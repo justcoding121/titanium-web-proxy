@@ -286,8 +286,8 @@ public class Phase0CharacterizationTests
             "Default buffered body limit must be 4 MiB.");
         Assert.AreEqual(16 * 1024 * 1024, proxy.MaxWebSocketFramePayloadBytes,
             "Default WebSocket frame payload limit must be 16 MiB.");
-        Assert.AreEqual(string.Empty, proxy.ViaHeaderPseudonym,
-            "Via header injection must be disabled by default (empty pseudonym).");
+        Assert.AreEqual("titanium-web-proxy", proxy.ViaHeaderPseudonym,
+            "Via header pseudonym must default to 'titanium-web-proxy'.");
     }
 
     private static readonly Encoding encoding = Encoding.ASCII;

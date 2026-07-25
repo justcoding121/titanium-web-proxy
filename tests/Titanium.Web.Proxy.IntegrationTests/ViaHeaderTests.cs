@@ -10,11 +10,11 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 public class ViaHeaderTests
 {
     [TestMethod]
-    public void ProxyServer_ViaHeaderPseudonym_DefaultIsEmpty()
+    public void ProxyServer_ViaHeaderPseudonym_DefaultIsTitaniumWebProxy()
     {
         using var proxy = new ProxyServer();
-        Assert.AreEqual(string.Empty, proxy.ViaHeaderPseudonym,
-            "Via injection must be disabled by default.");
+        Assert.AreEqual("titanium-web-proxy", proxy.ViaHeaderPseudonym,
+            "Via pseudonym must default to 'titanium-web-proxy'.");
     }
 
     [TestMethod]
@@ -89,7 +89,7 @@ public class ViaHeaderTests
         });
 
         var proxy = testSuite.GetProxy();
-        // ViaHeaderPseudonym is empty by default — Via should NOT be added.
+        proxy.ViaHeaderPseudonym = "";  // explicitly disable Via injection
 
         using var client = testSuite.GetClient(proxy);
         await client.GetAsync(new Uri(server.ListeningHttpsUrl));
