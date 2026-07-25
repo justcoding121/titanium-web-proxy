@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Channels;
@@ -117,6 +118,21 @@ public partial class ProxyServer
             return;
         }
 
+        // This bridge performs its origin I/O outside Http2Helper's normal h2 forwarding path,
+        // so apply Via loop detection and injection here while the inbound version is still h2.
+        if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
+            !string.IsNullOrEmpty(ViaHeaderPseudonym))
+        {
+            if (HasLoopedVia(sessionArgs.HttpClient.Request.Headers, ViaHeaderPseudonym))
+            {
+                sessionArgs.GenericResponse(string.Empty, (HttpStatusCode)508);
+                return;
+            }
+
+            AddViaHeader(sessionArgs.HttpClient.Request.Headers,
+                sessionArgs.HttpClient.Request.HttpVersion, ViaHeaderPseudonym);
+        }
+
         // RFC 8441 extended CONNECT: the stream was opened as a tunnel (e.g. WebSocket-over-HTTP/2).
         // For the websocket protocol, translate to an HTTP/1.1 WebSocket upgrade on the origin.
         // Any other :protocol value is unsupported and gets a 501 so the client can retry over h1.
@@ -136,8 +152,16 @@ public partial class ProxyServer
             // Create the inbound channel BEFORE dispatching the background tunnel task so that DATA
             // frames arriving immediately after the HEADERS frame (before the task has had a chance
             // to run) are still routed correctly by Http2Helper.CopyHttp2FrameAsync.
-            var inboundChannel = Channel.CreateUnbounded<ReadOnlyMemory<byte>>(
-                new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+            // Keep per-tunnel buffering bounded. Http2Helper uses TryWrite and resets only this
+            // stream if the origin cannot keep up, so one slow tunnel neither grows memory
+            // without limit nor blocks the frame-reading loop for every multiplexed stream.
+            var inboundChannel = Channel.CreateBounded<ReadOnlyMemory<byte>>(
+                new BoundedChannelOptions(256)
+                {
+                    SingleReader = true,
+                    SingleWriter = true,
+                    FullMode = BoundedChannelFullMode.Wait
+                });
             extStreamState.InboundTunnelChannel = inboundChannel;
 
             if (!ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var tunnelStreamState))
@@ -285,6 +309,12 @@ public partial class ProxyServer
                 response.Headers.RemoveHeader("Keep-Alive");
                 response.Headers.RemoveHeader(KnownHeaders.ProxyConnection);
                 response.Headers.RemoveHeader(KnownHeaders.Upgrade);
+
+                if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
+                    !string.IsNullOrEmpty(ViaHeaderPseudonym))
+                {
+                    AddViaHeader(response.Headers, response.HttpVersion, ViaHeaderPseudonym);
+                }
 
                 // RFC 7540 §8.1.2: header field names MUST be lowercase in HTTP/2. An HTTP/1.1 origin has no
                 // such requirement (field names are case-insensitive on the wire), so the mixed-case names it
@@ -450,7 +480,7 @@ public partial class ProxyServer
 
             // Build and send the WebSocket upgrade request toward the h1 origin.
             var request = sessionArgs.HttpClient.Request;
-            var wsKey = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+            var wsKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
             var sb = new StringBuilder();
             sb.Append($"GET {request.RequestUri.PathAndQuery} HTTP/1.1\r\n");
             // Prefer the :authority pseudo-header value (already parsed into Request.Authority by
@@ -484,24 +514,50 @@ public partial class ProxyServer
 
             // Read origin's response line + headers.
             var responseLine = await ReadLineAsync(connection.Stream, cancellationToken);
-            if (responseLine == null || !responseLine.StartsWith("HTTP/1.1 101",
-                    StringComparison.OrdinalIgnoreCase))
+            bool validStatusLine = TryParseHttp11StatusLine(responseLine, out int statusCode);
+            if (!validStatusLine || statusCode != 101)
             {
-                var statusCode = responseLine != null && responseLine.Length >= 12 &&
-                                 int.TryParse(responseLine.AsSpan(9, 3), out var sc)
-                    ? sc
-                    : 502;
                 sessionArgs.GenericResponse(
                     $"WebSocket upgrade failed: {responseLine ?? "no response from origin"}",
-                    (HttpStatusCode)statusCode);
+                    validStatusLine ? (HttpStatusCode)statusCode : HttpStatusCode.BadGateway);
                 await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, ctx.StreamId,
                     ctx.ConnectionState, ctx.ClientStream, cancellationToken);
                 return;
             }
 
-            // Drain the remaining upgrade response headers from the origin.
+            // Parse and validate the origin's upgrade response, and retain negotiated
+            // WebSocket options that must be translated back to the h2 client.
+            var upgradeResponseHeaders = new HeaderCollection();
+            int upgradeHeaderBytes = 0;
+            int upgradeHeaderCount = 0;
             string? headerLine;
-            while ((headerLine = await ReadLineAsync(connection.Stream, cancellationToken)) is { Length: > 0 }) { }
+            while ((headerLine = await ReadLineAsync(connection.Stream, cancellationToken)) is { Length: > 0 })
+            {
+                upgradeHeaderBytes += headerLine.Length + 2;
+                if (++upgradeHeaderCount > 100 || upgradeHeaderBytes > 64 * 1024)
+                    throw new InvalidDataException("WebSocket upgrade response headers exceeded safety limits.");
+
+                int colon = headerLine.IndexOf(':');
+                if (colon <= 0) continue;
+                upgradeResponseHeaders.AddHeader(
+                    headerLine.Substring(0, colon).Trim(),
+                    headerLine.Substring(colon + 1).Trim());
+            }
+
+            var upgrade = upgradeResponseHeaders.GetFirstHeader("Upgrade")?.Value;
+            var responseConnection = upgradeResponseHeaders.GetFirstHeader("Connection")?.Value;
+            if (!string.Equals(upgrade, "websocket", StringComparison.OrdinalIgnoreCase) ||
+                responseConnection == null ||
+                !responseConnection.Split(',').Any(token =>
+                    string.Equals(token.Trim(), "upgrade", StringComparison.OrdinalIgnoreCase)))
+            {
+                sessionArgs.GenericResponse(
+                    "WebSocket upgrade failed: origin returned an invalid RFC 6455 handshake.",
+                    HttpStatusCode.BadGateway);
+                await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, ctx.StreamId,
+                    ctx.ConnectionState, ctx.ClientStream, cancellationToken);
+                return;
+            }
 
             // Capture the origin stream before the lambda so the closure does not accidentally
             // capture the local `connection` variable which may be reassigned on later iterations.
@@ -517,6 +573,21 @@ public partial class ProxyServer
                 StatusCode = 200,
                 StatusDescription = "OK"
             };
+            if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
+                !string.IsNullOrEmpty(ViaHeaderPseudonym))
+            {
+                // The origin response being translated was HTTP/1.1, so Via records 1.1 even
+                // though the response sent to the client is represented as h2 HEADERS.
+                AddViaHeader(response200.Headers, HttpHeader.Version11, ViaHeaderPseudonym);
+            }
+
+            // Preserve origin-negotiated WebSocket options on the extended CONNECT response.
+            foreach (var name in new[] { "Sec-WebSocket-Protocol", "Sec-WebSocket-Extensions" })
+            {
+                foreach (var header in upgradeResponseHeaders.GetHeaders(name) ?? Enumerable.Empty<HttpHeader>())
+                    response200.Headers.AddHeader(header.Name.ToLowerInvariant(), header.Value);
+            }
+
             sessionArgs.RespondStreaming(response200, async (bodyStream, ct) =>
             {
                 using var relayCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -688,7 +759,22 @@ public partial class ProxyServer
             var c = (char)oneByte[0];
             if (c == '\n') return sb.ToString().TrimEnd('\r');
             sb.Append(c);
+            if (sb.Length > 16 * 1024)
+                throw new InvalidDataException("HTTP/1.1 response line exceeded the maximum length.");
         }
+    }
+
+    private static bool TryParseHttp11StatusLine(string? line, out int statusCode)
+    {
+        statusCode = 0;
+        if (line == null) return false;
+
+        var parts = line.Split(new[] { ' ' }, 3, StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2 &&
+               string.Equals(parts[0], "HTTP/1.1", StringComparison.OrdinalIgnoreCase) &&
+               parts[1].Length == 3 &&
+               int.TryParse(parts[1], out statusCode) &&
+               statusCode is >= 100 and <= 999;
     }
 
     /// <summary>

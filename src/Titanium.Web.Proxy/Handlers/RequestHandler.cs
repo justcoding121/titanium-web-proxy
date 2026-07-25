@@ -501,7 +501,7 @@ public partial class ProxyServer
     ///     Appends a Via header entry to <paramref name="headers" /> per RFC 9110 §7.6.3.
     ///     If a Via header already exists its value is extended with a comma-separated suffix.
     /// </summary>
-    private static void AddViaHeader(HeaderCollection headers, Version httpVersion, string pseudonym)
+    internal static void AddViaHeader(HeaderCollection headers, Version httpVersion, string pseudonym)
     {
         var protocol = httpVersion.Major == 2 ? "2" : $"1.{httpVersion.Minor}";
         var entry = $"{protocol} {pseudonym}";
@@ -510,21 +510,70 @@ public partial class ProxyServer
         if (existing != null)
             existing.SetValue($"{existing.Value}, {entry}");
         else
-            headers.AddHeader("Via", entry);
+            // Lowercase is valid for HTTP/1.x and required when this collection is encoded as HTTP/2.
+            headers.AddHeader("via", entry);
     }
 
     /// <summary>
-    ///     Returns true if any component of the Via header already names <paramref name="pseudonym" />,
-    ///     indicating a proxy loop.
+    ///     Returns true if the received-by host in a single Via list entry matches
+    ///     <paramref name="pseudonym" /> exactly (case-insensitive), ignoring any optional port suffix.
+    ///     Prevents false positives from suffix substring matches (e.g. "proxy" matching "my-proxy").
     /// </summary>
-    private static bool HasLoopedVia(HeaderCollection headers, string pseudonym)
+    private static bool ViaTokenMatches(string viaEntry, string pseudonym)
     {
-        var via = headers.GetFirstHeader("Via")?.Value;
-        if (via == null) return false;
+        // A Via entry is: received-protocol RWS received-by [ RWS comment ].
+        // RFC 9110 RWS permits SP or HTAB, and received-by can include an optional port.
+        int separator = viaEntry.IndexOfAny(new[] { ' ', '\t' });
+        if (separator < 0) return false;
 
-        return via.Split(',')
+        int receivedByStart = separator;
+        while (receivedByStart < viaEntry.Length &&
+               (viaEntry[receivedByStart] == ' ' || viaEntry[receivedByStart] == '\t'))
+        {
+            receivedByStart++;
+        }
+
+        int receivedByEnd = receivedByStart;
+        while (receivedByEnd < viaEntry.Length &&
+               viaEntry[receivedByEnd] != ' ' && viaEntry[receivedByEnd] != '\t')
+        {
+            receivedByEnd++;
+        }
+
+        if (receivedByEnd == receivedByStart) return false;
+
+        var receivedBy = viaEntry.Substring(receivedByStart, receivedByEnd - receivedByStart);
+        if (string.Equals(receivedBy, pseudonym, StringComparison.OrdinalIgnoreCase)) return true;
+
+        // A configured pseudonym denotes the received-by host/token. Match an optional
+        // numeric port, but never suffixes such as "my-proxy" or "proxy.example".
+        if (receivedBy.Length <= pseudonym.Length + 1 ||
+            receivedBy[pseudonym.Length] != ':' ||
+            !receivedBy.StartsWith(pseudonym, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        for (int i = pseudonym.Length + 1; i < receivedBy.Length; i++)
+        {
+            if (receivedBy[i] < '0' || receivedBy[i] > '9') return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     Returns true if any token in any Via header field already names <paramref name="pseudonym" />,
+    ///     indicating a proxy loop. Checks all Via header fields (RFC 9110 allows multiple field lines).
+    /// </summary>
+    internal static bool HasLoopedVia(HeaderCollection headers, string pseudonym)
+    {
+        var viaHeaders = headers.GetHeaders("Via");
+        if (viaHeaders == null || viaHeaders.Count == 0) return false;
+
+        return viaHeaders
+            .SelectMany(h => h.Value.Split(','))
             .Select(v => v.Trim())
-            .Any(v => v.EndsWith(" " + pseudonym, StringComparison.OrdinalIgnoreCase) ||
-                      v.Contains(" " + pseudonym + " ", StringComparison.OrdinalIgnoreCase));
+            .Any(v => ViaTokenMatches(v, pseudonym));
     }
 }

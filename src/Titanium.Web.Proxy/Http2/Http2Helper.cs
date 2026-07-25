@@ -307,6 +307,7 @@ namespace Titanium.Web.Proxy.Http2
                 {
                     removedState.InboundTunnelChannel?.Writer.TryComplete(
                         new IOException("HTTP/2 stream removed due to protocol error."));
+                    removedState.Cancellation.Cancel();
                     connectionState.ClientSendFlow.RemoveStream(removeStreamId);
                     connectionState.ServerSendFlow.RemoveStream(removeStreamId);
                     connectionState.PendingFinalizations.Add(
@@ -471,10 +472,13 @@ namespace Titanium.Web.Proxy.Http2
                                 return false;
                             }
 
-                            if (headerListener.Scheme == string.Empty)
+                            if (headerListener.Scheme == string.Empty ||
+                                headerListener.Path.Length == 0 ||
+                                headerListener.Authority.Length == 0)
                             {
                                 ReportException(logger, new ProxyHttpException(
-                                    "HTTP/2 protocol error: extended CONNECT HEADERS missing required :scheme pseudo-header.",
+                                    "HTTP/2 protocol error: extended CONNECT HEADERS missing required " +
+                                    ":scheme, :path, or :authority pseudo-header.",
                                     null, sessionArgs));
                                 RemoveAndFinalizeStream(hbStreamId);
                                 await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
@@ -629,6 +633,28 @@ namespace Titanium.Web.Proxy.Http2
                         request.ReadHttp2BeforeHandlerTaskCompletionSource = null;
                         tcs.SetResult(true);
 
+                        // Apply the same outgoing-request normalization and Via policy as HTTP/1.x.
+                        // The h2-to-h1 bridge uses a NullOriginStream and applies Via itself before
+                        // launching its independent origin round trip, so do not process it twice here.
+                        if (!request.CancelRequest)
+                        {
+                            prepareRequestHeaders?.Invoke(request.Headers);
+                            if (output is not NullOriginStream &&
+                                !sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
+                                !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym))
+                            {
+                                var pseudonym = sessionArgs.Server.ViaHeaderPseudonym;
+                                if (ProxyServer.HasLoopedVia(request.Headers, pseudonym))
+                                {
+                                    sessionArgs.GenericResponse(string.Empty, (HttpStatusCode)508);
+                                }
+                                else
+                                {
+                                    ProxyServer.AddViaHeader(request.Headers, request.HttpVersion, pseudonym);
+                                }
+                            }
+                        }
+
                         // Did the consumer answer this request synthetically during BeforeRequest (Ok,
                         // GenericResponse, Redirect, buffered Respond, or RespondStreaming - all funnel
                         // through Respond(), which is the single source of truth for "short-circuit this
@@ -664,12 +690,6 @@ namespace Titanium.Web.Proxy.Http2
                         }
                         else
                         {
-                            // Same per-request header preparation HTTP/1.x applies before forwarding
-                            // upstream (allowed Accept-Encoding filtering, hop-by-hop/proxy-header
-                            // stripping via FixProxyHeaders) - previously skipped entirely for h2,
-                            // forwarding whatever the client (or BeforeRequest) set verbatim.
-                            prepareRequestHeaders?.Invoke(request.Headers);
-
                             // RFC 8441: extended CONNECT tunnel streams are handled entirely by the
                             // bridge's tunnel task (which manages its own response). Do not forward
                             // the CONNECT HEADERS to the (null) origin - the tunnel task sends the
@@ -778,6 +798,13 @@ namespace Titanium.Web.Proxy.Http2
                                 pendingSynthetics.Add(synthTask);
 
                                 return false;
+                            }
+
+                            if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
+                                !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym))
+                            {
+                                ProxyServer.AddViaHeader(finalResponse.Headers, finalResponse.HttpVersion,
+                                    sessionArgs.Server.ViaHeaderPseudonym);
                             }
 
                             await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
@@ -1194,8 +1221,17 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             var chunk = new byte[dataLen];
                             Buffer.BlockCopy(buffer, dataOff, chunk, 0, dataLen);
-                            await tunnelStreamState.InboundTunnelChannel.Writer.WriteAsync(
-                                new ReadOnlyMemory<byte>(chunk), cancellationToken);
+                            if (!tunnelStreamState.InboundTunnelChannel.Writer.TryWrite(
+                                    new ReadOnlyMemory<byte>(chunk)))
+                            {
+                                ReportException(logger, new ProxyHttpException(
+                                    "HTTP/2 extended CONNECT stream exceeded its bounded relay buffer.",
+                                    null, args));
+                                RemoveAndFinalizeStream(streamId);
+                                await lockedOwnLegWrite(() => SendRstStreamAsync(
+                                    new Http2FrameHeader(), new byte[9], streamId,
+                                    Http2ErrorCode.EnhanceYourCalm, input));
+                            }
                         }
                         if (endStreamFlag)
                         {
