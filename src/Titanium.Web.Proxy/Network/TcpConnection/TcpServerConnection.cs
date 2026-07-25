@@ -83,6 +83,12 @@ internal class TcpServerConnection : IDisposable
     internal Socket TcpSocket { get; }
 
     /// <summary>
+    ///     Physical peer of the established upstream TCP socket.
+    ///     When an upstream proxy is used this is the proxy hop, not the origin.
+    /// </summary>
+    internal IPEndPoint? RemoteEndPoint => TcpSocket.RemoteEndPoint as IPEndPoint;
+
+    /// <summary>
     ///     Used to write lines to server
     /// </summary>
     internal HttpServerStream Stream { get; }
@@ -140,14 +146,12 @@ internal class TcpServerConnection : IDisposable
 
     public void Dispose()
     {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
         if (disposed) return;
 
+        disposed = true;
+
+        // No finalizer: sockets/streams already have their own finalization, and scheduling
+        // Task.Run / logging from a finalizer thread is unsafe.
         Task.Run(async () =>
         {
             // delay calling tcp connection close()
@@ -157,29 +161,17 @@ internal class TcpServerConnection : IDisposable
 
             ProxyServer.UpdateServerConnectionCount(false);
 
-            if (disposing)
-            {
-                Stream.Dispose();
+            Stream.Dispose();
 
-                try
-                {
-                    TcpSocket.Close();
-                }
-                catch (Exception ex)
-                {
-                    Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
-                        "Failed to close a server socket during disposal.", ex);
-                }
+            try
+            {
+                TcpSocket.Close();
+            }
+            catch (Exception ex)
+            {
+                Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
+                    "Failed to close a server socket during disposal.", ex);
             }
         });
-
-        disposed = true;
-    }
-
-    ~TcpServerConnection()
-    {
-        Logging.ProxyDiagnostics.ReportUndisposedFinalizer(ProxyServer.Logger, nameof(TcpServerConnection));
-
-        Dispose(false);
     }
 }

@@ -34,6 +34,7 @@ public partial class ProxyServer
     private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClientConnection clientConnection)
     {
         var cancellationTokenSource = new CancellationTokenSource();
+        RegisterSessionCancellation(cancellationTokenSource);
         var cancellationToken = cancellationTokenSource.Token;
 
         var clientStream = new HttpClientStream(this, clientConnection, clientConnection.GetStream(), BufferPool,
@@ -113,11 +114,44 @@ public partial class ProxyServer
                     return;
                 }
 
+                // Optional pre-200 upstream connectivity check (issue #768). Default off — zero latency.
+                if (connectArgs.EstablishServerConnectionBeforeResponse)
+                {
+                    // Match the post-ClientHello decrypt path for upstream proxy selection: CONNECT
+                    // tunnels that will be decrypted are treated as HTTPS so UpStreamHttpsProxy is used.
+                    var restoredHttps = connectRequest.IsHttps;
+                    if (decryptSsl) connectRequest.IsHttps = true;
+
+                    try
+                    {
+                        var preConnection = await TcpConnectionFactory.GetServerConnection(this, connectArgs,
+                            true, null, false, false, cancellationToken);
+                        prefetchConnectionTask = Task.FromResult<TcpServerConnection?>(preConnection);
+                    }
+                    catch (Exception ex)
+                    {
+                        connectRequest.IsHttps = restoredHttps;
+                        var failureArgs = new TunnelConnectFailureEventArgs(this, clientConnection, connectArgs, ex);
+                        await endPoint.InvokeBeforeTunnelConnectFailure(this, failureArgs, logger);
+                        failureArgs.Response.Headers.FixProxyHeaders();
+                        connectArgs.HttpClient.Response = failureArgs.Response;
+                        await clientStream.WriteResponseAsync(failureArgs.Response, cancellationToken);
+                        closeServerConnection = true;
+                        OnException(clientStream, ex is ProxyException proxyEx
+                            ? proxyEx
+                            : new ProxyConnectException(
+                                "Upstream connectivity verification failed before CONNECT 200.", ex, connectArgs));
+                        return;
+                    }
+
+                    if (!decryptSsl) connectRequest.IsHttps = restoredHttps;
+                }
+
                 // write back successful CONNECT response
+                // Successful CONNECT 2xx responses must not carry Content-Length or Transfer-Encoding
+                // (RFC 9110 §9.3.6 / RFC 9112): tunnel bytes follow the header terminator immediately.
                 var response = ConnectResponse.CreateSuccessfulConnectResponse(connectRequest.HttpVersion);
 
-                // Set ContentLength explicitly to properly handle HTTP 1.0
-                response.ContentLength = 0;
                 response.Headers.FixProxyHeaders();
                 connectArgs.HttpClient.Response = response;
 
@@ -210,7 +244,9 @@ public partial class ProxyServer
                         var certName = HttpHelper.GetWildCardDomainName(connectHostname,
                             CertificateManager.DisableWildCardCertificates);
                         certificate = endPoint.GenericCertificate ??
-                                      await CertificateManager.CreateServerCertificate(certName);
+                                      await CertificateManager.CreateServerCertificate(certName)
+                                      ?? throw new InvalidOperationException(
+                                          $"CertificateManager returned null for '{certName}'.");
 
                         // Successfully managed to authenticate the client using the fake certificate
                         var options = new SslServerAuthenticationOptions();
@@ -221,7 +257,7 @@ public partial class ProxyServer
                                 options.ApplicationProtocols = SslExtensions.Http11ProtocolAsList;
                         }
 
-                        options.ServerCertificate = certificate;
+                        options.ServerCertificateContext = CertificateManager.CreateSslCertificateContext(certificate);
                         options.ClientCertificateRequired = false;
                         options.EnabledSslProtocols = SupportedSslProtocols;
                         options.CertificateRevocationCheckMode = X509RevocationMode.NoCheck;
@@ -284,7 +320,8 @@ public partial class ProxyServer
                 }
 
                 if (cancellationTokenSource.IsCancellationRequested)
-                    throw new Exception("Session was terminated by user.");
+                    throw new OperationCanceledException("Session was terminated by user.",
+                        cancellationTokenSource.Token);
 
                 if (method == KnownMethod.Invalid) sendRawData = true;
 
@@ -431,7 +468,8 @@ public partial class ProxyServer
                                 async (args, ctx) => { await OnBeforeResponse(args); },
                                 async args => { await OnAfterResponse(args); },
                                 headers => PrepareRequestHeaders(headers),
-                                connectArgs.CancellationTokenSource, clientStream.Connection.Id, logger);
+                                connectArgs.CancellationTokenSource, clientStream.Connection.Id, logger,
+                                MaxDecodedHeaderListBytes, EnableRfc8441);
 #endif
                     }
                     finally
@@ -486,6 +524,12 @@ public partial class ProxyServer
             closeServerConnection = true;
             OnException(clientStream, new Exception("Could not connect", e));
         }
+        catch (OperationCanceledException e)
+        {
+            // User TerminateSession / linked cancellation: expected, do not wrap or elevate to Error.
+            closeServerConnection = true;
+            ProxyDiagnostics.ReportException(logger, "Client session cancelled", e);
+        }
         catch (Exception e)
         {
             closeServerConnection = true;
@@ -494,6 +538,7 @@ public partial class ProxyServer
         finally
         {
             if (!cancellationTokenSource.IsCancellationRequested) cancellationTokenSource.Cancel();
+            UnregisterSessionCancellation(cancellationTokenSource);
 
             await TcpConnectionFactory.Release(prefetchConnectionTask, closeServerConnection);
 

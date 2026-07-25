@@ -5,17 +5,40 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.IntegrationTests;
 
+/// <summary>
+///     Tests share a single Kestrel <see cref="TestServer" /> instance (started once for the class)
+///     to avoid paying the ~200–400 ms host-start cost on every test. Tests within this class are
+///     serialised (<see cref="DoNotParallelizeAttribute" />) so that each test's
+///     <see cref="TestServer.HandleRequest" /> assignment is not racy; they still run concurrently
+///     with tests in other classes.
+/// </summary>
 [TestClass]
+[DoNotParallelize]
 public class ReverseProxyTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     public async Task Smoke_Test_Http_To_Http_Reverse_Proxy()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -44,7 +67,7 @@ public class ReverseProxyTests
     [TestMethod]
     public async Task Smoke_Test_Https_To_Http_Reverse_Proxy()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -73,7 +96,7 @@ public class ReverseProxyTests
     [TestMethod]
     public async Task Smoke_Test_Http_To_Https_Reverse_Proxy()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -102,7 +125,7 @@ public class ReverseProxyTests
     [TestMethod]
     public async Task Smoke_Test_Https_To_Https_Reverse_Proxy()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -131,7 +154,7 @@ public class ReverseProxyTests
     [TestMethod]
     public async Task Smoke_Test_Https_To_Https_Reverse_Proxy_Tunnel_Without_Decryption()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -163,7 +186,7 @@ public class ReverseProxyTests
     [TestMethod]
     public async Task Smoke_Test_Http_Reverse_Proxy_With_Fixed_Forward_Endpoint()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -192,7 +215,7 @@ public class ReverseProxyTests
     [TestMethod]
     public async Task Smoke_Test_Https_Reverse_Proxy_With_Fixed_Forward_Endpoint()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -222,7 +245,7 @@ public class ReverseProxyTests
     [TestMethod]
     public async Task Smoke_Test_Https_Reverse_Proxy_Tunnel_With_Fixed_Forward_Endpoint()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>

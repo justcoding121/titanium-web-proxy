@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Helpers;
 
 namespace Titanium.Web.Proxy.Http2;
 
@@ -87,6 +88,13 @@ internal sealed class Http2ConnectionState
     /// </summary>
     public int LastClientStreamId;
 
+    /// <summary>
+    ///     Per-stream multipart observers for h2 multipart/form-data boundary-aware streaming.
+    ///     Only populated for streams that have a <see cref="SessionEventArgs.MultipartRequestPartSent"/>
+    ///     subscriber and a multipart/form-data Content-Type.
+    /// </summary>
+    internal ConcurrentDictionary<int, MultipartStreamObserver> MultipartObservers { get; } = new();
+
     /// <summary>Cancels both relay directions; shared with the caller so either can trigger connection-wide teardown.</summary>
     public CancellationTokenSource CancellationTokenSource { get; }
 
@@ -123,6 +131,7 @@ internal sealed class Http2ConnectionState
     public void RemoveStream(int streamId)
     {
         Streams.TryRemove(streamId, out _);
+        MultipartObservers.TryRemove(streamId, out _);
         ClientSendFlow.RemoveStream(streamId);
         ServerSendFlow.RemoveStream(streamId);
     }

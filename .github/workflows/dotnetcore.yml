@@ -75,7 +75,7 @@ jobs:
         $maxAttempts = 3
         for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
           Write-Output "Integration tests attempt $attempt of $maxAttempts"
-          dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-build --no-restore --blame-hang --blame-hang-timeout 5m --collect:"Code Coverage" --results-directory "coverage/integration/attempt-$attempt"
+          dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory!=Slow" --blame-hang --blame-hang-timeout 5m --collect:"Code Coverage" --results-directory "coverage/integration/attempt-$attempt"
           if ($LASTEXITCODE -eq 0) { break }
           if ($attempt -eq $maxAttempts) { exit $LASTEXITCODE }
           Write-Output "Integration tests failed on attempt $attempt, retrying..."

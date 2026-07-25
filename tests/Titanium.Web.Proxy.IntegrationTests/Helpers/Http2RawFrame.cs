@@ -135,6 +135,9 @@ internal static class Http2RawFrame
             this.stream = stream;
         }
 
+        /// <summary>Exposes the underlying stream for tests that need to write raw, malformed bytes.</summary>
+        public Stream GetStream() => stream;
+
         public Task WriteFrameAsync(Http2FrameType type, int streamId, Http2FrameFlag flags, byte[] payload)
         {
             return WriteAsync(stream, type, streamId, flags, payload);
@@ -201,9 +204,16 @@ internal static class Http2RawFrame
         ///     SETTINGS_HEADER_TABLE_SIZE (RFC 7540 §6.5.2) instead of omitting it (i.e. relying on the
         ///     protocol default of 4096) - real browsers (e.g. Chrome) advertise a larger value here, which
         ///     the proxy must forward transparently to the other leg for that leg's HPACK decoder sizing.
+        ///     Also raises this connection's own decoder ceiling to match: advertising that setting means we
+        ///     promise to accept Dynamic Table Size Updates up to that size (RFC 7540 §6.5.2 / RFC 7541 §4.2).
+        ///     Without this, a correctly-behaved peer (including the proxy after it starts encoders at the RFC
+        ///     default 4096 and then emits a size-update to our advertised ceiling) would be rejected with
+        ///     "invalid max dynamic table size" by a decoder still stuck at 4096.
         /// </summary>
         public Task SendInitialSettingsAsync(int headerTableSize)
         {
+            decoder.SetMaxHeaderTableSize(headerTableSize);
+
             var payload = new byte[6];
             payload[0] = (byte)(((int)Http2SettingsId.HeaderTableSize >> 8) & 0xff);
             payload[1] = (byte)((int)Http2SettingsId.HeaderTableSize & 0xff);

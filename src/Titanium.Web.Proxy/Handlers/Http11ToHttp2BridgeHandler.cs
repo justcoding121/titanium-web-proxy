@@ -103,6 +103,17 @@ public partial class ProxyServer
                         request.HttpVersion = requestLine.Version;
                         request.SetOriginalHeaders();
 
+                        // Fill default Host before BeforeRequest so handlers can read or override it.
+                        if (!args.IsTransparent && !args.IsSocks && request.Host == null)
+                        {
+                            var rawAuthority = UriExtensions.GetRawAuthority(request.RequestUriString8)
+                                               ?? (request.Authority.Length > 0
+                                                   ? request.Authority.GetString()
+                                                   : null);
+                            if (rawAuthority != null)
+                                request.Host = rawAuthority;
+                        }
+
                         await OnBeforeRequest(args);
 
                         var keepGoing = true;
@@ -119,7 +130,21 @@ public partial class ProxyServer
                             else
                             {
                                 PrepareRequestHeaders(request.Headers);
-                                request.Host = request.RequestUri.Authority;
+                                // Do NOT overwrite Host — the default was filled above and user overrides preserved.
+
+                                if (!string.IsNullOrEmpty(ViaHeaderPseudonym))
+                                {
+                                    if (HasLoopedVia(request.Headers, ViaHeaderPseudonym))
+                                    {
+                                        args.GenericResponse(string.Empty, (HttpStatusCode)508);
+                                    }
+                                    else
+                                    {
+                                        // Record the protocol received from the client before this
+                                        // request is translated onto the h2 origin connection.
+                                        AddViaHeader(request.Headers, request.HttpVersion, ViaHeaderPseudonym);
+                                    }
+                                }
                             }
                         }
 
@@ -184,9 +209,10 @@ public partial class ProxyServer
                         }
 
                         if (cancellationTokenSource.IsCancellationRequested)
-                            throw new Exception("Session was terminated by user.");
+                            throw new OperationCanceledException("Session was terminated by user.",
+                                cancellationTokenSource.Token);
                     }
-                    catch (Exception e) when (!(e is ProxyHttpException))
+                    catch (Exception e) when (!(e is ProxyHttpException) && !(e is OperationCanceledException))
                     {
                         throw new ProxyHttpException(
                             "Error occured whilst handling HTTP/1.1-to-HTTP/2 bridge session request", e, args);
@@ -246,7 +272,7 @@ public partial class ProxyServer
         seedConnection ??= await EstablishHttp2OriginTcpConnectionAsync(args, remoteHostName, remotePort,
             connectHost, connectPort, cancellationToken);
 
-        return await Http2OriginConnection.CreateAsync(seedConnection, logger, cancellationToken);
+        return await Http2OriginConnection.CreateAsync(seedConnection, logger, MaxBufferedBodyBytes, cancellationToken);
     }
 
     /// <summary>
@@ -324,10 +350,28 @@ public partial class ProxyServer
             // request-send portion of it.
             args.Timing?.MarkRequestSent();
 
+            // Relay any 1xx interim responses (e.g. 103 Early Hints) from the h2 origin to the HTTP/1.1
+            // client as they arrive, before the final response is written via DeliverOriginExchangeAsync.
+            // This callback is invoked from SendAsync on the current (caller) task - not from the background
+            // read loop - so it is safe to write to clientStream without additional synchronization.
+            var capturedClientStream = clientStream;
+            Func<int, HeaderCollection, CancellationToken, Task> relayInterim =
+                async (statusCode, headers, ct) =>
+                {
+                    var interim = new Response
+                    {
+                        StatusCode = statusCode,
+                        StatusDescription = string.Empty,
+                        HttpVersion = HttpHeader.Version11
+                    };
+                    foreach (var h in headers) interim.Headers.AddHeader(h);
+                    await capturedClientStream.WriteResponseAsync(interim, ct);
+                };
+
             Http2OriginExchange exchange;
             try
             {
-                exchange = await originConnection.SendAsync(request, cancellationToken);
+                exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken);
             }
             catch (Http2OriginGoAwayException)
             {
@@ -345,7 +389,7 @@ public partial class ProxyServer
                 }
 
                 args.Timing?.MarkRequestSent();
-                exchange = await originConnection.SendAsync(request, cancellationToken);
+                exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken);
             }
 
             args.Timing?.MarkResponseHeadersReceived();
@@ -412,7 +456,18 @@ public partial class ProxyServer
         }
 
         response.Locked = true;
-        if (!args.IsTransparent && !args.IsSocks) response.Headers.FixProxyHeaders();
+        if (!args.IsTransparent && !args.IsSocks)
+        {
+            response.Headers.FixProxyHeaders();
+            if (!string.IsNullOrEmpty(ViaHeaderPseudonym))
+            {
+                // The response was received from the origin over HTTP/2 even though
+                // it is translated to an HTTP/1.1 response for the client.
+                AddViaHeader(response.Headers, HttpHeader.Version20, ViaHeaderPseudonym);
+            }
+        }
+        else
+            response.Headers.NormalizeMessageFraming();
 
         var body = exchange.Body;
 

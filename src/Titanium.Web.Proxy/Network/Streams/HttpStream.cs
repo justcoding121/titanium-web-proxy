@@ -697,12 +697,23 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             if (IsNetworkStream) readTask = readTask.WithCancellation(cancellationToken);
 
             var readBytes = await readTask;
+
+            // WithCancellation returns default(int)=0 when the token fires rather than throwing,
+            // because socket ReadAsync cannot be cancelled on all platforms. Re-surface as
+            // OperationCanceledException so timeout/cancellation callers (e.g. ProxyTimeoutScope)
+            // can distinguish a deliberate deadline from a genuine server EOF or socket error.
+            if (IsNetworkStream) cancellationToken.ThrowIfCancellationRequested();
+
             result = readBytes > 0;
             if (result)
             {
                 OnDataRead(streamBuffer, Available, readBytes);
                 Available += readBytes;
             }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

@@ -16,6 +16,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -31,6 +32,11 @@ namespace Titanium.Web.Proxy.Network.Tcp;
 internal class TcpConnectionFactory : IDisposable
 {
     private const int MaximumUpstreamProxyAuthenticationAttempts = 5;
+
+    /// <summary>
+    ///     Maximum number of upstream CONNECT rejection body bytes retained for diagnostics.
+    /// </summary>
+    private const int UpstreamProxyRejectionBodyPreviewLimit = 4096;
 
     private static readonly string[] UpstreamProxyAuthenticationSchemes = { "Negotiate", "NTLM", "Kerberos" };
 
@@ -58,13 +64,43 @@ internal class TcpConnectionFactory : IDisposable
     public void Dispose()
     {
         Dispose(true);
-        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    ///     Drains the connection pool and disposal bag without shutting down the factory.
+    ///     Used by <see cref="ProxyServer.Stop" /> / <see cref="ProxyServer.StopAsync" /> so the same
+    ///     <see cref="ProxyServer" /> instance can be started again afterwards.
+    /// </summary>
+    internal void ClearPools()
+    {
+        if (disposed) return;
+
+        try
+        {
+            @lock.Wait();
+
+            foreach (var queue in cache.Select(x => x.Value).ToList())
+                while (!queue.IsEmpty)
+                    if (queue.TryDequeue(out var connection))
+                        disposalBag.Add(connection);
+
+            cache.Clear();
+        }
+        finally
+        {
+            @lock.Release();
+        }
+
+        while (!disposalBag.IsEmpty)
+            if (disposalBag.TryTake(out var connection))
+                connection?.Dispose();
     }
 
     internal string GetConnectionCacheKey(string remoteHostName, int remotePort,
         bool isHttps, List<SslApplicationProtocol>? applicationProtocols,
         IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
-        string? connectHost = null, int? connectPort = null)
+        string? connectHost = null, int? connectPort = null,
+        IPEndPoint? upStreamEndPointIPv4 = null, IPEndPoint? upStreamEndPointIPv6 = null)
     {
         // http version is ignored since its an application level decision b/w HTTP 1.0/1.1
         // also when doing connect request MS Edge browser sends http 1.0 but uses 1.1 after server sends 1.1 its response.
@@ -96,35 +132,20 @@ internal class TcpConnectionFactory : IDisposable
                 cacheKeyBuilder.Append(protocol);
             }
 
-        if (upStreamEndPoint != null)
-        {
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(upStreamEndPoint.Address);
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(upStreamEndPoint.Port);
-        }
+        // Include generic + family-specific bind endpoints so dual-stack adapter selection
+        // never shares pool buckets across different local NICs (issue #951).
+        UpStreamEndPointSelector.AppendToCacheKey(cacheKeyBuilder, upStreamEndPoint,
+            upStreamEndPointIPv4, upStreamEndPointIPv6);
 
         if (externalProxy != null)
         {
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(externalProxy.HostName);
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(externalProxy.Port);
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(externalProxy.ProxyType);
-
-            // SOCKS remote-DNS toggle changes how the connection is established, so it must
-            // separate otherwise-identical connections.
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(externalProxy.ProxyDnsRequests);
-
-            // Different credentials (or default-credential mode) must never share a pooled
-            // connection to the same proxy. Include a fingerprint of the credentials, regardless
-            // of UseDefaultCredentials, without storing the plaintext password in the key.
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(externalProxy.UseDefaultCredentials);
-            cacheKeyBuilder.Append("-");
-            cacheKeyBuilder.Append(GetCredentialFingerprint(externalProxy.UserName, externalProxy.Password));
+            AppendExternalProxyToCacheKey(cacheKeyBuilder, externalProxy);
+            // Ordered chain: next hop identity must separate pool buckets (issue #909).
+            if (externalProxy.NextHop != null)
+            {
+                cacheKeyBuilder.Append("-next-");
+                AppendExternalProxyToCacheKey(cacheKeyBuilder, externalProxy.NextHop);
+            }
         }
 
         return cacheKeyBuilder.ToString();
@@ -145,6 +166,22 @@ internal class TcpConnectionFactory : IDisposable
         using var sha = SHA256.Create();
         var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(material));
         return Convert.ToBase64String(hash);
+    }
+
+    private static void AppendExternalProxyToCacheKey(StringBuilder cacheKeyBuilder, IExternalProxy externalProxy)
+    {
+        cacheKeyBuilder.Append('-');
+        cacheKeyBuilder.Append(externalProxy.HostName);
+        cacheKeyBuilder.Append('-');
+        cacheKeyBuilder.Append(externalProxy.Port);
+        cacheKeyBuilder.Append('-');
+        cacheKeyBuilder.Append(externalProxy.ProxyType);
+        cacheKeyBuilder.Append('-');
+        cacheKeyBuilder.Append(externalProxy.ProxyDnsRequests);
+        cacheKeyBuilder.Append('-');
+        cacheKeyBuilder.Append(externalProxy.UseDefaultCredentials);
+        cacheKeyBuilder.Append('-');
+        cacheKeyBuilder.Append(GetCredentialFingerprint(externalProxy.UserName, externalProxy.Password));
     }
 
     /// <summary>
@@ -212,14 +249,35 @@ internal class TcpConnectionFactory : IDisposable
         session.CustomUpStreamProxyUsed = customUpStreamProxy;
 
         var uri = session.HttpClient.Request.RequestUri;
-        var upStreamEndPoint = session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint;
+        var (upStreamEndPoint, upStreamEndPointIPv4, upStreamEndPointIPv6) =
+            ResolveConfiguredUpStreamEndPoints(session, server);
         var upStreamProxy = customUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
 
         // resolve the effective proxy (post-bypass) so the key matches the connection's actual route
         upStreamProxy = GetEffectiveUpstreamProxy(upStreamProxy, uri.Host, uri.Port);
 
+        // Mirror the connectHost/connectPort logic from GetServerConnection so that the key
+        // computed here is identical to the key stored on connections created by that method.
+        string? connectHost = null;
+        int? connectPort = null;
+        if (session.ProxyEndPoint is TransparentBaseProxyEndPoint transparentEndPoint
+            && !string.IsNullOrEmpty(transparentEndPoint.ForwardHost))
+        {
+            connectHost = transparentEndPoint.ForwardHost;
+            connectPort = transparentEndPoint.ForwardPort;
+        }
+
         return GetConnectionCacheKey(uri.Host, uri.Port, isHttps, applicationProtocols, upStreamEndPoint,
-            upStreamProxy);
+            upStreamProxy, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
+    }
+
+    private static (IPEndPoint? Generic, IPEndPoint? IPv4, IPEndPoint? IPv6) ResolveConfiguredUpStreamEndPoints(
+        SessionEventArgsBase session, ProxyServer server)
+    {
+        return (
+            session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
+            session.HttpClient.UpStreamEndPointIPv4 ?? server.UpStreamEndPointIPv4,
+            session.HttpClient.UpStreamEndPointIPv6 ?? server.UpStreamEndPointIPv6);
     }
 
 
@@ -294,7 +352,8 @@ internal class TcpConnectionFactory : IDisposable
             port = uri.Port;
         }
 
-        var upStreamEndPoint = session.HttpClient.UpStreamEndPoint ?? proxyServer.UpStreamEndPoint;
+        var (upStreamEndPoint, upStreamEndPointIPv4, upStreamEndPointIPv6) =
+            ResolveConfiguredUpStreamEndPoints(session, proxyServer);
         var upStreamProxy = customUpStreamProxy ??
                             (isHttps ? proxyServer.UpStreamHttpsProxy : proxyServer.UpStreamHttpProxy);
 
@@ -311,7 +370,7 @@ internal class TcpConnectionFactory : IDisposable
 
         return await GetServerConnection(proxyServer, host, port, session.HttpClient.Request.HttpVersion, isHttps,
             applicationProtocols, isConnect, session, upStreamEndPoint, upStreamProxy, noCache, prefetch,
-            cancellationToken, connectHost, connectPort);
+            cancellationToken, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
     }
 
     /// <summary>
@@ -336,16 +395,24 @@ internal class TcpConnectionFactory : IDisposable
         Version httpVersion, bool isHttps, List<SslApplicationProtocol>? applicationProtocols, bool isConnect,
         SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
         bool noCache, bool prefetch, CancellationToken cancellationToken,
-        string? connectHost = null, int? connectPort = null)
+        string? connectHost = null, int? connectPort = null,
+        IPEndPoint? upStreamEndPointIPv4 = null, IPEndPoint? upStreamEndPointIPv6 = null)
     {
         var sslProtocol = sessionArgs.ClientConnection.SslProtocol;
+
+        // Prefer explicitly passed family endpoints; otherwise take session/server configuration.
+        var configured = ResolveConfiguredUpStreamEndPoints(sessionArgs, proxyServer);
+        upStreamEndPoint ??= configured.Generic;
+        upStreamEndPointIPv4 ??= configured.IPv4;
+        upStreamEndPointIPv6 ??= configured.IPv6;
 
         // resolve the effective proxy (post-bypass) so that direct and proxied connections to the
         // same destination don't collide in the pool, and so the connection's stored key matches.
         externalProxy = GetEffectiveUpstreamProxy(externalProxy, remoteHostName, remotePort);
 
         var cacheKey = GetConnectionCacheKey(remoteHostName, remotePort,
-            isHttps, applicationProtocols, upStreamEndPoint, externalProxy, connectHost, connectPort);
+            isHttps, applicationProtocols, upStreamEndPoint, externalProxy, connectHost, connectPort,
+            upStreamEndPointIPv4, upStreamEndPointIPv6);
 
         if (proxyServer.EnableConnectionPool && !noCache)
             if (cache.TryGetValue(cacheKey, out var existingConnections))
@@ -368,7 +435,7 @@ internal class TcpConnectionFactory : IDisposable
 
         var connection = await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
             applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey,
-            prefetch, cancellationToken, connectHost, connectPort);
+            prefetch, cancellationToken, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
 
         return connection;
     }
@@ -397,7 +464,8 @@ internal class TcpConnectionFactory : IDisposable
         ProxyServer proxyServer, SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint,
         IExternalProxy? externalProxy, string cacheKey,
         bool prefetch, CancellationToken cancellationToken,
-        string? connectHost = null, int? connectPort = null)
+        string? connectHost = null, int? connectPort = null,
+        IPEndPoint? upStreamEndPointIPv4 = null, IPEndPoint? upStreamEndPointIPv6 = null)
     {
         // The actual destination we open the TCP connection to. When a fixed forward target
         // is configured, this differs from remoteHostName/remotePort which are kept for
@@ -450,6 +518,7 @@ internal class TcpConnectionFactory : IDisposable
         // which re-runs DNS/TCP-connect from scratch): every Mark* call just overwrites with the current
         // instant, so the final values always reflect the attempt that actually succeeded.
         var timing = proxyServer.EnableRequestTimingCapture ? new UpstreamConnectionTiming(DateTime.UtcNow) : null;
+        IPEndPoint? boundEndPoint = null;
 
         retry:
         try
@@ -481,7 +550,24 @@ internal class TcpConnectionFactory : IDisposable
                 try
                 {
                     var ipAddress = ipAddresses[i];
-                    var addressFamily = upStreamEndPoint?.AddressFamily ?? ipAddress.AddressFamily;
+                    // Select local bind after destination resolution so IPv4/IPv6 adapters can coexist (#951).
+                    var resolvedBind = UpStreamEndPointSelector.Resolve(ipAddress.AddressFamily,
+                        sessionArgs.HttpClient.UpStreamEndPoint, sessionArgs.HttpClient.UpStreamEndPointIPv4,
+                        sessionArgs.HttpClient.UpStreamEndPointIPv6,
+                        proxyServer.UpStreamEndPoint, proxyServer.UpStreamEndPointIPv4,
+                        proxyServer.UpStreamEndPointIPv6);
+                    // Prefer selector result; fall back to the legacy single endpoint only when families match.
+                    if (resolvedBind == null && upStreamEndPoint != null &&
+                        upStreamEndPoint.AddressFamily == ipAddress.AddressFamily)
+                        resolvedBind = upStreamEndPoint;
+                    if (resolvedBind == null && upStreamEndPointIPv4 != null &&
+                        ipAddress.AddressFamily == AddressFamily.InterNetwork)
+                        resolvedBind = upStreamEndPointIPv4;
+                    if (resolvedBind == null && upStreamEndPointIPv6 != null &&
+                        ipAddress.AddressFamily == AddressFamily.InterNetworkV6)
+                        resolvedBind = upStreamEndPointIPv6;
+
+                    var addressFamily = resolvedBind?.AddressFamily ?? ipAddress.AddressFamily;
 
                     if (socks)
                     {
@@ -510,7 +596,7 @@ internal class TcpConnectionFactory : IDisposable
                         tcpServerSocket = new Socket(addressFamily, SocketType.Stream, ProtocolType.Tcp);
                     }
 
-                    if (upStreamEndPoint != null) tcpServerSocket.Bind(upStreamEndPoint);
+                    if (resolvedBind != null) tcpServerSocket.Bind(resolvedBind);
 
                     tcpServerSocket.NoDelay = proxyServer.NoDelay;
                     tcpServerSocket.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
@@ -536,11 +622,12 @@ internal class TcpConnectionFactory : IDisposable
                             if (remoteIpAddresses == null || remoteIpAddresses.Length == 0)
                                 throw new Exception($"Could not resolve the SOCKS remote hostname {connectHostName}");
 
-                            // Known limitation: when the proxy resolves the remote host to multiple
-                            // addresses we only attempt the first. Per-remote-address failover would
-                            // require restructuring the shared connect/timeout loop below (which iterates
-                            // over the PROXY addresses, not the remote target addresses) and is left as a
-                            // future improvement to avoid destabilizing the connection path.
+                            // Prefer IPv4 when both families are returned so SOCKS ATYP selection is
+                            // predictable on dual-stack hosts (e.g. localhost → 127.0.0.1 before ::1).
+                            // Known limitation: when multiple addresses remain we still only attempt the
+                            // first. Per-remote-address failover would require restructuring the shared
+                            // connect/timeout loop below and is left as a future improvement.
+                            Array.Sort(remoteIpAddresses, (x, y) => x.AddressFamily.CompareTo(y.AddressFamily));
                             connectTask = ProxySocketConnectionTaskFactory.CreateTask(
                                 (ProxySocket.ProxySocket)tcpServerSocket, remoteIpAddresses[0], connectPortNumber);
                         }
@@ -554,6 +641,12 @@ internal class TcpConnectionFactory : IDisposable
                         Task.Delay(proxyServer.ConnectTimeOutSeconds * 1000, cancellationToken));
                     if (!connectTask.IsCompleted || !tcpServerSocket.Connected)
                     {
+                        // Connect race lost to ConnectTimeOutSeconds — surface a typed timeout so
+                        // diagnostics / callers can distinguish it from other connect failures.
+                        lastException = new ProxyTimeoutException(
+                            $"Timed out connecting to {hostname}:{port} after {proxyServer.ConnectTimeOutSeconds}s.",
+                            ProxyTimeoutKind.Connect);
+
                         // here we can just do some cleanup and let the loop continue since
                         // we will either get a connection or wind up with a null tcpClient
                         // which will throw
@@ -579,6 +672,7 @@ internal class TcpConnectionFactory : IDisposable
                         continue;
                     }
 
+                    boundEndPoint = resolvedBind;
                     break;
                 }
                 catch (Exception e)
@@ -604,15 +698,20 @@ internal class TcpConnectionFactory : IDisposable
                         // under, the new proxy rather than the one that just failed.
                         var retryProxy = GetEffectiveUpstreamProxy(newUpstreamProxy, remoteHostName, remotePort);
                         var retryCacheKey = GetConnectionCacheKey(remoteHostName, remotePort, isHttps,
-                            applicationProtocols, upStreamEndPoint, retryProxy, connectHost, connectPort);
+                            applicationProtocols, upStreamEndPoint, retryProxy, connectHost, connectPort,
+                            upStreamEndPointIPv4, upStreamEndPointIPv6);
 
                         return await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps,
                             sslProtocol, applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint,
-                            retryProxy, retryCacheKey, prefetch, cancellationToken, connectHost, connectPort);
+                            retryProxy, retryCacheKey, prefetch, cancellationToken, connectHost, connectPort,
+                            upStreamEndPointIPv4, upStreamEndPointIPv6);
                     }
                 }
 
                 if (prefetch) return null;
+
+                if (lastException is ProxyTimeoutException timeoutException)
+                    throw timeoutException;
 
                 throw new Exception($"Could not establish connection to {hostname}", lastException);
             }
@@ -626,69 +725,27 @@ internal class TcpConnectionFactory : IDisposable
 
             if (externalProxy != null && externalProxy.ProxyType == ExternalProxyType.Http && (isConnect || isHttps))
             {
-                var authority = $"{connectHostName}:{connectPortNumber}";
-                var authorityBytes = authority.GetByteString();
-                var connectRequest = new ConnectRequest(authorityBytes)
+                // Ordered two-hop chain (issue #909): CONNECT to NextHop through the first proxy,
+                // then CONNECT to the origin through that tunnel. Only HTTP hops are supported.
+                if (externalProxy.NextHop != null)
                 {
-                    IsHttps = isHttps,
-                    RequestUriString8 = authorityBytes,
-                    HttpVersion = httpVersion
-                };
+                    if (externalProxy.NextHop.ProxyType != ExternalProxyType.Http)
+                        throw new NotSupportedException(
+                            "Upstream proxy chaining currently supports HTTP hops only (SOCKS NextHop is not implemented).");
 
-                connectRequest.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionKeepAlive);
-                connectRequest.Headers.AddHeader(KnownHeaders.Host, authority);
-
-                if (!externalProxy.UseDefaultCredentials &&
-                    !string.IsNullOrEmpty(externalProxy.UserName) && externalProxy.Password != null)
-                {
-                    connectRequest.Headers.AddHeader(HttpHeader.ProxyConnectionKeepAlive);
-                    connectRequest.Headers.AddHeader(
-                        HttpHeader.GetProxyAuthorizationHeader(externalProxy.UserName, externalProxy.Password));
+                    var nextAuthority = $"{externalProxy.NextHop.HostName}:{externalProxy.NextHop.Port}";
+                    var hop1WinAuth = await EstablishHttpUpstreamConnectAsync(proxyServer, stream, externalProxy,
+                        nextAuthority, isHttps, httpVersion, cancellationToken);
+                    var originAuthority = $"{connectHostName}:{connectPortNumber}";
+                    var hop2WinAuth = await EstablishHttpUpstreamConnectAsync(proxyServer, stream,
+                        externalProxy.NextHop, originAuthority, isHttps, httpVersion, cancellationToken);
+                    upstreamProxyWinAuthenticated = hop1WinAuth || hop2WinAuth;
                 }
-
-                var authenticationData = new InternalDataStore();
-                var authenticationAttempts = 0;
-
-                while (true)
+                else
                 {
-                    await proxyServer.OnBeforeUpStreamConnectRequest(connectRequest);
-                    await stream.WriteRequestAsync(connectRequest, cancellationToken);
-
-                    var httpStatus = await stream.ReadResponseStatus(cancellationToken);
-                    var headers = new HeaderCollection();
-                    await HeaderParser.ReadHeaders(stream, headers, cancellationToken);
-
-                    if (httpStatus.StatusCode == (int)HttpStatusCode.OK ||
-                        httpStatus.Description.EqualsIgnoreCase("Connection Established"))
-                    {
-                        upstreamProxyWinAuthenticated = authenticationAttempts > 0;
-                        break;
-                    }
-
-                    await DrainUpstreamProxyResponseBody(stream, headers, cancellationToken);
-
-                    if (httpStatus.StatusCode != (int)HttpStatusCode.ProxyAuthenticationRequired ||
-                        !externalProxy.UseDefaultCredentials ||
-                        authenticationAttempts >= MaximumUpstreamProxyAuthenticationAttempts ||
-                        !TryGetUpstreamProxyAuthenticationChallenge(headers, out var scheme, out var challenge))
-                        throw new Exception("Upstream proxy failed to create a secure tunnel");
-
-                    if (headers.GetHeaderValueOrNull(KnownHeaders.Connection)
-                            ?.EqualsIgnoreCase(KnownHeaders.ConnectionClose.String) == true ||
-                        headers.GetHeaderValueOrNull(KnownHeaders.ProxyConnection)
-                            ?.EqualsIgnoreCase(KnownHeaders.ProxyConnectionClose.String) == true)
-                        throw new Exception("Upstream proxy closed the connection during authentication");
-
-                    var token = proxyServer.GenerateUpstreamProxyWinAuthToken(externalProxy, scheme!, challenge,
-                        authenticationData);
-                    if (string.IsNullOrEmpty(token))
-                        throw new Exception("Failed to generate an upstream proxy authentication token");
-
-                    connectRequest.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyAuthorization,
-                        string.Concat(scheme, token));
-                    connectRequest.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyConnection,
-                        KnownHeaders.ConnectionKeepAlive.String);
-                    authenticationAttempts++;
+                    var authority = $"{connectHostName}:{connectPortNumber}";
+                    upstreamProxyWinAuthenticated = await EstablishHttpUpstreamConnectAsync(proxyServer, stream,
+                        externalProxy, authority, isHttps, httpVersion, cancellationToken);
                 }
 
                 timing?.MarkUpstreamProxyConnected();
@@ -774,12 +831,90 @@ internal class TcpConnectionFactory : IDisposable
         timing?.MarkEstablished();
 
         return new TcpServerConnection(proxyServer, tcpServerSocket, stream, remoteHostName, remotePort, isHttps,
-            negotiatedApplicationProtocol, httpVersion, externalProxy, upStreamEndPoint, cacheKey)
+            negotiatedApplicationProtocol, httpVersion, externalProxy, boundEndPoint ?? upStreamEndPoint, cacheKey)
         {
             IsWinAuthenticated = upstreamProxyWinAuthenticated,
             UsedClientCertificate = usedClientCertificate,
             Timing = timing
         };
+    }
+
+    /// <summary>
+    ///     Sends an HTTP CONNECT for <paramref name="authority" /> through an already-open stream to
+    ///     <paramref name="proxy" />, handling Basic and WinAuth 407 challenges. Returns whether WinAuth
+    ///     was used successfully.
+    /// </summary>
+    private async Task<bool> EstablishHttpUpstreamConnectAsync(ProxyServer proxyServer, HttpServerStream stream,
+        IExternalProxy proxy, string authority, bool isHttps, Version httpVersion,
+        CancellationToken cancellationToken)
+    {
+        var authorityBytes = authority.GetByteString();
+        var connectRequest = new ConnectRequest(authorityBytes)
+        {
+            IsHttps = isHttps,
+            RequestUriString8 = authorityBytes,
+            HttpVersion = httpVersion
+        };
+
+        connectRequest.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionKeepAlive);
+        connectRequest.Headers.AddHeader(KnownHeaders.Host, authority);
+
+        if (!proxy.UseDefaultCredentials &&
+            !string.IsNullOrEmpty(proxy.UserName) && proxy.Password != null)
+        {
+            connectRequest.Headers.AddHeader(HttpHeader.ProxyConnectionKeepAlive);
+            connectRequest.Headers.AddHeader(
+                HttpHeader.GetProxyAuthorizationHeader(proxy.UserName, proxy.Password));
+        }
+
+        var authenticationData = new InternalDataStore();
+        var authenticationAttempts = 0;
+
+        while (true)
+        {
+            await proxyServer.OnBeforeUpStreamConnectRequest(connectRequest);
+            await stream.WriteRequestAsync(connectRequest, cancellationToken);
+
+            var httpStatus = await stream.ReadResponseStatus(cancellationToken)
+                             ?? throw new IOException(
+                                 "Upstream proxy closed the connection before sending a CONNECT response.");
+            var headers = new HeaderCollection();
+            await HeaderParser.ReadHeaders(stream, headers, cancellationToken);
+
+            if (httpStatus.StatusCode == (int)HttpStatusCode.OK ||
+                httpStatus.Description.EqualsIgnoreCase("Connection Established"))
+                return authenticationAttempts > 0;
+
+            var bodyPreview = await DrainUpstreamProxyResponseBody(stream, headers, cancellationToken);
+
+            if (httpStatus.StatusCode != (int)HttpStatusCode.ProxyAuthenticationRequired ||
+                !proxy.UseDefaultCredentials ||
+                authenticationAttempts >= MaximumUpstreamProxyAuthenticationAttempts ||
+                !TryGetUpstreamProxyAuthenticationChallenge(headers, out var scheme, out var challenge))
+            {
+                throw CreateUpstreamProxyConnectException(httpStatus, headers, bodyPreview);
+            }
+
+            if (headers.GetHeaderValueOrNull(KnownHeaders.Connection)
+                    ?.EqualsIgnoreCase(KnownHeaders.ConnectionClose.String) == true ||
+                headers.GetHeaderValueOrNull(KnownHeaders.ProxyConnection)
+                    ?.EqualsIgnoreCase(KnownHeaders.ProxyConnectionClose.String) == true)
+            {
+                throw CreateUpstreamProxyConnectException(httpStatus, headers, bodyPreview,
+                    "Upstream proxy closed the connection during authentication");
+            }
+
+            var token = proxyServer.GenerateUpstreamProxyWinAuthToken(proxy, scheme!, challenge,
+                authenticationData);
+            if (string.IsNullOrEmpty(token))
+                throw new Exception("Failed to generate an upstream proxy authentication token");
+
+            connectRequest.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyAuthorization,
+                string.Concat(scheme, token));
+            connectRequest.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyConnection,
+                KnownHeaders.ConnectionKeepAlive.String);
+            authenticationAttempts++;
+        }
     }
 
     private static bool TryGetUpstreamProxyAuthenticationChallenge(HeaderCollection headers, out string? scheme,
@@ -808,23 +943,50 @@ internal class TcpConnectionFactory : IDisposable
         return false;
     }
 
-    private static async Task DrainUpstreamProxyResponseBody(HttpServerStream stream, HeaderCollection headers,
-        CancellationToken cancellationToken)
+    private static UpstreamProxyConnectException CreateUpstreamProxyConnectException(
+        ResponseStatusInfo httpStatus, HeaderCollection headers, string? bodyPreview, string? message = null)
     {
+        var headerSnapshot = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var header in headers)
+        {
+            if (!headerSnapshot.ContainsKey(header.Name))
+                headerSnapshot[header.Name] = header.Value;
+        }
+
+        var effectiveMessage = message ??
+                               $"Upstream proxy failed to create a secure tunnel (HTTP {httpStatus.StatusCode} {httpStatus.Description}).";
+
+        return new UpstreamProxyConnectException(effectiveMessage, httpStatus.StatusCode, httpStatus.Description,
+            headerSnapshot, bodyPreview);
+    }
+
+    private static async Task<string?> DrainUpstreamProxyResponseBody(HttpServerStream stream,
+        HeaderCollection headers, CancellationToken cancellationToken)
+    {
+        var preview = new MemoryStream();
+
         var transferEncoding = headers.GetHeaderValueOrNull(KnownHeaders.TransferEncoding);
         if (transferEncoding != null && transferEncoding.ContainsIgnoreCase(KnownHeaders.TransferEncodingChunked.String))
         {
-            await DrainChunkedBody(stream, cancellationToken);
-            return;
+            await DrainChunkedBody(stream, preview, cancellationToken);
+            return PreviewToString(preview);
         }
 
         var contentLengthValue = headers.GetHeaderValueOrNull(KnownHeaders.ContentLength);
-        if (!long.TryParse(contentLengthValue, out var remaining) || remaining <= 0) return;
+        if (!long.TryParse(contentLengthValue, out var remaining) || remaining <= 0) return null;
 
-        await DrainBytes(stream, remaining, cancellationToken);
+        await DrainBytes(stream, remaining, preview, cancellationToken);
+        return PreviewToString(preview);
     }
 
-    private static async Task DrainChunkedBody(HttpServerStream stream, CancellationToken cancellationToken)
+    private static string? PreviewToString(MemoryStream preview)
+    {
+        if (preview.Length == 0) return null;
+        return Encoding.UTF8.GetString(preview.GetBuffer(), 0, (int)preview.Length);
+    }
+
+    private static async Task DrainChunkedBody(HttpServerStream stream, MemoryStream preview,
+        CancellationToken cancellationToken)
     {
         while (true)
         {
@@ -849,11 +1011,13 @@ internal class TcpConnectionFactory : IDisposable
             }
 
             // chunk data followed by its trailing CRLF
-            await DrainBytes(stream, chunkSize + 2, cancellationToken);
+            await DrainBytes(stream, chunkSize, preview, cancellationToken);
+            await DrainBytes(stream, 2, null, cancellationToken);
         }
     }
 
-    private static async Task DrainBytes(HttpServerStream stream, long count, CancellationToken cancellationToken)
+    private static async Task DrainBytes(HttpServerStream stream, long count, MemoryStream? preview,
+        CancellationToken cancellationToken)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(8192);
         try
@@ -863,6 +1027,13 @@ internal class TcpConnectionFactory : IDisposable
                 var read = await stream.ReadAsync(buffer, 0, (int)Math.Min(buffer.Length, count), cancellationToken);
                 if (read <= 0)
                     throw new IOException("Upstream proxy closed the connection while sending a response body");
+
+                if (preview != null && preview.Length < UpstreamProxyRejectionBodyPreviewLimit)
+                {
+                    var toCopy = Math.Min(read, UpstreamProxyRejectionBodyPreviewLimit - (int)preview.Length);
+                    preview.Write(buffer, 0, toCopy);
+                }
+
                 count -= read;
             }
         }
@@ -1033,11 +1204,6 @@ internal class TcpConnectionFactory : IDisposable
         }
 
         disposed = true;
-    }
-
-    ~TcpConnectionFactory()
-    {
-        Dispose(false);
     }
 
     private static class SocketConnectionTaskFactory

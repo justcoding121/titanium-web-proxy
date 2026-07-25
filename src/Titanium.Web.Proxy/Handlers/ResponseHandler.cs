@@ -1,9 +1,13 @@
 using System;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Logging;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.WinAuth.Security;
 
 namespace Titanium.Web.Proxy;
@@ -20,32 +24,43 @@ public partial class ProxyServer
     /// <returns> The task.</returns>
     private async Task HandleHttpSessionResponse(SessionEventArgs args)
     {
-        var cancellationToken = args.CancellationTokenSource.Token;
+        var cancellationToken = args.CancellationToken;
 
-        // read response & headers from server
-        await args.HttpClient.ReceiveResponse(cancellationToken);
-
-        // Relay/consume every interim (1xx) response that precedes the final response on this connection.
-        // 100 Continue is discarded exactly as before - per spec, "the client can simply discard this
-        // interim response" (the proxy itself already consumed/acted on it, if at all, while sending the
-        // request body in HttpWebClient.SendRequest). Any other 1xx (e.g. 103 Early Hints) has no dedicated
-        // event yet, so it is relayed to the client verbatim - interim responses never carry a body
-        // (RFC 9110 �15.2) - and the proxy loops back onto the same connection for the next message.
-        // 101 Switching Protocols is excluded: it *is* the final message of this exchange (the connection
-        // becomes a raw tunnel immediately afterwards), so it must fall through to the normal
-        // response-handling path below instead of looping. Interim responses are not exposed through
-        // BeforeResponse; only the final response is.
-        while (args.HttpClient.Response.StatusCode is >= 100 and <= 199
-               and not (int)HttpStatusCode.SwitchingProtocols)
+        try
         {
-            if (args.HttpClient.Response.StatusCode != (int)HttpStatusCode.Continue)
-                await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+            // read response & headers from server (response-header deadline / idle-read for exempt paths)
+            await ReceiveOriginResponseWithTimeout(args, cancellationToken);
 
-            await args.ClearResponse(cancellationToken);
-            await args.HttpClient.ReceiveResponse(cancellationToken);
+            // Relay/consume every interim (1xx) response that precedes the final response on this connection.
+            // 100 Continue is discarded exactly as before - per spec, "the client can simply discard this
+            // interim response" (the proxy itself already consumed/acted on it, if at all, while sending the
+            // request body in HttpWebClient.SendRequest). Any other 1xx (e.g. 103 Early Hints) has no dedicated
+            // event yet, so it is relayed to the client verbatim - interim responses never carry a body
+            // (RFC 9110 §15.2) - and the proxy loops back onto the same connection for the next message.
+            // 101 Switching Protocols is excluded: it *is* the final message of this exchange (the connection
+            // becomes a raw tunnel immediately afterwards), so it must fall through to the normal
+            // response-handling path below instead of looping. Interim responses are not exposed through
+            // BeforeResponse; only the final response is.
+            while (args.HttpClient.Response.StatusCode is >= 100 and <= 199
+                   and not (int)HttpStatusCode.SwitchingProtocols)
+            {
+                if (args.HttpClient.Response.StatusCode != (int)HttpStatusCode.Continue)
+                {
+                    await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                    args.IsClientResponseCommitted = true;
+                }
+
+                await args.ClearResponse(cancellationToken);
+                await ReceiveOriginResponseWithTimeout(args, cancellationToken);
+            }
+
+            args.Timing?.MarkResponseHeadersReceived();
         }
-
-        args.Timing?.MarkResponseHeadersReceived();
+        catch (ProxyTimeoutException ex)
+        {
+            await HandleProxyTimeoutAsync(args, ex, cancellationToken);
+            return;
+        }
 
         var response = args.HttpClient.Response;
         args.ReRequest = false;
@@ -88,6 +103,7 @@ public partial class ProxyServer
         {
             // write custom user response with body and return.
             await clientStream.WriteResponseAsync(response, cancellationToken);
+            args.IsClientResponseCommitted = true;
 
             // if the user requested a streamed body, produce it now without buffering.
             if (response.StreamBodyWriter != null && !response.IsBodySent)
@@ -143,9 +159,31 @@ public partial class ProxyServer
 
         response.Locked = true;
 
-        if (!args.IsTransparent && !args.IsSocks) response.Headers.FixProxyHeaders();
+        // Framing normalize applies to every endpoint mode (CL+TE smuggling guard). Proxy-Connection
+        // rewriting remains explicit-proxy-only.
+        if (!args.IsTransparent && !args.IsSocks)
+        {
+            response.Headers.FixProxyHeaders();
+            // Via injection on outgoing response (RFC 9110 §7.6.3).
+            if (!string.IsNullOrEmpty(ViaHeaderPseudonym))
+                AddViaHeader(response.Headers, args.HttpClient.Response.HttpVersion, ViaHeaderPseudonym);
+        }
+        else
+        {
+            response.Headers.NormalizeMessageFraming();
+        }
+
+        // HTTP/1.0 clients do not support chunked transfer encoding (RFC 7230 §4.1 / RFC 1945).
+        // Buffer the body so it can be reframed with a Content-Length header instead.
+        if (args.HttpClient.Request.HttpVersion == HttpHeader.Version10 && response.IsChunked)
+        {
+            await args.GetResponseBody(cancellationToken);
+            // ContentLength setter also removes Transfer-Encoding: chunked via IsChunked = false.
+            response.ContentLength = response.Body.Length;
+        }
 
         await clientStream.WriteResponseAsync(response, cancellationToken);
+        args.IsClientResponseCommitted = true;
 
         if (response.OriginalHasBody)
         {
@@ -156,14 +194,87 @@ public partial class ProxyServer
             }
             else
             {
-                // Copy body if exists
+                // Copy body if exists (idle-read window on stalled transfers)
                 var serverStream = args.HttpClient.Connection.Stream;
-                await serverStream.CopyBodyAsync(response, false, clientStream, TransformationMode.None,
-                    false, args, cancellationToken);
+                try
+                {
+                    using var idleScope = ProxyTimeoutScope.Create(cancellationToken,
+                        ResolveIdleReadTimeout(args), ProxyTimeoutKind.IdleRead);
+                    try
+                    {
+                        await serverStream.CopyBodyAsync(response, false, clientStream, TransformationMode.None,
+                            false, args, idleScope.Token);
+                    }
+                    catch (Exception ex) when (ex is OperationCanceledException || idleScope.IsTimedOut())
+                    {
+                        idleScope.ThrowIfTimedOut(ex);
+                        throw;
+                    }
+                }
+                catch (ProxyTimeoutException ex)
+                {
+                    // Response status already committed — terminate cleanly without injecting HTTP.
+                    await HandleProxyTimeoutAsync(args, ex, cancellationToken);
+                    return;
+                }
             }
 
             response.IsBodyReceived = true;
         }
+    }
+
+    /// <summary>
+    ///     Waits for origin response status/headers under the effective response-header deadline,
+    ///     or under idle-read when the session is exempt from short header deadlines.
+    /// </summary>
+    private async Task ReceiveOriginResponseWithTimeout(SessionEventArgs args, CancellationToken cancellationToken)
+    {
+        var headerTimeout = ResolveResponseHeaderTimeout(args);
+        var kind = headerTimeout.HasValue ? ProxyTimeoutKind.ResponseHeader : ProxyTimeoutKind.IdleRead;
+        var timeout = headerTimeout ?? ResolveIdleReadTimeout(args);
+
+        using var scope = ProxyTimeoutScope.Create(cancellationToken, timeout, kind);
+        try
+        {
+            await args.HttpClient.ReceiveResponse(scope.Token);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException || scope.IsTimedOut())
+        {
+            scope.ThrowIfTimedOut(ex);
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     Surfaces a typed timeout through diagnostics. Before any client response bytes are committed,
+    ///     writes HTTP 504 Gateway Timeout; afterwards only terminates the session.
+    /// </summary>
+    private async Task HandleProxyTimeoutAsync(SessionEventArgs args, ProxyTimeoutException ex,
+        CancellationToken cancellationToken)
+    {
+        args.Exception = ex;
+        args.HttpClient.CloseServerConnection = true;
+        ProxyDiagnostics.ReportBenign(logger, $"Proxy {ex.Kind} timeout", ex);
+
+        // 504 only before any response bytes have been committed; afterward terminate without injecting HTTP.
+        if (!args.IsClientResponseCommitted && !args.HttpClient.Response.Locked)
+        {
+            try
+            {
+                args.GenericResponse("Gateway Timeout", HttpStatusCode.GatewayTimeout,
+                    closeServerConnection: true);
+                await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                args.IsClientResponseCommitted = true;
+            }
+            catch (Exception writeEx)
+            {
+                ProxyDiagnostics.ReportBenign(logger, "Failed to write 504 Gateway Timeout after proxy timeout",
+                    writeEx);
+            }
+        }
+
+        if (!args.CancellationTokenSource.IsCancellationRequested)
+            args.CancellationTokenSource.Cancel();
     }
 
     /// <summary>

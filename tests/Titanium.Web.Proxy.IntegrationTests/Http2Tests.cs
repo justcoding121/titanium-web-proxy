@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -20,9 +20,24 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     decoder was already handled, so these tests exercise many requests over one HTTP/2 connection to prove
 ///     the dynamic table is actually being reused end-to-end without corrupting headers.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class Http2Tests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     [Timeout(30 * 1000)]
     public async Task Http2_Repeated_Response_Header_Round_Trips_Correctly_Across_Multiple_Requests()
@@ -33,7 +48,7 @@ public class Http2Tests
         const string repeatedValue =
             "a-fairly-long-repeated-header-value-used-to-exercise-http2-hpack-dynamic-table-reuse-across-requests";
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
         {
@@ -71,7 +86,7 @@ public class Http2Tests
         const string repeatedValue =
             "another-fairly-long-repeated-header-value-for-the-request-direction-hpack-dynamic-table";
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var receivedValues = new System.Collections.Concurrent.ConcurrentBag<string>();
         server.HandleRequest(context =>
@@ -106,7 +121,7 @@ public class Http2Tests
         // Fires many concurrent requests over the same HTTP/2 connection (true multiplexing, interleaved
         // frames) each with a stream-specific header value, guarding against the shared encoder/decoder
         // introducing cross-stream contamination now that state is persisted per connection direction.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
         {

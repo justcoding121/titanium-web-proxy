@@ -6,15 +6,31 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
+[DoNotParallelize]
 [TestClass]
 public class ExpectContinueTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     public async Task ReverseProxy_GotContinueAndOkResponse()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var continueServer = new HttpContinueServer
         {
@@ -41,7 +57,7 @@ public class ExpectContinueTests
     [TestMethod]
     public async Task ReverseProxy_GotExpectationFailedResponse()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var continueServer = new HttpContinueServer { ExpectationResponse = HttpStatusCode.ExpectationFailed };
         server.HandleTcpRequest(continueServer.HandleRequest);
@@ -64,7 +80,7 @@ public class ExpectContinueTests
     [TestMethod]
     public async Task ReverseProxy_GotNotFoundResponse()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var continueServer = new HttpContinueServer { ExpectationResponse = HttpStatusCode.NotFound };
         server.HandleTcpRequest(continueServer.HandleRequest);
@@ -87,7 +103,7 @@ public class ExpectContinueTests
     [TestMethod]
     public async Task ReverseProxy_BeforeRequestThrows()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
         var continueServer = new HttpContinueServer { ExpectationResponse = HttpStatusCode.Continue };
         server.HandleTcpRequest(continueServer.HandleRequest);

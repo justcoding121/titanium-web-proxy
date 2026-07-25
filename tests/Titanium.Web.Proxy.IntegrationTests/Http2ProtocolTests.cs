@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
@@ -23,14 +23,27 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     and <see cref="Http2RawOriginServer" /> for byte-level control, as in
 ///     <see cref="Http2TrailerInterimContinuationTests" />.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class Http2ProtocolTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     private static X509Certificate2 CreateOriginCertificate()
     {
-        using var dummyProxy = new ProxyServer(false, false, false);
-        dummyProxy.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
-        return dummyProxy.CertificateManager.CreateServerCertificate("localhost").Result;
+        return TestCertificateAuthority.ServerCertificate;
     }
 
     /// <summary>
@@ -80,7 +93,7 @@ public class Http2ProtocolTests
                 Encoding.ASCII.GetBytes("second-body"));
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -149,7 +162,7 @@ public class Http2ProtocolTests
             }
         });
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -187,7 +200,7 @@ public class Http2ProtocolTests
         using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
         rawServer.HandleConnection(NoOpOriginHandler());
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -248,7 +261,7 @@ public class Http2ProtocolTests
         using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
         rawServer.HandleConnection(NoOpOriginHandler());
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -284,7 +297,7 @@ public class Http2ProtocolTests
         using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
         rawServer.HandleConnection(NoOpOriginHandler());
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -306,7 +319,7 @@ public class Http2ProtocolTests
         using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
         rawServer.HandleConnection(NoOpOriginHandler());
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 
@@ -329,7 +342,7 @@ public class Http2ProtocolTests
         using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
         rawServer.HandleConnection(NoOpOriginHandler());
 
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
 

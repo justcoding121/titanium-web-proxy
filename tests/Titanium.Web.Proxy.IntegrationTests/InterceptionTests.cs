@@ -5,15 +5,31 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
+[DoNotParallelize]
 [TestClass]
 public class InterceptionTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     [TestMethod]
     public async Task Can_Intercept_Get_Requests()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var serverCalled = false;
 
@@ -50,7 +66,7 @@ public class InterceptionTests
     [TestMethod]
     public async Task Can_Intercept_Post_Requests()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -84,7 +100,7 @@ public class InterceptionTests
     [TestMethod]
     public async Task Can_Intercept_Put_Requests()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -119,7 +135,7 @@ public class InterceptionTests
     [TestMethod]
     public async Task Can_Intercept_Patch_Requests()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>
@@ -153,7 +169,7 @@ public class InterceptionTests
     [TestMethod]
     public async Task Can_Intercept_Delete_Requests()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context =>

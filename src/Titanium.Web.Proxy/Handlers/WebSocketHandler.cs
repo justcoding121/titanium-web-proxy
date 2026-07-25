@@ -1,6 +1,9 @@
+using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -16,17 +19,38 @@ public partial class ProxyServer
         HttpClientStream clientStream, TcpServerConnection serverConnection,
         CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
     {
+        // When frame-level interception is active, strip extensions that produce RSV-flagged frames
+        // (e.g. permessage-deflate sets RSV1=1) because the proxy cannot decode or re-encode them.
+        // The server will therefore not negotiate any extension, keeping the wire format plain.
+        // Phase 6 will add permessage-deflate support and relax this restriction.
+        if (args.HasWebSocketFrameInterceptHandler)
+            args.HttpClient.Request.Headers.RemoveHeader("Sec-WebSocket-Extensions");
+
         await serverConnection.Stream.WriteRequestAsync(args.HttpClient.Request, cancellationToken);
 
-        var httpStatus = await serverConnection.Stream.ReadResponseStatus(cancellationToken);
+        // WebSocket upgrades are exempt from short response-header deadlines; use idle-read if configured.
+        using (var idleScope = ProxyTimeoutScope.Create(cancellationToken,
+                   ResolveIdleReadTimeout(args), ProxyTimeoutKind.IdleRead))
+        {
+            try
+            {
+                var httpStatus = await serverConnection.Stream.ReadResponseStatus(idleScope.Token)
+                                 ?? throw new IOException(
+                                     "Server closed the connection before sending a WebSocket upgrade response.");
 
-        var response = args.HttpClient.Response;
-        response.HttpVersion = httpStatus.Version;
-        response.StatusCode = httpStatus.StatusCode;
-        response.StatusDescription = httpStatus.Description;
+                var upgradeResponse = args.HttpClient.Response;
+                upgradeResponse.HttpVersion = httpStatus.Version;
+                upgradeResponse.StatusCode = httpStatus.StatusCode;
+                upgradeResponse.StatusDescription = httpStatus.Description;
 
-        await HeaderParser.ReadHeaders(serverConnection.Stream, response.Headers,
-            cancellationToken);
+                await HeaderParser.ReadHeaders(serverConnection.Stream, upgradeResponse.Headers, idleScope.Token);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException || idleScope.IsTimedOut())
+            {
+                idleScope.ThrowIfTimedOut(ex);
+                throw;
+            }
+        }
 
         args.Timing?.MarkResponseHeadersReceived();
 
@@ -39,11 +63,12 @@ public partial class ProxyServer
         if (!args.HttpClient.Response.Locked) await OnBeforeResponse(args);
 
         // it may have changed in the user event
-        response = args.HttpClient.Response;
+        var response = args.HttpClient.Response;
         var userReplacedResponse = response.Locked;
         response.Locked = true;
 
         await clientStream.WriteResponseAsync(response, cancellationToken);
+        args.IsClientResponseCommitted = true;
 
         // The upgrade handshake is what "request timing" means for a WebSocket session - mark it complete
         // here rather than leaving it to the shared OnAfterResponse chokepoint (see its remarks), which
@@ -58,7 +83,17 @@ public partial class ProxyServer
         // along with it.
         if (userReplacedResponse) return;
 
-        await TcpHelper.SendRaw(clientStream, serverConnection.Stream, BufferPool,
-            args.OnDataSent, args.OnDataReceived, cancellationTokenSource, logger);
+        // Frame-level interception when BeforeWebSocketFrame is subscribed; otherwise keep the
+        // zero-overhead raw byte relay. DataSent/DataReceived still fire for written bytes.
+        if (args.HasWebSocketFrameInterceptHandler)
+        {
+            await WebSocketInterceptRelay.RelayAsync(clientStream, serverConnection.Stream, BufferPool,
+                args, cancellationTokenSource);
+        }
+        else
+        {
+            await TcpHelper.SendRaw(clientStream, serverConnection.Stream, BufferPool,
+                args.OnDataSent, args.OnDataReceived, cancellationTokenSource, logger);
+        }
     }
 }

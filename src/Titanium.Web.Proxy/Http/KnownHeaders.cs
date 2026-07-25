@@ -28,6 +28,7 @@ public static class KnownHeaders
     public static KnownHeader Trailer = "Trailer";
 
     // Request headers
+    public static KnownHeader Accept = "Accept";
     public static KnownHeader AcceptEncoding = "Accept-Encoding";
 
     public static KnownHeader Authorization = "Authorization";

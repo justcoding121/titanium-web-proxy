@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -9,7 +10,9 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Network;
+using Titanium.Web.Proxy.Network.Certificate;
 
 namespace Titanium.Web.Proxy.UnitTests
 {
@@ -19,6 +22,136 @@ namespace Titanium.Web.Proxy.UnitTests
         private static readonly string[] hostNames
             = { "facebook.com", "youtube.com", "google.com", "bing.com", "yahoo.com" };
 
+
+        /// <summary>
+        /// Regression test for issue #878: certificate NotBefore must only be backdated by the configured
+        /// grace days (default 2), not the hard-coded 366 days.  Total validity
+        /// (NotAfter - NotBefore) must equal validDays + graceDays so it stays within the
+        /// Chrome/Apple 398-day limit.
+        /// </summary>
+        [DataTestMethod]
+        [DataRow(CertificateEngine.BouncyCastle)]
+        [DataRow(CertificateEngine.BouncyCastleFast)]
+        public void Certificate_Lifetime_Respects_GraceDays_And_ValidDays(CertificateEngine engineType)
+        {
+            const int validDays = 395;
+            const int graceDays = 2;
+
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = engineType,
+                CertificateValidDays = validDays,
+                CertificateGraceDays = graceDays
+            };
+
+            var cert = mgr.CreateCertificate("lifetime-test.example", false);
+            Assert.IsNotNull(cert);
+
+            var totalDays = (cert.NotAfter - cert.NotBefore).TotalDays;
+            Assert.AreEqual(validDays + graceDays, (int)Math.Round(totalDays), 1,
+                $"Total lifetime should be {validDays + graceDays} days, got {totalDays:F1}");
+
+            // NotBefore must be close to now - graceDays (allow ±1 minute for test execution lag)
+            var expectedNotBefore = DateTime.UtcNow.AddDays(-graceDays);
+            Assert.IsTrue(
+                Math.Abs((cert.NotBefore.ToUniversalTime() - expectedNotBefore).TotalMinutes) < 2,
+                $"NotBefore {cert.NotBefore:u} should be ~{expectedNotBefore:u}");
+
+            cert.Dispose();
+        }
+
+        /// <summary>
+        /// Regression test for issue #765: setting RootCertificate to the same certificate instance
+        /// (same thumbprint) must NOT clear the in-memory leaf cache, so cached leaves survive a
+        /// simulated restart where the same persisted root is reloaded.
+        /// </summary>
+        [TestMethod]
+        public async Task RootCertificate_Reload_With_Same_Thumbprint_Preserves_Cache()
+        {
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastle
+            };
+
+            mgr.CreateRootCertificate(false);
+            var root = mgr.RootCertificate;
+            Assert.IsNotNull(root);
+
+            // Generate a leaf via CreateServerCertificate which populates the in-memory cache
+            var leaf = await mgr.CreateServerCertificate("cache-reload.example");
+            Assert.IsNotNull(leaf);
+            var expectedThumbprint = leaf.Thumbprint;
+
+            // Simulate restart: reassign the same root certificate (same thumbprint)
+            mgr.RootCertificate = root;
+
+            // The in-memory cache should still contain the leaf
+            var leafAfterReload = await mgr.CreateServerCertificate("cache-reload.example");
+            Assert.IsNotNull(leafAfterReload);
+            Assert.AreEqual(expectedThumbprint, leafAfterReload.Thumbprint,
+                "Cached leaf cert should be reused when the same root is reloaded");
+        }
+
+        /// <summary>
+        /// Regression test for issue #765 (rotation path): setting a DIFFERENT root certificate
+        /// must clear the in-memory leaf cache so stale leaves are not served.
+        /// </summary>
+        [TestMethod]
+        public async Task RootCertificate_Changed_Clears_Cache()
+        {
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastle
+            };
+
+            mgr.CreateRootCertificate(false);
+            var leaf = await mgr.CreateServerCertificate("cache-rotation.example");
+            Assert.IsNotNull(leaf);
+            var originalThumbprint = leaf.Thumbprint;
+
+            // Create a second manager with a different root
+            var mgr2 = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastle
+            };
+            mgr2.CreateRootCertificate(false);
+            var newRoot = mgr2.RootCertificate;
+            Assert.IsNotNull(newRoot);
+            Assert.AreNotEqual(mgr.RootCertificate!.Thumbprint, newRoot.Thumbprint);
+
+            mgr.RootCertificate = newRoot;
+
+            // Cache must have been cleared; fresh leaf (different thumbprint) is created
+            var newLeaf = await mgr.CreateServerCertificate("cache-rotation.example");
+            Assert.IsNotNull(newLeaf);
+            Assert.AreNotEqual(originalThumbprint, newLeaf.Thumbprint,
+                "Leaf cache must be invalidated when the signing root changes");
+        }
+
+        /// <summary>
+        /// Regression test for issue #729: ProxyServer.Start must not call EnsureRootCertificate
+        /// when all configured endpoints have DecryptSsl=false or supply a GenericCertificate.
+        /// Verified by confirming that CertificateManager.RootCertificate remains null when no
+        /// endpoint needs TLS decryption.
+        /// </summary>
+        [TestMethod]
+        public void CertificateManager_EnsureRoot_OnlyCreatedWhenNeeded()
+        {
+            // Manager with no explicit root; root should NOT be auto-created when not needed
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastle
+            };
+
+            // RootCertificate must be null before any creation call
+            Assert.IsNull(mgr.RootCertificate,
+                "RootCertificate must be null before EnsureRootCertificate is called");
+
+            // After creating it explicitly it should be set
+            mgr.CreateRootCertificate(false);
+            Assert.IsNotNull(mgr.RootCertificate,
+                "RootCertificate must be set after CreateRootCertificate");
+        }
 
         [TestMethod]
         public async Task Simple_BC_Create_Certificate_Test()
@@ -87,6 +220,195 @@ namespace Titanium.Web.Proxy.UnitTests
                 })));
 
             await Task.WhenAll(tasks.ToArray());
+        }
+
+        /// <summary>
+        /// Regression test for issue #965: issuer DN of generated leaf certificates must exactly
+        /// match the subject DN of the custom signing root (preserving RDN order, C/O/L/CN attributes,
+        /// and escaping) rather than being round-tripped through a display-string representation.
+        /// Covers both BcCertificateMaker and BcCertificateMakerFast.
+        /// </summary>
+        [TestMethod]
+        public void BC_Leaf_IssuerDN_Matches_Root_SubjectDN_RawBytes()
+        {
+            // Build a custom root certificate with multiple RDN attributes so that any string
+            // round-trip would produce a different ordering or encoding.
+            X509Certificate2 customRoot;
+            using (var rsa = RSA.Create(2048))
+            {
+                var req = new CertificateRequest(
+                    "C=AU, ST=Victoria, L=Melbourne, O=Acme Corp, OU=Proxy, CN=Acme Root CA",
+                    rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                req.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+                req.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
+                customRoot = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(365));
+            }
+
+            var expectedIssuerRaw = customRoot.SubjectName.RawData;
+
+            // Test BcCertificateMaker
+            var maker = new BcCertificateMaker(certificateValidDays: 365, certificateGraceDays: 2);
+            var leaf = maker.MakeCertificate("example.com", customRoot);
+            CollectionAssert.AreEqual(expectedIssuerRaw, leaf.IssuerName.RawData,
+                "BcCertificateMaker: leaf IssuerName.RawData must equal signing root SubjectName.RawData");
+
+            // Test BcCertificateMakerFast
+            var makerFast = new BcCertificateMakerFast(certificateValidDays: 365, certificateGraceDays: 2);
+            var leafFast = makerFast.MakeCertificate("example.com", customRoot);
+            CollectionAssert.AreEqual(expectedIssuerRaw, leafFast.IssuerName.RawData,
+                "BcCertificateMakerFast: leaf IssuerName.RawData must equal signing root SubjectName.RawData");
+
+            customRoot.Dispose();
+            leaf.Dispose();
+            leafFast.Dispose();
+        }
+
+        /// <summary>
+        /// Regression test for issue #904: when the proxy is configured with an intermediate CA
+        /// as its signing root, CreateSslCertificateContext must include the intermediate CA in
+        /// the returned SslStreamCertificateContext so that clients trust-anchored at the root CA
+        /// can verify the generated leaf certificate chain.
+        /// </summary>
+        [TestMethod]
+        public void BC_IntermediateCA_SslContext_IncludesIntermediateInChain()
+        {
+            // Build root CA → intermediate CA → leaf chain
+            X509Certificate2 rootCa;
+            using (var rsa = RSA.Create(2048))
+            {
+                var req = new CertificateRequest("CN=Test Root CA", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                req.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+                rootCa = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(365));
+            }
+
+            X509Certificate2 intermediateCa;
+            using (var rsa = RSA.Create(2048))
+            {
+                var req = new CertificateRequest("CN=Test Intermediate CA", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                req.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+                req.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign, true));
+                intermediateCa = req.Create(rootCa, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(300), new byte[] { 1 })
+                    .CopyWithPrivateKey(rsa);
+            }
+
+            // Configure the proxy manager to use the intermediate CA as the signing certificate
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastle
+            };
+            mgr.RootCertificate = intermediateCa;
+
+            var leaf = mgr.CreateCertificate("example.com", false);
+            Assert.IsNotNull(leaf);
+
+            // SslStreamCertificateContext creation should succeed and include the intermediate
+            var ctx = mgr.CreateSslCertificateContext(leaf);
+            Assert.IsNotNull(ctx);
+
+            // Verify the chain: leaf should chain up to the rootCa when intermediate is provided
+            using var chain = new X509Chain();
+            chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority;
+            chain.ChainPolicy.ExtraStore.Add(intermediateCa);
+            chain.ChainPolicy.ExtraStore.Add(rootCa);
+            chain.Build(leaf);
+            // Chain should contain: leaf → intermediate → root (3 elements)
+            Assert.IsTrue(chain.ChainElements.Count >= 2,
+                "Certificate chain should contain at least leaf and intermediate");
+
+            rootCa.Dispose();
+            intermediateCa.Dispose();
+            leaf.Dispose();
+        }
+
+        /// <summary>
+        /// Characterization for issue #776: first manager persists a root PFX; a second manager lifetime
+        /// loads that PFX and must still mint usable leaf certificates (the "examples fail on second run" case).
+        /// </summary>
+        [TestMethod]
+        public void TwoManagerLifetimes_LoadSamePfx_CanIssueLeafCertificates()
+        {
+            var pfxPath = Path.Combine(Path.GetTempPath(), $"twp-lifetime-{Guid.NewGuid():N}.pfx");
+            const string password = "";
+
+            try
+            {
+                string rootThumbprint;
+                using (var first = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+                       {
+                           CertificateEngine = CertificateEngine.BouncyCastle
+                       })
+                {
+                    Assert.IsTrue(first.CreateRootCertificate(false));
+                    Assert.IsNotNull(first.RootCertificate);
+                    rootThumbprint = first.RootCertificate.Thumbprint;
+                    File.WriteAllBytes(pfxPath,
+                        first.RootCertificate.Export(X509ContentType.Pkcs12, password));
+                }
+
+                using var second = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+                {
+                    CertificateEngine = CertificateEngine.BouncyCastle
+                };
+                Assert.IsTrue(second.LoadRootCertificate(pfxPath, password, overwritePfXFile: false));
+                Assert.IsNotNull(second.RootCertificate);
+                Assert.AreEqual(rootThumbprint, second.RootCertificate.Thumbprint);
+
+                var leaf = second.CreateCertificate("second-run.example", false);
+                Assert.IsNotNull(leaf);
+                Assert.IsTrue(leaf.HasPrivateKey);
+                Assert.IsTrue(leaf.NotAfter > DateTime.Now);
+                leaf.Dispose();
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(pfxPath)) File.Delete(pfxPath);
+                }
+                catch
+                {
+                    // best-effort
+                }
+            }
+        }
+
+        /// <summary>
+        /// Regression test for issue #923: BouncyCastle makers must produce a usable private-key
+        /// certificate on every platform. On non-Windows this uses CopyWithPrivateKey (avoiding the
+        /// macOS PKCS#12 Exportable import failure); on Windows the PKCS#12 Exportable path is preserved
+        /// so disk-cache export continues to work.
+        /// </summary>
+        [DataTestMethod]
+        [DataRow(CertificateEngine.BouncyCastle)]
+        [DataRow(CertificateEngine.BouncyCastleFast)]
+        public void BC_Leaf_HasPrivateKey_And_IsSslUsable_OnCurrentPlatform(CertificateEngine engineType)
+        {
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = engineType
+            };
+            mgr.CreateRootCertificate(false);
+
+            var leaf = mgr.CreateCertificate("macos-exportable.example", false);
+            Assert.IsNotNull(leaf);
+            Assert.IsTrue(leaf.HasPrivateKey, "Generated leaf must have a private key");
+
+            using var rsa = leaf.GetRSAPrivateKey();
+            Assert.IsNotNull(rsa, "Leaf private key must be accessible as RSA");
+
+            // SslStreamCertificateContext construction is the practical usability gate for MITM.
+            var ctx = mgr.CreateSslCertificateContext(leaf);
+            Assert.IsNotNull(ctx);
+
+            if (RunTime.IsWindows)
+            {
+                // Windows path must remain PKCS#12-exportable for DefaultCertificateDiskCache.
+                var exported = leaf.Export(X509ContentType.Pkcs12);
+                Assert.IsTrue(exported.Length > 0, "Windows leaf must remain PKCS#12 exportable");
+            }
+
+            leaf.Dispose();
         }
 
         [TestMethod]

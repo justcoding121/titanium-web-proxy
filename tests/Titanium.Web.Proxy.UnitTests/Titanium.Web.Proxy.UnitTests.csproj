@@ -4,6 +4,12 @@
     <TargetFramework>net10.0</TargetFramework>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>StrongNameKey.snk</AssemblyOriginatorKeyFile>
+    <!--
+      Same rationale as IntegrationTests: CI builds with the warnaserror switch, and several
+      test helpers use "?" annotations without a project-wide Nullable enable. Keep CS8632
+      from failing the build without forcing a full nullable-enable pass on this test project.
+    -->
+    <WarningsNotAsErrors>CS8632</WarningsNotAsErrors>
   </PropertyGroup>
 
   <ItemGroup>

@@ -34,6 +34,16 @@ public class TunnelConnectSessionEventArgs : SessionEventArgsBase
     public bool DenyConnect { get; set; }
 
     /// <summary>
+    ///     When <see langword="true" />, the proxy establishes the upstream TCP connection
+    ///     (and upstream-proxy CONNECT when configured) <b>before</b> writing HTTP 200 to the client.
+    ///     On failure, <see cref="ExplicitProxyEndPoint.BeforeTunnelConnectFailure" /> can supply a
+    ///     custom HTTP error response (the client never receives 200 / never starts TLS).
+    ///     Default is <see langword="false" /> — no preconnect and no added latency.
+    ///     Set this during <see cref="ExplicitProxyEndPoint.BeforeTunnelConnectRequest" />.
+    /// </summary>
+    public bool EstablishServerConnectionBeforeResponse { get; set; }
+
+    /// <summary>
     ///     Controls which HTTP version the proxy uses on its own connection to the origin server for this
     ///     tunnel, independent of the HTTP version the client itself negotiates with the proxy. Must be set
     ///     during <c>BeforeTunnelConnectRequest</c> - it is read before the client TLS handshake, and the
@@ -111,11 +121,4 @@ public class TunnelConnectSessionEventArgs : SessionEventArgsBase
         }
     }
 
-    ~TunnelConnectSessionEventArgs()
-    {
-        Titanium.Web.Proxy.Logging.ProxyDiagnostics.ReportUndisposedFinalizer(Server.Logger,
-            nameof(TunnelConnectSessionEventArgs));
-
-        Dispose(false);
-    }
 }

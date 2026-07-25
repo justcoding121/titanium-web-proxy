@@ -11,6 +11,7 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http2;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended;
@@ -35,8 +36,10 @@ public partial class ProxyServer
     }
 
     private async Task HandleClient(TransparentBaseProxyEndPoint endPoint, TcpClientConnection clientConnection,
-        int port, CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
+        int port, CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken,
+        string? socksTargetHost = null)
     {
+        RegisterSessionCancellation(cancellationTokenSource);
         var isHttps = false;
         Task<TcpServerConnection?>? prefetchConnectionTask = null;
         var clientStream = new HttpClientStream(this, clientConnection, clientConnection.GetStream(), BufferPool,
@@ -64,7 +67,8 @@ public partial class ProxyServer
                 await endPoint.InvokeBeforeSslAuthenticate(this, args, logger);
 
                 if (cancellationTokenSource.IsCancellationRequested)
-                    throw new Exception("Session was terminated by user.");
+                    throw new OperationCanceledException("Session was terminated by user.",
+                        cancellationTokenSource.Token);
 
                 if (endPoint.DecryptSsl && args.DecryptSsl)
                 {
@@ -143,7 +147,7 @@ public partial class ProxyServer
                         // capability must already be known.
                         var options = new SslServerAuthenticationOptions
                         {
-                            ServerCertificate = certificate,
+                            ServerCertificateContext = CertificateManager.CreateSslCertificateContext(certificate),
                             ClientCertificateRequired = false,
                             EnabledSslProtocols = SupportedSslProtocols,
                             CertificateRevocationCheckMode = X509RevocationMode.NoCheck
@@ -294,7 +298,8 @@ public partial class ProxyServer
                                         async (sessionArgs, ctx) => { await OnBeforeResponse(sessionArgs); },
                                         async sessionArgs => { await OnAfterResponse(sessionArgs); },
                                         headers => PrepareRequestHeaders(headers),
-                                        cancellationTokenSource, clientStream.Connection.Id, logger);
+                                        cancellationTokenSource, clientStream.Connection.Id, logger,
+                                        MaxDecodedHeaderListBytes, EnableRfc8441);
 #endif
                                 }
                                 finally
@@ -314,10 +319,16 @@ public partial class ProxyServer
                 else
                 {
                     var sessionArgs = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
-                    var forwardHttpsHostName = args.ForwardHttpsHostName ??
-                                               throw new InvalidOperationException("Forward HTTPS host is not set.");
+                    // SOCKS CONNECT already named the TCP target. Prefer that over SNI+443 defaults:
+                    // SNI hostname with ForwardHttpsPort=443 is wrong when the SOCKS request used a
+                    // non-443 port (e.g. a local test origin, or any explicit non-standard HTTPS port).
+                    var forwardHttpsHostName = socksTargetHost
+                                               ?? args.ForwardHttpsHostName
+                                               ?? throw new InvalidOperationException(
+                                                   "Forward HTTPS host is not set.");
+                    var forwardHttpsPort = socksTargetHost != null ? port : args.ForwardHttpsPort;
                     var connection = (await TcpConnectionFactory.GetServerConnection(this, forwardHttpsHostName,
-                        args.ForwardHttpsPort,
+                        forwardHttpsPort,
                         HttpHeader.VersionUnknown, false, null,
                         true, sessionArgs, UpStreamEndPoint,
                         UpStreamHttpsProxy, true, false, cancellationToken))!;
@@ -366,6 +377,36 @@ public partial class ProxyServer
             // Now create the request
             var prefetchTask = prefetchConnectionTask;
             prefetchConnectionTask = null;
+
+            // For SOCKS endpoints: if the plaintext traffic does not start with a recognised HTTP method
+            // (e.g. a raw TCP protocol tunnelled over SOCKS), relay it opaquely to the SOCKS target
+            // instead of attempting HTTP parsing, which would fail and close the connection.
+            if (socksTargetHost != null && !isHttps)
+            {
+                var method = await HttpHelper.GetMethod(clientStream, BufferPool, cancellationToken);
+                if (method == KnownMethod.Invalid)
+                {
+                    await TcpConnectionFactory.Release(prefetchTask, true);
+                    prefetchTask = null;
+                    var session = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
+                    var connection = (await TcpConnectionFactory.GetServerConnection(this, socksTargetHost, port,
+                        HttpHeader.VersionUnknown, false, null,
+                        false, session, UpStreamEndPoint,
+                        UpStreamHttpProxy ?? UpStreamHttpsProxy, true, false, cancellationToken))!;
+                    try
+                    {
+                        await TcpHelper.SendRaw(clientStream, connection.Stream, BufferPool,
+                            null, null, cancellationTokenSource, logger);
+                    }
+                    finally
+                    {
+                        await TcpConnectionFactory.Release(connection, true);
+                    }
+
+                    return;
+                }
+            }
+
             await HandleHttpSessionRequest(endPoint, clientStream, cancellationTokenSource,
                 prefetchConnectionTask: prefetchTask, isHttps: isHttps);
         }
@@ -381,12 +422,18 @@ public partial class ProxyServer
         {
             OnException(clientStream, new Exception("Could not connect", e));
         }
+        catch (OperationCanceledException e)
+        {
+            ProxyDiagnostics.ReportException(logger, "Client session cancelled", e);
+        }
         catch (Exception e)
         {
             OnException(clientStream, new Exception("Error occured in whilst handling the client", e));
         }
         finally
         {
+            if (!cancellationTokenSource.IsCancellationRequested) cancellationTokenSource.Cancel();
+            UnregisterSessionCancellation(cancellationTokenSource);
             await TcpConnectionFactory.Release(prefetchConnectionTask, true);
             clientStream.Dispose();
         }

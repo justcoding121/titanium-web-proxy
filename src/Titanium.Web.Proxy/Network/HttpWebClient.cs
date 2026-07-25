@@ -1,7 +1,9 @@
 ﻿using System;
+using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -54,9 +56,23 @@ public class HttpWebClient
     public object? UserData { get; set; }
 
     /// <summary>
-    ///     Override UpStreamEndPoint for this request; Local NIC via request is made
+    ///     Override UpStreamEndPoint for this request; Local NIC via request is made.
+    ///     Ignored for a destination whose address family does not match; prefer
+    ///     <see cref="UpStreamEndPointIPv4" /> / <see cref="UpStreamEndPointIPv6" /> for dual-stack.
     /// </summary>
     public IPEndPoint? UpStreamEndPoint { get; set; }
+
+    /// <summary>
+    ///     Per-request local bind for IPv4 upstream destinations (overrides server
+    ///     <c>UpStreamEndPointIPv4</c>).
+    /// </summary>
+    public IPEndPoint? UpStreamEndPointIPv4 { get; set; }
+
+    /// <summary>
+    ///     Per-request local bind for IPv6 upstream destinations (overrides server
+    ///     <c>UpStreamEndPointIPv6</c>).
+    /// </summary>
+    public IPEndPoint? UpStreamEndPointIPv6 { get; set; }
 
     /// <summary>
     ///     Headers passed with Connect.
@@ -112,28 +128,37 @@ public class HttpWebClient
         string? upstreamProxyPassword = null;
 
         string url;
-        if (isTransparent)
+        if (useUpstreamProxy)
         {
-            url = Request.RequestUriString;
-        }
-        else if (!useUpstreamProxy)
-        {
-            if (UriExtensions.GetScheme(Request.RequestUriString8).Length == 0)
-                url = Request.RequestUriString;
-            else
-                url = Request.RequestUri.GetOriginalPathAndQuery();
-        }
-        else
-        {
-            url = Request.RequestUri.ToString();
+            // Upstream HTTP proxies require absolute-form targets and may need Proxy-Authorization.
+            // This applies to both explicit and transparent client-facing endpoints (#964): previously
+            // the transparent branch skipped credential injection, so Basic-auth upstream proxies
+            // returned 407 for plain HTTP even when UserName/Password were configured.
+            //
+            // Preserve the original request target verbatim rather than serialising through
+            // System.Uri, which may normalise percent-encoding or drop non-ASCII characters.
+            // Request.Url builds the absolute-form URL directly from the raw RequestUriString8
+            // bytes (decoded/re-encoded via ISO-8859-1), so the upstream proxy receives exactly
+            // what the client sent (or what a BeforeRequest handler wrote).
+            url = Request.Url;
 
-            // Send Authentication to Upstream proxy if needed
             if (!upstreamProxy!.UseDefaultCredentials &&
                 !string.IsNullOrEmpty(upstreamProxy.UserName) && upstreamProxy.Password != null)
             {
                 upstreamProxyUserName = upstreamProxy.UserName;
                 upstreamProxyPassword = upstreamProxy.Password;
             }
+        }
+        else if (isTransparent)
+        {
+            url = Request.RequestUriString;
+        }
+        else
+        {
+            if (UriExtensions.GetScheme(Request.RequestUriString8).Length == 0)
+                url = Request.RequestUriString;
+            else
+                url = Request.RequestUri.GetOriginalPathAndQuery();
         }
 
         if (url == string.Empty) url = "/";
@@ -191,9 +216,21 @@ public class HttpWebClient
         Response.RequestMethod = Request.Method;
 
         var httpStatus = await Connection.Stream.ReadResponseStatus(cancellationToken);
-        Response.HttpVersion = httpStatus.Version;
-        Response.StatusCode = httpStatus.StatusCode;
-        Response.StatusDescription = httpStatus.Description;
+        if (httpStatus == null)
+        {
+            // EOF before any response bytes: typically a stale pooled keep-alive connection.
+            // RetryPolicy re-runs the whole exchange; only safe when there is no body or the
+            // body is buffered in memory (IsBodyRead). A streamed body cannot be replayed.
+            if (!Request.HasBody || Request.IsBodyRead)
+                throw new RetryableServerConnectionException(
+                    "Server connection was closed before any response was received.");
+
+            throw new IOException("Server closed the connection before sending a response.");
+        }
+
+        Response.HttpVersion = httpStatus.Value.Version;
+        Response.StatusCode = httpStatus.Value.StatusCode;
+        Response.StatusDescription = httpStatus.Value.Description;
 
         // Read the response headers in to unique and non-unique header collections
         await HeaderParser.ReadHeaders(Connection.Stream, Response.Headers, cancellationToken);

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
@@ -23,9 +24,24 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     and that a <c>BeforeResponse</c> subscriber's changes to the upgrade response actually take effect
 ///     (including denying the upgrade outright) rather than being silently dropped.
 /// </summary>
+[DoNotParallelize]
 [TestClass]
 public class WebSocketUpgradeTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     private const string OriginGreetingText = "hello-from-origin";
     private const string ClientPingText = "ping-from-client";
     private static readonly Encoding AsciiEncoding = Encoding.ASCII;
@@ -34,7 +50,7 @@ public class WebSocketUpgradeTests
     [Timeout(30 * 1000)]
     public async Task WebSocketUpgrade_RelaysFramesBothWays_AndProxyCanDecodeThemViaPublicApi()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -152,12 +168,119 @@ public class WebSocketUpgradeTests
 
     [TestMethod]
     [Timeout(30 * 1000)]
+    public async Task WebSocketUpgrade_FrameIntercept_CanDropAndReplace_WhileDataEventsStillFire()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+
+        server.HandleTcpRequest(async context =>
+        {
+            await DrainRequestHeaders(context);
+            var handshake = AsciiEncoding.GetBytes(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n");
+            await context.Transport.Output.WriteAsync(handshake);
+
+            // Echo each inbound chunk (post-intercept wire bytes) back to the client.
+            while (true)
+            {
+                var result = await context.Transport.Input.ReadAsync();
+                if (result.Buffer.IsEmpty && result.IsCompleted)
+                {
+                    context.Transport.Input.AdvanceTo(result.Buffer.End);
+                    break;
+                }
+
+                if (!result.Buffer.IsEmpty)
+                    foreach (var segment in result.Buffer)
+                        await context.Transport.Output.WriteAsync(segment.ToArray());
+
+                context.Transport.Input.AdvanceTo(result.Buffer.End);
+                if (result.IsCompleted) break;
+            }
+
+            context.Transport.Output.Complete();
+        });
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.BeforeRequest += (_, e) =>
+        {
+            e.HttpClient.Request.Url = server.ListeningTcpUrl;
+            return Task.CompletedTask;
+        };
+
+        var observedSent = new List<string>();
+        proxy.BeforeResponse += (_, e) =>
+        {
+            e.BeforeWebSocketFrame += async (_, frame) =>
+            {
+                if (frame.Direction != WebSocketFrameDirection.ClientToServer)
+                    return;
+
+                var text = Encoding.UTF8.GetString(frame.Data);
+                if (text == "drop-me")
+                {
+                    frame.Drop();
+                    return;
+                }
+
+                if (text == "replace-me")
+                {
+                    frame.Replace(Encoding.UTF8.GetBytes("replaced"));
+                    return;
+                }
+
+                await Task.CompletedTask;
+            };
+
+            e.DataSent += (_, dataArgs) =>
+            {
+                foreach (var frame in e.WebSocketDecoderSend.Decode(dataArgs.Buffer, dataArgs.Offset, dataArgs.Count))
+                    observedSent.Add(frame.GetText());
+            };
+            return Task.CompletedTask;
+        };
+
+        using var tcpClient = new TcpClient();
+        await tcpClient.ConnectAsync(IPAddress.Loopback, proxy.ProxyEndPoints[0].Port);
+        var stream = tcpClient.GetStream();
+        var timeout = TimeSpan.FromSeconds(10);
+
+        await stream.WriteAsync(AsciiEncoding.GetBytes(
+            "GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" +
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n"));
+
+        var reader = new RawWebSocketStreamReader(stream);
+        await reader.ReadHeadersAsync(timeout);
+
+        await stream.WriteAsync(BuildFrame(WebsocketOpCode.Text, Encoding.UTF8.GetBytes("drop-me"), mask: true));
+        await stream.WriteAsync(BuildFrame(WebsocketOpCode.Text, Encoding.UTF8.GetBytes("replace-me"), mask: true));
+        await stream.WriteAsync(BuildFrame(WebsocketOpCode.Ping, Encoding.UTF8.GetBytes("ctl"), mask: true));
+
+        var clientDecoder = new WebSocketDecoder(new DefaultBufferPool());
+        // Copy payloads immediately — WebSocketFrame.Data aliases the decoder buffer.
+        var frames = await reader.ReadFramesAsync(clientDecoder, 2, timeout);
+        var captured = frames.Select(f => (Op: f.OpCode, Payload: f.Data.ToArray())).ToList();
+
+        tcpClient.Close();
+
+        Assert.AreEqual(2, captured.Count, "Dropped frame must not be echoed; replace + ping should arrive.");
+        Assert.AreEqual("replaced", Encoding.UTF8.GetString(captured[0].Payload));
+        Assert.AreEqual(WebsocketOpCode.Ping, captured[1].Op);
+        CollectionAssert.AreEqual(Encoding.UTF8.GetBytes("ctl"), captured[1].Payload);
+
+        WaitForCondition(() => observedSent.Contains("replaced"), timeout,
+            "DataSent must still observe the replaced frame on the wire.");
+        Assert.IsFalse(observedSent.Contains("drop-me"), "Dropped frames must not appear in DataSent.");
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
     public async Task WebSocketUpgrade_BeforeResponseHandler_HeaderChangeReachesClient()
     {
         // Regression test for the fix to WebSocketHandler.HandleWebSocketUpgrade: BeforeResponse used to
         // fire only *after* the original 101 response had already been written to the client, so any
         // change made here was silently lost. It must now take effect.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -204,7 +327,7 @@ public class WebSocketUpgradeTests
         // Regression test: previously the original 101 was already on the wire before BeforeResponse ran,
         // so a handler trying to deny the upgrade via args.Respond/GenericResponse had no effect on what
         // the client received, and the proxy still went on to relay raw bytes as if it had succeeded.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
         server.HandleTcpRequest(async context =>
@@ -259,6 +382,149 @@ public class WebSocketUpgradeTests
         Assert.IsFalse(responseText.Contains("HTTP/1.1 101", StringComparison.Ordinal),
             "The original 101 must never have reached the client once BeforeResponse replaced it.");
         Assert.IsTrue(responseText.Contains("Upgrade denied by policy", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///     Characterization for issue #572: rewriting a WebSocket upgrade RequestUri to a new host/scheme/path
+    ///     that embeds the original absolute URI (including its query) as a nested query value must preserve
+    ///     host, scheme, path, and the nested query on the origin request line and Host header.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task WebSocketUpgrade_RequestUriRewrite_PreservesHostSchemePathAndNestedQuery()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+
+        string capturedRequest = null;
+        var requestReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        server.HandleTcpRequest(async context =>
+        {
+            var requestText = string.Empty;
+            while (!requestText.Contains("\r\n\r\n", StringComparison.Ordinal))
+            {
+                var result = await context.Transport.Input.ReadAsync();
+                foreach (var seg in result.Buffer) requestText += AsciiEncoding.GetString(seg.Span);
+                context.Transport.Input.AdvanceTo(result.Buffer.End);
+            }
+
+            capturedRequest = requestText;
+            requestReady.TrySetResult(true);
+
+            var handshake = AsciiEncoding.GetBytes(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n");
+            await context.Transport.Output.WriteAsync(handshake);
+            context.Transport.Output.Complete();
+        });
+
+        // Mirror the issue report: nest the original absolute URI (with its own query) inside a new query.
+        const string originalAbsoluteUri = "https://echo.websocket.org/?encoding=text";
+        var originBase = new Uri(server.ListeningTcpUrl);
+        var rewrittenAbsolute =
+            $"http://{originBase.Host}:{originBase.Port}/?socket={originalAbsoluteUri}";
+        var rewrittenUri = new Uri(rewrittenAbsolute);
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.BeforeRequest += (_, e) =>
+        {
+            e.HttpClient.Request.RequestUri = rewrittenUri;
+            e.HttpClient.Request.Host = rewrittenUri.Authority;
+            return Task.CompletedTask;
+        };
+
+        using var tcpClient = new TcpClient();
+        await tcpClient.ConnectAsync(IPAddress.Loopback, proxy.ProxyEndPoints[0].Port);
+        var stream = tcpClient.GetStream();
+
+        await stream.WriteAsync(AsciiEncoding.GetBytes(
+            "GET /?encoding=text HTTP/1.1\r\nHost: echo.websocket.org\r\nUpgrade: websocket\r\n" +
+            "Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" +
+            "Sec-WebSocket-Version: 13\r\n\r\n"));
+
+        Assert.IsTrue(await requestReady.Task.WaitAsync(TimeSpan.FromSeconds(10)),
+            "Origin never received the rewritten WebSocket upgrade request.");
+        Assert.IsNotNull(capturedRequest);
+
+        var expectedNestedQuery = "/?socket=https://echo.websocket.org/?encoding=text";
+        Assert.IsTrue(
+            capturedRequest.Contains(expectedNestedQuery, StringComparison.Ordinal),
+            $"Expected nested query '{expectedNestedQuery}' on the origin request. Got:\n{capturedRequest}");
+        Assert.IsTrue(
+            capturedRequest.Contains($"Host: {rewrittenUri.Authority}", StringComparison.OrdinalIgnoreCase)
+            || capturedRequest.Contains($"Host: {rewrittenUri.Host}", StringComparison.OrdinalIgnoreCase),
+            $"Expected Host rewritten to the new authority. Got:\n{capturedRequest}");
+        Assert.IsFalse(
+            capturedRequest.Contains("Host: echo.websocket.org", StringComparison.OrdinalIgnoreCase),
+            "Original Host must not be forwarded after rewrite.");
+        // Must not collapse to the pre-rewrite query alone.
+        Assert.IsFalse(
+            capturedRequest.Contains("GET /?encoding=text HTTP/1.1", StringComparison.Ordinal),
+            "Original path/query must not be forwarded unchanged.");
+    }
+
+    /// <summary>
+    ///     Same nested-query rewrite through an upstream HTTP proxy (issue #572 upstream path).
+    /// </summary>
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task WebSocketUpgrade_RequestUriRewrite_ThroughUpstreamProxy_PreservesNestedQuery()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+
+        string capturedRequest = null;
+        var requestReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        server.HandleTcpRequest(async context =>
+        {
+            var requestText = string.Empty;
+            while (!requestText.Contains("\r\n\r\n", StringComparison.Ordinal))
+            {
+                var result = await context.Transport.Input.ReadAsync();
+                foreach (var seg in result.Buffer) requestText += AsciiEncoding.GetString(seg.Span);
+                context.Transport.Input.AdvanceTo(result.Buffer.End);
+            }
+
+            capturedRequest = requestText;
+            requestReady.TrySetResult(true);
+
+            var handshake = AsciiEncoding.GetBytes(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n");
+            await context.Transport.Output.WriteAsync(handshake);
+            context.Transport.Output.Complete();
+        });
+
+        var upstream = testSuite.GetProxy();
+        var proxy = testSuite.GetReverseProxy(upstream);
+
+        const string originalAbsoluteUri = "https://echo.websocket.org/?encoding=text";
+        var originBase = new Uri(server.ListeningTcpUrl);
+        var rewrittenUri = new Uri(
+            $"http://{originBase.Host}:{originBase.Port}/?socket={originalAbsoluteUri}");
+
+        proxy.BeforeRequest += (_, e) =>
+        {
+            e.HttpClient.Request.RequestUri = rewrittenUri;
+            e.HttpClient.Request.Host = rewrittenUri.Authority;
+            return Task.CompletedTask;
+        };
+
+        using var tcpClient = new TcpClient();
+        await tcpClient.ConnectAsync(IPAddress.Loopback, proxy.ProxyEndPoints[0].Port);
+        var stream = tcpClient.GetStream();
+
+        await stream.WriteAsync(AsciiEncoding.GetBytes(
+            "GET /?encoding=text HTTP/1.1\r\nHost: echo.websocket.org\r\nUpgrade: websocket\r\n" +
+            "Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" +
+            "Sec-WebSocket-Version: 13\r\n\r\n"));
+
+        Assert.IsTrue(await requestReady.Task.WaitAsync(TimeSpan.FromSeconds(15)),
+            "Origin never received the rewritten WebSocket upgrade through the upstream proxy.");
+        Assert.IsNotNull(capturedRequest);
+        Assert.IsTrue(
+            capturedRequest.Contains("socket=https://echo.websocket.org/?encoding=text", StringComparison.Ordinal),
+            $"Nested query must survive the upstream-proxy path. Got:\n{capturedRequest}");
     }
 
     private static void WaitForCondition(Func<bool> condition, TimeSpan timeout, string failureMessage)
@@ -367,11 +633,23 @@ public class WebSocketUpgradeTests
         {
             var frames = new List<WebSocketFrame>();
 
+            void Capture(IEnumerable<WebSocketFrame> decoded)
+            {
+                // Copy payload immediately — Data aliases decoder/read buffers.
+                foreach (var frame in decoded)
+                    frames.Add(new WebSocketFrame
+                    {
+                        IsFinal = frame.IsFinal,
+                        OpCode = frame.OpCode,
+                        Data = frame.Data.ToArray()
+                    });
+            }
+
             if (pending.Count > 0)
             {
                 var leftover = pending.ToArray();
                 pending.Clear();
-                frames.AddRange(decoder.Decode(leftover, 0, leftover.Length));
+                Capture(decoder.Decode(leftover, 0, leftover.Length));
             }
 
             using var cts = new CancellationTokenSource(timeout);
@@ -380,7 +658,7 @@ public class WebSocketUpgradeTests
             {
                 var read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
                 if (read == 0) throw new IOException("Connection closed before enough frames arrived.");
-                frames.AddRange(decoder.Decode(buffer, 0, read));
+                Capture(decoder.Decode(buffer, 0, read));
             }
 
             return frames;

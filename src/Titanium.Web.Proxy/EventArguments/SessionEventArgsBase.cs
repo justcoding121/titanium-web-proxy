@@ -25,6 +25,17 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 
     internal readonly CancellationTokenSource CancellationTokenSource;
 
+    /// <summary>
+    ///     Optional per-request token (e.g. linked request-timeout deadline). When set, handlers should
+    ///     prefer <see cref="CancellationToken" /> over <see cref="CancellationTokenSource" />.Token alone.
+    /// </summary>
+    internal CancellationToken? OperationCancellationToken { get; set; }
+
+    /// <summary>
+    ///     Effective cancellation token for the current request exchange.
+    /// </summary>
+    internal CancellationToken CancellationToken => OperationCancellationToken ?? CancellationTokenSource.Token;
+
     private bool disposed;
     private bool enableWinAuth;
 
@@ -124,6 +135,21 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     public IPEndPoint ClientEndPoint => ClientRemoteEndPoint;
 
     /// <summary>
+    ///     Physical peer of the established upstream TCP connection (no second DNS lookup).
+    ///     Available after the server connection is established (for example in
+    ///     <see cref="ProxyServer.BeforeResponse" />). When an upstream HTTP/SOCKS proxy is used,
+    ///     this is the proxy hop endpoint, not the origin server. <see langword="null" /> when no
+    ///     upstream connection exists (for example a synthetic local response).
+    /// </summary>
+    public IPEndPoint? ServerRemoteEndPoint =>
+        HttpClient.HasConnection ? ServerConnection.RemoteEndPoint : null;
+
+    /// <summary>
+    ///     IP address of <see cref="ServerRemoteEndPoint" />.
+    /// </summary>
+    public IPAddress? ServerIpAddress => ServerRemoteEndPoint?.Address;
+
+    /// <summary>
     ///     The web client used to communicate with server for this session.
     /// </summary>
     public HttpWebClient HttpClient { get; }
@@ -167,6 +193,12 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     public Exception? Exception { get; internal set; }
 
     /// <summary>
+    ///     True once any HTTP response status/headers have been written to the client for this session.
+    ///     Used to decide whether a timeout may still safely inject HTTP 504.
+    /// </summary>
+    internal bool IsClientResponseCommitted { get; set; }
+
+    /// <summary>
     ///     The live logger for the <see cref="ProxyServer" /> that owns this session. Always reads the
     ///     server's current logger rather than a value snapshotted at session creation, so a logger
     ///     replaced via <see cref="ProxyServer.ApplyLoggingConfiguration" /> is picked up immediately.
@@ -176,7 +208,6 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     public void Dispose()
     {
         Dispose(true);
-        GC.SuppressFinalize(this);
     }
 
     protected void OnException(Exception exception)
@@ -188,25 +219,20 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     {
         if (disposed) return;
 
+        // No finalizer: session objects only own managed state. Explicit Dispose clears
+        // handlers and finishes the HTTP client; omitting Dispose leaves no unmanaged leak.
         if (disposing)
         {
             CustomUpStreamProxyUsed = null;
 
             HttpClient.FinishSession();
+
+            DataSent = null;
+            DataReceived = null;
+            Exception = null;
         }
 
-        DataSent = null;
-        DataReceived = null;
-        Exception = null;
-
         disposed = true;
-    }
-
-    ~SessionEventArgsBase()
-    {
-        ProxyDiagnostics.ReportUndisposedFinalizer(Server.Logger, nameof(SessionEventArgsBase));
-
-        Dispose(false);
     }
 
     /// <summary>

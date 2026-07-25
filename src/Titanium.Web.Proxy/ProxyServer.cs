@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -45,6 +46,12 @@ public partial class ProxyServer : IDisposable
     ///     Backing field for exposed public property.
     /// </summary>
     private int clientConnectionCount;
+
+    /// <summary>
+    ///     Per-session cancellation tokens for in-flight client handlers. Cancelled on Stop/StopAsync
+    ///     so active relays do not outlive the listener (issues #919 / #799 / #809).
+    /// </summary>
+    private readonly ConcurrentDictionary<CancellationTokenSource, byte> activeSessionCancellations = new();
 
     /// <summary>
     ///     Backing field for exposed public property.
@@ -172,12 +179,18 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     Enable disable Windows Authentication (NTLM/Kerberos).
-    ///     Note: NTLM/Kerberos will always send local credentials of current user
-    ///     running the proxy process. This is because a man
-    ///     in middle attack with Windows domain authentication is not currently supported.
-    ///     Defaults to false.
+    ///     By default SSPI uses the process identity. To authenticate as another user, set
+    ///     <see cref="WinAuthCredentialsProvider" /> (issue #461). Defaults to false.
     /// </summary>
     public bool EnableWinAuth { get; set; }
+
+    /// <summary>
+    ///     Optional per-session credential provider for server 401 WinAuth (NTLM/Negotiate/Kerberos).
+    ///     Return <see langword="null" /> to use the current process identity (legacy behavior).
+    ///     Do not put plaintext passwords on <see cref="SessionEventArgs" /> — use this callback instead.
+    ///     Windows SSPI only; ignored on non-Windows platforms.
+    /// </summary>
+    public Func<SessionEventArgs, Task<WinAuthCredentials?>>? WinAuthCredentialsProvider { get; set; }
 
     /// <summary>
     ///     Overrides upstream proxy Windows authentication token generation.
@@ -215,6 +228,16 @@ public partial class ProxyServer : IDisposable
     public bool EnableHttp2 { get; set; } = true;
 
     /// <summary>
+    ///     When <see langword="true"/>, the proxy accepts WebSocket-over-HTTP/2 connections from
+    ///     clients (RFC 8441 extended CONNECT with <c>:protocol = websocket</c>) and advertises
+    ///     <c>SETTINGS_ENABLE_CONNECT_PROTOCOL=1</c> to h2 clients. The proxy independently
+    ///     negotiates with each origin: if the origin supports RFC 8441 the DATA frames are
+    ///     relayed directly; otherwise a new HTTP/1.1 WebSocket upgrade is performed.
+    ///     Default: <see langword="false"/> (must opt-in; demand measurement pending).
+    /// </summary>
+    public bool EnableRfc8441 { get; set; } = false;
+
+    /// <summary>
     ///     Should we check for certificate revocation during SSL authentication to servers
     ///     Note: If enabled can reduce performance. Defaults to false.
     /// </summary>
@@ -226,6 +249,55 @@ public partial class ProxyServer : IDisposable
     ///     Defaults to false.
     /// </summary>
     public bool Enable100ContinueBehaviour { get; set; }
+
+    /// <summary>
+    ///     When <see langword="true" />, the proxy immediately responds with a synthetic
+    ///     <c>100 Continue</c> to any client request carrying <c>Expect: 100-continue</c>,
+    ///     before forwarding the headers to the origin and without waiting for the origin
+    ///     to respond. This breaks the strict handshake (client → proxy 100 → client body
+    ///     → origin body) but prevents the deadlock that occurs with strict clients when
+    ///     <see cref="Enable100ContinueBehaviour" /> is <see langword="false" /> (the default).
+    ///     Has no effect when <see cref="Enable100ContinueBehaviour" /> is <see langword="true" />.
+    ///     Default: <see langword="false" />.
+    /// </summary>
+    public bool CompatibilityMode100Continue { get; set; } = false;
+
+    /// <summary>
+    ///     Maximum decoded HTTP/2 header list size in bytes, using RFC 7541 accounting
+    ///     (name.Length + value.Length + 32 per field). Requests or responses with a decoded
+    ///     header list exceeding this limit will be refused with RST_STREAM(ENHANCE_YOUR_CALM)
+    ///     (code 0xb). Set to 0 to disable the limit (not recommended).
+    ///     Default: 65,536 (64 KiB). Advertised via SETTINGS_MAX_HEADER_LIST_SIZE.
+    /// </summary>
+    public int MaxDecodedHeaderListBytes { get; set; } = 64 * 1024;
+
+    /// <summary>
+    ///     Maximum bytes the proxy will buffer for a single request or response body when
+    ///     body buffering is required (body-read hooks, authentication retry, etc.). Bodies
+    ///     larger than this limit are rejected with 413 (upstream request) or connection teardown
+    ///     (upstream response). Set to 0 to disable the limit (not recommended).
+    ///     Default: 4,194,304 (4 MiB).
+    /// </summary>
+    public int MaxBufferedBodyBytes { get; set; } = 4 * 1024 * 1024;
+
+    /// <summary>
+    ///     Maximum WebSocket frame payload size in bytes that the proxy will accept during
+    ///     frame-level interception (i.e. when <c>BeforeWebSocketFrame</c> has at least one
+    ///     subscriber). Frames whose decoded payload exceeds this limit cause the WebSocket
+    ///     connection to be closed with Close code 1009 (Message Too Big).
+    ///     Raw-relay sessions (no <c>BeforeWebSocketFrame</c> subscriber) bypass this check
+    ///     entirely and pass all frames through unvalidated.
+    ///     Default: 16,777,216 (16 MiB).
+    /// </summary>
+    public int MaxWebSocketFramePayloadBytes { get; set; } = 16 * 1024 * 1024;
+
+    /// <summary>
+    ///     Pseudonym used in Via header fields appended to forwarded requests and responses
+    ///     (RFC 9110 §7.6.3). Defaults to <c>"titanium-web-proxy"</c>. Set to an empty string
+    ///     to disable Via header injection entirely. Loop detection uses this value: a request
+    ///     arriving with this pseudonym already present in Via is refused with 508 Loop Detected.
+    /// </summary>
+    public string ViaHeaderPseudonym { get; set; } = "titanium-web-proxy";
 
     /// <summary>
     ///     Controls which HTTP version is declared to the origin server on the request line, independently of
@@ -288,6 +360,42 @@ public partial class ProxyServer : IDisposable
     public int ConnectTimeOutSeconds { get; set; } = 20;
 
     /// <summary>
+    ///     Seconds to wait for the origin to send the response status line and headers after the
+    ///     request has been sent. Enforced with a linked <see cref="System.Threading.CancellationTokenSource" />
+    ///     (not Socket receive timeout alone). When the deadline elapses a
+    ///     <see cref="Exceptions.ProxyTimeoutException" /> with
+    ///     <see cref="Exceptions.ProxyTimeoutKind.ResponseHeader" /> is raised (and may be converted to
+    ///     HTTP 504 before any response bytes have been committed to the client).
+    ///     Default is 0 (disabled). WebSocket upgrades, Server-Sent Events, raw tunnels, and sessions
+    ///     that already wrote a response status to the client are exempt; those waits use
+    ///     <see cref="IdleReadTimeoutSeconds" /> when configured.
+    ///     Per-session override: <see cref="EventArguments.SessionEventArgs.ResponseHeaderTimeout" />.
+    /// </summary>
+    public int ResponseHeaderTimeoutSeconds { get; set; }
+
+    /// <summary>
+    ///     Seconds of idle time allowed while reading from the origin (stalled header/body waits).
+    ///     Applied via <c>CancelAfter</c> on the active read operation. Default is 0 (disabled).
+    ///     Per-session override: <see cref="EventArguments.SessionEventArgs.IdleReadTimeout" />.
+    /// </summary>
+    public int IdleReadTimeoutSeconds { get; set; }
+
+    /// <summary>
+    ///     Seconds of idle time allowed while writing to the origin (stalled header/body waits).
+    ///     Applied via <c>CancelAfter</c> on the active write operation. Default is 0 (disabled).
+    ///     Per-session override: <see cref="EventArguments.SessionEventArgs.IdleWriteTimeout" />.
+    /// </summary>
+    public int IdleWriteTimeoutSeconds { get; set; }
+
+    /// <summary>
+    ///     Total seconds allowed for a single request/response exchange after
+    ///     <see cref="BeforeRequest" /> returns (connect, send, wait for headers, and body copy).
+    ///     Default is 0 (disabled). Per-session override:
+    ///     <see cref="EventArguments.SessionEventArgs.RequestTimeout" />.
+    /// </summary>
+    public int RequestTimeoutSeconds { get; set; }
+
+    /// <summary>
     ///     Maximum number of concurrent connections per remote host in cache.
     ///     Only valid when connection pooling is enabled.
     ///     Default value is 4.
@@ -295,8 +403,11 @@ public partial class ProxyServer : IDisposable
     public int MaxCachedConnections { get; set; } = 4;
 
     /// <summary>
-    ///     Number of seconds to linger when Tcp connection is in TIME_WAIT state.
-    ///     Default value is 30.
+    ///     SO_LINGER timeout in seconds applied to client and upstream sockets via
+    ///     <see cref="LingerOption" /> (enabled with this timeout).
+    ///     This is <b>not</b> the kernel TCP TIME_WAIT duration — TIME_WAIT is controlled by the OS.
+    ///     A positive value means <c>Close</c> may block up to that many seconds flushing send buffers;
+    ///     use 0 for an abortive close (RST). Default is 30.
     /// </summary>
     public int TcpTimeWaitSeconds { get; set; } = 30;
 
@@ -365,8 +476,23 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     Local adapter/NIC endpoint where proxy makes request via.
     ///     Defaults via any IP addresses of this machine.
+    ///     When the resolved destination address family does not match this endpoint, it is
+    ///     ignored so dual-stack destinations can still connect (see
+    ///     <see cref="UpStreamEndPointIPv4" /> / <see cref="UpStreamEndPointIPv6" />).
     /// </summary>
     public IPEndPoint? UpStreamEndPoint { get; set; }
+
+    /// <summary>
+    ///     Local bind endpoint used when the resolved upstream destination is IPv4.
+    ///     Takes precedence over <see cref="UpStreamEndPoint" /> for IPv4 destinations.
+    /// </summary>
+    public IPEndPoint? UpStreamEndPointIPv4 { get; set; }
+
+    /// <summary>
+    ///     Local bind endpoint used when the resolved upstream destination is IPv6.
+    ///     Takes precedence over <see cref="UpStreamEndPoint" /> for IPv6 destinations.
+    /// </summary>
+    public IPEndPoint? UpStreamEndPointIPv6 { get; set; }
 
     /// <summary>
     ///     A list of IpAddress and port this proxy is listening to.
@@ -802,7 +928,11 @@ public partial class ProxyServer : IDisposable
 
         SetThreadPoolMinThread(ThreadPoolWorkerThread);
 
-        if (ProxyEndPoints.OfType<ExplicitProxyEndPoint>().Any(x => x.GenericCertificate == null))
+        // Only create the root certificate when at least one endpoint will actually perform
+        // TLS decryption and does not already have a custom GenericCertificate.  Endpoints
+        // whose DecryptSsl is false never need to generate leaf certificates, so creating a
+        // root PFX for them is unnecessary I/O and key-generation work.
+        if (ProxyEndPoints.Any(x => x.DecryptSsl && x.GenericCertificate == null))
             CertificateManager.EnsureRootCertificate();
 
         if (changeSystemProxySettings && SystemProxySettingsManager != null && RunTime.IsWindows &&
@@ -845,8 +975,38 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     Stop this proxy server instance.
+    ///     Endpoints remain registered so <see cref="Start" /> can re-listen on the same ports.
+    ///     In-flight sessions are cancelled; pooled upstream connections are cleared. The connection
+    ///     factory itself stays usable for a subsequent Start (it is only disposed with the proxy).
     /// </summary>
     public void Stop()
+    {
+        StopCore(cancelSessions: true, clearPools: true);
+    }
+
+    /// <summary>
+    ///     Asynchronously stop this proxy server, cancel in-flight sessions, and wait briefly for
+    ///     client connection count to drain before clearing the upstream pool.
+    /// </summary>
+    /// <param name="drainTimeout">
+    ///     Maximum time to wait for active client handlers to exit after cancellation.
+    ///     Defaults to 5 seconds.
+    /// </param>
+    public async Task StopAsync(TimeSpan? drainTimeout = null)
+    {
+        if (!ProxyRunning) throw new Exception("Proxy is not running.");
+
+        StopCore(cancelSessions: true, clearPools: false);
+
+        var timeout = drainTimeout ?? TimeSpan.FromSeconds(5);
+        var deadline = DateTime.UtcNow + timeout;
+        while (ClientConnectionCount > 0 && DateTime.UtcNow < deadline)
+            await Task.Delay(50).ConfigureAwait(false);
+
+        TcpConnectionFactory.ClearPools();
+    }
+
+    private void StopCore(bool cancelSessions, bool clearPools)
     {
         if (!ProxyRunning) throw new Exception("Proxy is not running.");
 
@@ -861,13 +1021,38 @@ public partial class ProxyServer : IDisposable
         // Prevent accept callbacks from scheduling another accept while listeners are stopping.
         ProxyRunning = false;
 
+        if (cancelSessions) CancelActiveSessions();
+
         foreach (var endPoint in ProxyEndPoints) QuitListen(endPoint);
 
-        ProxyEndPoints.Clear();
+        // Keep ProxyEndPoints so Start() can re-bind the same listeners (issue #799).
 
         CertificateManager?.StopClearIdleCertificates();
-        TcpConnectionFactory.Dispose();
 
+        if (clearPools) TcpConnectionFactory.ClearPools();
+    }
+
+    internal void RegisterSessionCancellation(CancellationTokenSource cancellationTokenSource)
+    {
+        activeSessionCancellations.TryAdd(cancellationTokenSource, 0);
+    }
+
+    internal void UnregisterSessionCancellation(CancellationTokenSource cancellationTokenSource)
+    {
+        activeSessionCancellations.TryRemove(cancellationTokenSource, out _);
+    }
+
+    private void CancelActiveSessions()
+    {
+        foreach (var cts in activeSessionCancellations.Keys)
+            try
+            {
+                if (!cts.IsCancellationRequested) cts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Session already tore down its CTS.
+            }
     }
 
     /// <summary>
@@ -1168,12 +1353,14 @@ public partial class ProxyServer : IDisposable
 
     private bool disposed;
 
-    protected virtual void Dispose(bool disposing)
+    public void Dispose()
     {
         if (disposed) return;
 
         disposed = true;
 
+        // No finalizer: Stop()/certificate/buffer disposal must only run on the explicit
+        // Dispose path. Callers that omit Dispose leave OS sockets to safe-handle cleanup.
         if (ProxyRunning)
             try
             {
@@ -1184,31 +1371,26 @@ public partial class ProxyServer : IDisposable
                 // ignore
             }
 
-        if (disposing)
+        try
         {
-            CertificateManager?.Dispose();
-            BufferPool?.Dispose();
-
-            if (ownsActiveLoggerFactory)
-                try
-                {
-                    activeLoggerFactory.Dispose();
-                }
-                catch
-                {
-                    // A misbehaving sink must never prevent proxy disposal from completing.
-                }
+            TcpConnectionFactory.Dispose();
         }
-    }
+        catch
+        {
+            // ignore
+        }
 
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
+        CertificateManager?.Dispose();
+        BufferPool?.Dispose();
 
-    ~ProxyServer()
-    {
-        Dispose(false);
+        if (ownsActiveLoggerFactory)
+            try
+            {
+                activeLoggerFactory.Dispose();
+            }
+            catch
+            {
+                // A misbehaving sink must never prevent proxy disposal from completing.
+            }
     }
 }

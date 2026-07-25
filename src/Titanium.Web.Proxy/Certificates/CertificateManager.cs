@@ -130,16 +130,16 @@ public sealed class CertificateManager : IDisposable
                 switch (engine)
                 {
                     case CertificateEngine.BouncyCastle:
-                        certEngineValue = new BcCertificateMaker(CertificateValidDays);
+                        certEngineValue = new BcCertificateMaker(CertificateValidDays, CertificateGraceDays);
                         break;
                     case CertificateEngine.BouncyCastleFast:
-                        certEngineValue = new BcCertificateMakerFast(CertificateValidDays);
+                        certEngineValue = new BcCertificateMakerFast(CertificateValidDays, CertificateGraceDays);
                         break;
                     case CertificateEngine.DefaultWindows:
                     default:
                         if (!RunTime.IsWindows)
                             throw new PlatformNotSupportedException("The Windows certificate engine requires Windows.");
-                        certEngineValue = new WinCertificateMaker(CertificateValidDays);
+                        certEngineValue = new WinCertificateMaker(CertificateValidDays, CertificateGraceDays);
                         break;
                 }
 
@@ -225,10 +225,28 @@ public sealed class CertificateManager : IDisposable
     public string PfxFilePath { get; set; } = string.Empty;
 
     /// <summary>
-    ///     Number of Days generated HTTPS certificates are valid for.
-    ///     Maximum allowed on iOS 13 is 825 days and it is the default.
+    ///     Number of days generated HTTPS leaf certificates are valid for, measured forward from the
+    ///     moment of creation.  The certificate's <c>NotBefore</c> is set to
+    ///     <c>UtcNow - <see cref="CertificateGraceDays" /></c>, so the effective total validity window
+    ///     (NotAfter − NotBefore) equals <c>CertificateValidDays + CertificateGraceDays</c>.
+    ///     <para>
+    ///         Chrome 70+ and iOS 14+ reject certificates whose total validity window exceeds 398 days.
+    ///         To stay within that limit, keep <c>CertificateValidDays + CertificateGraceDays &lt;= 398</c>.
+    ///         The default value of 396, combined with the default grace of 2, equals exactly 398 days total.
+    ///     </para>
     /// </summary>
-    public int CertificateValidDays { get; set; } = 825;
+    public int CertificateValidDays { get; set; } = 396;
+
+    /// <summary>
+    ///     Number of days by which the certificate's <c>NotBefore</c> timestamp is backdated relative to
+    ///     the current UTC time.  A small backdate (the default is 2 days) compensates for minor clock-skew
+    ///     between the proxy machine and clients; it is not necessary to backdate by a year.
+    ///     <para>
+    ///         The total certificate lifetime is <c>CertificateValidDays + CertificateGraceDays</c>.
+    ///         Chrome 70+ and iOS 14+ cap this at 398 days for TLS leaf certificates.
+    ///     </para>
+    /// </summary>
+    public int CertificateGraceDays { get; set; } = 2;
 
     /// <summary>
     ///     Name of the root certificate issuer.
@@ -261,10 +279,30 @@ public sealed class CertificateManager : IDisposable
         get => rootCertificate;
         set
         {
-            ClearRootCertificate();
+            // Only invalidate cached leaf certificates when the signing root's identity actually
+            // changes.  Reloading the same persisted root certificate on startup should not discard
+            // valid cached leaves that were signed by that root — the leaves remain trustworthy as
+            // long as the signing root is the same.  Compare by thumbprint because thumbprint is a
+            // hash of the entire DER-encoded certificate (identity + public key + validity + chain).
+            var isSameRoot = rootCertificate != null && value != null &&
+                             string.Equals(rootCertificate.Thumbprint, value.Thumbprint,
+                                 StringComparison.OrdinalIgnoreCase);
+            if (!isSameRoot)
+                ClearRootCertificate();
             rootCertificate = value;
         }
     }
+
+    /// <summary>
+    ///     Additional certificates to send to clients as part of the TLS certificate chain.
+    ///     Use this when <see cref="RootCertificate" /> is an intermediate CA rather than the trust anchor:
+    ///     set this to the ordered list of intermediate certificates between the signing certificate
+    ///     and the client-trusted root so that clients can build a complete verified chain.
+    ///     When <see cref="RootCertificate" /> is not self-signed it is automatically included in the
+    ///     chain even if this collection is empty; any certificates in this collection are appended
+    ///     after it.
+    /// </summary>
+    public X509Certificate2Collection? IntermediateCertificates { get; set; }
 
     /// <summary>
     ///     Save all fake certificates using <seealso cref="CertificateStorage" />.
@@ -308,7 +346,6 @@ public sealed class CertificateManager : IDisposable
     public void Dispose()
     {
         Dispose(true);
-        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -649,6 +686,34 @@ public sealed class CertificateManager : IDisposable
     {
         clearCertificatesTokenSource.Cancel();
     }
+
+    /// <summary>
+    ///     Creates an <see cref="System.Net.Security.SslStreamCertificateContext" /> for the given leaf certificate,
+    ///     including any intermediate CA certificates that the client needs to build a verified chain.
+    ///     <para>
+    ///         When <see cref="RootCertificate" /> is not self-signed (i.e. it is an intermediate CA), it is
+    ///         automatically added to the chain so that clients trust-anchored at the root CA can still verify
+    ///         generated leaf certificates. Additional certificates from <see cref="IntermediateCertificates" />
+    ///         are appended after it.
+    ///     </para>
+    /// </summary>
+    internal System.Net.Security.SslStreamCertificateContext CreateSslCertificateContext(X509Certificate2 leaf)
+    {
+        var extras = new X509Certificate2Collection();
+
+        if (rootCertificate != null && !IsSelfSigned(rootCertificate))
+            extras.Add(rootCertificate);
+
+        if (IntermediateCertificates != null)
+            foreach (X509Certificate2 cert in IntermediateCertificates)
+                extras.Add(cert);
+
+        return System.Net.Security.SslStreamCertificateContext.Create(
+            leaf, extras.Count > 0 ? extras : null, offline: false);
+    }
+
+    private static bool IsSelfSigned(X509Certificate2 cert) =>
+        cert.SubjectName.RawData.SequenceEqual(cert.IssuerName.RawData);
 
     /// <summary>
     ///     Attempts to create a RootCertificate.
@@ -1018,10 +1083,5 @@ public sealed class CertificateManager : IDisposable
         if (disposing) clearCertificatesTokenSource.Dispose();
 
         disposed = true;
-    }
-
-    ~CertificateManager()
-    {
-        Dispose(false);
     }
 }

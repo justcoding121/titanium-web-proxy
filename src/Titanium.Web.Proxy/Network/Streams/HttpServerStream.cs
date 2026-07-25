@@ -27,15 +27,27 @@ internal sealed class HttpServerStream : HttpStream
         await WriteAsync(request, headerBuilder, cancellationToken);
     }
 
-    internal async ValueTask<ResponseStatusInfo> ReadResponseStatus(CancellationToken cancellationToken = default)
+    /// <summary>
+    ///     Reads the HTTP response status line.
+    /// </summary>
+    /// <returns>
+    ///     The parsed status info, or <c>null</c> when the peer closed the connection before sending
+    ///     any status line (normal EOF / keep-alive idle close). Malformed status lines still throw.
+    /// </returns>
+    internal async ValueTask<ResponseStatusInfo?> ReadResponseStatus(CancellationToken cancellationToken = default)
     {
-        var httpStatus = await ReadLineAsync(cancellationToken) ??
-                         throw new IOException("Invalid http status code.");
+        var httpStatus = await ReadLineAsync(cancellationToken);
+        if (httpStatus == null)
+            return null;
 
-        if (httpStatus == string.Empty)
-            // is this really possible?
-            httpStatus = await ReadLineAsync(cancellationToken) ??
-                         throw new IOException("Response status is empty.");
+        if (httpStatus.Length == 0)
+        {
+            // A blank line before the status is unusual but treated as "try the next line";
+            // a subsequent EOF is still a normal close, not a protocol error.
+            httpStatus = await ReadLineAsync(cancellationToken);
+            if (httpStatus == null)
+                return null;
+        }
 
         Response.ParseResponseLine(httpStatus, out var version, out var statusCode, out var description);
         return new ResponseStatusInfo { Version = version, StatusCode = statusCode, Description = description };

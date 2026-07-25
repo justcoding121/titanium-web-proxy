@@ -11,6 +11,9 @@ internal enum Http2SettingsId
     MaxConcurrentStreams = 0x3,
     InitialWindowSize = 0x4,
     MaxFrameSize = 0x5,
-    MaxHeaderListSize = 0x6
+    MaxHeaderListSize = 0x6,
+
+    /// <summary>RFC 8441 §3: enables extended CONNECT (WebSocket-over-HTTP/2) on this connection.</summary>
+    EnableConnectProtocol = 0x8
 }
 #endif

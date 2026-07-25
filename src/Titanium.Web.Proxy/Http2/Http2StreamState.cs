@@ -1,5 +1,7 @@
 #if NET6_0_OR_GREATER
+using System;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 
@@ -56,5 +58,27 @@ internal sealed class Http2StreamState
     ///     <see cref="System.Threading.Interlocked.CompareExchange(ref int, int, int)" />.
     /// </summary>
     public int FinalizedFlag;
+
+    /// <summary>
+    ///     RFC 8441: set to <see langword="true"/> when this stream was opened as an extended CONNECT
+    ///     request (i.e. <c>:method = CONNECT</c> with a <c>:protocol</c> pseudo-header). The relay
+    ///     uses this flag to switch DATA frame handling to the appropriate WebSocket-tunnel path.
+    /// </summary>
+    public bool IsExtendedConnect { get; set; }
+
+    /// <summary>
+    ///     RFC 8441: the value of the <c>:protocol</c> pseudo-header for this extended CONNECT stream
+    ///     (e.g. <c>"websocket"</c>). Only meaningful when <see cref="IsExtendedConnect"/> is true.
+    /// </summary>
+    public string? ExtendedConnectProtocol { get; set; }
+
+    /// <summary>
+    ///     RFC 8441: channel through which DATA-frame payloads arrive for this extended CONNECT tunnel
+    ///     stream. Set by <see cref="ProxyServer.BridgeOnBeforeRequest"/> before the tunnel task starts,
+    ///     so that DATA frames arriving immediately after the HEADERS frame are always routed correctly.
+    ///     <see cref="Http2Helper"/> writes payloads here when <see cref="IsExtendedConnect"/> is true
+    ///     and this channel is non-null, instead of following the normal body-buffering path.
+    /// </summary>
+    internal Channel<ReadOnlyMemory<byte>>? InboundTunnelChannel { get; set; }
 }
 #endif

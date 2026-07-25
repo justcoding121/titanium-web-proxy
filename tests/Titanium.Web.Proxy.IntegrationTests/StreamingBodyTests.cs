@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -15,16 +15,31 @@ using Titanium.Web.Proxy.IntegrationTests.Setup;
 
 namespace Titanium.Web.Proxy.IntegrationTests;
 
+[DoNotParallelize]
 [TestClass]
 public class StreamingBodyTests
 {
+    private static TestServer sharedServer;
+
+    [ClassInitialize]
+    public static void ClassSetup(TestContext _)
+    {
+        sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        sharedServer?.Dispose();
+    }
+
     // The per-chunk body-write hook only runs for plain (non-TLS) HTTP, because it operates directly on the
     // network stream. These tests therefore go over http:// so the hook is exercised.
 
     [TestMethod]
     public async Task OnResponseBodyWrite_Passthrough_Is_Byte_For_Byte()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         const string expected = "I am server. I received your greetings.";
 
@@ -54,7 +69,7 @@ public class StreamingBodyTests
     [TestMethod]
     public async Task OnResponseBodyWrite_Can_Rewrite_Body()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("hello world"));
@@ -80,7 +95,7 @@ public class StreamingBodyTests
     [TestMethod]
     public async Task Large_Response_Streams_Incrementally_Without_Full_Buffering()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         // ~1 MB body so it spans many buffer-sized reads.
         const int totalSize = 1024 * 1024;
@@ -119,7 +134,7 @@ public class StreamingBodyTests
     [TestMethod]
     public async Task RespondStreaming_Chunked_Generates_Body_Without_Contacting_Server()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var serverCalled = false;
         var server = testSuite.GetServer();
@@ -164,7 +179,7 @@ public class StreamingBodyTests
     [TestMethod]
     public async Task RespondStreaming_FixedLength_Writes_Raw_With_ContentLength()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("from server"));
@@ -210,7 +225,7 @@ public class StreamingBodyTests
         // and HttpStream reports that capability as true whenever its backing stream is either a plain
         // NetworkStream or a decrypted SslStream. So OnResponseBodyWrite must fire with parity for a
         // TLS-decrypted HTTP/1.x connection, exactly as it already does for plain HTTP.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         const string expected = "I am server. I received your greetings.";
 
@@ -247,7 +262,7 @@ public class StreamingBodyTests
         // Companion to the read-only test above: proves the hook is not just invoked but its mutation of
         // e.BodyBytes is actually relayed to the client for a TLS-decrypted HTTP/1.x connection, matching
         // the plain-HTTP behavior in OnResponseBodyWrite_Can_Rewrite_Body.
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("hello world"));
@@ -273,7 +288,7 @@ public class StreamingBodyTests
     [TestMethod]
     public async Task OnResponseBodyWrite_Http2_Can_Rewrite_Body()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("hello world"));
@@ -301,7 +316,7 @@ public class StreamingBodyTests
     [TestMethod]
     public async Task RespondStreaming_Http2_Generates_Body_Without_Contacting_Server()
     {
-        using var testSuite = new TestSuite();
+        using var testSuite = new TestSuite(sharedServer);
 
         var serverCalled = false;
         var server = testSuite.GetServer();

@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
@@ -44,7 +45,31 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     public bool IsPromise { get; internal set; }
 
-    private bool HasMulipartEventSubscribers => MultipartRequestPartSent != null;
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.ResponseHeaderTimeoutSeconds" />.
+    ///     <see langword="null" /> uses the server default; <see cref="TimeSpan.Zero" /> or negative disables.
+    /// </summary>
+    public TimeSpan? ResponseHeaderTimeout { get; set; }
+
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.IdleReadTimeoutSeconds" />.
+    ///     <see langword="null" /> uses the server default; <see cref="TimeSpan.Zero" /> or negative disables.
+    /// </summary>
+    public TimeSpan? IdleReadTimeout { get; set; }
+
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.IdleWriteTimeoutSeconds" />.
+    ///     <see langword="null" /> uses the server default; <see cref="TimeSpan.Zero" /> or negative disables.
+    /// </summary>
+    public TimeSpan? IdleWriteTimeout { get; set; }
+
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.RequestTimeoutSeconds" />.
+    ///     <see langword="null" /> uses the server default; <see cref="TimeSpan.Zero" /> or negative disables.
+    /// </summary>
+    public TimeSpan? RequestTimeout { get; set; }
+
+    internal bool HasMulipartEventSubscribers => MultipartRequestPartSent != null;
 
     /// <summary>
     /// Should we send the request again ?
@@ -66,6 +91,37 @@ public class SessionEventArgs : SessionEventArgsBase
     public WebSocketDecoder WebSocketDecoderSend => webSocketDecoderSend ??= new WebSocketDecoder(BufferPool);
 
     public WebSocketDecoder WebSocketDecoderReceive => webSocketDecoderReceive ??= new WebSocketDecoder(BufferPool);
+
+    /// <summary>
+    ///     Fired for each WebSocket frame after upgrade when at least one handler is subscribed.
+    ///     Handlers may <see cref="WebSocketFrameInterceptAction.Forward" />,
+    ///     <see cref="WebSocketFrameInterceptAction.Drop" />, or
+    ///     <see cref="WebSocketFrameInterceptAction.Replace" /> the frame, optionally with a
+    ///     <see cref="WebSocketFrameInterceptEventArgs.Delay" />. Observational
+    ///     <see cref="SessionEventArgsBase.DataSent" /> / <see cref="SessionEventArgsBase.DataReceived" />
+    ///     still fire for bytes actually written to the peer.
+    /// </summary>
+    public event AsyncEventHandler<WebSocketFrameInterceptEventArgs>? BeforeWebSocketFrame;
+
+    /// <summary>
+    ///     Inject frames toward the remote server (client→server direction, masked).
+    ///     Available only while an intercepted WebSocket relay is active.
+    /// </summary>
+    public WebSocketFrameWriter? WebSocketServerWriter { get; internal set; }
+
+    /// <summary>
+    ///     Inject frames toward the local client (server→client direction, unmasked).
+    ///     Available only while an intercepted WebSocket relay is active.
+    /// </summary>
+    public WebSocketFrameWriter? WebSocketClientWriter { get; internal set; }
+
+    internal bool HasWebSocketFrameInterceptHandler => BeforeWebSocketFrame != null;
+
+    internal async Task InvokeBeforeWebSocketFrame(WebSocketFrameInterceptEventArgs args)
+    {
+        if (BeforeWebSocketFrame != null)
+            await BeforeWebSocketFrame.InvokeAsync(Server, args, Logger);
+    }
 
     /// <summary>
     /// Occurs when multipart request part sent.
@@ -232,6 +288,12 @@ public class SessionEventArgs : SessionEventArgsBase
         var contentLength = request.ContentLength;
 
         // send the request body bytes to server
+        // Integration point for MultipartStreamObserver: the observer can be created here and
+        // used alongside the existing CopyStream/ReadUntilBoundaryAsync pipeline for
+        // protocol-neutral, observational multipart streaming (e.g. HTTP/2 reuse).
+        // Example:
+        //   var observer = MultipartStreamObserver.TryCreate(request.ContentType,
+        //       headers => { /* callback */ }, () => { /* part complete */ });
         if (contentLength > 0 && HasMulipartEventSubscribers && request.IsMultipartFormData)
         {
             var boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
@@ -688,16 +750,10 @@ public class SessionEventArgs : SessionEventArgsBase
     {
         if (disposed) return;
 
-        MultipartRequestPartSent = null;
+        if (disposing) MultipartRequestPartSent = null;
+
         disposed = true;
 
         base.Dispose(disposing);
-    }
-
-    ~SessionEventArgs()
-    {
-        Logging.ProxyDiagnostics.ReportUndisposedFinalizer(Server.Logger, nameof(SessionEventArgs));
-
-        Dispose(false);
     }
 }
