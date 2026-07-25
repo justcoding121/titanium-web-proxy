@@ -72,7 +72,7 @@ If you find something inaccurate, please open an issue.
 | SETTINGS parameter validation | Yes | Unknown parameters are silently ignored per RFC 7540 §6.5; out-of-range values for known parameters (`INITIAL_WINDOW_SIZE`, `MAX_FRAME_SIZE`, `HEADER_TABLE_SIZE`) trigger a `PROTOCOL_ERROR`. |
 | CONTINUATION frame safety | Yes | A HEADERS frame with `END_HEADERS` clear must be followed by CONTINUATION frames on the same stream; any intervening frame triggers a `PROTOCOL_ERROR` connection error, closing the connection. |
 | Decoded header list size limit | Yes | HPACK-decoded header list bytes (name + value + 32-byte overhead per entry, per RFC 7541 §4.1) that exceed `MaxDecodedHeaderListBytes` (default 64 KiB) cause the stream to be reset with `RST_STREAM(ENHANCE_YOUR_CALM)` rather than forwarded. |
-| RFC 8441 WebSocket over HTTP/2 (extended CONNECT) | Partial | Scaffolding implemented; `EnableRfc8441 = true` enables extended-CONNECT negotiation. Data-frame translation between WebSocket frames and HTTP/2 DATA frames is not yet complete — the proxy currently returns `501 Not Implemented` for the tunnel phase. |
+| RFC 8441 WebSocket over HTTP/2 (extended CONNECT) | Partial | `EnableRfc8441 = true` enables extended-CONNECT negotiation. The h2-client→h1-origin WebSocket tunnel is now fully implemented: the proxy opens an HTTP/1.1 origin connection, performs the WebSocket upgrade handshake, and relays DATA frames bidirectionally. The h2↔h2 tunnel (both client and origin speak RFC 8441) is still TODO. |
 
 ## WebSocket safety
 
@@ -107,7 +107,7 @@ If you find something inaccurate, please open an issue.
 | `MaxWebSocketFramePayloadBytes` | 16,777,216 (16 MiB) | Maximum WebSocket frame payload size in intercepted sessions. Frames exceeding this are rejected. |
 | `ViaHeaderPseudonym` | `"titanium-web-proxy"` | Token appended to `Via` headers on forwarded requests and responses. Set to an empty string to disable. Loop detection rejects incoming requests whose `Via` already contains this token with `508 Loop Detected`. |
 | `CompatibilityMode100Continue` | `false` | Sends a synthetic `100 Continue` to the client before reading the request body when `Enable100ContinueBehaviour = false`, preventing deadlock with strict `Expect: 100-continue` clients. |
-| `EnableRfc8441` | `false` | Enables WebSocket over HTTP/2 extended CONNECT negotiation (RFC 8441). Data-frame translation is not yet complete; the tunnel phase returns `501 Not Implemented`. |
+| `EnableRfc8441` | `false` | Enables WebSocket over HTTP/2 extended CONNECT negotiation (RFC 8441). When enabled, the proxy advertises `ENABLE_CONNECT_PROTOCOL` to h2 clients and handles the tunnel by opening an HTTP/1.1 WebSocket upgrade to the origin, then relaying DATA frames bidirectionally. |
 
 ## Where to look for more detail
 
