@@ -100,30 +100,17 @@ internal sealed class MultipartStreamObserver
         Action<HeaderCollection>? onPartHeaders,
         Action? onPartComplete)
     {
-        if (contentType == null) return null;
-        var boundary = ExtractBoundary(contentType);
-        if (boundary == null) return null;
-        try { return new MultipartStreamObserver(boundary, onPartHeaders, onPartComplete); }
-        catch { return null; }
-    }
-
-    private static string? ExtractBoundary(string contentType)
-    {
-        var lower = contentType.ToLowerInvariant();
-        if (!lower.Contains("multipart/")) return null;
-
-        var idx = lower.IndexOf("boundary=", StringComparison.Ordinal);
-        if (idx < 0) return null;
-
-        var raw = contentType.Substring(idx + 9).TrimStart();
-        if (raw.Length > 0 && raw[0] == '"')
+        if (contentType == null ||
+            !contentType.StartsWith("multipart/", StringComparison.OrdinalIgnoreCase))
         {
-            var end = raw.IndexOf('"', 1);
-            return end < 0 ? null : raw.Substring(1, end - 1);
+            return null;
         }
 
-        var semi = raw.IndexOf(';');
-        return semi < 0 ? raw.Trim() : raw.Substring(0, semi).Trim();
+        var boundary = HttpHelper.GetBoundaryFromContentType(contentType);
+        if (boundary.IsEmpty || string.IsNullOrWhiteSpace(boundary.ToString())) return null;
+
+        try { return new MultipartStreamObserver(boundary.ToString(), onPartHeaders, onPartComplete); }
+        catch { return null; }
     }
 
     /// <summary>
@@ -161,7 +148,8 @@ internal sealed class MultipartStreamObserver
         }
 
         // When in part-header parsing mode, also accumulate bytes for header decoding.
-        if (_inPartHeaders)
+        bool wasParsingHeaders = _inPartHeaders;
+        if (wasParsingHeaders)
         {
             if (_headerFill < _headerBuffer.Length)
                 _headerBuffer[_headerFill++] = b;
@@ -185,7 +173,10 @@ internal sealed class MultipartStreamObserver
             }
         }
 
-        CheckForBoundary();
+        // Delimiter-looking bytes inside the MIME header section are header data,
+        // not multipart delimiters. Resume boundary scanning only after the blank
+        // line (or the bounded-header fallback) transitions into the part body.
+        if (!wasParsingHeaders) CheckForBoundary();
     }
 
     private void CheckForBoundary()

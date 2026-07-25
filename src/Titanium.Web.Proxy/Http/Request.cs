@@ -150,7 +150,8 @@ public class Request : RequestResponseBase
     /// <summary>
     ///     Does this request contain multipart/form-data?
     /// </summary>
-    public bool IsMultipartFormData => ContentType?.StartsWith("multipart/form-data") == true;
+    public bool IsMultipartFormData =>
+        ContentType?.StartsWith("multipart/form-data", StringComparison.OrdinalIgnoreCase) == true;
 
     /// <summary>
     ///     Cancels the client HTTP request without sending to server.

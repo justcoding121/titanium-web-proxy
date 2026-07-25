@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -109,12 +110,18 @@ public class Rfc8441TunnelTests
         server.HandleTcpRequest(async context =>
         {
             // Drain the HTTP upgrade request headers sent by the proxy.
-            await ReadRequestHeadersAsync(context);
+            var upgradeRequest = await ReadRequestHeadersAsync(context);
+            var keyLine = upgradeRequest.Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries)
+                .Single(line => line.StartsWith("Sec-WebSocket-Key:", StringComparison.OrdinalIgnoreCase));
+            var wsKey = keyLine.Substring(keyLine.IndexOf(':') + 1).Trim();
+            var wsAccept = Convert.ToBase64String(SHA1.HashData(
+                Ascii.GetBytes(wsKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
 
             // Respond with 101 Switching Protocols (minimal WebSocket handshake response).
             await context.Transport.Output.WriteAsync(Ascii.GetBytes(
                 "HTTP/1.1 101 Switching Protocols\r\n" +
-                "Upgrade: websocket\r\nConnection: Upgrade\r\n\r\n"));
+                "Upgrade: websocket\r\nConnection: Upgrade\r\n" +
+                $"Sec-WebSocket-Accept: {wsAccept}\r\n\r\n"));
             await context.Transport.Output.FlushAsync();
 
             // Echo loop: relay every byte received back to the sender.
@@ -243,7 +250,7 @@ public class Rfc8441TunnelTests
     ///     Reads raw bytes from <paramref name="context"/> until the HTTP request header terminator
     ///     (<c>\r\n\r\n</c>) is found, draining the header section without buffering the body.
     /// </summary>
-    private static async Task ReadRequestHeadersAsync(ConnectionContext context)
+    private static async Task<string> ReadRequestHeadersAsync(ConnectionContext context)
     {
         var accumulated = string.Empty;
         while (!accumulated.Contains("\r\n\r\n", StringComparison.Ordinal))
@@ -253,6 +260,8 @@ public class Rfc8441TunnelTests
                 accumulated += Ascii.GetString(seg.Span);
             context.Transport.Input.AdvanceTo(result.Buffer.End);
         }
+
+        return accumulated;
     }
 
     /// <summary>

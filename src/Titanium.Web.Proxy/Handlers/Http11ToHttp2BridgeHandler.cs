@@ -131,6 +131,20 @@ public partial class ProxyServer
                             {
                                 PrepareRequestHeaders(request.Headers);
                                 // Do NOT overwrite Host — the default was filled above and user overrides preserved.
+
+                                if (!string.IsNullOrEmpty(ViaHeaderPseudonym))
+                                {
+                                    if (HasLoopedVia(request.Headers, ViaHeaderPseudonym))
+                                    {
+                                        args.GenericResponse(string.Empty, (HttpStatusCode)508);
+                                    }
+                                    else
+                                    {
+                                        // Record the protocol received from the client before this
+                                        // request is translated onto the h2 origin connection.
+                                        AddViaHeader(request.Headers, request.HttpVersion, ViaHeaderPseudonym);
+                                    }
+                                }
                             }
                         }
 
@@ -443,7 +457,15 @@ public partial class ProxyServer
 
         response.Locked = true;
         if (!args.IsTransparent && !args.IsSocks)
+        {
             response.Headers.FixProxyHeaders();
+            if (!string.IsNullOrEmpty(ViaHeaderPseudonym))
+            {
+                // The response was received from the origin over HTTP/2 even though
+                // it is translated to an HTTP/1.1 response for the client.
+                AddViaHeader(response.Headers, HttpHeader.Version20, ViaHeaderPseudonym);
+            }
+        }
         else
             response.Headers.NormalizeMessageFraming();
 

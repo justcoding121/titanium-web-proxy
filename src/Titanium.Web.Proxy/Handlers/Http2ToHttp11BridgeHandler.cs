@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -133,6 +134,10 @@ public partial class ProxyServer
                 sessionArgs.HttpClient.Request.HttpVersion, ViaHeaderPseudonym);
         }
 
+        // This bridge launches origin work in the background. Normalize headers before
+        // launching that task so Http2Helper cannot race a later mutation against the send.
+        PrepareRequestHeaders(sessionArgs.HttpClient.Request.Headers);
+
         // RFC 8441 extended CONNECT: the stream was opened as a tunnel (e.g. WebSocket-over-HTTP/2).
         // For the websocket protocol, translate to an HTTP/1.1 WebSocket upgrade on the origin.
         // Any other :protocol value is unsupported and gets a 501 so the client can retry over h1.
@@ -254,8 +259,6 @@ public partial class ProxyServer
                 request.Headers.RemoveHeader("Cookie");
                 request.Headers.AddHeader("Cookie", combinedCookie);
             }
-
-            PrepareRequestHeaders(request.Headers);
 
             var customUpStreamProxy = sessionArgs.CustomUpStreamProxy;
             if (customUpStreamProxy == null && GetCustomUpStreamProxyFunc != null)
@@ -546,7 +549,11 @@ public partial class ProxyServer
 
             var upgrade = upgradeResponseHeaders.GetFirstHeader("Upgrade")?.Value;
             var responseConnection = upgradeResponseHeaders.GetFirstHeader("Connection")?.Value;
-            if (!string.Equals(upgrade, "websocket", StringComparison.OrdinalIgnoreCase) ||
+            var expectedAccept = Convert.ToBase64String(SHA1.HashData(
+                Encoding.ASCII.GetBytes(wsKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
+            var actualAccept = upgradeResponseHeaders.GetFirstHeader("Sec-WebSocket-Accept")?.Value;
+            if (!string.Equals(actualAccept, expectedAccept, StringComparison.Ordinal) ||
+                !string.Equals(upgrade, "websocket", StringComparison.OrdinalIgnoreCase) ||
                 responseConnection == null ||
                 !responseConnection.Split(',').Any(token =>
                     string.Equals(token.Trim(), "upgrade", StringComparison.OrdinalIgnoreCase)))
@@ -573,19 +580,33 @@ public partial class ProxyServer
                 StatusCode = 200,
                 StatusDescription = "OK"
             };
-            if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
-                !string.IsNullOrEmpty(ViaHeaderPseudonym))
-            {
-                // The origin response being translated was HTTP/1.1, so Via records 1.1 even
-                // though the response sent to the client is represented as h2 HEADERS.
-                AddViaHeader(response200.Headers, HttpHeader.Version11, ViaHeaderPseudonym);
-            }
 
             // Preserve origin-negotiated WebSocket options on the extended CONNECT response.
             foreach (var name in new[] { "Sec-WebSocket-Protocol", "Sec-WebSocket-Extensions" })
             {
                 foreach (var header in upgradeResponseHeaders.GetHeaders(name) ?? Enumerable.Empty<HttpHeader>())
                     response200.Headers.AddHeader(header.Name.ToLowerInvariant(), header.Value);
+            }
+
+            sessionArgs.HttpClient.Response = response200;
+            await OnBeforeResponse(sessionArgs);
+            var interceptedResponse = sessionArgs.HttpClient.Response;
+            if (!ReferenceEquals(interceptedResponse, response200) ||
+                interceptedResponse.StatusCode is < 200 or >= 300)
+            {
+                // A BeforeResponse subscriber denied or replaced the tunnel response.
+                // Emit that response normally and never start the byte relay.
+                await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, ctx.StreamId,
+                    ctx.ConnectionState, ctx.ClientStream, cancellationToken);
+                return;
+            }
+
+            if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
+                !string.IsNullOrEmpty(ViaHeaderPseudonym))
+            {
+                // The origin response being translated was HTTP/1.1, so Via records 1.1 even
+                // though the response sent to the client is represented as h2 HEADERS.
+                AddViaHeader(response200.Headers, HttpHeader.Version11, ViaHeaderPseudonym);
             }
 
             sessionArgs.RespondStreaming(response200, async (bodyStream, ct) =>
@@ -596,7 +617,7 @@ public partial class ProxyServer
                 // Task A: drains the inbound DATA-frame channel and forwards payloads to the
                 // origin. Cancelled via relayCt once the other direction finishes.
                 var toOriginTask = RelayChannelToStreamAsync(
-                    streamState.InboundTunnelChannel!.Reader, originStreamForRelay, relayCt);
+                    streamState.InboundTunnelChannel!.Reader, originStreamForRelay, sessionArgs, relayCt);
 
                 // Task B: reads the origin's raw TCP bytes and forwards them to the h2 client.
                 // Uses CancellationToken.None for the source read: HttpStream.FillBufferAsync
@@ -606,7 +627,7 @@ public partial class ProxyServer
                 // Instead we close the socket explicitly below, which forces ReadAsync to
                 // return 0 (or throw an IOException that is swallowed by HttpStream), giving
                 // toClientTask a reliable, synchronous exit signal.
-                var toClientTask = RelayStreamToClientAsync(originStreamForRelay, bodyStream, ct);
+                var toClientTask = RelayStreamToClientAsync(originStreamForRelay, bodyStream, sessionArgs, ct);
 
                 await Task.WhenAny(toOriginTask, toClientTask);
                 relayCts.Cancel();
@@ -689,6 +710,7 @@ public partial class ProxyServer
     private static async Task RelayChannelToStreamAsync(
         ChannelReader<ReadOnlyMemory<byte>> reader,
         Stream destination,
+        SessionEventArgs sessionArgs,
         CancellationToken cancellationToken)
     {
         await foreach (var chunk in reader.ReadAllAsync(cancellationToken))
@@ -696,6 +718,8 @@ public partial class ProxyServer
             if (chunk.IsEmpty) continue;
             await destination.WriteAsync(chunk, cancellationToken);
             await destination.FlushAsync(cancellationToken);
+            if (MemoryMarshal.TryGetArray(chunk, out var segment) && segment.Array != null)
+                sessionArgs.OnDataSent(segment.Array, segment.Offset, segment.Count);
         }
     }
 
@@ -715,6 +739,7 @@ public partial class ProxyServer
     private static async Task RelayStreamToClientAsync(
         Stream source,
         Stream destination,
+        SessionEventArgs sessionArgs,
         CancellationToken writeCancellationToken)
     {
         var buf = new byte[16384];
@@ -736,6 +761,7 @@ public partial class ProxyServer
             {
                 await destination.WriteAsync(buf, 0, read, writeCancellationToken);
                 await destination.FlushAsync(writeCancellationToken);
+                sessionArgs.OnDataReceived(buf, 0, read);
             }
             catch (Exception)
             {
