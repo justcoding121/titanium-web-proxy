@@ -81,7 +81,7 @@ public class MultipartStreamObserverTests
         Assert.IsNotNull(observer);
 
         var body = ToBytes(
-            "------boundary\r\n" +
+            "\r\n------boundary\r\n" +
             "Content-Disposition: form-data; name=\"field\"\r\n\r\n" +
             "value\r\n" +
             "------boundary--\r\n");
@@ -99,7 +99,7 @@ public class MultipartStreamObserverTests
         Assert.IsNotNull(observer);
 
         var body = ToBytes(
-            "------boundary\r\n" +
+            "\r\n------boundary\r\n" +
             "Content-Disposition: form-data; name=\"x\"\r\n\r\n" +
             "val\r\n" +
             "------boundary--\r\n");
@@ -118,7 +118,7 @@ public class MultipartStreamObserverTests
             () => partCount++);
         Assert.IsNotNull(observer);
 
-        var body = "--ABC\r\nContent-Disposition: form-data; name=\"f\"\r\n\r\nvalue\r\n--ABC--\r\n";
+        var body = "\r\n--ABC\r\nContent-Disposition: form-data; name=\"f\"\r\n\r\nvalue\r\n--ABC--\r\n";
         foreach (var b in Encoding.ASCII.GetBytes(body))
             observer!.Observe(new ReadOnlySpan<byte>(new[] { b }));
 
@@ -136,7 +136,7 @@ public class MultipartStreamObserverTests
         Assert.IsNotNull(observer);
 
         var body = ToBytes(
-            "--BOUND\r\n" +
+            "\r\n--BOUND\r\n" +
             "Content-Disposition: form-data; name=\"a\"\r\n\r\n" +
             "valueA\r\n" +
             "--BOUND\r\n" +
@@ -156,7 +156,7 @@ public class MultipartStreamObserverTests
             null, null);
         Assert.IsNotNull(observer);
 
-        var body = ToBytes("--BOUND\r\n\r\n\r\n--BOUND--\r\n");
+        var body = ToBytes("\r\n--BOUND\r\n\r\n\r\n--BOUND--\r\n");
         observer!.Observe(body);
 
         // After the closing boundary, further calls return false immediately.
@@ -175,7 +175,7 @@ public class MultipartStreamObserverTests
         Assert.IsNotNull(observer);
 
         var body = ToBytes(
-            "--BOUND\r\n" +
+            "\r\n--BOUND\r\n" +
             "Content-Disposition: form-data; name=\"file\"\r\n" +
             "Content-Type: text/plain\r\n\r\n" +
             "hello\r\n" +

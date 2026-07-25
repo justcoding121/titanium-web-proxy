@@ -25,6 +25,7 @@ public class Http2MultipartTests
     private static byte[] BuildMultipartBody(string boundary, string fieldName, string value)
     {
         var sb = new StringBuilder();
+        sb.Append("\r\n");  // RFC 2046: \r\n prefix required before first boundary for observer detection
         sb.Append($"--{boundary}\r\n");
         sb.Append($"Content-Disposition: form-data; name=\"{fieldName}\"\r\n");
         sb.Append("\r\n");

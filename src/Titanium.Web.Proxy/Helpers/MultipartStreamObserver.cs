@@ -56,11 +56,16 @@ internal sealed class MultipartStreamObserver
 
         var boundaryBytes = Encoding.ASCII.GetBytes(boundaryString);
 
-        // Delimiter token: CRLF "--" boundary  (the leading CRLF is part of the delimiter per RFC 2046)
-        _boundary = new byte[2 + boundaryBytes.Length];
-        _boundary[0] = (byte)'-';
-        _boundary[1] = (byte)'-';
-        Buffer.BlockCopy(boundaryBytes, 0, _boundary, 2, boundaryBytes.Length);
+        // Delimiter token: \r\n "--" boundary  (the leading \r\n is part of the delimiter per RFC 2046).
+        // Including \r\n prevents body content from false-matching the boundary string.
+        // The very first boundary (at preamble start) has no preceding \r\n and is not detected;
+        // that is acceptable because the first boundary is just the preamble separator.
+        _boundary = new byte[4 + boundaryBytes.Length];
+        _boundary[0] = (byte)'\r';
+        _boundary[1] = (byte)'\n';
+        _boundary[2] = (byte)'-';
+        _boundary[3] = (byte)'-';
+        Buffer.BlockCopy(boundaryBytes, 0, _boundary, 4, boundaryBytes.Length);
 
         _closingBoundary = new byte[_boundary.Length + 2];
         Buffer.BlockCopy(_boundary, 0, _closingBoundary, 0, _boundary.Length);
@@ -147,11 +152,16 @@ internal sealed class MultipartStreamObserver
                 _headerBuffer[_headerFill++] = b;
 
             // Detect end-of-headers: \r\n\r\n
-            if (_headerFill >= 4 &&
+            bool endOfHeaders = _headerFill >= 4 &&
                 _headerBuffer[_headerFill - 4] == '\r' &&
                 _headerBuffer[_headerFill - 3] == '\n' &&
                 _headerBuffer[_headerFill - 2] == '\r' &&
-                _headerBuffer[_headerFill - 1] == '\n')
+                _headerBuffer[_headerFill - 1] == '\n';
+
+            // Treat a full buffer as a truncated header block so the observer never stalls.
+            bool truncated = _headerFill == _headerBuffer.Length;
+
+            if (endOfHeaders || truncated)
             {
                 _inPartHeaders = false;
                 var headers = ParsePartHeaders();
