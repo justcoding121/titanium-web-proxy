@@ -305,6 +305,8 @@ namespace Titanium.Web.Proxy.Http2
             {
                 if (connectionState.Streams.TryRemove(removeStreamId, out var removedState))
                 {
+                    removedState.InboundTunnelChannel?.Writer.TryComplete(
+                        new IOException("HTTP/2 stream removed due to protocol error."));
                     connectionState.ClientSendFlow.RemoveStream(removeStreamId);
                     connectionState.ServerSendFlow.RemoveStream(removeStreamId);
                     connectionState.PendingFinalizations.Add(
@@ -668,8 +670,19 @@ namespace Titanium.Web.Proxy.Http2
                             // forwarding whatever the client (or BeforeRequest) set verbatim.
                             prepareRequestHeaders?.Invoke(request.Headers);
 
-                            await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
-                                request, endStreamFlag, output, isPromise));
+                            // RFC 8441: extended CONNECT tunnel streams are handled entirely by the
+                            // bridge's tunnel task (which manages its own response). Do not forward
+                            // the CONNECT HEADERS to the (null) origin - the tunnel task sends the
+                            // actual WebSocket upgrade request and response independently.
+                            bool isExtendedConnectTunnel =
+                                connectionState.Streams.TryGetValue(hbStreamId, out var ecTunnelState)
+                                && ecTunnelState.IsExtendedConnect
+                                && ecTunnelState.InboundTunnelChannel != null;
+                            if (!isExtendedConnectTunnel)
+                            {
+                                await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
+                                    request, endStreamFlag, output, isPromise));
+                            }
                         }
                     }
                     else
@@ -1174,23 +1187,20 @@ namespace Titanium.Web.Proxy.Http2
                         && tunnelStreamState.InboundTunnelChannel != null)
                     {
                         bool endStreamFlag = (flags & Http2FrameFlag.EndStream) != 0;
+                        int dataOff = (flags & Http2FrameFlag.Padded) != 0 ? 1 : 0;
+                        int dataLen = (flags & Http2FrameFlag.Padded) != 0 ? length - 1 - buffer[0] : length;
+                        if (dataLen < 0) dataLen = 0;
+                        if (dataLen > 0)
+                        {
+                            var chunk = new byte[dataLen];
+                            Buffer.BlockCopy(buffer, dataOff, chunk, 0, dataLen);
+                            await tunnelStreamState.InboundTunnelChannel.Writer.WriteAsync(
+                                new ReadOnlyMemory<byte>(chunk), cancellationToken);
+                        }
                         if (endStreamFlag)
                         {
                             endStream = true;
                             tunnelStreamState.InboundTunnelChannel.Writer.TryComplete();
-                        }
-                        else
-                        {
-                            int dataOff = (flags & Http2FrameFlag.Padded) != 0 ? 1 : 0;
-                            int dataLen = (flags & Http2FrameFlag.Padded) != 0 ? length - 1 - buffer[0] : length;
-                            if (dataLen < 0) dataLen = 0;
-                            if (dataLen > 0)
-                            {
-                                var chunk = new byte[dataLen];
-                                Buffer.BlockCopy(buffer, dataOff, chunk, 0, dataLen);
-                                await tunnelStreamState.InboundTunnelChannel.Writer.WriteAsync(
-                                    new ReadOnlyMemory<byte>(chunk), cancellationToken);
-                            }
                         }
 
                         rr = args.HttpClient.Request; // required for the endStream cleanup block below
@@ -1422,6 +1432,11 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             if (kvp.Key > lastStreamId)
                             {
+                                // RFC 8441: unblock any tunnel relay waiting on the inbound channel
+                                // so it can shut down promptly without waiting for more DATA frames
+                                // that the peer has already said it will not send.
+                                kvp.Value.InboundTunnelChannel?.Writer.TryComplete(
+                                    new IOException("Connection received GOAWAY."));
                                 kvp.Value.Cancellation.Cancel();
                             }
                         }

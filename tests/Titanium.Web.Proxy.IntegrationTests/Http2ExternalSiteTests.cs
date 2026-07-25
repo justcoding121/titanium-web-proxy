@@ -21,6 +21,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     access; skips (does not fail) if the origin cannot be reached at all.
 /// </summary>
 [TestClass]
+[TestCategory("Slow")]
 public class Http2ExternalSiteTests
 {
     private const string TargetUrl = "https://www.google.com/";

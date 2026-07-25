@@ -16,10 +16,7 @@ public class TestSuite : IDisposable
 
     public TestSuite(bool requireMutualTls = false)
     {
-        using var dummyProxy = new ProxyServer(false, false, false);
-        dummyProxy.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
-        var serverCertificate = dummyProxy.CertificateManager.CreateServerCertificate("localhost").Result;
-        server = new TestServer(serverCertificate, requireMutualTls);
+        server = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls);
     }
 
     public TestServer GetServer()

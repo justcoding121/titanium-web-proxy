@@ -136,8 +136,8 @@ public partial class ProxyServer
             // Create the inbound channel BEFORE dispatching the background tunnel task so that DATA
             // frames arriving immediately after the HEADERS frame (before the task has had a chance
             // to run) are still routed correctly by Http2Helper.CopyHttp2FrameAsync.
-            var inboundChannel = Channel.CreateBounded<ReadOnlyMemory<byte>>(
-                new BoundedChannelOptions(256) { FullMode = BoundedChannelFullMode.Wait });
+            var inboundChannel = Channel.CreateUnbounded<ReadOnlyMemory<byte>>(
+                new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
             extStreamState.InboundTunnelChannel = inboundChannel;
 
             if (!ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var tunnelStreamState))
@@ -453,7 +453,12 @@ public partial class ProxyServer
             var wsKey = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
             var sb = new StringBuilder();
             sb.Append($"GET {request.RequestUri.PathAndQuery} HTTP/1.1\r\n");
-            sb.Append($"Host: {remoteHostName}:{remotePort}\r\n");
+            // Prefer the :authority pseudo-header value (already parsed into Request.Authority by
+            // Http2Helper) for the Host header, falling back to the connect target identity.
+            var authorityStr = request.Host
+                ?? (request.Authority.Length > 0 ? request.Authority.GetString() : null)
+                ?? $"{remoteHostName}:{remotePort}";
+            sb.Append($"Host: {authorityStr}\r\n");
             sb.Append("Upgrade: websocket\r\n");
             sb.Append("Connection: Upgrade\r\n");
             sb.Append($"Sec-WebSocket-Key: {wsKey}\r\n");

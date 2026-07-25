@@ -8,6 +8,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
 [TestClass]
+[TestCategory("Slow")]
 public class StressTests
 {
     [TestMethod]

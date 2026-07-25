@@ -21,9 +21,7 @@ public class Http2OriginCapabilityCacheIntegrationTests
 {
     private static X509Certificate2 CreateOriginCertificate()
     {
-        using var dummyProxy = new ProxyServer(false, false, false);
-        dummyProxy.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
-        return dummyProxy.CertificateManager.CreateServerCertificate("localhost").Result;
+        return TestCertificateAuthority.ServerCertificate;
     }
 
     [TestMethod]

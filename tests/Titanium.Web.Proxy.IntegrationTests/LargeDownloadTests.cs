@@ -14,6 +14,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Characterization for issue #911: large fixed-length downloads (~200MB) through the proxy.
 /// </summary>
 [TestClass]
+[TestCategory("Slow")]
 public class LargeDownloadTests
 {
     private const int PayloadBytes = 200 * 1024 * 1024;

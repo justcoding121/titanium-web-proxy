@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http2;
@@ -21,9 +22,7 @@ public class Http2OriginFrameValidationTests
 {
     private static X509Certificate2 CreateOriginCertificate()
     {
-        using var dummyProxy = new ProxyServer(false, false, false);
-        dummyProxy.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
-        return dummyProxy.CertificateManager.CreateServerCertificate("localhost").Result;
+        return TestCertificateAuthority.ServerCertificate;
     }
 
     /// <summary>
@@ -67,6 +66,9 @@ public class Http2OriginFrameValidationTests
     [Timeout(15_000)]
     public async Task Origin_ZeroIncrement_WindowUpdate_Tears_Down_Connection()
     {
+        // Auto-cancels after 1 s (far more than needed on localhost); also cancelled immediately
+        // once TrySendRequestAsync returns so the server-side keep-alive exits without delay.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
         using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
         rawServer.HandleConnection(async connection =>
         {
@@ -75,7 +77,7 @@ public class Http2OriginFrameValidationTests
             var payload = new byte[4]; // all-zero ⇒ increment = 0
             await connection.WriteFrameAsync(Http2FrameType.WindowUpdate, 0, 0, payload);
             // Stay alive so the proxy has time to read and reject the frame.
-            try { await Task.Delay(3000); } catch { }
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
         });
 
         using var testSuite = new TestSuite();
@@ -83,6 +85,7 @@ public class Http2OriginFrameValidationTests
         proxy.EnableHttp2 = true;
 
         var succeeded = await TrySendRequestAsync(proxy.ProxyEndPoints[0].Port, new Uri(rawServer.Url));
+        cts.Cancel(); // unblock the server handler immediately if still waiting
 
         Assert.IsFalse(succeeded,
             "The proxy must reject a zero-increment WINDOW_UPDATE with a connection error, failing the request.");
@@ -98,6 +101,7 @@ public class Http2OriginFrameValidationTests
     {
         // The proxy must reject the frame based on the declared length alone, before
         // allocating memory or waiting for the payload bytes that never arrive.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
         using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
         rawServer.HandleConnection(async connection =>
         {
@@ -124,7 +128,7 @@ public class Http2OriginFrameValidationTests
             await stream.FlushAsync();
 
             // Keep the connection open so the proxy has time to read the header and reject it.
-            try { await Task.Delay(3000); } catch { }
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
         });
 
         using var testSuite = new TestSuite();
@@ -132,6 +136,7 @@ public class Http2OriginFrameValidationTests
         proxy.EnableHttp2 = true;
 
         var succeeded = await TrySendRequestAsync(proxy.ProxyEndPoints[0].Port, new Uri(rawServer.Url));
+        cts.Cancel(); // unblock the server handler immediately if still waiting
 
         Assert.IsFalse(succeeded,
             "The proxy must reject an oversized frame (declared length > 16 KiB) before allocating memory.");
@@ -145,6 +150,7 @@ public class Http2OriginFrameValidationTests
     [Timeout(15_000)]
     public async Task Origin_Settings_WithNonZeroStreamId_Tears_Down_Connection()
     {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
         using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
         rawServer.HandleConnection(async connection =>
         {
@@ -161,7 +167,7 @@ public class Http2OriginFrameValidationTests
             await stream.WriteAsync(header, 0, header.Length);
             await stream.FlushAsync();
 
-            try { await Task.Delay(3000); } catch { }
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
         });
 
         using var testSuite = new TestSuite();
@@ -169,6 +175,7 @@ public class Http2OriginFrameValidationTests
         proxy.EnableHttp2 = true;
 
         var succeeded = await TrySendRequestAsync(proxy.ProxyEndPoints[0].Port, new Uri(rawServer.Url));
+        cts.Cancel(); // unblock the server handler immediately if still waiting
 
         Assert.IsFalse(succeeded,
             "The proxy must treat SETTINGS on a non-zero stream as a connection-level error.");
@@ -185,6 +192,7 @@ public class Http2OriginFrameValidationTests
         // The origin first answers the request normally (200 OK), then immediately
         // sends a stray CONTINUATION on the same stream even though no HEADERS/
         // PUSH_PROMISE with END_HEADERS cleared is in progress.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
         using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
         rawServer.HandleConnection(async connection =>
         {
@@ -209,7 +217,7 @@ public class Http2OriginFrameValidationTests
             await rawStream.WriteAsync(contHeader, 0, contHeader.Length);
             await rawStream.FlushAsync();
 
-            try { await Task.Delay(3000); } catch { }
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
         });
 
         using var testSuite = new TestSuite();
@@ -220,6 +228,7 @@ public class Http2OriginFrameValidationTests
         // stray CONTINUATION (the 200 response is sent first). What matters is that
         // the test finishes within the timeout — no deadlock.
         _ = await TrySendRequestAsync(proxy.ProxyEndPoints[0].Port, new Uri(rawServer.Url));
+        cts.Cancel(); // unblock the server handler immediately if still waiting
         // No assertion on success/failure; [Timeout] catches deadlocks.
     }
 
@@ -231,6 +240,7 @@ public class Http2OriginFrameValidationTests
     [Timeout(15_000)]
     public async Task Origin_GoAway_WithNonZeroStreamId_Tears_Down_Connection()
     {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
         using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
         rawServer.HandleConnection(async connection =>
         {
@@ -256,7 +266,7 @@ public class Http2OriginFrameValidationTests
             await stream.WriteAsync(payload, 0, payload.Length);
             await stream.FlushAsync();
 
-            try { await Task.Delay(3000); } catch { }
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
         });
 
         using var testSuite = new TestSuite();
@@ -264,6 +274,7 @@ public class Http2OriginFrameValidationTests
         proxy.EnableHttp2 = true;
 
         var succeeded = await TrySendRequestAsync(proxy.ProxyEndPoints[0].Port, new Uri(rawServer.Url));
+        cts.Cancel(); // unblock the server handler immediately if still waiting
 
         Assert.IsFalse(succeeded,
             "The proxy must treat GOAWAY on a non-zero stream as a connection-level error.");

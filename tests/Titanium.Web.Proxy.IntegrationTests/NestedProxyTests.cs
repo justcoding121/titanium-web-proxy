@@ -119,6 +119,7 @@ public class NestedProxyTests
 
     [TestMethod]
     [Timeout(2 * 60 * 1000)]
+    [TestCategory("Slow")]
     public async Task Nested_Proxy_Farm_Without_Connection_Cache_Should_Not_Hang()
     {
         using var testSuite = new TestSuite();
@@ -202,6 +203,7 @@ public class NestedProxyTests
     //https://github.com/justcoding121/titanium-web-proxy/issues/826
     [TestMethod]
     [Timeout(2 * 60 * 1000)]
+    [TestCategory("Slow")]
     public async Task Nested_Proxy_Farm_With_Connection_Cache_Should_Not_Hang()
     {
         using var testSuite = new TestSuite();
