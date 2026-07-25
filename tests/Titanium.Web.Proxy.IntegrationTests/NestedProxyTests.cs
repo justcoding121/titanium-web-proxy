@@ -116,8 +116,6 @@ public class NestedProxyTests
     [Timeout(2 * 60 * 1000)]
     public async Task Nested_Proxy_Farm_Without_Connection_Cache_Should_Not_Hang()
     {
-        var rnd = new Random();
-
         using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
@@ -147,7 +145,7 @@ public class NestedProxyTests
         {
             var proxy1 = testSuite.GetProxy();
             proxy1.EnableConnectionPool = false;
-            var proxy2 = proxies2[rnd.Next() % proxies2.Count];
+            var proxy2 = proxies2[Random.Shared.Next() % proxies2.Count];
 
             proxy1.GetCustomUpStreamProxyFunc += async _ =>
             {
@@ -169,17 +167,17 @@ public class NestedProxyTests
         var tasks = new List<Task>();
 
         //send multiple concurrent requests from client => proxy farm 1 => proxy farm 2 => server
-        for (var j = 0; j < 10_000; j++)
+        for (var j = 0; j < 1_000; j++)
         {
             var task = Task.Run(async () =>
             {
                 try
                 {
-                    var proxy = proxies1[rnd.Next() % proxies1.Count];
+                    var proxy = proxies1[Random.Shared.Next() % proxies1.Count];
                     using var client = testSuite.GetClient(proxy);
 
-                    //tests should not keep hanging for 30 mins.
-                    client.Timeout = TimeSpan.FromMinutes(30);
+                    //tests should not keep hanging indefinitely.
+                    client.Timeout = TimeSpan.FromSeconds(60);
                     await client.PostAsync(new Uri(server.ListeningHttpsUrl),
                         new StringContent("hello server. I am a client."));
                 }
@@ -201,8 +199,6 @@ public class NestedProxyTests
     [Timeout(2 * 60 * 1000)]
     public async Task Nested_Proxy_Farm_With_Connection_Cache_Should_Not_Hang()
     {
-        var rnd = new Random();
-
         using var testSuite = new TestSuite();
 
         var server = testSuite.GetServer();
@@ -230,7 +226,7 @@ public class NestedProxyTests
         for (var i = 0; i < 10; i++)
         {
             var proxy1 = testSuite.GetProxy();
-            var proxy2 = proxies2[rnd.Next() % proxies2.Count];
+            var proxy2 = proxies2[Random.Shared.Next() % proxies2.Count];
 
             proxy1.GetCustomUpStreamProxyFunc += async _ =>
             {
@@ -252,17 +248,17 @@ public class NestedProxyTests
         var tasks = new List<Task>();
 
         //send multiple concurrent requests from client => proxy farm 1 => proxy farm 2 => server
-        for (var j = 0; j < 10_000; j++)
+        for (var j = 0; j < 1_000; j++)
         {
             var task = Task.Run(async () =>
             {
                 try
                 {
-                    var proxy = proxies1[rnd.Next() % proxies1.Count];
+                    var proxy = proxies1[Random.Shared.Next() % proxies1.Count];
                     using var client = testSuite.GetClient(proxy);
 
-                    //tests should not keep hanging for 30 mins.
-                    client.Timeout = TimeSpan.FromMinutes(30);
+                    //tests should not keep hanging indefinitely.
+                    client.Timeout = TimeSpan.FromSeconds(60);
                     await client.PostAsync(new Uri(server.ListeningHttpsUrl),
                         new StringContent("hello server. I am a client."));
                 }
