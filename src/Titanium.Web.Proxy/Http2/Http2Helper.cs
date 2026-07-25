@@ -1696,7 +1696,14 @@ namespace Titanium.Web.Proxy.Http2
                     // stream error: cancel any waiter/synthetic task scoped to this stream and stop tracking
                     // its flow-control windows and session mapping - regardless of the error code, the
                     // stream is now closed.
-                    connectionState.MultipartObservers.TryRemove(streamId, out _);
+                    // Only remove the multipart observer when the RST came from the client: the observer
+                    // is scoped to the client-side DATA stream and must survive an origin RST_STREAM so
+                    // that any already-received client DATA frames can still finish firing their events.
+                    // (An origin RST_STREAM with NO_ERROR is a normal post-response cleanup by servers
+                    // like Kestrel; removing the observer here would silently drop multipart events on
+                    // slower hosts where the RST races the client DATA processing.)
+                    if (isClient)
+                        connectionState.MultipartObservers.TryRemove(streamId, out _);
                     if (connectionState.Streams.TryRemove(streamId, out var resetStream))
                     {
                         // RFC 8441: if the reset stream is an extended CONNECT tunnel, unblock the relay
@@ -1724,7 +1731,9 @@ namespace Titanium.Web.Proxy.Http2
                         }
                     }
 
-                    if (errorCode != (int)Http2ErrorCode.Cancel)
+                    // NO_ERROR (0) from the origin is a normal post-response cleanup; only report
+                    // genuine error codes so the server log is not flooded with false-positive errors.
+                    if (errorCode != (int)Http2ErrorCode.NoError && errorCode != (int)Http2ErrorCode.Cancel)
                     {
                         ReportException(logger, new ProxyHttpException("HTTP/2 stream error. Error code: " + errorCode, null, args));
                     }
