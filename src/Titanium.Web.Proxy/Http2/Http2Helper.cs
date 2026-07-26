@@ -730,6 +730,12 @@ namespace Titanium.Web.Proxy.Http2
                             }
                             else if (isNativeExtendedConnect && output is not NullOriginStream)
                             {
+                                // Wait for the origin's initial SETTINGS to be processed before checking
+                                // SETTINGS_ENABLE_CONNECT_PROTOCOL. The client may send its extended CONNECT
+                                // request before the server→client relay has had a chance to relay the origin's
+                                // SETTINGS frame; without this await the check below would always see false.
+                                await connectionState.ServerSettingsRelayed.Task.WaitAsync(cancellationToken);
+
                                 // Native h2↔h2 extended CONNECT path.
                                 string? ecProto = ecTunnelState?.ExtendedConnectProtocol;
                                 if (!string.Equals(ecProto, "websocket", StringComparison.OrdinalIgnoreCase))
