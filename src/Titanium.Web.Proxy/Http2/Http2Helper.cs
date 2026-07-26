@@ -434,6 +434,20 @@ namespace Titanium.Web.Proxy.Http2
                     }
                 }
 
+                // RFC 9113 §8.5: once an extended CONNECT tunnel is established, no HEADERS or CONTINUATION
+                // frame is permitted on that stream.  The HPACK decode above already ran to keep the
+                // connection-level dynamic table in sync; now reject the stream itself.
+                if (connectionState.Streams.TryGetValue(hbStreamId, out var estConnectState)
+                    && estConnectState.ExtendedConnectEstablished)
+                {
+                    ReportException(logger, new ProxyHttpException(
+                        "HTTP/2 protocol error: HEADERS received on an established extended CONNECT tunnel.",
+                        null, sessionArgs));
+                    await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
+                        Http2ErrorCode.ProtocolError, input));
+                    return false;
+                }
+
                 if (isClient)
                 {
                     var method = headerListener.Method;
@@ -902,6 +916,18 @@ namespace Titanium.Web.Proxy.Http2
 
                             await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                 finalResponse, endStreamFlag, output, isPromise));
+
+                            // RFC 8441: once a final 2xx response to a native h2↔h2 extended CONNECT is
+                            // forwarded to the client, the stream enters tunnel state. DATA frames from either
+                            // direction are raw tunnel bytes; any subsequent HEADERS/CONTINUATION is rejected.
+                            if (finalResponse.StatusCode is >= 200 and < 300
+                                && connectionState.Streams.TryGetValue(hbStreamId, out var tunnelEstState)
+                                && tunnelEstState.IsExtendedConnect
+                                && tunnelEstState.InboundTunnelChannel == null)
+                            {
+                                tunnelEstState.ExtendedConnectEstablished = true;
+                            }
+
                             finalResponse.Locked = true;
                             return false;
                         }
@@ -1320,14 +1346,15 @@ namespace Titanium.Web.Proxy.Http2
                     // safe regardless of what happens to the payload below.
                     await GrantReceiveCreditAsync(streamId, length);
 
-                    // RFC 8441: extended CONNECT tunnel - route frame payload directly to the per-stream
-                    // channel rather than the normal body-buffering path. The channel is created by
+                    connectionState.Streams.TryGetValue(streamId, out var dataStreamState);
+
+                    // RFC 8441 h2→h1 bridge: route frame payload directly to the per-stream channel
+                    // rather than the normal body-buffering path. The channel is created by
                     // BridgeOnBeforeRequest before the tunnel task starts, so it is always populated
                     // before the first DATA frame for the stream can be processed here.
                     if (isClient
-                        && connectionState.Streams.TryGetValue(streamId, out var tunnelStreamState)
-                        && tunnelStreamState.IsExtendedConnect
-                        && tunnelStreamState.InboundTunnelChannel != null)
+                        && dataStreamState?.IsExtendedConnect == true
+                        && dataStreamState.InboundTunnelChannel != null)
                     {
                         bool endStreamFlag = (flags & Http2FrameFlag.EndStream) != 0;
                         int dataOff = (flags & Http2FrameFlag.Padded) != 0 ? 1 : 0;
@@ -1337,7 +1364,7 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             var chunk = new byte[dataLen];
                             Buffer.BlockCopy(buffer, dataOff, chunk, 0, dataLen);
-                            if (!tunnelStreamState.InboundTunnelChannel.Writer.TryWrite(
+                            if (!dataStreamState.InboundTunnelChannel.Writer.TryWrite(
                                     new ReadOnlyMemory<byte>(chunk)))
                             {
                                 ReportException(logger, new ProxyHttpException(
@@ -1352,11 +1379,56 @@ namespace Titanium.Web.Proxy.Http2
                         if (endStreamFlag)
                         {
                             endStream = true;
-                            tunnelStreamState.InboundTunnelChannel.Writer.TryComplete();
+                            dataStreamState.InboundTunnelChannel.Writer.TryComplete();
                         }
 
                         rr = args.HttpClient.Request; // required for the endStream cleanup block below
                         sendPacket = false;
+                    }
+                    else if (dataStreamState?.IsExtendedConnect == true
+                        && dataStreamState.InboundTunnelChannel == null
+                        && (isClient || dataStreamState.ExtendedConnectEstablished))
+                    {
+                        // RFC 8441 native h2↔h2 tunnel: relay DATA unchanged, fire events with the
+                        // unpadded payload bytes only, and bypass HTTP body buffering and mutation hooks.
+                        bool endStreamFlag = (flags & Http2FrameFlag.EndStream) != 0;
+                        bool padded = (flags & Http2FrameFlag.Padded) != 0;
+                        int payloadOff = padded ? 1 : 0;
+                        int padLen = padded ? buffer[0] : 0;
+                        int payloadLen = length - payloadOff - padLen;
+                        if (payloadLen < 0) payloadLen = 0;
+
+                        // Reject DATA from a direction whose half is already closed (RFC 9113 §6.9).
+                        bool halfClosed = isClient
+                            ? dataStreamState.RequestClosed
+                            : dataStreamState.ResponseClosed;
+                        if (halfClosed)
+                        {
+                            ReportException(logger, new ProxyHttpException(
+                                $"HTTP/2 protocol error: DATA received on a half-closed ({(isClient ? "local" : "remote")}) stream.",
+                                null, args));
+                            await lockedOwnLegWrite(() => SendRstStreamAsync(
+                                new Http2FrameHeader(), new byte[9], streamId,
+                                Http2ErrorCode.StreamClosed, input));
+                            sendPacket = false;
+                        }
+                        else
+                        {
+                            if (isClient)
+                                args.OnDataSent(buffer, payloadOff, payloadLen);
+                            else
+                                args.OnDataReceived(buffer, payloadOff, payloadLen);
+
+                            if (endStreamFlag)
+                            {
+                                endStream = true;
+                                if (isClient) args.Timing?.MarkRequestSent();
+                                else args.Timing?.MarkComplete();
+                            }
+                        }
+
+                        rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
+                        // sendPacket remains true: forward the raw frame unchanged.
                     }
                     else
                     {

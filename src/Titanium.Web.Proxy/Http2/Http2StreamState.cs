@@ -73,6 +73,14 @@ internal sealed class Http2StreamState
     public string? ExtendedConnectProtocol { get; set; }
 
     /// <summary>
+    ///     RFC 8441: set to <see langword="true"/> once a final 2xx response to this extended CONNECT
+    ///     request has been forwarded to the client, establishing the native h2↔h2 tunnel.  DATA frames on
+    ///     this stream bypass the HTTP body API once this flag is set; any subsequent HEADERS/CONTINUATION
+    ///     frame is a stream-level PROTOCOL_ERROR (RFC 9113 §8.5).
+    /// </summary>
+    public bool ExtendedConnectEstablished { get; set; }
+
+    /// <summary>
     ///     RFC 8441: channel through which DATA-frame payloads arrive for this extended CONNECT tunnel
     ///     stream. Set by <see cref="ProxyServer.BridgeOnBeforeRequest"/> before the tunnel task starts,
     ///     so that DATA frames arriving immediately after the HEADERS frame are always routed correctly.
