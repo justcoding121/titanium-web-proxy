@@ -133,6 +133,14 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     private async Task ReadRequestBodyAsync(CancellationToken cancellationToken)
     {
+        // RFC 8441: an extended CONNECT request opens an unbounded bidirectional tunnel;
+        // it has no finite HTTP body to accumulate. Calling GetRequestBody() on such a stream
+        // would deadlock waiting for END_STREAM that never arrives for a live tunnel.
+        if (HttpClient.Request.ExtendedConnectProtocol != null)
+            throw new InvalidOperationException(
+                "Cannot read the body of an HTTP/2 extended CONNECT request. " +
+                "The stream is a WebSocket tunnel; subscribe to OnDataSent/OnDataReceived instead.");
+
         HttpClient.Request.EnsureBodyAvailable(false);
 
         var request = HttpClient.Request;
@@ -203,6 +211,14 @@ public class SessionEventArgs : SessionEventArgsBase
     private async Task ReadResponseBodyAsync(CancellationToken cancellationToken)
     {
         if (!HttpClient.Request.Locked) throw new Exception("You cannot read the response body before request is made to server.");
+
+        // RFC 8441: a 2xx response to an extended CONNECT request establishes a tunnel; subsequent
+        // DATA frames are raw tunnel bytes, not an HTTP response body. Accumulating them would deadlock.
+        if (HttpClient.Request.ExtendedConnectProtocol != null
+            && HttpClient.Response.StatusCode is >= 200 and < 300)
+            throw new InvalidOperationException(
+                "Cannot read the body of a successful HTTP/2 extended CONNECT response. " +
+                "The stream is an established WebSocket tunnel; subscribe to OnDataReceived instead.");
 
         var response = HttpClient.Response;
         if (!response.HasBody) return;

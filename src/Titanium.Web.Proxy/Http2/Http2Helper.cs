@@ -85,6 +85,8 @@ namespace Titanium.Web.Proxy.Http2
             ProxyDiagnostics.ReportUnexpected(logger, ex.Message, ex);
         }
 
+        private static bool IsAsciiDigit(byte b) => b is >= (byte)'0' and <= (byte)'9';
+
         /// <summary>
         ///     relays the input clientStream to the server at the specified host name and port with the given httpCmd and headers
         ///     as prefix
@@ -331,7 +333,7 @@ namespace Titanium.Web.Proxy.Http2
             {
                 var collected = new HeaderCollection();
                 var headerListener = new MyHeaderListener(
-                    (name, value) => collected.AddHeader(new HttpHeader(name, value)));
+                    (name, value) => collected.AddHeader(new HttpHeader(name, value)), isRequest: isClient);
 
                 try
                 {
@@ -432,6 +434,20 @@ namespace Titanium.Web.Proxy.Http2
                     }
                 }
 
+                // RFC 9113 §8.5: once an extended CONNECT tunnel is established, no HEADERS or CONTINUATION
+                // frame is permitted on that stream.  The HPACK decode above already ran to keep the
+                // connection-level dynamic table in sync; now reject the stream itself.
+                if (connectionState.Streams.TryGetValue(hbStreamId, out var estConnectState)
+                    && estConnectState.ExtendedConnectEstablished)
+                {
+                    ReportException(logger, new ProxyHttpException(
+                        "HTTP/2 protocol error: HEADERS received on an established extended CONNECT tunnel.",
+                        null, sessionArgs));
+                    await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
+                        Http2ErrorCode.ProtocolError, input));
+                    return false;
+                }
+
                 if (isClient)
                 {
                     var method = headerListener.Method;
@@ -489,12 +505,14 @@ namespace Titanium.Web.Proxy.Http2
                             }
 
                             // Mark the stream as extended CONNECT so the relay can handle DATA frames appropriately.
+                            string? ecProtocol = Encoding.ASCII.GetString(headerListener.Protocol.Span);
                             if (connectionState.Streams.TryGetValue(hbStreamId, out var extStreamState))
                             {
                                 extStreamState.IsExtendedConnect = true;
-                                extStreamState.ExtendedConnectProtocol =
-                                    Encoding.ASCII.GetString(headerListener.Protocol.Span);
+                                extStreamState.ExtendedConnectProtocol = ecProtocol;
                             }
+                            // Expose on the request so BeforeRequest handlers can identify the upgrade.
+                            ((Request)headerRr).ExtendedConnectProtocol = ecProtocol;
                         }
                         else if (!isConnect && headerListener.Scheme == string.Empty)
                         {
@@ -700,11 +718,74 @@ namespace Titanium.Web.Proxy.Http2
                             // bridge's tunnel task (which manages its own response). Do not forward
                             // the CONNECT HEADERS to the (null) origin - the tunnel task sends the
                             // actual WebSocket upgrade request and response independently.
-                            bool isExtendedConnectTunnel =
-                                connectionState.Streams.TryGetValue(hbStreamId, out var ecTunnelState)
-                                && ecTunnelState.IsExtendedConnect
+                            connectionState.Streams.TryGetValue(hbStreamId, out var ecTunnelState);
+                            bool isExtendedConnectTunnel = ecTunnelState?.IsExtendedConnect == true
                                 && ecTunnelState.InboundTunnelChannel != null;
-                            if (!isExtendedConnectTunnel)
+                            bool isNativeExtendedConnect = ecTunnelState?.IsExtendedConnect == true
+                                && ecTunnelState.InboundTunnelChannel == null;
+
+                            if (isExtendedConnectTunnel)
+                            {
+                                // h2→h1 bridge: the tunnel task owns the origin connection; skip.
+                            }
+                            else if (isNativeExtendedConnect && output is not NullOriginStream)
+                            {
+                                // Wait for the origin's initial SETTINGS to be processed before checking
+                                // SETTINGS_ENABLE_CONNECT_PROTOCOL. The client may send its extended CONNECT
+                                // request before the server→client relay has had a chance to relay the origin's
+                                // SETTINGS frame; without this await the check below would always see false.
+                                await connectionState.ServerSettingsRelayed.Task.WaitAsync(cancellationToken);
+
+                                // Native h2↔h2 extended CONNECT path.
+                                string? ecProto = ecTunnelState?.ExtendedConnectProtocol;
+                                if (!string.Equals(ecProto, "websocket", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    // Only the 'websocket' protocol token is implemented. BeforeRequest ran
+                                    // but did not synthesize a response - return 501 so the client can retry.
+                                    sessionArgs.GenericResponse(
+                                        $"RFC 8441 extended CONNECT (protocol: {ecProto ?? "unknown"}) " +
+                                        "is not supported by this proxy. Only 'websocket' is implemented.",
+                                        HttpStatusCode.NotImplemented);
+                                    syntheticStreams.Add(hbStreamId);
+                                    connectionState.Streams.TryGetValue(hbStreamId, out var unknProtoState);
+                                    var unknProtoToken = unknProtoState != null
+                                        ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
+                                            unknProtoState.Cancellation.Token).Token
+                                        : cancellationToken;
+                                    var synthTask501 = EmitSyntheticResponseAsync(sessionArgs, hbStreamId,
+                                            connectionState, input, unknProtoToken)
+                                        .ContinueWith(t =>
+                                        {
+                                            if (t.IsFaulted)
+                                                ReportException(logger, new ProxyHttpException(
+                                                    "HTTP/2 synthetic response failed",
+                                                    t.Exception!.GetBaseException(), sessionArgs));
+                                        }, TaskScheduler.Default);
+                                    if (unknProtoState != null) unknProtoState.SyntheticTask = synthTask501;
+                                    pendingSynthetics.Add(synthTask501);
+                                }
+                                else if (!connectionState.ServerSettings.EnableConnectProtocol)
+                                {
+                                    // Origin did not advertise SETTINGS_ENABLE_CONNECT_PROTOCOL=1.
+                                    // Refuse deterministically so the client can retry or fall back;
+                                    // do NOT leak the extended-CONNECT HEADERS to an unsupporting origin.
+                                    ReportException(logger, new ProxyHttpException(
+                                        "HTTP/2 extended CONNECT refused: origin did not advertise " +
+                                        "SETTINGS_ENABLE_CONNECT_PROTOCOL=1.",
+                                        null, sessionArgs));
+                                    RemoveAndFinalizeStream(hbStreamId);
+                                    await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                        hbStreamId, Http2ErrorCode.RefusedStream, input));
+                                    return false;
+                                }
+                                else
+                                {
+                                    // Origin supports RFC 8441 - forward the extended CONNECT HEADERS.
+                                    await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
+                                        request, endStreamFlag, output, isPromise));
+                                }
+                            }
+                            else
                             {
                                 await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                     request, endStreamFlag, output, isPromise));
@@ -725,9 +806,35 @@ namespace Titanium.Web.Proxy.Http2
                     int statusCode = 0;
                     if (hasStatus)
                     {
-                        // todo: avoid string conversion
-                        string statusHack = HttpHeader.Encoding.GetString(headerListener.Status.Span);
-                        int.TryParse(statusHack, out statusCode);
+                        // RFC 7540 §8.1.2.4 / RFC 9110: :status MUST be exactly three ASCII decimal
+                        // digits in the range 100–999.  Any other encoding is a stream-level protocol error.
+                        var statusSpan = headerListener.Status.Span;
+                        if (statusSpan.Length != 3 ||
+                            !IsAsciiDigit(statusSpan[0]) ||
+                            !IsAsciiDigit(statusSpan[1]) ||
+                            !IsAsciiDigit(statusSpan[2]))
+                        {
+                            ReportException(logger, new ProxyHttpException(
+                                "HTTP/2 protocol error: :status pseudo-header is not exactly three ASCII digits.",
+                                null, sessionArgs));
+                            await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                hbStreamId, Http2ErrorCode.ProtocolError, input));
+                            return false;
+                        }
+
+                        statusCode = (statusSpan[0] - '0') * 100
+                                   + (statusSpan[1] - '0') * 10
+                                   + (statusSpan[2] - '0');
+
+                        if (statusCode < 100 || statusCode > 999)
+                        {
+                            ReportException(logger, new ProxyHttpException(
+                                $"HTTP/2 protocol error: :status value {statusCode} is outside the valid range (100-999).",
+                                null, sessionArgs));
+                            await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                hbStreamId, Http2ErrorCode.ProtocolError, input));
+                            return false;
+                        }
                     }
 
                     bool isInterim = hasStatus && statusCode is >= 100 and <= 199;
@@ -815,6 +922,18 @@ namespace Titanium.Web.Proxy.Http2
 
                             await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                 finalResponse, endStreamFlag, output, isPromise));
+
+                            // RFC 8441: once a final 2xx response to a native h2↔h2 extended CONNECT is
+                            // forwarded to the client, the stream enters tunnel state. DATA frames from either
+                            // direction are raw tunnel bytes; any subsequent HEADERS/CONTINUATION is rejected.
+                            if (finalResponse.StatusCode is >= 200 and < 300
+                                && connectionState.Streams.TryGetValue(hbStreamId, out var tunnelEstState)
+                                && tunnelEstState.IsExtendedConnect
+                                && tunnelEstState.InboundTunnelChannel == null)
+                            {
+                                tunnelEstState.ExtendedConnectEstablished = true;
+                            }
+
                             finalResponse.Locked = true;
                             return false;
                         }
@@ -1233,14 +1352,15 @@ namespace Titanium.Web.Proxy.Http2
                     // safe regardless of what happens to the payload below.
                     await GrantReceiveCreditAsync(streamId, length);
 
-                    // RFC 8441: extended CONNECT tunnel - route frame payload directly to the per-stream
-                    // channel rather than the normal body-buffering path. The channel is created by
+                    connectionState.Streams.TryGetValue(streamId, out var dataStreamState);
+
+                    // RFC 8441 h2→h1 bridge: route frame payload directly to the per-stream channel
+                    // rather than the normal body-buffering path. The channel is created by
                     // BridgeOnBeforeRequest before the tunnel task starts, so it is always populated
                     // before the first DATA frame for the stream can be processed here.
                     if (isClient
-                        && connectionState.Streams.TryGetValue(streamId, out var tunnelStreamState)
-                        && tunnelStreamState.IsExtendedConnect
-                        && tunnelStreamState.InboundTunnelChannel != null)
+                        && dataStreamState?.IsExtendedConnect == true
+                        && dataStreamState.InboundTunnelChannel != null)
                     {
                         bool endStreamFlag = (flags & Http2FrameFlag.EndStream) != 0;
                         int dataOff = (flags & Http2FrameFlag.Padded) != 0 ? 1 : 0;
@@ -1250,7 +1370,7 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             var chunk = new byte[dataLen];
                             Buffer.BlockCopy(buffer, dataOff, chunk, 0, dataLen);
-                            if (!tunnelStreamState.InboundTunnelChannel.Writer.TryWrite(
+                            if (!dataStreamState.InboundTunnelChannel.Writer.TryWrite(
                                     new ReadOnlyMemory<byte>(chunk)))
                             {
                                 ReportException(logger, new ProxyHttpException(
@@ -1265,11 +1385,56 @@ namespace Titanium.Web.Proxy.Http2
                         if (endStreamFlag)
                         {
                             endStream = true;
-                            tunnelStreamState.InboundTunnelChannel.Writer.TryComplete();
+                            dataStreamState.InboundTunnelChannel.Writer.TryComplete();
                         }
 
                         rr = args.HttpClient.Request; // required for the endStream cleanup block below
                         sendPacket = false;
+                    }
+                    else if (dataStreamState?.IsExtendedConnect == true
+                        && dataStreamState.InboundTunnelChannel == null
+                        && (isClient || dataStreamState.ExtendedConnectEstablished))
+                    {
+                        // RFC 8441 native h2↔h2 tunnel: relay DATA unchanged, fire events with the
+                        // unpadded payload bytes only, and bypass HTTP body buffering and mutation hooks.
+                        bool endStreamFlag = (flags & Http2FrameFlag.EndStream) != 0;
+                        bool padded = (flags & Http2FrameFlag.Padded) != 0;
+                        int payloadOff = padded ? 1 : 0;
+                        int padLen = padded ? buffer[0] : 0;
+                        int payloadLen = length - payloadOff - padLen;
+                        if (payloadLen < 0) payloadLen = 0;
+
+                        // Reject DATA from a direction whose half is already closed (RFC 9113 §6.9).
+                        bool halfClosed = isClient
+                            ? dataStreamState.RequestClosed
+                            : dataStreamState.ResponseClosed;
+                        if (halfClosed)
+                        {
+                            ReportException(logger, new ProxyHttpException(
+                                $"HTTP/2 protocol error: DATA received on a half-closed ({(isClient ? "local" : "remote")}) stream.",
+                                null, args));
+                            await lockedOwnLegWrite(() => SendRstStreamAsync(
+                                new Http2FrameHeader(), new byte[9], streamId,
+                                Http2ErrorCode.StreamClosed, input));
+                            sendPacket = false;
+                        }
+                        else
+                        {
+                            if (isClient)
+                                args.OnDataSent(buffer, payloadOff, payloadLen);
+                            else
+                                args.OnDataReceived(buffer, payloadOff, payloadLen);
+
+                            if (endStreamFlag)
+                            {
+                                endStream = true;
+                                if (isClient) args.Timing?.MarkRequestSent();
+                                else args.Timing?.MarkComplete();
+                            }
+                        }
+
+                        rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
+                        // sendPacket remains true: forward the raw frame unchanged.
                     }
                     else
                     {
@@ -1616,7 +1781,14 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             // RFC 8441 §3: the proxy manages ENABLE_CONNECT_PROTOCOL independently per leg.
                             sawEnableConnectProtocol = true;
-                            if (isClient)
+
+                            // RFC 8441 §3: value MUST be 0 or 1; any other value is a connection error.
+                            if (value != 0 && value != 1)
+                            {
+                                invalidSettings = true;
+                                invalidSettingsError = Http2ErrorCode.ProtocolError;
+                            }
+                            else if (isClient)
                             {
                                 // Suppress the client's ENABLE_CONNECT_PROTOCOL preference - do not relay
                                 // it to the server; the proxy negotiates RFC 8441 with each leg independently.
@@ -1627,13 +1799,26 @@ namespace Titanium.Web.Proxy.Http2
                             }
                             else
                             {
-                                // Server advertises its RFC 8441 support - record it.
-                                localSettings.EnableConnectProtocol = (value == 1);
-                                // Overwrite with what the proxy chooses to advertise to the client.
-                                buffer[valueOffset] = 0;
-                                buffer[valueOffset + 1] = 0;
-                                buffer[valueOffset + 2] = 0;
-                                buffer[valueOffset + 3] = (byte)(enableRfc8441 ? 1 : 0);
+                                // RFC 8441 §3: a sender MUST NOT send 0 after previously sending 1.
+                                if (value == 0 && localSettings.EnableConnectProtocolEverSet)
+                                {
+                                    invalidSettings = true;
+                                    invalidSettingsError = Http2ErrorCode.ProtocolError;
+                                }
+                                else
+                                {
+                                    localSettings.EnableConnectProtocol = (value == 1);
+                                    if (value == 1) localSettings.EnableConnectProtocolEverSet = true;
+
+                                    // Overwrite with what the proxy chooses to advertise to the client.
+                                    int wireValue = enableRfc8441 ? 1 : 0;
+                                    buffer[valueOffset] = 0;
+                                    buffer[valueOffset + 1] = 0;
+                                    buffer[valueOffset + 2] = 0;
+                                    buffer[valueOffset + 3] = (byte)wireValue;
+                                    if (wireValue == 1)
+                                        connectionState.DownstreamAdvertisedEnableConnect = true;
+                                }
                             }
                         }
                     }
@@ -1677,6 +1862,7 @@ namespace Titanium.Web.Proxy.Http2
                         buffer[length + 5] = 1;
                         length += 6;
                         frameHeader.Length = length;
+                        connectionState.DownstreamAdvertisedEnableConnect = true;
                     }
                 }
 
@@ -1940,10 +2126,19 @@ namespace Titanium.Web.Proxy.Http2
             {
                 var uri = request.RequestUri;
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderMethod, request.Method.GetByteString());
-                encoder.EncodeHeader(writer, StaticTable.KnownHeaderAuhtority, uri.Authority.GetByteString());
+                // For extended CONNECT, use the preserved authority bytes to avoid URI normalization
+                // stripping explicit ports (e.g. :443 on https) that the client originally sent.
+                var authorityValue = request.ExtendedConnectProtocol != null && request.Authority.Length > 0
+                    ? request.Authority
+                    : uri.Authority.GetByteString();
+                encoder.EncodeHeader(writer, StaticTable.KnownHeaderAuhtority, authorityValue);
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderScheme, uri.Scheme.GetByteString());
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderPath, request.RequestUriString8, false,
                     HpackUtil.IndexType.None, false);
+                // RFC 8441 §5: :protocol must appear after the other pseudo-headers.
+                if (request.ExtendedConnectProtocol != null)
+                    encoder.EncodeHeader(writer, StaticTable.KnownHeaderProtocol,
+                        request.ExtendedConnectProtocol.GetByteString());
             }
             else
             {
@@ -2449,6 +2644,20 @@ namespace Titanium.Web.Proxy.Http2
         {
             private readonly Action<ByteString, ByteString> addHeaderFunc;
 
+            /// <summary>
+            ///     <see langword="true"/> when this block is for a request (client→proxy direction).
+            ///     Used to enforce the RFC 7540 §8.1.2.3 pseudo-header allow-lists: request fields
+            ///     (:method, :authority, :scheme, :path, :protocol) are forbidden in response blocks and
+            ///     :status is forbidden in request blocks.
+            /// </summary>
+            private readonly bool isRequest;
+
+            // Per-pseudo-header "seen" flags for duplicate detection (RFC 7540 §8.1.2.1).
+            private bool sawMethod, sawStatus, sawAuthority, sawScheme, sawPath, sawProtocol;
+
+            // RFC 7540 §8.1.2.1: pseudo-header fields MUST NOT appear after a regular header field.
+            private bool seenRegularHeader;
+
             public ByteString Method { get; private set; }
 
             public ByteString Status { get; private set; }
@@ -2463,9 +2672,10 @@ namespace Titanium.Web.Proxy.Http2
             public ByteString Protocol { get; private set; }
 
             /// <summary>
-            ///     Set when this header block contained an unknown pseudo-header field or a field name with
-            ///     uppercase characters (RFC 7540 ?8.1.2/?8.1.2.1) - both are malformed and the block's stream
-            ///     must be reset rather than acted upon.
+            ///     Set when this header block contained an unknown pseudo-header field, a field name with
+            ///     uppercase characters, a duplicate pseudo-header, a pseudo-header that belongs to the
+            ///     wrong message direction, or a pseudo-header that appears after a regular header field.
+            ///     All are malformed per RFC 7540 §8.1.2 and the block's stream must be reset.
             /// </summary>
             public bool HasMalformedHeader { get; private set; }
 
@@ -2489,47 +2699,104 @@ namespace Titanium.Web.Proxy.Http2
                 }
             }
 
-            public MyHeaderListener(Action<ByteString, ByteString> addHeaderFunc)
+            public MyHeaderListener(Action<ByteString, ByteString> addHeaderFunc, bool isRequest)
             {
                 this.addHeaderFunc = addHeaderFunc;
+                this.isRequest = isRequest;
             }
 
             public void AddHeader(ByteString name, ByteString value, bool sensitive)
             {
                 if (name.Length > 0 && name.Span[0] == ':')
                 {
+                    // RFC 7540 §8.1.2.1: pseudo-header fields MUST NOT appear after a regular header field.
+                    if (seenRegularHeader)
+                    {
+                        if (!HasMalformedHeader)
+                        {
+                            HasMalformedHeader = true;
+                            MalformedReason = "pseudo-header field after a regular header field";
+                        }
+                        return;
+                    }
+
                     string nameStr = Encoding.ASCII.GetString(name.Span);
                     switch (nameStr)
                     {
                         case ":method":
+                            if (!isRequest || sawMethod)
+                            {
+                                MarkMalformed(isRequest
+                                    ? "duplicate pseudo-header field ':method'"
+                                    : "request pseudo-header ':method' in a response block");
+                                return;
+                            }
+                            sawMethod = true;
                             Method = value;
                             return;
                         case ":authority":
+                            if (!isRequest || sawAuthority)
+                            {
+                                MarkMalformed(isRequest
+                                    ? "duplicate pseudo-header field ':authority'"
+                                    : "request pseudo-header ':authority' in a response block");
+                                return;
+                            }
+                            sawAuthority = true;
                             Authority = value;
                             return;
                         case ":scheme":
+                            if (!isRequest || sawScheme)
+                            {
+                                MarkMalformed(isRequest
+                                    ? "duplicate pseudo-header field ':scheme'"
+                                    : "request pseudo-header ':scheme' in a response block");
+                                return;
+                            }
+                            sawScheme = true;
                             scheme = value;
                             return;
                         case ":path":
+                            if (!isRequest || sawPath)
+                            {
+                                MarkMalformed(isRequest
+                                    ? "duplicate pseudo-header field ':path'"
+                                    : "request pseudo-header ':path' in a response block");
+                                return;
+                            }
+                            sawPath = true;
                             Path = value;
                             return;
                         case ":status":
+                            if (isRequest || sawStatus)
+                            {
+                                MarkMalformed(!isRequest
+                                    ? "duplicate pseudo-header field ':status'"
+                                    : "response pseudo-header ':status' in a request block");
+                                return;
+                            }
+                            sawStatus = true;
                             Status = value;
                             return;
                         case ":protocol":
-                            // RFC 8441 §5: valid only on CONNECT requests; validated in ProcessCompleteHeaderBlockAsync.
+                            // RFC 8441 §5: only valid on CONNECT requests.
+                            if (!isRequest || sawProtocol)
+                            {
+                                MarkMalformed(isRequest
+                                    ? "duplicate pseudo-header field ':protocol'"
+                                    : "request pseudo-header ':protocol' in a response block");
+                                return;
+                            }
+                            sawProtocol = true;
                             Protocol = value;
                             return;
+                        default:
+                            MarkMalformed($"unknown pseudo-header field '{nameStr}'");
+                            return;
                     }
-
-                    if (!HasMalformedHeader)
-                    {
-                        HasMalformedHeader = true;
-                        MalformedReason = $"unknown pseudo-header field '{nameStr}'";
-                    }
-
-                    return;
                 }
+
+                seenRegularHeader = true;
 
                 if (!HasMalformedHeader)
                 {
@@ -2545,6 +2812,15 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 addHeaderFunc(name, value);
+            }
+
+            private void MarkMalformed(string reason)
+            {
+                if (!HasMalformedHeader)
+                {
+                    HasMalformedHeader = true;
+                    MalformedReason = reason;
+                }
             }
 
             public Uri GetUri()

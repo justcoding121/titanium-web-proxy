@@ -9,10 +9,10 @@ interim 1xx responses, and TLS body-write-hook parity for HTTP/1.x; HPACK dynami
 HEADERS/CONTINUATION reassembly and re-splitting, trailers, interim 1xx responses, two-hop flow control,
 SETTINGS/PING/GOAWAY handling, and synthetic-response API parity for HTTP/2), plus the subsequent protocol
 policy and safety hardening work (HTTP/2 frame/header-list bounds, bounded body streaming, RFC 8441 WebSocket
-over HTTP/2 h2-client-to-h1-origin tunneling, WebSocket frame validation, Via header injection, multipart streaming,
-stacked Content-Encoding parsing, and authentication retry bounds). HTTP/2 has gone through a full regression
-pass and is now **on by default** (`ProxyServer.EnableHttp2 = true`); set it to `false` to force HTTP/1.1 only.
-If you find something inaccurate, please open an issue.
+over HTTP/2 including both the h2-client-to-h1-origin bridge and the native h2↔h2 tunnel, WebSocket frame
+validation, Via header injection, multipart streaming, stacked Content-Encoding parsing, and authentication retry
+bounds). HTTP/2 has gone through a full regression pass and is now **on by default** (`ProxyServer.EnableHttp2 =
+true`); set it to `false` to force HTTP/1.1 only. If you find something inaccurate, please open an issue.
 
 ## Connections and framing
 
@@ -70,7 +70,7 @@ If you find something inaccurate, please open an issue.
 | SETTINGS parameter validation | Yes | Unknown parameters are silently ignored per RFC 7540 §6.5; out-of-range values for known parameters (`INITIAL_WINDOW_SIZE`, `MAX_FRAME_SIZE`, `HEADER_TABLE_SIZE`) trigger a `PROTOCOL_ERROR`. |
 | CONTINUATION frame safety | Yes | A HEADERS frame with `END_HEADERS` clear must be followed by CONTINUATION frames on the same stream; any intervening frame triggers a `PROTOCOL_ERROR` connection error, closing the connection. |
 | Decoded header list size limit | Yes | HPACK-decoded header list bytes (name + value + 32-byte overhead per entry, per RFC 7541 §4.1) that exceed `MaxDecodedHeaderListBytes` (default 64 KiB) cause the stream to be reset with `RST_STREAM(ENHANCE_YOUR_CALM)` rather than forwarded. |
-| RFC 8441 WebSocket over HTTP/2 (extended CONNECT) | Partial | `EnableRfc8441 = true` enables extended-CONNECT negotiation. The h2-client→h1-origin WebSocket tunnel is fully implemented: the proxy validates required pseudo-headers, opens an HTTP/1.1 origin connection, performs the WebSocket upgrade handshake, preserves negotiated subprotocol/extensions, and relays DATA frames bidirectionally through bounded per-stream buffers. DATA combined with `END_STREAM`, resets, and connection shutdown are handled without dropping payloads or leaking tunnel work. The h2↔h2 tunnel (both client and origin speak RFC 8441) is still TODO. |
+| RFC 8441 WebSocket over HTTP/2 (extended CONNECT) | Yes | `EnableRfc8441 = true` enables extended-CONNECT negotiation. Both tunnel paths are fully implemented: **h2-client→h1-origin bridge** – the proxy validates required pseudo-headers, opens an HTTP/1.1 origin connection, performs the WebSocket upgrade handshake, preserves negotiated subprotocol/extensions, and relays DATA frames bidirectionally through bounded per-stream buffers; **native h2↔h2 tunnel** – when the origin advertises `SETTINGS_ENABLE_CONNECT_PROTOCOL=1`, the proxy forwards the extended CONNECT HEADERS decoded and re-encoded (preserving `:protocol`, `:authority`, `:scheme`, `:path`, and all application headers), marks the stream established on a final 2xx response, then raw-relays DATA frames for both directions without HTTP body buffering; `OnDataSent`/`OnDataReceived` events still fire with the unpadded tunnel payload. Per-leg SETTINGS negotiation is independent: the client's and origin's `ENABLE_CONNECT_PROTOCOL` preferences are never cross-forwarded; the proxy intercepts and independently decides what to advertise to each leg. Invalid `SETTINGS_ENABLE_CONNECT_PROTOCOL` values and the forbidden 1→0 downgrade are each connection-level `GOAWAY(PROTOCOL_ERROR)` errors. An origin that does not advertise the setting causes the affected stream to be reset with `REFUSED_STREAM` rather than forwarding malformed HEADERS. `Request.ExtendedConnectProtocol` exposes the `:protocol` token to `BeforeRequest` handlers; `Request.UpgradeToWebSocket` returns `true` for both RFC 8441 and HTTP/1.1 WebSocket upgrades. Calling `GetRequestBody`/`GetResponseBody` on an established extended CONNECT stream throws `InvalidOperationException` (these are unbounded duplex streams, not finite HTTP bodies). Post-establishment HEADERS/trailers on the tunnel stream are rejected with `RST_STREAM(PROTOCOL_ERROR)`. DATA combined with `END_STREAM`, independent per-direction half-closes, resets, and connection shutdown are handled without dropping payloads or leaking tunnel work. Only the `websocket` protocol token is implemented; unsupported `:protocol` values return `501 Not Implemented` after running `BeforeRequest` (allowing handlers to synthesize their own response). Extended CONNECT inherits the existing explicit-proxy `Via` header policy. |
 
 ## WebSocket safety
 
@@ -105,7 +105,7 @@ If you find something inaccurate, please open an issue.
 | `MaxWebSocketFramePayloadBytes` | 16,777,216 (16 MiB) | Maximum WebSocket frame payload size in intercepted sessions. Frames exceeding this are rejected. |
 | `ViaHeaderPseudonym` | `"titanium-web-proxy"` | Token appended to `Via` headers on forwarded requests and responses. Set to an empty string to disable. Loop detection rejects incoming requests whose `Via` already contains this token with `508 Loop Detected`. |
 | `CompatibilityMode100Continue` | `false` | Sends a synthetic `100 Continue` to the client before reading the request body when `Enable100ContinueBehaviour = false`, preventing deadlock with strict `Expect: 100-continue` clients. |
-| `EnableRfc8441` | `false` | Enables WebSocket over HTTP/2 extended CONNECT negotiation (RFC 8441). When enabled, the proxy advertises `ENABLE_CONNECT_PROTOCOL` to h2 clients and handles the tunnel by opening an HTTP/1.1 WebSocket upgrade to the origin, then relaying DATA frames bidirectionally. |
+| `EnableRfc8441` | `false` | Enables WebSocket over HTTP/2 extended CONNECT negotiation (RFC 8441). When enabled, the proxy advertises `ENABLE_CONNECT_PROTOCOL=1` to h2 clients and selects the appropriate tunnel path: if the origin also advertises `ENABLE_CONNECT_PROTOCOL=1`, the proxy uses the native h2↔h2 DATA relay path; otherwise it falls back to opening an HTTP/1.1 WebSocket upgrade to the origin. |
 
 ## Where to look for more detail
 
