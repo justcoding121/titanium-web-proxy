@@ -330,5 +330,118 @@ internal static class Http2RawFrame
                 first = false;
             } while (pos < compressed.Length);
         }
+
+        /// <summary>
+        ///     Sends a SETTINGS frame including SETTINGS_ENABLE_CONNECT_PROTOCOL=1 (RFC 8441) so the
+        ///     proxy will accept native h2↔h2 extended CONNECT requests to this origin.
+        /// </summary>
+        public Task SendInitialSettingsWithConnectProtocolAsync()
+        {
+            var payload = new byte[6];
+            payload[0] = (byte)(((int)Http2SettingsId.EnableConnectProtocol >> 8) & 0xff);
+            payload[1] = (byte)((int)Http2SettingsId.EnableConnectProtocol & 0xff);
+            payload[2] = 0;
+            payload[3] = 0;
+            payload[4] = 0;
+            payload[5] = 1;
+            return WriteFrameAsync(Http2FrameType.Settings, 0, 0, payload);
+        }
+
+        /// <summary>
+        ///     Reads frames until a SETTINGS frame that is NOT a SETTINGS ACK is found, then returns
+        ///     the decoded settings entries. Skips interleaved ACK, WINDOW_UPDATE, PING, etc.
+        /// </summary>
+        public async Task<Dictionary<int, int>> ReadSettingsAsync()
+        {
+            Frame frame;
+            do
+            {
+                frame = await ReadFrameAsync();
+            } while (!(frame.Type == Http2FrameType.Settings && (frame.Flags & Http2FrameFlag.Ack) == 0));
+
+            var result = new Dictionary<int, int>();
+            for (var i = 0; i + 5 < frame.Payload.Length; i += 6)
+            {
+                var id = (frame.Payload[i] << 8) | frame.Payload[i + 1];
+                var value = (frame.Payload[i + 2] << 24) | (frame.Payload[i + 3] << 16) |
+                            (frame.Payload[i + 4] << 8) | frame.Payload[i + 5];
+                result[id] = value;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        ///     Reads frames until an RST_STREAM for <paramref name="streamId" /> or a GOAWAY is found,
+        ///     skipping unrelated frames. Returns the wire error code from whichever arrived first.
+        /// </summary>
+        public async Task<Http2ErrorCode> ReadRstOrGoAwayErrorCodeAsync(int streamId)
+        {
+            while (true)
+            {
+                var frame = await ReadFrameAsync();
+                if (frame.Type == Http2FrameType.RstStream && frame.StreamId == streamId)
+                {
+                    var ec = (frame.Payload[0] << 24) | (frame.Payload[1] << 16) |
+                             (frame.Payload[2] << 8) | frame.Payload[3];
+                    return (Http2ErrorCode)ec;
+                }
+
+                if (frame.Type == Http2FrameType.GoAway)
+                {
+                    var ec = (frame.Payload[4] << 24) | (frame.Payload[5] << 16) |
+                             (frame.Payload[6] << 8) | frame.Payload[7];
+                    return (Http2ErrorCode)ec;
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Reads frames until a HEADERS on <paramref name="streamId" />, an RST_STREAM for
+        ///     <paramref name="streamId" />, or a GOAWAY arrives, whichever comes first.  Returns
+        ///     the decoded header list (null if RST/GOAWAY was observed instead) and the error code
+        ///     (zero when HEADERS was received).
+        /// </summary>
+        public async Task<(List<(string Name, string Value)>? Headers, bool EndStream, Http2ErrorCode ErrorCode)>
+            ReadHeadersOrRstAsync(int streamId)
+        {
+            var compressed = new MemoryStream();
+
+            while (true)
+            {
+                var frame = await ReadFrameAsync();
+
+                if (frame.Type == Http2FrameType.RstStream && frame.StreamId == streamId)
+                {
+                    var ec = (frame.Payload[0] << 24) | (frame.Payload[1] << 16) |
+                             (frame.Payload[2] << 8) | frame.Payload[3];
+                    return (null, false, (Http2ErrorCode)ec);
+                }
+
+                if (frame.Type == Http2FrameType.GoAway)
+                {
+                    var ec = (frame.Payload[4] << 24) | (frame.Payload[5] << 16) |
+                             (frame.Payload[6] << 8) | frame.Payload[7];
+                    return (null, false, (Http2ErrorCode)ec);
+                }
+
+                if (frame.Type == Http2FrameType.Headers && frame.StreamId == streamId)
+                {
+                    compressed.Write(frame.Payload, 0, frame.Payload.Length);
+                    var endStream = (frame.Flags & Http2FrameFlag.EndStream) != 0;
+
+                    while ((frame.Flags & Http2FrameFlag.EndHeaders) == 0)
+                    {
+                        frame = await ReadFrameAsync();
+                        if (frame.Type != Http2FrameType.Continuation || frame.StreamId != streamId)
+                            throw new InvalidOperationException(
+                                $"Expected CONTINUATION for stream {streamId}, got {frame.Type}:{frame.StreamId}.");
+                        compressed.Write(frame.Payload, 0, frame.Payload.Length);
+                    }
+
+                    return (DecodeHeaders(compressed.ToArray()), endStream, Http2ErrorCode.NoError);
+                }
+            }
+        }
     }
 }
