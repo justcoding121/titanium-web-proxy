@@ -699,9 +699,10 @@ public sealed class CertificateManager : IDisposable
     ///     <para>
     ///         Uses <c>offline: true</c> so chain building does not consult the Windows certificate stores or the
     ///         network. Without that, Schannel can latch onto a different root that happens to share the same
-    ///         subject DN (common when a previously-trusted Titanium root remains in CurrentUser\Root) and then
-    ///         present a store-backed leaf instead of the one we just generated — breaking CustomRootTrust
-    ///         validation against the in-memory test/session root.
+    ///         subject DN — for example the product default <c>Titanium Root Certificate Authority</c> that the
+    ///         Basic/WPF examples trust into CurrentUser\Root on <c>ProxyServer.Start()</c> — and then present a
+    ///         store-backed leaf instead of the one we just generated, breaking callers that validate against a
+    ///         different in-memory/session root (integration tests, or a second proxy instance).
     ///     </para>
     /// </summary>
     internal System.Net.Security.SslStreamCertificateContext CreateSslCertificateContext(X509Certificate2 leaf)

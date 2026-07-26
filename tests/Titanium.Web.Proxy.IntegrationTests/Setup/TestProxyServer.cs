@@ -11,7 +11,13 @@ public class TestProxyServer : IDisposable
     public TestProxyServer(bool isReverseProxy, ProxyServer upStreamProxy = null)
     {
         ProxyServer = new ProxyServer(false, false, false);
+        // Keep the manager's configured name aligned with the shared test root so any code path
+        // that falls back to CreateRootCertificate cannot mint a product-default-CN root that
+        // would collide with an example-trusted "Titanium Root Certificate Authority" in the
+        // current-user Windows stores (Basic example uses new ProxyServer() which trusts on Start).
+        ProxyServer.CertificateManager.RootCertificateName = TestCertificateAuthority.RootCertificateName;
         ProxyServer.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
+        ProxyServer.CertificateManager.SaveFakeCertificates = false;
         ProxyServer.ServerCertificateValidationCallback += (_, args) =>
         {
             args.IsValid = TestCertificateAuthority.Validate(args.Certificate, args.SslPolicyErrors);
