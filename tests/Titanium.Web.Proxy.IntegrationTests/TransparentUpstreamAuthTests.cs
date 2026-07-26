@@ -25,10 +25,13 @@ public class TransparentUpstreamAuthTests
         server.HandleRequest(context => context.Response.WriteAsync("transparent-upstream-ok"));
 
         var upstream = testSuite.GetProxy();
+        // Distinct Via tokens so the intentional proxy chain is not mistaken for a forwarding loop.
+        upstream.ViaHeaderPseudonym = "titanium-upstream";
         upstream.ProxyBasicAuthenticateFunc = (_, user, pass) =>
             Task.FromResult(user == "upuser" && pass == "uppass");
 
         var proxy = testSuite.GetReverseProxy();
+        proxy.ViaHeaderPseudonym = "titanium-transparent";
         proxy.UpStreamHttpsProxy = new ExternalProxy("localhost", upstream.ProxyEndPoints[0].Port)
         {
             UserName = "upuser",
@@ -68,10 +71,14 @@ public class TransparentUpstreamAuthTests
         server.HandleRequest(context => context.Response.WriteAsync("transparent-http-upstream-ok"));
 
         var upstream = testSuite.GetProxy();
+        // Distinct Via tokens so the intentional proxy chain is not mistaken for a forwarding loop
+        // (both would otherwise default to "titanium-web-proxy" and the second hop would return 508).
+        upstream.ViaHeaderPseudonym = "titanium-upstream";
         upstream.ProxyBasicAuthenticateFunc = (_, user, pass) =>
             Task.FromResult(user == "upuser" && pass == "uppass");
 
         var proxy = testSuite.GetReverseProxy();
+        proxy.ViaHeaderPseudonym = "titanium-transparent";
         proxy.UpStreamHttpProxy = new ExternalProxy("localhost", upstream.ProxyEndPoints[0].Port)
         {
             UserName = "upuser",

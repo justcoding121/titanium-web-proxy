@@ -70,6 +70,10 @@ internal static class TestCertificateAuthority
     private static X509Certificate2 CreateRootCertificate()
     {
         using var proxy = new ProxyServer(false, false, false);
+        // Distinct CN from the library default ("Titanium Root Certificate Authority") so a previously
+        // user-trusted product root left in CurrentUser\Root cannot collide with CustomRootTrust
+        // chain building or Schannel server-cert selection during HTTPS reverse-proxy tests.
+        proxy.CertificateManager.RootCertificateName = "Titanium Integration Test Root CA";
         if (!proxy.CertificateManager.CreateRootCertificate(false) ||
             proxy.CertificateManager.RootCertificate == null)
         {
