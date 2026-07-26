@@ -696,6 +696,13 @@ public sealed class CertificateManager : IDisposable
     ///         generated leaf certificates. Additional certificates from <see cref="IntermediateCertificates" />
     ///         are appended after it.
     ///     </para>
+    ///     <para>
+    ///         Uses <c>offline: true</c> so chain building does not consult the Windows certificate stores or the
+    ///         network. Without that, Schannel can latch onto a different root that happens to share the same
+    ///         subject DN (common when a previously-trusted Titanium root remains in CurrentUser\Root) and then
+    ///         present a store-backed leaf instead of the one we just generated — breaking CustomRootTrust
+    ///         validation against the in-memory test/session root.
+    ///     </para>
     /// </summary>
     internal System.Net.Security.SslStreamCertificateContext CreateSslCertificateContext(X509Certificate2 leaf)
     {
@@ -709,7 +716,7 @@ public sealed class CertificateManager : IDisposable
                 extras.Add(cert);
 
         return System.Net.Security.SslStreamCertificateContext.Create(
-            leaf, extras.Count > 0 ? extras : null, offline: false);
+            leaf, extras.Count > 0 ? extras : null, offline: true);
     }
 
     private static bool IsSelfSigned(X509Certificate2 cert) =>
