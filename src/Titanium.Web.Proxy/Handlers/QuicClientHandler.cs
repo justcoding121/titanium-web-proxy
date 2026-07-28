@@ -34,10 +34,11 @@ public partial class ProxyServer
     {
         if (!QuicListener.IsSupported)
             throw new PlatformNotSupportedException(
-                "HTTP/3 (QUIC) requires the MsQuic native library and a supported OS version. " +
-                "On Windows, Windows 11 / Windows Server 2022 or later is required. " +
-                "On Linux, ensure libmsquic is installed. " +
-                "To disable HTTP/3, set ProxyServer.EnableHttp3 = false. " +
+                "HTTP/3 (QUIC) requires the MsQuic native library and a supported OS. " +
+                "Windows: Windows 11 / Server 2022+. " +
+                "Linux: install libmsquic (e.g. apt install libmsquic). " +
+                "macOS: bundle libmsquic, libssl, and libcrypto alongside the app with @loader_path RPATH. " +
+                "Set ProxyServer.EnableHttp3 = false to disable. " +
                 "(System.Net.Quic.QuicListener.IsSupported is false on this machine.)");
 
         var cts = quicListenerCts!;

@@ -1,6 +1,8 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Models;
 
+#pragma warning disable TWP001 // Experimental HTTP/3 API — test intentionally exercises this surface
+
 namespace Titanium.Web.Proxy.UnitTests;
 
 /// <summary>

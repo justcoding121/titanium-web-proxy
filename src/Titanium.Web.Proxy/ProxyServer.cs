@@ -271,7 +271,13 @@ public partial class ProxyServer : IDisposable
     ///     (<see cref="System.Net.Quic.QuicListener.IsSupported" />). Setting to <see langword="true" /> with
     ///     no <c>TransparentQuicProxyEndPoint</c> configured emits a warning and skips QUIC initialization.
     ///     Default: <see langword="false" /> (opt-in).
+    ///     <para>
+    ///         <b>Experimental:</b> HTTP/3 support has not yet completed the full interop/soak/fuzz gate
+    ///         process. Suppress <c>TWP001</c> to opt in; the attribute is removed when the feature
+    ///         graduates to stable.
+    ///     </para>
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
     public bool EnableHttp3 { get; set; } = false;
     /// <summary>
     ///     Should we check for certificate revocation during SSL authentication to servers

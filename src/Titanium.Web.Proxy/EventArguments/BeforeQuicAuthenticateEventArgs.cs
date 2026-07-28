@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Threading;
 using Titanium.Web.Proxy.Models;
@@ -17,7 +18,12 @@ namespace Titanium.Web.Proxy.EventArguments;
 ///         Thread-safety: each inbound QUIC connection fires a dedicated instance of this event on its own
 ///         accept task. Handlers that mutate shared state must synchronize themselves.
 ///     </para>
+///     <para>
+///         <b>Experimental:</b> HTTP/3 support has not yet completed the full interop/soak/fuzz gate
+///         process. Suppress <c>TWP001</c> to opt in.
+///     </para>
 /// </summary>
+[System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
 public class BeforeQuicAuthenticateEventArgs : EventArgs
 {
     private UpstreamHttpProtocol upstreamHttpProtocol = UpstreamHttpProtocol.Auto;
