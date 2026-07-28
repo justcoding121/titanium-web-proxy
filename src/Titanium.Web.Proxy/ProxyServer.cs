@@ -132,6 +132,9 @@ public partial class ProxyServer : IDisposable
         BufferPool = new DefaultBufferPool();
         ProxyEndPoints = new List<ProxyEndPoint>();
         TcpConnectionFactory = new TcpConnectionFactory(this);
+#if NET6_0_OR_GREATER
+        QuicConnectionPool = new Network.Quic.QuicConnectionPool(this);
+#endif
         if (RunTime.IsWindows && !RunTime.IsUwpOnWindows) SystemProxySettingsManager = new SystemProxyManager();
 
         CertificateManager = new CertificateManager(rootCertificateName, rootCertificateIssuerName,
@@ -142,6 +145,14 @@ public partial class ProxyServer : IDisposable
     ///     An factory that creates tcp connection to server.
     /// </summary>
     private TcpConnectionFactory TcpConnectionFactory { get; }
+
+#if NET6_0_OR_GREATER
+    /// <summary>
+    ///     Pool of outbound QUIC connections to HTTP/3 origin servers.
+    ///     Drained on proxy stop and disposed with the proxy.
+    /// </summary>
+    internal Network.Quic.QuicConnectionPool QuicConnectionPool { get; }
+#endif
 
     /// <summary>
     ///     Caches, per upstream host:port, whether the real origin negotiates HTTP/2 via TLS ALPN - so that
@@ -1061,6 +1072,9 @@ public partial class ProxyServer : IDisposable
             await Task.Delay(50).ConfigureAwait(false);
 
         TcpConnectionFactory.ClearPools();
+#if NET6_0_OR_GREATER
+        await QuicConnectionPool.DrainAsync();
+#endif
     }
 
     private void StopCore(bool cancelSessions, bool clearPools)
@@ -1096,6 +1110,9 @@ public partial class ProxyServer : IDisposable
         CertificateManager?.StopClearIdleCertificates();
 
         if (clearPools) TcpConnectionFactory.ClearPools();
+#if NET6_0_OR_GREATER
+        if (clearPools) QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
+#endif
     }
 
     internal void RegisterSessionCancellation(CancellationTokenSource cancellationTokenSource)
@@ -1455,6 +1472,17 @@ public partial class ProxyServer : IDisposable
         {
             // ignore
         }
+
+#if NET6_0_OR_GREATER
+        try
+        {
+            QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // ignore
+        }
+#endif
 
         CertificateManager?.Dispose();
         BufferPool?.Dispose();
