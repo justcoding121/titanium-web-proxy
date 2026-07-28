@@ -195,3 +195,33 @@ public class AltSvcParserTests
         Assert.AreEqual(0, results[0].MaxAgeSeconds);
     }
 }
+
+[TestClass]
+public class Http3OriginCapabilityCacheTrimTests
+{
+    [TestMethod]
+    public void TrimExpired_RemovesExpiredEntries()
+    {
+        var cache = new Http3OriginCapabilityCache();
+        cache.Set("a.example.com:443", ttl: TimeSpan.FromMilliseconds(50));
+        cache.Set("b.example.com:443", altPort: 8443, ttl: TimeSpan.FromMilliseconds(50));
+
+        Thread.Sleep(200);
+
+        cache.TrimExpired();
+
+        Assert.IsFalse(cache.TryGet("a.example.com:443", out _), "Expired entry must be removed");
+        Assert.IsFalse(cache.TryGet("b.example.com:443", out _), "Expired entry with altPort must be removed");
+    }
+
+    [TestMethod]
+    public void TrimExpired_PreservesActiveEntries()
+    {
+        var cache = new Http3OriginCapabilityCache();
+        cache.Set("live.example.com:443", ttl: TimeSpan.FromSeconds(60));
+
+        cache.TrimExpired();
+
+        Assert.IsTrue(cache.TryGet("live.example.com:443", out _), "Active entry must survive TrimExpired");
+    }
+}

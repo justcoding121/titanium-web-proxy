@@ -44,6 +44,19 @@ public class DisposalTests
         manager.Dispose();
     }
 
+    [TestMethod]
+    public void TcpConnectionFactory_Dispose_IsIdempotent_And_DoesNotThrow()
+    {
+        // Regression: @lock and _cleanupCts must NOT be explicitly disposed because the background
+        // cleanup task may still be accessing them at the time Dispose() is called, which would
+        // cause ObjectDisposedException from SemaphoreSlim.WaitAsync / CTS.Token.
+        // Dispose() must complete without throwing and must be idempotent.
+        var factory = new Network.Tcp.TcpConnectionFactory(new ProxyServer());
+        factory.Dispose();
+        // A second disposal must not throw (idempotent guard).
+        factory.Dispose();
+    }
+
     private static void AssertHasNoFinalizer(System.Type type)
     {
         var finalize = type.GetMethod("Finalize",

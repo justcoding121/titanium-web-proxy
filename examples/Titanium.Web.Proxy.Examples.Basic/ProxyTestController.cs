@@ -29,7 +29,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private ExplicitProxyEndPoint explicitEndPoint;
 
 #pragma warning disable TWP001 // HTTP/3 is experimental — example intentionally exercises this API
+#nullable enable
         private TransparentQuicProxyEndPoint? quicEndPoint;
+#nullable restore
 #pragma warning restore TWP001
 
         public ProxyTestController()

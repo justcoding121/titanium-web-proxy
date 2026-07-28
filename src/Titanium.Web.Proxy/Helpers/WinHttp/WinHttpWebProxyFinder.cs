@@ -53,11 +53,11 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
     {
         if (disposed) return;
 
+        disposed = true;
+
         if (session == null || session.IsInvalid) return;
 
         session.Close();
-
-        disposed = true;
     }
 
     public bool GetAutoProxies(Uri destination, out IList<string>? proxyList)

@@ -492,6 +492,7 @@ public sealed class CertificateManager : IDisposable
                     if (certificate != null && certificate.NotAfter <= DateTime.Now)
                     {
                         OnException(new Exception($"Cached certificate for {subjectName} has expired."));
+                        certificate.Dispose();
                         certificate = null;
                     }
                 }
@@ -657,10 +658,10 @@ public sealed class CertificateManager : IDisposable
                 var outdated = cachedCertificates.Where(x => x.Value.LastAccess < cutOff).ToList();
 
                 foreach (var cache in outdated)
-                    // dispose the evicted certificate so its native handle is released promptly
-                    // rather than waiting for finalization.
-                    if (cachedCertificates.TryRemove(cache.Key, out var removed))
-                        removed.Certificate.Dispose();
+                    // Evict stale entries without disposing the certificate — the cert object may still
+                    // be held by an in-flight TLS handshake. The GC finalizer will release the native
+                    // handle once all references drop, which typically happens within milliseconds.
+                    cachedCertificates.TryRemove(cache.Key, out _);
             }
             catch (Exception e)
             {
@@ -747,6 +748,7 @@ public sealed class CertificateManager : IDisposable
                     if (rootCert != null && rootCert.NotAfter <= DateTime.Now)
                     {
                         OnException(new Exception("Loaded root certificate has expired."));
+                        rootCert.Dispose();
                         return false;
                     }
 
@@ -808,6 +810,7 @@ public sealed class CertificateManager : IDisposable
             if (rootCert != null && rootCert.NotAfter <= DateTime.Now)
             {
                 OnException(new ArgumentException("Loaded root certificate has expired."));
+                rootCert.Dispose();
                 return null;
             }
 
@@ -1080,7 +1083,15 @@ public sealed class CertificateManager : IDisposable
     public void ClearRootCertificate()
     {
         certificateCache.Clear();
-        cachedCertificates.Clear();
+
+        // Dispose every cached leaf cert before clearing so native CAPI/OpenSSL handles
+        // are released promptly rather than waiting for GC finalization.
+        foreach (var pair in cachedCertificates)
+            if (cachedCertificates.TryRemove(pair.Key, out var entry))
+                try { entry.Certificate.Dispose(); } catch { }
+
+        // Do not dispose rootCertificate: it may have been supplied by the caller and still
+        // referenced outside this manager (e.g. shared test CA / persisted root reload).
         rootCertificate = null;
     }
 
@@ -1088,7 +1099,19 @@ public sealed class CertificateManager : IDisposable
     {
         if (disposed) return;
 
-        if (disposing) clearCertificatesTokenSource.Dispose();
+        if (disposing)
+        {
+            clearCertificatesTokenSource.Dispose();
+            pendingCertificateCreationTaskLock.Dispose();
+
+            // Release native CAPI/OpenSSL handles on all cached leaf certificates (manager-owned).
+            foreach (var pair in cachedCertificates)
+                if (cachedCertificates.TryRemove(pair.Key, out var entry))
+                    try { entry.Certificate.Dispose(); } catch { }
+
+            // Do not dispose rootCertificate: ownership may belong to the caller.
+            rootCertificate = null;
+        }
 
         disposed = true;
     }

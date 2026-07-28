@@ -808,7 +808,17 @@ public class SessionEventArgs : SessionEventArgsBase
     {
         if (disposed) return;
 
-        if (disposing) MultipartRequestPartSent = null;
+        if (disposing)
+        {
+            MultipartRequestPartSent = null;
+
+            // Dispose any accumulated HTTP/2 body MemoryStreams so their backing arrays
+            // are returned to the LOH promptly rather than waiting for GC finalization.
+            HttpClient.Request.Http2BodyData?.Dispose();
+            HttpClient.Request.Http2BodyData = null;
+            HttpClient.Response.Http2BodyData?.Dispose();
+            HttpClient.Response.Http2BodyData = null;
+        }
 
         disposed = true;
 

@@ -445,5 +445,35 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.AreNotEqual(expiredThumbprint, result.Thumbprint,
                 "expired cached certificate should have been replaced");
         }
+
+        /// <summary>
+        ///     Regression: CertificateManager.Dispose() must drain cachedCertificates so that the
+        ///     native CAPI/OpenSSL handle of each leaf cert is released promptly.
+        /// </summary>
+        [TestMethod]
+        public async Task Dispose_ReleasesAllCachedCertificates()
+        {
+            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+                { CertificateEngine = CertificateEngine.BouncyCastleFast };
+
+            // Populate the in-memory cache with at least one leaf cert.
+            var cert = await mgr.CreateServerCertificate("dispose-test.example.com");
+            Assert.IsNotNull(cert, "pre-condition: cache should have been populated");
+
+            var cacheField = typeof(CertificateManager).GetField("cachedCertificates",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.IsNotNull(cacheField, "cachedCertificates field not found via reflection");
+            var cache = (ConcurrentDictionary<string, CachedCertificate>)cacheField.GetValue(mgr)!;
+
+            Assert.IsTrue(cache.Count > 0, "pre-condition: cache must be non-empty before Dispose");
+
+            mgr.Dispose();
+
+            Assert.AreEqual(0, cache.Count,
+                "Dispose() must drain cachedCertificates to release native handles promptly");
+
+            // Double-dispose must be idempotent.
+            mgr.Dispose();
+        }
     }
 }

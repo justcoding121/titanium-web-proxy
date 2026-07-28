@@ -769,6 +769,9 @@ internal sealed class Http2OriginConnection
     {
         Fail(new ObjectDisposedException(nameof(Http2OriginConnection)), false);
         connectionCts.Cancel();
+        connectionCts.Dispose();
+        writeLock.Dispose();
+        concurrencyGate?.Dispose();
         connection.Dispose();
     }
 

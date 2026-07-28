@@ -54,4 +54,17 @@ internal sealed class Http2OriginCapabilityCache
     {
         cache[hostAndPort] = (supported, DateTime.UtcNow.Add(Ttl));
     }
+
+    /// <summary>
+    ///     Removes entries whose TTL has elapsed. Called periodically from the connection-pool cleanup
+    ///     loop to prevent unbounded growth of the dictionary in long-running proxies that handle many
+    ///     unique origins.
+    /// </summary>
+    internal void TrimExpired()
+    {
+        var now = DateTime.UtcNow;
+        foreach (var key in cache.Keys)
+            if (cache.TryGetValue(key, out var entry) && entry.ExpiresAtUtc <= now)
+                cache.TryRemove(key, out _);
+    }
 }

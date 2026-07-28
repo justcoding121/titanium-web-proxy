@@ -426,6 +426,7 @@ public partial class ProxyServer
         {
             if (!cancellationTokenSource.IsCancellationRequested) cancellationTokenSource.Cancel();
             UnregisterSessionCancellation(cancellationTokenSource);
+            cancellationTokenSource.Dispose();
             await TcpConnectionFactory.Release(prefetchConnectionTask, true);
             clientStream.Dispose();
         }

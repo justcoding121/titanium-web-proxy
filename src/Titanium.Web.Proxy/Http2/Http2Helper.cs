@@ -311,6 +311,7 @@ namespace Titanium.Web.Proxy.Http2
                     removedState.InboundTunnelChannel?.Writer.TryComplete(
                         new IOException("HTTP/2 stream removed due to protocol error."));
                     removedState.Cancellation.Cancel();
+                    removedState.Cancellation.Dispose();
                     connectionState.ClientSendFlow.RemoveStream(removeStreamId);
                     connectionState.ServerSendFlow.RemoveStream(removeStreamId);
                     connectionState.PendingFinalizations.Add(
@@ -691,16 +692,18 @@ namespace Titanium.Web.Proxy.Http2
                             // relay.
                             syntheticStreams.Add(hbStreamId);
                             connectionState.Streams.TryGetValue(hbStreamId, out var streamState);
-                            var streamToken = streamState != null
+                            var linkedCts694 = streamState != null
                                 ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
-                                    streamState.Cancellation.Token).Token
-                                : cancellationToken;
+                                    streamState.Cancellation.Token)
+                                : null;
+                            var streamToken = linkedCts694?.Token ?? cancellationToken;
                             // we are inside the `if (isClient)` branch, so `input` is always the client
                             // stream here (see the isClient=true call in SendHttp2).
                             var synthTask = EmitSyntheticResponseAsync(sessionArgs, hbStreamId, connectionState,
                                     input, streamToken)
                                 .ContinueWith(t =>
                                 {
+                                    linkedCts694?.Dispose();
                                     if (t.IsFaulted)
                                     {
                                         ReportException(logger, new ProxyHttpException(
@@ -747,14 +750,16 @@ namespace Titanium.Web.Proxy.Http2
                                         HttpStatusCode.NotImplemented);
                                     syntheticStreams.Add(hbStreamId);
                                     connectionState.Streams.TryGetValue(hbStreamId, out var unknProtoState);
-                                    var unknProtoToken = unknProtoState != null
+                                    var linkedCts751 = unknProtoState != null
                                         ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
-                                            unknProtoState.Cancellation.Token).Token
-                                        : cancellationToken;
+                                            unknProtoState.Cancellation.Token)
+                                        : null;
+                                    var unknProtoToken = linkedCts751?.Token ?? cancellationToken;
                                     var synthTask501 = EmitSyntheticResponseAsync(sessionArgs, hbStreamId,
                                             connectionState, input, unknProtoToken)
                                         .ContinueWith(t =>
                                         {
+                                            linkedCts751?.Dispose();
                                             if (t.IsFaulted)
                                                 ReportException(logger, new ProxyHttpException(
                                                     "HTTP/2 synthetic response failed",
@@ -889,16 +894,18 @@ namespace Titanium.Web.Proxy.Http2
                                 finalResponse.Locked = true;
 
                                 connectionState.Streams.TryGetValue(hbStreamId, out var streamState);
-                                var streamToken = streamState != null
+                                var linkedCts893 = streamState != null
                                     ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
-                                        streamState.Cancellation.Token).Token
-                                    : cancellationToken;
+                                        streamState.Cancellation.Token)
+                                    : null;
+                                var streamToken = linkedCts893?.Token ?? cancellationToken;
                                 // we are inside the isClient=false branch, so `output` is the client stream
                                 // here (see the isClient=false call in SendHttp2).
                                 var synthTask = EmitSyntheticResponseAsync(sessionArgs, hbStreamId, connectionState,
                                         output, streamToken)
                                     .ContinueWith(t =>
                                     {
+                                        linkedCts893?.Dispose();
                                         if (t.IsFaulted)
                                         {
                                             ReportException(logger, new ProxyHttpException(
@@ -1672,6 +1679,7 @@ namespace Titanium.Web.Proxy.Http2
                                 kvp.Value.InboundTunnelChannel?.Writer.TryComplete(
                                     new IOException("Connection received GOAWAY."));
                                 kvp.Value.Cancellation.Cancel();
+                                kvp.Value.Cancellation.Dispose();
                             }
                         }
                     }
@@ -1895,6 +1903,7 @@ namespace Titanium.Web.Proxy.Http2
                         // that is reading from the inbound channel so it can shut down promptly.
                         resetStream.InboundTunnelChannel?.Writer.TryComplete();
                         resetStream.Cancellation.Cancel();
+                        resetStream.Cancellation.Dispose();
                         connectionState.ClientSendFlow.RemoveStream(streamId);
                         connectionState.ServerSendFlow.RemoveStream(streamId);
                         connectionState.PendingFinalizations.Add(
@@ -1968,6 +1977,7 @@ namespace Titanium.Web.Proxy.Http2
                         tcs.SetResult(true);
                     }
 
+                    rr.Http2BodyData?.Dispose();
                     rr.Http2BodyData = null;
 
                     if (rr.Http2BeforeHandlerTask != null)
