@@ -300,16 +300,31 @@ public partial class ProxyServer : IDisposable
     [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
     public bool EnableHttp3 { get; set; } = false;
 
+    private bool? _enableHttpsSvcbDnsDiscovery;
+
     /// <summary>
     ///     When <see langword="true" />, the proxy queries the configured DNS server for an HTTPS/SVCB RR
     ///     (DNS type 65) before each first connection to an uncached origin in
     ///     <see cref="Models.UpstreamHttpProtocol.Auto" /> mode. A positive result (ALPN <c>h3</c> found)
     ///     upgrades the outbound connection to HTTP/3 and caches the result for the record's TTL.
     ///     Negative results are cached for 1 minute to avoid a DNS round-trip on every request to
-    ///     HTTP/2-only origins. Defaults to <see langword="false" />.
+    ///     HTTP/2-only origins.
+    ///     <para>
+    ///         Defaults to <see langword="true" /> whenever <see cref="EnableHttp3" /> is
+    ///         <see langword="true" />, because proactive SVCB discovery is required to use HTTP/3 on the
+    ///         first connection to an origin (before any <c>Alt-Svc</c> header has been received and cached).
+    ///         Set explicitly to <see langword="false" /> to disable DNS discovery even when HTTP/3 is
+    ///         enabled — for example, when the configured DNS server is untrusted or unreachable.
+    ///     </para>
     /// </summary>
     [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
-    public bool EnableHttpsSvcbDnsDiscovery { get; set; } = false;
+    public bool EnableHttpsSvcbDnsDiscovery
+    {
+        // When the caller has not explicitly set this flag, inherit EnableHttp3 so SVCB discovery
+        // is automatically active for every proxy that opts into HTTP/3.
+        get => _enableHttpsSvcbDnsDiscovery ?? EnableHttp3;
+        set => _enableHttpsSvcbDnsDiscovery = value;
+    }
 
     /// <summary>
     ///     When <see langword="true" />, enables RFC 9204 QPACK dynamic table encoding and decoding for

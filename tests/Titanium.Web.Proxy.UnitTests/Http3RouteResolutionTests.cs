@@ -36,12 +36,59 @@ public class Http3RouteResolutionTests
         SvcbResult? svcbResult = null)
     {
         var s = new ProxyServer(false, false, false) { EnableHttp3 = enableH3 };
+
         if (enableSvcb)
         {
+            // Explicit opt-in: use the stub resolver.
             s.EnableHttpsSvcbDnsDiscovery = true;
             s.HttpsSvcbResolver = new StubSvcbResolver(svcbResult);
         }
+        else
+        {
+            // Explicit opt-out: override the new default (EnableH3 => EnableSvcb) so tests that
+            // want "H3 on, no SVCB probe" remain deterministic without real DNS calls.
+            s.EnableHttpsSvcbDnsDiscovery = false;
+        }
+
         return s;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // EnableHttpsSvcbDnsDiscovery defaults to EnableHttp3
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void EnableHttpsSvcbDnsDiscovery_DefaultsToFalse_WhenH3IsOff()
+    {
+        using var server = new ProxyServer(false, false, false);
+        Assert.IsFalse(server.EnableHttpsSvcbDnsDiscovery,
+            "SVCB discovery must be off when H3 is disabled.");
+    }
+
+    [TestMethod]
+    public void EnableHttpsSvcbDnsDiscovery_DefaultsToTrue_WhenH3IsOn()
+    {
+        using var server = new ProxyServer(false, false, false) { EnableHttp3 = true };
+        Assert.IsTrue(server.EnableHttpsSvcbDnsDiscovery,
+            "SVCB discovery must default to true when H3 is enabled, so the first connection can use H3.");
+    }
+
+    [TestMethod]
+    public void EnableHttpsSvcbDnsDiscovery_ExplicitFalse_OverridesDefault()
+    {
+        using var server = new ProxyServer(false, false, false) { EnableHttp3 = true };
+        server.EnableHttpsSvcbDnsDiscovery = false;
+        Assert.IsFalse(server.EnableHttpsSvcbDnsDiscovery,
+            "Explicit false must override the H3-inherited default (escape hatch for untrusted DNS).");
+    }
+
+    [TestMethod]
+    public void EnableHttpsSvcbDnsDiscovery_ExplicitTrue_WithH3Off_IsRespected()
+    {
+        // Unusual but legal: manually enable SVCB even if H3 is off.
+        using var server = new ProxyServer(false, false, false);
+        server.EnableHttpsSvcbDnsDiscovery = true;
+        Assert.IsTrue(server.EnableHttpsSvcbDnsDiscovery);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -241,9 +288,10 @@ public class Http3RouteResolutionTests
     [TestMethod]
     public async Task ResolveH3_AllowDnsProbe_False_SkipsDnsEvenIfEnabled()
     {
-        // DNS probe disabled on per-stream hot path.
+        // DNS probe is blocked on the per-stream hot path even when SVCB discovery is enabled.
         var resolver = new CountingResolver(new SvcbResult(443, TimeSpan.FromMinutes(1)));
-        var server = new ProxyServer(false, false, false) { EnableHttp3 = true, EnableHttpsSvcbDnsDiscovery = true };
+        // EnableHttp3=true → EnableHttpsSvcbDnsDiscovery defaults to true; install counting resolver.
+        var server = new ProxyServer(false, false, false) { EnableHttp3 = true };
         server.HttpsSvcbResolver = resolver;
 
         var route = await server.ResolveHttp3OriginAsync(
