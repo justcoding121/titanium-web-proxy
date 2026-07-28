@@ -123,6 +123,16 @@ public class TransparentQuicProxyEndPoint : TransparentBaseProxyEndPoint
     internal QuicListener? QuicListener { get; set; }
 
     /// <summary>
+    ///     Transient per-connection <see cref="BeforeQuicAuthenticateEventArgs" /> created in the
+    ///     <c>ConnectionOptionsCallback</c> and consumed by the accept loop. Uses a
+    ///     <see cref="System.Runtime.CompilerServices.ConditionalWeakTable{TKey,TValue}" /> so that
+    ///     entries are automatically released if the <see cref="QuicConnection" /> is GC'd before the
+    ///     accept loop picks it up.
+    /// </summary>
+    internal System.Runtime.CompilerServices.ConditionalWeakTable<QuicConnection, BeforeQuicAuthenticateEventArgs>
+        PendingQuicAuthArgs { get; } = new();
+
+    /// <summary>
     ///     Fired before the QUIC TLS handshake completes for each inbound connection.
     ///     Handlers may inspect/override the forward target, upstream protocol policy, and custom upstream
     ///     proxy, or call <see cref="BeforeQuicAuthenticateEventArgs.Reject" /> to refuse the connection.

@@ -186,9 +186,9 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     public ProxyEndPoint LocalEndPoint => ProxyEndPoint;
 
     /// <summary>
-    ///     Is this a transparent endpoint?
+    ///     Is this a transparent endpoint (TCP or QUIC)?
     /// </summary>
-    public bool IsTransparent => ProxyEndPoint is TransparentProxyEndPoint;
+    public bool IsTransparent => ProxyEndPoint is TransparentBaseProxyEndPoint;
 
     /// <summary>
     ///     Is this a SOCKS endpoint?

@@ -15,7 +15,7 @@ namespace Titanium.Web.Proxy.Network.Tcp;
 /// </summary>
 internal class TcpClientConnection : IDisposable
 {
-    private readonly Socket tcpClientSocket;
+    private readonly Socket? tcpClientSocket;
 
     private bool disposed;
 
@@ -28,17 +28,40 @@ internal class TcpClientConnection : IDisposable
         ProxyServer.UpdateClientConnectionCount(true);
     }
 
+    /// <summary>
+    ///     Protected constructor for subclasses (e.g., QUIC connections) that do not use a TCP socket.
+    ///     The caller is responsible for supplying the effective <see cref="LocalEndPoint" /> and
+    ///     <see cref="RemoteEndPoint" /> via the <paramref name="localEndPoint" /> and
+    ///     <paramref name="remoteEndPoint" /> parameters.
+    /// </summary>
+    protected TcpClientConnection(ProxyServer proxyServer, IPEndPoint localEndPoint, IPEndPoint remoteEndPoint)
+    {
+        tcpClientSocket = null;
+        LocalEndPointOverride = localEndPoint;
+        RemoteEndPointOverride = remoteEndPoint;
+        ProxyServer = proxyServer;
+        ProxyServer.UpdateClientConnectionCount(true);
+    }
+
+    /// <summary>Stored local endpoint for socket-less subclasses (e.g., QUIC).</summary>
+    private IPEndPoint? LocalEndPointOverride { get; }
+
+    /// <summary>Stored remote endpoint for socket-less subclasses (e.g., QUIC).</summary>
+    private IPEndPoint? RemoteEndPointOverride { get; }
+
     public object? ClientUserData { get; set; }
 
     private ProxyServer ProxyServer { get; }
 
     public Guid Id { get; } = Guid.NewGuid();
 
-    public EndPoint LocalEndPoint => tcpClientSocket.LocalEndPoint
-                                     ?? throw new InvalidOperationException("Client socket has no local endpoint.");
+    public EndPoint LocalEndPoint => LocalEndPointOverride
+                                     ?? tcpClientSocket?.LocalEndPoint
+                                     ?? throw new InvalidOperationException("Client connection has no local endpoint.");
 
-    public EndPoint RemoteEndPoint => tcpClientSocket.RemoteEndPoint
-                                      ?? throw new InvalidOperationException("Client socket has no remote endpoint.");
+    public EndPoint RemoteEndPoint => RemoteEndPointOverride
+                                      ?? tcpClientSocket?.RemoteEndPoint
+                                      ?? throw new InvalidOperationException("Client connection has no remote endpoint.");
 
     internal SslProtocols SslProtocol { get; set; }
 
@@ -60,6 +83,7 @@ internal class TcpClientConnection : IDisposable
             await Task.Delay(1000);
             ProxyServer.UpdateClientConnectionCount(false);
 
+            if (tcpClientSocket == null) return;
             try
             {
                 tcpClientSocket.Close();
@@ -74,11 +98,16 @@ internal class TcpClientConnection : IDisposable
 
     public Stream GetStream()
     {
+        if (tcpClientSocket == null)
+            throw new InvalidOperationException(
+                "GetStream() is not supported on non-TCP connections. Use the QUIC stream API directly.");
         return new NetworkStream(tcpClientSocket, true);
     }
 
     public int GetProcessId(ProxyEndPoint endPoint)
     {
+        if (tcpClientSocket == null) return -1; // Process ID is not available for QUIC/non-TCP connections.
+
         if (processId.HasValue) return processId.Value;
 
         if (RunTime.IsWindows)

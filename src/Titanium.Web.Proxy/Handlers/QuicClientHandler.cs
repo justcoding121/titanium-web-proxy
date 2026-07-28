@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Quic;
 namespace Titanium.Web.Proxy;
@@ -155,6 +156,9 @@ public partial class ProxyServer
         // Use the (possibly overridden) forward target for certificate selection.
         var certHost = eventArgs.ForwardHost;
 
+        // Store auth args so the accept loop can retrieve them when the connection is accepted.
+        endPoint.PendingQuicAuthArgs.AddOrUpdate(connection, eventArgs);
+
         // Obtain or generate a MITM leaf certificate for this hostname.
         var cert = await CertificateManager.CreateServerCertificate(certHost)
             ?? throw new InvalidOperationException(
@@ -216,45 +220,36 @@ public partial class ProxyServer
             }
 
             // Handle each QUIC connection on its own task — do not await.
-            _ = HandleQuicConnectionAsync(connection, endPoint, cancellationToken);
+            if (!endPoint.PendingQuicAuthArgs.TryGetValue(connection, out var authArgs))
+            {
+                // No auth args means the options callback failed or was skipped — reject this connection.
+                _ = connection.CloseAsync(0x100).AsTask();
+                continue;
+            }
+            endPoint.PendingQuicAuthArgs.Remove(connection);
+            _ = HandleQuicConnectionAsync(connection, endPoint, authArgs, cancellationToken);
         }
     }
 
     /// <summary>
     ///     Handles a single accepted QUIC connection: runs the H3 stream accept loop for the lifetime of
-    ///     the connection. Full HTTP/3 protocol handling is implemented in Http3Connection (§4).
-    ///     This stub accepts and immediately closes streams until §4 is wired in.
+    ///     the connection.
     /// </summary>
     private async Task HandleQuicConnectionAsync(
         QuicConnection connection,
         TransparentQuicProxyEndPoint endPoint,
+        BeforeQuicAuthenticateEventArgs authArgs,
         CancellationToken cancellationToken)
     {
         await using (connection)
         {
             try
             {
-                // §4 will replace this stub with Http3Connection.RunAsync(connection, endPoint, cancellationToken)
-                // For now, drain and close any arriving streams gracefully.
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    QuicStream stream;
-                    try
-                    {
-                        stream = await connection.AcceptInboundStreamAsync(cancellationToken);
-                    }
-                    catch (QuicException qex) when (qex.QuicError == QuicError.ConnectionAborted ||
-                                                    qex.QuicError == QuicError.ConnectionIdle)
-                    {
-                        break;
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
-
-                    await stream.DisposeAsync();
-                }
+                await Http3Connection.RunAsync(
+                    connection, endPoint, authArgs, this, Logger, cancellationToken,
+                    onBeforeRequest: OnBeforeRequest,
+                    onBeforeResponse: OnBeforeResponse,
+                    onAfterResponse: OnAfterResponse);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
