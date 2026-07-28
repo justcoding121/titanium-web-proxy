@@ -148,7 +148,10 @@ internal static class Http3RequestStream
                 else
                 {
                     // 7. Forward to origin using the appropriate protocol bridge (H3→H3, H3→H2, or H3→H1.1).
-                    await Http3OriginBridge.ForwardAsync(sessionArgs, server, logger, cancellationToken);
+                    // Pass a relay callback so that 1xx interim responses are forwarded to the client before
+                    // the final response arrives.
+                    await Http3OriginBridge.ForwardAsync(sessionArgs, server, logger, cancellationToken,
+                        onInterimResponse: (interim, ct) => SendInterimResponseAsync(stream, interim, ct));
 
                     await onBeforeResponse(sessionArgs);
 
@@ -240,6 +243,27 @@ internal static class Http3RequestStream
         {
             body.Dispose();
         }
+    }
+
+    /// <summary>
+    ///     Sends a single HTTP/3 1xx interim response HEADERS frame to the client without closing the
+    ///     stream write side. <c>CompleteWrites()</c> is intentionally NOT called — the response is still
+    ///     in progress.
+    /// </summary>
+    private static async Task SendInterimResponseAsync(QuicStream stream, Response response, CancellationToken ct)
+    {
+        var headers = new List<(string, string)> { (":status", response.StatusCode.ToString()) };
+        foreach (var header in response.Headers.GetAllHeaders())
+        {
+            var name = header.Name.ToLowerInvariant();
+            if (name is "connection" or "keep-alive" or "proxy-connection"
+                or "transfer-encoding" or "upgrade")
+                continue;
+            headers.Add((name, header.Value));
+        }
+        var encoded = QpackEncoder.Encode(headers);
+        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, encoded, ct);
+        await stream.FlushAsync(ct);
     }
 
     /// <summary>
