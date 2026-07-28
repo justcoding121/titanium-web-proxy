@@ -530,7 +530,10 @@ public partial class ProxyServer
     /// </summary>
     internal static void AddViaHeader(HeaderCollection headers, Version httpVersion, string pseudonym)
     {
-        var protocol = httpVersion.Major == 2 ? "2" : $"1.{httpVersion.Minor}";
+        // Via uses HTTP's protocol-version token, whose canonical form includes both digits
+        // (RFC 9110 §2.5/§7.6.3): 1.1, 2.0, 3.0. Sending "2" is accepted by many origins,
+        // but strict servers such as play.google.com reject it with RST_STREAM(PROTOCOL_ERROR).
+        var protocol = $"{httpVersion.Major}.{httpVersion.Minor}";
         var entry = $"{protocol} {pseudonym}";
 
         var existing = headers.GetHeaders("Via");

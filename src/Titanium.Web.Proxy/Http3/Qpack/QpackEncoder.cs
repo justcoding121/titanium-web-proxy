@@ -145,11 +145,15 @@ internal static class QpackEncoder
         WriteStringLiteral(buf, value);
     }
 
-    // Literal Without Name Reference: 0 0 1 N=0 ... — pattern 0x20
+    // Literal Field Line With Literal Name (RFC 9204 §4.5.6):
+    //   0 0 1 N H NameLen(3+) | Name | H ValueLen(7+) | Value
+    // Name length occupies the 3-bit prefix of the first byte — it is NOT a separate string literal.
     private static void WriteLiteralNewName(MemoryStream buf, string name, string value)
     {
-        buf.WriteByte(0x20);
-        WriteStringLiteral(buf, name);
+        var nameBytes = Encoding.Latin1.GetBytes(name);
+        // pattern 0x20 => 001 N=0 H=0, then 3-bit-prefixed name length
+        WritePrefixedInt(buf, 0x20, 3, (ulong)nameBytes.Length);
+        buf.Write(nameBytes, 0, nameBytes.Length);
         WriteStringLiteral(buf, value);
     }
 

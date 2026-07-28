@@ -70,7 +70,9 @@ internal sealed class QuicConnectionFactory
             },
             DefaultStreamErrorCode = (long)Http3.Http3ErrorCode.RequestCancelled,
             DefaultCloseErrorCode = (long)Http3.Http3ErrorCode.NoError,
-            LocalEndPoint = upStreamEndPoint,
+            // Do not bind LocalEndPoint from UpStreamEndPoint here: QuicConnection resolves via
+            // Happy Eyeballs, and an IPv4-only local bind fails against IPv6-first hosts (Google).
+            // TCP uses UpStreamEndPointSelector after DNS; QUIC lacks an equivalent hook today.
             MaxInboundBidirectionalStreams = 0,
             MaxInboundUnidirectionalStreams = 3  // control, QPACK encoder, QPACK decoder
         };

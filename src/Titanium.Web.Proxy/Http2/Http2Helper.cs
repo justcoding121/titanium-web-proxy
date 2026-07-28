@@ -1942,7 +1942,11 @@ namespace Titanium.Web.Proxy.Http2
                     // genuine error codes so the server log is not flooded with false-positive errors.
                     if (errorCode != (int)Http2ErrorCode.NoError && errorCode != (int)Http2ErrorCode.Cancel)
                     {
-                        ReportException(logger, new ProxyHttpException("HTTP/2 stream error. Error code: " + errorCode, null, args));
+                        var direction = isClient ? "client→proxy" : "origin→proxy";
+                        var requestUrl = args?.HttpClient.Request.Url ?? "(unknown)";
+                        ReportException(logger, new ProxyHttpException(
+                            $"HTTP/2 stream error. Error code: {errorCode}; direction: {direction}; " +
+                            $"stream: {streamId}; request: {requestUrl}", null, args));
                     }
                 }
 
