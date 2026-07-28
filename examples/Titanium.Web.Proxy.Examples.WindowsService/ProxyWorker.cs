@@ -1,5 +1,6 @@
 using System;
 using System.Net;
+using System.Net.Quic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -68,6 +69,36 @@ internal sealed class ProxyWorker : BackgroundService
                 new ExplicitProxyEndPoint(IPAddress.IPv6Any, settings.ListeningPort, settings.DecryptSsl);
             proxyServer.AddEndPoint(explicitEndPointV6);
         }
+
+        // HTTP/3 transparent QUIC endpoint (experimental — suppress TWP001 to opt in).
+        // Requires MsQuic and a supported OS. UDP traffic must be redirected here; see wiki/HTTP-3.md.
+#pragma warning disable TWP001
+        if (settings.EnableHttp3)
+        {
+            if (QuicListener.IsSupported)
+            {
+                if (settings.QuicListeningPort <= 0 || settings.QuicListeningPort > 65535)
+                    throw new InvalidOperationException("Invalid QUIC listening port");
+
+                proxyServer.EnableHttp3 = true;
+                var quicEndPoint = new TransparentQuicProxyEndPoint(IPAddress.Any, settings.QuicListeningPort)
+                {
+                    // Replace with IOriginalDestinationResolver for real NAT-transparent interception.
+                    ForwardHost = "localhost",
+                    ForwardPort = 443
+                };
+                proxyServer.AddEndPoint(quicEndPoint);
+                logger.LogInformation("HTTP/3 QUIC endpoint started on UDP {QuicListeningPort}",
+                    settings.QuicListeningPort);
+            }
+            else
+            {
+                logger.LogWarning(
+                    "EnableHttp3 is true but QuicListener.IsSupported is false on this platform. " +
+                    "HTTP/3 skipped. Windows requires Windows 11 / Server 2022+.");
+            }
+        }
+#pragma warning restore TWP001
 
         // Bridge the proxy's diagnostic logging into the host's own ILoggerFactory (e.g. configured via
         // appsettings.json's Logging.LogLevel.Default), rather than using the built-in Console/File sinks.
