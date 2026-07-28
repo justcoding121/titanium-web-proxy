@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
@@ -9,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Examples.Basic.Helpers;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -19,7 +19,13 @@ namespace Titanium.Web.Proxy.Examples.Basic
 {
     public class ProxyTestController : IDisposable
     {
+        private const int MaxUrlLength = 100;
+        private const int MaxWebSocketTextLength = 120;
+
         private readonly ProxyServer proxyServer;
+#if !DEBUG
+        private readonly ILoggerFactory compactLoggerFactory;
+#endif
 
         private readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
 
@@ -53,11 +59,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.CertificateManager.TrustRootCertificate();
             //proxyServer.CertificateManager.TrustRootCertificateAsAdmin();
 
-            // Library diagnostics: Trace while debugging; Warning+ in Release so traffic lines stay readable.
+            // Library diagnostics stay quiet on the traffic tape: one-line errors (no stacks) in Release.
+            // DEBUG keeps the built-in Trace console (full stacks) for deep diagnosis.
 #if DEBUG
             proxyServer.Logging.MinimumLevel = LogLevel.Trace;
 #else
             proxyServer.Logging.MinimumLevel = LogLevel.Warning;
+            proxyServer.Logging.EnableConsole = false;
+            compactLoggerFactory = new CompactConsoleLoggerFactory((level, line) =>
+                WriteToConsole(line, level >= LogLevel.Error ? ConsoleColor.Red : ConsoleColor.Yellow));
+            proxyServer.Logging.LoggerFactory = compactLoggerFactory;
 #endif
 
             proxyServer.TcpTimeWaitSeconds = 10;
@@ -89,6 +100,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             cancellationTokenSource.Dispose();
             proxyServer.Dispose();
+#if !DEBUG
+            compactLoggerFactory?.Dispose();
+#endif
         }
 
         public void StartProxy()
@@ -146,12 +160,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 Console.WriteLine("  macOS:   bundle libmsquic + libssl + libcrypto with @loader_path RPATH.");
             }
 #pragma warning restore TWP001
-
-            // Print connection counts only when they change (not on every request).
-            proxyServer.ClientConnectionCountChanged += OnClientConnectionCountChanged;
-            proxyServer.ServerConnectionCountChanged += OnServerConnectionCountChanged;
-            proxyServer.Http3ClientConnectionCountChanged += OnHttp3ClientConnectionCountChanged;
-            proxyServer.Http3ServerConnectionCountChanged += OnHttp3ServerConnectionCountChanged;
 
             proxyServer.Start();
 
@@ -214,11 +222,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 quicEndPoint.BeforeQuicAuthenticate -= OnBeforeQuicAuthenticate;
 #pragma warning restore TWP001
 
-            proxyServer.ClientConnectionCountChanged -= OnClientConnectionCountChanged;
-            proxyServer.ServerConnectionCountChanged -= OnServerConnectionCountChanged;
-            proxyServer.Http3ClientConnectionCountChanged -= OnHttp3ClientConnectionCountChanged;
-            proxyServer.Http3ServerConnectionCountChanged -= OnHttp3ServerConnectionCountChanged;
-
             proxyServer.BeforeRequest -= OnRequest;
             proxyServer.BeforeResponse -= OnResponse;
             proxyServer.AfterResponse -= OnAfterResponse;
@@ -229,26 +232,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             // remove the generated certificates
             //proxyServer.CertificateManager.RemoveTrustedRootCertificates();
-        }
-
-        private void OnClientConnectionCountChanged(object sender, EventArgs e)
-        {
-            WriteToConsole("Active Client Connections: " + proxyServer.ClientConnectionCount);
-        }
-
-        private void OnServerConnectionCountChanged(object sender, EventArgs e)
-        {
-            WriteToConsole("Active Server Connections: " + proxyServer.ServerConnectionCount);
-        }
-
-        private void OnHttp3ClientConnectionCountChanged(object sender, EventArgs e)
-        {
-            WriteToConsole("Active HTTP/3 Client Connections: " + proxyServer.Http3ClientConnectionCount);
-        }
-
-        private void OnHttp3ServerConnectionCountChanged(object sender, EventArgs e)
-        {
-            WriteToConsole("Active HTTP/3 Server Connections: " + proxyServer.Http3ServerConnectionCount);
         }
 
         private async Task<IExternalProxy> OnGetCustomUpStreamProxyFunc(SessionEventArgsBase arg)
@@ -287,7 +270,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             var hostname = e.HttpClient.Request.RequestUri.Host;
             e.GetState().PipelineInfo.AppendLine(nameof(OnBeforeTunnelConnectRequest) + ":" + hostname);
-            WriteToConsole("Tunnel to: " + hostname);
 
             var clientLocalIp = e.ClientLocalEndPoint.Address;
             if (!clientLocalIp.Equals(IPAddress.Loopback) && !clientLocalIp.Equals(IPAddress.IPv6Loopback))
@@ -298,6 +280,15 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 // Useful for clients that use certificate pinning
                 // for example dropbox.com
                 e.DecryptSsl = false;
+
+            // Opaque tunnels (no decrypt) get a single line; decrypted hosts show up as request lines later.
+            // DEBUG also logs every CONNECT for diagnosis.
+            if (!e.DecryptSsl)
+                WriteToConsole($"TUNNEL {hostname} (ssl passthrough)");
+#if DEBUG
+            else
+                WriteToConsole("Tunnel to: " + hostname);
+#endif
         }
 
         private void WebSocket_DataSent(object sender, DataEventArgs e)
@@ -315,18 +306,19 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private void WebSocketDataSentReceived(SessionEventArgs args, DataEventArgs e, bool sent)
         {
             var color = sent ? ConsoleColor.Green : ConsoleColor.Blue;
+            var arrow = sent ? "→" : "←";
             var decoder = sent ? args.WebSocketDecoderSend : args.WebSocketDecoderReceive;
 
             foreach (var frame in decoder.Decode(e.Buffer, e.Offset, e.Count))
             {
                 if (frame.OpCode == WebsocketOpCode.Binary)
                 {
-                    var data = frame.Data.ToArray();
-                    var str = string.Join(",", data.ToArray().Select(x => x.ToString("X2")));
-                    WriteToConsole(str, color);
+                    WriteToConsole($"WS {arrow} binary {frame.Data.Length}B", color);
+                    continue;
                 }
 
-                if (frame.OpCode == WebsocketOpCode.Text) WriteToConsole(frame.GetText(), color);
+                if (frame.OpCode == WebsocketOpCode.Text)
+                    WriteToConsole($"WS {arrow} {Truncate(frame.GetText(), MaxWebSocketTextLength)}", color);
             }
         }
 
@@ -474,9 +466,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 ? 0
                 : (long)(DateTime.UtcNow - state.RequestStartedUtc).TotalMilliseconds;
 
-            // One line per completed session: method, URL, status, protocol pair, elapsed.
+            // Compact traffic tape: METHOD host/path → status  H2↔H2  187ms
             var line =
-                $"{request.Method} {request.Url} → {statusCode} | client↔proxy: {FormatHttpProtocol(request.HttpVersion)} | proxy↔server: {FormatHttpProtocol(response?.HttpVersion)} | {elapsedMs}ms";
+                $"{request.Method,-7} {FormatUrlForConsole(request.Url)} → {statusCode,3}  {FormatHttpProtocolShort(request.HttpVersion)}↔{FormatHttpProtocolShort(response?.HttpVersion)}  {elapsedMs}ms";
             WriteToConsole(line, ColorForStatusCode(statusCode));
 
 #if DEBUG
@@ -491,6 +483,39 @@ namespace Titanium.Web.Proxy.Examples.Basic
             if (statusCode >= 400)
                 return ConsoleColor.Yellow;
             return ConsoleColor.Cyan;
+        }
+
+        /// <summary>
+        ///     Host + path for the console; drops long query strings and truncates.
+        /// </summary>
+        private static string FormatUrlForConsole(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return url;
+
+            string compact;
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            {
+                compact = uri.IsDefaultPort
+                    ? uri.Host + uri.AbsolutePath
+                    : uri.Host + ":" + uri.Port + uri.AbsolutePath;
+                if (uri.Query.Length > 1)
+                    compact += "?…";
+            }
+            else
+            {
+                compact = url;
+            }
+
+            return Truncate(compact, MaxUrlLength);
+        }
+
+        private static string Truncate(string value, int maxLength)
+        {
+            if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
+                return value;
+
+            return value.Substring(0, maxLength - 1) + "…";
         }
 
         /// <summary>
@@ -523,18 +548,17 @@ namespace Titanium.Web.Proxy.Examples.Basic
         }
 
         /// <summary>
-        ///     Formats an HTTP version for brief console logs (e.g. HTTP/1.1, HTTP/2, HTTP/3).
+        ///     Formats an HTTP version for brief console logs (e.g. H1.1, H2, H3).
         /// </summary>
-        private static string FormatHttpProtocol(Version version)
+        private static string FormatHttpProtocolShort(Version version)
         {
             if (version == null || version.Major == 0)
-                return "unknown";
+                return "?";
 
-            // HTTP/2 and HTTP/3 are conventionally written without a minor component.
             if (version.Major >= 2)
-                return "HTTP/" + version.Major;
+                return "H" + version.Major;
 
-            return "HTTP/" + version.Major + "." + version.Minor;
+            return "H" + version.Major + "." + version.Minor;
         }
 
         private void WriteToConsole(string message, ConsoleColor? consoleColor = null)
