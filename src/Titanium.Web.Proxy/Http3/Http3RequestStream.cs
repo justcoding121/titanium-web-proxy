@@ -112,7 +112,7 @@ internal static class Http3RequestStream
                 };
 
                 // Seed per-connection upstream policy from the auth event, then allow per-stream override.
-                // SessionEventArgs.UpstreamHttpProtocol defaults to null (= use connection-level policy).
+                sessionArgs.UpstreamHttpProtocol = authArgs.UpstreamHttpProtocol;
 
                 streamState = new Http3StreamState(stream.Id, sessionArgs);
                 onSessionCreated(sessionArgs, streamState);
@@ -130,9 +130,18 @@ internal static class Http3RequestStream
                 // 6. Fire BeforeRequest.
                 await onBeforeRequest(sessionArgs);
 
+                // Inject Via header (RFC 9110 §7.6.3) on the request before forwarding.
+                if (!string.IsNullOrEmpty(server.ViaHeaderPseudonym))
+                    sessionArgs.HttpClient.Request.Headers.AddHeader(
+                        new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
+
                 if (sessionArgs.HttpClient.Response.Locked)
                 {
                     // Developer set a synthetic response in BeforeRequest.
+                    await onBeforeResponse(sessionArgs);
+                    if (!string.IsNullOrEmpty(server.ViaHeaderPseudonym))
+                        sessionArgs.HttpClient.Response.Headers.AddHeader(
+                            new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
                     await SendResponseAsync(stream, sessionArgs.HttpClient.Response, cancellationToken);
                 }
                 else
@@ -151,6 +160,11 @@ internal static class Http3RequestStream
                     sessionArgs.HttpClient.Response = stubResponse;
 
                     await onBeforeResponse(sessionArgs);
+
+                    // Inject Via header on the response (RFC 9110 §7.6.3).
+                    if (!string.IsNullOrEmpty(server.ViaHeaderPseudonym))
+                        sessionArgs.HttpClient.Response.Headers.AddHeader(
+                            new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
                     await SendResponseAsync(stream, sessionArgs.HttpClient.Response, cancellationToken);
                 }
 
