@@ -238,6 +238,29 @@ public partial class ProxyServer : IDisposable
     public bool EnableRfc8441 { get; set; } = false;
 
     /// <summary>
+    ///     Enable HTTP/3 (QUIC) support. When <see langword="true" />:
+    ///     <list type="bullet">
+    ///       <item>
+    ///         <description>
+    ///           Any <c>TransparentQuicProxyEndPoint</c> added to <see cref="ProxyEndPoints" /> is started as
+    ///           a QUIC listener that accepts inbound HTTP/3 connections.
+    ///         </description>
+    ///       </item>
+    ///       <item>
+    ///         <description>
+    ///           With <see cref="UpstreamHttpProtocol.Auto" /> (default), the proxy automatically uses HTTP/3
+    ///           for outbound connections to origins whose Alt-Svc or HTTPS/SVCB capability is cached, falling
+    ///           back to HTTP/2 then HTTP/1.1 on failure.
+    ///         </description>
+    ///       </item>
+    ///     </list>
+    ///     Requires MsQuic native library and a supported operating-system version
+    ///     (<see cref="System.Net.Quic.QuicListener.IsSupported" />). Setting to <see langword="true" /> with
+    ///     no <c>TransparentQuicProxyEndPoint</c> configured emits a warning and skips QUIC initialization.
+    ///     Default: <see langword="false" /> (opt-in).
+    /// </summary>
+    public bool EnableHttp3 { get; set; } = false;
+    /// <summary>
     ///     Should we check for certificate revocation during SSL authentication to servers
     ///     Note: If enabled can reduce performance. Defaults to false.
     /// </summary>
