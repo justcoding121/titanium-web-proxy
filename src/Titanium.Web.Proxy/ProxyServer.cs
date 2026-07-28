@@ -289,6 +289,39 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
     public bool EnableHttp3 { get; set; } = false;
+
+    /// <summary>
+    ///     When <see langword="true" />, the proxy queries the configured DNS server for an HTTPS/SVCB RR
+    ///     (DNS type 65) before each first connection to an uncached origin in
+    ///     <see cref="Models.UpstreamHttpProtocol.Auto" /> mode. A positive result (ALPN <c>h3</c> found)
+    ///     upgrades the outbound connection to HTTP/3 and caches the result for the record's TTL.
+    ///     Negative results are cached for 1 minute to avoid a DNS round-trip on every request to
+    ///     HTTP/2-only origins. Defaults to <see langword="false" />.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
+    public bool EnableHttpsSvcbDnsDiscovery { get; set; } = false;
+
+    /// <summary>
+    ///     DNS server endpoint used by <see cref="Http3.Dns.UdpSvcbDnsResolver" /> for HTTPS/SVCB
+    ///     queries. Defaults to <c>127.0.0.1:53</c>. Override for testing or to use a specific resolver.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
+    public IPEndPoint DnsServerEndPoint { get; set; } = new(System.Net.IPAddress.Loopback, 53);
+
+    private Http3.Dns.IHttpsSvcbResolver? _httpsSvcbResolver;
+
+    /// <summary>
+    ///     Resolver used to perform HTTPS/SVCB DNS lookups when <see cref="EnableHttpsSvcbDnsDiscovery" />
+    ///     is enabled. Defaults to <see cref="Http3.Dns.UdpSvcbDnsResolver" /> using
+    ///     <see cref="DnsServerEndPoint" />. Replace with a mock in tests.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
+    public Http3.Dns.IHttpsSvcbResolver HttpsSvcbResolver
+    {
+        get => _httpsSvcbResolver ??= new Http3.Dns.UdpSvcbDnsResolver(DnsServerEndPoint);
+        set => _httpsSvcbResolver = value;
+    }
+
     /// <summary>
     ///     Should we check for certificate revocation during SSL authentication to servers
     ///     Note: If enabled can reduce performance. Defaults to false.

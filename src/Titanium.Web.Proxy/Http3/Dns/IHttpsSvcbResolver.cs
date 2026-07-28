@@ -1,0 +1,19 @@
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Titanium.Web.Proxy.Http3.Dns;
+
+/// <summary>
+///     Probes whether a given host:port advertises HTTP/3 via an HTTPS/SVCB DNS record (RR type 65).
+///     Inject a mock implementation in tests.
+/// </summary>
+internal interface IHttpsSvcbResolver
+{
+    /// <summary>
+    ///     Attempts to discover whether <paramref name="host" />:<paramref name="port" /> supports HTTP/3
+    ///     by querying for an HTTPS DNS RR (type 65). Returns a <see cref="SvcbResult" /> on success or
+    ///     <see langword="null" /> when no H3 capability is found (NXDOMAIN, SERVFAIL, no <c>alpn=h3</c>
+    ///     SvcParam, or timeout).
+    /// </summary>
+    Task<SvcbResult?> TryGetH3CapabilityAsync(string host, int port, CancellationToken ct);
+}
