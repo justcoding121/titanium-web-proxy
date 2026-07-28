@@ -36,6 +36,18 @@ internal sealed class ProxySettings
 
     public bool EnableHttp2 { get; set; } = true;
 
+    /// <summary>
+    ///     Enable experimental HTTP/3 (QUIC) support. Requires MsQuic and a supported OS
+    ///     (<see cref="System.Net.Quic.QuicListener.IsSupported" />). When true, a
+    ///     <c>TransparentQuicProxyEndPoint</c> is bound on <see cref="QuicListeningPort" />.
+    /// </summary>
+    public bool EnableHttp3 { get; set; } = true;
+
+    /// <summary>
+    ///     UDP port for the transparent HTTP/3 QUIC endpoint. Only used when <see cref="EnableHttp3" /> is true.
+    /// </summary>
+    public int QuicListeningPort { get; set; } = 443;
+
     public bool NoDelay { get; set; } = true;
 
     /// <summary>

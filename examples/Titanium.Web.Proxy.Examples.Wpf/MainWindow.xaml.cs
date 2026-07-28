@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Quic;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
@@ -101,6 +102,24 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             //proxyServer.AddEndPoint(socksEndPoint);
 
+            // HTTP/3 transparent QUIC endpoint (experimental — suppress TWP001 to opt in).
+            // Requires MsQuic and a supported OS (Windows 11 / Server 2022+, or libmsquic on Linux/macOS).
+            // UDP traffic must be redirected here; see wiki/HTTP-3.md.
+#pragma warning disable TWP001
+            if (QuicListener.IsSupported)
+            {
+                proxyServer.EnableHttp3 = true;
+                var quicEndPoint = new TransparentQuicProxyEndPoint(IPAddress.Any, 443)
+                {
+                    // Replace with IOriginalDestinationResolver for real NAT-transparent interception.
+                    ForwardHost = "localhost",
+                    ForwardPort = 443
+                };
+                quicEndPoint.BeforeQuicAuthenticate += ProxyServer_BeforeQuicAuthenticate;
+                proxyServer.AddEndPoint(quicEndPoint);
+            }
+#pragma warning restore TWP001
+
             proxyServer.BeforeRequest += ProxyServer_BeforeRequest;
             proxyServer.BeforeResponse += ProxyServer_BeforeResponse;
             proxyServer.AfterResponse += ProxyServer_AfterResponse;
@@ -152,6 +171,13 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             get => (int)GetValue(ServerConnectionCountProperty);
             set => SetValue(ServerConnectionCountProperty, value);
         }
+
+#pragma warning disable TWP001
+        private Task ProxyServer_BeforeQuicAuthenticate(object sender, BeforeQuicAuthenticateEventArgs e)
+        {
+            return Task.CompletedTask;
+        }
+#pragma warning restore TWP001
 
         private async Task ProxyServer_BeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
