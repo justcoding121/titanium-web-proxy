@@ -738,7 +738,19 @@ public partial class ProxyServer : IDisposable
 
         ProxyEndPoints.Add(endPoint);
 
+#if NET6_0_OR_GREATER
+        if (ProxyRunning && endPoint is TransparentQuicProxyEndPoint quicEndPoint)
+        {
+            quicListenerCts ??= new CancellationTokenSource();
+            ListenQuic(quicEndPoint);
+        }
+        else if (ProxyRunning)
+        {
+            Listen(endPoint);
+        }
+#else
         if (ProxyRunning) Listen(endPoint);
+#endif
     }
 
     /// <summary>
@@ -753,7 +765,14 @@ public partial class ProxyServer : IDisposable
 
         ProxyEndPoints.Remove(endPoint);
 
+#if NET6_0_OR_GREATER
+        if (ProxyRunning && endPoint is TransparentQuicProxyEndPoint quicEndPoint)
+            QuitListenQuic(quicEndPoint);
+        else if (ProxyRunning)
+            QuitListen(endPoint);
+#else
         if (ProxyRunning) QuitListen(endPoint);
+#endif
     }
 
     /// <summary>
@@ -993,6 +1012,21 @@ public partial class ProxyServer : IDisposable
 
         CertificateManager.ClearIdleCertificates();
 
+#if NET6_0_OR_GREATER
+        if (EnableHttp3 && ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>().Any())
+        {
+            quicListenerCts = new CancellationTokenSource();
+            foreach (var quicEndPoint in ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>())
+                ListenQuic(quicEndPoint);
+        }
+        else if (EnableHttp3)
+        {
+            Logger.LogWarning(
+                "EnableHttp3 is true but no TransparentQuicProxyEndPoint is registered. " +
+                "Add a TransparentQuicProxyEndPoint to ProxyEndPoints before calling Start().");
+        }
+#endif
+
         foreach (var endPoint in ProxyEndPoints) Listen(endPoint);
     }
 
@@ -1047,6 +1081,15 @@ public partial class ProxyServer : IDisposable
         if (cancelSessions) CancelActiveSessions();
 
         foreach (var endPoint in ProxyEndPoints) QuitListen(endPoint);
+
+#if NET6_0_OR_GREATER
+        // Cancel and wait for QUIC accept loops to exit.
+        quicListenerCts?.Cancel();
+        foreach (var quicEndPoint in ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>())
+            QuitListenQuic(quicEndPoint);
+        quicListenerCts?.Dispose();
+        quicListenerCts = null;
+#endif
 
         // Keep ProxyEndPoints so Start() can re-bind the same listeners (issue #799).
 
