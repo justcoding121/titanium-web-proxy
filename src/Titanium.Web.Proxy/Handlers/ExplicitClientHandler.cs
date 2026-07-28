@@ -276,10 +276,8 @@ public partial class ProxyServer
                         ProxyLog.BrowserHandshakeSucceeded(logger, connectHostname,
                             sslStream.NegotiatedApplicationProtocol);
 
-#if NET6_0_OR_GREATER
                             clientStream.Connection.NegotiatedApplicationProtocol =
  sslStream.NegotiatedApplicationProtocol;
-#endif
 
                         // HTTPS server created - we can now decrypt the client's traffic
                         clientStream = new HttpClientStream(this, clientStream.Connection, sslStream, BufferPool,
@@ -418,7 +416,6 @@ public partial class ProxyServer
 
                     if (requiresHttp11Bridge)
                     {
-#if NET6_0_OR_GREATER
                         // UpstreamHttpProtocol.Http11 + AllowHttpProtocolTranslation: no origin connection was
                         // negotiated/retained above (RequiresHttp11Bridge implies OriginSupportsHttp2 is false
                         // and RetainedConnectionTask is null) - every h2 stream on this connection instead gets
@@ -428,7 +425,6 @@ public partial class ProxyServer
                         await SendHttp2ToHttp11Bridge(clientStream, endPoint, connectArgs.HttpClient.ConnectRequest,
                             connectArgs.UserData, bridgeHost, bridgePort, null, null,
                             connectArgs.CancellationTokenSource);
-#endif
                         return;
                     }
 
@@ -456,7 +452,6 @@ public partial class ProxyServer
                         connectArgs.Timing.MarkConnectionReady(connection.Id, !connection.ClaimFirstUse());
                     try
                     {
-#if NET6_0_OR_GREATER
                             var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
                             await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
                             await Http2Helper.SendHttp2(clientStream, connection.Stream,
@@ -470,7 +465,6 @@ public partial class ProxyServer
                                 headers => PrepareRequestHeaders(headers),
                                 connectArgs.CancellationTokenSource, clientStream.Connection.Id, logger,
                                 MaxDecodedHeaderListBytes, EnableRfc8441);
-#endif
                     }
                     finally
                     {
@@ -490,7 +484,6 @@ public partial class ProxyServer
 
             if (requiresH2OriginBridge)
             {
-#if NET6_0_OR_GREATER
                 // UpstreamHttpProtocol.Http2 + AllowHttpProtocolTranslation: the client never offered "h2"
                 // (see the http2Supported computation above), so it stays on the normal HTTP/1.1 wire format,
                 // but every request must be translated onto the already-established h2 origin connection
@@ -502,7 +495,6 @@ public partial class ProxyServer
                 await SendHttp11ToHttp2Bridge(clientStream, endPoint, connectArgs.HttpClient.ConnectRequest,
                     connectArgs.UserData, bridgeHost, bridgePort, null, null, prefetchTask,
                     connectArgs.CancellationTokenSource);
-#endif
                 return;
             }
 

@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 #pragma warning disable CA1416
 using System;
 using System.Collections.Concurrent;
@@ -116,4 +115,3 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     public async ValueTask DisposeAsync() => await DrainAsync();
 }
 #pragma warning restore CA1416
-#endif

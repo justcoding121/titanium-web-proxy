@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
@@ -848,4 +847,3 @@ internal sealed class Http2OriginExchange
 
     internal HeaderCollection? TrailingHeaders { get; }
 }
-#endif

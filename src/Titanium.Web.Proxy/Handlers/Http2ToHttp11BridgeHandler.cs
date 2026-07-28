@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.IO;
 using System.Linq;
@@ -820,4 +819,3 @@ public partial class ProxyServer
         }
     }
 }
-#endif

@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -44,4 +43,3 @@ public interface IOriginalDestinationResolver
         string? sniHostName,
         CancellationToken cancellationToken);
 }
-#endif

@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 #pragma warning disable CA1416 // QUIC APIs are only supported on specific platforms; IsSupported is checked at runtime
 using System;
 using System.Collections.Generic;
@@ -262,4 +261,3 @@ public partial class ProxyServer
         }
     }
 }
-#endif

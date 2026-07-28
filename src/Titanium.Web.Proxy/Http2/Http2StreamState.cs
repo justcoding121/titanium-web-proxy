@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.Threading;
 using System.Threading.Channels;
@@ -89,4 +88,3 @@ internal sealed class Http2StreamState
     /// </summary>
     internal Channel<ReadOnlyMemory<byte>>? InboundTunnelChannel { get; set; }
 }
-#endif

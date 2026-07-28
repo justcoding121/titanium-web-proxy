@@ -327,14 +327,12 @@ public partial class ProxyServer
 
         if (noCache) serverConnection = null;
 
-#if NET6_0_OR_GREATER
         // H1.1/H2 client → H3 origin bridge: when Auto mode resolves to H3.
         if (!args.HttpClient.Request.UpgradeToWebSocket && ShouldUseHttp3Origin(args))
         {
             await Http3.Http3OriginBridge.ForwardAsync(args, this, logger, cancellationToken);
             return new RetryResult(null, null, true);
         }
-#endif
 
         // a connection generator task with captured parameters via closure.
         var generator = () =>

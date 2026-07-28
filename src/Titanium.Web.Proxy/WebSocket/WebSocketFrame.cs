@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text;
 
 namespace Titanium.Web.Proxy;
@@ -38,10 +38,6 @@ public class WebSocketFrame
 
     public string GetText(Encoding encoding)
     {
-#if NET6_0_OR_GREATER
         return encoding.GetString(Data.Span);
-#else
-        return encoding.GetString(Data.ToArray());
-#endif
     }
 }

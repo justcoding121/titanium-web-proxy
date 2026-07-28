@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Reflection;
 using System.Runtime.Versioning;
@@ -13,9 +13,7 @@ namespace Titanium.Web.Proxy.Network.Certificate;
 ///     Certificate Maker - uses MakeCert
 ///     Calls COM objects using reflection
 /// </summary>
-#if !NETFRAMEWORK
 [SupportedOSPlatform("windows")]
-#endif
 internal class WinCertificateMaker : ICertificateMaker
 {
     private readonly string sProviderName = "Microsoft Enhanced Cryptographic Provider v1.0";

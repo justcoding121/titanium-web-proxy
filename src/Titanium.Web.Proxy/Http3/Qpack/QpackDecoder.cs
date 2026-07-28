@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -197,4 +196,3 @@ internal static class QpackDecoder
         return Encoding.Latin1.GetString(decoded.Span);
     }
 }
-#endif

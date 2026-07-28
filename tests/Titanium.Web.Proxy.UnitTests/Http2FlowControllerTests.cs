@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -238,4 +237,3 @@ public class Http2FlowControllerTests
         await flow.ReserveAsync(7, 100, CancellationToken.None);
     }
 }
-#endif

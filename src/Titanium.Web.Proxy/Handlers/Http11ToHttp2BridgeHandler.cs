@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.Net;
 using System.Net.Security;
@@ -536,4 +535,3 @@ public partial class ProxyServer
         return headerValue != null && headerValue.EqualsIgnoreCase(KnownHeaders.ConnectionClose.String);
     }
 }
-#endif

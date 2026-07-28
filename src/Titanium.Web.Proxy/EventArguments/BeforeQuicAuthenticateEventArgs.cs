@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.Net;
 using System.Threading;
@@ -123,4 +122,3 @@ public class BeforeQuicAuthenticateEventArgs : EventArgs
     /// </summary>
     public void Reject() => TaskCancellationSource.Cancel();
 }
-#endif

@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 namespace Titanium.Web.Proxy.Http3;
 
 /// <summary>
@@ -66,4 +65,3 @@ internal enum Http3ErrorCode : long
     /// <summary>An error on the QPACK decoder stream.</summary>
     QpackDecoderStreamError = 0x202
 }
-#endif

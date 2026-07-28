@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -132,9 +132,7 @@ public partial class ProxyServer : IDisposable
         BufferPool = new DefaultBufferPool();
         ProxyEndPoints = new List<ProxyEndPoint>();
         TcpConnectionFactory = new TcpConnectionFactory(this);
-#if NET6_0_OR_GREATER
         QuicConnectionPool = new Network.Quic.QuicConnectionPool(this);
-#endif
         if (RunTime.IsWindows && !RunTime.IsUwpOnWindows) SystemProxySettingsManager = new SystemProxyManager();
 
         CertificateManager = new CertificateManager(rootCertificateName, rootCertificateIssuerName,
@@ -146,13 +144,11 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     internal TcpConnectionFactory TcpConnectionFactory { get; }
 
-#if NET6_0_OR_GREATER
     /// <summary>
     ///     Pool of outbound QUIC connections to HTTP/3 origin servers.
     ///     Drained on proxy stop and disposed with the proxy.
     /// </summary>
     internal Network.Quic.QuicConnectionPool QuicConnectionPool { get; }
-#endif
 
     /// <summary>
     ///     Caches, per upstream host:port, whether the real origin negotiates HTTP/2 via TLS ALPN - so that
@@ -478,9 +474,7 @@ public partial class ProxyServer : IDisposable
 #pragma warning disable CS0618, SYSLIB0039 // SSL 3.0/TLS 1.0/1.1 remain opt-in defaults for legacy proxy compatibility.
     public SslProtocols SupportedSslProtocols { get; set; } =
         SslProtocols.Ssl3 | SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12
-#if NET6_0_OR_GREATER
         | SslProtocols.Tls13
-#endif
         ;
 #pragma warning restore CS0618, SYSLIB0039
 
@@ -755,7 +749,6 @@ public partial class ProxyServer : IDisposable
 
         ProxyEndPoints.Add(endPoint);
 
-#if NET6_0_OR_GREATER
         if (ProxyRunning && endPoint is TransparentQuicProxyEndPoint quicEndPoint)
         {
             quicListenerCts ??= new CancellationTokenSource();
@@ -765,9 +758,6 @@ public partial class ProxyServer : IDisposable
         {
             Listen(endPoint);
         }
-#else
-        if (ProxyRunning) Listen(endPoint);
-#endif
     }
 
     /// <summary>
@@ -782,14 +772,10 @@ public partial class ProxyServer : IDisposable
 
         ProxyEndPoints.Remove(endPoint);
 
-#if NET6_0_OR_GREATER
         if (ProxyRunning && endPoint is TransparentQuicProxyEndPoint quicEndPoint)
             QuitListenQuic(quicEndPoint);
         else if (ProxyRunning)
             QuitListen(endPoint);
-#else
-        if (ProxyRunning) QuitListen(endPoint);
-#endif
     }
 
     /// <summary>
@@ -1029,7 +1015,6 @@ public partial class ProxyServer : IDisposable
 
         CertificateManager.ClearIdleCertificates();
 
-#if NET6_0_OR_GREATER
         if (EnableHttp3 && ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>().Any())
         {
             quicListenerCts = new CancellationTokenSource();
@@ -1042,7 +1027,6 @@ public partial class ProxyServer : IDisposable
                 "EnableHttp3 is true but no TransparentQuicProxyEndPoint is registered. " +
                 "Add a TransparentQuicProxyEndPoint to ProxyEndPoints before calling Start().");
         }
-#endif
 
         foreach (var endPoint in ProxyEndPoints) Listen(endPoint);
     }
@@ -1078,9 +1062,7 @@ public partial class ProxyServer : IDisposable
             await Task.Delay(50).ConfigureAwait(false);
 
         TcpConnectionFactory.ClearPools();
-#if NET6_0_OR_GREATER
         await QuicConnectionPool.DrainAsync();
-#endif
     }
 
     private void StopCore(bool cancelSessions, bool clearPools)
@@ -1102,23 +1084,19 @@ public partial class ProxyServer : IDisposable
 
         foreach (var endPoint in ProxyEndPoints) QuitListen(endPoint);
 
-#if NET6_0_OR_GREATER
         // Cancel and wait for QUIC accept loops to exit.
         quicListenerCts?.Cancel();
         foreach (var quicEndPoint in ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>())
             QuitListenQuic(quicEndPoint);
         quicListenerCts?.Dispose();
         quicListenerCts = null;
-#endif
 
         // Keep ProxyEndPoints so Start() can re-bind the same listeners (issue #799).
 
         CertificateManager?.StopClearIdleCertificates();
 
         if (clearPools) TcpConnectionFactory.ClearPools();
-#if NET6_0_OR_GREATER
         if (clearPools) QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
-#endif
     }
 
     internal void RegisterSessionCancellation(CancellationTokenSource cancellationTokenSource)
@@ -1479,7 +1457,6 @@ public partial class ProxyServer : IDisposable
             // ignore
         }
 
-#if NET6_0_OR_GREATER
         try
         {
             QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
@@ -1488,7 +1465,6 @@ public partial class ProxyServer : IDisposable
         {
             // ignore
         }
-#endif
 
         CertificateManager?.Dispose();
         BufferPool?.Dispose();

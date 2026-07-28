@@ -1,9 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Net;
-#if NETFRAMEWORK
-using System.Runtime.CompilerServices;
-#endif
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
@@ -11,9 +8,7 @@ using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Helpers.WinHttp;
 
-#if !NETFRAMEWORK
 [SupportedOSPlatform("windows")]
-#endif
 internal sealed class WinHttpWebProxyFinder : IDisposable
 {
     private readonly WinHttpHandle? session;
@@ -167,9 +162,6 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
     private ProxyInfo GetProxyInfo()
     {
         var proxyConfig = new NativeMethods.WinHttp.WinhttpCurrentUserIeProxyConfig();
-#if NETFRAMEWORK
-        RuntimeHelpers.PrepareConstrainedRegions();
-#endif
         try
         {
             ProxyInfo result;
@@ -248,9 +240,6 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
 
         bool flag;
         var proxyInfo = new NativeMethods.WinHttp.WinhttpProxyInfo();
-#if NETFRAMEWORK
-        RuntimeHelpers.PrepareConstrainedRegions();
-#endif
         try
         {
             flag = NativeMethods.WinHttp.WinHttpGetProxyForUrl(currentSession, destination, ref autoProxyOptions,

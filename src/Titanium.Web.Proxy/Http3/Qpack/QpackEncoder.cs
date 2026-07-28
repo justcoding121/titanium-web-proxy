@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -125,4 +124,3 @@ internal static class QpackEncoder
         buf.Write(bytes, 0, bytes.Length);
     }
 }
-#endif

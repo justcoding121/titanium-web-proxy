@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.Collections.Generic;
 
@@ -93,4 +92,3 @@ internal sealed class Http3Settings
         return buf[..offset];
     }
 }
-#endif

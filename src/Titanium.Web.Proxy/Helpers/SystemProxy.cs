@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.Versioning;
@@ -47,9 +47,7 @@ internal class HttpSystemProxyValue
 /// </summary>
 [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType",
     Justification = "Reviewed.")]
-#if !NETFRAMEWORK
 [SupportedOSPlatform("windows")]
-#endif
 internal class SystemProxyManager
 {
     private const string RegKeyInternetSettings = "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";

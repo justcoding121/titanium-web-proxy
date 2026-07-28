@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 namespace Titanium.Web.Proxy.Http3;
 
 /// <summary>
@@ -45,4 +44,3 @@ internal static class Http3StreamType
     /// <summary>QPACK decoder stream.</summary>
     public const ulong QpackDecoder = 0x3;
 }
-#endif

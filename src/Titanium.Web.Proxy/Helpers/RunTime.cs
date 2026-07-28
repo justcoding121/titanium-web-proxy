@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -13,25 +13,6 @@ public static class RunTime
 {
     private static readonly Lazy<bool> isRunningOnMono = new(() => Type.GetType("Mono.Runtime") != null);
 
-#if NETFRAMEWORK
-    /// <summary>
-    ///     cache for Windows platform check
-    /// </summary>
-    /// <returns></returns>
-    private static bool IsRunningOnWindows => true;
-
-    /// <summary>
-    ///     cache for mono runtime check
-    /// </summary>
-    /// <returns></returns>
-    private static bool IsRunningOnLinux => false;
-
-    /// <summary>
-    ///     cache for mac runtime check
-    /// </summary>
-    /// <returns></returns>
-    private static bool IsRunningOnMac => false;
-#else
         /// <summary>
         /// cache for Windows platform check
         /// </summary>
@@ -49,7 +30,6 @@ public static class RunTime
         /// </summary>
         /// <returns></returns>
         private static bool IsRunningOnMac => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
-#endif
 
     /// <summary>
     ///     Is running on Mono?
@@ -58,14 +38,10 @@ public static class RunTime
 
     public static bool IsLinux => IsRunningOnLinux;
 
-#if !NETFRAMEWORK
     [SupportedOSPlatformGuard("windows")]
-#endif
     public static bool IsWindows => IsRunningOnWindows;
 
-#if !NETFRAMEWORK
     [SupportedOSPlatformGuard("windows")]
-#endif
     public static bool IsUwpOnWindows => IsWindows && UwpHelper.IsRunningAsUwp();
 
     public static bool IsMac => IsRunningOnMac;

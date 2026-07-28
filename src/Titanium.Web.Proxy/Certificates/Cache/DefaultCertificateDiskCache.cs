@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
@@ -164,13 +164,11 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
                 if (assemblyLocation == string.Empty)
                     assemblyLocation = Assembly.GetEntryAssembly()?.Location ?? string.Empty;
 
-#if NET6_0_OR_GREATER
                 // single-file app returns string.Empty location
                 if (assemblyLocation == string.Empty)
                 {
                     assemblyLocation = AppContext.BaseDirectory;
                 }
-#endif
 
                 var path = Path.GetDirectoryName(assemblyLocation);
 

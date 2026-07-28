@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 
 namespace Titanium.Web.Proxy.Http3;
@@ -30,4 +29,3 @@ internal sealed class Http3StreamException : Exception
 
     public Http3ErrorCode ErrorCode { get; }
 }
-#endif
