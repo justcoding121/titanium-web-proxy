@@ -496,7 +496,11 @@ public partial class ProxyServer
                             await Http2Helper.SendHttp2(clientStream, connection.Stream,
                                 () => new SessionEventArgs(this, endPoint, clientStream, connectArgs?.HttpClient.ConnectRequest, cancellationTokenSource)
                                 {
-                                    UserData = connectArgs?.UserData
+                                    UserData = connectArgs?.UserData,
+                                    // Seed the connection-level protocol policy so per-stream resolution
+                                    // correctly honours forced Http11/Http2 and never attempts H3 when
+                                    // the connection-level policy explicitly prohibits it.
+                                    UpstreamHttpProtocol = connectArgs?.UpstreamHttpProtocol
                                 },
                                 // Use the H3-aware delegate so per-stream Alt-Svc cache hits can upgrade
                                 // individual h2 streams to H3 mid-connection (warm path).
