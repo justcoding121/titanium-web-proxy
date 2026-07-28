@@ -101,6 +101,57 @@ public class Http3OriginCapabilityCacheTests
         cache.TryGet("example.com:443", out var altPort);
         Assert.AreEqual(int.MinValue, altPort);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TargetName storage and retrieval
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void TryGet_WithTargetName_ReturnsTargetName()
+    {
+        var cache = new Http3OriginCapabilityCache();
+        cache.Set("example.com:443", altPort: int.MinValue, targetName: "target.cdn.example.com");
+
+        var found = cache.TryGet("example.com:443", out _, out var targetName);
+
+        Assert.IsTrue(found);
+        Assert.AreEqual("target.cdn.example.com", targetName);
+    }
+
+    [TestMethod]
+    public void TryGet_WithoutTargetName_ReturnsNullTargetName()
+    {
+        var cache = new Http3OriginCapabilityCache();
+        cache.Set("example.com:443"); // no targetName
+
+        var found = cache.TryGet("example.com:443", out _, out var targetName);
+
+        Assert.IsTrue(found);
+        Assert.IsNull(targetName, "Alt-Svc entries have no TargetName; should return null.");
+    }
+
+    [TestMethod]
+    public void Set_WithTargetName_Overwrites_ClearsPreviousTargetName()
+    {
+        var cache = new Http3OriginCapabilityCache();
+        cache.Set("example.com:443", targetName: "old-target.example.com");
+        cache.Set("example.com:443"); // overwrite without targetName
+
+        cache.TryGet("example.com:443", out _, out var targetName);
+        Assert.IsNull(targetName, "Overwriting with no targetName should clear the previous value.");
+    }
+
+    [TestMethod]
+    public void TwoArgTryGet_Overload_StillWorks()
+    {
+        // Verify the convenience overload that discards targetName compiles and returns correct altPort.
+        var cache = new Http3OriginCapabilityCache();
+        cache.Set("example.com:443", altPort: 8443, targetName: "target.example.com");
+
+        var found = cache.TryGet("example.com:443", out var altPort);
+        Assert.IsTrue(found);
+        Assert.AreEqual(8443, altPort);
+    }
 }
 
 /// <summary>
