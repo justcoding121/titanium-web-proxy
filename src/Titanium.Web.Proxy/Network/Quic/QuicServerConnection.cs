@@ -35,6 +35,7 @@ internal sealed class QuicServerConnection : IAsyncDisposable
         LastAccess = DateTime.UtcNow;
         ProxyServer = proxyServer;
         ProxyServer.UpdateServerConnectionCount(true);
+        ProxyServer.UpdateHttp3ServerConnectionCount(true);
         HostName = hostName;
         Port = port;
         UpStreamProxy = upStreamProxy;
@@ -105,6 +106,7 @@ internal sealed class QuicServerConnection : IAsyncDisposable
         if (_disposed) return;
         _disposed = true;
         ProxyServer.UpdateServerConnectionCount(false);
+        ProxyServer.UpdateHttp3ServerConnectionCount(false);
         try
         {
             await Connection.CloseAsync((long)Http3.Http3ErrorCode.NoError).AsTask()

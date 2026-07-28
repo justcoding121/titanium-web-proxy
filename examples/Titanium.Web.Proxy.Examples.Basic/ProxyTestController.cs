@@ -53,10 +53,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.CertificateManager.TrustRootCertificate();
             //proxyServer.CertificateManager.TrustRootCertificateAsAdmin();
 
+            // Library diagnostics: Trace while debugging; Warning+ in Release so traffic lines stay readable.
 #if DEBUG
             proxyServer.Logging.MinimumLevel = LogLevel.Trace;
 #else
-            proxyServer.Logging.MinimumLevel = LogLevel.Information;
+            proxyServer.Logging.MinimumLevel = LogLevel.Warning;
 #endif
 
             proxyServer.TcpTimeWaitSeconds = 10;
@@ -146,6 +147,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
             }
 #pragma warning restore TWP001
 
+            // Print connection counts only when they change (not on every request).
+            proxyServer.ClientConnectionCountChanged += OnClientConnectionCountChanged;
+            proxyServer.ServerConnectionCountChanged += OnServerConnectionCountChanged;
+            proxyServer.Http3ClientConnectionCountChanged += OnHttp3ClientConnectionCountChanged;
+            proxyServer.Http3ServerConnectionCountChanged += OnHttp3ServerConnectionCountChanged;
+
             proxyServer.Start();
 
             // Transparent endpoint is useful for reverse proxy (client is not aware of the existence of proxy)
@@ -197,6 +204,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public void Stop()
         {
+            WriteToConsole("Stopping proxy...");
+
             explicitEndPoint.BeforeTunnelConnectRequest -= OnBeforeTunnelConnectRequest;
             explicitEndPoint.BeforeTunnelConnectResponse -= OnBeforeTunnelConnectResponse;
 
@@ -205,8 +214,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 quicEndPoint.BeforeQuicAuthenticate -= OnBeforeQuicAuthenticate;
 #pragma warning restore TWP001
 
+            proxyServer.ClientConnectionCountChanged -= OnClientConnectionCountChanged;
+            proxyServer.ServerConnectionCountChanged -= OnServerConnectionCountChanged;
+            proxyServer.Http3ClientConnectionCountChanged -= OnHttp3ClientConnectionCountChanged;
+            proxyServer.Http3ServerConnectionCountChanged -= OnHttp3ServerConnectionCountChanged;
+
             proxyServer.BeforeRequest -= OnRequest;
             proxyServer.BeforeResponse -= OnResponse;
+            proxyServer.AfterResponse -= OnAfterResponse;
             proxyServer.ServerCertificateValidationCallback -= OnCertificateValidation;
             proxyServer.ClientCertificateSelectionCallback -= OnCertificateSelection;
 
@@ -214,6 +229,26 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             // remove the generated certificates
             //proxyServer.CertificateManager.RemoveTrustedRootCertificates();
+        }
+
+        private void OnClientConnectionCountChanged(object sender, EventArgs e)
+        {
+            WriteToConsole("Active Client Connections: " + proxyServer.ClientConnectionCount);
+        }
+
+        private void OnServerConnectionCountChanged(object sender, EventArgs e)
+        {
+            WriteToConsole("Active Server Connections: " + proxyServer.ServerConnectionCount);
+        }
+
+        private void OnHttp3ClientConnectionCountChanged(object sender, EventArgs e)
+        {
+            WriteToConsole("Active HTTP/3 Client Connections: " + proxyServer.Http3ClientConnectionCount);
+        }
+
+        private void OnHttp3ServerConnectionCountChanged(object sender, EventArgs e)
+        {
+            WriteToConsole("Active HTTP/3 Server Connections: " + proxyServer.Http3ServerConnectionCount);
         }
 
         private async Task<IExternalProxy> OnGetCustomUpStreamProxyFunc(SessionEventArgsBase arg)
@@ -314,7 +349,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
         // intercept & cancel redirect or update requests
         private async Task OnRequest(object sender, SessionEventArgs e)
         {
-            e.GetState().PipelineInfo.AppendLine(nameof(OnRequest) + ":" + e.HttpClient.Request.RequestUri);
+            var state = e.GetState();
+            state.RequestStartedUtc = DateTime.UtcNow;
+            state.PipelineInfo.AppendLine(nameof(OnRequest) + ":" + e.HttpClient.Request.RequestUri);
 
             var clientLocalIp = e.ClientLocalEndPoint.Address;
             if (!clientLocalIp.Equals(IPAddress.Loopback) && !clientLocalIp.Equals(IPAddress.IPv6Loopback))
@@ -322,9 +359,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             if (e.HttpClient.Request.Url.Contains("yahoo.com"))
                 e.CustomUpStreamProxy = new ExternalProxy("localhost", 8888);
-
-            WriteToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
-            WriteToConsole(e.HttpClient.Request.Url);
 
             // store it in the UserData property
             // It can be a simple integer, Guid, or any type
@@ -381,13 +415,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 e.DataReceived += WebSocket_DataReceived;
             }
 
-            WriteToConsole("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
-
-            var ext = Path.GetExtension(e.HttpClient.Request.RequestUri.AbsolutePath);
-
             // access user data set in request to do something with it
             //var userData = e.HttpClient.UserData as CustomUserData;
 
+            //var ext = Path.GetExtension(e.HttpClient.Request.RequestUri.AbsolutePath);
             //if (ext == ".gif" || ext == ".png" || ext == ".jpg")
             //{ 
             //    byte[] btBody = Encoding.UTF8.GetBytes("<!DOCTYPE html>" +
@@ -435,7 +466,31 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task OnAfterResponse(object sender, SessionEventArgs e)
         {
-            WriteToConsole($"Pipelineinfo: {e.GetState().PipelineInfo}", ConsoleColor.Yellow);
+            var state = e.GetState();
+            var request = e.HttpClient.Request;
+            var response = e.HttpClient.Response;
+            var statusCode = response?.StatusCode ?? 0;
+            var elapsedMs = state.RequestStartedUtc == default
+                ? 0
+                : (long)(DateTime.UtcNow - state.RequestStartedUtc).TotalMilliseconds;
+
+            // One line per completed session: method, URL, status, protocol pair, elapsed.
+            var line =
+                $"{request.Method} {request.Url} → {statusCode} | client↔proxy: {FormatHttpProtocol(request.HttpVersion)} | proxy↔server: {FormatHttpProtocol(response?.HttpVersion)} | {elapsedMs}ms";
+            WriteToConsole(line, ColorForStatusCode(statusCode));
+
+#if DEBUG
+            WriteToConsole($"Pipelineinfo: {state.PipelineInfo}", ConsoleColor.Yellow);
+#endif
+        }
+
+        private static ConsoleColor ColorForStatusCode(int statusCode)
+        {
+            if (statusCode >= 500 || statusCode == 0)
+                return ConsoleColor.Red;
+            if (statusCode >= 400)
+                return ConsoleColor.Yellow;
+            return ConsoleColor.Cyan;
         }
 
         /// <summary>
@@ -465,6 +520,21 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // set e.clientCertificate to override
 
             return Task.CompletedTask;
+        }
+
+        /// <summary>
+        ///     Formats an HTTP version for brief console logs (e.g. HTTP/1.1, HTTP/2, HTTP/3).
+        /// </summary>
+        private static string FormatHttpProtocol(Version version)
+        {
+            if (version == null || version.Major == 0)
+                return "unknown";
+
+            // HTTP/2 and HTTP/3 are conventionally written without a minor component.
+            if (version.Major >= 2)
+                return "HTTP/" + version.Major;
+
+            return "HTTP/" + version.Major + "." + version.Minor;
         }
 
         private void WriteToConsole(string message, ConsoleColor? consoleColor = null)

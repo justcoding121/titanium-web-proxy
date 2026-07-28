@@ -119,6 +119,30 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         public event PropertyChangedEventHandler PropertyChanged;
 
+        /// <summary>
+        ///     Brief client↔proxy | proxy↔server label (e.g. "HTTP/2 ↔ HTTP/3").
+        /// </summary>
+        private static string FormatClientServerProtocol(Version clientVersion, Version serverVersion)
+        {
+            var client = FormatHttpProtocol(clientVersion);
+            var server = FormatHttpProtocol(serverVersion);
+            if (server == "unknown")
+                return client;
+
+            return client + " ↔ " + server;
+        }
+
+        private static string FormatHttpProtocol(Version version)
+        {
+            if (version == null || version.Major == 0)
+                return "unknown";
+
+            if (version.Major >= 2)
+                return "HTTP/" + version.Major;
+
+            return "HTTP/" + version.Major + "." + version.Minor;
+        }
+
         protected bool SetField<T>(ref T field, T value, [CallerMemberName] string propertyName = null)
         {
             if (!Equals(field, value))
@@ -143,7 +167,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             var response = HttpClient.Response;
             var statusCode = response?.StatusCode ?? 0;
             StatusCode = statusCode == 0 ? "-" : statusCode.ToString();
-            Protocol = request.HttpVersion.Major == 2 ? "http2" : request.RequestUri.Scheme;
+            // e.g. "HTTP/2 ↔ HTTP/3" (client↔proxy | proxy↔server).
+            Protocol = FormatClientServerProtocol(request.HttpVersion, response?.HttpVersion);
             ClientConnectionId = args.ClientConnectionId;
             ServerConnectionId = args.ServerConnectionId;
 

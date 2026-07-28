@@ -58,5 +58,15 @@ internal sealed class ProxySettings
 
     public bool DecryptSsl { get; set; }
 
-    public bool LogErrors { get; set; } = true;
+    /// <summary>
+    ///     Master switch for proxy-library diagnostic logging (bridged into the host <c>ILoggerFactory</c>).
+    ///     When false, the proxy uses a no-op logger regardless of host log levels.
+    /// </summary>
+    public bool EnableProxyLogging { get; set; } = true;
+
+    /// <summary>
+    ///     When true, each completed response is logged at Information (files only — Event Log is Warning+).
+    ///     Disable under high traffic if you only need errors and lifecycle messages.
+    /// </summary>
+    public bool LogRequests { get; set; } = true;
 }

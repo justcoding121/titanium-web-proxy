@@ -48,6 +48,11 @@ public partial class ProxyServer : IDisposable
     private int clientConnectionCount;
 
     /// <summary>
+    ///     Backing field for <see cref="Http3ClientConnectionCount" />.
+    /// </summary>
+    private int http3ClientConnectionCount;
+
+    /// <summary>
     ///     Per-session cancellation tokens for in-flight client handlers. Cancelled on Stop/StopAsync
     ///     so active relays do not outlive the listener (issues #919 / #799 / #809).
     /// </summary>
@@ -57,6 +62,11 @@ public partial class ProxyServer : IDisposable
     ///     Backing field for exposed public property.
     /// </summary>
     private int serverConnectionCount;
+
+    /// <summary>
+    ///     Backing field for <see cref="Http3ServerConnectionCount" />.
+    /// </summary>
+    private int http3ServerConnectionCount;
 
     /// <summary>
     ///     Upstream proxy manager.
@@ -524,14 +534,27 @@ public partial class ProxyServer : IDisposable
     public bool ReuseSocket { get; set; } = true;
 
     /// <summary>
-    ///     Total number of active client connections.
+    ///     Total number of active TCP client connections.
+    ///     Does not include inbound HTTP/3 (QUIC) clients; see <see cref="Http3ClientConnectionCount" />.
     /// </summary>
     public int ClientConnectionCount => clientConnectionCount;
 
     /// <summary>
-    ///     Total number of active server connections.
+    ///     Total number of active server connections (TCP plus upstream QUIC).
+    ///     For HTTP/3-only upstreams see <see cref="Http3ServerConnectionCount" />.
     /// </summary>
     public int ServerConnectionCount => serverConnectionCount;
+
+    /// <summary>
+    ///     Total number of active inbound HTTP/3 (QUIC) client connections.
+    /// </summary>
+    public int Http3ClientConnectionCount => http3ClientConnectionCount;
+
+    /// <summary>
+    ///     Total number of active upstream HTTP/3 (QUIC) server connections.
+    ///     These are also included in <see cref="ServerConnectionCount" />.
+    /// </summary>
+    public int Http3ServerConnectionCount => http3ServerConnectionCount;
 
     /// <summary>
     ///     Realm used during Proxy Basic Authentication.
@@ -747,6 +770,16 @@ public partial class ProxyServer : IDisposable
     ///     Event occurs when server connection count changed.
     /// </summary>
     public event EventHandler? ServerConnectionCountChanged;
+
+    /// <summary>
+    ///     Event occurs when inbound HTTP/3 client connection count changed.
+    /// </summary>
+    public event EventHandler? Http3ClientConnectionCountChanged;
+
+    /// <summary>
+    ///     Event occurs when upstream HTTP/3 server connection count changed.
+    /// </summary>
+    public event EventHandler? Http3ServerConnectionCountChanged;
 
     /// <summary>
     ///     Event to override the default verification logic of remote SSL certificate received during authentication.
@@ -1466,6 +1499,48 @@ public partial class ProxyServer : IDisposable
         try
         {
             ServerConnectionCountChanged?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+        }
+    }
+
+    /// <summary>
+    ///     Update inbound HTTP/3 client connection count.
+    /// </summary>
+    /// <param name="increment">Should we increment/decrement?</param>
+    internal void UpdateHttp3ClientConnectionCount(bool increment)
+    {
+        if (increment)
+            Interlocked.Increment(ref http3ClientConnectionCount);
+        else
+            Interlocked.Decrement(ref http3ClientConnectionCount);
+
+        try
+        {
+            Http3ClientConnectionCountChanged?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+        }
+    }
+
+    /// <summary>
+    ///     Update upstream HTTP/3 server connection count.
+    /// </summary>
+    /// <param name="increment">Should we increment/decrement?</param>
+    internal void UpdateHttp3ServerConnectionCount(bool increment)
+    {
+        if (increment)
+            Interlocked.Increment(ref http3ServerConnectionCount);
+        else
+            Interlocked.Decrement(ref http3ServerConnectionCount);
+
+        try
+        {
+            Http3ServerConnectionCountChanged?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {

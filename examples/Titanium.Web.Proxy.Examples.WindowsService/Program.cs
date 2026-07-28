@@ -1,22 +1,57 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using System.IO;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Serilog;
+using Serilog.Events;
 using Titanium.Web.Proxy.Examples.WindowsService;
 
-var builder = Host.CreateApplicationBuilder(args);
+// File-first logging: rolling files get Information+; Event Log is Warning+ so request volume
+// does not flood Event Viewer. Console is useful when run interactively (`dotnet run`).
+var logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
+Directory.CreateDirectory(logDirectory);
 
-// Registers this process as a Windows Service host when launched by the Service Control Manager
-// (falls back to a normal console app when run interactively, e.g. `dotnet run`).
-builder.Services.AddWindowsService(options => options.ServiceName = "ProxyService");
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.File(
+        path: Path.Combine(logDirectory, "proxy-service.log"),
+        rollingInterval: RollingInterval.Day,
+        fileSizeLimitBytes: 10 * 1024 * 1024,
+        retainedFileCountLimit: 5,
+        shared: true)
+    .WriteTo.EventLog(
+        source: "ProxyService",
+        logName: "Application",
+        manageEventSource: false,
+        restrictedToMinimumLevel: LogEventLevel.Warning)
+    .CreateLogger();
 
-builder.Logging.AddEventLog(options =>
+try
 {
-    options.SourceName = "ProxyService";
-    options.LogName = "Application";
-});
+    var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.Configure<ProxySettings>(builder.Configuration.GetSection("ProxySettings"));
-builder.Services.AddHostedService<ProxyWorker>();
+    // Registers this process as a Windows Service host when launched by the Service Control Manager
+    // (falls back to a normal console app when run interactively, e.g. `dotnet run`).
+    builder.Services.AddWindowsService(options => options.ServiceName = "ProxyService");
 
-var host = builder.Build();
-host.Run();
+    // Serilog owns all sinks (file + Event Log Warning+ + console); drop default MEL providers.
+    builder.Logging.ClearProviders();
+    builder.Services.AddSerilog();
+    builder.Services.Configure<ProxySettings>(builder.Configuration.GetSection("ProxySettings"));
+    builder.Services.AddHostedService<ProxyWorker>();
+
+    var host = builder.Build();
+    host.Run();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Proxy service terminated unexpectedly");
+    throw;
+}
+finally
+{
+    Log.CloseAndFlush();
+}
