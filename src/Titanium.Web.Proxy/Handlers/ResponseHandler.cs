@@ -310,6 +310,9 @@ public partial class ProxyServer
     {
         if (AfterResponse != null) await AfterResponse.InvokeAsync(this, args, logger);
 
+        // Process Alt-Svc header to cache HTTP/3 capability for future requests.
+        TryUpdateHttp3CapabilityFromResponse(args);
+
         // Marked after the user event (rather than before) so that TotalDuration/ResponseDeliveryDuration
         // include any time spent in an AfterResponse handler, matching what a caller actually experienced.
         args.Timing?.MarkComplete();

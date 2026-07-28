@@ -163,6 +163,12 @@ public partial class ProxyServer : IDisposable
         new(TimeSpan.FromMinutes(5));
 
     /// <summary>
+    ///     Caches, per upstream host:port, whether the real origin supports HTTP/3 (QUIC), as discovered via
+    ///     <c>Alt-Svc</c> response headers or HTTPS/SVCB DNS records. See <see cref="Http3.Http3OriginCapabilityCache" />.
+    /// </summary>
+    internal Http3.Http3OriginCapabilityCache Http3OriginCapabilityCache { get; } = new();
+
+    /// <summary>
     ///     Manage system proxy settings.
     /// </summary>
     private SystemProxyManager? SystemProxySettingsManager { get; }
