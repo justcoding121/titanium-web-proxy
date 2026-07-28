@@ -202,7 +202,7 @@ internal static class Http3OriginBridge
             var bodyStream = new System.IO.MemoryStream();
             try
             {
-                if (server.OnResponseBodyWrite == null)
+                if (!server.HasOnResponseBodyWriteSubscribers)
                 {
                     // Fast path: no subscriber.
                     while (true)

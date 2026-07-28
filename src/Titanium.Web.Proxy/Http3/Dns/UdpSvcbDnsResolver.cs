@@ -83,9 +83,9 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
 
     private async Task<SvcbResult?> QueryAsync(string host, int port, CancellationToken ct)
     {
-        // Build the query.
-        Span<byte> queryId = stackalloc byte[2];
-        RandomNumberGenerator.Fill(queryId);
+        // Use a heap-allocated array (not stackalloc) so it can survive the await boundaries.
+        var queryId = new byte[2];
+        RandomNumberGenerator.Fill(queryId.AsSpan());
 
         var queryPacket = BuildDnsQuery(queryId, host, DnsTypeHttps);
 
@@ -149,8 +149,12 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // DNS response parser
+    // DNS response parser (internal for unit-testing)
     // ─────────────────────────────────────────────────────────────────────────
+
+    internal static SvcbResult? ParseDnsResponseInternal(
+        ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, string host, int queriedPort) =>
+        ParseDnsResponse(response, expectedId, host, queriedPort);
 
     private static SvcbResult? ParseDnsResponse(
         ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, string host, int queriedPort)
