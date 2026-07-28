@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // Start proxy controller
             controller.StartProxy();
 
-            Console.WriteLine("Traffic is logged as one line per completed request.");
+            Console.WriteLine("Traffic tape: one compact line per completed request (errors are one-liners).");
             Console.WriteLine("Hit any key to exit..");
             Console.WriteLine();
 
