@@ -97,6 +97,9 @@ internal static class TestCertificateAuthority
             throw new InvalidOperationException("Could not create the integration test root certificate.");
         }
 
-        return proxy.CertificateManager.RootCertificate;
+        // Clone via PKCS12 so the returned instance is independent of CertificateManager's
+        // lifetime (the temporary proxy is disposed at the end of this method).
+        var bytes = proxy.CertificateManager.RootCertificate.Export(X509ContentType.Pkcs12);
+        return X509CertificateLoader.LoadPkcs12(bytes, null, X509KeyStorageFlags.Exportable);
     }
 }

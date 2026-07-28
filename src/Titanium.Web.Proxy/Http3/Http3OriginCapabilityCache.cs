@@ -64,5 +64,18 @@ internal sealed class Http3OriginCapabilityCache
     /// <summary>Removes a stale or negative entry so the next request re-probes.</summary>
     internal void Evict(string hostAndPort) => _cache.TryRemove(hostAndPort, out _);
 
+    /// <summary>
+    ///     Removes entries whose TTL has elapsed. Called periodically from the connection-pool cleanup
+    ///     loop to prevent unbounded growth of the dictionary in long-running proxies that visit many
+    ///     unique origins.
+    /// </summary>
+    internal void TrimExpired()
+    {
+        var now = DateTime.UtcNow;
+        foreach (var key in _cache.Keys)
+            if (_cache.TryGetValue(key, out var entry) && entry.ExpiresAtUtc <= now)
+                _cache.TryRemove(key, out _);
+    }
+
     private readonly record struct Entry(int AltPort, DateTime ExpiresAtUtc);
 }

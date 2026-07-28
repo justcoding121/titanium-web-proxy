@@ -53,10 +53,19 @@ internal class TcpConnectionFactory : IDisposable
 
     private volatile bool runCleanUpTask = true;
 
+    /// <summary>
+    ///     Cancels the <see cref="Task.Delay" /> inside <see cref="ClearOutdatedConnections" /> so the
+    ///     background cleanup task can exit promptly when the factory is disposed, rather than sleeping
+    ///     for the full 3-second interval before checking <see cref="runCleanUpTask" />.
+    /// </summary>
+    private readonly CancellationTokenSource _cleanupCts = new();
+
     internal TcpConnectionFactory(ProxyServer server)
     {
         Server = server ?? throw new ArgumentNullException(nameof(server));
-        Task.Run(async () => await ClearOutdatedConnections());
+        // Run on the thread pool so the first cleanup iteration (which may complete
+        // WaitAsync synchronously) cannot block ProxyServer's constructor.
+        _ = Task.Run(ClearOutdatedConnections);
     }
 
     internal ProxyServer Server { get; }
@@ -520,6 +529,10 @@ internal class TcpConnectionFactory : IDisposable
         var timing = proxyServer.EnableRequestTimingCapture ? new UpstreamConnectionTiming(DateTime.UtcNow) : null;
         IPEndPoint? boundEndPoint = null;
 
+        // Capture before the retry label: nullable flow analysis treats sessionArgs as maybe-null
+        // across goto retry combined with later sessionArgs?. / sessionArgs != null checks.
+        var sessionHttpClient = sessionArgs.HttpClient;
+
         retry:
         try
         {
@@ -552,8 +565,8 @@ internal class TcpConnectionFactory : IDisposable
                     var ipAddress = ipAddresses[i];
                     // Select local bind after destination resolution so IPv4/IPv6 adapters can coexist (#951).
                     var resolvedBind = UpStreamEndPointSelector.Resolve(ipAddress.AddressFamily,
-                        sessionArgs.HttpClient.UpStreamEndPoint, sessionArgs.HttpClient.UpStreamEndPointIPv4,
-                        sessionArgs.HttpClient.UpStreamEndPointIPv6,
+                        sessionHttpClient.UpStreamEndPoint, sessionHttpClient.UpStreamEndPointIPv4,
+                        sessionHttpClient.UpStreamEndPointIPv6,
                         proxyServer.UpStreamEndPoint, proxyServer.UpStreamEndPointIPv4,
                         proxyServer.UpStreamEndPointIPv6);
                     // Prefer selector result; fall back to the legacy single endpoint only when families match.
@@ -964,7 +977,7 @@ internal class TcpConnectionFactory : IDisposable
     private static async Task<string?> DrainUpstreamProxyResponseBody(HttpServerStream stream,
         HeaderCollection headers, CancellationToken cancellationToken)
     {
-        var preview = new MemoryStream();
+        using var preview = new MemoryStream();
 
         var transferEncoding = headers.GetHeaderValueOrNull(KnownHeaders.TransferEncoding);
         if (transferEncoding != null && transferEncoding.ContainsIgnoreCase(KnownHeaders.TransferEncodingChunked.String))
@@ -1118,6 +1131,7 @@ internal class TcpConnectionFactory : IDisposable
     private async Task ClearOutdatedConnections()
     {
         while (runCleanUpTask)
+        {
             try
             {
                 var cutOff = DateTime.UtcNow.AddSeconds(-Server.ConnectionTimeOutSeconds);
@@ -1151,8 +1165,9 @@ internal class TcpConnectionFactory : IDisposable
                     await @lock.WaitAsync();
 
                     // clear empty queues
-                    var emptyKeys = cache.ToArray().Where(x => x.Value.Count == 0).Select(x => x.Key);
-                    foreach (var key in emptyKeys) cache.TryRemove(key, out _);
+                    foreach (var pair in cache)
+                        if (pair.Value.Count == 0)
+                            cache.TryRemove(pair.Key, out _);
                 }
                 finally
                 {
@@ -1162,17 +1177,25 @@ internal class TcpConnectionFactory : IDisposable
                 while (!disposalBag.IsEmpty)
                     if (disposalBag.TryTake(out var connection))
                         connection?.Dispose();
+
+                Server.TrimOriginCapabilityCaches();
             }
             catch (Exception e)
             {
                 ProxyDiagnostics.ReportException(Server.Logger, "An error occurred when disposing server connections",
                     e);
             }
-            finally
+
+            // cleanup every 3 seconds by default; exit promptly when disposed.
+            try
             {
-                // cleanup every 3 seconds by default
-                await Task.Delay(1000 * 3);
+                await Task.Delay(1000 * 3, _cleanupCts.Token);
             }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
     }
 
     protected virtual void Dispose(bool disposing)
@@ -1180,6 +1203,7 @@ internal class TcpConnectionFactory : IDisposable
         if (disposed) return;
 
         runCleanUpTask = false;
+        _cleanupCts.Cancel();
 
         if (disposing)
         {
@@ -1202,6 +1226,12 @@ internal class TcpConnectionFactory : IDisposable
             while (!disposalBag.IsEmpty)
                 if (disposalBag.TryTake(out var connection))
                     connection?.Dispose();
+
+            // Do not dispose _cleanupCts or @lock: the cleanup task may still be accessing
+            // _cleanupCts.Token (throwing ObjectDisposedException on the Token property even after
+            // Cancel()) and @lock.WaitAsync() (throwing ObjectDisposedException if disposed while
+            // the task is entering the wait). Neither holds unmanaged resources that need explicit
+            // release — the GC finalizer path is sufficient.
         }
 
         disposed = true;

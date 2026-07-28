@@ -155,7 +155,7 @@ public partial class ProxyServer : IDisposable
     ///     repeat CONNECT tunnels to the same host (very common with real browsers) do not each pay for their
     ///     own redundant probe TLS handshake. See <see cref="Http2OriginCapabilityCache" />.
     /// </summary>
-    private Http2OriginCapabilityCache Http2OriginCapabilityCache { get; } =
+    internal Http2OriginCapabilityCache Http2OriginCapabilityCache { get; } =
         new(TimeSpan.FromMinutes(5));
 
     /// <summary>
@@ -163,6 +163,16 @@ public partial class ProxyServer : IDisposable
     ///     <c>Alt-Svc</c> response headers or HTTPS/SVCB DNS records. See <see cref="Http3.Http3OriginCapabilityCache" />.
     /// </summary>
     internal Http3.Http3OriginCapabilityCache Http3OriginCapabilityCache { get; } = new();
+
+    /// <summary>
+    ///     Removes expired entries from both origin-capability caches. Called from the connection-pool
+    ///     cleanup loop every few seconds so stale origin records do not accumulate indefinitely.
+    /// </summary>
+    internal void TrimOriginCapabilityCaches()
+    {
+        Http2OriginCapabilityCache.TrimExpired();
+        Http3OriginCapabilityCache.TrimExpired();
+    }
 
     /// <summary>
     ///     Manage system proxy settings.
@@ -1103,6 +1113,11 @@ public partial class ProxyServer : IDisposable
 
         if (clearPools) TcpConnectionFactory.ClearPools();
         if (clearPools) QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
+
+        // Release the WinHTTP session handle acquired during Start() (Windows-only type).
+        if (OperatingSystem.IsWindows())
+            systemProxyResolver?.Dispose();
+        systemProxyResolver = null;
     }
 
     internal void RegisterSessionCancellation(CancellationTokenSource cancellationTokenSource)

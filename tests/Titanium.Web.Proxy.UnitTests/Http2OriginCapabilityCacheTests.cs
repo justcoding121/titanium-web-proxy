@@ -83,4 +83,32 @@ public class Http2OriginCapabilityCacheTests
         Assert.IsFalse(found, "Entry should have expired after the TTL elapsed.");
         Assert.IsFalse(supported);
     }
+
+    [TestMethod]
+    public void TrimExpired_RemovesExpiredEntries()
+    {
+        var cache = new Http2OriginCapabilityCache(TimeSpan.FromMilliseconds(50));
+        cache.Set("a.example.com:443", true);
+        cache.Set("b.example.com:443", false);
+
+        Thread.Sleep(200);
+
+        cache.TrimExpired();
+
+        // Expired entries must no longer be returned.
+        Assert.IsFalse(cache.TryGet("a.example.com:443", out _));
+        Assert.IsFalse(cache.TryGet("b.example.com:443", out _));
+    }
+
+    [TestMethod]
+    public void TrimExpired_PreservesActiveEntries()
+    {
+        var cache = new Http2OriginCapabilityCache(TimeSpan.FromSeconds(60));
+        cache.Set("live.example.com:443", true);
+
+        cache.TrimExpired();
+
+        Assert.IsTrue(cache.TryGet("live.example.com:443", out var supported));
+        Assert.IsTrue(supported);
+    }
 }

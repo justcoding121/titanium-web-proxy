@@ -306,6 +306,7 @@ internal sealed class Http3Connection
                 }
             }
             state.Cancellation.Cancel();
+            state.Cancellation.Dispose();
         }
         _activeStreams.Clear();
     }

@@ -62,6 +62,8 @@ internal static class Http3RequestStream
         {
             SessionEventArgs? sessionArgs = null;
             Http3StreamState? streamState = null;
+            CancellationTokenSource? cts = null;
+            CancellationTokenSource? linkedCts = null;
 
             try
             {
@@ -97,8 +99,8 @@ internal static class Http3RequestStream
                     request.Headers.AddHeader(new HttpHeader(name, value));
 
                 // 4. Create SessionEventArgs using a null-backed HttpClientStream.
-                var cts = new CancellationTokenSource();
-                var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
+                cts = new CancellationTokenSource();
+                linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
 
                 var nullHttpClientStream = new HttpClientStream(
                     server, clientConnection, System.IO.Stream.Null,
@@ -174,6 +176,8 @@ internal static class Http3RequestStream
             }
             finally
             {
+                linkedCts?.Dispose();
+                cts?.Dispose();
                 if (streamState != null &&
                     Interlocked.CompareExchange(ref streamState.FinalizedFlag, 1, 0) == 0)
                 {
@@ -204,28 +208,35 @@ internal static class Http3RequestStream
         CancellationToken ct)
     {
         var body = new System.IO.MemoryStream();
-        while (true)
+        try
         {
-            var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0 /* unlimited in body reading */, ct);
-            if (frame is null) break; // END_STREAM
-
-            switch (frame.Type)
+            while (true)
             {
-                case Http3FrameType.Data:
-                    await body.WriteAsync(frame.Payload, ct);
-                    break;
-                case Http3FrameType.Headers:
-                    // Trailing headers — parse and add to request trailing headers.
-                    var trailers = QpackDecoder.Decode(frame.Payload.Span);
-                    foreach (var (name, value) in trailers)
-                        request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
-                    break;
-                default:
-                    // Unknown/reserved frame types MUST be ignored per RFC 9114 §9.
-                    break;
+                var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0 /* unlimited in body reading */, ct);
+                if (frame is null) break; // END_STREAM
+
+                switch (frame.Type)
+                {
+                    case Http3FrameType.Data:
+                        await body.WriteAsync(frame.Payload, ct);
+                        break;
+                    case Http3FrameType.Headers:
+                        // Trailing headers — parse and add to request trailing headers.
+                        var trailers = QpackDecoder.Decode(frame.Payload.Span);
+                        foreach (var (name, value) in trailers)
+                            request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
+                        break;
+                    default:
+                        // Unknown/reserved frame types MUST be ignored per RFC 9114 §9.
+                        break;
+                }
             }
+            return body.ToArray();
         }
-        return body.ToArray();
+        finally
+        {
+            body.Dispose();
+        }
     }
 
     /// <summary>
