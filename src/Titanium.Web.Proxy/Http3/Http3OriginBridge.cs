@@ -263,16 +263,17 @@ internal static class Http3OriginBridge
             response.IsBodyRead = true;
             sessionArgs.HttpClient.Response = response;
 
-            // Cache Alt-Svc from H3 response for future requests.
+            // Cache Alt-Svc from H3 response for future requests (keyed by origin identity).
             var altSvc = response.Headers.GetHeaderValueOrNull("Alt-Svc");
             if (!string.IsNullOrEmpty(altSvc))
             {
                 var entries = AltSvcParser.Parse(altSvc);
                 if (entries.Count > 0 && entries[0].MaxAgeSeconds > 0)
                 {
+                    var originPort = request.RequestUri?.Port ?? port;
                     var ttl = TimeSpan.FromSeconds(entries[0].MaxAgeSeconds);
-                    server.Http3OriginCapabilityCache.Set($"{sniHost}:{port}",
-                        entries[0].Port == port ? int.MinValue : entries[0].Port, ttl);
+                    server.Http3OriginCapabilityCache.Set($"{sniHost}:{originPort}",
+                        entries[0].Port == originPort ? int.MinValue : entries[0].Port, ttl);
                 }
             }
         }
@@ -290,7 +291,15 @@ internal static class Http3OriginBridge
 
             if (!isForcedH3)
             {
-                await ForwardOverTcpAsync(sessionArgs, server, default, cancellationToken, onInterimResponse);
+                try
+                {
+                    await ForwardOverTcpAsync(sessionArgs, server, default, cancellationToken, onInterimResponse);
+                }
+                catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
+                {
+                    sessionArgs.HttpClient.Response = MakeBadGatewayResponse(tcpEx.Message);
+                }
+
                 return;
             }
 
@@ -310,10 +319,23 @@ internal static class Http3OriginBridge
             if (!isForcedH3)
             {
                 // Auto policy: the cached H3 capability is stale or unusable — evict and fall back to TCP.
-                var hostAndPort = $"{sniHost}:{port}";
+                // Evict by origin identity (request URI port), not the QUIC connect port, which may
+                // differ when Alt-Svc / SVCB advertised an alternative port.
+                var originPort = request.RequestUri?.Port ?? port;
+                var hostAndPort = $"{sniHost}:{originPort}";
                 server.Http3OriginCapabilityCache.Evict(hostAndPort);
                 logger.LogDebug("Evicted stale H3 capability for {HostAndPort}; falling back to TCP.", hostAndPort);
-                await ForwardOverTcpAsync(sessionArgs, server, default, cancellationToken, onInterimResponse);
+                try
+                {
+                    await ForwardOverTcpAsync(sessionArgs, server, default, cancellationToken, onInterimResponse);
+                }
+                catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
+                {
+                    logger.LogDebug(tcpEx, "TCP fallback after H3 failure also failed for {Host}:{Port}",
+                        sniHost, originPort);
+                    sessionArgs.HttpClient.Response = MakeBadGatewayResponse(tcpEx.Message);
+                }
+
                 return;
             }
 

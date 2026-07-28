@@ -654,17 +654,21 @@ namespace Titanium.Web.Proxy.Http2
                         tcs.SetResult(true);
 
                         // Apply the same outgoing-request normalization and Via policy as HTTP/1.x.
-                        // The h2-to-h1 bridge uses a NullOriginStream and applies Via itself before
-                        // launching its independent origin round trip, so do not process it twice here.
-                        if (!request.CancelRequest)
+                        // External bridges (H2→H1 via NullOriginStream, H2→H3 via IsExternalBridge)
+                        // apply Via themselves before launching their independent origin round trip.
+                        // Re-applying here would see their Via entry and falsely return 508 Loop Detected,
+                        // and would race a second synthetic response against the bridge task.
+                        connectionState.Streams.TryGetValue(hbStreamId, out var viaOwnerState);
+                        bool bridgeOwnsRequestPrep = output is NullOriginStream
+                            || viaOwnerState?.IsExternalBridge == true;
+
+                        if (!request.CancelRequest && !bridgeOwnsRequestPrep)
                         {
-                            // The h2-to-h1 bridge owns request preparation before it starts
-                            // its background origin operation; doing it here afterward races
+                            // The h2-to-h1 / h2-to-h3 bridges own request preparation before they start
+                            // their background origin operation; doing it here afterward races
                             // with that operation and can mutate headers while they are sent.
-                            if (output is not NullOriginStream)
-                                prepareRequestHeaders?.Invoke(request.Headers);
-                            if (output is not NullOriginStream &&
-                                !sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
+                            prepareRequestHeaders?.Invoke(request.Headers);
+                            if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
                                 !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym))
                             {
                                 var pseudonym = sessionArgs.Server.ViaHeaderPseudonym;
