@@ -115,7 +115,7 @@ internal sealed class Http2OriginConnection
                 await instance.stream.WriteAsync(preface, 0, preface.Length, cancellationToken);
                 await instance.SendInitialSettingsAsync(cancellationToken);
 
-                instance.readLoopTask = Task.Run(() => instance.ReadLoopAsync(instance.connectionCts.Token));
+                instance.readLoopTask = instance.ReadLoopAsync(instance.connectionCts.Token);
 
                 try
                 {
