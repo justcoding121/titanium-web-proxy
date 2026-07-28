@@ -11,8 +11,14 @@ using Titanium.Web.Proxy.Examples.WindowsService;
 var logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
 Directory.CreateDirectory(logDirectory);
 
+#if DEBUG
+const LogEventLevel minimumLevel = LogEventLevel.Verbose;
+#else
+const LogEventLevel minimumLevel = LogEventLevel.Information;
+#endif
+
 Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Information()
+    .MinimumLevel.Is(minimumLevel)
     .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
     .Enrich.FromLogContext()
     .WriteTo.Console()

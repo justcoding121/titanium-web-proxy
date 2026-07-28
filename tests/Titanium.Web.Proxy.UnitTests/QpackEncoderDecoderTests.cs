@@ -119,4 +119,20 @@ public class QpackEncoderDecoderTests
             Assert.AreEqual(headers[i].Item2, result[i].Value);
         }
     }
+
+    [TestMethod]
+    public void LiteralNewName_WireFormat_EmbedsNameLengthInPrefixByte()
+    {
+        // RFC 9204 §4.5.6: first instruction byte is 001 N H + 3-bit-prefixed name length.
+        var shortName = "x-short"; // length 7 → fits in 3-bit prefix (max 7 before overflow)
+        var encoded = QpackEncoder.Encode([(shortName, "v")]);
+        Assert.IsTrue(encoded.Length > 2);
+        var first = encoded[2];
+        Assert.AreEqual(0x20, first & 0xF8, "top 5 bits must be 00100 (N=0,H=0)");
+        Assert.AreEqual(shortName.Length, first & 0x07);
+
+        // Longer names use the prefixed-integer overflow form (low 3 bits all 1).
+        var longEncoded = QpackEncoder.Encode([("x-custom-header", "my-value-123")]);
+        Assert.AreEqual(0x27, longEncoded[2] & 0xFF, "name length >= 7 sets 3-bit prefix to max");
+    }
 }

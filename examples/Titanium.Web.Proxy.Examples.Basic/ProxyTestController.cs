@@ -63,6 +63,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // DEBUG keeps the built-in Trace console (full stacks) for deep diagnosis.
 #if DEBUG
             proxyServer.Logging.MinimumLevel = LogLevel.Trace;
+            proxyServer.Logging.EnableFile = true;
+            proxyServer.Logging.FilePath = Path.Combine(
+                AppContext.BaseDirectory, "logs", "basic-proxy.log");
 #else
             proxyServer.Logging.MinimumLevel = LogLevel.Warning;
             proxyServer.Logging.EnableConsole = false;

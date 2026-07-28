@@ -48,11 +48,15 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             proxyServer = new ProxyServer();
 
             // Session traffic is shown in the UI. Library diagnostics go to a rolling file (not the
-            // console — WinExe usually has none). Raise MinimumLevel to Trace when diagnosing TLS/HTTP2.
+            // console — WinExe usually has none). Debug builds capture full protocol diagnostics.
             proxyServer.Logging.EnableConsole = false;
             proxyServer.Logging.EnableFile = true;
             proxyServer.Logging.FilePath = Path.Combine(AppContext.BaseDirectory, "logs", "wpf-proxy.log");
+#if DEBUG
+            proxyServer.Logging.MinimumLevel = LogLevel.Trace;
+#else
             proxyServer.Logging.MinimumLevel = LogLevel.Warning;
+#endif
 
             var certificateDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

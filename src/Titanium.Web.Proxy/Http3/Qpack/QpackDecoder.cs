@@ -147,11 +147,27 @@ internal static class QpackDecoder
             }
             else if ((b & 0x20) != 0)
             {
-                // Literal Header Field Without Name Reference (0b001xxxxx)
-                data = data[1..];
-                if (!TryReadStringLiteral(data, out var name, out consumed))
-                    throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Invalid literal name.");
+                // Literal Field Line With Literal Name (RFC 9204 §4.5.6):
+                // 0 0 1 N H NameLen(3+) — name length is the 3-bit prefix of this byte.
+                var nameHuffman = (b & 0x08) != 0;
+                if (!TryReadPrefixedInt(data, 3, out var nameLength, out consumed))
+                    throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Invalid literal name length.");
                 data = data[consumed..];
+                if (nameLength > (ulong)data.Length)
+                    throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Truncated literal name.");
+                var nameBytes = data[..(int)nameLength];
+                data = data[(int)nameLength..];
+                string name;
+                try
+                {
+                    name = nameHuffman ? HuffmanDecode(nameBytes) : Encoding.Latin1.GetString(nameBytes);
+                }
+                catch (Exception)
+                {
+                    throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed,
+                        "Invalid Huffman-coded literal name.");
+                }
+
                 if (!TryReadStringLiteral(data, out var value, out consumed))
                     throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Invalid literal value.");
                 data = data[consumed..];

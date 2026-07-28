@@ -144,18 +144,23 @@ internal class LimitedStream : Stream
 
     public async Task Finish()
     {
-        if (bytesRemaining != -1)
+        if (bytesRemaining == -1) return;
+
+        // Drain any unread framing bytes so the underlying keep-alive connection stays aligned.
+        // (Previously this threw when leftover payload remained after decompression, which is
+        // exactly the case Finish must clean up.)
+        var buffer = bufferPool.GetBuffer();
+        try
         {
-            var buffer = bufferPool.GetBuffer();
-            try
+            while (bytesRemaining != -1)
             {
                 var res = await ReadAsync(buffer, 0, buffer.Length);
-                if (res != 0) throw new Exception("Data received after stream end");
+                if (res == 0) break;
             }
-            finally
-            {
-                bufferPool.ReturnBuffer(buffer);
-            }
+        }
+        finally
+        {
+            bufferPool.ReturnBuffer(buffer);
         }
     }
 

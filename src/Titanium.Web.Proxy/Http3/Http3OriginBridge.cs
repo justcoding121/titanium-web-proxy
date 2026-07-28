@@ -1,12 +1,14 @@
 #pragma warning disable CA1416
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Quic;
 using System.Net.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
@@ -184,9 +186,21 @@ internal static class Http3OriginBridge
                 responseHeadersFrame = await Http3Frame.ReadAsync(originStream,
                     maxPayloadBytes: server.MaxDecodedHeaderListBytes, cancellationToken);
 
-                if (responseHeadersFrame == null || responseHeadersFrame.Type != Http3FrameType.Headers)
+                if (responseHeadersFrame == null)
                     throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
                         "Expected HEADERS frame as first frame on origin response stream.");
+
+                // RFC 9114 §9: ignore unknown/GREASE frames. DATA before HEADERS is a protocol error.
+                if (responseHeadersFrame.Type != Http3FrameType.Headers)
+                {
+                    if (responseHeadersFrame.Type == Http3FrameType.Data)
+                        throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
+                            "DATA frame received before response HEADERS.");
+                    if (IsForbiddenOnRequestStream(responseHeadersFrame.Type))
+                        throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
+                            $"Frame type 0x{responseHeadersFrame.Type:X} not permitted on request stream.");
+                    continue; // GREASE / unknown / PRIORITY_UPDATE etc.
+                }
 
                 decodedResponseHeaders = QpackDecoder.Decode(responseHeadersFrame.Payload.Span);
                 finalStatus = ParseStatusCode(decodedResponseHeaders);
@@ -222,8 +236,11 @@ internal static class Http3OriginBridge
                     {
                         var frame = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload, cancellationToken);
                         if (frame == null) break;
+                        if (frame.Type == Http3FrameType.Headers)
+                            break; // trailers — ignored for now
                         if (frame.Type == Http3FrameType.Data)
                             await bodyStream.WriteAsync(frame.Payload, cancellationToken);
+                        // else: ignore GREASE / unknown frames per RFC 9114 §9
                     }
                 }
                 else
@@ -254,7 +271,13 @@ internal static class Http3OriginBridge
                 }
 
                 if (bodyStream.Length > 0)
-                    response.Body = bodyStream.ToArray();
+                {
+                    var raw = bodyStream.ToArray();
+                    // EmitSyntheticResponseAsync → CompressBodyAndUpdateContentLength assumes Body is
+                    // uncompressed and will re-apply Content-Encoding. Wire bytes from H3 are already
+                    // compressed — decompress here so the client does not receive double-compressed data.
+                    response.Body = await DecompressIfEncodedAsync(raw, response.ContentEncoding, cancellationToken);
+                }
             }
             finally
             {
@@ -313,7 +336,12 @@ internal static class Http3OriginBridge
 
             if (quicConn != null)
             {
-                await server.QuicConnectionPool.ReturnAsync(quicConn);
+                // Any exception while using the request stream makes the connection suspect.
+                // In particular, a peer-closed connection is not reflected by
+                // QuicServerConnection.IsClosed, which only tracks local disposal state.
+                // Returning it to the pool causes every later request to retry the same dead QUIC
+                // connection and produces intermittent 502s after an otherwise healthy H3 run.
+                await quicConn.DisposeAsync();
                 quicConn = null;
             }
 
@@ -334,7 +362,8 @@ internal static class Http3OriginBridge
                 {
                     logger.LogDebug(tcpEx, "TCP fallback after H3 failure also failed for {Host}:{Port}",
                         sniHost, originPort);
-                    sessionArgs.HttpClient.Response = MakeBadGatewayResponse(tcpEx.Message);
+                    sessionArgs.HttpClient.Response = MakeBadGatewayResponse(
+                        $"QUIC failed: {ex.Message}; TCP fallback failed: {tcpEx.Message}");
                 }
 
                 return;
@@ -375,6 +404,7 @@ internal static class Http3OriginBridge
         // SendRequest uses HTTP/1.x framing. Translate H2/H3-shaped requests the same way
         // Http2ToHttp11BridgeHandler does before hitting the wire.
         var needsHttp11Wire = request.HttpVersion.Major >= 2;
+        var clientHttpVersion = request.HttpVersion;
         byte[]? body = null;
         if (needsHttp11Wire)
         {
@@ -393,37 +423,45 @@ internal static class Http3OriginBridge
             body = request.CompressBodyAndUpdateContentLength();
         }
 
-        // Prefer HTTP/1.1 ALPN when translating from H2/H3 so we do not negotiate h2 and then
-        // write HTTP/1.x request lines onto an HTTP/2 connection.
-        var alpn = needsHttp11Wire ? SslApplicationProtocol.Http11 : preferredProtocol;
+        // SendRequest always writes HTTP/1.x framing — never negotiate h2/h3 on this path.
+        var alpn = SslApplicationProtocol.Http11;
 
-        var connection = await server.TcpConnectionFactory.GetServerConnection(
-            server, sessionArgs, false, alpn, false, cancellationToken);
-
-        sessionArgs.HttpClient.SetConnection(connection);
-        await sessionArgs.HttpClient.SendRequest(
-            server.Enable100ContinueBehaviour, sessionArgs.IsTransparent,
-            sessionArgs.OriginHttpVersionPolicy ?? server.OriginHttpVersionPolicy, cancellationToken);
-
-        if (needsHttp11Wire && request.HasBody && !request.ExpectationFailed)
-            await connection.Stream.WriteBodyAsync(body ?? Array.Empty<byte>(), request.IsChunked,
-                request.HasTrailingHeaders ? request.TrailingHeaders : null, cancellationToken);
-
-        await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
-
-        while (sessionArgs.HttpClient.Response.StatusCode is >= 100 and < 200)
+        try
         {
-            if (onInterimResponse != null)
-                await onInterimResponse(sessionArgs.HttpClient.Response, cancellationToken);
+            var connection = await server.TcpConnectionFactory.GetServerConnection(
+                server, sessionArgs, false, alpn, false, cancellationToken);
 
-            await sessionArgs.ClearResponse(cancellationToken);
+            sessionArgs.HttpClient.SetConnection(connection);
+            await sessionArgs.HttpClient.SendRequest(
+                server.Enable100ContinueBehaviour, sessionArgs.IsTransparent,
+                sessionArgs.OriginHttpVersionPolicy ?? server.OriginHttpVersionPolicy, cancellationToken);
+
+            if (needsHttp11Wire && request.HasBody && !request.ExpectationFailed)
+                await connection.Stream.WriteBodyAsync(body ?? Array.Empty<byte>(), request.IsChunked,
+                    request.HasTrailingHeaders ? request.TrailingHeaders : null, cancellationToken);
+
             await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
-        }
 
-        // Buffer the response body so H2→H3 EmitSyntheticResponseAsync can emit DATA frames.
-        // Without this, HasBody && !IsBodyRead leaves the H2 stream without END_STREAM.
-        if (sessionArgs.HttpClient.Response.HasBody && !sessionArgs.HttpClient.Response.IsBodyRead)
-            await sessionArgs.GetResponseBody(cancellationToken);
+            while (sessionArgs.HttpClient.Response.StatusCode is >= 100 and < 200)
+            {
+                if (onInterimResponse != null)
+                    await onInterimResponse(sessionArgs.HttpClient.Response, cancellationToken);
+
+                await sessionArgs.ClearResponse(cancellationToken);
+                await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
+            }
+
+            // Buffer the response body so H2→H3 EmitSyntheticResponseAsync can emit DATA frames.
+            // Without this, HasBody && !IsBodyRead leaves the H2 stream without END_STREAM.
+            if (sessionArgs.HttpClient.Response.HasBody && !sessionArgs.HttpClient.Response.IsBodyRead)
+                await sessionArgs.GetResponseBody(cancellationToken);
+        }
+        finally
+        {
+            // Translation is wire-local. Preserve the protocol observed from the client for
+            // downstream response handling, callbacks, and the traffic tape.
+            request.HttpVersion = clientHttpVersion;
+        }
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────
@@ -443,8 +481,11 @@ internal static class Http3OriginBridge
         foreach (var header in request.Headers.GetAllHeaders())
         {
             var name = header.Name.ToLowerInvariant();
+            // Hop-by-hop / HTTP/1 semantics must not appear on H3. Host is superseded by :authority.
             if (name is "connection" or "keep-alive" or "proxy-connection"
-                or "transfer-encoding" or "upgrade" or "te") continue;
+                or "transfer-encoding" or "upgrade" or "te" or "host"
+                or "http2-settings" or "proxy-authorization" or "proxy-authenticate")
+                continue;
             headers.Add((name, header.Value));
         }
 
@@ -481,5 +522,51 @@ internal static class Http3OriginBridge
         IsBodyRead = true,
         Body = System.Text.Encoding.UTF8.GetBytes($"HTTP/3 origin forwarding error: {detail}")
     };
+
+    /// <summary>
+    ///     Frame types that RFC 9114 forbids on request streams (must not be silently ignored).
+    /// </summary>
+    private static bool IsForbiddenOnRequestStream(ulong frameType) =>
+        frameType is Http3FrameType.Settings or Http3FrameType.GoAway
+            or Http3FrameType.MaxPushId or Http3FrameType.CancelPush;
+
+    /// <summary>
+    ///     Decompresses <paramref name="raw" /> when <paramref name="contentEncoding" /> is present,
+    ///     matching <see cref="SessionEventArgs.GetResponseBody"/> so later
+    ///     <c>CompressBodyAndUpdateContentLength</c> does not double-compress.
+    /// </summary>
+    private static async Task<byte[]> DecompressIfEncodedAsync(
+        byte[] raw, string? contentEncoding, CancellationToken cancellationToken)
+    {
+        var layers = CompressionUtil.ParseContentEncodings(contentEncoding);
+        if (layers.Count == 0 || raw.Length == 0) return raw;
+
+        Stream current = new MemoryStream(raw, writable: false);
+        var owned = new List<Stream> { current };
+        try
+        {
+            for (var i = layers.Count - 1; i >= 0; i--)
+            {
+                var kind = CompressionUtil.CompressionNameToEnum(layers[i]);
+                if (kind == HttpCompression.Unsupported) return raw;
+                current = DecompressionFactory.Create(kind, current);
+                owned.Add(current);
+            }
+
+            using var output = new MemoryStream();
+            await current.CopyToAsync(output, cancellationToken);
+            return output.ToArray();
+        }
+        catch
+        {
+            // Leave wire bytes as-is; caller still has Content-Encoding for the client.
+            return raw;
+        }
+        finally
+        {
+            for (var i = owned.Count - 1; i >= 0; i--)
+                await owned[i].DisposeAsync();
+        }
+    }
 }
 #pragma warning restore CA1416
