@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http3.Qpack;
@@ -95,7 +96,17 @@ internal static class Http3OriginBridge
     {
         var request = sessionArgs.HttpClient.Request;
         var upStreamEndPoint = sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint;
-        var upstreamProxy = sessionArgs.CustomUpStreamProxy ?? server.UpStreamHttpsProxy;
+
+        // Mirror TcpConnectionFactory.GetServerConnection proxy-resolution logic.
+        // Resolve per-request proxy via GetCustomUpStreamProxyFunc if not already set by the caller.
+        var upstreamProxy = sessionArgs.CustomUpStreamProxy;
+        if (upstreamProxy == null && server.GetCustomUpStreamProxyFunc != null)
+            upstreamProxy = await server.GetCustomUpStreamProxyFunc(sessionArgs);
+
+        // Set BOTH fields so the TCP fallback path does not re-invoke GetCustomUpStreamProxyFunc.
+        sessionArgs.CustomUpStreamProxy = upstreamProxy;
+        sessionArgs.CustomUpStreamProxyUsed = upstreamProxy;
+        upstreamProxy ??= server.UpStreamHttpsProxy;
 
         QuicServerConnection? quicConn = null;
         try
@@ -244,17 +255,34 @@ internal static class Http3OriginBridge
                 }
             }
         }
+        catch (QuicProxyNotSupportedException)
+        {
+            // System.Net.Quic cannot route via a proxy. Fall back to TCP so proxy rules are
+            // honoured. Do NOT call CustomUpStreamProxyFailureFunc — that callback is for proxy
+            // unreachability, not transport limitations. Both CustomUpStreamProxy and
+            // CustomUpStreamProxyUsed are already set above, so TcpConnectionFactory will not
+            // re-invoke GetCustomUpStreamProxyFunc.
+            logger.LogDebug(
+                "QUIC cannot route via proxy; falling back to TCP for {Host}:{Port}", host, port);
+            // quicConn is null here: GetOrCreateAsync threw before a connection was created.
+            await ForwardOverTcpAsync(sessionArgs, server, default, cancellationToken, onInterimResponse);
+            return;
+        }
         catch (Exception ex) when (!(ex is OperationCanceledException))
         {
             logger.LogDebug(ex, "H3→H3 origin forwarding failed for {Host}:{Port}", host, port);
-            // Surface as a 502.
-            await server.QuicConnectionPool.ReturnAsync(quicConn!);
-            quicConn = null;
+            // Surface as a 502. quicConn may be null if GetOrCreateAsync failed.
+            if (quicConn != null)
+            {
+                await server.QuicConnectionPool.ReturnAsync(quicConn);
+                quicConn = null;
+            }
             sessionArgs.HttpClient.Response = MakeBadGatewayResponse(ex.Message);
             return;
         }
 
-        await server.QuicConnectionPool.ReturnAsync(quicConn!);
+        if (quicConn != null)
+            await server.QuicConnectionPool.ReturnAsync(quicConn);
     }
 
     private static List<(string, string)> BuildRequestHeaders(Request request, string host)

@@ -8,6 +8,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Diagnostics;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Network.Quic;
@@ -29,6 +30,11 @@ internal sealed class QuicConnectionFactory
     ///     Establishes a new QUIC connection to <paramref name="hostName" />:<paramref name="port" />
     ///     and wraps it in a <see cref="QuicServerConnection" />.
     /// </summary>
+    /// <exception cref="QuicProxyNotSupportedException">
+    ///     Thrown when <paramref name="upStreamProxy" /> is non-null. <c>System.Net.Quic</c> does not
+    ///     expose a mechanism for CONNECT tunnelling or SOCKS5 UDP ASSOCIATE; the caller must catch this
+    ///     and fall back to a TCP-based bridge so proxy rules are honoured.
+    /// </exception>
     internal async Task<QuicServerConnection> CreateAsync(
         string hostName,
         int port,
@@ -38,6 +44,11 @@ internal sealed class QuicConnectionFactory
         RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
         CancellationToken cancellationToken)
     {
+        // System.Net.Quic (MsQuic) does not expose CONNECT tunnelling or SOCKS5 UDP ASSOCIATE.
+        // Throw so the caller can fall back to TCP where proxy routing is supported.
+        if (upStreamProxy != null)
+            throw new QuicProxyNotSupportedException(upStreamProxy.ToString() ?? "unknown");
+
         var clientOptions = new QuicClientConnectionOptions
         {
             RemoteEndPoint = new DnsEndPoint(hostName, port),
