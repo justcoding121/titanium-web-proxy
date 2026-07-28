@@ -127,7 +127,8 @@ internal static class Http3RequestStream
                 sessionArgs.HttpClient.Request.IsBodyRead = true;
                 streamState.RequestClosed = true;
 
-                // 6. Fire BeforeRequest.
+                // 6. Fire BeforeRequest (stamp timing milestone just before).
+                sessionArgs.Timing?.MarkRequestHeadersReceived();
                 await onBeforeRequest(sessionArgs);
 
                 // Inject Via header (RFC 9110 §7.6.3) on the request before forwarding.
@@ -191,6 +192,8 @@ internal static class Http3RequestStream
                     }
                     finally
                     {
+                        // MarkComplete covers all exit paths: normal, synthetic response, and exception.
+                        sessionArgs?.Timing?.MarkComplete();
                         sessionArgs?.Dispose();
                     }
                 }
