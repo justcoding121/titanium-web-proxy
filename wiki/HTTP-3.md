@@ -74,8 +74,9 @@ proxy.Start();
 When `UpstreamHttpProtocol.Auto` (the default) is in effect, the proxy selects the outbound protocol
 for each request as follows:
 
-1. **HTTP/3** — if `EnableHttp3 == true` **and** the origin's H3 capability has been cached
-   (via `Alt-Svc` response header from a previous request to the same host:port).
+1. **HTTP/3** — if `EnableHttp3 == true` **and** the origin's H3 capability is known. Capability is
+   populated from either a previous `Alt-Svc` response header **or** (when `EnableHttpsSvcbDnsDiscovery`
+   is true) a proactive HTTPS/SVCB DNS query before the first connection attempt.
 2. **HTTP/2** — if the origin has been probed and supports HTTP/2 (via ALPN).
 3. **HTTP/1.1** — fallback.
 
@@ -94,6 +95,40 @@ Alt-Svc: h3=":443"; ma=86400
 Subsequent requests to the same host:port will use HTTP/3 transparently (when `EnableHttp3 == true`).
 The cache entry expires after the advertised `ma` (max-age) duration.  To evict early, call
 `ProxyServer.Http3OriginCapabilityCache.Evict("host:port")`.
+
+## HTTPS/SVCB DNS discovery (opt-in)
+
+In addition to reactive `Alt-Svc` caching, you can enable **proactive** HTTP/3 capability discovery via
+RFC 9460 HTTPS resource record queries:
+
+```csharp
+#pragma warning disable TWP001
+proxyServer.EnableHttp3 = true;
+proxyServer.EnableHttpsSvcbDnsDiscovery = true; // opt-in
+
+// Optional: use a specific DNS server (default: 127.0.0.1:53)
+// proxyServer.DnsServerEndPoint = new IPEndPoint(IPAddress.Parse("8.8.8.8"), 53);
+#pragma warning restore TWP001
+```
+
+When enabled, the proxy issues a DNS HTTPS RR query for an origin before opening the first connection.
+If the DNS response contains an HTTPS record with ALPN `h3`, HTTP/3 is used immediately rather than
+waiting for an `Alt-Svc` response header.
+
+**Behavior:**
+
+- Queries are sent over UDP to `DnsServerEndPoint` with a 1-second timeout.
+- Results are cached with the record's TTL, capped at 1 hour.
+- NXDOMAIN, alias-mode entries (SvcPriority = 0), and records without `h3` in the ALPN list are
+  cached as negative entries (suppress further queries for the TTL duration).
+- Query coalescing: concurrent requests for the same origin share one in-flight DNS query.
+- The resolver is pluggable: set `ProxyServer.HttpsSvcbResolver` to a custom `IHttpsSvcbResolver`
+  implementation (e.g. for testing with pre-built responses).
+
+> **Note:** HTTPS/SVCB discovery adds a DNS round-trip before the first QUIC connection to any origin.
+> On a LAN or loopback resolver this is typically < 1 ms. Enable it selectively if you control the
+> DNS infrastructure; leave it disabled if you rely on the OS resolver (`/etc/resolv.conf` / WinDNS)
+> and cannot guarantee HTTPS RR support.
 
 ## Protocol bridges
 
@@ -121,9 +156,48 @@ The following `SessionEventArgs` properties override the global defaults for a s
 
 ## QPACK
 
-Titanium Web Proxy uses **static-table-only** QPACK (RFC 9204): the Required Insert Count is always
-zero and the dynamic table is never synchronised.  This is fully interoperable with all RFC 9204-compliant
-peers; it sacrifices some header-compression efficiency in exchange for simpler, allocation-free encoding.
+Titanium Web Proxy implements two QPACK modes:
+
+### Static-table mode (default)
+
+By default, the encoder sends Required Insert Count = 0 on every field section and never synchronises the
+dynamic table. This is fully interoperable with all RFC 9204-compliant peers and involves no per-connection
+state, but sacrifices some header-compression efficiency on repeated headers.
+
+### Dynamic-table mode (opt-in)
+
+Set `ProxyServer.EnableQpackDynamicTable = true` to enable full RFC 9204 dynamic table support:
+
+```csharp
+#pragma warning disable TWP001
+proxyServer.EnableHttp3 = true;
+proxyServer.EnableQpackDynamicTable = true; // opt-in
+#pragma warning restore TWP001
+```
+
+When enabled, per accepted QUIC connection:
+
+- The proxy opens the QPACK encoder and decoder unidirectional control streams.
+- It advertises `SETTINGS_QPACK_MAX_TABLE_CAPACITY = 4096` and `SETTINGS_QPACK_BLOCKED_STREAMS = 100`
+  to the client.
+- A `QpackDynamicTable` (thread-safe via `ReaderWriterLockSlim`) tracks inbound and outbound table entries
+  as absolute indices, per RFC 9204 §3.
+- When decoding an incoming HEADERS block whose Required Insert Count is > 0, the proxy suspends decoding
+  until the required number of insertions have been acknowledged via the encoder stream, per RFC 9204 §4.5.1.
+- Section Acknowledgments are queued on a bounded `Channel` (capacity 1000, `DropNewest` on overflow) and
+  written to the client's decoder stream by a background `QpackDecoderStreamWriter` task.
+- In-flight eviction protection: a table entry cannot be evicted while any open request stream holds a
+  reference to it (tracked per stream by absolute index). This satisfies RFC 9204 §2.1.1.
+
+> **Note:** Dynamic table support adds per-connection state (inbound + outbound tables, two extra QUIC
+> streams, and a background drain task). Leave `EnableQpackDynamicTable = false` if your traffic has a
+> high connection churn rate or if header repetition is low.
+
+### QPACK configuration
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `EnableQpackDynamicTable` | `false` | Enables RFC 9204 dynamic table synchronisation for HTTP/3 connections. |
 
 ## Transparent QUIC endpoint configuration
 
@@ -141,7 +215,11 @@ peers; it sacrifices some header-compression efficiency in exchange for simpler,
 
 - **Transparent only**: HTTP/3 cannot be configured as an explicit (system-proxy) endpoint. See
   [Why no explicit HTTP/3 endpoint yet](#why-no-explicit-http3-endpoint-yet) below.
-- **Static QPACK only**: dynamic table synchronisation is not implemented.
+- **QPACK dynamic table is opt-in**: static-table-only mode is the default; see [QPACK](#qpack) above.
+- **Upstream proxy with QUIC falls back to TCP**: `System.Net.Quic` does not support HTTP CONNECT
+  tunnelling or SOCKS5 UDP ASSOCIATE. When a per-request or global upstream proxy is configured, the
+  QUIC leg gracefully falls back to `ForwardOverTcpAsync` where the proxy rules are honoured on the
+  TCP connection.
 - **No 0-RTT**: early data is not supported by `System.Net.Quic` in .NET 10.
 - **No connection migration**: `System.Net.Quic` does not expose migration APIs.
 - **No server push**: removed from RFC 9114.
