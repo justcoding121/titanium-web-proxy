@@ -344,8 +344,12 @@ internal class TcpConnectionFactory : IDisposable
             var idx = authority.IndexOf((byte)':');
             if (idx == -1)
             {
+                // H2/H3 :authority is typically hostname-only for the default port.
+                // Defaulting to 80 here made HTTPS TCP fallbacks (e.g. H2→H3 bridge after
+                // QUIC failure) attempt TLS against port 80, which surfaces as
+                // AuthenticationException: "Cannot determine the frame size or a corrupted frame".
                 host = authority.GetString();
-                port = 80;
+                port = isHttps ? 443 : 80;
             }
             else
             {
