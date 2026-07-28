@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
 namespace Titanium.Web.Proxy.Http3;
 
@@ -57,6 +58,12 @@ internal sealed class Http3Connection
     /// </summary>
     private Http3Settings _clientSettings = new();
 
+    /// <summary>
+    ///     Per-connection QPACK dynamic table context. Non-null only when
+    ///     <see cref="ProxyServer.EnableQpackDynamicTable" /> is true.
+    /// </summary>
+    private QpackContext? _qpackContext;
+
     private Http3Connection(
         QuicConnection connection,
         TransparentQuicProxyEndPoint endPoint,
@@ -103,10 +110,32 @@ internal sealed class Http3Connection
     {
         try
         {
+            // Instantiate QPACK context when dynamic table is enabled.
+            if (_server.EnableQpackDynamicTable)
+                _qpackContext = new QpackContext(4096);
+
             // Open our outbound control stream and send SETTINGS.
             _serverControlStream = await _connection.OpenOutboundStreamAsync(
                 QuicStreamType.Unidirectional, _shutdownToken);
-            await SendServerSettingsAsync(_serverControlStream, _shutdownToken);
+            await SendServerSettingsAsync(_serverControlStream, _qpackContext, _shutdownToken);
+
+            // When dynamic table is enabled, open outbound QPACK encoder and decoder streams and
+            // start their background loops.
+            if (_qpackContext != null)
+            {
+                var qpackEncoderStream = await _connection.OpenOutboundStreamAsync(
+                    QuicStreamType.Unidirectional, _shutdownToken);
+                // Write stream type byte 0x02 (QPACK encoder stream).
+                await qpackEncoderStream.WriteAsync(new byte[] { (byte)Http3StreamType.QpackEncoder }, _shutdownToken);
+
+                var qpackDecoderStream = await _connection.OpenOutboundStreamAsync(
+                    QuicStreamType.Unidirectional, _shutdownToken);
+                // Write stream type byte 0x03 (QPACK decoder stream).
+                await qpackDecoderStream.WriteAsync(new byte[] { (byte)Http3StreamType.QpackDecoder }, _shutdownToken);
+
+                // Start the ack writer background loop.
+                _ = QpackDecoderStreamWriter.RunAsync(qpackDecoderStream, _qpackContext, _shutdownToken);
+            }
 
             // Run request-accept loop concurrently with unidirectional stream setup.
             var acceptTask = AcceptStreamsAsync(_shutdownToken);
@@ -127,13 +156,16 @@ internal sealed class Http3Connection
         {
             await FinalizeAllStreamsAsync();
             await SendGoAwayAsync();
+
+            if (_qpackContext != null)
+                await _qpackContext.DisposeAsync();
         }
     }
 
     /// <summary>
     ///     Opens the server-side outbound control stream and sends the SETTINGS frame.
     /// </summary>
-    private static async Task SendServerSettingsAsync(QuicStream controlStream, CancellationToken ct)
+    private static async Task SendServerSettingsAsync(QuicStream controlStream, QpackContext? qpackContext, CancellationToken ct)
     {
         // Write the stream type byte (0x00 = control stream).
         var streamTypeBuf = new byte[1];
@@ -142,9 +174,13 @@ internal sealed class Http3Connection
 
         // Build SETTINGS payload.
         var settings = new Http3Settings();
-        // Advertise no dynamic QPACK table (static-only implementation).
-        // SETTINGS_MAX_FIELD_SECTION_SIZE: not set → no limit advised.
-        // We could add SETTINGS_MAX_FIELD_SECTION_SIZE here based on server config.
+
+        if (qpackContext != null)
+        {
+            // Advertise QPACK dynamic table capability (RFC 9204 §3.1).
+            settings.SetQpackMaxTableCapacity(4096);
+            settings.SetQpackBlockedStreams(0); // we don't block
+        }
 
         var payload = settings.Serialize();
         await Http3Frame.WriteAsync(controlStream, Http3FrameType.Settings, payload, ct);
@@ -195,11 +231,15 @@ internal sealed class Http3Connection
                         await ProcessClientControlStreamAsync(stream, ct);
                         break;
                     case Http3StreamType.QpackEncoder:
-                        // Static-only: drain but ignore all encoder stream instructions.
-                        await DrainStreamAsync(stream, ct);
+                        if (_qpackContext != null)
+                            await QpackEncoderStreamReader.ProcessAsync(stream, _qpackContext, ct);
+                        else
+                            await DrainStreamAsync(stream, ct);
                         break;
                     case Http3StreamType.QpackDecoder:
-                        // Static-only: drain but ignore all decoder stream instructions.
+                        // Decoder stream from client: Section Acks for our outbound HEADERS blocks.
+                        // Currently we don't use acks to unpin InFlightMinAbsoluteIndex entries here
+                        // (that is done in AfterResponse), so drain to prevent flow-control stall.
                         await DrainStreamAsync(stream, ct);
                         break;
                     default:
@@ -231,6 +271,12 @@ internal sealed class Http3Connection
                             "Received duplicate SETTINGS on control stream.");
                     _clientSettings = Http3Settings.Parse(frame.Payload.Span);
                     receivedSettings = true;
+                    // If the client sets QPACK_MAX_TABLE_CAPACITY = 0, disable outbound dynamic table
+                    // encoding so we never reference entries the peer will not maintain.
+                    if (_qpackContext != null && _clientSettings.QpackMaxTableCapacity == 0)
+                        _qpackContext.DisableOutboundTable();
+                    else if (_qpackContext != null && _clientSettings.QpackMaxTableCapacity > 0)
+                        _qpackContext.MaxTableCapacityFromPeer = _clientSettings.QpackMaxTableCapacity;
                     break;
                 case Http3FrameType.GoAway:
                     // Client is initiating graceful shutdown — stop processing new requests.
@@ -266,7 +312,8 @@ internal sealed class Http3Connection
                     streamState = state;
                     _activeStreams[streamId] = state;
                 },
-                _onBeforeRequest, _onBeforeResponse, _onAfterResponse);
+                _onBeforeRequest, _onBeforeResponse, _onAfterResponse,
+                qpackContext: _qpackContext);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

@@ -56,7 +56,8 @@ internal static class Http3RequestStream
         Action<SessionEventArgs, Http3StreamState> onSessionCreated,
         Func<SessionEventArgs, Task> onBeforeRequest,
         Func<SessionEventArgs, Task> onBeforeResponse,
-        Func<SessionEventArgs, Task> onAfterResponse)
+        Func<SessionEventArgs, Task> onAfterResponse,
+        QpackContext? qpackContext = null)
     {
         await using (stream)
         {
@@ -76,7 +77,11 @@ internal static class Http3RequestStream
                         $"Expected HEADERS frame as first frame on request stream, got type 0x{headersFrame.Type:X}.");
 
                 // 2. Decode QPACK headers → extract HTTP/3 pseudo-headers and regular headers.
-                var decodedHeaders = QpackDecoder.Decode(headersFrame.Payload.Span);
+                // When dynamic table is enabled, DecodeAsync waits until the required insert count is
+                // satisfied by the encoder stream reader, then decodes using table entries.
+                var decodedHeaders = await QpackDecoder.DecodeAsync(
+                    headersFrame.Payload.Span, qpackContext, cancellationToken);
+                qpackContext?.EnqueueSectionAck(stream.Id);
                 var (method, scheme, authority, path, regularHeaders) = ExtractPseudoHeaders(decodedHeaders);
 
                 if (method is null || authority is null)
@@ -143,7 +148,7 @@ internal static class Http3RequestStream
                     if (!string.IsNullOrEmpty(server.ViaHeaderPseudonym))
                         sessionArgs.HttpClient.Response.Headers.AddHeader(
                             new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
-                    await SendResponseAsync(stream, sessionArgs.HttpClient.Response, cancellationToken);
+                    await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext, cancellationToken);
                 }
                 else
                 {
@@ -151,7 +156,7 @@ internal static class Http3RequestStream
                     // Pass a relay callback so that 1xx interim responses are forwarded to the client before
                     // the final response arrives.
                     await Http3OriginBridge.ForwardAsync(sessionArgs, server, logger, cancellationToken,
-                        onInterimResponse: (interim, ct) => SendInterimResponseAsync(stream, interim, ct));
+                        onInterimResponse: (interim, ct) => SendInterimResponseAsync(stream, interim, qpackContext, ct));
 
                     await onBeforeResponse(sessionArgs);
 
@@ -159,8 +164,11 @@ internal static class Http3RequestStream
                     if (!string.IsNullOrEmpty(server.ViaHeaderPseudonym))
                         sessionArgs.HttpClient.Response.Headers.AddHeader(
                             new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
-                    await SendResponseAsync(stream, sessionArgs.HttpClient.Response, cancellationToken);
+                    await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext, cancellationToken);
                 }
+
+                // Unpin dynamic table entries for this stream after the response is sent.
+                qpackContext?.InFlightMinAbsoluteIndex.TryRemove(stream.Id, out _);
 
                 streamState.ResponseClosed = true;
                 stream.CompleteWrites();
@@ -295,7 +303,8 @@ internal static class Http3RequestStream
     ///     stream write side. <c>CompleteWrites()</c> is intentionally NOT called — the response is still
     ///     in progress.
     /// </summary>
-    private static async Task SendInterimResponseAsync(QuicStream stream, Response response, CancellationToken ct)
+    private static async Task SendInterimResponseAsync(
+        QuicStream stream, Response response, QpackContext? qpackContext, CancellationToken ct)
     {
         var headers = new List<(string, string)> { (":status", response.StatusCode.ToString()) };
         foreach (var header in response.Headers.GetAllHeaders())
@@ -306,7 +315,7 @@ internal static class Http3RequestStream
                 continue;
             headers.Add((name, header.Value));
         }
-        var encoded = QpackEncoder.Encode(headers);
+        var encoded = QpackEncoder.Encode(headers, qpackContext);
         await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, encoded, ct);
         await stream.FlushAsync(ct);
     }
@@ -314,7 +323,7 @@ internal static class Http3RequestStream
     /// <summary>
     ///     Sends the HTTP/3 response (HEADERS frame + optional DATA frames) to the client stream.
     /// </summary>
-    private static async Task SendResponseAsync(QuicStream stream, Response response, CancellationToken ct)
+    private static async Task SendResponseAsync(QuicStream stream, Response response, QpackContext? qpackContext, CancellationToken ct)
     {
         // Build QPACK-encoded response headers.
         var headers = new List<(string, string)>
@@ -332,7 +341,7 @@ internal static class Http3RequestStream
             headers.Add((name, header.Value));
         }
 
-        var qpackHeaders = QpackEncoder.Encode(headers);
+        var qpackHeaders = QpackEncoder.Encode(headers, qpackContext);
         await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
 
         // Send body if present.
