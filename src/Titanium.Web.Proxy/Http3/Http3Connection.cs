@@ -108,6 +108,7 @@ internal sealed class Http3Connection
 
     private async Task RunCoreAsync()
     {
+        _server.UpdateHttp3ClientConnectionCount(true);
         try
         {
             // Instantiate QPACK context when dynamic table is enabled.
@@ -159,6 +160,8 @@ internal sealed class Http3Connection
 
             if (_qpackContext != null)
                 await _qpackContext.DisposeAsync();
+
+            _server.UpdateHttp3ClientConnectionCount(false);
         }
     }
 

@@ -23,7 +23,7 @@
             <ListView.View>
                 <GridView>
                     <GridViewColumn Header="Result" DisplayMemberBinding="{Binding StatusCode}" />
-                    <GridViewColumn Header="Protocol" DisplayMemberBinding="{Binding Protocol}" />
+                    <GridViewColumn Header="Client↔Server" DisplayMemberBinding="{Binding Protocol}" Width="140" />
                     <GridViewColumn Header="Host" DisplayMemberBinding="{Binding Host}" />
                     <GridViewColumn Header="Url" DisplayMemberBinding="{Binding Url}" />
                     <GridViewColumn Header="BodySize" DisplayMemberBinding="{Binding BodySize}" />
@@ -62,6 +62,10 @@
             <TextBlock Text="{Binding ClientConnectionCount}" Margin="10,0,20,0" />
             <TextBlock Text="ServerConnectionCount:" />
             <TextBlock Text="{Binding ServerConnectionCount}" Margin="10,0,20,0" />
+            <TextBlock Text="Http3ClientConnectionCount:" />
+            <TextBlock Text="{Binding Http3ClientConnectionCount}" Margin="10,0,20,0" />
+            <TextBlock Text="Http3ServerConnectionCount:" />
+            <TextBlock Text="{Binding Http3ServerConnectionCount}" Margin="10,0,20,0" />
         </StackPanel>
     </Grid>
 </Window>

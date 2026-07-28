@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Examples.WindowsService;
@@ -100,16 +101,49 @@ internal sealed class ProxyWorker : BackgroundService
         }
 #pragma warning restore TWP001
 
-        // Bridge the proxy's diagnostic logging into the host's own ILoggerFactory (e.g. configured via
-        // appsettings.json's Logging.LogLevel.Default), rather than using the built-in Console/File sinks.
-        proxyServer.Logging.Enabled = settings.LogErrors;
+        // Bridge the proxy's diagnostic logging into the host's Serilog pipeline (rolling files + Event Log).
+        proxyServer.Logging.Enabled = settings.EnableProxyLogging;
         proxyServer.Logging.LoggerFactory = loggerFactory;
+
+        if (settings.LogRequests)
+            proxyServer.BeforeResponse += OnBeforeResponse;
 
         proxyServer.Start();
 
         logger.LogInformation("Service listening on port {ListeningPort}", settings.ListeningPort);
 
         return base.StartAsync(cancellationToken);
+    }
+
+    private Task OnBeforeResponse(object sender, SessionEventArgs e)
+    {
+        var request = e.HttpClient.Request;
+        var response = e.HttpClient.Response;
+        var statusCode = response?.StatusCode ?? 0;
+
+        // Aligned with the Basic/WPF traffic line shape; Information goes to files (Event Log is Warning+).
+        logger.LogInformation(
+            "{Method} {Url} → {StatusCode} | client↔proxy: {ClientProtocol} | proxy↔server: {ServerProtocol}",
+            request.Method,
+            request.Url,
+            statusCode,
+            FormatHttpProtocol(request.HttpVersion),
+            FormatHttpProtocol(response?.HttpVersion));
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    ///     Formats an HTTP version for brief logs (e.g. HTTP/1.1, HTTP/2, HTTP/3).
+    /// </summary>
+    private static string FormatHttpProtocol(Version? version)
+    {
+        if (version == null || version.Major == 0)
+            return "unknown";
+
+        if (version.Major >= 2)
+            return "HTTP/" + version.Major;
+
+        return "HTTP/" + version.Major + "." + version.Minor;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -127,6 +161,11 @@ internal sealed class ProxyWorker : BackgroundService
 
     public override Task StopAsync(CancellationToken cancellationToken)
     {
+        logger.LogInformation("Stopping proxy service...");
+
+        if (proxyServer != null && settings.LogRequests)
+            proxyServer.BeforeResponse -= OnBeforeResponse;
+
         proxyServer?.Stop();
         // clean up here since we make a new instance every time the service starts
         proxyServer?.Dispose();
