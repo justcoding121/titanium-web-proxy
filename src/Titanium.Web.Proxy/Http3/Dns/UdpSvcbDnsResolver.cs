@@ -11,19 +11,37 @@ using System.Threading.Tasks;
 namespace Titanium.Web.Proxy.Http3.Dns;
 
 /// <summary>
-///     Production <see cref="IHttpsSvcbResolver" /> that sends a single UDP DNS query for HTTPS RR
-///     (type 65) per host:port and parses the ALPN SvcParam (key 1) looking for "h3".
+///     Production <see cref="IHttpsSvcbResolver" /> that sends a UDP DNS query for HTTPS RR (type 65)
+///     per host:port and parses the ALPN SvcParam (key 1) looking for "h3".
 /// </summary>
 /// <remarks>
 ///     Design points:
 ///     <list type="bullet">
-///       <item>Per-query <see cref="Socket" /> (UDP) — lightweight, avoids shared-socket threading issues.</item>
-///       <item>DNS query-ID validation — random 2-byte ID embedded in query, verified in response.</item>
-///       <item>RCODE check — NXDOMAIN/SERVFAIL returns <see langword="null" /> immediately.</item>
-///       <item>No retry — a dropped packet falls through to TCP; the next request probes again.</item>
-///       <item>Query coalescing — concurrent requests for the same host:port share one UDP round-trip.</item>
-///       <item>Negative caching — 1-minute TTL for misses prevents a DNS query per request to H2-only origins.</item>
+///       <item>Per-query UDP <see cref="Socket" /> — avoids shared-socket threading issues.</item>
+///       <item>Random query-ID validated in the response.</item>
+///       <item>RCODE check — NXDOMAIN/SERVFAIL is a definitive negative and is negative-cached.</item>
+///       <item>TC (Truncated) flag — truncated UDP responses are treated as transient and not cached.</item>
+///       <item>Query coalescing — concurrent requests for the same host:port share one UDP round-trip.
+///         The shared task uses its own internal timeout CTS so one caller's cancellation cannot
+///         abort or poison the lookup for other callers.</item>
+///       <item>Per-waiter cancellation — callers cancel their own wait via <see cref="Task.WaitAsync" />
+///         without affecting the shared task or other waiters.</item>
+///       <item>Negative caching — only for definitive results (NXDOMAIN, valid no-H3 response).
+///         Transient failures (timeout, socket error, TC bit) are not negative-cached.</item>
+///       <item>SvcPriority selection — returns the ServiceMode record with the lowest SvcPriority.</item>
+///       <item>AliasMode chain — bounded recursive resolution (max depth <see cref="MaxAliasDepth" />)
+///         with loop protection via the same-host guard.</item>
+///       <item>TargetName — preserved from ServiceMode records so the caller can connect to the SVCB
+///         target host for QUIC while retaining the origin host for TLS SNI and <c>:authority</c>.</item>
+///       <item>Address family — derived from the DNS server <see cref="IPEndPoint" /> so both IPv4 and
+///         IPv6 DNS servers work correctly.</item>
+///       <item>Port validation — port SvcParam value 0 is rejected.</item>
 ///     </list>
+///     <para>
+///         ECH (Encrypted Client Hello) and address-hint SvcParams are intentionally not consumed.
+///         Normal host resolution remains the fallback for IP routing; ECH support can be added when
+///         the runtime exposes the relevant TLS primitives.
+///     </para>
 /// </remarks>
 internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
 {
@@ -31,12 +49,17 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     private const ushort DnsTypeHttps = 65;
     private const ushort DnsClassIn = 1;
 
+    /// <summary>Maximum depth for recursive AliasMode chain following.</summary>
+    private const int MaxAliasDepth = 3;
+
     private readonly IPEndPoint _dnsServerEndPoint;
 
-    // Coalescing: concurrent requests for the same host:port share one Task.
-    private readonly ConcurrentDictionary<string, Task<SvcbResult?>> _inflight = new();
+    // Coalescing: concurrent requests for the same host:port share one Task<SvcbQueryState>.
+    // The task uses its own timeout CTS — independent of any individual caller — so one waiter's
+    // cancellation cannot cancel or poison the shared lookup.
+    private readonly ConcurrentDictionary<string, Task<SvcbQueryState>> _inflight = new();
 
-    // Negative cache: DateTime.UtcNow expiry per host:port key.
+    // Negative cache: stores the expiry for definitive "no H3" results only.
     private readonly ConcurrentDictionary<string, DateTime> _negativeCache = new();
 
     private readonly TimeSpan _negativeCacheTtl;
@@ -52,28 +75,47 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     {
         var key = $"{host}:{port}";
 
-        // Fast path: negative cache hit.
+        // Fast path: definitive negative already cached.
         if (_negativeCache.TryGetValue(key, out var expires) && DateTime.UtcNow < expires)
             return Task.FromResult<SvcbResult?>(null);
 
-        // Coalesce concurrent queries: if one is in flight, reuse its Task.
-        return _inflight.GetOrAdd(key, _ => RunQueryAndCacheAsync(key, host, port, ct));
+        // Coalesce: reuse in-flight shared task or start a new one.
+        var sharedTask = _inflight.GetOrAdd(key, _ => RunSharedQueryAsync(key, host, port));
+
+        // Per-waiter cancellation: WaitAsync throws OperationCanceledException to THIS caller but
+        // leaves the shared task running so other waiters are unaffected.
+        return WrapResultAsync(sharedTask, ct);
     }
 
-    private async Task<SvcbResult?> RunQueryAndCacheAsync(string key, string host, int port, CancellationToken ct)
+    private static async Task<SvcbResult?> WrapResultAsync(Task<SvcbQueryState> sharedTask, CancellationToken ct)
+    {
+        var state = ct.CanBeCanceled ? await sharedTask.WaitAsync(ct) : await sharedTask;
+        return state.Result;
+    }
+
+    private async Task<SvcbQueryState> RunSharedQueryAsync(string key, string host, int port)
     {
         try
         {
-            var result = await QueryAsync(host, port, ct);
-            if (result == null)
+            // The shared query has its own dedicated timeout — not linked to any caller's CT.
+            using var timeoutCts = new CancellationTokenSource(DnsQueryTimeoutMs);
+            var (result, isTransient) = await QueryCoreAsync(host, port, timeoutCts.Token);
+
+            // Only negative-cache definitive results; transient failures allow a fresh retry.
+            if (!isTransient && result == null)
                 _negativeCache[key] = DateTime.UtcNow + _negativeCacheTtl;
-            return result;
+
+            return new SvcbQueryState(result);
+        }
+        catch (OperationCanceledException)
+        {
+            // Internal timeout: transient, not negative-cached.
+            return new SvcbQueryState(null);
         }
         catch
         {
-            // Any error (timeout, socket, parse) is treated as a negative result.
-            _negativeCache[key] = DateTime.UtcNow + _negativeCacheTtl;
-            return null;
+            // Socket / IO / unexpected error: treat as transient.
+            return new SvcbQueryState(null);
         }
         finally
         {
@@ -81,27 +123,44 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
         }
     }
 
-    private async Task<SvcbResult?> QueryAsync(string host, int port, CancellationToken ct)
+    /// <summary>
+    ///     Sends a DNS UDP query and parses the response.
+    ///     Returns <c>(result, false)</c> for a successful H3 record,
+    ///     <c>(null, false)</c> for a definitive negative,
+    ///     <c>(null, true)</c> for a transient failure (socket error, TC bit, parse error).
+    /// </summary>
+    private async Task<(SvcbResult? result, bool isTransient)> QueryCoreAsync(
+        string host, int port, CancellationToken ct, int aliasDepth = 0)
     {
-        // Use a heap-allocated array (not stackalloc) so it can survive the await boundaries.
         var queryId = new byte[2];
         RandomNumberGenerator.Fill(queryId.AsSpan());
-
         var queryPacket = BuildDnsQuery(queryId, host, DnsTypeHttps);
 
-        // Send via a fresh per-query UDP socket.
-        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-        socket.Bind(new IPEndPoint(IPAddress.Any, 0));
+        // Derive the socket address family from the configured DNS server endpoint.
+        var addrFamily = _dnsServerEndPoint.AddressFamily;
+        using var socket = new Socket(addrFamily, SocketType.Dgram, ProtocolType.Udp);
+        var bindAddr = addrFamily == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
+        socket.Bind(new IPEndPoint(bindAddr, 0));
 
-        using var timeoutCts = new CancellationTokenSource(DnsQueryTimeoutMs);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
-
-        await socket.SendToAsync(queryPacket, SocketFlags.None, _dnsServerEndPoint, linked.Token);
+        await socket.SendToAsync(queryPacket, SocketFlags.None, _dnsServerEndPoint, ct);
 
         var responseBuffer = new byte[4096];
-        var received = await socket.ReceiveAsync(responseBuffer.AsMemory(), SocketFlags.None, linked.Token);
+        var received = await socket.ReceiveAsync(responseBuffer.AsMemory(), SocketFlags.None, ct);
 
-        return ParseDnsResponse(responseBuffer.AsSpan(0, received), queryId, host, port);
+        var parsed = ParseDnsResponseCore(responseBuffer.AsSpan(0, received), queryId, host, port);
+
+        if (parsed.IsTransient) return (null, isTransient: true);
+        if (parsed.BestRecord != null) return (parsed.BestRecord, isTransient: false);
+
+        // AliasMode chain following: bounded depth, loop guard via same-host check.
+        if (parsed.AliasTarget != null
+            && aliasDepth < MaxAliasDepth
+            && !string.Equals(parsed.AliasTarget, host, StringComparison.OrdinalIgnoreCase))
+        {
+            return await QueryCoreAsync(parsed.AliasTarget, port, ct, aliasDepth + 1);
+        }
+
+        return (null, isTransient: false); // definitive no-H3
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -110,25 +169,17 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
 
     private static byte[] BuildDnsQuery(ReadOnlySpan<byte> queryId, string host, ushort rrType)
     {
-        // Estimate: header (12) + encoded name + 4 (QTYPE + QCLASS)
         var buf = new System.IO.MemoryStream(64);
 
-        // Transaction ID
         buf.Write(queryId);
-        // Flags: standard query, RD=1
-        buf.Write(stackalloc byte[] { 0x01, 0x00 });
-        // QDCOUNT = 1
-        buf.Write(stackalloc byte[] { 0x00, 0x01 });
-        // ANCOUNT, NSCOUNT, ARCOUNT = 0
-        buf.Write(stackalloc byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 });
+        buf.Write(stackalloc byte[] { 0x01, 0x00 }); // Flags: standard query, RD=1
+        buf.Write(stackalloc byte[] { 0x00, 0x01 }); // QDCOUNT = 1
+        buf.Write(stackalloc byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }); // AN/NS/AR = 0
 
-        // QNAME: label-encoded host
         WriteDnsName(buf, host);
 
-        // QTYPE
         buf.WriteByte((byte)(rrType >> 8));
         buf.WriteByte((byte)(rrType & 0xFF));
-        // QCLASS IN
         buf.WriteByte((byte)(DnsClassIn >> 8));
         buf.WriteByte((byte)(DnsClassIn & 0xFF));
 
@@ -137,7 +188,6 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
 
     private static void WriteDnsName(System.IO.Stream buf, string name)
     {
-        // Remove trailing dot if present.
         var labels = name.TrimEnd('.').Split('.');
         foreach (var label in labels)
         {
@@ -149,76 +199,107 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // DNS response parser (internal for unit-testing)
+    // DNS response parser (core + public test hook)
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    ///     Public test hook — returns the best <see cref="SvcbResult" /> (or null) from a raw
+    ///     DNS response buffer without any coalescing or caching.
+    /// </summary>
     internal static SvcbResult? ParseDnsResponseInternal(
-        ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, string host, int queriedPort) =>
-        ParseDnsResponse(response, expectedId, host, queriedPort);
+        ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, string host, int queriedPort)
+        => ParseDnsResponseCore(response, expectedId, host, queriedPort).BestRecord;
 
-    private static SvcbResult? ParseDnsResponse(
+    private static DnsParseResult ParseDnsResponseCore(
         ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, string host, int queriedPort)
     {
-        if (response.Length < 12) return null;
+        if (response.Length < 12) return DnsParseResult.Transient;
 
-        // Validate transaction ID.
-        if (response[0] != expectedId[0] || response[1] != expectedId[1]) return null;
+        // Transaction ID must match.
+        if (response[0] != expectedId[0] || response[1] != expectedId[1])
+            return DnsParseResult.Transient;
 
-        // Flags byte 2: QR=1, check RCODE (lower 4 bits of byte 3).
+        // TC (Truncated) flag — bit 1 of byte 2. Truncated UDP responses are transient.
+        if ((response[2] & 0x02) != 0) return DnsParseResult.Transient;
+
+        // RCODE (lower 4 bits of byte 3): non-zero means NXDOMAIN, SERVFAIL, etc.
         var rcode = response[3] & 0x0F;
-        if (rcode != 0) return null; // NXDOMAIN (3) / SERVFAIL (2) / etc.
+        if (rcode != 0) return DnsParseResult.DefinitiveNegative;
 
         int anCount = (response[6] << 8) | response[7];
-        if (anCount == 0) return null;
+        if (anCount == 0) return DnsParseResult.DefinitiveNegative;
 
-        // Skip past the question section.
+        // Skip question section.
         int offset = 12;
-        if (!SkipDnsName(response, ref offset)) return null;
+        if (!SkipDnsName(response, ref offset)) return DnsParseResult.Transient;
         offset += 4; // QTYPE + QCLASS
 
-        // Scan answer section.
+        // Collect all HTTPS RR answers:
+        //   - ServiceMode (SvcPriority > 0): choose the record with the lowest priority.
+        //   - AliasMode   (SvcPriority = 0): capture the first target for chain following.
+        SvcbResult? bestRecord = null;
+        ushort bestPriority = ushort.MaxValue;
+        string? firstAlias = null;
+
         for (int i = 0; i < anCount && offset < response.Length; i++)
         {
-            if (!SkipDnsName(response, ref offset)) return null;
-            if (offset + 10 > response.Length) return null;
+            if (!SkipDnsName(response, ref offset)) return DnsParseResult.Transient;
+            if (offset + 10 > response.Length) return DnsParseResult.Transient;
 
             ushort rrType = (ushort)((response[offset] << 8) | response[offset + 1]);
-            // ushort rrClass = ...
             uint ttlSecs = (uint)((response[offset + 4] << 24) | (response[offset + 5] << 16)
                                  | (response[offset + 6] << 8) | response[offset + 7]);
             int rdLen = (response[offset + 8] << 8) | response[offset + 9];
             offset += 10;
 
-            if (offset + rdLen > response.Length) return null;
+            if (offset + rdLen > response.Length) return DnsParseResult.Transient;
 
-            if (rrType == DnsTypeHttps)
+            if (rrType == DnsTypeHttps && rdLen >= 2)
             {
-                var result = ParseHttpsRr(response.Slice(offset, rdLen), queriedPort, ttlSecs);
-                if (result != null) return result;
+                var rdata = response.Slice(offset, rdLen);
+                ushort svcPriority = (ushort)((rdata[0] << 8) | rdata[1]);
+
+                if (svcPriority == 0)
+                {
+                    // AliasMode: extract the alias target for bounded chain following.
+                    if (firstAlias == null)
+                    {
+                        int p = 2;
+                        firstAlias = ReadDnsName(rdata, ref p);
+                    }
+                }
+                else if (svcPriority < bestPriority)
+                {
+                    // ServiceMode: candidate with lower priority wins.
+                    var record = ParseServiceModeRr(rdata, queriedPort, ttlSecs);
+                    if (record != null)
+                    {
+                        bestRecord = record;
+                        bestPriority = svcPriority;
+                    }
+                }
             }
 
             offset += rdLen;
         }
 
-        return null;
+        if (bestRecord != null) return new DnsParseResult(bestRecord, null, false);
+        if (firstAlias != null) return new DnsParseResult(null, firstAlias, false);
+        return DnsParseResult.DefinitiveNegative;
     }
 
     /// <summary>
-    ///     Parses an HTTPS RR RDATA section per RFC 9460. Returns non-null only when
-    ///     SvcPriority &gt; 0 (skip AliasMode) and the <c>alpn</c> SvcParam (key 1) contains "h3".
+    ///     Parses a ServiceMode HTTPS RR RDATA section (SvcPriority &gt; 0) and returns a
+    ///     <see cref="SvcbResult" /> when the <c>alpn</c> SvcParam (key 1) contains "h3".
+    ///     Returns <see langword="null" /> when ALPN is absent or does not include "h3".
     /// </summary>
-    private static SvcbResult? ParseHttpsRr(ReadOnlySpan<byte> rdata, int queriedPort, uint ttlSecs)
+    private static SvcbResult? ParseServiceModeRr(ReadOnlySpan<byte> rdata, int queriedPort, uint ttlSecs)
     {
-        if (rdata.Length < 2) return null;
+        int pos = 2; // skip SvcPriority (already extracted by caller)
 
-        ushort svcPriority = (ushort)((rdata[0] << 8) | rdata[1]);
-        if (svcPriority == 0) return null; // AliasMode — skip
+        var targetName = ReadDnsName(rdata, ref pos);
+        if (pos < 0) return null; // malformed
 
-        // Skip TargetName (label-encoded, terminated by 0).
-        int pos = 2;
-        if (!SkipDnsName(rdata, ref pos)) return null;
-
-        // Parse SvcParams.
         bool hasH3Alpn = false;
         int altPort = queriedPort;
 
@@ -233,7 +314,10 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
             if (key == 1) // alpn
                 hasH3Alpn = ParseAlpnParam(rdata.Slice(pos, valLen));
             else if (key == 3 && valLen == 2) // port
-                altPort = (rdata[pos] << 8) | rdata[pos + 1];
+            {
+                int p = (rdata[pos] << 8) | rdata[pos + 1];
+                if (p > 0) altPort = p; // skip invalid port 0
+            }
 
             pos += valLen;
         }
@@ -241,10 +325,14 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
         if (!hasH3Alpn) return null;
 
         var ttl = TimeSpan.FromSeconds(Math.Min(ttlSecs, 3600)); // clamp to 1 hour
-        return new SvcbResult(altPort, ttl);
+
+        // TargetName "." (empty string after parsing) means owner name — normalize to null.
+        var effectiveTarget = string.IsNullOrEmpty(targetName) ? null : targetName;
+
+        return new SvcbResult(altPort, ttl, effectiveTarget);
     }
 
-    /// <summary>Parses the ALPN SvcParam value, returning true when "h3" is present.</summary>
+    /// <summary>Parses the ALPN SvcParam wire format, returning true when "h3" is present.</summary>
     private static bool ParseAlpnParam(ReadOnlySpan<byte> value)
     {
         int pos = 0;
@@ -261,6 +349,50 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     }
 
     /// <summary>
+    ///     Reads a DNS wire-format name from <paramref name="rdata" /> starting at
+    ///     <paramref name="offset" />, advancing <paramref name="offset" /> past it.
+    ///     Compression pointers are skipped without following (no full message context available).
+    ///     Returns an empty string for <c>.</c> (root label = owner name).
+    ///     Returns <see langword="null" /> on malformed or truncated input.
+    /// </summary>
+    private static string? ReadDnsName(ReadOnlySpan<byte> rdata, ref int offset)
+    {
+        var sb = new StringBuilder();
+        int iterations = 0;
+
+        while (offset < rdata.Length)
+        {
+            if (++iterations > 128) return null;
+
+            byte len = rdata[offset];
+
+            if (len == 0)
+            {
+                offset++;
+                return sb.ToString().TrimEnd('.');
+            }
+
+            if ((len & 0xC0) == 0xC0)
+            {
+                // Compression pointer: skip without following; return whatever we have.
+                offset += 2;
+                return sb.Length > 0 ? sb.ToString().TrimEnd('.') : null;
+            }
+
+            if ((len & 0xC0) != 0) return null; // reserved bits
+
+            offset++;
+            if (offset + len > rdata.Length) return null;
+
+            if (sb.Length > 0) sb.Append('.');
+            sb.Append(Encoding.ASCII.GetString(rdata.Slice(offset, len)));
+            offset += len;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     ///     Advances <paramref name="offset" /> past a DNS label-encoded name, following compression
     ///     pointers (RFC 1035 §4.1.4). Returns false if the name is malformed.
     /// </summary>
@@ -269,16 +401,45 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
         int iterations = 0;
         while (offset < data.Length)
         {
-            if (++iterations > 128) return false; // infinite-loop guard
+            if (++iterations > 128) return false;
 
             byte len = data[offset];
-            if (len == 0) { offset++; return true; }                   // root label
-            if ((len & 0xC0) == 0xC0) { offset += 2; return true; }   // compression pointer
-            if ((len & 0xC0) != 0) return false;                       // reserved
+            if (len == 0) { offset++; return true; }
+            if ((len & 0xC0) == 0xC0) { offset += 2; return true; }
+            if ((len & 0xC0) != 0) return false;
 
             offset += 1 + len;
         }
         return false;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Internal types
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Carries the result of a completed shared DNS query task.</summary>
+    private sealed class SvcbQueryState
+    {
+        internal SvcbQueryState(SvcbResult? result) => Result = result;
+        internal SvcbResult? Result { get; }
+    }
+
+    /// <summary>Structured result of <see cref="ParseDnsResponseCore" />.</summary>
+    private readonly struct DnsParseResult
+    {
+        internal static readonly DnsParseResult Transient = new(null, null, isTransient: true);
+        internal static readonly DnsParseResult DefinitiveNegative = new(null, null, isTransient: false);
+
+        internal DnsParseResult(SvcbResult? best, string? alias, bool isTransient)
+        {
+            BestRecord = best;
+            AliasTarget = alias;
+            IsTransient = isTransient;
+        }
+
+        internal SvcbResult? BestRecord { get; }
+        internal string? AliasTarget { get; }
+        internal bool IsTransient { get; }
     }
 }
 #pragma warning restore CA1416
