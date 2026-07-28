@@ -46,11 +46,11 @@ internal static class QpackEncoderStreamReader
             {
                 // Insert With Name Reference: 1 S T Index(6) + value literal
                 bool isStatic = (b & 0x40) != 0;
-                if (!TryReadPrefixedInt(span, 6, out ulong nameIndex, out int consumed)) { await RefillAsync(stream, ref remaining, buffer, ct); continue; }
+                if (!TryReadPrefixedInt(span, 6, out ulong nameIndex, out int consumed)) { remaining = await RefillAsync(stream, buffer, ct); continue; }
                 remaining = remaining[consumed..];
                 span = remaining.Span;
 
-                if (!TryReadStringLiteral(span, out string value, out consumed)) { await RefillAsync(stream, ref remaining, buffer, ct); continue; }
+                if (!TryReadStringLiteral(span, out string value, out consumed)) { remaining = await RefillAsync(stream, buffer, ct); continue; }
                 remaining = remaining[consumed..];
 
                 string name;
@@ -73,7 +73,7 @@ internal static class QpackEncoderStreamReader
             else if ((b & 0x40) != 0)
             {
                 // Set Dynamic Table Capacity: 01 Capacity(6)
-                if (!TryReadPrefixedInt(span, 6, out ulong newCapacity, out int consumed)) { await RefillAsync(stream, ref remaining, buffer, ct); continue; }
+                if (!TryReadPrefixedInt(span, 6, out ulong newCapacity, out int consumed)) { remaining = await RefillAsync(stream, buffer, ct); continue; }
                 remaining = remaining[consumed..];
 
                 context.InboundDecoderTable.SetCapacity((uint)Math.Min(newCapacity, uint.MaxValue));
@@ -81,15 +81,15 @@ internal static class QpackEncoderStreamReader
             else if ((b & 0x20) != 0)
             {
                 // Insert With Literal Name: 001 N Name-literal Value-literal
-                if (remaining.Length < 1) { await RefillAsync(stream, ref remaining, buffer, ct); continue; }
+                if (remaining.Length < 1) { remaining = await RefillAsync(stream, buffer, ct); continue; }
                 remaining = remaining[1..]; // skip pattern byte
                 span = remaining.Span;
 
-                if (!TryReadStringLiteral(span, out string name, out int consumed)) { await RefillAsync(stream, ref remaining, buffer, ct); continue; }
+                if (!TryReadStringLiteral(span, out string name, out int consumed)) { remaining = await RefillAsync(stream, buffer, ct); continue; }
                 remaining = remaining[consumed..];
                 span = remaining.Span;
 
-                if (!TryReadStringLiteral(span, out string value, out consumed)) { await RefillAsync(stream, ref remaining, buffer, ct); continue; }
+                if (!TryReadStringLiteral(span, out string value, out consumed)) { remaining = await RefillAsync(stream, buffer, ct); continue; }
                 remaining = remaining[consumed..];
 
                 context.InboundDecoderTable.Insert(name, value, context.InFlightMinAbsoluteIndex);
@@ -98,7 +98,7 @@ internal static class QpackEncoderStreamReader
             else
             {
                 // Duplicate: 000 Index(5)
-                if (!TryReadPrefixedInt(span, 5, out ulong dupIndex, out int consumed)) { await RefillAsync(stream, ref remaining, buffer, ct); continue; }
+                if (!TryReadPrefixedInt(span, 5, out ulong dupIndex, out int consumed)) { remaining = await RefillAsync(stream, buffer, ct); continue; }
                 remaining = remaining[consumed..];
 
                 if (context.InboundDecoderTable.TryGetByAbsoluteIndex(dupIndex, out string dupName, out string dupValue))
@@ -110,10 +110,10 @@ internal static class QpackEncoderStreamReader
         }
     }
 
-    private static async Task RefillAsync(QuicStream stream, ref ReadOnlyMemory<byte> remaining, byte[] buffer, CancellationToken ct)
+    private static async Task<ReadOnlyMemory<byte>> RefillAsync(QuicStream stream, byte[] buffer, CancellationToken ct)
     {
         int read = await stream.ReadAsync(buffer, ct);
-        remaining = read == 0 ? ReadOnlyMemory<byte>.Empty : buffer.AsMemory(0, read);
+        return read == 0 ? ReadOnlyMemory<byte>.Empty : buffer.AsMemory(0, read);
     }
 
     private static bool TryReadPrefixedInt(ReadOnlySpan<byte> data, int prefixBits, out ulong value, out int consumed)

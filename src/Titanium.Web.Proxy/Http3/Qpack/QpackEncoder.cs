@@ -96,11 +96,7 @@ internal static class QpackEncoder
         }
         else
         {
-            // Encoded Required Insert Count = (count % (2 * MaxEntries)) + 1
-            // where MaxEntries = floor(MaxTableCapacity / 32)  (RFC 9204 §4.5.1.1)
-            var maxEntries = (ulong)(context!.MaxTableCapacityFromPeer / 32);
-            if (maxEntries == 0) maxEntries = 1;
-            var encodedRic = (maxRequiredInsertCount % (2 * maxEntries)) + 1;
+            var encodedRic = EncodeRequiredInsertCount(maxRequiredInsertCount, context!.MaxTableCapacityFromPeer);
             ricByte = (byte)(encodedRic & 0xFF);
             sByte = 0x00; // S=0, Delta Base = 0 (post-base indexing not used)
         }
@@ -110,6 +106,17 @@ internal static class QpackEncoder
         result[1] = sByte;
         body.GetBuffer().AsSpan(0, (int)body.Length).CopyTo(result.AsSpan(2));
         return result;
+    }
+
+    /// <summary>
+    ///     Encodes the Required Insert Count per RFC 9204 §4.5.1.1.
+    ///     Encoded = (count % (2 * MaxEntries)) + 1, where MaxEntries = floor(MaxTableCapacity / 32).
+    /// </summary>
+    internal static ulong EncodeRequiredInsertCount(ulong requiredInsertCount, uint maxTableCapacity)
+    {
+        var maxEntries = (ulong)(maxTableCapacity / 32);
+        if (maxEntries == 0) maxEntries = 1;
+        return (requiredInsertCount % (2 * maxEntries)) + 1;
     }
 
     // Indexed Header Field (static): 1 1 S=1 Index(6) — pattern 0xC0

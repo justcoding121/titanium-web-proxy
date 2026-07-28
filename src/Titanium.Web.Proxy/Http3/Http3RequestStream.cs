@@ -80,7 +80,7 @@ internal static class Http3RequestStream
                 // When dynamic table is enabled, DecodeAsync waits until the required insert count is
                 // satisfied by the encoder stream reader, then decodes using table entries.
                 var decodedHeaders = await QpackDecoder.DecodeAsync(
-                    headersFrame.Payload.Span, qpackContext, cancellationToken);
+                    headersFrame.Payload, qpackContext, cancellationToken);
                 qpackContext?.EnqueueSectionAck(stream.Id);
                 var (method, scheme, authority, path, regularHeaders) = ExtractPseudoHeaders(decodedHeaders);
 
@@ -230,7 +230,7 @@ internal static class Http3RequestStream
         var body = new System.IO.MemoryStream();
         try
         {
-            if (server.OnRequestBodyWrite == null)
+            if (!server.HasOnRequestBodyWriteSubscribers)
             {
                 // Fast path: no subscriber — read all frames without creating hook args.
                 while (true)

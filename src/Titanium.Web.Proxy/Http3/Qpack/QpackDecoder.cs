@@ -28,12 +28,15 @@ internal static class QpackDecoder
     ///     dynamic table has the required number of entries or <paramref name="ct" /> is cancelled.
     /// </summary>
     public static async Task<List<(string Name, string Value)>> DecodeAsync(
-        ReadOnlySpan<byte> data, QpackContext? context, CancellationToken ct)
+        ReadOnlyMemory<byte> data, QpackContext? context, CancellationToken ct)
     {
         if (context != null)
         {
             // Peek at the Required Insert Count before decoding the full block.
-            if (data.Length >= 1 && TryReadPrefixedInt(data, 8, out ulong encodedRic, out _) && encodedRic > 0)
+            // We must not hold a Span across the await, so peek via the Memory indexer.
+            if (data.Length >= 1 &&
+                TryReadPrefixedInt(data.Span, 8, out ulong encodedRic, out _) &&
+                encodedRic > 0)
             {
                 // Decode the RequiredInsertCount per RFC 9204 §4.5.1.1.
                 var requiredInsertCount = DecodeRequiredInsertCount(
@@ -42,10 +45,11 @@ internal static class QpackDecoder
                     await context.AwaitInsertCountAsync(requiredInsertCount, ct);
             }
         }
-        return DecodeCore(data, context);
+        // Only take the Span after all awaits are done.
+        return DecodeCore(data.Span, context);
     }
 
-    private static ulong DecodeRequiredInsertCount(ulong encodedRic, ulong insertCount, uint maxTableCapacity)
+    internal static ulong DecodeRequiredInsertCount(ulong encodedRic, ulong insertCount, uint maxTableCapacity)
     {
         if (encodedRic == 0) return 0;
         var maxEntries = (ulong)(maxTableCapacity / 32);

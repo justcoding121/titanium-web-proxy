@@ -325,7 +325,7 @@ public partial class ProxyServer : IDisposable
     ///     <see cref="DnsServerEndPoint" />. Replace with a mock in tests.
     /// </summary>
     [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
-    public Http3.Dns.IHttpsSvcbResolver HttpsSvcbResolver
+    internal Http3.Dns.IHttpsSvcbResolver HttpsSvcbResolver
     {
         get => _httpsSvcbResolver ??= new Http3.Dns.UdpSvcbDnsResolver(DnsServerEndPoint);
         set => _httpsSvcbResolver = value;
@@ -781,6 +781,15 @@ public partial class ProxyServer : IDisposable
     ///     without buffering the whole body. Do not combine with SessionEventArgs.GetResponseBody (which buffers).
     /// </summary>
     public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnResponseBodyWrite;
+
+    internal bool HasOnRequestBodyWriteSubscribers => OnRequestBodyWrite != null;
+    internal bool HasOnResponseBodyWriteSubscribers => OnResponseBodyWrite != null;
+
+    internal Task InvokeOnRequestBodyWriteAsync(object sender, BeforeBodyWriteEventArgs args) =>
+        OnRequestBodyWrite?.Invoke(sender, args) ?? Task.CompletedTask;
+
+    internal Task InvokeOnResponseBodyWriteAsync(object sender, BeforeBodyWriteEventArgs args) =>
+        OnResponseBodyWrite?.Invoke(sender, args) ?? Task.CompletedTask;
 
     /// <summary>
     ///     Intercept after response event from server.
