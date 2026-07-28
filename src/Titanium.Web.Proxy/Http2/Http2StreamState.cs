@@ -87,4 +87,23 @@ internal sealed class Http2StreamState
     ///     and this channel is non-null, instead of following the normal body-buffering path.
     /// </summary>
     internal Channel<ReadOnlyMemory<byte>>? InboundTunnelChannel { get; set; }
+
+    /// <summary>
+    ///     Set by an external bridge handler (e.g. the H2→H3 bridge) before returning from
+    ///     <c>onBeforeRequest</c> to signal that it owns this stream's origin round trip and
+    ///     response emission entirely.
+    ///     <para>
+    ///         When <see langword="true"/>, <see cref="Http2Helper"/> must:
+    ///         <list type="bullet">
+    ///           <item><description>suppress forwarding the request HEADERS to the native H2 origin;</description></item>
+    ///           <item><description>NOT invoke the inline synthetic-response emitter (which is reserved for
+    ///               BeforeRequest-time <c>Ok</c>/<c>GenericResponse</c>/<c>Redirect</c> etc.);</description></item>
+    ///           <item><description>let the background task registered in <see cref="SyntheticTask"/> be the sole
+    ///               owner of response emission via <c>Http2Helper.EmitSyntheticResponseAsync</c>.</description></item>
+    ///         </list>
+    ///         Register this flag before returning from <c>onBeforeRequest</c> so the check in
+    ///         <c>ProcessCompleteHeaderBlockAsync</c> always sees the up-to-date value.
+    ///     </para>
+    /// </summary>
+    internal bool IsExternalBridge { get; set; }
 }

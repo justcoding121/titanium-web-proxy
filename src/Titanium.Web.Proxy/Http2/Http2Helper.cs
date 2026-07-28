@@ -725,10 +725,19 @@ namespace Titanium.Web.Proxy.Http2
                                 && ecTunnelState.InboundTunnelChannel != null;
                             bool isNativeExtendedConnect = ecTunnelState?.IsExtendedConnect == true
                                 && ecTunnelState.InboundTunnelChannel == null;
+                            bool isExternalBridge = ecTunnelState?.IsExternalBridge == true;
 
                             if (isExtendedConnectTunnel)
                             {
                                 // h2→h1 bridge: the tunnel task owns the origin connection; skip.
+                            }
+                            else if (isExternalBridge)
+                            {
+                                // An external bridge (e.g. H2→H3) registered its background task in
+                                // SyntheticTask and owns this stream's origin round trip entirely.
+                                // Suppress forwarding the request HEADERS to the native H2 origin;
+                                // the bridge task emits the response via EmitSyntheticResponseAsync.
+                                syntheticStreams.Add(hbStreamId);
                             }
                             else if (isNativeExtendedConnect && output is not NullOriginStream)
                             {
