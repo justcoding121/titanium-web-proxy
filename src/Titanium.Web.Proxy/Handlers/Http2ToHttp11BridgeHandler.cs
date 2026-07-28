@@ -283,7 +283,7 @@ public partial class ProxyServer
             // unlike the HTTP/1.1 path which may still need to copy the body live off the client stream).
             var body = request.CompressBodyAndUpdateContentLength();
 
-            await sessionArgs.HttpClient.SendRequest(Enable100ContinueBehaviour, true, OriginHttpVersionPolicy,
+            await sessionArgs.HttpClient.SendRequest(Enable100ContinueBehaviour, true, sessionArgs.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy,
                 cancellationToken);
 
             if (request.HasBody && !request.ExpectationFailed)

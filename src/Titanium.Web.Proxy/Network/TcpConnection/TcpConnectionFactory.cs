@@ -638,13 +638,16 @@ internal class TcpConnectionFactory : IDisposable
                     }
 
                     await Task.WhenAny(connectTask,
-                        Task.Delay(proxyServer.ConnectTimeOutSeconds * 1000, cancellationToken));
+                        Task.Delay((int)(sessionArgs?.ConnectTimeout?.TotalMilliseconds ?? proxyServer.ConnectTimeOutSeconds * 1000.0), cancellationToken));
                     if (!connectTask.IsCompleted || !tcpServerSocket.Connected)
                     {
                         // Connect race lost to ConnectTimeOutSeconds — surface a typed timeout so
                         // diagnostics / callers can distinguish it from other connect failures.
+                        var effectiveTimeoutSecs = sessionArgs?.ConnectTimeout.HasValue == true
+                            ? $"{sessionArgs.ConnectTimeout!.Value.TotalSeconds:0.#}s"
+                            : $"{proxyServer.ConnectTimeOutSeconds}s";
                         lastException = new ProxyTimeoutException(
-                            $"Timed out connecting to {hostname}:{port} after {proxyServer.ConnectTimeOutSeconds}s.",
+                            $"Timed out connecting to {hostname}:{port} after {effectiveTimeoutSecs}.",
                             ProxyTimeoutKind.Connect);
 
                         // here we can just do some cleanup and let the loop continue since

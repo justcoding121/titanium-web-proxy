@@ -1351,6 +1351,16 @@ public partial class ProxyServer : IDisposable
         return new RetryPolicy<T>(NetworkFailureRetryAttempts, TcpConnectionFactory);
     }
 
+    /// <summary>
+    ///     Connection retry policy that respects the per-session
+    ///     <see cref="SessionEventArgs.NetworkFailureRetryAttempts" /> override when set.
+    /// </summary>
+    private RetryPolicy<T> RetryPolicy<T>(SessionEventArgs? sessionOverride) where T : Exception
+    {
+        var attempts = sessionOverride?.NetworkFailureRetryAttempts ?? NetworkFailureRetryAttempts;
+        return new RetryPolicy<T>(attempts, TcpConnectionFactory);
+    }
+
     private bool disposed;
 
     public void Dispose()

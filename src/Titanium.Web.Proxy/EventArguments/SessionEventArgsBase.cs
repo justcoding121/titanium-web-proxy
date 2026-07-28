@@ -102,6 +102,14 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     }
 
     /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.ConnectTimeOutSeconds" />.
+    ///     <see langword="null" /> uses the server default; <see cref="TimeSpan.Zero" /> or negative
+    ///     disables the connect timeout. Set in <c>BeforeRequest</c> to speed up or slow down the
+    ///     TCP connect race for this individual request.
+    /// </summary>
+    public TimeSpan? ConnectTimeout { get; set; }
+
+    /// <summary>
     ///     Enable/disable Windows Authentication (NTLM/Kerberos) for the current session.
     /// </summary>
     public bool EnableWinAuth
