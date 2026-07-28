@@ -2596,7 +2596,7 @@ namespace Titanium.Web.Proxy.Http2
 
             public override void Write(byte[] buffer, int offset, int count)
             {
-                WriteAsync(buffer, offset, count, CancellationToken.None).GetAwaiter().GetResult();
+                throw new NotSupportedException("Use WriteAsync.");
             }
 
             public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct)

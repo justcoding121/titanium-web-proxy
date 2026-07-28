@@ -112,6 +112,10 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
         }
     }
 
-    public async ValueTask DisposeAsync() => await DrainAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await DrainAsync();
+        _drainGate.Dispose();
+    }
 }
 #pragma warning restore CA1416
