@@ -37,17 +37,29 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     ///     Returns an open <see cref="QuicServerConnection" /> for the given origin, reusing a
     ///     pooled connection when available or creating a new one.
     /// </summary>
+    /// <param name="connectHost">
+    ///     The DNS/hostname used for the actual QUIC UDP connection. When an HTTPS/SVCB record
+    ///     advertises a TargetName, this will differ from <paramref name="sniHost" />.
+    /// </param>
+    /// <param name="sniHost">
+    ///     The TLS SNI host (origin authority). Used for certificate validation and the cache key's
+    ///     security identity so different origins sharing the same connect target are not coalesced.
+    ///     When <see langword="null" />, defaults to <paramref name="connectHost" />.
+    /// </param>
     internal async ValueTask<QuicServerConnection> GetOrCreateAsync(
-        string hostName,
+        string connectHost,
         int port,
         IPEndPoint? upStreamEndPoint,
         IExternalProxy? upStreamProxy,
         RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? sniHost = null)
     {
         if (_draining) throw new InvalidOperationException("QuicConnectionPool is draining.");
 
-        var cacheKey = QuicConnectionFactory.GetCacheKey(hostName, port, upStreamProxy, upStreamEndPoint);
+        var effectiveSniHost = sniHost ?? connectHost;
+        var cacheKey = QuicConnectionFactory.GetCacheKey(connectHost, port, effectiveSniHost,
+            upStreamProxy, upStreamEndPoint);
 
         if (_pool.TryGetValue(cacheKey, out var queue))
         {
@@ -63,7 +75,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
         }
 
         return await _factory.CreateAsync(
-            hostName, port, upStreamEndPoint, upStreamProxy,
+            connectHost, effectiveSniHost, port, upStreamEndPoint, upStreamProxy,
             cacheKey, remoteCertificateValidationCallback, cancellationToken);
     }
 

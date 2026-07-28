@@ -10,4 +10,10 @@ namespace Titanium.Web.Proxy.Http3.Dns;
 ///     the queried port (or when the SVCB record does not contain a <c>port</c> SvcParam).
 /// </param>
 /// <param name="Ttl">DNS TTL to use as the capability-cache lifetime.</param>
-internal sealed record SvcbResult(int AltPort, TimeSpan Ttl);
+/// <param name="TargetName">
+///     The ServiceMode <c>TargetName</c> from the HTTPS RR, or <see langword="null" /> when the
+///     record uses <c>.</c> (root label) meaning the owner name.  When non-null, the QUIC connection
+///     must be established to this hostname while the original origin host is retained for TLS SNI
+///     and the HTTP/3 <c>:authority</c> pseudo-header.
+/// </param>
+internal sealed record SvcbResult(int AltPort, TimeSpan Ttl, string? TargetName = null);

@@ -27,16 +27,25 @@ internal sealed class QuicConnectionFactory
     }
 
     /// <summary>
-    ///     Establishes a new QUIC connection to <paramref name="hostName" />:<paramref name="port" />
+    ///     Establishes a new QUIC connection to <paramref name="connectHost" />:<paramref name="port" />
     ///     and wraps it in a <see cref="QuicServerConnection" />.
     /// </summary>
+    /// <param name="connectHost">
+    ///     The DNS/hostname used for the UDP QUIC connection. When an HTTPS/SVCB record advertises a
+    ///     <c>TargetName</c>, this will differ from <paramref name="sniHost" />.
+    /// </param>
+    /// <param name="sniHost">
+    ///     The hostname presented in the TLS SNI extension and used for certificate validation.
+    ///     This is always the origin authority host (the URI host from the HTTP request).
+    /// </param>
     /// <exception cref="QuicProxyNotSupportedException">
     ///     Thrown when <paramref name="upStreamProxy" /> is non-null. <c>System.Net.Quic</c> does not
     ///     expose a mechanism for CONNECT tunnelling or SOCKS5 UDP ASSOCIATE; the caller must catch this
     ///     and fall back to a TCP-based bridge so proxy rules are honoured.
     /// </exception>
     internal async Task<QuicServerConnection> CreateAsync(
-        string hostName,
+        string connectHost,
+        string sniHost,
         int port,
         IPEndPoint? upStreamEndPoint,
         IExternalProxy? upStreamProxy,
@@ -44,39 +53,41 @@ internal sealed class QuicConnectionFactory
         RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
         CancellationToken cancellationToken)
     {
-        // System.Net.Quic (MsQuic) does not expose CONNECT tunnelling or SOCKS5 UDP ASSOCIATE.
-        // Throw so the caller can fall back to TCP where proxy routing is supported.
         if (upStreamProxy != null)
             throw new QuicProxyNotSupportedException(upStreamProxy.ToString() ?? "unknown");
 
         var clientOptions = new QuicClientConnectionOptions
         {
-            RemoteEndPoint = new DnsEndPoint(hostName, port),
+            // Connect to the SVCB TargetName (or the origin host when no TargetName).
+            RemoteEndPoint = new DnsEndPoint(connectHost, port),
             ClientAuthenticationOptions = new SslClientAuthenticationOptions
             {
                 ApplicationProtocols = new List<SslApplicationProtocol> { SslApplicationProtocol.Http3 },
-                TargetHost = hostName,
+                // SNI and certificate validation use the origin authority, not the connect host.
+                TargetHost = sniHost,
                 RemoteCertificateValidationCallback = remoteCertificateValidationCallback
                     ?? DefaultValidationCallback
             },
             DefaultStreamErrorCode = (long)Http3.Http3ErrorCode.RequestCancelled,
             DefaultCloseErrorCode = (long)Http3.Http3ErrorCode.NoError,
             LocalEndPoint = upStreamEndPoint,
-            MaxInboundBidirectionalStreams = 0, // client does not accept server-initiated bidirectional streams
+            MaxInboundBidirectionalStreams = 0,
             MaxInboundUnidirectionalStreams = 3  // control, QPACK encoder, QPACK decoder
         };
 
         var connectStartedAt = DateTime.UtcNow;
         var connection = await QuicConnection.ConnectAsync(clientOptions, cancellationToken);
 
+        // Store the SNI host as the canonical HostName so Alt-Svc / capability cache keying is
+        // consistent with the origin identity rather than the transport connect address.
         var serverConnection = new QuicServerConnection(
-            _proxyServer, connection, hostName, port,
+            _proxyServer, connection, sniHost, port,
             upStreamProxy, upStreamEndPoint, cacheKey);
 
         if (_proxyServer.EnableRequestTimingCapture)
         {
             var timing = new UpstreamConnectionTiming(connectStartedAt);
-            timing.MarkTlsHandshakeCompleted(); // QUIC combines transport + TLS
+            timing.MarkTlsHandshakeCompleted();
             timing.MarkEstablished();
             serverConnection.Timing = timing;
         }
@@ -89,12 +100,17 @@ internal sealed class QuicConnectionFactory
         => _proxyServer.ValidateServerCertificate(sender, null, certificate, chain, sslPolicyErrors);
 
     /// <summary>
-    ///     Builds the pool cache key for a QUIC origin connection, consistent with the TCP pool format.
+    ///     Builds the pool cache key for a QUIC origin connection.
+    ///     The key encodes the connect target (<paramref name="connectHost" />:<paramref name="port" />),
+    ///     the TLS identity (<paramref name="sniHost" />), and the proxy/endpoint coordinates so that
+    ///     connections to different SVCB TargetNames for the same origin are kept separate and
+    ///     connections to the same target for different origins are never coalesced.
     /// </summary>
-    internal static string GetCacheKey(string hostName, int port, IExternalProxy? upStreamProxy,
-        IPEndPoint? upStreamEndPoint)
+    internal static string GetCacheKey(
+        string connectHost, int port, string sniHost,
+        IExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint)
     {
-        return $"h3:{hostName}:{port}:{upStreamProxy?.ToString() ?? string.Empty}:{upStreamEndPoint?.ToString() ?? string.Empty}";
+        return $"h3:{connectHost}:{port}:{sniHost}:{upStreamProxy?.ToString() ?? string.Empty}:{upStreamEndPoint?.ToString() ?? string.Empty}";
     }
 }
 #pragma warning restore CA1416

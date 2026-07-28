@@ -45,7 +45,8 @@ public partial class ProxyServer
 
             var altPort = entry.Port == port ? int.MinValue : entry.Port;
             var ttl = TimeSpan.FromSeconds(Math.Min(entry.MaxAgeSeconds, Http3OriginCapabilityCache.DefaultTtl.TotalSeconds * 2));
-            Http3OriginCapabilityCache.Set(hostAndPort, altPort, ttl);
+            // Alt-Svc does not carry a TargetName — always null here.
+            Http3OriginCapabilityCache.Set(hostAndPort, altPort, ttl, targetName: null);
             break; // Take the first valid h3 entry.
         }
     }
@@ -96,15 +97,16 @@ public partial class ProxyServer
         if (protocol == UpstreamHttpProtocol.Http11 || protocol == UpstreamHttpProtocol.Http2)
             return Http3OriginRoute.None;
 
-        // Auto: check the in-memory Alt-Svc capability cache (synchronous, no I/O).
+        // Auto: check the in-memory Alt-Svc / SVCB capability cache (synchronous, no I/O).
         var hostAndPort = $"{host}:{port}";
-        if (Http3OriginCapabilityCache.TryGet(hostAndPort, out var cachedAltPort))
+        if (Http3OriginCapabilityCache.TryGet(hostAndPort, out var cachedAltPort, out var cachedTarget))
         {
             var quicPort = cachedAltPort == int.MinValue ? port : cachedAltPort;
             return new Http3OriginRoute
             {
                 UseH3 = true,
                 QuicPort = quicPort,
+                QuicHost = cachedTarget, // null when cache entry came from Alt-Svc
                 Source = Http3RouteSource.AltSvcCache
             };
         }
@@ -117,11 +119,12 @@ public partial class ProxyServer
             {
                 // Normalize same-port vs alternative-port for the capability cache.
                 var altPort = svcb.AltPort == port ? int.MinValue : svcb.AltPort;
-                Http3OriginCapabilityCache.Set(hostAndPort, altPort, svcb.Ttl);
+                Http3OriginCapabilityCache.Set(hostAndPort, altPort, svcb.Ttl, svcb.TargetName);
                 return new Http3OriginRoute
                 {
                     UseH3 = true,
                     QuicPort = svcb.AltPort,
+                    QuicHost = svcb.TargetName, // null when SVCB uses "." (owner name)
                     Source = Http3RouteSource.HttpsSvcb
                 };
             }
@@ -156,13 +159,14 @@ public partial class ProxyServer
             return Http3OriginRoute.None;
 
         var hostAndPort = $"{host}:{port}";
-        if (Http3OriginCapabilityCache.TryGet(hostAndPort, out var cachedAltPort))
+        if (Http3OriginCapabilityCache.TryGet(hostAndPort, out var cachedAltPort, out var cachedTarget))
         {
             var quicPort = cachedAltPort == int.MinValue ? port : cachedAltPort;
             return new Http3OriginRoute
             {
                 UseH3 = true,
                 QuicPort = quicPort,
+                QuicHost = cachedTarget,
                 Source = Http3RouteSource.AltSvcCache
             };
         }

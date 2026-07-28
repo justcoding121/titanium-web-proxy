@@ -23,6 +23,15 @@ internal readonly struct Http3OriginRoute
     public int QuicPort { get; init; }
 
     /// <summary>
+    ///     Effective QUIC connect hostname.  Non-null when an HTTPS/SVCB record specifies a
+    ///     <c>TargetName</c> that differs from the origin authority; the QUIC connection is then
+    ///     established to this host while the original origin authority is still used for TLS SNI
+    ///     and the <c>:authority</c> pseudo-header.
+    ///     <see langword="null" /> means use the same host as the origin authority.
+    /// </summary>
+    public string? QuicHost { get; init; }
+
+    /// <summary>
     ///     When <see langword="true"/>, this route was produced by an explicit
     ///     <see cref="UpstreamHttpProtocol.Http3"/> policy and no TCP fallback is permitted.
     ///     When <see langword="false"/> (<see cref="UpstreamHttpProtocol.Auto"/>), the caller may
