@@ -75,4 +75,25 @@ public class ViaHeaderPolicyTests
         Assert.AreEqual("1.1 titanium-web-proxy, 2 titanium-web-proxy",
             headers.GetFirstHeader("via")?.Value);
     }
+
+    [TestMethod]
+    public void HasLoopedVia_MultipleEntriesInOneLine_DetectsLoop()
+    {
+        var headers = new HeaderCollection();
+        headers.AddHeader("Via", "1.1 first-proxy, 1.1 titanium-web-proxy, 1.0 edge");
+
+        Assert.IsTrue(ProxyServer.HasLoopedVia(headers, "titanium-web-proxy"));
+    }
+
+    [TestMethod]
+    public void AddViaHeader_AlreadyPresent_DoesNotDuplicate()
+    {
+        var headers = new HeaderCollection();
+        headers.AddHeader("via", "1.1 upstream, 2 titanium-web-proxy");
+
+        ProxyServer.AddViaHeader(headers, new Version(2, 0), "titanium-web-proxy");
+
+        Assert.AreEqual("1.1 upstream, 2 titanium-web-proxy",
+            headers.GetFirstHeader("via")?.Value);
+    }
 }

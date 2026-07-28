@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading;
@@ -452,11 +451,21 @@ public partial class ProxyServer
         if (acceptEncoding != null)
         {
             var supportedAcceptEncoding = new List<string>();
+            var remaining = acceptEncoding.AsSpan();
+            while (remaining.Length > 0)
+            {
+                int comma = remaining.IndexOf(',');
+                var token = (comma < 0 ? remaining : remaining.Slice(0, comma)).Trim();
+                if (token.Length > 0)
+                {
+                    var s = token.ToString();
+                    if (ProxyConstants.ProxySupportedCompressions.Contains(s))
+                        supportedAcceptEncoding.Add(s);
+                }
 
-            // only allow proxy supported compressions
-            supportedAcceptEncoding.AddRange(acceptEncoding.Split(',')
-                .Select(x => x.Trim())
-                .Where(x => ProxyConstants.ProxySupportedCompressions.Contains(x)));
+                if (comma < 0) break;
+                remaining = remaining.Slice(comma + 1);
+            }
 
             // uncompressed is always supported by proxy
             supportedAcceptEncoding.Add("identity");
@@ -519,9 +528,26 @@ public partial class ProxyServer
             // Keep this operation idempotent only for the exact received-protocol
             // entry. The same pseudonym with a different protocol represents a
             // distinct hop and must not suppress the correct entry.
-            bool alreadyPresent = existing
-                .SelectMany(header => header.Value.Split(','))
-                .Any(value => ViaEntryMatches(value.Trim(), protocol, pseudonym));
+            bool alreadyPresent = false;
+            foreach (var header in existing)
+            {
+                var remaining = header.Value.AsSpan();
+                while (remaining.Length > 0)
+                {
+                    int comma = remaining.IndexOf(',');
+                    var token = (comma < 0 ? remaining : remaining.Slice(0, comma)).Trim();
+                    if (token.Length > 0 && ViaEntryMatches(token.ToString(), protocol, pseudonym))
+                    {
+                        alreadyPresent = true;
+                        break;
+                    }
+
+                    if (comma < 0) break;
+                    remaining = remaining.Slice(comma + 1);
+                }
+
+                if (alreadyPresent) break;
+            }
 
             if (!alreadyPresent)
                 existing[0].SetValue($"{existing[0].Value}, {entry}");
@@ -539,9 +565,11 @@ public partial class ProxyServer
         }
     }
 
+    private static readonly char[] ViaWhitespaceChars = { ' ', '\t' };
+
     private static bool ViaEntryMatches(string viaEntry, string protocol, string pseudonym)
     {
-        int separator = viaEntry.IndexOfAny(new[] { ' ', '\t' });
+        int separator = viaEntry.IndexOfAny(ViaWhitespaceChars);
         if (separator <= 0 ||
             !string.Equals(viaEntry.Substring(0, separator), protocol, StringComparison.OrdinalIgnoreCase))
         {
@@ -560,7 +588,7 @@ public partial class ProxyServer
     {
         // A Via entry is: received-protocol RWS received-by [ RWS comment ].
         // RFC 9110 RWS permits SP or HTAB, and received-by can include an optional port.
-        int separator = viaEntry.IndexOfAny(new[] { ' ', '\t' });
+        int separator = viaEntry.IndexOfAny(ViaWhitespaceChars);
         if (separator < 0) return false;
 
         int receivedByStart = separator;
@@ -631,9 +659,19 @@ public partial class ProxyServer
         var viaHeaders = headers.GetHeaders("Via");
         if (viaHeaders == null || viaHeaders.Count == 0) return false;
 
-        return viaHeaders
-            .SelectMany(h => h.Value.Split(','))
-            .Select(v => v.Trim())
-            .Any(v => ViaTokenMatches(v, pseudonym));
+        foreach (var header in viaHeaders)
+        {
+            var remaining = header.Value.AsSpan();
+            while (remaining.Length > 0)
+            {
+                int comma = remaining.IndexOf(',');
+                var token = (comma < 0 ? remaining : remaining.Slice(0, comma)).Trim();
+                if (token.Length > 0 && ViaTokenMatches(token.ToString(), pseudonym)) return true;
+                if (comma < 0) break;
+                remaining = remaining.Slice(comma + 1);
+            }
+        }
+
+        return false;
     }
 }
