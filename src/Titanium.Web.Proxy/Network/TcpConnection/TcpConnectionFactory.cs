@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -783,9 +783,7 @@ internal class TcpConnectionFactory : IDisposable
 
                 ProxyLog.OriginHandshakeStarting(proxyServer.Logger, remoteHostName, remotePort, applicationProtocols);
                 await sslStream.AuthenticateAsClientAsync(options, cancellationToken);
-#if NET6_0_OR_GREATER
                 negotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
-#endif
                 ProxyLog.OriginHandshakeSucceeded(proxyServer.Logger, remoteHostName, remotePort, negotiatedApplicationProtocol);
 
                 timing?.MarkTlsHandshakeCompleted();

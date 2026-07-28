@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
 
 namespace Titanium.Web.Proxy.Http2;
@@ -48,4 +47,3 @@ internal class Http2Settings
     /// </summary>
     public Encoder? Encoder { get; set; }
 }
-#endif

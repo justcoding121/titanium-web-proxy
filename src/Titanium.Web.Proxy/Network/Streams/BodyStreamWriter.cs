@@ -84,7 +84,6 @@ internal sealed class BodyStreamWriter : Stream
         }
     }
 
-#if NET6_0_OR_GREATER
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
         if (System.Runtime.InteropServices.MemoryMarshal.TryGetArray(buffer, out var segment) && segment.Array != null)
@@ -97,7 +96,6 @@ internal sealed class BodyStreamWriter : Stream
             await WriteAsync(array, 0, array.Length, cancellationToken);
         }
     }
-#endif
 
     /// <summary>
     ///     Writes the terminating chunk when in chunked mode. Must be called once the consumer's write delegate

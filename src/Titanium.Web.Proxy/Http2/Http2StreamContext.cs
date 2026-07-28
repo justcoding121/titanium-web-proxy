@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System.IO;
 using System.Threading;
 
@@ -44,4 +43,3 @@ internal sealed class Http2StreamContext
     /// </summary>
     internal CancellationToken CancellationToken { get; }
 }
-#endif

@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 #pragma warning disable CA1416 // QUIC APIs are platform-specific; runtime check guards usage
 using System;
 using System.Diagnostics;
@@ -157,4 +156,3 @@ public class TransparentQuicProxyEndPoint : TransparentBaseProxyEndPoint
     internal override Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
         BeforeSslAuthenticateEventArgs connectArgs, ILogger logger) => Task.CompletedTask;
 }
-#endif

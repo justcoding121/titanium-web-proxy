@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.Buffers;
 using System.IO;
@@ -165,4 +164,3 @@ internal static class Http3VarInt
     }
 }
 #pragma warning restore CA1416
-#endif

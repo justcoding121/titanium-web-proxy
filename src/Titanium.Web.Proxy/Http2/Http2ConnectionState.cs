@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.Collections.Concurrent;
 using System.Threading;
@@ -143,4 +142,3 @@ internal sealed class Http2ConnectionState
         ServerSendFlow.RemoveStream(streamId);
     }
 }
-#endif

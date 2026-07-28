@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.Net.Quic;
 using System.Threading;
@@ -90,4 +89,3 @@ internal sealed class Http3Frame
         => await WriteAsync(stream, frameType, ReadOnlyMemory<byte>.Empty, cancellationToken);
 }
 #pragma warning restore CA1416
-#endif

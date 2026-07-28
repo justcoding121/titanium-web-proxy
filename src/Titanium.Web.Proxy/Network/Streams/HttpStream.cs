@@ -33,11 +33,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     // overloads (they fall back to Stream's sync-over-async), so we route Begin/End Read/Write
     // through our own Task-based async methods. Modern .NET implements true async socket I/O, so
     // this stays false there and the base Stream implementation is used directly.
-#if NETFRAMEWORK
-    private static readonly bool networkStreamHack;
-#else
     private static readonly bool networkStreamHack = false;
-#endif
 
     private int bufferPos;
 
@@ -65,23 +61,6 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
     public bool IsClosed { get; private set; }
 
-#if NETFRAMEWORK
-    static HttpStream()
-    {
-        // Detect whether NetworkStream provides its own cancellable ReadAsync. If it only inherits
-        // Stream's implementation (as on .NET Framework), enable the async routing hack below.
-        try
-        {
-            var method = typeof(NetworkStream).GetMethod(nameof(Stream.ReadAsync),
-                new[] { typeof(byte[]), typeof(int), typeof(int), typeof(CancellationToken) });
-            if (method == null || method.DeclaringType == typeof(Stream)) networkStreamHack = true;
-        }
-        catch
-        {
-            networkStreamHack = true;
-        }
-    }
-#endif
 
     private static readonly byte[] newLine = ProxyConstants.NewLineBytes;
     private readonly ProxyServer server;
@@ -349,12 +328,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     ///     less than the requested number, or it can be 0 (zero)
     ///     if the end of the stream has been reached.
     /// </returns>
-#if NET6_0_OR_GREATER
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken =
  default)
-#else
-    public async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
-#endif
     {
         if (Available == 0) await FillBufferAsync(cancellationToken);
 
@@ -1444,7 +1419,6 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         }
     }
 
-#if NET6_0_OR_GREATER
     /// <summary>
     ///     Asynchronously writes a sequence of bytes to the current stream, advances the current position within this stream by the number of bytes written, and monitors cancellation requests.
     /// </summary>
@@ -1471,35 +1445,4 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 ReportSuppressedFailure(ex);
             }
         }
-#else
-    /// <summary>
-    ///     Asynchronously writes a sequence of bytes to the current stream, advances the current position within this stream
-    ///     by the number of bytes written, and monitors cancellation requests.
-    /// </summary>
-    /// <param name="buffer">The buffer to write data from.</param>
-    /// <param name="cancellationToken">
-    ///     The token to monitor for cancellation requests. The default value is
-    ///     <see cref="P:System.Threading.CancellationToken.None" />.
-    /// </param>
-    /// <returns>A task that represents the asynchronous write operation.</returns>
-    public async Task WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
-    {
-        var buf = ArrayPool<byte>.Shared.Rent(buffer.Length);
-        try
-        {
-            buffer.CopyTo(buf);
-            await BaseStream.WriteAsync(buf, 0, buffer.Length, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            if (!IsNetworkStream)
-                throw;
-            ReportSuppressedFailure(ex);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buf);
-        }
-    }
-#endif
 }

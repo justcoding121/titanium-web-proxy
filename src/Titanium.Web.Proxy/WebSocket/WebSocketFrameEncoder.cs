@@ -65,11 +65,7 @@ public static class WebSocketFrameEncoder
             }
             else
             {
-#if NET6_0_OR_GREATER
                 ms.Write(payload);
-#else
-                ms.Write(payload.ToArray(), 0, length);
-#endif
             }
         }
 

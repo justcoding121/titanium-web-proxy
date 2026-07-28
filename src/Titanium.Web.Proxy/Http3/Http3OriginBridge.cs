@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 #pragma warning disable CA1416
 using System;
 using System.Collections.Generic;
@@ -232,4 +231,3 @@ internal static class Http3OriginBridge
     };
 }
 #pragma warning restore CA1416
-#endif

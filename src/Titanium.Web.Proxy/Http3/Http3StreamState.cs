@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System.Threading;
 using Titanium.Web.Proxy.EventArguments;
 
@@ -49,4 +48,3 @@ internal sealed class Http3StreamState
     /// </summary>
     public int FinalizedFlag;
 }
-#endif

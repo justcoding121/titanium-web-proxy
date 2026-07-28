@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 namespace Titanium.Web.Proxy.Http3.Qpack;
 
 /// <summary>
@@ -109,4 +108,3 @@ internal static class QpackStaticTable
         /* 98 */ ("x-frame-options", "sameorigin"),
     };
 }
-#endif

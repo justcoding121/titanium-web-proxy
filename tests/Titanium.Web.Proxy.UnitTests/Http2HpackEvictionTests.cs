@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System.IO;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -95,4 +94,3 @@ public class Http2HpackEvictionTests
         }
     }
 }
-#endif

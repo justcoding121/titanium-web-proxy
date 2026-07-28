@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 namespace Titanium.Web.Proxy.Http2;
 
 /// <summary>
@@ -16,4 +15,3 @@ internal enum Http2SettingsId
     /// <summary>RFC 8441 §3: enables extended CONNECT (WebSocket-over-HTTP/2) on this connection.</summary>
     EnableConnectProtocol = 0x8
 }
-#endif

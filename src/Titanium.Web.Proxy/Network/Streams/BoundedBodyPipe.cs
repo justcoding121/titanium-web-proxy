@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.IO;
 using System.IO.Pipelines;
@@ -121,4 +120,3 @@ internal sealed class BodySizeLimitExceededException : IOException
 {
     internal BodySizeLimitExceededException(string message) : base(message) { }
 }
-#endif
