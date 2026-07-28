@@ -459,9 +459,21 @@ public partial class ProxyServer : IDisposable
     ///     <see cref="LingerOption" /> (enabled with this timeout).
     ///     This is <b>not</b> the kernel TCP TIME_WAIT duration — TIME_WAIT is controlled by the OS.
     ///     A positive value means <c>Close</c> may block up to that many seconds flushing send buffers;
-    ///     use 0 for an abortive close (RST). Default is 30.
+    ///     use 0 for an abortive close (RST). Default is 0 so high-churn proxies avoid TIME_WAIT
+    ///     accumulation; the 1-second connection disposal delay already prefers peer-first close.
     /// </summary>
-    public int TcpTimeWaitSeconds { get; set; } = 30;
+    public int TcpTimeWaitSeconds { get; set; } = 0;
+
+    /// <summary>
+    ///     Enable TCP KeepAlive on client and server sockets so NAT/firewall mappings for
+    ///     long-lived CONNECT tunnels are refreshed. Default: true.
+    /// </summary>
+    public bool EnableTcpKeepAlive { get; set; } = true;
+
+    /// <summary>
+    ///     TCP listener accept backlog. Default: 512 for burst connection handling.
+    /// </summary>
+    public int ListenerBackLog { get; set; } = 512;
 
     /// <summary>
     ///     Should we reuse client/server tcp sockets.
@@ -1156,7 +1168,7 @@ public partial class ProxyServer : IDisposable
 
         try
         {
-            endPoint.Listener.Start();
+            endPoint.Listener.Start(ListenerBackLog);
 
             endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
 
@@ -1330,6 +1342,9 @@ public partial class ProxyServer : IDisposable
         tcpClientSocket.SendTimeout = ConnectionTimeOutSeconds * 1000;
 
         tcpClientSocket.LingerState = new LingerOption(true, TcpTimeWaitSeconds);
+
+        if (EnableTcpKeepAlive)
+            tcpClientSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 
         await InvokeClientConnectionCreateEvent(tcpClientSocket);
 

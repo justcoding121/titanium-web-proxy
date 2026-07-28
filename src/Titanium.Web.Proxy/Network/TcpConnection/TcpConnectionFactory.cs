@@ -172,8 +172,7 @@ internal class TcpConnectionFactory : IDisposable
         // NUL separator cannot appear in the individual parts, avoiding ambiguity between
         // e.g. ("ab", "c") and ("a", "bc").
         var material = (userName ?? string.Empty) + "\0" + (password ?? string.Empty);
-        using var sha = SHA256.Create();
-        var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(material));
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(material));
         return Convert.ToBase64String(hash);
     }
 
@@ -619,10 +618,18 @@ internal class TcpConnectionFactory : IDisposable
                     if (proxyServer.ReuseSocket && RunTime.IsSocketReuseAvailable())
                         tcpServerSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
 
-                    Task connectTask;
+                    if (proxyServer.EnableTcpKeepAlive)
+                        tcpServerSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+
+                    var connectTimeoutMs = (int)(sessionArgs?.ConnectTimeout?.TotalMilliseconds
+                        ?? proxyServer.ConnectTimeOutSeconds * 1000.0);
+                    var effectiveTimeoutSecs = sessionArgs?.ConnectTimeout.HasValue == true
+                        ? $"{sessionArgs.ConnectTimeout!.Value.TotalSeconds:0.#}s"
+                        : $"{proxyServer.ConnectTimeOutSeconds}s";
 
                     if (socks)
                     {
+                        Task connectTask;
                         if (externalProxy!.ProxyDnsRequests)
                         {
                             connectTask =
@@ -644,48 +651,52 @@ internal class TcpConnectionFactory : IDisposable
                             connectTask = ProxySocketConnectionTaskFactory.CreateTask(
                                 (ProxySocket.ProxySocket)tcpServerSocket, remoteIpAddresses[0], connectPortNumber);
                         }
+
+                        await Task.WhenAny(connectTask, Task.Delay(connectTimeoutMs, cancellationToken));
+                        if (!connectTask.IsCompleted || !tcpServerSocket.Connected)
+                        {
+                            // Connect race lost — dispose the socket so the in-flight BeginConnect aborts.
+                            lastException = new ProxyTimeoutException(
+                                $"Timed out connecting to {hostname}:{port} after {effectiveTimeoutSecs}.",
+                                ProxyTimeoutKind.Connect);
+
+                            try { connectTask.Dispose(); } catch { /* ignore */ }
+
+                            try
+                            {
+                                tcpServerSocket?.Dispose();
+                                tcpServerSocket = null;
+                            }
+                            catch { /* ignore */ }
+
+                            continue;
+                        }
                     }
                     else
                     {
-                        connectTask = SocketConnectionTaskFactory.CreateTask(tcpServerSocket, ipAddress, port);
-                    }
-
-                    await Task.WhenAny(connectTask,
-                        Task.Delay((int)(sessionArgs?.ConnectTimeout?.TotalMilliseconds ?? proxyServer.ConnectTimeOutSeconds * 1000.0), cancellationToken));
-                    if (!connectTask.IsCompleted || !tcpServerSocket.Connected)
-                    {
-                        // Connect race lost to ConnectTimeOutSeconds — surface a typed timeout so
-                        // diagnostics / callers can distinguish it from other connect failures.
-                        var effectiveTimeoutSecs = sessionArgs?.ConnectTimeout.HasValue == true
-                            ? $"{sessionArgs.ConnectTimeout!.Value.TotalSeconds:0.#}s"
-                            : $"{proxyServer.ConnectTimeOutSeconds}s";
-                        lastException = new ProxyTimeoutException(
-                            $"Timed out connecting to {hostname}:{port} after {effectiveTimeoutSecs}.",
-                            ProxyTimeoutKind.Connect);
-
-                        // here we can just do some cleanup and let the loop continue since
-                        // we will either get a connection or wind up with a null tcpClient
-                        // which will throw
+                        // ConnectAsync + CancelAfter cancels the in-flight connect on timeout,
+                        // avoiding ephemeral-port leaks from orphaned BeginConnect operations.
+                        using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                        connectCts.CancelAfter(connectTimeoutMs);
                         try
                         {
-                            connectTask.Dispose();
+                            await tcpServerSocket.ConnectAsync(new IPEndPoint(ipAddress, port), connectCts.Token);
                         }
-                        catch
+                        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                         {
-                            // ignore
-                        }
+                            lastException = new ProxyTimeoutException(
+                                $"Timed out connecting to {hostname}:{port} after {effectiveTimeoutSecs}.",
+                                ProxyTimeoutKind.Connect);
 
-                        try
-                        {
-                            tcpServerSocket?.Dispose();
-                            tcpServerSocket = null;
-                        }
-                        catch
-                        {
-                            // ignore
-                        }
+                            try
+                            {
+                                tcpServerSocket?.Dispose();
+                                tcpServerSocket = null;
+                            }
+                            catch { /* ignore */ }
 
-                        continue;
+                            continue;
+                        }
                     }
 
                     boundEndPoint = resolvedBind;
@@ -1235,28 +1246,6 @@ internal class TcpConnectionFactory : IDisposable
         }
 
         disposed = true;
-    }
-
-    private static class SocketConnectionTaskFactory
-    {
-        private static IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback? requestCallback,
-            object? state)
-        {
-            var socket = state as Socket ?? throw new InvalidOperationException("Socket APM state is missing.");
-            return socket.BeginConnect(address, port, requestCallback, state);
-        }
-
-        private static void EndConnect(IAsyncResult asyncResult)
-        {
-            var socket = asyncResult.AsyncState as Socket
-                         ?? throw new InvalidOperationException("Socket APM state is missing.");
-            socket.EndConnect(asyncResult);
-        }
-
-        public static Task CreateTask(Socket socket, IPAddress ipAddress, int port)
-        {
-            return Task.Factory.FromAsync(BeginConnect, EndConnect, ipAddress, port, socket);
-        }
     }
 
     private static class ProxySocketConnectionTaskFactory
