@@ -141,6 +141,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             if (QuicListener.IsSupported)
             {
                 proxyServer.EnableHttp3 = true;
+                // EnableHttpsSvcbDnsDiscovery inherits EnableHttp3 (cold-path H3 via HTTPS/SVCB).
+                // DnsServerEndPoint defaults to 8.8.8.8:53; override if you need a corporate resolver.
                 quicEndPoint = new TransparentQuicProxyEndPoint(IPAddress.Any, 443)
                 {
                     // Replace with IOriginalDestinationResolver for real NAT-transparent interception.

@@ -277,7 +277,8 @@ public partial class ProxyServer
                                     await TcpConnectionFactory.Release(prefetchConnectionTask, true);
                                     prefetchConnectionTask = null;
                                     await SendHttp2ToHttp3Bridge(clientStream, endPoint, null, null,
-                                        httpsHostName, args.ForwardHttpsPort, cancellationTokenSource);
+                                        httpsHostName, args.ForwardHttpsPort, cancellationTokenSource,
+                                        args.UpstreamHttpProtocol);
                                     return;
                                 }
 

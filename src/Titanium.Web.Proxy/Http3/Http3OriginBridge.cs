@@ -1,6 +1,7 @@
 #pragma warning disable CA1416
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Quic;
 using System.Net.Security;
 using System.Threading;
@@ -353,7 +354,14 @@ internal static class Http3OriginBridge
     // ────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     Forwards the session over a TCP (H1.1 or H2) connection to the origin server.
+    ///     Forwards the session over a TCP (HTTP/1.1) connection to the origin server.
+    ///     <para>
+    ///         H2/H3 client sessions arrive with <c>HttpVersion</c> 2/3, <c>:authority</c> instead of
+    ///         <c>Host</c>, and a buffered request body that <see cref="Network.HttpWebClient.SendRequest" />
+    ///         does not write. Without the translation below, QUIC→TCP fallback sends
+    ///         <c>POST … HTTP/2.0</c> with no Host and no body — origins respond <c>HTTP/1.0 400</c>
+    ///         (logged as <c>H2↔H1.0</c>).
+    ///     </para>
     /// </summary>
     private static async Task ForwardOverTcpAsync(
         SessionEventArgs sessionArgs,
@@ -362,13 +370,44 @@ internal static class Http3OriginBridge
         CancellationToken cancellationToken,
         Func<Response, CancellationToken, Task>? onInterimResponse = null)
     {
+        var request = sessionArgs.HttpClient.Request;
+
+        // SendRequest uses HTTP/1.x framing. Translate H2/H3-shaped requests the same way
+        // Http2ToHttp11BridgeHandler does before hitting the wire.
+        var needsHttp11Wire = request.HttpVersion.Major >= 2;
+        byte[]? body = null;
+        if (needsHttp11Wire)
+        {
+            request.HttpVersion = HttpHeader.Version11;
+            if (string.IsNullOrEmpty(request.Host) && request.Authority.Length > 0)
+                request.Host = request.Authority.GetString();
+
+            var cookieHeaders = request.Headers.GetHeaders("Cookie");
+            if (cookieHeaders is { Count: > 1 })
+            {
+                var combined = string.Join("; ", cookieHeaders.Select(h => h.Value));
+                request.Headers.RemoveHeader("Cookie");
+                request.Headers.AddHeader("Cookie", combined);
+            }
+
+            body = request.CompressBodyAndUpdateContentLength();
+        }
+
+        // Prefer HTTP/1.1 ALPN when translating from H2/H3 so we do not negotiate h2 and then
+        // write HTTP/1.x request lines onto an HTTP/2 connection.
+        var alpn = needsHttp11Wire ? SslApplicationProtocol.Http11 : preferredProtocol;
+
         var connection = await server.TcpConnectionFactory.GetServerConnection(
-            server, sessionArgs, false, preferredProtocol, false, cancellationToken);
+            server, sessionArgs, false, alpn, false, cancellationToken);
 
         sessionArgs.HttpClient.SetConnection(connection);
         await sessionArgs.HttpClient.SendRequest(
             server.Enable100ContinueBehaviour, sessionArgs.IsTransparent,
             sessionArgs.OriginHttpVersionPolicy ?? server.OriginHttpVersionPolicy, cancellationToken);
+
+        if (needsHttp11Wire && request.HasBody && !request.ExpectationFailed)
+            await connection.Stream.WriteBodyAsync(body ?? Array.Empty<byte>(), request.IsChunked,
+                request.HasTrailingHeaders ? request.TrailingHeaders : null, cancellationToken);
 
         await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
 
@@ -380,6 +419,11 @@ internal static class Http3OriginBridge
             await sessionArgs.ClearResponse(cancellationToken);
             await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
         }
+
+        // Buffer the response body so H2→H3 EmitSyntheticResponseAsync can emit DATA frames.
+        // Without this, HasBody && !IsBodyRead leaves the H2 stream without END_STREAM.
+        if (sessionArgs.HttpClient.Response.HasBody && !sessionArgs.HttpClient.Response.IsBodyRead)
+            await sessionArgs.GetResponseBody(cancellationToken);
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────

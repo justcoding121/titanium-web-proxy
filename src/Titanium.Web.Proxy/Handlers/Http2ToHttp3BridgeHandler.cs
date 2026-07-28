@@ -50,7 +50,8 @@ public partial class ProxyServer
         object? userData,
         string remoteHostName,
         int remotePort,
-        CancellationTokenSource cancellationTokenSource)
+        CancellationTokenSource cancellationTokenSource,
+        UpstreamHttpProtocol? upstreamHttpProtocol = null)
     {
         var cancellationToken = cancellationTokenSource.Token;
         var originStream = new NullOriginStream(cancellationToken);
@@ -59,7 +60,10 @@ public partial class ProxyServer
             clientStream, originStream,
             () => new SessionEventArgs(this, endPoint, clientStream, connectRequest, cancellationTokenSource)
             {
-                UserData = userData
+                UserData = userData,
+                // Seed connection-level protocol policy so per-stream ShouldUseHttp3OriginCached
+                // honours forced Http3/Http11/Http2 (same as the warm-path factory).
+                UpstreamHttpProtocol = upstreamHttpProtocol
             },
             (sessionArgs, ctx) => BridgeOnBeforeRequestForH3(sessionArgs, ctx, remoteHostName, remotePort),
             // NullOriginStream never produces real response HEADERS frames; this delegate is never invoked.
