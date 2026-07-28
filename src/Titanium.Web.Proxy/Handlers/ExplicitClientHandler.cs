@@ -449,7 +449,7 @@ public partial class ProxyServer
                             ParseHostAndPort(connectArgs.HttpClient.ConnectRequest!.Authority.GetString(), 443);
                         await SendHttp2ToHttp3Bridge(clientStream, endPoint, connectArgs.HttpClient.ConnectRequest,
                             connectArgs.UserData, h3BridgeHost, h3BridgePort,
-                            connectArgs.CancellationTokenSource);
+                            connectArgs.CancellationTokenSource, connectArgs.UpstreamHttpProtocol);
                         return;
                     }
 

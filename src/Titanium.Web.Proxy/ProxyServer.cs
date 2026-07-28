@@ -337,10 +337,13 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     DNS server endpoint used by <see cref="Http3.Dns.UdpSvcbDnsResolver" /> for HTTPS/SVCB
-    ///     queries. Defaults to <c>127.0.0.1:53</c>. Override for testing or to use a specific resolver.
+    ///     queries. Defaults to Google Public DNS (<c>8.8.8.8:53</c>). Override to use a corporate
+    ///     resolver, or set to <c>127.0.0.1:53</c> only when a local recursive resolver is running
+    ///     (the previous default was loopback, which silently disabled cold-path H3 discovery on
+    ///     typical developer machines).
     /// </summary>
     [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
-    public IPEndPoint DnsServerEndPoint { get; set; } = new(System.Net.IPAddress.Loopback, 53);
+    public IPEndPoint DnsServerEndPoint { get; set; } = new(System.Net.IPAddress.Parse("8.8.8.8"), 53);
 
     private Http3.Dns.IHttpsSvcbResolver? _httpsSvcbResolver;
 
