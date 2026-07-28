@@ -326,11 +326,22 @@ public partial class ProxyServer
 
         if (noCache) serverConnection = null;
 
-        // H1.1/H2 client → H3 origin bridge: when Auto mode resolves to H3.
-        if (!args.HttpClient.Request.UpgradeToWebSocket && ShouldUseHttp3Origin(args))
+        // H1.1 client → H3 origin bridge: resolve route (including SVCB DNS on cold start).
+        if (!args.HttpClient.Request.UpgradeToWebSocket)
         {
-            await Http3.Http3OriginBridge.ForwardAsync(args, this, logger, cancellationToken);
-            return new RetryResult(null, null, true);
+            var reqHost = args.HttpClient.Request.RequestUri?.Host ?? string.Empty;
+            var reqPort = args.HttpClient.Request.RequestUri?.Port ?? 443;
+            var h3Route = await ResolveHttp3OriginAsync(
+                reqHost, reqPort,
+                args.UpstreamHttpProtocol,
+                allowDnsProbe: true,
+                cancellationToken);
+
+            if (h3Route.UseH3)
+            {
+                await Http3.Http3OriginBridge.ForwardAsync(args, this, h3Route, logger, cancellationToken);
+                return new RetryResult(null, null, true);
+            }
         }
 
         // a connection generator task with captured parameters via closure.
