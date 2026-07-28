@@ -98,6 +98,11 @@ internal static class Http3OriginBridge
                 null /* default cert validation */,
                 cancellationToken);
 
+            // Stamp ConnectionReadyAt before opening the stream (stream-open latency is not part of
+            // connection-ready latency). ClaimFirstUse() returns true on the very first use of this
+            // connection object; subsequent calls return false, meaning isReused = !ClaimFirstUse().
+            sessionArgs.Timing?.MarkConnectionReady(quicConn.Id, !quicConn.ClaimFirstUse());
+
             await using var originStream = await quicConn.OpenRequestStreamAsync(cancellationToken);
 
             // Send request headers as a QPACK HEADERS frame.
@@ -113,6 +118,7 @@ internal static class Http3OriginBridge
                     await Http3Frame.WriteAsync(originStream, Http3FrameType.Data, body, cancellationToken);
             }
             originStream.CompleteWrites();
+            sessionArgs.Timing?.MarkRequestSent();
 
             // Read response HEADERS frame.
             var responseHeadersFrame = await Http3Frame.ReadAsync(originStream,
@@ -123,6 +129,7 @@ internal static class Http3OriginBridge
                     "Expected HEADERS frame as first frame on origin response stream.");
 
             var decodedResponseHeaders = QpackDecoder.Decode(responseHeadersFrame.Payload.Span);
+            sessionArgs.Timing?.MarkResponseHeadersReceived();
             var response = new Response { HttpVersion = HttpHeader.Version30 };
 
             foreach (var (name, value) in decodedResponseHeaders)
