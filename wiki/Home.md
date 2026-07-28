@@ -220,7 +220,7 @@ push and cleartext h2c upgrade. See [Protocol Feature Support](Protocol-Support)
 
 ## HTTP/3
 
-HTTP/3 support is available on .NET 6+ as an opt-in feature.  See the **[HTTP/3](HTTP-3)** page for the full
+HTTP/3 support is available as an opt-in feature.  See the **[HTTP/3](HTTP-3)** page for the full
 setup guide.  Quick start:
 
 ```csharp

@@ -69,7 +69,13 @@ public class TransferEncodingConflictTests
 
         var buffer = new byte[16];
         await Assert.ThrowsExceptionAsync<ProxyHttpException>(async () =>
-            await limited.ReadAsync(buffer, 0, buffer.Length));
+        {
+            // Single-shot probe: oversized chunk size must fail during framing parse,
+            // before any body bytes are returned (CA2022 does not apply to exception paths).
+#pragma warning disable CA2022
+            _ = await limited.ReadAsync(buffer, 0, buffer.Length);
+#pragma warning restore CA2022
+        });
     }
 
     [TestMethod]

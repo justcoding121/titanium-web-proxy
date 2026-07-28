@@ -11,8 +11,6 @@ Titanium Web Proxy supports HTTP/3 as an **opt-in experimental** feature built o
 > proxyServer.EnableHttp3 = true;
 > #pragma warning restore TWP001
 > ```
-> The attribute is removed in a future semver-minor release after the interop/soak/fuzz gates listed in
-> [Rollout / rollback runbook](#rollout--rollback-runbook) have passed.
 
 ## Prerequisites
 
@@ -253,14 +251,6 @@ proxyServer.AddEndPoint(new TransparentQuicProxyEndPoint(...));
 **Rollback:** Set `EnableHttp3 = false` and remove the `TransparentQuicProxyEndPoint`. For origins that
 cached `h3` via Alt-Svc, they will fall back to TCP on the next request cycle. To accelerate rollback, send
 `Alt-Svc: clear` in a response to the client for affected origins (strips all cached alternatives).
-
-**Graduation to stable** requires all of the following gates to pass:
-- Full interop against Chrome, Edge, Firefox, and Safari (HTTPS/SVCB discovery, QPACK, stream reuse).
-- Soak test: 72 hours under representative production traffic with no unexpected stream resets.
-- Malformed-peer / fuzzing gate: no panics or unhandled exceptions under crafted QUIC frames.
-- Resource-exhaustion gate: stream/connection limits hold under attack (no OOM or goroutine leak equivalent).
-
-Once those pass, the `[Experimental]` attribute is removed in a semver-minor release.
 
 ## See also
 
