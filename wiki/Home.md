@@ -12,6 +12,7 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET. This wiki documents t
 - [Custom and redirected responses](#custom-and-redirected-responses)
 - [Streaming bodies](#streaming-bodies)
 - [HTTP/2](#http2)
+- [HTTP/3](#http3)
 - [Tunnel (CONNECT) interception](#tunnel-connect-interception)
 - [Upstream proxies](#upstream-proxies)
 - [Authentication](#authentication)
@@ -217,6 +218,22 @@ the synthetic-response APIs (`Ok`/`Respond`/`Redirect`/`GenericResponse`/`Respon
 HTTP/2 the same as over HTTP/1.x — see [Streaming Bodies](Streaming-Bodies). Not supported: HTTP/2 server
 push and cleartext h2c upgrade. See [Protocol Feature Support](Protocol-Support) for the full breakdown.
 
+## HTTP/3
+
+HTTP/3 support is available on .NET 6+ as an opt-in feature.  See the **[HTTP/3](HTTP-3)** page for the full
+setup guide.  Quick start:
+
+```csharp
+proxy.EnableHttp3 = true;
+var quicEndPoint = new TransparentQuicProxyEndPoint(IPAddress.Any, 443);
+proxy.AddEndPoint(quicEndPoint);
+proxy.Start();
+```
+
+All existing `BeforeRequest`/`BeforeResponse`/`AfterResponse` event handlers work unchanged for HTTP/3
+streams.  The proxy auto-discovers HTTP/3 capability via `Alt-Svc` response headers and will transparently
+use HTTP/3 for subsequent requests to the same origin when capability is cached.
+
 ## Tunnel (CONNECT) interception
 
 On an `ExplicitProxyEndPoint`, decide per-`CONNECT` whether to decrypt:
@@ -383,6 +400,7 @@ Versions prior to 4.0 also supported .NET Framework 4.6.2 and .NET 8; starting w
 
 ## Protocol feature support
 
-Wondering whether a specific HTTP/1.x or HTTP/2 feature (trailers, interim 1xx responses, HPACK, server
-push, ...) is supported? See the **[Protocol Feature Support](Protocol-Support)** page for a full
+Wondering whether a specific HTTP/1.x, HTTP/2, or HTTP/3 feature (trailers, interim 1xx responses, HPACK,
+QPACK, Alt-Svc, server push, ...) is supported? See the **[Protocol Feature Support](Protocol-Support)** page
+for a full
 Yes/No/Partial breakdown.

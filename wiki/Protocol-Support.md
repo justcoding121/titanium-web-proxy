@@ -96,7 +96,31 @@ true`); set it to `false` to force HTTP/1.1 only. If you find something inaccura
 | `Via` header injection | Yes (default) | `ViaHeaderPseudonym` defaults to `"titanium-web-proxy"`, appending `Via: {version} {pseudonym}` to forwarded HTTP/1.x and native/bridged HTTP/2 requests and responses (RFC 9110 §7.6.3). HTTP/2 uses the `2` received-protocol token, while responses record the origin response version. Set to an empty string to disable. Loop detection checks exact received-by tokens across every `Via` field and refuses matches with `508 Loop Detected`. |
 | Authentication retry bounds | Yes | NTLM/Negotiate and 407/401 retry loops are capped at 3 round-trips per session to prevent indefinite handshake cycles against a misbehaving peer. |
 
-## Protocol Policy Properties (New in this Release)
+## HTTP/3 (QUIC) — opt-in, .NET 6+
+
+HTTP/3 support is gated behind `ProxyServer.EnableHttp3 = true`. It requires the MsQuic native library and
+`System.Net.Quic.QuicListener.IsSupported == true` at runtime (available on Windows 11/Server 2022 and recent
+Linux kernels with kernel 5.11+ TLS; macOS is not supported by MsQuic).
+
+| Feature | Support | Notes |
+|---------|---------|-------|
+| Inbound HTTP/3 (client → proxy over QUIC) | Yes | `TransparentQuicProxyEndPoint` — QUIC only; explicit QUIC proxying is not yet standardised. |
+| QPACK header compression | Yes (static table only) | Only RFC 9204 static-table lookups and literal encoding are implemented. Dynamic-table synchronisation is not used (encoder sends Required Insert Count = 0 on every field section). |
+| HTTP/3 frame codec | Yes | HEADERS, DATA, SETTINGS, GOAWAY, and unknown/reserved frame types per RFC 9114. |
+| Per-stream request/response lifecycle | Yes | `BeforeRequest`, `BeforeResponse`, `AfterResponse` (exactly once per stream), `Via` header injection, per-stream `UpstreamHttpProtocol` override, `ConnectTimeout` override. |
+| Outbound H3→H3 (proxy → origin over QUIC) | Yes | `QuicConnectionPool` leases a live `QuicConnection` per origin; streams are opened per-request. |
+| Outbound H3→H2 bridge | Yes | Falls through to `TcpConnectionFactory` with h2 ALPN when `UpstreamHttpProtocol.Http2` is set. |
+| Outbound H3→H1.1 bridge | Yes | Falls through to `TcpConnectionFactory` with default ALPN negotiation. |
+| Inbound H1.1/H2 → H3 origin bridge | Yes | `RequestHandler` checks `Http3OriginCapabilityCache` before opening a TCP connection; if H3 is cached, `Http3OriginBridge.ForwardAsync` is used instead. |
+| Alt-Svc discovery | Yes | Response `Alt-Svc: h3=":443"; ma=86400` headers are parsed and cached in `Http3OriginCapabilityCache` with the advertised max-age TTL, enabling proactive H3 reuse on subsequent requests. |
+| HTTPS/SVCB DNS discovery | Future | Extension point in `Http3OriginCapabilityCache.Set` is available; DNS resolution is not yet wired. |
+| `BeforeQuicAuthenticate` event | Yes | Fired once per accepted QUIC connection (analogous to `BeforeSslAuthenticate`); allows setting `UpstreamHttpProtocol`, custom cert validation, and `AllowHttpProtocolTranslation` per connection. |
+| `IOriginalDestinationResolver` | Yes | Plug-in interface for resolving the pre-NAT (real) destination of a transparently intercepted QUIC connection. |
+| QUIC connection pool drain on stop | Yes | `QuicConnectionPool.DrainAsync` is called during `ProxyServer.Stop`/`DrainAsync`/`Dispose`. |
+| QUIC control stream (server→client) | Yes | `Http3Connection` sends its own outbound control stream with a SETTINGS frame on startup. |
+| Server push | No | Not defined in RFC 9114 (server push was removed from HTTP/3). |
+| 0-RTT / early data | No | Not supported by `System.Net.Quic`; all connections start with a 1-RTT handshake. |
+| QUIC connection migration | No | `System.Net.Quic` does not expose migration APIs in .NET 10. |
 
 | Property | Default | Description |
 |----------|---------|-------------|
@@ -106,8 +130,10 @@ true`); set it to `false` to force HTTP/1.1 only. If you find something inaccura
 | `ViaHeaderPseudonym` | `"titanium-web-proxy"` | Token appended to `Via` headers on forwarded requests and responses. Set to an empty string to disable. Loop detection rejects incoming requests whose `Via` already contains this token with `508 Loop Detected`. |
 | `CompatibilityMode100Continue` | `false` | Sends a synthetic `100 Continue` to the client before reading the request body when `Enable100ContinueBehaviour = false`, preventing deadlock with strict `Expect: 100-continue` clients. |
 | `EnableRfc8441` | `false` | Enables WebSocket over HTTP/2 extended CONNECT negotiation (RFC 8441). When enabled, the proxy advertises `ENABLE_CONNECT_PROTOCOL=1` to h2 clients and selects the appropriate tunnel path: if the origin also advertises `ENABLE_CONNECT_PROTOCOL=1`, the proxy uses the native h2↔h2 DATA relay path; otherwise it falls back to opening an HTTP/1.1 WebSocket upgrade to the origin. |
+| `EnableHttp3` | `false` | Enables HTTP/3 (QUIC) support (opt-in). See [HTTP-3](HTTP-3) wiki page for full details. |
 
 ## Where to look for more detail
 
 - [Streaming Bodies](Streaming-Bodies) - the `OnRequestBodyWrite`/`OnResponseBodyWrite`/`RespondStreaming` APIs in depth.
+- [HTTP/3](HTTP-3) - HTTP/3 and QUIC support, `TransparentQuicProxyEndPoint`, protocol bridges, and `EnableHttp3`.
 - [Home](Home) - general usage and the rest of the public API surface.
