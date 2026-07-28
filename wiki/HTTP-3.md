@@ -141,13 +141,57 @@ peers; it sacrifices some header-compression efficiency in exchange for simpler,
 
 ## Limitations
 
-- **Transparent only**: HTTP/3 cannot be configured as an explicit (system-proxy) endpoint because the
-  Windows system-proxy mechanism does not support QUIC/UDP.
+- **Transparent only**: HTTP/3 cannot be configured as an explicit (system-proxy) endpoint. See
+  [Why no explicit HTTP/3 endpoint yet](#why-no-explicit-http3-endpoint-yet) below.
 - **Static QPACK only**: dynamic table synchronisation is not implemented.
 - **No 0-RTT**: early data is not supported by `System.Net.Quic` in .NET 10.
 - **No connection migration**: `System.Net.Quic` does not expose migration APIs.
 - **No server push**: removed from RFC 9114.
 - **macOS**: see [macOS](#macos) below.
+
+### Why no explicit HTTP/3 endpoint yet
+
+**An RFC exists but it is a relay, not an interceptor.**
+RFC 9298 (MASQUE/CONNECT-UDP) is the standardized mechanism for proxying HTTP/3 through an explicit proxy.
+A browser sends an extended-CONNECT request to the proxy with `:protocol = connect-udp`, the proxy opens a
+UDP socket to the origin, and QUIC datagrams are shuttled between browser and origin wrapped in HTTP
+Datagrams (RFC 9297):
+
+```
+Browser ──CONNECT-UDP──► TWP ──UDP datagrams (opaque)──► Origin
+         (HTTP/3)                                         ▲
+         └──────── TLS 1.3 end-to-end (QUIC) ────────────┘
+```
+
+The QUIC TLS 1.3 session is **end-to-end between browser and origin**. TWP receives only encrypted QUIC
+datagrams and relays them without seeing their content. There is no opportunity to terminate TLS, read
+HTTP/3 frames, or fire `BeforeRequest`/`BeforeResponse` events. This is the opposite of how TCP CONNECT
+works, where TWP sits inside the TLS session by issuing a MITM certificate.
+
+**OS proxy APIs do not support HTTP/3 targets.**
+Windows WinHTTP/WPAD, macOS system proxy settings, and Linux `$http_proxy`/`$https_proxy` all reference a
+TCP host:port. There is no standardized mechanism for a user or application to specify an HTTP/3
+(UDP-based) proxy endpoint through OS-level proxy configuration.
+
+**No browser exposes HTTP/3 proxy configuration.**
+Chrome, Edge, Firefox, and Safari all fall back to HTTP/2 or HTTP/1.1 for the proxy leg when a system
+proxy is configured — they do not negotiate QUIC with the proxy. Chrome has private MASQUE support
+(used by iCloud Private Relay and Google One VPN), but this path is not user-configurable and bypasses
+system proxy settings entirely.
+
+**SOCKS5 UDP ASSOCIATE is not used by browsers.**
+SOCKS5 (RFC 1928) has supported UDP proxying since 1996, but all major browsers ignore the UDP ASSOCIATE
+command for QUIC traffic even when the SOCKS5 server advertises it.
+
+**What would be required for TWP to support an explicit HTTP/3 endpoint:**
+
+1. OS proxy APIs gain an HTTP/3 target field (new registry key / proxy.pac extension / etc.).
+2. Browsers honor that configuration and connect to the proxy over QUIC.
+3. Browsers use standard `CONNECT host:443` (not `CONNECT-UDP`) over that HTTP/3 connection, creating a
+   bidirectional stream that TWP can terminate TLS on — same MITM model as today's TCP CONNECT.
+
+None of these exist yet. If they land, TWP can add an `ExplicitQuicProxyEndPoint` following the same
+pattern as `ExplicitProxyEndPoint` without touching the transparent implementation.
 
 ## macOS
 
