@@ -76,7 +76,7 @@ internal static class WebSocketInterceptRelay
                 foreach (var frame in decoder.Decode(buffer, 0, read))
                 {
                     if (!ValidateWebSocketFrame(frame, direction,
-                            session.Server.MaxWebSocketFramePayloadBytes, out _))
+                            session.MaxWebSocketFramePayloadBytes ?? session.Server.MaxWebSocketFramePayloadBytes, out _))
                     {
                         // RFC 6455 §7.2: a protocol error requires closing the connection.
                         // Cancel both relay directions so the connection tears down cleanly.

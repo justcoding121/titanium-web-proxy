@@ -342,7 +342,7 @@ public partial class ProxyServer
         /// because subsequent try will not have data to read from client 
         /// and will hang at clientStream.ReadAsync call.
         /// So, throw RetryableServerConnectionException only when we are sure we can retry safely.
-        return await RetryPolicy<RetryableServerConnectionException>().ExecuteAsync(async connection =>
+        return await RetryPolicy<RetryableServerConnectionException>(args).ExecuteAsync(async connection =>
         {
             // set the connection and send request headers
             args.HttpClient.SetConnection(connection);
@@ -376,7 +376,7 @@ public partial class ProxyServer
         var body = request.CompressBodyAndUpdateContentLength();
 
         await args.HttpClient.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
-            OriginHttpVersionPolicy, cancellationToken);
+            args.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy, cancellationToken);
 
         // If a successful 100 continue request was made, inform that to the client and reset response
         if (request.ExpectationSucceeded)

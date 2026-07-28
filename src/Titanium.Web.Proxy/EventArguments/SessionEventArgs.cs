@@ -69,6 +69,34 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     public TimeSpan? RequestTimeout { get; set; }
 
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.MaxBufferedBodyBytes" />.
+    ///     <see langword="null" /> uses the server default. Set in <c>BeforeRequest</c> to increase the
+    ///     limit for large uploads/downloads without relaxing the global limit for all requests.
+    /// </summary>
+    public int? MaxBufferedBodyBytes { get; set; }
+
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.NetworkFailureRetryAttempts" />.
+    ///     <see langword="null" /> uses the server default. Set to 0 in <c>BeforeRequest</c> for
+    ///     non-idempotent methods (POST, PATCH) to prevent unsafe retries.
+    /// </summary>
+    public int? NetworkFailureRetryAttempts { get; set; }
+
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.MaxWebSocketFramePayloadBytes" />.
+    ///     <see langword="null" /> uses the server default. Set in <c>BeforeRequest</c> before the
+    ///     WebSocket upgrade completes.
+    /// </summary>
+    public int? MaxWebSocketFramePayloadBytes { get; set; }
+
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.OriginHttpVersionPolicy" />.
+    ///     <see langword="null" /> uses the server default (<see cref="Models.OriginHttpVersionPolicy.PreserveClientVersion" />
+    ///     unless the server property was changed). Set in <c>BeforeRequest</c>.
+    /// </summary>
+    public Models.OriginHttpVersionPolicy? OriginHttpVersionPolicy { get; set; }
+
     internal bool HasMulipartEventSubscribers => MultipartRequestPartSent != null;
 
     /// <summary>
