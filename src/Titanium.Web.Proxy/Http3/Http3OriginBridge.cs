@@ -35,11 +35,17 @@ internal static class Http3OriginBridge
     ///     the caller is responsible for invoking <c>BeforeResponse</c>, adding headers, and sending the
     ///     response back to the QUIC client.
     /// </summary>
+    /// <param name="onInterimResponse">
+    ///     Optional callback invoked for each 1xx interim response received from the origin before the
+    ///     final response. <c>BeforeResponse</c> is NOT fired for interim responses — only the final
+    ///     response triggers it. May be <see langword="null" /> to discard interim responses.
+    /// </param>
     internal static async Task ForwardAsync(
         SessionEventArgs sessionArgs,
         ProxyServer server,
         ILogger logger,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<Response, CancellationToken, Task>? onInterimResponse = null)
     {
         var request = sessionArgs.HttpClient.Request;
         var host = request.RequestUri?.Host ?? string.Empty;
@@ -60,16 +66,16 @@ internal static class Http3OriginBridge
         switch (upstreamProtocol)
         {
             case UpstreamHttpProtocol.Http3:
-                await ForwardOverQuicAsync(sessionArgs, server, host, port, logger, cancellationToken);
+                await ForwardOverQuicAsync(sessionArgs, server, host, port, logger, cancellationToken, onInterimResponse);
                 return;
 
             case UpstreamHttpProtocol.Http2:
-                await ForwardOverTcpAsync(sessionArgs, server, SslApplicationProtocol.Http2, cancellationToken);
+                await ForwardOverTcpAsync(sessionArgs, server, SslApplicationProtocol.Http2, cancellationToken, onInterimResponse);
                 return;
 
             default:
                 // Http11 or unresolved Auto: use TCP with server-default ALPN negotiation.
-                await ForwardOverTcpAsync(sessionArgs, server, default, cancellationToken);
+                await ForwardOverTcpAsync(sessionArgs, server, default, cancellationToken, onInterimResponse);
                 return;
         }
     }
@@ -84,7 +90,8 @@ internal static class Http3OriginBridge
         string host,
         int port,
         ILogger logger,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<Response, CancellationToken, Task>? onInterimResponse = null)
     {
         var request = sessionArgs.HttpClient.Request;
         var upStreamEndPoint = sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint;
@@ -120,25 +127,49 @@ internal static class Http3OriginBridge
             originStream.CompleteWrites();
             sessionArgs.Timing?.MarkRequestSent();
 
-            // Read response HEADERS frame.
-            var responseHeadersFrame = await Http3Frame.ReadAsync(originStream,
-                maxPayloadBytes: server.MaxDecodedHeaderListBytes, cancellationToken);
+            // Read response HEADERS frames, relaying any 1xx interim responses before the final one.
+            // Guard against a misbehaving origin sending endless 1xx frames.
+            const int maxInterimResponses = 20;
+            int interimCount = 0;
 
-            if (responseHeadersFrame == null || responseHeadersFrame.Type != Http3FrameType.Headers)
-                throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
-                    "Expected HEADERS frame as first frame on origin response stream.");
+            Http3Frame? responseHeadersFrame;
+            List<(string Name, string Value)> decodedResponseHeaders;
+            int finalStatus;
 
-            var decodedResponseHeaders = QpackDecoder.Decode(responseHeadersFrame.Payload.Span);
-            sessionArgs.Timing?.MarkResponseHeadersReceived();
-            var response = new Response { HttpVersion = HttpHeader.Version30 };
-
-            foreach (var (name, value) in decodedResponseHeaders)
+            while (true)
             {
-                if (name == ":status" && int.TryParse(value, out var statusCode))
-                    response.StatusCode = statusCode;
-                else if (!name.StartsWith(':'))
-                    response.Headers.AddHeader(new HttpHeader(name, value));
+                responseHeadersFrame = await Http3Frame.ReadAsync(originStream,
+                    maxPayloadBytes: server.MaxDecodedHeaderListBytes, cancellationToken);
+
+                if (responseHeadersFrame == null || responseHeadersFrame.Type != Http3FrameType.Headers)
+                    throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
+                        "Expected HEADERS frame as first frame on origin response stream.");
+
+                decodedResponseHeaders = QpackDecoder.Decode(responseHeadersFrame.Payload.Span);
+                finalStatus = ParseStatusCode(decodedResponseHeaders);
+
+                if (finalStatus is >= 100 and < 200)
+                {
+                    if (++interimCount > maxInterimResponses)
+                        throw new Http3StreamException(Http3ErrorCode.InternalError,
+                            $"Origin sent more than {maxInterimResponses} interim responses.");
+
+                    if (onInterimResponse != null)
+                    {
+                        var interim = BuildResponseFromHeaders(decodedResponseHeaders, HttpHeader.Version30);
+                        await onInterimResponse(interim, cancellationToken);
+                    }
+                    continue;
+                }
+
+                // Non-1xx: this is the final response.
+                break;
             }
+
+            // MarkResponseHeadersReceived after the final (non-1xx) headers are decoded.
+            sessionArgs.Timing?.MarkResponseHeadersReceived();
+
+            var response = BuildResponseFromHeaders(decodedResponseHeaders, HttpHeader.Version30);
 
             // Read response body DATA frames.
             var bodyStream = new System.IO.MemoryStream();
@@ -207,15 +238,47 @@ internal static class Http3OriginBridge
         return headers;
     }
 
+    /// <summary>Extracts the :status pseudo-header value from a decoded QPACK field section.</summary>
+    private static int ParseStatusCode(List<(string Name, string Value)> headers)
+    {
+        foreach (var (name, value) in headers)
+            if (name == ":status" && int.TryParse(value, out var code))
+                return code;
+        return 0;
+    }
+
+    /// <summary>Builds a <see cref="Response" /> from a decoded QPACK field section.</summary>
+    private static Response BuildResponseFromHeaders(
+        List<(string Name, string Value)> headers,
+        Version httpVersion)
+    {
+        var response = new Response { HttpVersion = httpVersion };
+        foreach (var (name, value) in headers)
+        {
+            if (name == ":status" && int.TryParse(value, out var statusCode))
+                response.StatusCode = statusCode;
+            else if (!name.StartsWith(':'))
+                response.Headers.AddHeader(new HttpHeader(name, value));
+        }
+        return response;
+    }
+
     // ────────────────────────────────────────────────────────────────────────────────────────
     // H3 → TCP (H2 or H1.1)
     // ────────────────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    ///     Forwards the session over a TCP (H1.1 or H2) connection to the origin server.
+    ///     Loops on any 1xx interim responses, relaying each via <paramref name="onInterimResponse" />,
+    ///     and calls <see cref="SessionEventArgs.ClearResponse" /> between iterations so that
+    ///     the final (non-1xx) response is stored correctly in <c>sessionArgs.HttpClient.Response</c>.
+    /// </summary>
     private static async Task ForwardOverTcpAsync(
         SessionEventArgs sessionArgs,
         ProxyServer server,
         SslApplicationProtocol preferredProtocol,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<Response, CancellationToken, Task>? onInterimResponse = null)
     {
         var connection = await server.TcpConnectionFactory.GetServerConnection(
             server, sessionArgs, false, preferredProtocol, false, cancellationToken);
@@ -226,6 +289,18 @@ internal static class Http3OriginBridge
             sessionArgs.OriginHttpVersionPolicy ?? server.OriginHttpVersionPolicy, cancellationToken);
 
         await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
+
+        // Relay and consume any 1xx interim responses before the final response.
+        while (sessionArgs.HttpClient.Response.StatusCode is >= 100 and < 200)
+        {
+            if (onInterimResponse != null)
+                await onInterimResponse(sessionArgs.HttpClient.Response, cancellationToken);
+
+            // ClearResponse drains any (empty) body and resets Response.StatusCode to 0 so
+            // the next ReceiveResponse() call does not early-return.
+            await sessionArgs.ClearResponse(cancellationToken);
+            await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
+        }
     }
 
     private static Response MakeBadGatewayResponse(string detail) => new()
