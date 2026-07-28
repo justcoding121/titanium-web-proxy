@@ -60,7 +60,20 @@ internal static class Http3OriginBridge
         {
             // Auto: prefer H3 if cached capability known; otherwise fall back to TCP stack.
             if (server.EnableHttp3 && server.Http3OriginCapabilityCache.TryGet(hostAndPort, out _))
+            {
                 upstreamProtocol = UpstreamHttpProtocol.Http3;
+            }
+            else if (server.EnableHttp3 && server.EnableHttpsSvcbDnsDiscovery)
+            {
+                // Cache miss — probe via HTTPS/SVCB DNS.
+                var svcb = await server.HttpsSvcbResolver.TryGetH3CapabilityAsync(host, port, cancellationToken);
+                if (svcb != null)
+                {
+                    server.Http3OriginCapabilityCache.Set(hostAndPort, svcb.AltPort, svcb.Ttl);
+                    upstreamProtocol = UpstreamHttpProtocol.Http3;
+                }
+                // On null, UdpSvcbDnsResolver has already negative-cached the result internally.
+            }
             // else: stay Auto → handled as H2/H1.1 auto-negotiate by TcpConnectionFactory
         }
 
