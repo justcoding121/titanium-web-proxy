@@ -89,6 +89,7 @@ public partial class ProxyServer
                     var http2Supported = false;
                     var requiresHttp11Bridge = false;
                     var requiresH2OriginBridge = false;
+                    var requiresH3Bridge = false;
                     string? http2ConnectHost = null;
                     int? http2ConnectPort = null;
 
@@ -103,26 +104,43 @@ public partial class ProxyServer
                         var clientOffersHttp2 = clientHelloInfo.GetAlpn()?.Contains(SslApplicationProtocol.Http2)
                                                  == true;
 
-                        var negotiationSession =
-                            new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
-                        var negotiation = await ResolveHttp2ForClientAsync(negotiationSession, clientOffersHttp2,
-                            httpsHostName, args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
-                            args.UpstreamHttpProtocol, args.AllowHttpProtocolTranslation,
-                            EnableTcpServerConnectionPrefetch, cancellationToken);
-                        requiresHttp11Bridge = negotiation.RequiresHttp11Bridge;
-                        requiresH2OriginBridge = negotiation.RequiresH2OriginBridge;
-                        // The client is offered "h2" both when the origin itself speaks it (and no
-                        // client-facing bridge is needed) and when a translation bridge will stand in for an
-                        // HTTP/1.1-only origin. RequiresH2OriginBridge is the mirror image - the origin
-                        // speaks h2 but the client itself does not, so "h2" must never be offered to it.
-                        http2Supported = (negotiation.OriginSupportsHttp2 && !requiresH2OriginBridge)
-                                         || requiresHttp11Bridge;
-                        // Retained regardless of whether it turns out to be h2- or h1.1-keyed: if this
-                        // connection is not adopted by the h2 relay below, it still flows down to the
-                        // HTTP/1.1 pipeline's own prefetch-adoption/validation logic rather than being
-                        // discarded here. Always null when requiresHttp11Bridge (nothing to adopt/flow down -
-                        // the bridge opens its own per-h2-stream HTTP/1.1 connections instead).
-                        prefetchConnectionTask = negotiation.RetainedConnectionTask;
+                        // Probe for H3 capability (HTTPS/SVCB DNS or forced Http3 policy) before opening
+                        // any H2 origin connection. If H3 is selected, the H2→H3 bridge handles every stream.
+                        var h3RouteAtConnect = await ResolveHttp3OriginAsync(
+                            httpsHostName, args.ForwardHttpsPort,
+                            args.UpstreamHttpProtocol,
+                            allowDnsProbe: true,
+                            cancellationToken);
+
+                        if (h3RouteAtConnect.UseH3)
+                        {
+                            // Offer h2 to the client (the bridge translates h2 streams onto QUIC).
+                            http2Supported = clientOffersHttp2;
+                            requiresH3Bridge = true;
+                        }
+                        else
+                        {
+                            var negotiationSession =
+                                new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
+                            var negotiation = await ResolveHttp2ForClientAsync(negotiationSession, clientOffersHttp2,
+                                httpsHostName, args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
+                                args.UpstreamHttpProtocol, args.AllowHttpProtocolTranslation,
+                                EnableTcpServerConnectionPrefetch, cancellationToken);
+                            requiresHttp11Bridge = negotiation.RequiresHttp11Bridge;
+                            requiresH2OriginBridge = negotiation.RequiresH2OriginBridge;
+                            // The client is offered "h2" both when the origin itself speaks it (and no
+                            // client-facing bridge is needed) and when a translation bridge will stand in for an
+                            // HTTP/1.1-only origin. RequiresH2OriginBridge is the mirror image - the origin
+                            // speaks h2 but the client itself does not, so "h2" must never be offered to it.
+                            http2Supported = (negotiation.OriginSupportsHttp2 && !requiresH2OriginBridge)
+                                             || requiresHttp11Bridge;
+                            // Retained regardless of whether it turns out to be h2- or h1.1-keyed: if this
+                            // connection is not adopted by the h2 relay below, it still flows down to the
+                            // HTTP/1.1 pipeline's own prefetch-adoption/validation logic rather than being
+                            // discarded here. Always null when requiresHttp11Bridge (nothing to adopt/flow down -
+                            // the bridge opens its own per-h2-stream HTTP/1.1 connections instead).
+                            prefetchConnectionTask = negotiation.RetainedConnectionTask;
+                        }
                     }
 
                     // do client authentication using certificate
@@ -252,6 +270,17 @@ public partial class ProxyServer
                                         $"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
                                 }
 
+                                if (requiresH3Bridge)
+                                {
+                                    // HTTPS/SVCB DNS or forced Http3: release any prefetched TCP connection
+                                    // and route every h2 stream to the QUIC origin via the H3 bridge.
+                                    await TcpConnectionFactory.Release(prefetchConnectionTask, true);
+                                    prefetchConnectionTask = null;
+                                    await SendHttp2ToHttp3Bridge(clientStream, endPoint, null, null,
+                                        httpsHostName, args.ForwardHttpsPort, cancellationTokenSource);
+                                    return;
+                                }
+
                                 if (requiresHttp11Bridge)
                                 {
                                     // UpstreamHttpProtocol.Http11 + AllowHttpProtocolTranslation: no origin
@@ -287,7 +316,10 @@ public partial class ProxyServer
                                     await Http2Helper.SendHttp2(clientStream, connection.Stream,
                                         () => new SessionEventArgs(this, endPoint, clientStream, null,
                                             cancellationTokenSource),
-                                        async (sessionArgs, ctx) => { await OnBeforeRequest(sessionArgs); },
+                                        // Use the H3-aware delegate so Alt-Svc cache hits can upgrade
+                                        // individual h2 streams to H3 mid-connection (warm path).
+                                        (sessionArgs, ctx) => BridgeOnBeforeRequestForH3(sessionArgs, ctx,
+                                            httpsHostName, args.ForwardHttpsPort),
                                         async (sessionArgs, ctx) => { await OnBeforeResponse(sessionArgs); },
                                         async sessionArgs => { await OnAfterResponse(sessionArgs); },
                                         headers => PrepareRequestHeaders(headers),
