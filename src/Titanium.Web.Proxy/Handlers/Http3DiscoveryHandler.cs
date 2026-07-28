@@ -1,6 +1,7 @@
 using System;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http3;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy;
 
@@ -45,5 +46,29 @@ public partial class ProxyServer
             Http3OriginCapabilityCache.Set(hostAndPort, altPort, ttl);
             break; // Take the first valid h3 entry.
         }
+    }
+
+    /// <summary>
+    ///     Returns <see langword="true" /> when this request should be forwarded to the origin over
+    ///     HTTP/3 rather than the normal TCP pipeline. Evaluated in <c>HandleHttpSessionRequest</c>
+    ///     before the TCP connection generator runs.
+    /// </summary>
+    internal bool ShouldUseHttp3Origin(SessionEventArgs args)
+    {
+        if (!EnableHttp3) return false;
+
+        var effectiveProtocol = args.UpstreamHttpProtocol ?? UpstreamHttpProtocol.Auto;
+
+        if (effectiveProtocol == UpstreamHttpProtocol.Http3) return true;
+
+        if (effectiveProtocol == UpstreamHttpProtocol.Auto)
+        {
+            var host = args.HttpClient.Request.RequestUri?.Host;
+            var port = args.HttpClient.Request.RequestUri?.Port ?? 443;
+            if (host != null && Http3OriginCapabilityCache.TryGet($"{host}:{port}", out _))
+                return true;
+        }
+
+        return false;
     }
 }

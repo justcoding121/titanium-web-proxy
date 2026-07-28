@@ -144,7 +144,7 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     An factory that creates tcp connection to server.
     /// </summary>
-    private TcpConnectionFactory TcpConnectionFactory { get; }
+    internal TcpConnectionFactory TcpConnectionFactory { get; }
 
 #if NET6_0_OR_GREATER
     /// <summary>

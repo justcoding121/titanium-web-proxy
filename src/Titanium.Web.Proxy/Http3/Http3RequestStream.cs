@@ -3,7 +3,6 @@
 using System;
 using System.Collections.Generic;
 using System.Net.Quic;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -146,18 +145,8 @@ internal static class Http3RequestStream
                 }
                 else
                 {
-                    // 7. Forward to origin. Currently a 502 stub — §9 bridges will replace this.
-                    // TODO §9: resolve upstream protocol from authArgs/sessionArgs.UpstreamHttpProtocol
-                    //          and use QuicConnectionFactory / TcpConnectionFactory as appropriate.
-                    var stubResponse = new Response
-                    {
-                        HttpVersion = HttpHeader.Version30,
-                        StatusCode = 502,
-                        StatusDescription = "Bad Gateway (HTTP/3 origin bridge not yet implemented)"
-                    };
-                    stubResponse.Headers.AddHeader(new HttpHeader("content-type", "text/plain"));
-                    stubResponse.Body = Encoding.UTF8.GetBytes("HTTP/3 transparent proxy origin bridge (§9) not yet implemented.");
-                    sessionArgs.HttpClient.Response = stubResponse;
+                    // 7. Forward to origin using the appropriate protocol bridge (H3→H3, H3→H2, or H3→H1.1).
+                    await Http3OriginBridge.ForwardAsync(sessionArgs, server, logger, cancellationToken);
 
                     await onBeforeResponse(sessionArgs);
 
