@@ -34,6 +34,9 @@ public class HttpHeader
     internal static Version Version20 { get; } = new(2, 0);
 #endif
 
+    /// <summary>HTTP/3 version constant (3.0).</summary>
+    internal static Version Version30 { get; } = new(3, 0);
+
     internal static readonly Encoding DefaultEncoding = Encoding.GetEncoding("ISO-8859-1");
 
     public static Encoding Encoding => DefaultEncoding;

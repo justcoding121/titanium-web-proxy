@@ -97,6 +97,20 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     public Models.OriginHttpVersionPolicy? OriginHttpVersionPolicy { get; set; }
 
+    /// <summary>
+    ///     Per-request outbound protocol version policy. Overrides the connection-level
+    ///     <see cref="Models.UpstreamHttpProtocol" /> value set during <c>BeforeSslAuthenticate</c> /
+    ///     <c>BeforeQuicAuthenticate</c> for this single request stream only.
+    ///     <see langword="null" /> uses the connection-level policy (or <see cref="Models.UpstreamHttpProtocol.Auto" />
+    ///     if none was set). Evaluated in <c>BeforeRequest</c>; changes after that have no effect.
+    ///     <para>
+    ///         On an H3 inbound connection (one client QUIC connection serving many concurrent streams),
+    ///         each stream resolves its outbound protocol independently after <c>BeforeRequest</c> fires,
+    ///         making per-stream protocol overrides possible even though the inbound leg is already QUIC.
+    ///     </para>
+    /// </summary>
+    public Models.UpstreamHttpProtocol? UpstreamHttpProtocol { get; set; }
+
     internal bool HasMulipartEventSubscribers => MultipartRequestPartSent != null;
 
     /// <summary>
