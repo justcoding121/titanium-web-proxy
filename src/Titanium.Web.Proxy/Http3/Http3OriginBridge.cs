@@ -41,6 +41,49 @@ internal static class Http3OriginBridge
     ///     final response. <c>BeforeResponse</c> is NOT fired for interim responses — only the final
     ///     response triggers it. May be <see langword="null" /> to discard interim responses.
     /// </param>
+    /// <summary>
+    ///     Forwards the request using a pre-resolved <paramref name="route"/> produced by
+    ///     <see cref="ProxyServer.ResolveHttp3OriginAsync" />.  This overload skips the internal
+    ///     protocol-selection logic and uses the effective QUIC port from the route, which may
+    ///     differ from the URI port when an Alt-Svc or SVCB record advertises an alternative port.
+    /// </summary>
+    internal static async Task ForwardAsync(
+        SessionEventArgs sessionArgs,
+        ProxyServer server,
+        Http3OriginRoute route,
+        ILogger logger,
+        CancellationToken cancellationToken,
+        Func<Response, CancellationToken, Task>? onInterimResponse = null)
+    {
+        var request = sessionArgs.HttpClient.Request;
+        var host = request.RequestUri?.Host ?? string.Empty;
+
+        if (route.UseH3)
+        {
+            await ForwardOverQuicAsync(sessionArgs, server, host, route.QuicPort, logger,
+                cancellationToken, onInterimResponse);
+            return;
+        }
+
+        // Route resolved to non-H3 (e.g. forced Http2 or Http11 override).
+        var preferredProtocol = sessionArgs.UpstreamHttpProtocol ?? UpstreamHttpProtocol.Auto;
+        var sslProtocol = preferredProtocol == UpstreamHttpProtocol.Http2
+            ? SslApplicationProtocol.Http2
+            : default;
+        await ForwardOverTcpAsync(sessionArgs, server, sslProtocol, cancellationToken, onInterimResponse);
+    }
+
+    /// <summary>
+    ///     Forwards the request described by <paramref name="sessionArgs" /> to the origin server and
+    ///     populates <c>sessionArgs.HttpClient.Response</c>. After this method returns (without throwing),
+    ///     the caller is responsible for invoking <c>BeforeResponse</c>, adding headers, and sending the
+    ///     response back to the QUIC client.
+    /// </summary>
+    /// <param name="onInterimResponse">
+    ///     Optional callback invoked for each 1xx interim response received from the origin before the
+    ///     final response. <c>BeforeResponse</c> is NOT fired for interim responses — only the final
+    ///     response triggers it. May be <see langword="null" /> to discard interim responses.
+    /// </param>
     internal static async Task ForwardAsync(
         SessionEventArgs sessionArgs,
         ProxyServer server,
@@ -56,11 +99,14 @@ internal static class Http3OriginBridge
         // Determine effective upstream protocol (per-stream override > connection-level default > Auto).
         var upstreamProtocol = sessionArgs.UpstreamHttpProtocol ?? UpstreamHttpProtocol.Auto;
 
+        int quicPort = port;
+
         if (upstreamProtocol == UpstreamHttpProtocol.Auto)
         {
             // Auto: prefer H3 if cached capability known; otherwise fall back to TCP stack.
-            if (server.EnableHttp3 && server.Http3OriginCapabilityCache.TryGet(hostAndPort, out _))
+            if (server.EnableHttp3 && server.Http3OriginCapabilityCache.TryGet(hostAndPort, out var cachedAltPort))
             {
+                quicPort = cachedAltPort == int.MinValue ? port : cachedAltPort;
                 upstreamProtocol = UpstreamHttpProtocol.Http3;
             }
             else if (server.EnableHttp3 && server.EnableHttpsSvcbDnsDiscovery)
@@ -69,18 +115,26 @@ internal static class Http3OriginBridge
                 var svcb = await server.HttpsSvcbResolver.TryGetH3CapabilityAsync(host, port, cancellationToken);
                 if (svcb != null)
                 {
-                    server.Http3OriginCapabilityCache.Set(hostAndPort, svcb.AltPort, svcb.Ttl);
+                    var altPort = svcb.AltPort == port ? int.MinValue : svcb.AltPort;
+                    server.Http3OriginCapabilityCache.Set(hostAndPort, altPort, svcb.Ttl);
+                    quicPort = svcb.AltPort;
                     upstreamProtocol = UpstreamHttpProtocol.Http3;
                 }
                 // On null, UdpSvcbDnsResolver has already negative-cached the result internally.
             }
             // else: stay Auto → handled as H2/H1.1 auto-negotiate by TcpConnectionFactory
         }
+        else if (upstreamProtocol == UpstreamHttpProtocol.Http3)
+        {
+            // Forced H3: use the URI port unless cache has an alt-port.
+            if (server.Http3OriginCapabilityCache.TryGet(hostAndPort, out var cachedAltPort))
+                quicPort = cachedAltPort == int.MinValue ? port : cachedAltPort;
+        }
 
         switch (upstreamProtocol)
         {
             case UpstreamHttpProtocol.Http3:
-                await ForwardOverQuicAsync(sessionArgs, server, host, port, logger, cancellationToken, onInterimResponse);
+                await ForwardOverQuicAsync(sessionArgs, server, host, quicPort, logger, cancellationToken, onInterimResponse);
                 return;
 
             case UpstreamHttpProtocol.Http2:

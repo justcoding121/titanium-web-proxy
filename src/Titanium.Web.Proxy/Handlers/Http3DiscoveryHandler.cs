@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Models;
@@ -49,9 +51,133 @@ public partial class ProxyServer
     }
 
     /// <summary>
+    ///     Resolves whether the proxy should connect to the origin over HTTP/3 for the given
+    ///     <paramref name="host"/>:<paramref name="port"/> and effective upstream protocol policy.
+    ///     This is the single authority for H3 route selection; use it from every protocol path
+    ///     rather than calling <see cref="ShouldUseHttp3OriginCached"/> directly or duplicating
+    ///     the cache/DNS logic.
+    /// </summary>
+    /// <param name="host">Origin host name.</param>
+    /// <param name="port">Origin port.</param>
+    /// <param name="effectiveProtocol">
+    ///     The upstream protocol policy in effect (connection-level override from
+    ///     <c>BeforeTunnelConnectRequest</c> / <c>BeforeSslAuthenticate</c>, or the per-stream
+    ///     override from <c>BeforeRequest</c>). <see langword="null"/> is treated as
+    ///     <see cref="UpstreamHttpProtocol.Auto"/>.
+    /// </param>
+    /// <param name="allowDnsProbe">
+    ///     When <see langword="true"/>, a capability-cache miss may trigger an HTTPS/SVCB DNS
+    ///     lookup (only when <see cref="EnableHttpsSvcbDnsDiscovery"/> is also
+    ///     <see langword="true"/>). Set to <see langword="false"/> on the hot per-stream path
+    ///     inside a running H2 relay to avoid blocking the frame reader on DNS I/O.
+    /// </param>
+    /// <param name="cancellationToken">Propagates request/connection cancellation.</param>
+    internal async Task<Http3OriginRoute> ResolveHttp3OriginAsync(
+        string host, int port,
+        UpstreamHttpProtocol? effectiveProtocol,
+        bool allowDnsProbe,
+        CancellationToken cancellationToken)
+    {
+        if (!EnableHttp3) return Http3OriginRoute.None;
+
+        var protocol = effectiveProtocol ?? UpstreamHttpProtocol.Auto;
+
+        // Explicit forced H3 — callers must handle QUIC failure; no TCP fallback.
+        if (protocol == UpstreamHttpProtocol.Http3)
+            return new Http3OriginRoute
+            {
+                UseH3 = true,
+                QuicPort = port,
+                ForcedH3 = true,
+                Source = Http3RouteSource.Forced
+            };
+
+        // Explicit non-H3 policy — honour without any DNS query.
+        if (protocol == UpstreamHttpProtocol.Http11 || protocol == UpstreamHttpProtocol.Http2)
+            return Http3OriginRoute.None;
+
+        // Auto: check the in-memory Alt-Svc capability cache (synchronous, no I/O).
+        var hostAndPort = $"{host}:{port}";
+        if (Http3OriginCapabilityCache.TryGet(hostAndPort, out var cachedAltPort))
+        {
+            var quicPort = cachedAltPort == int.MinValue ? port : cachedAltPort;
+            return new Http3OriginRoute
+            {
+                UseH3 = true,
+                QuicPort = quicPort,
+                Source = Http3RouteSource.AltSvcCache
+            };
+        }
+
+        // Auto + DNS probe (connection-time path only; never inside H2 frame-reading loop).
+        if (allowDnsProbe && EnableHttpsSvcbDnsDiscovery)
+        {
+            var svcb = await HttpsSvcbResolver.TryGetH3CapabilityAsync(host, port, cancellationToken);
+            if (svcb != null)
+            {
+                // Normalize same-port vs alternative-port for the capability cache.
+                var altPort = svcb.AltPort == port ? int.MinValue : svcb.AltPort;
+                Http3OriginCapabilityCache.Set(hostAndPort, altPort, svcb.Ttl);
+                return new Http3OriginRoute
+                {
+                    UseH3 = true,
+                    QuicPort = svcb.AltPort,
+                    Source = Http3RouteSource.HttpsSvcb
+                };
+            }
+            // Negative result already cached internally by UdpSvcbDnsResolver.
+        }
+
+        return Http3OriginRoute.None;
+    }
+
+    /// <summary>
+    ///     Synchronous, cache-only variant of <see cref="ResolveHttp3OriginAsync" /> for use on
+    ///     the hot per-stream path inside a running H2 relay where DNS I/O must not block the
+    ///     frame reader. Returns <see cref="Http3OriginRoute.None"/> on any cache miss.
+    /// </summary>
+    internal Http3OriginRoute ShouldUseHttp3OriginCached(
+        string host, int port, UpstreamHttpProtocol? effectiveProtocol)
+    {
+        if (!EnableHttp3) return Http3OriginRoute.None;
+
+        var protocol = effectiveProtocol ?? UpstreamHttpProtocol.Auto;
+
+        if (protocol == UpstreamHttpProtocol.Http3)
+            return new Http3OriginRoute
+            {
+                UseH3 = true,
+                QuicPort = port,
+                ForcedH3 = true,
+                Source = Http3RouteSource.Forced
+            };
+
+        if (protocol == UpstreamHttpProtocol.Http11 || protocol == UpstreamHttpProtocol.Http2)
+            return Http3OriginRoute.None;
+
+        var hostAndPort = $"{host}:{port}";
+        if (Http3OriginCapabilityCache.TryGet(hostAndPort, out var cachedAltPort))
+        {
+            var quicPort = cachedAltPort == int.MinValue ? port : cachedAltPort;
+            return new Http3OriginRoute
+            {
+                UseH3 = true,
+                QuicPort = quicPort,
+                Source = Http3RouteSource.AltSvcCache
+            };
+        }
+
+        return Http3OriginRoute.None;
+    }
+
+    /// <summary>
     ///     Returns <see langword="true" /> when this request should be forwarded to the origin over
     ///     HTTP/3 rather than the normal TCP pipeline. Evaluated in <c>HandleHttpSessionRequest</c>
     ///     before the TCP connection generator runs.
+    ///     <para>
+    ///         This is a thin synchronous wrapper used only on the H1.1 hot path; prefer
+    ///         <see cref="ResolveHttp3OriginAsync" /> on paths where async DNS probing is safe.
+    ///     </para>
     /// </summary>
     internal bool ShouldUseHttp3Origin(SessionEventArgs args)
     {
