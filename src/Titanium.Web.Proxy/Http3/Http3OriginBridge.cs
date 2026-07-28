@@ -172,20 +172,61 @@ internal static class Http3OriginBridge
             var response = BuildResponseFromHeaders(decodedResponseHeaders, HttpHeader.Version30);
 
             // Read response body DATA frames.
+            // When OnResponseBodyWrite has subscribers, use a one-frame read-ahead so IsLastChunk
+            // is accurate. Otherwise use the fast path without allocating hook args.
+            var maxPayload = sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes;
             var bodyStream = new System.IO.MemoryStream();
-            while (true)
+            try
             {
-                var frame = await Http3Frame.ReadAsync(originStream,
-                    maxPayloadBytes: sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes,
-                    cancellationToken);
-                if (frame == null) break;
-                if (frame.Type == Http3FrameType.Data)
-                    await bodyStream.WriteAsync(frame.Payload, cancellationToken);
-                // Trailer HEADERS frames are intentionally ignored in this initial implementation.
+                if (server.OnResponseBodyWrite == null)
+                {
+                    // Fast path: no subscriber.
+                    while (true)
+                    {
+                        var frame = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload, cancellationToken);
+                        if (frame == null) break;
+                        if (frame.Type == Http3FrameType.Data)
+                            await bodyStream.WriteAsync(frame.Payload, cancellationToken);
+                        // Trailer HEADERS frames ignored (initial implementation).
+                    }
+                }
+                else
+                {
+                    // Hooked path: one-frame read-ahead for accurate IsLastChunk.
+                    var current = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload, cancellationToken);
+                    while (current != null)
+                    {
+                        var next = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload, cancellationToken);
+                        bool isLast = next == null || next.Type == Http3FrameType.Headers;
+
+                        if (current.Type == Http3FrameType.Data)
+                        {
+                            var hookArgs = new BeforeBodyWriteEventArgs(
+                                sessionArgs, current.Payload.ToArray(), isChunked: true, isLastChunk: isLast);
+                            await server.OnBeforeResponseBodyWrite(hookArgs);
+
+                            if (hookArgs.BodyBytes?.Length > 0)
+                                await bodyStream.WriteAsync(hookArgs.BodyBytes, cancellationToken);
+
+                            if (hookArgs.IsLastChunk && !isLast)
+                            {
+                                originStream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
+                                break;
+                            }
+                        }
+                        // Trailer HEADERS frames ignored (initial implementation).
+                        current = next;
+                    }
+                }
+
+                if (bodyStream.Length > 0)
+                    response.Body = bodyStream.ToArray();
+            }
+            finally
+            {
+                bodyStream.Dispose();
             }
 
-            if (bodyStream.Length > 0)
-                response.Body = bodyStream.ToArray();
             response.IsBodyRead = true;
 
             sessionArgs.HttpClient.Response = response;

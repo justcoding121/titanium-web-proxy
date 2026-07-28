@@ -118,7 +118,7 @@ internal static class Http3RequestStream
                 onSessionCreated(sessionArgs, streamState);
 
                 // 5. Read any request DATA frames into the body (if present).
-                var bodyBytes = await ReadRequestBodyAsync(stream, sessionArgs.HttpClient.Request, cancellationToken);
+                var bodyBytes = await ReadRequestBodyAsync(stream, sessionArgs.HttpClient.Request, server, sessionArgs, cancellationToken);
                 if (bodyBytes.Length > 0)
                 {
                 sessionArgs.HttpClient.Request.Body = bodyBytes;
@@ -207,36 +207,81 @@ internal static class Http3RequestStream
     /// <summary>
     ///     Reads DATA frames from the request stream until END_STREAM, assembling the body bytes.
     ///     Non-DATA frames (e.g. trailers HEADERS frame) are recognized and handled per RFC 9114.
+    ///     When <see cref="ProxyServer.OnRequestBodyWrite" /> has subscribers, fires
+    ///     <see cref="EventArguments.BeforeBodyWriteEventArgs" /> for each DATA frame using a one-frame
+    ///     read-ahead so that <c>IsLastChunk</c> is accurate. A handler may set <c>IsLastChunk = true</c>
+    ///     to terminate reading early; the stream read side is then aborted to release flow-control credit.
     /// </summary>
     private static async ValueTask<byte[]> ReadRequestBodyAsync(
         QuicStream stream,
         Request request,
+        ProxyServer server,
+        SessionEventArgs sessionArgs,
         CancellationToken ct)
     {
         var body = new System.IO.MemoryStream();
         try
         {
-            while (true)
+            if (server.OnRequestBodyWrite == null)
             {
-                var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0 /* unlimited in body reading */, ct);
-                if (frame is null) break; // END_STREAM
-
-                switch (frame.Type)
+                // Fast path: no subscriber — read all frames without creating hook args.
+                while (true)
                 {
-                    case Http3FrameType.Data:
-                        await body.WriteAsync(frame.Payload, ct);
-                        break;
-                    case Http3FrameType.Headers:
-                        // Trailing headers — parse and add to request trailing headers.
-                        var trailers = QpackDecoder.Decode(frame.Payload.Span);
-                        foreach (var (name, value) in trailers)
-                            request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
-                        break;
-                    default:
-                        // Unknown/reserved frame types MUST be ignored per RFC 9114 §9.
-                        break;
+                    var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0, ct);
+                    if (frame is null) break;
+                    switch (frame.Type)
+                    {
+                        case Http3FrameType.Data:
+                            await body.WriteAsync(frame.Payload, ct);
+                            break;
+                        case Http3FrameType.Headers:
+                            var trailers = QpackDecoder.Decode(frame.Payload.Span);
+                            foreach (var (name, value) in trailers)
+                                request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
+                            break;
+                    }
                 }
             }
+            else
+            {
+                // Hooked path: one-frame read-ahead so IsLastChunk is accurate.
+                var current = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0, ct);
+                while (current != null)
+                {
+                    var next = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0, ct);
+                    // A trailing HEADERS frame or null (END_STREAM) marks the end of DATA.
+                    bool isLast = next == null || next.Type == Http3FrameType.Headers;
+
+                    if (current.Type == Http3FrameType.Data)
+                    {
+                        var hookArgs = new BeforeBodyWriteEventArgs(
+                            sessionArgs, current.Payload.ToArray(), isChunked: true, isLastChunk: isLast);
+                        await server.OnBeforeRequestBodyWrite(hookArgs);
+
+                        // Null guard: developer may have set BodyBytes = null.
+                        if (hookArgs.BodyBytes?.Length > 0)
+                            await body.WriteAsync(hookArgs.BodyBytes, ct);
+
+                        if (hookArgs.IsLastChunk && !isLast)
+                        {
+                            // Developer requested early termination on a non-terminal frame.
+                            // Abort the read side to release the QUIC flow-control window.
+                            stream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
+                            break;
+                        }
+                    }
+                    else if (current.Type == Http3FrameType.Headers)
+                    {
+                        // Trailing headers — always process, regardless of hook subscription.
+                        var trailerList = QpackDecoder.Decode(current.Payload.Span);
+                        foreach (var (name, value) in trailerList)
+                            request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
+                    }
+
+                    current = next;
+                }
+            }
+
             return body.ToArray();
         }
         finally
