@@ -1,42 +1,58 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Http3.Qpack;
 
 /// <summary>
-///     Static-only QPACK encoder (RFC 9204). The encoder never populates the dynamic table; all
-///     representations use either static-table indexed references or literal-without-indexing.
-///     This means every HEADERS block has a zero Required Insert Count, which allows all QPACK decoder
-///     streams to remain empty and QPACK_BLOCKED_STREAMS to be 0.
+///     QPACK encoder (RFC 9204). Supports both static-table-only mode and dynamic-table mode.
+///     When <see cref="QpackContext" /> is provided and not disabled, the encoder will attempt to
+///     reference dynamic-table entries for repeated headers; otherwise all blocks use static-table
+///     references or literals. The 2-byte prefix (Required Insert Count + Base) is computed per
+///     RFC 9204 §4.5.1 and emitted at the front of every HEADERS block.
 /// </summary>
 internal static class QpackEncoder
 {
     /// <summary>
-    ///     Encodes a list of header fields into a QPACK header block.
-    ///     The output is suitable as the payload of an HTTP/3 HEADERS frame.
+    ///     Encodes a list of header fields into a QPACK header block using static-table-only mode.
+    ///     Equivalent to calling <see cref="Encode(IEnumerable{ValueTuple{string,string}},QpackContext?)" />
+    ///     with a null context.
     /// </summary>
-    public static byte[] Encode(IEnumerable<(string Name, string Value)> headers)
+    public static byte[] Encode(IEnumerable<(string Name, string Value)> headers) =>
+        Encode(headers, context: null);
+
+    /// <summary>
+    ///     Encodes a list of header fields into a QPACK header block.
+    ///     When <paramref name="context" /> is non-null and the outbound table is not disabled, the
+    ///     encoder will reference dynamic-table entries. The Required Insert Count prefix is encoded per
+    ///     RFC 9204 §4.5.1.1.
+    /// </summary>
+    public static byte[] Encode(IEnumerable<(string Name, string Value)> headers, QpackContext? context)
     {
-        var body = new System.IO.MemoryStream();
+        var body = new MemoryStream();
+        var outboundTable = context != null && !context.OutboundTableDisabled && context.MaxTableCapacityFromPeer > 0
+            ? context.OutboundEncoderTable
+            : null;
+
+        ulong maxRequiredInsertCount = 0;
 
         foreach (var (name, value) in headers)
         {
             var lowerName = name; // names from the proxy are already lowercase
 
-            // Try exact match (name + value) in the static table first.
-            int nameOnlyIndex = -1;
+            // 1. Try exact match in the static table.
+            int nameOnlyStaticIndex = -1;
             bool foundExact = false;
             for (var i = 0; i < QpackStaticTable.Entries.Length; i++)
             {
                 var entry = QpackStaticTable.Entries[i];
                 if (!string.Equals(entry.Name, lowerName, StringComparison.Ordinal)) continue;
-                if (nameOnlyIndex < 0) nameOnlyIndex = i;
+                if (nameOnlyStaticIndex < 0) nameOnlyStaticIndex = i;
                 if (string.Equals(entry.Value, value, StringComparison.Ordinal))
                 {
-                    // Indexed Header Field representation (S=1, 6-bit prefix)
-                    // Pattern: 1 1 S T Index
-                    //          1 1 1 (static) Index(6)
+                    // Indexed Header Field (static): 1 1 S=1 Index(6)
                     WriteIndexed(body, (ulong)i);
                     foundExact = true;
                     break;
@@ -44,56 +60,94 @@ internal static class QpackEncoder
             }
             if (foundExact) continue;
 
-            if (nameOnlyIndex >= 0)
+            // 2. Try dynamic table (when enabled).
+            if (outboundTable != null && outboundTable.TryFind(lowerName, value, out ulong dynAbsIdx, out bool dynExact))
             {
-                // Literal Header Field With Name Reference (static table name, literal value)
-                // Pattern: 0 1 N S T Index(4) | value literal
-                WriteLiteralWithStaticNameRef(body, (ulong)nameOnlyIndex, value);
+                if (dynExact)
+                {
+                    WriteDynamicIndexed(body, dynAbsIdx);
+                    maxRequiredInsertCount = Math.Max(maxRequiredInsertCount, dynAbsIdx + 1);
+                }
+                else
+                {
+                    WriteLiteralWithDynamicNameRef(body, dynAbsIdx, value);
+                    maxRequiredInsertCount = Math.Max(maxRequiredInsertCount, dynAbsIdx + 1);
+                }
+                continue;
             }
-            else
+
+            // 3. Literal with static name reference.
+            if (nameOnlyStaticIndex >= 0)
             {
-                // Literal Header Field Without Name Reference
-                // Pattern: 0 0 1 N (Name + Value literals)
-                WriteLiteralNewName(body, lowerName, value);
+                WriteLiteralWithStaticNameRef(body, (ulong)nameOnlyStaticIndex, value);
+                continue;
             }
+
+            // 4. Literal without name reference.
+            WriteLiteralNewName(body, lowerName, value);
         }
 
-        // Prepend 2-byte QPACK prefix: Required Insert Count = 0, S=0, Delta Base = 0.
+        // Encode the 2-byte QPACK prefix per RFC 9204 §4.5.1.
+        byte ricByte, sByte;
+        if (maxRequiredInsertCount == 0 || outboundTable == null)
+        {
+            ricByte = 0x00; // Required Insert Count = 0
+            sByte = 0x00;   // S=0, Delta Base = 0
+        }
+        else
+        {
+            // Encoded Required Insert Count = (count % (2 * MaxEntries)) + 1
+            // where MaxEntries = floor(MaxTableCapacity / 32)  (RFC 9204 §4.5.1.1)
+            var maxEntries = (ulong)(context!.MaxTableCapacityFromPeer / 32);
+            if (maxEntries == 0) maxEntries = 1;
+            var encodedRic = (maxRequiredInsertCount % (2 * maxEntries)) + 1;
+            ricByte = (byte)(encodedRic & 0xFF);
+            sByte = 0x00; // S=0, Delta Base = 0 (post-base indexing not used)
+        }
+
         var result = new byte[2 + body.Length];
-        result[0] = 0x00; // Required Insert Count = 0
-        result[1] = 0x00; // S=0, Delta Base = 0
+        result[0] = ricByte;
+        result[1] = sByte;
         body.GetBuffer().AsSpan(0, (int)body.Length).CopyTo(result.AsSpan(2));
         return result;
     }
 
-    // Indexed Header Field: 1 1 S=1(static) Index(6)
-    // Byte 0: 1 1 1 xxxxxx where xxxxxx = index (if <=63) or first 6 bits + continuation
-    private static void WriteIndexed(System.IO.MemoryStream buf, ulong index)
+    // Indexed Header Field (static): 1 1 S=1 Index(6) — pattern 0xC0
+    private static void WriteIndexed(MemoryStream buf, ulong index)
     {
-        // Pattern byte: 0b11 (high 2 bits) + S=1 (bit 6) → 0b1110_0000 = 0xC0 + 6-bit prefix int
         WritePrefixedInt(buf, 0xC0, 6, index);
     }
 
-    // Literal With Name Reference: 0 1 N=0 S=1(static) T=0 Index(4)
-    // Byte 0: 0b0101_xxxx where xxxx = first 4 bits of static index
-    private static void WriteLiteralWithStaticNameRef(System.IO.MemoryStream buf, ulong nameIndex, string value)
+    // Indexed Header Field (dynamic, post-base): 0 0 0 1 Index(4) — pattern 0x10
+    private static void WriteDynamicIndexed(MemoryStream buf, ulong absoluteIndex)
     {
-        // Pattern: 0b0101_0000 = 0x50 (N=0, S=1) with 4-bit prefix
+        WritePrefixedInt(buf, 0x10, 4, absoluteIndex);
+    }
+
+    // Literal Header Field With Name Reference (static): 0 1 N=0 S=1 Index(4) — pattern 0x50
+    private static void WriteLiteralWithStaticNameRef(MemoryStream buf, ulong nameIndex, string value)
+    {
         WritePrefixedInt(buf, 0x50, 4, nameIndex);
         WriteStringLiteral(buf, value);
     }
 
-    // Literal Without Name Reference: 0 0 1 N=0 Name-length Name Value-length Value
-    // Byte 0: 0b0010_0000 = 0x20 (N=0)
-    private static void WriteLiteralNewName(System.IO.MemoryStream buf, string name, string value)
+    // Literal Header Field With Name Reference (dynamic, post-base): 0 0 0 0 N=0 Index(3) — pattern 0x00
+    private static void WriteLiteralWithDynamicNameRef(MemoryStream buf, ulong absoluteIndex, string value)
     {
-        buf.WriteByte(0x20); // 0b0010_0000
+        WritePrefixedInt(buf, 0x00, 3, absoluteIndex);
+        WriteStringLiteral(buf, value);
+    }
+
+    // Literal Without Name Reference: 0 0 1 N=0 ... — pattern 0x20
+    private static void WriteLiteralNewName(MemoryStream buf, string name, string value)
+    {
+        buf.WriteByte(0x20);
         WriteStringLiteral(buf, name);
         WriteStringLiteral(buf, value);
     }
 
     /// <summary>Writes an RFC 7541 §5.1 prefixed integer into the stream.</summary>
-    private static void WritePrefixedInt(System.IO.MemoryStream buf, byte patternByte, int prefixBits, ulong value)
+    private static void WritePrefixedInt(MemoryStream buf, byte patternByte, int prefixBits, ulong value)
     {
         var mask = (uint)((1 << prefixBits) - 1);
         if (value < mask)
@@ -116,10 +170,9 @@ internal static class QpackEncoder
     ///     Writes an RFC 7541 §5.2 string literal (length-prefixed, no Huffman encoding).
     ///     We always emit raw bytes (H=0) to keep the implementation simple.
     /// </summary>
-    private static void WriteStringLiteral(System.IO.MemoryStream buf, string s)
+    private static void WriteStringLiteral(MemoryStream buf, string s)
     {
         var bytes = Encoding.Latin1.GetBytes(s);
-        // H=0 flag + 7-bit length
         WritePrefixedInt(buf, 0x00, 7, (ulong)bytes.Length);
         buf.Write(bytes, 0, bytes.Length);
     }

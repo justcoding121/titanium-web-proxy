@@ -51,12 +51,28 @@ internal sealed class Http3Settings
     /// <summary>SETTINGS_MAX_FIELD_SECTION_SIZE (0x6). 0 means no limit was sent.</summary>
     public ulong MaxFieldSectionSize { get; private set; }
 
+    /// <summary>SETTINGS_QPACK_MAX_TABLE_CAPACITY (0x1). 0 means no dynamic table (default).</summary>
+    public uint QpackMaxTableCapacity { get; private set; }
+
+    /// <summary>SETTINGS_QPACK_BLOCKED_STREAMS (0x7). 0 means no blocked streams (default).</summary>
+    public uint QpackBlockedStreams { get; private set; }
+
     public void Add(ulong id, ulong value)
     {
         _parameters.Add((id, value));
         if (id == Http3SettingsId.MaxFieldSectionSize)
             MaxFieldSectionSize = value;
+        else if (id == Http3SettingsId.QpackMaxTableCapacity)
+            QpackMaxTableCapacity = (uint)Math.Min(value, uint.MaxValue);
+        else if (id == Http3SettingsId.QpackBlockedStreams)
+            QpackBlockedStreams = (uint)Math.Min(value, uint.MaxValue);
     }
+
+    /// <summary>Adds SETTINGS_QPACK_MAX_TABLE_CAPACITY to this settings object.</summary>
+    public void SetQpackMaxTableCapacity(uint capacity) => Add(Http3SettingsId.QpackMaxTableCapacity, capacity);
+
+    /// <summary>Adds SETTINGS_QPACK_BLOCKED_STREAMS to this settings object.</summary>
+    public void SetQpackBlockedStreams(uint count) => Add(Http3SettingsId.QpackBlockedStreams, count);
 
     /// <summary>
     ///     Parses a SETTINGS frame payload.

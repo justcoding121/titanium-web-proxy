@@ -302,6 +302,15 @@ public partial class ProxyServer : IDisposable
     public bool EnableHttpsSvcbDnsDiscovery { get; set; } = false;
 
     /// <summary>
+    ///     When <see langword="true" />, enables RFC 9204 QPACK dynamic table encoding and decoding for
+    ///     inbound HTTP/3 connections. Each connection gets its own <see cref="Http3.Qpack.QpackContext" />
+    ///     with two independent 4096-byte tables (one inbound, one outbound). Defaults to
+    ///     <see langword="false" /> (static-table-only); existing deployments are unaffected.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
+    public bool EnableQpackDynamicTable { get; set; } = false;
+
+    /// <summary>
     ///     DNS server endpoint used by <see cref="Http3.Dns.UdpSvcbDnsResolver" /> for HTTPS/SVCB
     ///     queries. Defaults to <c>127.0.0.1:53</c>. Override for testing or to use a specific resolver.
     /// </summary>
