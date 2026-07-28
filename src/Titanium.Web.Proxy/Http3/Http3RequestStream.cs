@@ -106,12 +106,12 @@ internal static class Http3RequestStream
                     server, clientConnection, System.IO.Stream.Null,
                     server.BufferPool, linkedCts.Token);
 
-                sessionArgs = new SessionEventArgs(server, endPoint, nullHttpClientStream, null, cts)
-                {
-                    UserData = authArgs.CustomUpStreamProxy
-                };
+                sessionArgs = new SessionEventArgs(server, endPoint, nullHttpClientStream, null, cts);
 
-                // Seed per-connection upstream policy from the auth event, then allow per-stream override.
+                // Seed per-connection overrides from the auth event.
+                // CustomUpStreamProxy is the typed proxy field read by the bridge; UserData is
+                // intentionally left null so the public API is not polluted with internal state.
+                sessionArgs.CustomUpStreamProxy = authArgs.CustomUpStreamProxy;
                 sessionArgs.UpstreamHttpProtocol = authArgs.UpstreamHttpProtocol;
 
                 streamState = new Http3StreamState(stream.Id, sessionArgs);
