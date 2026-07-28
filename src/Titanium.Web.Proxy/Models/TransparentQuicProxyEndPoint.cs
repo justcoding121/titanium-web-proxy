@@ -1,6 +1,7 @@
 #pragma warning disable CA1416 // QUIC APIs are platform-specific; runtime check guards usage
 using System;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Quic;
 using System.Threading.Tasks;
@@ -32,8 +33,13 @@ namespace Titanium.Web.Proxy.Models;
 ///         is encrypted and cannot be extracted here. Either disable ECH for intercepted names in your
 ///         managed DNS, or configure managed clients to disable ECH.
 ///     </para>
+///     <para>
+///         <b>Experimental:</b> HTTP/3 support has not yet completed the full interop/soak/fuzz gate
+///         process. Suppress <c>TWP001</c> to opt in.
+///     </para>
 /// </summary>
 [DebuggerDisplay("TransparentQuic: {IpAddress}:{Port}")]
+[Experimental("TWP001")]
 public class TransparentQuicProxyEndPoint : TransparentBaseProxyEndPoint
 {
     private int maxInboundUnidirectionalStreams = 3;

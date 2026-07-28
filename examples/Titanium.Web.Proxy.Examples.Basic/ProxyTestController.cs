@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Quic;
 using System.Net.Security;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,6 +27,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
             = new ConcurrentQueue<Tuple<ConsoleColor?, string>>();
 
         private ExplicitProxyEndPoint explicitEndPoint;
+
+#pragma warning disable TWP001 // HTTP/3 is experimental — example intentionally exercises this API
+        private TransparentQuicProxyEndPoint? quicEndPoint;
+#pragma warning restore TWP001
 
         public ProxyTestController()
         {
@@ -107,6 +112,38 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // An explicit endpoint is where the client knows about the existence of a proxy
             // So client sends request in a proxy friendly manner
             proxyServer.AddEndPoint(explicitEndPoint);
+
+            // HTTP/3 transparent QUIC endpoint (experimental — suppress TWP001 to opt in).
+            // Requires MsQuic native library and a supported OS:
+            //   Windows: Windows 11 / Server 2022+
+            //   Linux:   apt install libmsquic
+            //   macOS:   bundle libmsquic + libssl + libcrypto with @loader_path RPATH
+            // Traffic must be redirected here (e.g. via iptables/nftables UDP REDIRECT on Linux,
+            // WFP on Windows, or pf rdr on macOS). See wiki/HTTP-3.md for setup details.
+#pragma warning disable TWP001
+            if (QuicListener.IsSupported)
+            {
+                proxyServer.EnableHttp3 = true;
+                quicEndPoint = new TransparentQuicProxyEndPoint(IPAddress.Any, 443)
+                {
+                    // Replace with IOriginalDestinationResolver for real NAT-transparent interception.
+                    // ForwardHost and ForwardPort are used as a fallback when no resolver is set.
+                    ForwardHost = "localhost",
+                    ForwardPort = 443
+                };
+                quicEndPoint.BeforeQuicAuthenticate += OnBeforeQuicAuthenticate;
+                proxyServer.AddEndPoint(quicEndPoint);
+                Console.WriteLine("HTTP/3 QUIC endpoint started on UDP 443.");
+            }
+            else
+            {
+                Console.WriteLine("[HTTP/3] Skipped: QuicListener.IsSupported is false on this platform.");
+                Console.WriteLine("  Windows: requires Windows 11 / Server 2022+.");
+                Console.WriteLine("  Linux:   apt install libmsquic");
+                Console.WriteLine("  macOS:   bundle libmsquic + libssl + libcrypto with @loader_path RPATH.");
+            }
+#pragma warning restore TWP001
+
             proxyServer.Start();
 
             // Transparent endpoint is useful for reverse proxy (client is not aware of the existence of proxy)
@@ -160,6 +197,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             explicitEndPoint.BeforeTunnelConnectRequest -= OnBeforeTunnelConnectRequest;
             explicitEndPoint.BeforeTunnelConnectResponse -= OnBeforeTunnelConnectResponse;
+
+#pragma warning disable TWP001
+            if (quicEndPoint != null)
+                quicEndPoint.BeforeQuicAuthenticate -= OnBeforeQuicAuthenticate;
+#pragma warning restore TWP001
 
             proxyServer.BeforeRequest -= OnRequest;
             proxyServer.BeforeResponse -= OnResponse;
@@ -258,6 +300,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             return Task.CompletedTask;
         }
+
+#pragma warning disable TWP001
+        private Task OnBeforeQuicAuthenticate(object sender, BeforeQuicAuthenticateEventArgs e)
+        {
+            WriteToConsole($"[QUIC] Connection from {e.RemoteEndPoint} (SNI: {e.SniHostName})");
+            return Task.CompletedTask;
+        }
+#pragma warning restore TWP001
 
         // intercept & cancel redirect or update requests
         private async Task OnRequest(object sender, SessionEventArgs e)

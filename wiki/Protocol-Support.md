@@ -96,11 +96,12 @@ true`); set it to `false` to force HTTP/1.1 only. If you find something inaccura
 | `Via` header injection | Yes (default) | `ViaHeaderPseudonym` defaults to `"titanium-web-proxy"`, appending `Via: {version} {pseudonym}` to forwarded HTTP/1.x and native/bridged HTTP/2 requests and responses (RFC 9110 §7.6.3). HTTP/2 uses the `2` received-protocol token, while responses record the origin response version. Set to an empty string to disable. Loop detection checks exact received-by tokens across every `Via` field and refuses matches with `508 Loop Detected`. |
 | Authentication retry bounds | Yes | NTLM/Negotiate and 407/401 retry loops are capped at 3 round-trips per session to prevent indefinite handshake cycles against a misbehaving peer. |
 
-## HTTP/3 (QUIC) — opt-in, .NET 6+
+## HTTP/3 (QUIC) — opt-in, experimental
 
-HTTP/3 support is gated behind `ProxyServer.EnableHttp3 = true`. It requires the MsQuic native library and
-`System.Net.Quic.QuicListener.IsSupported == true` at runtime (available on Windows 11/Server 2022 and recent
-Linux kernels with kernel 5.11+ TLS; macOS is not supported by MsQuic).
+HTTP/3 support is gated behind `ProxyServer.EnableHttp3 = true` (marked `[Experimental("TWP001")]`).
+It requires the MsQuic native library and `System.Net.Quic.QuicListener.IsSupported == true` at runtime
+(available on Windows 11/Server 2022+ and Linux with a recent `libmsquic` package; on macOS, bundle
+`libmsquic`, `libssl`, and `libcrypto` with `@loader_path` RPATH — see [HTTP-3](HTTP-3) for details).
 
 | Feature | Support | Notes |
 |---------|---------|-------|
@@ -130,7 +131,7 @@ Linux kernels with kernel 5.11+ TLS; macOS is not supported by MsQuic).
 | `ViaHeaderPseudonym` | `"titanium-web-proxy"` | Token appended to `Via` headers on forwarded requests and responses. Set to an empty string to disable. Loop detection rejects incoming requests whose `Via` already contains this token with `508 Loop Detected`. |
 | `CompatibilityMode100Continue` | `false` | Sends a synthetic `100 Continue` to the client before reading the request body when `Enable100ContinueBehaviour = false`, preventing deadlock with strict `Expect: 100-continue` clients. |
 | `EnableRfc8441` | `false` | Enables WebSocket over HTTP/2 extended CONNECT negotiation (RFC 8441). When enabled, the proxy advertises `ENABLE_CONNECT_PROTOCOL=1` to h2 clients and selects the appropriate tunnel path: if the origin also advertises `ENABLE_CONNECT_PROTOCOL=1`, the proxy uses the native h2↔h2 DATA relay path; otherwise it falls back to opening an HTTP/1.1 WebSocket upgrade to the origin. |
-| `EnableHttp3` | `false` | Enables HTTP/3 (QUIC) support (opt-in). See [HTTP-3](HTTP-3) wiki page for full details. |
+| `EnableHttp3` | `false` | Enables HTTP/3 (QUIC) support (opt-in, experimental — suppress `TWP001`). See [HTTP-3](HTTP-3) wiki page for full details. |
 
 ## Where to look for more detail
 
