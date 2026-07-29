@@ -213,3 +213,6 @@ docs/manifest.json
 .sonarqube/
 .coverage/
 coverage/
+
+# BenchmarkDotNet run output (benchmarks/Titanium.Web.Proxy.Benchmarks is run manually, not in CI)
+BenchmarkDotNet.Artifacts/

@@ -6,6 +6,14 @@ namespace Titanium.Web.Proxy;
 /// Phase 0 policy decision: document defaults here so later phases can expose
 /// them as configurable properties on ProxyServer.
 /// </summary>
+/// <remarks>
+/// These are <see langword="static readonly" />, not <see langword="const" />, even though every
+/// current value is a compile-time constant. A <see langword="const" /> field is copied by value
+/// into every consumer assembly at their compile time; if a later release changes the default, a
+/// consumer that has not recompiled keeps the stale inlined value instead of picking up the new
+/// one from the referenced <c>Titanium.Web.Proxy.dll</c>. <see langword="static readonly" /> is
+/// resolved at load time, so a binary-only upgrade of this library takes effect for callers.
+/// </remarks>
 public static class ProxyLimits
 {
     /// <summary>
@@ -13,14 +21,14 @@ public static class ProxyLimits
     /// Streams with header lists exceeding this limit are rejected with RST_STREAM(ENHANCE_YOUR_CALM).
     /// Default: 64 KiB.
     /// </summary>
-    public const int DefaultMaxDecodedHeaderListBytes = 64 * 1024;
+    public static readonly int DefaultMaxDecodedHeaderListBytes = 64 * 1024;
 
     /// <summary>
     /// Maximum buffered request or response body size for proxied exchanges where full
     /// buffering is required (body mutation, authentication retry, etc.).
     /// Default: 4 MiB.
     /// </summary>
-    public const long DefaultMaxBufferedBodyBytes = 4L * 1024 * 1024;
+    public static readonly long DefaultMaxBufferedBodyBytes = 4L * 1024 * 1024;
 
     /// <summary>
     /// Maximum WebSocket frame payload size the proxy will accept during frame-level interception.
@@ -28,26 +36,26 @@ public static class ProxyLimits
     /// Raw relay (no interception) is not subject to this limit.
     /// Default: 16 MiB.
     /// </summary>
-    public const int DefaultMaxWebSocketFramePayloadBytes = 16 * 1024 * 1024;
+    public static readonly int DefaultMaxWebSocketFramePayloadBytes = 16 * 1024 * 1024;
 
     /// <summary>
     /// Maximum WebSocket message size (sum of all fragment payloads) the proxy will
     /// reassemble. Messages exceeding this limit are dropped and the connection is closed.
     /// Default: 64 MiB.
     /// </summary>
-    public const long DefaultMaxWebSocketMessageBytes = 64L * 1024 * 1024;
+    public static readonly long DefaultMaxWebSocketMessageBytes = 64L * 1024 * 1024;
 
     /// <summary>
     /// Pseudonym to use in Via header fields appended by this proxy.
     /// Empty string means Via headers are not appended (the default, for privacy and compatibility).
     /// Must be set to a non-empty token before Via header support is enabled in a later phase.
     /// </summary>
-    public const string DefaultViaPseudonym = "";
+    public static readonly string DefaultViaPseudonym = "";
 
     /// <summary>
     /// Maximum number of authentication challenge rounds allowed per request
     /// (e.g. NTLM three-way handshake counts as one round; additional 401/407 responses count separately).
     /// Default: 3.
     /// </summary>
-    public const int DefaultMaxAuthRounds = 3;
+    public static readonly int DefaultMaxAuthRounds = 3;
 }
