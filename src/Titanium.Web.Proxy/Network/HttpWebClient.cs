@@ -111,6 +111,24 @@ public class HttpWebClient
     }
 
     /// <summary>
+    ///     Resolves the HTTP version that will actually be declared to the origin on the request line, per
+    ///     <paramref name="originHttpVersionPolicy" />. Exposed so a caller that needs to know the outcome
+    ///     <em>before</em> <see cref="SendRequest" /> writes headers - e.g. to decide whether
+    ///     <c>Transfer-Encoding: chunked</c> must first be downgraded to buffered <c>Content-Length</c>
+    ///     framing, since HTTP/1.0 has no chunked transfer-coding at all - does not have to re-derive this
+    ///     logic and risk it drifting out of sync with what <see cref="SendRequest" /> actually sends.
+    /// </summary>
+    internal static Version ResolveOriginHttpVersion(Version requestHttpVersion,
+        OriginHttpVersionPolicy originHttpVersionPolicy)
+    {
+        if (originHttpVersionPolicy == OriginHttpVersionPolicy.NormalizeToHttp11 &&
+            requestHttpVersion == HttpHeader.Version10)
+            return HttpHeader.Version11;
+
+        return requestHttpVersion;
+    }
+
+    /// <summary>
     ///     Prepare and send the http(s) request
     /// </summary>
     /// <returns></returns>
@@ -166,12 +184,9 @@ public class HttpWebClient
         // The origin-bound wire version defaults to whatever the client itself declared (pass-through); it is
         // never written back onto Request.HttpVersion itself, which stays the client-facing version that event
         // handlers observe (see OriginHttpVersionPolicy).
-        var originHttpVersion = Request.HttpVersion;
-        if (originHttpVersionPolicy == OriginHttpVersionPolicy.NormalizeToHttp11 &&
-            originHttpVersion == HttpHeader.Version10)
+        var originHttpVersion = ResolveOriginHttpVersion(Request.HttpVersion, originHttpVersionPolicy);
+        if (originHttpVersion == HttpHeader.Version11 && Request.HttpVersion == HttpHeader.Version10)
         {
-            originHttpVersion = HttpHeader.Version11;
-
             // Some origins that are only conditionally HTTP/1.1-compliant still mirror the persistence implied
             // by whatever version/headers they were sent rather than trusting HTTP/1.1's persistent-by-default
             // rule; explicitly asking for "keep-alive" maximizes compatibility with that class of origin. An

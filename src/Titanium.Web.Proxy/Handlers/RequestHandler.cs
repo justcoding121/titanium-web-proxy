@@ -180,6 +180,11 @@ public partial class ProxyServer
                             // so that we can send it after authentication in WinAuthHandler.cs
                             if (args.EnableWinAuth && request.HasBody) await args.GetRequestBody(requestToken);
 
+                            // Must run before Request.Locked is set (a few lines below, inside the
+                            // Locked = true overload) - GetRequestBody() throws once Locked, exactly like
+                            // the WinAuth buffering immediately above it.
+                            await DowngradeChunkedFramingForHttp10OriginIfNeeded(args, requestToken);
+
                             var response = args.HttpClient.Response;
 
                             if (request.CancelRequest)
@@ -725,5 +730,40 @@ public partial class ProxyServer
         if (args.IsSocks) return FramingSource.Http1WireSocks;
         if (args.IsTransparent) return FramingSource.Http1WireTransparent;
         return FramingSource.Http1Wire;
+    }
+
+    /// <summary>
+    ///     HTTP/1.0 has no <c>chunked</c> transfer-coding at all (it predates RFC 2616's introduction of
+    ///     it), so a request that is still <see cref="Request.IsChunked" /> when
+    ///     <see cref="HttpWebClient.ResolveOriginHttpVersion" /> says the origin will be declared "HTTP/1.0"
+    ///     on the wire cannot be forwarded as-is: <see cref="OriginHttpVersionPolicy.PreserveClientVersion" />
+    ///     (the default) mirrors whatever version the client declared, so an HTTP/1.0 client whose request
+    ///     was itself re-chunked by this proxy - or a non-conformant HTTP/1.0 client that sent
+    ///     <c>Transfer-Encoding: chunked</c> anyway - would otherwise have that chunked framing relayed
+    ///     verbatim to a peer that cannot parse it.
+    ///     <para>
+    ///         The fix is to buffer the whole request body (the same bounded whole-body read every other
+    ///         whole-body API in this class already performs, e.g. WinAuth) and switch to
+    ///         <c>Content-Length</c> framing before <see cref="HttpWebClient.SendRequest" /> writes the
+    ///         request line/headers, rather than attempting to translate the chunked wire encoding
+    ///         mid-stream. Applies uniformly to the explicit, transparent and SOCKS paths, since all three
+    ///         share this single call site.
+    ///     </para>
+    /// </summary>
+    private static async Task DowngradeChunkedFramingForHttp10OriginIfNeeded(SessionEventArgs args,
+        CancellationToken cancellationToken)
+    {
+        var request = args.HttpClient.Request;
+        if (!request.IsChunked) return;
+
+        var originHttpVersion = HttpWebClient.ResolveOriginHttpVersion(request.HttpVersion,
+            args.OriginHttpVersionPolicy ?? args.Server.OriginHttpVersionPolicy);
+        if (originHttpVersion != HttpHeader.Version10) return;
+
+        if (!request.IsBodyRead) await args.GetRequestBody(cancellationToken);
+
+        // The ContentLength setter also clears IsChunked (removes Transfer-Encoding), so this single
+        // assignment performs the whole downgrade.
+        request.ContentLength = request.Body.Length;
     }
 }
