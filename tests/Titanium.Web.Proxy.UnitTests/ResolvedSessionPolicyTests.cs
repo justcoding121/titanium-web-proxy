@@ -64,6 +64,7 @@ public class ResolvedSessionPolicyTests
             maxConcurrentStreamsPerConnection: 50,
             maxPeerInitiatedIncompleteStreamResets: null,
             maxOpenHeaderBlockFrames: 64,
+            maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(5),
             connectionPoolingEnabled: true,
             maxCachedConnectionsPerHost: 2,
             maxCertificateCacheEntries: null);

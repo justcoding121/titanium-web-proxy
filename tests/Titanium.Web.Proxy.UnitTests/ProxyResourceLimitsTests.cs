@@ -24,6 +24,30 @@ public class ProxyResourceLimitsTests
         Assert.IsTrue(limits.MaxCachedConnectionsPerHost > 0);
         Assert.IsNull(limits.MaxConcurrentClients, "Admission cap is opt-in under the Balanced default.");
         Assert.IsNull(limits.MaxEncodedBodyBytes, "Body budget is opt-in under the Balanced default.");
+        Assert.IsTrue(limits.MaxOpenHeaderBlockFrames > 0);
+        Assert.IsTrue(limits.MaxOpenHeaderBlockDuration > TimeSpan.Zero);
+    }
+
+    [TestMethod]
+    public void Create_ZeroMaxOpenHeaderBlockDuration_Throws()
+    {
+        // Like MaxOpenHeaderBlockFrames, this is always-enforced: it is the wall-clock half of the
+        // CONTINUATION-flood guard, so it must never be representable as "disabled".
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => ProxyResourceLimits.Create(
+            maxHeaderLineBytes: 8192,
+            maxHeaderCount: 64,
+            maxHeaderAggregateBytes: 32768,
+            maxEncodedBodyBytes: null,
+            maxDecodedBodyBytes: null,
+            maxDecompressionRatio: null,
+            maxConcurrentClients: null,
+            maxConcurrentStreamsPerConnection: 50,
+            maxPeerInitiatedIncompleteStreamResets: null,
+            maxOpenHeaderBlockFrames: 16,
+            maxOpenHeaderBlockDuration: TimeSpan.Zero,
+            connectionPoolingEnabled: true,
+            maxCachedConnectionsPerHost: 1,
+            maxCertificateCacheEntries: null));
     }
 
     [TestMethod]
@@ -40,6 +64,7 @@ public class ProxyResourceLimitsTests
             maxConcurrentStreamsPerConnection: 50,
             maxPeerInitiatedIncompleteStreamResets: 20,
             maxOpenHeaderBlockFrames: 16,
+            maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(5),
             connectionPoolingEnabled: true,
             maxCachedConnectionsPerHost: 2,
             maxCertificateCacheEntries: 100);
@@ -67,6 +92,7 @@ public class ProxyResourceLimitsTests
             maxConcurrentStreamsPerConnection: 50,
             maxPeerInitiatedIncompleteStreamResets: null,
             maxOpenHeaderBlockFrames: 16,
+            maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(5),
             connectionPoolingEnabled: false,
             maxCachedConnectionsPerHost: 1,
             maxCertificateCacheEntries: null);
@@ -96,6 +122,7 @@ public class ProxyResourceLimitsTests
             maxConcurrentStreamsPerConnection: 50,
             maxPeerInitiatedIncompleteStreamResets: null,
             maxOpenHeaderBlockFrames: 16,
+            maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(5),
             connectionPoolingEnabled: true,
             maxCachedConnectionsPerHost: 1,
             maxCertificateCacheEntries: null));
@@ -117,6 +144,7 @@ public class ProxyResourceLimitsTests
             maxConcurrentStreamsPerConnection: 0,
             maxPeerInitiatedIncompleteStreamResets: null,
             maxOpenHeaderBlockFrames: 16,
+            maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(5),
             connectionPoolingEnabled: true,
             maxCachedConnectionsPerHost: 1,
             maxCertificateCacheEntries: null));
@@ -139,6 +167,7 @@ public class ProxyResourceLimitsTests
             maxConcurrentStreamsPerConnection: 50,
             maxPeerInitiatedIncompleteStreamResets: null,
             maxOpenHeaderBlockFrames: 16,
+            maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(5),
             connectionPoolingEnabled: false,
             maxCachedConnectionsPerHost: 0,
             maxCertificateCacheEntries: null));
@@ -158,6 +187,7 @@ public class ProxyResourceLimitsTests
             maxConcurrentStreamsPerConnection: 50,
             maxPeerInitiatedIncompleteStreamResets: null,
             maxOpenHeaderBlockFrames: 16,
+            maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(5),
             connectionPoolingEnabled: true,
             maxCachedConnectionsPerHost: 1,
             maxCertificateCacheEntries: null));

@@ -15,6 +15,7 @@ using Titanium.Web.Proxy.Http2.Hpack;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Streams;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Options;
 using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
 
 namespace Titanium.Web.Proxy.Http2;
@@ -59,12 +60,11 @@ internal sealed class Http2OriginConnection
     /// <summary>Maximum total header block (HEADERS + CONTINUATION fragments) we accept from origin before treating it as a protocol violation.</summary>
     private const int MaxHeaderBlockBytes = 256 * 1024;
 
-    private const int DefaultConcurrencyCap = 100;
-
     private readonly TcpServerConnection connection;
     private readonly Stream stream;
     private readonly ILogger logger;
     private readonly long maxBufferedBodyBytes;
+    private readonly ProxyResourceLimits resourceLimits;
     private readonly SemaphoreSlim writeLock = new(1, 1);
     private readonly Http2FlowController sendFlow = new();
     private readonly Http2Settings originSettings = new();
@@ -81,12 +81,14 @@ internal sealed class Http2OriginConnection
     private int goAwayLastStreamId = int.MaxValue;
     private Task? readLoopTask;
 
-    private Http2OriginConnection(TcpServerConnection connection, ILogger logger, long maxBufferedBodyBytes)
+    private Http2OriginConnection(TcpServerConnection connection, ILogger logger, long maxBufferedBodyBytes,
+        ProxyResourceLimits resourceLimits)
     {
         this.connection = connection;
         stream = connection.Stream;
         this.logger = logger;
         this.maxBufferedBodyBytes = maxBufferedBodyBytes;
+        this.resourceLimits = resourceLimits;
     }
 
     /// <summary>True while this connection may still be leased for a new request.</summary>
@@ -107,9 +109,11 @@ internal sealed class Http2OriginConnection
     ///     <see cref="SendAsync" /> always has a real <c>MAX_CONCURRENT_STREAMS</c>/frame-size budget to honor.
     /// </summary>
     internal static async Task<Http2OriginConnection> CreateAsync(TcpServerConnection connection,
-        ILogger logger, long maxBufferedBodyBytes, CancellationToken cancellationToken)
+        ILogger logger, long maxBufferedBodyBytes, CancellationToken cancellationToken,
+        ProxyResourceLimits? resourceLimits = null)
     {
-                var instance = new Http2OriginConnection(connection, logger, maxBufferedBodyBytes);
+                var instance = new Http2OriginConnection(connection, logger, maxBufferedBodyBytes,
+                    resourceLimits ?? ProxyResourceLimits.Default);
 
                 var preface = Http2Helper.ConnectionPreface;
                 await instance.stream.WriteAsync(preface, 0, preface.Length, cancellationToken);
@@ -414,9 +418,17 @@ internal sealed class Http2OriginConnection
                         await SendSettingsAckAsync(cancellationToken);
                         if (!initialSettingsReceived.Task.IsCompleted)
                         {
+                            // Consolidated with Http2Helper's client-facing admission check: both now
+                            // derive from the same proxy-owned ProxyResourceLimits.MaxConcurrentStreamsPerConnection
+                            // rather than each hard-coding its own default, so the two mechanisms cannot
+                            // silently drift apart. This gate additionally respects a lower
+                            // origin-advertised value (never a higher one) since it self-throttles the
+                            // proxy's own outbound usage of this shared origin connection - unlike
+                            // Http2Helper's check, there is no wire value here to keep in sync with.
+                            var proxyCap = resourceLimits.MaxConcurrentStreamsPerConnection;
                             var cap = originSettings.MaxConcurrentStreams == int.MaxValue
-                                ? DefaultConcurrencyCap
-                                : Math.Max(1, Math.Min(originSettings.MaxConcurrentStreams, DefaultConcurrencyCap * 4));
+                                ? proxyCap
+                                : Math.Max(1, Math.Min(originSettings.MaxConcurrentStreams, proxyCap));
                             concurrencyGate = new SemaphoreSlim(cap, cap);
                             initialSettingsReceived.TrySetResult(true);
                         }

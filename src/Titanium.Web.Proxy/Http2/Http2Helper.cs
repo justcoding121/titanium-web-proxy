@@ -19,6 +19,7 @@ using Titanium.Web.Proxy.Http2.Hpack;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Streams;
+using Titanium.Web.Proxy.Options;
 using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
 using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
 
@@ -100,19 +101,22 @@ namespace Titanium.Web.Proxy.Http2
             Func<SessionEventArgs, Http2StreamContext, Task> onBeforeResponse,
             Func<SessionEventArgs, Task> onAfterResponse, Action<HeaderCollection> prepareRequestHeaders,
             CancellationTokenSource cancellationTokenSource, Guid connectionId,
-            ILogger logger, int maxDecodedHeaderListBytes = 64 * 1024, bool enableRfc8441 = false)
+            ILogger logger, int maxDecodedHeaderListBytes = 64 * 1024, bool enableRfc8441 = false,
+            ProxyResourceLimits? resourceLimits = null)
         {
+            resourceLimits ??= ProxyResourceLimits.Default;
             var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource);
 
             // Now async relay all server=>client & client=>server data
             var sendRelay =
                 CopyHttp2FrameAsync(clientStream, serverStream, connectionState,
                     sessionFactory, onBeforeRequest, onAfterResponse, prepareRequestHeaders, true,
-                    cancellationTokenSource.Token, logger, maxDecodedHeaderListBytes, enableRfc8441);
+                    cancellationTokenSource.Token, logger, maxDecodedHeaderListBytes, enableRfc8441,
+                    resourceLimits);
             var receiveRelay =
                 CopyHttp2FrameAsync(serverStream, clientStream, connectionState,
                     sessionFactory, onBeforeResponse, onAfterResponse, null, false, cancellationTokenSource.Token,
-                    logger, maxDecodedHeaderListBytes, enableRfc8441);
+                    logger, maxDecodedHeaderListBytes, enableRfc8441, resourceLimits);
 
             await Task.WhenAny(sendRelay, receiveRelay);
             cancellationTokenSource.Cancel();
@@ -196,8 +200,10 @@ namespace Titanium.Web.Proxy.Http2
             CancellationToken cancellationToken,
             ILogger logger,
             int maxDecodedHeaderListBytes = 64 * 1024,
-            bool enableRfc8441 = false)
+            bool enableRfc8441 = false,
+            ProxyResourceLimits? resourceLimits = null)
         {
+            resourceLimits ??= ProxyResourceLimits.Default;
             var connectionId = connectionState.ConnectionId;
             var cancellationTokenSource = connectionState.CancellationTokenSource;
 
@@ -554,6 +560,18 @@ namespace Titanium.Web.Proxy.Http2
                         // the server has already told us (via GOAWAY) it will not process any new stream
                         // above its last-accepted id - refuse this one locally instead of forwarding a
                         // request we already know will never be answered.
+                        RemoveAndFinalizeStream(hbStreamId);
+                        await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
+                            Http2ErrorCode.RefusedStream, input));
+                        return false;
+                    }
+
+                    if (isMainHeaders && connectionState.ClientResetBudgetExceeded &&
+                        hbStreamId > connectionState.ClientResetBudgetLastStreamId)
+                    {
+                        // The proxy already announced (via its own GOAWAY, sent when the Rapid Reset
+                        // budget was exceeded) that it will not process any client-initiated stream above
+                        // this id - refuse locally rather than doing further setup work for it.
                         RemoveAndFinalizeStream(hbStreamId);
                         await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
                             Http2ErrorCode.RefusedStream, input));
@@ -1047,6 +1065,14 @@ namespace Titanium.Web.Proxy.Http2
             bool pendingHeaderEndStream = false;
             bool pendingHeaderIsPromise = false;
 
+            // Companion bounds for the open header block above: a byte cap alone never trips on
+            // zero-length CONTINUATION frames, and only one header block may be open per connection
+            // direction, so an attacker sending an endless sequence of empty CONTINUATION frames would
+            // otherwise head-of-line block every other multiplexed stream on this leg forever. Both are
+            // reset whenever a block opens and checked on every CONTINUATION frame for it.
+            int pendingHeaderBlockFrameCount = 0;
+            long pendingHeaderBlockOpenedAt = 0;
+
             // RFC 7540 ?3.5: "each endpoint is required to send a connection preface... this sequence MUST
             // be followed by a SETTINGS frame". The connection preface itself (the literal
             // "PRI * HTTP/2.0..." bytes) is already validated before this relay starts (see the explicit
@@ -1294,6 +1320,8 @@ namespace Titanium.Web.Proxy.Http2
                         pendingHeaderRr = rr;
                         pendingHeaderEndStream = endStreamFlag;
                         pendingHeaderIsPromise = args.IsPromise;
+                        pendingHeaderBlockFrameCount = 1;
+                        pendingHeaderBlockOpenedAt = Environment.TickCount64;
                     }
 
                     sendPacket = false;
@@ -1319,6 +1347,23 @@ namespace Titanium.Web.Proxy.Http2
                         return;
                     }
 
+                    // Frame-count and wall-clock bound: a zero-length CONTINUATION never advances
+                    // pendingHeaderBlock.Length above, so the byte cap alone cannot bound an attacker
+                    // that never sets END_HEADERS and sends an endless sequence of empty CONTINUATION
+                    // frames (or paces non-empty ones just slowly enough to never look byte-abusive).
+                    pendingHeaderBlockFrameCount++;
+                    var openMillis = Environment.TickCount64 - pendingHeaderBlockOpenedAt;
+                    if (pendingHeaderBlockFrameCount > resourceLimits.MaxOpenHeaderBlockFrames ||
+                        openMillis > resourceLimits.MaxOpenHeaderBlockDuration.TotalMilliseconds)
+                    {
+                        ReportException(logger, new ProxyHttpException(
+                            "HTTP/2 header block exceeded the maximum allowed CONTINUATION frame count or " +
+                            "stayed open too long - possible CONTINUATION flood.", null, pendingHeaderArgs));
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
+                            Http2ErrorCode.EnhanceYourCalm, input));
+                        return;
+                    }
+
                     pendingHeaderBlock.Write(buffer, 0, length);
 
                     if ((flags & Http2FrameFlag.EndHeaders) != 0)
@@ -1334,6 +1379,8 @@ namespace Titanium.Web.Proxy.Http2
                         pendingHeaderArgs = null;
                         pendingHeaderRr = null;
                         pendingHeaderStreamId = -1;
+                        pendingHeaderBlockFrameCount = 0;
+                        pendingHeaderBlockOpenedAt = 0;
 
                         args = pArgs;
                         rr = pRr;
@@ -1761,6 +1808,7 @@ namespace Titanium.Web.Proxy.Http2
                     Http2ErrorCode invalidSettingsError = Http2ErrorCode.ProtocolError;
                     bool sawEnablePush = false;
                     bool sawEnableConnectProtocol = false;
+                    bool sawMaxConcurrentStreams = false;
 
                     int pos = 0;
                     while (pos < length)
@@ -1810,7 +1858,37 @@ namespace Titanium.Web.Proxy.Http2
                         }
                         else if (identifier == (int)Http2SettingsId.MaxConcurrentStreams)
                         {
-                            localSettings.MaxConcurrentStreams = value > int.MaxValue ? int.MaxValue : (int)value;
+                            sawMaxConcurrentStreams = true;
+                            var advertised = value > int.MaxValue ? int.MaxValue : (int)value;
+
+                            if (!isClient)
+                            {
+                                // This is the server's own SETTINGS frame, about to be relayed on toward
+                                // the real client below. Consolidate what were previously two independent
+                                // mechanisms (this origin-advertised value, admitted against verbatim at
+                                // the isMainHeaders check, and Http2OriginConnection's separate
+                                // proxy-owned concurrencyGate for the H1-to-H2 bridge) into one: clamp to
+                                // the proxy-owned cap and rewrite the wire value so what the client is
+                                // told matches what will actually be enforced. Not clamping the advertised
+                                // value while still enforcing a lower one would let the client legitimately
+                                // open a stream believing it is within budget, only for the proxy to refuse
+                                // it - the PROTOCOL_ERROR-vs-REFUSED_STREAM ambiguity RFC 9113 §5.1.2 warns
+                                // against.
+                                var effective = Math.Min(advertised, resourceLimits.MaxConcurrentStreamsPerConnection);
+                                localSettings.MaxConcurrentStreams = effective;
+
+                                buffer[valueOffset] = (byte)((effective >> 24) & 0xff);
+                                buffer[valueOffset + 1] = (byte)((effective >> 16) & 0xff);
+                                buffer[valueOffset + 2] = (byte)((effective >> 8) & 0xff);
+                                buffer[valueOffset + 3] = (byte)(effective & 0xff);
+                            }
+                            else
+                            {
+                                // The client's own SETTINGS value governs server-initiated (push) stream
+                                // admission, which this proxy always advertises as disabled (see the
+                                // ENABLE_PUSH override below) - nothing to consolidate on this leg.
+                                localSettings.MaxConcurrentStreams = advertised;
+                            }
                         }
                         else if (identifier == (int)Http2SettingsId.EnablePush)
                         {
@@ -1921,6 +1999,28 @@ namespace Titanium.Web.Proxy.Http2
                         frameHeader.Length = length;
                         connectionState.DownstreamAdvertisedEnableConnect = true;
                     }
+
+                    if (!isClient && !sawMaxConcurrentStreams &&
+                        resourceLimits.MaxConcurrentStreamsPerConnection < int.MaxValue &&
+                        (flags & Http2FrameFlag.Ack) == 0 && length + 6 <= buffer.Length)
+                    {
+                        // The server's SETTINGS frame did not declare SETTINGS_MAX_CONCURRENT_STREAMS at
+                        // all (its RFC default, unbounded, would otherwise apply) - append an explicit
+                        // entry advertising the proxy-owned cap before relaying this frame to the client,
+                        // for the same "advertised must equal enforced" reason as the in-place overwrite
+                        // above.
+                        var effective = resourceLimits.MaxConcurrentStreamsPerConnection;
+                        localSettings.MaxConcurrentStreams = effective;
+
+                        buffer[length] = (byte)(((int)Http2SettingsId.MaxConcurrentStreams >> 8) & 0xff);
+                        buffer[length + 1] = (byte)((int)Http2SettingsId.MaxConcurrentStreams & 0xff);
+                        buffer[length + 2] = (byte)((effective >> 24) & 0xff);
+                        buffer[length + 3] = (byte)((effective >> 16) & 0xff);
+                        buffer[length + 4] = (byte)((effective >> 8) & 0xff);
+                        buffer[length + 5] = (byte)(effective & 0xff);
+                        length += 6;
+                        frameHeader.Length = length;
+                    }
                 }
 
                 if (type == Http2FrameType.RstStream)
@@ -1977,6 +2077,32 @@ namespace Titanium.Web.Proxy.Http2
                             resetRr.IsBodyRead = true;
                             resetRr.IsBodyReceived = true;
                             bodyTcs.TrySetResult(true);
+                        }
+
+                        // Rapid Reset (CVE-2023-44487) abuse budget: this branch only runs for a stream
+                        // that was still tracked (i.e. never reached a normal end-stream) at the moment
+                        // the RST_STREAM arrived, and only the client->server relay task ever reads an
+                        // RST_STREAM frame directly off the client's own wire, so `isClient` here means
+                        // exactly "the client reset a stream it never let complete" - never a
+                        // proxy-initiated reset, which this task never reads back from its own writes.
+                        if (isClient && resourceLimits.MaxPeerInitiatedIncompleteStreamResets.HasValue &&
+                            !connectionState.ClientResetBudgetExceeded)
+                        {
+                            var resetCount = Interlocked.Increment(ref connectionState.ClientIncompleteStreamResetCount);
+                            if (resetCount > resourceLimits.MaxPeerInitiatedIncompleteStreamResets.Value)
+                            {
+                                connectionState.ClientResetBudgetExceeded = true;
+                                connectionState.ClientResetBudgetLastStreamId = connectionState.LastClientStreamId;
+                                ReportException(logger, new ProxyHttpException(
+                                    "HTTP/2 abuse budget exceeded: too many client-initiated resets of " +
+                                    "incomplete streams (possible Rapid Reset / CVE-2023-44487).", null, null));
+                                await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                                    connectionState.ClientResetBudgetLastStreamId, Http2ErrorCode.EnhanceYourCalm,
+                                    input));
+                                // Do not return: already-admitted streams (id <= the last-stream-id just
+                                // announced) must still be allowed to drain per RFC 9113 §6.8. Only new
+                                // stream admission is refused, at the isMainHeaders check below.
+                            }
                         }
                     }
 
