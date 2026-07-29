@@ -53,6 +53,33 @@ public partial class ProxyServer : IDisposable
     private int http3ClientConnectionCount;
 
     /// <summary>
+    ///     Global admission counter for the admission gate, incremented/decremented synchronously at
+    ///     <see cref="HandleClient(Socket,ProxyEndPoint)" /> entry/exit. Deliberately independent of
+    ///     <see cref="clientConnectionCount" />: that counter is decremented from a fire-and-forget task
+    ///     behind a hardcoded one-second TIME_WAIT delay in <see cref="TcpClientConnection.Dispose" />,
+    ///     so gating admission on it would reject healthy traffic for a full second after every closed
+    ///     connection.
+    /// </summary>
+    private int admittedClientConnectionCount;
+
+    /// <summary>
+    ///     Number of client connections rejected by the global admission gate (see
+    ///     <see cref="MaxConcurrentClientConnections" />). A single bounded counter, not broken down by
+    ///     endpoint, so it stays cardinality-safe regardless of how many endpoints a host application adds.
+    /// </summary>
+    private long globalAdmissionRejectionCount;
+
+    /// <summary>
+    ///     Number of client connections rejected by a per-endpoint admission gate (see
+    ///     <see cref="ProxyEndPoint.MaxConcurrentClients" />), aggregated across all endpoints into one
+    ///     counter for the same cardinality-safety reason as <see cref="globalAdmissionRejectionCount" />.
+    ///     Per-endpoint rejection counts remain available, without adding label cardinality, via
+    ///     <see cref="ProxyEndPoint.AdmittedClientCount" /> and <see cref="ProxyEndPoint.MaxConcurrentClients" />
+    ///     on each of the caller's own, already-bounded <see cref="ProxyEndPoints" /> instances.
+    /// </summary>
+    private long endpointAdmissionRejectionCount;
+
+    /// <summary>
     ///     Per-session cancellation tokens for in-flight client handlers. Cancelled on Stop/StopAsync
     ///     so active relays do not outlive the listener (issues #919 / #799 / #809).
     /// </summary>
@@ -607,6 +634,40 @@ public partial class ProxyServer : IDisposable
     ///     These are also included in <see cref="ServerConnectionCount" />.
     /// </summary>
     public int Http3ServerConnectionCount => http3ServerConnectionCount;
+
+    /// <summary>
+    ///     Maximum number of client connections admitted across all TCP-based endpoints at once.
+    ///     <see langword="null" /> (the default) disables the global admission gate, preserving today's
+    ///     unbounded behavior. When set, a connection beyond this limit is rejected and disposed
+    ///     immediately after accept, before a handler task is even started.
+    ///     <para>
+    ///         Enforced independently of <see cref="ClientConnectionCount" />: see
+    ///         <see cref="admittedClientConnectionCount" /> for why. See also
+    ///         <see cref="ProxyEndPoint.MaxConcurrentClients" /> for a per-endpoint cap layered on top of
+    ///         this global one.
+    ///     </para>
+    /// </summary>
+    public int? MaxConcurrentClientConnections { get; set; }
+
+    /// <summary>
+    ///     Number of client connections currently admitted (accepted and past the admission gate, not
+    ///     yet finished being handled), across all TCP-based endpoints. Unlike
+    ///     <see cref="ClientConnectionCount" />, this drops to zero as soon as the handler returns,
+    ///     without the trailing TIME_WAIT delay.
+    /// </summary>
+    public int AdmittedClientConnectionCount => Volatile.Read(ref admittedClientConnectionCount);
+
+    /// <summary>
+    ///     Total number of client connections rejected by <see cref="MaxConcurrentClientConnections" />
+    ///     since this instance was created.
+    /// </summary>
+    public long GlobalAdmissionRejectionCount => Interlocked.Read(ref globalAdmissionRejectionCount);
+
+    /// <summary>
+    ///     Total number of client connections rejected by any endpoint's
+    ///     <see cref="ProxyEndPoint.MaxConcurrentClients" /> since this instance was created.
+    /// </summary>
+    public long EndpointAdmissionRejectionCount => Interlocked.Read(ref endpointAdmissionRejectionCount);
 
     /// <summary>
     ///     Realm used during Proxy Basic Authentication.
@@ -1491,34 +1552,103 @@ public partial class ProxyServer : IDisposable
         {
             if (ProxyRunning)
             {
-                try
+                // Gate before spending anything on this socket beyond the accept itself: a rejected
+                // connection is disposed immediately, without a handler task ever being scheduled.
+                if (!TryAdmitClientConnection(endPoint))
                 {
-                    tcpClient.NoDelay = NoDelay;
+                    tcpClient.Dispose();
                 }
-                catch (Exception ex)
+                else
                 {
-                    OnException(null, ex);
-                }
-
-                var acceptedClient = tcpClient;
-                Task.Run(async () =>
-                {
-                    // HandleClient runs detached (fire-and-forget); an unobserved exception here would
-                    // otherwise never surface anywhere and, depending on the .NET unobserved-task-
-                    // exception policy, could tear down the process. Always report it instead.
                     try
                     {
-                        await HandleClient(acceptedClient, endPoint);
+                        tcpClient.NoDelay = NoDelay;
                     }
                     catch (Exception ex)
                     {
-                        ProxyDiagnostics.ReportException(logger, "Unhandled exception while handling a client connection", ex);
+                        OnException(null, ex);
                     }
-                });
+
+                    var acceptedClient = tcpClient;
+                    Task.Run(async () =>
+                    {
+                        // HandleClient runs detached (fire-and-forget); an unobserved exception here would
+                        // otherwise never surface anywhere and, depending on the .NET unobserved-task-
+                        // exception policy, could tear down the process. Always report it instead.
+                        try
+                        {
+                            await HandleClient(acceptedClient, endPoint);
+                        }
+                        catch (Exception ex)
+                        {
+                            ProxyDiagnostics.ReportException(logger, "Unhandled exception while handling a client connection", ex);
+                        }
+                        finally
+                        {
+                            // Synchronous, unconditional release: never tied to the TIME_WAIT-delayed
+                            // decrement in TcpClientConnection.Dispose, so a burst of short-lived
+                            // connections cannot starve admission for a following burst.
+                            ReleaseClientConnection(endPoint);
+                        }
+                    });
+                }
             }
             else
                 tcpClient.Dispose();
         }
+    }
+
+    /// <summary>
+    ///     Admission gate evaluated synchronously before an accepted socket is dispatched to a handler
+    ///     task. Checks the global cap first, then the endpoint-specific one; a rejection anywhere
+    ///     rolls back only what this call itself admitted; released via
+    ///     <see cref="ReleaseClientConnection" /> once the corresponding handler completes.
+    /// </summary>
+    private bool TryAdmitClientConnection(ProxyEndPoint endPoint)
+    {
+        if (!TryAdmitGlobal())
+        {
+            Interlocked.Increment(ref globalAdmissionRejectionCount);
+            ProxyLog.ClientConnectionAdmissionRejected(logger, endPoint, "global limit");
+            return false;
+        }
+
+        if (!endPoint.TryAdmitClient())
+        {
+            ReleaseGlobal();
+            Interlocked.Increment(ref endpointAdmissionRejectionCount);
+            ProxyLog.ClientConnectionAdmissionRejected(logger, endPoint, "endpoint limit");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     Releases the admission slot acquired by a prior successful <see cref="TryAdmitClientConnection" />
+    ///     call for the same endpoint. Must be called exactly once per admitted connection, regardless of
+    ///     whether its handler completed normally or threw.
+    /// </summary>
+    private void ReleaseClientConnection(ProxyEndPoint endPoint)
+    {
+        ReleaseGlobal();
+        endPoint.ReleaseClient();
+    }
+
+    private bool TryAdmitGlobal()
+    {
+        while (true)
+        {
+            var current = Volatile.Read(ref admittedClientConnectionCount);
+            if (MaxConcurrentClientConnections is { } limit && current >= limit) return false;
+            if (Interlocked.CompareExchange(ref admittedClientConnectionCount, current + 1, current) == current)
+                return true;
+        }
+    }
+
+    private void ReleaseGlobal()
+    {
+        Interlocked.Decrement(ref admittedClientConnectionCount);
     }
 
     /// <summary>

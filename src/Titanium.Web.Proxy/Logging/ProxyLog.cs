@@ -102,6 +102,20 @@ internal static class ProxyLog
             host, port, Describe(ex));
     }
 
+    /// <summary>
+    ///     A client connection was rejected by the admission gate in <c>ProxyServer.OnAcceptConnection</c>.
+    ///     Tagged by <paramref name="reason" /> (one of a small fixed set: "global limit"/"endpoint
+    ///     limit") and by the endpoint's own <c>ip:port</c>, both naturally bounded label spaces, so this
+    ///     stays cardinality-safe however many endpoints a host application creates.
+    /// </summary>
+    internal static void ClientConnectionAdmissionRejected(ILogger logger, Models.ProxyEndPoint endPoint,
+        string reason)
+    {
+        if (!logger.IsEnabled(LogLevel.Warning)) return;
+        logger.LogWarning("Rejected a client connection on {Endpoint} ({Reason}).",
+            $"{endPoint.IpAddress}:{endPoint.Port}", reason);
+    }
+
     internal static void Http2ProbeResult(ILogger logger, string connectTarget, bool fromCache, bool supported,
         Exception? failure)
     {
