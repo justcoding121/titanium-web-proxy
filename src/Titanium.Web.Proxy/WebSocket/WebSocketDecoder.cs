@@ -19,9 +19,19 @@ public class WebSocketDecoder
 
     private long bufferLength;
 
-    internal WebSocketDecoder(IBufferPool bufferPool)
+    private readonly long maxFramePayloadBytes;
+
+    /// <param name="bufferPool">Sizes the initial internal reassembly buffer.</param>
+    /// <param name="maxFramePayloadBytes">
+    ///     Upper bound on a single frame's declared payload length, validated before any of that frame's
+    ///     bytes are buffered. Defaults to <see cref="long.MaxValue" /> (no caller-configured limit; the
+    ///     structural <see cref="int.MaxValue" /> bound below still applies) so existing call sites that
+    ///     do not have a policy limit to enforce keep their previous behavior.
+    /// </param>
+    internal WebSocketDecoder(IBufferPool bufferPool, long maxFramePayloadBytes = long.MaxValue)
     {
         buffer = new byte[bufferPool.BufferSize];
+        this.maxFramePayloadBytes = maxFramePayloadBytes;
     }
 
     /// <summary>
@@ -56,12 +66,6 @@ public class WebSocketDecoder
             var b = data1[1];
             long size = b & 0x7f;
 
-            // TODO: size > int.MaxValue is structurally possible with a 64-bit length field but is
-            // rejected upstream anyway: WebSocketInterceptRelay.ValidateWebSocketFrame enforces
-            // MaxWebSocketFramePayloadBytes for intercepted sessions; raw-relay sessions forward frames
-            // without decoding and therefore cannot enforce a per-frame limit here without threading
-            // ProxyServer through the decoder. Wiring that in is deferred to a future phase.
-
             var masked = (b & 0x80) != 0;
 
             var idx = 2;
@@ -74,12 +78,41 @@ public class WebSocketDecoder
                 }
                 else
                 {
+                    // RFC 6455 section 5.2: "the most significant bit MUST be 0" for the 64-bit extended
+                    // payload length. Check the raw byte before doing arithmetic on it below - a set high
+                    // bit would otherwise just flip the sign of the shifted value rather than fail loudly.
+                    if ((data1[2] & 0x80) != 0)
+                        throw new WebSocketProtocolException(
+                            "WebSocket frame declared a 64-bit payload length with the reserved high bit set.",
+                            1002);
+
                     size = ((long)data1[2] << 56) + ((long)data1[3] << 48) + ((long)data1[4] << 40) +
                            ((long)data1[5] << 32) +
                            ((long)data1[6] << 24) + (data1[7] << 16) + (data1[8] << 8) + data1[9];
                     idx = 10;
+
+                    // WebSocketFrame.Data is ultimately sliced with a 32-bit length (below), so a
+                    // structurally valid but oversized 64-bit length can never be honored regardless of
+                    // any configured limit.
+                    if (size > int.MaxValue)
+                        throw new WebSocketProtocolException(
+                            $"WebSocket frame declared a payload length of {size:N0} bytes, which exceeds " +
+                            $"the maximum of {int.MaxValue:N0} bytes this decoder can buffer.",
+                            1002);
                 }
             }
+
+            // Validate the declared length before buffering a single byte of payload (see the
+            // maxFramePayloadBytes remarks on the constructor): the completeness check just below waits
+            // for the full declared length to arrive, and CopyToBuffer grows the reassembly buffer
+            // without an upper bound to accumulate a frame that has not fully arrived yet. Checking here,
+            // rather than after the frame is fully reassembled, is what keeps an attacker who declares an
+            // oversized length and trickles bytes in slowly from forcing unbounded allocation.
+            if (size > maxFramePayloadBytes)
+                throw new WebSocketProtocolException(
+                    $"WebSocket frame payload of {size:N0} bytes exceeds the configured limit of " +
+                    $"{maxFramePayloadBytes:N0} bytes.",
+                    1009);
 
             // The completeness check must also account for the 4-byte masking key (present right before
             // the payload whenever the mask bit is set) - otherwise, once just enough bytes have arrived
@@ -149,27 +182,36 @@ public class WebSocketDecoder
         return buffer.AsMemory(0, (int)bufferLength);
     }
 
+    /// <summary>
+    ///     Reports whether enough bytes have arrived to parse the frame's length-encoding header (the
+    ///     base 2 bytes, plus a 2- or 8-byte extended length field, plus a 4-byte mask key when present) -
+    ///     not whether the payload itself has fully arrived. The payload-completeness check is separate
+    ///     (in <see cref="Decode" />, once the real declared length is known) so that this gate can run,
+    ///     and the declared-length validation immediately after it, using only the header bytes.
+    /// </summary>
+    /// <remarks>
+    ///     A previous version of this check compared the bytes available against the raw 126/127
+    ///     length-code marker byte instead of the actual number of header bytes needed (e.g. requiring
+    ///     127 total bytes to be available before even attempting to parse a 64-bit extended length,
+    ///     regardless of how small the header itself is). That accidentally left the declared-length
+    ///     validation in <see cref="Decode" /> unreachable for a header delivered with little or no
+    ///     payload alongside it - exactly the slow-trickle delivery pattern an attacker would use to
+    ///     force unbounded reassembly-buffer growth while "waiting for more data".
+    /// </remarks>
     private static bool IsDataEnough(ReadOnlySpan<byte> data)
     {
-        var length = data.Length;
-        if (length < 2)
+        if (data.Length < 2)
             return false;
 
-        var size = data[1];
-        if ((size & 0x80) != 0) // masked
-            length -= 4;
+        var masked = (data[1] & 0x80) != 0;
+        var sizeMarker = data[1] & 0x7f;
 
-        size &= 0x7f;
+        var headerLength = 2;
+        if (sizeMarker == 126) headerLength += 2;
+        else if (sizeMarker == 127) headerLength += 8;
 
-        if (size == 126)
-        {
-            if (length < 2) return false;
-        }
-        else if (size == 127)
-        {
-            if (length < 10) return false;
-        }
+        if (masked) headerLength += 4;
 
-        return length >= size;
+        return data.Length >= headerLength;
     }
 }
