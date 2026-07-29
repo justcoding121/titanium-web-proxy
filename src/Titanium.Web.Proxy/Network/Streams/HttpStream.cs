@@ -665,6 +665,13 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         bufferPos = 0;
 
         var result = false;
+        // A cancelled/timed-out wait is not evidence the connection is dead - the read simply never
+        // got the chance to observe EOF or a transport error. Unlike a genuine EOF or I/O failure
+        // (which correctly poison the stream below via IsClosed/closedWrite), an operation-cancelled
+        // read must leave the stream's write side usable: callers (e.g. WebSocketInterceptRelay
+        // cancelling the "losing" direction's pending read after the other leg finds a protocol
+        // violation) still need to write a conformant close frame on this same stream afterwards.
+        var cancelled = false;
         try
         {
             var readTask = BaseStream.ReadAsync(streamBuffer, Available, bytesToRead, cancellationToken);
@@ -687,6 +694,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         }
         catch (OperationCanceledException)
         {
+            cancelled = true;
             throw;
         }
         catch (Exception ex)
@@ -697,7 +705,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         }
         finally
         {
-            if (!result)
+            if (!result && !cancelled)
             {
                 IsClosed = true;
                 closedWrite = true;

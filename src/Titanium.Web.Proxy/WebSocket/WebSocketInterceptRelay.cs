@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -24,29 +25,43 @@ internal static class WebSocketInterceptRelay
         session.WebSocketClientWriter = new WebSocketFrameWriter(clientStream, mask: false, clientWriteLock,
             (b, o, c) => session.OnDataReceived(b, o, c));
 
+        var maxFramePayloadBytes = session.MaxWebSocketFramePayloadBytes ?? session.Server.MaxWebSocketFramePayloadBytes;
+
         var clientToServer = RelayDirectionAsync(clientStream, serverStream, bufferPool,
-            WebSocketFrameDirection.ClientToServer, maskWhenWriting: true, session,
+            WebSocketFrameDirection.ClientToServer, maxFramePayloadBytes, session,
             serverWriteLock, cancellationTokenSource,
             onRead: (b, o, c) => { /* observational reads are implied by frames; wire bytes fire on write */ },
             onWrite: (b, o, c) => session.OnDataSent(b, o, c));
 
         var serverToClient = RelayDirectionAsync(serverStream, clientStream, bufferPool,
-            WebSocketFrameDirection.ServerToClient, maskWhenWriting: false, session,
+            WebSocketFrameDirection.ServerToClient, maxFramePayloadBytes, session,
             clientWriteLock, cancellationTokenSource,
             onRead: (_, _, _) => { },
             onWrite: (b, o, c) => session.OnDataReceived(b, o, c));
 
         await Task.WhenAny(clientToServer, serverToClient).ConfigureAwait(false);
         cancellationTokenSource.Cancel();
+
+        ushort? closeCode = null;
         try
         {
             await Task.WhenAll(clientToServer, serverToClient).ConfigureAwait(false);
+            closeCode = clientToServer.Result ?? serverToClient.Result;
         }
         catch (OperationCanceledException)
         {
         }
         finally
         {
+            // RFC 6455 sections 5.5.1 and 7.1.1: a frame/fragmentation violation is not a best-effort
+            // teardown - both legs must receive a Close control frame (masked toward the origin, since
+            // the proxy is impersonating the client on that leg) before the underlying connections close,
+            // and no further data frames may follow it. Do this before the writers/locks below are torn
+            // down, while both streams are still known to be open.
+            if (closeCode.HasValue)
+                await SendConformantCloseAsync(clientStream, serverStream, clientWriteLock, serverWriteLock,
+                    closeCode.Value).ConfigureAwait(false);
+
             session.WebSocketServerWriter = null;
             session.WebSocketClientWriter = null;
             clientWriteLock.Dispose();
@@ -54,13 +69,64 @@ internal static class WebSocketInterceptRelay
         }
     }
 
-    private static async Task RelayDirectionAsync(Stream source, Stream destination, IBufferPool bufferPool,
-        WebSocketFrameDirection direction, bool maskWhenWriting, SessionEventArgs session,
+    /// <summary>
+    ///     Sends a Close control frame on both legs of the tunnel. Best-effort per leg: a peer that has
+    ///     already disconnected must not prevent the other leg's Close from being attempted, and the
+    ///     underlying connections are torn down by the caller regardless once this returns.
+    /// </summary>
+    private static async Task SendConformantCloseAsync(Stream clientStream, Stream serverStream,
+        SemaphoreSlim clientWriteLock, SemaphoreSlim serverWriteLock, ushort closeCode)
+    {
+        var payload = new[] { (byte)(closeCode >> 8), (byte)closeCode };
+
+        await TrySendCloseFrameAsync(clientStream, clientWriteLock, payload, mask: false).ConfigureAwait(false);
+        await TrySendCloseFrameAsync(serverStream, serverWriteLock, payload, mask: true).ConfigureAwait(false);
+
+        // Both WriteAsync/FlushAsync calls above only guarantee the bytes left this process's send
+        // buffer, not that the peer's TCP stack has ACKed them - the caller tears down the underlying
+        // sockets immediately after this method returns, and an instantaneous close can otherwise beat
+        // a just-flushed small frame off the wire on some platforms/network stacks. This short grace
+        // period costs nothing on the hot path (only reached after a protocol violation) and makes
+        // delivery of the Close frame reliable in practice.
+        await Task.Delay(100).ConfigureAwait(false);
+    }
+
+    private static async Task TrySendCloseFrameAsync(Stream stream, SemaphoreSlim writeLock, byte[] payload,
+        bool mask)
+    {
+        try
+        {
+            var wire = WebSocketFrameEncoder.Encode(WebsocketOpCode.ConnectionClose, payload, mask);
+            await writeLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                await stream.WriteAsync(wire, 0, wire.Length).ConfigureAwait(false);
+                await stream.FlushAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                writeLock.Release();
+            }
+        }
+        catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
+        {
+            // Best-effort - the underlying connection is closed unconditionally after this regardless of
+            // whether the peer was still reachable to receive the Close frame.
+        }
+    }
+
+    /// <returns>
+    ///     <see langword="null" /> if the direction ended normally (peer disconnect, cancellation or a
+    ///     transport-level I/O error); otherwise the RFC 6455 section 7.4 status code to report in a
+    ///     conformant Close for the frame/fragmentation violation that ended it.
+    /// </returns>
+    private static async Task<ushort?> RelayDirectionAsync(Stream source, Stream destination, IBufferPool bufferPool,
+        WebSocketFrameDirection direction, long maxFramePayloadBytes, SessionEventArgs session,
         SemaphoreSlim writeLock, CancellationTokenSource cancellationTokenSource,
         Action<byte[], int, int> onRead, Action<byte[], int, int> onWrite)
     {
         var cancellationToken = cancellationTokenSource.Token;
-        var decoder = new WebSocketDecoder(bufferPool);
+        var decoder = new WebSocketDecoder(bufferPool, maxFramePayloadBytes);
         var messageTracker = new WebSocketMessageTracker();
         var buffer = bufferPool.GetBuffer();
         try
@@ -69,52 +135,70 @@ internal static class WebSocketInterceptRelay
             {
                 var read = await source.ReadAsync(buffer, 0, buffer.Length, cancellationToken)
                     .ConfigureAwait(false);
-                if (read == 0) return;
+                if (read == 0) return null;
 
                 onRead(buffer, 0, read);
 
-                foreach (var frame in decoder.Decode(buffer, 0, read))
+                try
                 {
-                    if (!ValidateWebSocketFrame(frame, direction,
-                            session.MaxWebSocketFramePayloadBytes ?? session.Server.MaxWebSocketFramePayloadBytes, out _))
+                    foreach (var frame in decoder.Decode(buffer, 0, read))
                     {
-                        // RFC 6455 §7.2: a protocol error requires closing the connection.
-                        // Cancel both relay directions so the connection tears down cleanly.
-                        messageTracker.Reset();
-                        cancellationTokenSource.Cancel();
-                        return;
+                        if (!ValidateWebSocketFrame(frame, direction, out var closeCode))
+                        {
+                            // RFC 6455 §7.2: a protocol error requires closing the connection.
+                            messageTracker.Reset();
+                            return closeCode;
+                        }
+
+                        // Track message boundaries and compression state per RFC 6455 §5.4.
+                        // isCompressed will be true only when permessage-deflate is negotiated and RSV1
+                        // is set on the opening frame; currently always false (extension stripped in
+                        // Phase 1.4).
+                        messageTracker.OnFrame(frame, out _, out var isFragmentationError);
+                        if (isFragmentationError)
+                        {
+                            // A non-continuation data frame arrived while a fragmented message was still
+                            // open - RFC 6455 §5.4 makes this a protocol error, not a resumable condition.
+                            messageTracker.Reset();
+                            return 1002;
+                        }
+
+                        var args = new WebSocketFrameInterceptEventArgs(session.Server, session.ClientConnection,
+                            session, direction, frame);
+
+                        if (session.HasWebSocketFrameInterceptHandler)
+                            await session.InvokeBeforeWebSocketFrame(args).ConfigureAwait(false);
+
+                        if (args.Action == WebSocketFrameInterceptAction.Drop)
+                            continue;
+
+                        if (args.Delay > TimeSpan.Zero)
+                            await Task.Delay(args.Delay, cancellationToken).ConfigureAwait(false);
+
+                        var wire = WebSocketFrameEncoder.Encode(args.OpCode, args.Data,
+                            direction == WebSocketFrameDirection.ClientToServer, args.IsFinal);
+                        await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+                        try
+                        {
+                            await destination.WriteAsync(wire, 0, wire.Length, cancellationToken)
+                                .ConfigureAwait(false);
+                            await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
+                            onWrite(wire, 0, wire.Length);
+                        }
+                        finally
+                        {
+                            writeLock.Release();
+                        }
                     }
-
-                    // Track message boundaries and compression state per RFC 6455 §5.4.
-                    // isCompressed will be true only when permessage-deflate is negotiated and RSV1
-                    // is set on the opening frame; currently always false (extension stripped in Phase 1.4).
-                    messageTracker.OnFrame(frame, out _);
-
-                    var args = new WebSocketFrameInterceptEventArgs(session.Server, session.ClientConnection,
-                        session, direction, frame);
-
-                    if (session.HasWebSocketFrameInterceptHandler)
-                        await session.InvokeBeforeWebSocketFrame(args).ConfigureAwait(false);
-
-                    if (args.Action == WebSocketFrameInterceptAction.Drop)
-                        continue;
-
-                    if (args.Delay > TimeSpan.Zero)
-                        await Task.Delay(args.Delay, cancellationToken).ConfigureAwait(false);
-
-                    var wire = WebSocketFrameEncoder.Encode(args.OpCode, args.Data, maskWhenWriting, args.IsFinal);
-                    await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-                    try
-                    {
-                        await destination.WriteAsync(wire, 0, wire.Length, cancellationToken)
-                            .ConfigureAwait(false);
-                        await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
-                        onWrite(wire, 0, wire.Length);
-                    }
-                    finally
-                    {
-                        writeLock.Release();
-                    }
+                }
+                catch (WebSocketProtocolException ex)
+                {
+                    // Raised by the decoder before any of the offending frame's payload was buffered
+                    // (declared length violates the reserved-bit rule, exceeds int.MaxValue, or exceeds
+                    // the configured per-frame limit) - never forwarded, so nothing to unwind here beyond
+                    // reporting the close code the caller should send.
+                    messageTracker.Reset();
+                    return ex.CloseCode;
                 }
             }
         }
@@ -128,10 +212,15 @@ internal static class WebSocketInterceptRelay
         {
             bufferPool.ReturnBuffer(buffer);
         }
+
+        return null;
     }
 
     /// <summary>
-    ///     Validates a decoded WebSocket frame against RFC 6455 protocol rules.
+    ///     Validates a decoded WebSocket frame against RFC 6455 protocol rules not already enforced by
+    ///     <see cref="WebSocketDecoder" /> before buffering (the declared-length checks - reserved high
+    ///     bit, structural <see cref="int.MaxValue" /> bound and the configured per-frame payload limit -
+    ///     live there instead, so a violating frame is rejected before it is ever materialized).
     ///     Returns <see langword="false" /> (and sets <paramref name="closeCode" />) when the frame
     ///     represents a protocol violation that requires the connection to be closed.
     /// </summary>
@@ -144,17 +233,9 @@ internal static class WebSocketInterceptRelay
     private static bool ValidateWebSocketFrame(
         WebSocketFrame frame,
         WebSocketFrameDirection direction,
-        long maxPayloadBytes,
         out ushort closeCode)
     {
         closeCode = 1002; // Protocol Error (default)
-
-        // RFC 6455 §7.4.1: payload too large for the configured interception limit.
-        if (frame.Data.Length > maxPayloadBytes)
-        {
-            closeCode = 1009; // Message Too Big
-            return false;
-        }
 
         var op = (int)frame.OpCode;
 

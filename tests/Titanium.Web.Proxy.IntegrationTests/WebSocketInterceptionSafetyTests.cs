@@ -364,23 +364,188 @@ public class WebSocketInterceptionSafetyTests
             $"Expected 101 Switching Protocols. Got:\n{headerText}");
 
         // The relay should close the client-side connection shortly after receiving the bad frame.
+        // A conformant close (RFC 6455 §§5.5.1/7.1.1) means the client first receives an actual Close
+        // control frame before the TCP connection itself is torn down - so a non-zero read here (the
+        // Close frame) is expected and must not be mistaken for the proxy staying open indefinitely;
+        // keep reading until EOF to confirm the connection is eventually closed.
         using var cts = new CancellationTokenSource(timeout);
         var buf = new byte[256];
-        int read;
+        var sawEof = false;
         try
         {
-            read = await stream.ReadAsync(buf, 0, buf.Length, cts.Token);
+            while (true)
+            {
+                var read = await stream.ReadAsync(buf, 0, buf.Length, cts.Token);
+                if (read == 0)
+                {
+                    sawEof = true;
+                    break;
+                }
+            }
         }
         catch (OperationCanceledException)
         {
-            Assert.Fail("Proxy did not close the connection within the timeout after receiving a reserved-opcode frame.");
-            return;
+        }
+        catch (IOException)
+        {
+            // The peer (proxy) reset/closed the connection - equivalent to observing EOF for this test's
+            // purposes.
+            sawEof = true;
         }
 
-        // read == 0 means the peer closed the connection (expected), or we may have received some data.
-        // Either way, the connection must eventually close.
-        Assert.IsTrue(read == 0 || !stream.CanRead || !tcpClient.Connected,
+        Assert.IsTrue(sawEof || !stream.CanRead || !tcpClient.Connected,
             "Expected the proxy to tear down the WebSocket connection after a reserved-opcode frame.");
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 5: A protocol violation produces a conformant Close per RFC 6455 §§5.5.1/7.1.1 -
+    //         the client leg receives an actual Close control frame carrying the correct status
+    //         code, not just an abrupt disconnect.
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task WebSocket_InterceptRelay_ReservedOpcode_ClientReceivesConformantCloseFrame()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+
+        server.HandleTcpRequest(async context =>
+        {
+            await DrainHeadersAsync(context);
+
+            var handshake = Ascii.GetBytes(
+                "HTTP/1.1 101 Switching Protocols\r\n" +
+                "Upgrade: websocket\r\n" +
+                "Connection: Upgrade\r\n" +
+                "\r\n");
+            await context.Transport.Output.WriteAsync(handshake);
+
+            // Send a frame with reserved opcode 0x3 — a protocol violation (RFC 6455 §5.2).
+            var badFrame = BuildRawFrame(firstByte: 0x83 /* FIN=1, opcode=3 */, payload: new byte[] { 0x01 });
+            await context.Transport.Output.WriteAsync(badFrame);
+
+            await Task.Delay(3000);
+            context.Transport.Output.Complete();
+        });
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.BeforeRequest += (_, e) =>
+        {
+            e.HttpClient.Request.Url = server.ListeningTcpUrl;
+            return Task.CompletedTask;
+        };
+        proxy.BeforeResponse += (_, e) =>
+        {
+            e.BeforeWebSocketFrame += (_, _) => Task.CompletedTask;
+            return Task.CompletedTask;
+        };
+
+        using var tcpClient = new TcpClient();
+        await tcpClient.ConnectAsync(IPAddress.Loopback, proxy.ProxyEndPoints[0].Port);
+        var stream = tcpClient.GetStream();
+        var timeout = TimeSpan.FromSeconds(10);
+
+        await stream.WriteAsync(Ascii.GetBytes(
+            "GET / HTTP/1.1\r\n" +
+            "Host: localhost\r\n" +
+            "Upgrade: websocket\r\n" +
+            "Connection: Upgrade\r\n" +
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" +
+            "Sec-WebSocket-Version: 13\r\n" +
+            "\r\n"));
+
+        var reader = new RawFrameReader(stream);
+        var headerText = await reader.ReadHttpHeadersAsync(timeout);
+        Assert.IsTrue(headerText.StartsWith("HTTP/1.1 101", StringComparison.Ordinal),
+            $"Expected 101 Switching Protocols. Got:\n{headerText}");
+
+        var clientDecoder = new WebSocketDecoder(new DefaultBufferPool());
+        var frames = await reader.ReadFramesAsync(clientDecoder, 1, timeout);
+
+        Assert.AreEqual(1, frames.Count);
+        Assert.AreEqual(WebsocketOpCode.ConnectionClose, frames[0].OpCode,
+            "RFC 6455 §7.1.1: a protocol violation must produce an actual Close control frame on the " +
+            "client leg, not merely an abrupt TCP disconnect.");
+        Assert.IsTrue(frames[0].Data.Length >= 2, "Close frame must carry a 2-byte status code.");
+        var closeCode = (ushort)((frames[0].Data.Span[0] << 8) | frames[0].Data.Span[1]);
+        Assert.AreEqual((ushort)1002, closeCode);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 6: A declared frame length beyond the configured per-frame limit is rejected the
+    //         moment the length header is known - before the (never-sent) oversized payload
+    //         would need to arrive - and produces a conformant 1009 Close.
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task WebSocket_InterceptRelay_OversizedDeclaredLength_RejectedBeforePayloadArrives()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+
+        server.HandleTcpRequest(async context =>
+        {
+            await DrainHeadersAsync(context);
+
+            var handshake = Ascii.GetBytes(
+                "HTTP/1.1 101 Switching Protocols\r\n" +
+                "Upgrade: websocket\r\n" +
+                "Connection: Upgrade\r\n" +
+                "\r\n");
+            await context.Transport.Output.WriteAsync(handshake);
+
+            // Declare a 5000-byte binary frame (16-bit extended length) but never actually send the
+            // payload. If the decoder only validated after the frame fully reassembled, this would
+            // just hang waiting for bytes that never arrive; validating the declared length up front
+            // must reject it immediately instead.
+            var oversizedHeader = new byte[] { 0x82, 126, (byte)(5000 >> 8), unchecked((byte)5000) };
+            await context.Transport.Output.WriteAsync(oversizedHeader);
+
+            await Task.Delay(3000);
+            context.Transport.Output.Complete();
+        });
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.MaxWebSocketFramePayloadBytes = 1024;
+        proxy.BeforeRequest += (_, e) =>
+        {
+            e.HttpClient.Request.Url = server.ListeningTcpUrl;
+            return Task.CompletedTask;
+        };
+        proxy.BeforeResponse += (_, e) =>
+        {
+            e.BeforeWebSocketFrame += (_, _) => Task.CompletedTask;
+            return Task.CompletedTask;
+        };
+
+        using var tcpClient = new TcpClient();
+        await tcpClient.ConnectAsync(IPAddress.Loopback, proxy.ProxyEndPoints[0].Port);
+        var stream = tcpClient.GetStream();
+        var timeout = TimeSpan.FromSeconds(10);
+
+        await stream.WriteAsync(Ascii.GetBytes(
+            "GET / HTTP/1.1\r\n" +
+            "Host: localhost\r\n" +
+            "Upgrade: websocket\r\n" +
+            "Connection: Upgrade\r\n" +
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" +
+            "Sec-WebSocket-Version: 13\r\n" +
+            "\r\n"));
+
+        var reader = new RawFrameReader(stream);
+        var headerText = await reader.ReadHttpHeadersAsync(timeout);
+        Assert.IsTrue(headerText.StartsWith("HTTP/1.1 101", StringComparison.Ordinal),
+            $"Expected 101 Switching Protocols. Got:\n{headerText}");
+
+        var clientDecoder = new WebSocketDecoder(new DefaultBufferPool());
+        var frames = await reader.ReadFramesAsync(clientDecoder, 1, timeout);
+
+        Assert.AreEqual(1, frames.Count);
+        Assert.AreEqual(WebsocketOpCode.ConnectionClose, frames[0].OpCode);
+        var closeCode = (ushort)((frames[0].Data.Span[0] << 8) | frames[0].Data.Span[1]);
+        Assert.AreEqual((ushort)1009, closeCode);
     }
 
     // -------------------------------------------------------------------------

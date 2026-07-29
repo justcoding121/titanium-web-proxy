@@ -16,9 +16,9 @@ namespace Titanium.Web.Proxy.UnitTests;
 [TestClass]
 public class WebSocketDecoderTests
 {
-    private static WebSocketDecoder CreateDecoder(int bufferSize = 8192)
+    private static WebSocketDecoder CreateDecoder(int bufferSize = 8192, long maxFramePayloadBytes = long.MaxValue)
     {
-        return new WebSocketDecoder(new FakeBufferPool(bufferSize));
+        return new WebSocketDecoder(new FakeBufferPool(bufferSize), maxFramePayloadBytes);
     }
 
     [TestMethod]
@@ -224,6 +224,91 @@ public class WebSocketDecoderTests
         // no longer reads back "first-message". This is the exact bug this test would have caught: naively
         // collecting WebSocketFrame instances (rather than their extracted text/bytes) for later use.
         Assert.AreNotEqual("first-message", decodedFrameA.GetText());
+    }
+
+    [TestMethod]
+    public void Decode_64BitLength_ReservedHighBitSet_ThrowsBeforeBuffering()
+    {
+        // RFC 6455 section 5.2: "the most significant bit MUST be 0" for the 64-bit extended length.
+        // Build only the 10-byte header (opcode/flags + length-marker byte + 8-byte extended length) with
+        // the reserved bit set and no payload at all - if validation happened only after the full
+        // (attacker-declared) length had arrived, this call would instead just report "not enough data
+        // yet" and wait forever.
+        var decoder = CreateDecoder();
+        var header = new byte[]
+        {
+            (byte)(0x80 | (byte)WebsocketOpCode.Binary), // FIN=1, opcode=Binary
+            127, // unmasked, 64-bit extended length follows
+            0x80, 0, 0, 0, 0, 0, 0, 1 // reserved high bit set; low bits declare length=1
+        };
+
+        var ex = Assert.ThrowsException<WebSocketProtocolException>(
+            () => decoder.Decode(header, 0, header.Length).ToList());
+        Assert.AreEqual((ushort)1002, ex.CloseCode);
+    }
+
+    [TestMethod]
+    public void Decode_64BitLength_ExceedsIntMaxValue_ThrowsBeforeBuffering()
+    {
+        // A structurally valid (reserved bit clear) but still unbufferable length: WebSocketFrame.Data
+        // is ultimately sliced with a 32-bit length, so this can never be honored regardless of any
+        // configured per-frame limit.
+        var decoder = CreateDecoder();
+        var header = new byte[]
+        {
+            (byte)(0x80 | (byte)WebsocketOpCode.Binary),
+            127,
+            0, 0, 0, 1, 0, 0, 0, 0 // (long)1 << 32 = 4,294,967,296, well over int.MaxValue
+        };
+
+        var ex = Assert.ThrowsException<WebSocketProtocolException>(
+            () => decoder.Decode(header, 0, header.Length).ToList());
+        Assert.AreEqual((ushort)1002, ex.CloseCode);
+    }
+
+    [TestMethod]
+    public void Decode_DeclaredLengthExceedsConfiguredLimit_ThrowsBeforeBufferingPayload()
+    {
+        // Only the header has arrived (10 bytes); the declared 10 000-byte payload has not, and never
+        // will in this test. A caller-configured limit smaller than the declared length must reject the
+        // frame the moment the length is known, rather than growing the reassembly buffer while waiting
+        // for the rest of an oversized frame that a legitimate peer might trickle in slowly.
+        var decoder = CreateDecoder(maxFramePayloadBytes: 1024);
+        var header = new byte[]
+        {
+            (byte)(0x80 | (byte)WebsocketOpCode.Binary),
+            127,
+            0, 0, 0, 0, 0, 0, 0x27, 0x10 // 10_000
+        };
+
+        var ex = Assert.ThrowsException<WebSocketProtocolException>(
+            () => decoder.Decode(header, 0, header.Length).ToList());
+        Assert.AreEqual((ushort)1009, ex.CloseCode);
+    }
+
+    [TestMethod]
+    public void Decode_16BitLength_ExceedsConfiguredLimit_ThrowsBeforeBufferingPayload()
+    {
+        var decoder = CreateDecoder(maxFramePayloadBytes: 100);
+        var raw = BuildFrame(WebsocketOpCode.Binary, new byte[500]);
+
+        // Deliver only the 4-byte header (opcode/flags + 126-marker + 16-bit length) - the limit check
+        // must fire without any of the 500-byte payload having arrived.
+        var ex = Assert.ThrowsException<WebSocketProtocolException>(
+            () => decoder.Decode(raw, 0, 4).ToList());
+        Assert.AreEqual((ushort)1009, ex.CloseCode);
+    }
+
+    [TestMethod]
+    public void Decode_DeclaredLengthWithinConfiguredLimit_StillDecodesNormally()
+    {
+        var decoder = CreateDecoder(maxFramePayloadBytes: 1024);
+        var raw = BuildFrame(WebsocketOpCode.Text, Encoding.UTF8.GetBytes("within limit"));
+
+        var frames = decoder.Decode(raw, 0, raw.Length).ToList();
+
+        Assert.AreEqual(1, frames.Count);
+        Assert.AreEqual("within limit", frames[0].GetText());
     }
 
     /// <summary>
