@@ -148,6 +148,21 @@ internal static class Http3OriginBridge
         upstreamProxy ??= server.UpStreamHttpsProxy;
 
         QuicServerConnection? quicConn = null;
+        // A pooled connection can go stale between requests: MsQuic's own (server-negotiated) idle
+        // timeout is often shorter than QuicConnectionPool's bookkeeping window, and a silently
+        // dead connection isn't reflected by QuicServerConnection.IsClosed until it's actually used.
+        // If OpenRequestStreamAsync/write fails on a *reused* connection before anything has been
+        // sent to the client, retrying with another connection is safe and avoids needlessly evicting
+        // the H3 capability (and downgrading the origin to TCP) over a stale pooled connection.
+        // Up to MaxConnectionsPerOrigin retries may be needed: QuicConnectionPool can hand out that
+        // many *different* pooled connections before it is forced to fall through to a guaranteed-fresh
+        // one, and if a whole browsing-idle gap elapsed, all of them may have gone stale together.
+        var reused = false;
+        var staleConnectionRetries = 0;
+        var requestSent = false;
+
+        while (true)
+        {
         try
         {
             quicConn = await server.QuicConnectionPool.GetOrCreateAsync(
@@ -156,7 +171,8 @@ internal static class Http3OriginBridge
                 cancellationToken,
                 sniHost: sniHost);
 
-            sessionArgs.Timing?.MarkConnectionReady(quicConn.Id, !quicConn.ClaimFirstUse());
+            reused = !quicConn.ClaimFirstUse();
+            sessionArgs.Timing?.MarkConnectionReady(quicConn.Id, reused);
 
             await using var originStream = await quicConn.OpenRequestStreamAsync(cancellationToken);
 
@@ -172,6 +188,7 @@ internal static class Http3OriginBridge
                     await Http3Frame.WriteAsync(originStream, Http3FrameType.Data, body, cancellationToken);
             }
             originStream.CompleteWrites();
+            requestSent = true; // request fully on the wire — no longer safe to silently retry
             sessionArgs.Timing?.MarkRequestSent();
 
             const int maxInterimResponses = 20;
@@ -300,6 +317,8 @@ internal static class Http3OriginBridge
                         entries[0].Port == originPort ? int.MinValue : entries[0].Port, ttl);
                 }
             }
+
+            break; // success — exit the retry loop
         }
         catch (QuicProxyNotSupportedException)
         {
@@ -345,6 +364,22 @@ internal static class Http3OriginBridge
                 quicConn = null;
             }
 
+            // The failure happened while acquiring/opening the stream on a *pooled* connection and
+            // nothing was written to the origin yet (see requestSent) — most likely the connection
+            // silently went idle-dead between requests (MsQuic's idle timeout tends to be shorter than
+            // QuicConnectionPool's bookkeeping window; see QuicServerConnection.IsClosed remarks).
+            // A single retry with a freshly created connection is safe (no request bytes were sent)
+            // and avoids evicting the H3 capability / downgrading the origin to TCP for what is really
+            // just a stale pooled connection, not a genuine H3 unreachability.
+            if (reused && !requestSent && staleConnectionRetries < QuicConnectionPool.MaxConnectionsPerOrigin)
+            {
+                staleConnectionRetries++;
+                logger.LogDebug(
+                    "Pooled QUIC connection to {Host}:{Port} was stale ({ExceptionType}); retrying (attempt {Attempt}/{Max}).",
+                    sniHost, port, ex.GetType().Name, staleConnectionRetries, QuicConnectionPool.MaxConnectionsPerOrigin);
+                continue;
+            }
+
             if (!isForcedH3)
             {
                 // Auto policy: the cached H3 capability is stale or unusable — evict and fall back to TCP.
@@ -373,6 +408,7 @@ internal static class Http3OriginBridge
             sessionArgs.HttpClient.Response = MakeBadGatewayResponse(ex.Message);
             return;
         }
+        } // end retry loop
 
         if (quicConn != null)
             await server.QuicConnectionPool.ReturnAsync(quicConn);
