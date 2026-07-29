@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
 using Titanium.Web.Proxy.Models;
@@ -178,5 +179,150 @@ public class ProxyLifecycleTests
         var cpuDelta = Process.GetCurrentProcess().TotalProcessorTime - cpuBefore;
         Assert.IsTrue(cpuDelta < TimeSpan.FromSeconds(3),
             $"Aborted-TLS storm should not burn CPU; observed {cpuDelta.TotalMilliseconds:F0}ms processor time.");
+    }
+
+    /// <summary>
+    ///     Start() must be transactional: if a later endpoint fails to bind, every endpoint this
+    ///     call already started is stopped and ProxyRunning is left false, rather than leaving a
+    ///     partially-started proxy with the earlier endpoint still accepting connections.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public void Start_RollsBackAlreadyStartedEndpoints_WhenALaterEndpointFailsToBind()
+    {
+        // Occupy a fixed port at the OS level, outside this ProxyServer's own endpoint list, so
+        // AddEndPoint (which only checks for conflicts within its own ProxyEndPoints) allows it,
+        // and Listen() fails with a real "address already in use" SocketException when Start()
+        // reaches it.
+        using var occupier = new TcpListener(IPAddress.Loopback, 0);
+        occupier.Start();
+        var occupiedPort = ((IPEndPoint)occupier.LocalEndpoint).Port;
+
+        var proxy = new ProxyServer(false, false, false);
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false));
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, occupiedPort, false));
+        var firstEndPointPort = -1;
+
+        try
+        {
+            try
+            {
+                proxy.Start();
+                Assert.Fail("Start() should have thrown because the second endpoint's port is already in use.");
+            }
+            catch (Exception)
+            {
+                // Expected: Listen() wraps the SocketException and Start() must roll back and rethrow.
+            }
+
+            Assert.IsFalse(proxy.ProxyRunning, "A partially-failed Start() must leave ProxyRunning false.");
+
+            firstEndPointPort = proxy.ProxyEndPoints[0].Port;
+            Assert.AreNotEqual(0, firstEndPointPort, "The first endpoint's ephemeral port should have been assigned before rollback.");
+
+            // The rolled-back first listener must actually be stopped, not merely logically
+            // forgotten: a fresh connect to its port must be refused rather than accepted.
+            using var probe = new TcpClient();
+            var connectTask = probe.ConnectAsync(IPAddress.Loopback, firstEndPointPort);
+            var refused = false;
+            try
+            {
+                connectTask.Wait(TimeSpan.FromSeconds(2));
+                refused = !probe.Connected;
+            }
+            catch (Exception)
+            {
+                refused = true;
+            }
+
+            Assert.IsTrue(refused, "Rolled-back listener must no longer accept connections after a failed Start().");
+
+            // The instance must be reusable: fix the conflict and Start() must succeed cleanly.
+            occupier.Stop();
+            proxy.Start();
+            Assert.IsTrue(proxy.ProxyRunning);
+        }
+        finally
+        {
+            if (proxy.ProxyRunning) proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    /// <summary>
+    ///     StopAsync must drain Http3ClientConnectionCount, not only the TCP-based
+    ///     ClientConnectionCount, before clearing shared pools.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task StopAsync_WaitsForHttp3ClientConnectionCount_BeforeReturning()
+    {
+        var proxy = new ProxyServer(false, false, false);
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false));
+        proxy.Start();
+
+        try
+        {
+            // Simulate an in-flight HTTP/3 (QUIC) client that never completes, without needing a
+            // real MsQuic-backed endpoint: the counter, not the transport, is what StopAsync reads.
+            proxy.UpdateHttp3ClientConnectionCount(true);
+
+            var drainTimeout = TimeSpan.FromMilliseconds(400);
+            var stopwatch = Stopwatch.StartNew();
+            await proxy.StopAsync(drainTimeout);
+            stopwatch.Stop();
+
+            Assert.IsTrue(stopwatch.Elapsed >= drainTimeout - TimeSpan.FromMilliseconds(50),
+                $"StopAsync returned after {stopwatch.ElapsedMilliseconds}ms but should have waited out the " +
+                $"{drainTimeout.TotalMilliseconds}ms drain timeout while Http3ClientConnectionCount was nonzero.");
+        }
+        finally
+        {
+            proxy.UpdateHttp3ClientConnectionCount(false);
+            if (proxy.ProxyRunning) proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    /// <summary>
+    ///     Stop() must undo Start()'s wiring of GetCustomUpStreamProxyFunc to the system-upstream-
+    ///     proxy resolver together with disposing that resolver, so a subsequent Start() recreates a
+    ///     fresh resolver instead of leaving the callback pointed at a disposed one.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public void Restart_WithForwardToUpstreamGateway_RecreatesResolver_InsteadOfStaleCallback()
+    {
+        if (!RunTime.IsWindows)
+        {
+            Assert.Inconclusive("System-upstream-proxy resolution is Windows-only.");
+            return;
+        }
+
+        var proxy = new ProxyServer(false, false, false);
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false));
+        proxy.ForwardToUpstreamGateway = true;
+
+        try
+        {
+            Assert.IsNull(proxy.GetCustomUpStreamProxyFunc, "Precondition: no user callback assigned.");
+
+            proxy.Start(changeSystemProxySettings: false);
+            Assert.IsNotNull(proxy.GetCustomUpStreamProxyFunc,
+                "Start() should wire the system-upstream-proxy resolver when none is set.");
+
+            proxy.Stop();
+            Assert.IsNull(proxy.GetCustomUpStreamProxyFunc,
+                "Stop() must clear the callback it assigned, or a restart retains a callback bound to a disposed resolver.");
+
+            proxy.Start(changeSystemProxySettings: false);
+            Assert.IsNotNull(proxy.GetCustomUpStreamProxyFunc,
+                "Restart must recreate a fresh resolver and callback.");
+        }
+        finally
+        {
+            if (proxy.ProxyRunning) proxy.Stop();
+            proxy.Dispose();
+        }
     }
 }

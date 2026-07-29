@@ -56,7 +56,19 @@ public class Response : RequestResponseBase
     {
         get
         {
+            // RFC 9110 section 6.4.1: a 1xx, 204 or 304 response never has a body, regardless of
+            // any Content-Length/Transfer-Encoding header the server sent - those headers describe
+            // the representation the resource *would* carry, not bytes actually on this wire (a
+            // 304's Content-Length, for instance, must not be used for framing). A response to
+            // HEAD never has a body for the same reason, and a successful (2xx) response to
+            // CONNECT never has one either: once tunneling begins there is no further HTTP framing
+            // on the connection. These status/method exclusions must run before any framing check
+            // below, since "!KeepAlive" would otherwise short-circuit a 204/304 "Connection: close"
+            // response to "has body".
+            if (StatusCode is >= 100 and < 200) return false;
+            if (StatusCode == 204 || StatusCode == 304) return false;
             if (RequestMethod == "HEAD") return false;
+            if (RequestMethod == "CONNECT" && StatusCode is >= 200 and < 300) return false;
 
             var contentLength = ContentLength;
 

@@ -46,13 +46,6 @@ internal sealed class AuthNone : AuthMethod
     }
 
     /// <summary>
-    ///     Authenticates the user.
-    /// </summary>
-    public override void Authenticate()
-    {
-    }
-
-    /// <summary>
     ///     Authenticates the user asynchronously.
     /// </summary>
     /// <param name="callback">The method to call when the authentication is complete.</param>
