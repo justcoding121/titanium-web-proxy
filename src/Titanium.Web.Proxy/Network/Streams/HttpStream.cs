@@ -674,7 +674,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
             // WithCancellation returns default(int)=0 when the token fires rather than throwing,
             // because socket ReadAsync cannot be cancelled on all platforms. Re-surface as
-            // OperationCanceledException so timeout/cancellation callers (e.g. ProxyTimeoutScope)
+            // OperationCanceledException so timeout/cancellation callers (e.g. DeadlineRegistry)
             // can distinguish a deliberate deadline from a genuine server EOF or socket error.
             if (IsNetworkStream) cancellationToken.ThrowIfCancellationRequested();
 

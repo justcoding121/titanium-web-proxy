@@ -482,6 +482,20 @@ public partial class ProxyServer : IDisposable
     public int ConnectTimeOutSeconds { get; set; } = 20;
 
     /// <summary>
+    ///     Seconds to wait for a client to finish sending the request line and headers, from the moment
+    ///     this proxy starts reading a new request on the connection. Enforced with a linked
+    ///     <see cref="System.Threading.CancellationTokenSource" /> around the request-line and header
+    ///     read, not <c>Socket.ReceiveTimeout</c>: that property only bounds a single blocking
+    ///     <c>Receive</c> call, not the asynchronous reads this proxy actually issues, so without this
+    ///     deadline a client that opens a connection and trickles bytes arbitrarily slowly (or stops
+    ///     sending entirely) after the first byte ties up a read loop indefinitely.
+    ///     Default is 0 (disabled), matching every other deadline in this class - no per-session
+    ///     override exists because there is no <see cref="EventArguments.SessionEventArgs" /> for this
+    ///     request yet at the point this deadline applies.
+    /// </summary>
+    public int ClientHeaderTimeoutSeconds { get; set; }
+
+    /// <summary>
     ///     Seconds to wait for the origin to send the response status line and headers after the
     ///     request has been sent. Enforced with a linked <see cref="System.Threading.CancellationTokenSource" />
     ///     (not Socket receive timeout alone). When the deadline elapses a

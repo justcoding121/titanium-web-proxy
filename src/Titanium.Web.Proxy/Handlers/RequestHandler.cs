@@ -53,26 +53,53 @@ public partial class ProxyServer
             {
                 if (clientStream.IsClosed) return;
 
-                // read the request line
-                var requestLine = await clientStream.ReadRequestLine(cancellationToken);
-                if (requestLine.IsEmpty()) return;
-
-                var args = new SessionEventArgs(this, endPoint, clientStream, connectRequest, cancellationTokenSource)
+                // Bounds the request line and header read together as one continuous window - not
+                // Socket.ReceiveTimeout, which only bounds a single blocking Receive and does nothing for
+                // the asynchronous reads actually issued here. A standalone registry (rather than
+                // args.Deadlines) because no SessionEventArgs exists yet for a request line that never
+                // arrives at all - the common, entirely expected "client closed its idle keep-alive
+                // connection" case below, which must stay silent and args-free exactly as before.
+                RequestStatusInfo requestLine;
+                SessionEventArgs? args = null;
+                var headerDeadlineRegistry = new DeadlineRegistry();
+                using (var headerDeadline = headerDeadlineRegistry.Start(cancellationToken,
+                           ResolveClientHeaderTimeout(), ProxyTimeoutKind.ClientHeader))
                 {
-                    UserData = connectArgs?.UserData
-                };
+                    try
+                    {
+                        // read the request line
+                        requestLine = await clientStream.ReadRequestLine(headerDeadline.Token);
+                        if (requestLine.IsEmpty()) return;
 
-                var request = args.HttpClient.Request;
+                        args = new SessionEventArgs(this, endPoint, clientStream, connectRequest,
+                            cancellationTokenSource)
+                        {
+                            UserData = connectArgs?.UserData
+                        };
+
+                        // Read the request headers in to unique and non-unique header collections
+                        await HeaderParser.ReadHeaders(clientStream, args.HttpClient.Request.Headers,
+                            headerDeadline.Token);
+                    }
+                    catch (OperationCanceledException ex)
+                    {
+                        // No response was ever attempted (there may be no request line at all yet, or no
+                        // Host/Method to safely answer with) and no OnAfterResponse subscriber should see a
+                        // session that never had a request - dispose directly rather than falling through
+                        // to the try/finally below that pairs a real attempt with AfterResponse.
+                        args?.Dispose();
+                        headerDeadline.ThrowIfTimedOut(ex);
+                        throw; // unreachable: ThrowIfTimedOut always throws; satisfies definite-assignment analysis.
+                    }
+                }
+
+                var request = args!.HttpClient.Request;
                 if (isHttps) request.IsHttps = true;
 
                 try
                 {
                     try
                     {
-                        // Read the request headers in to unique and non-unique header collections
-                        await HeaderParser.ReadHeaders(clientStream, args.HttpClient.Request.Headers,
-                            cancellationToken);
-
                         if (connectRequest != null)
                         {
                             request.IsHttps = connectRequest.IsHttps;
@@ -128,9 +155,9 @@ public partial class ProxyServer
                         await OnBeforeRequest(args);
 
                         // Total per-request deadline starts after BeforeRequest so session overrides apply.
-                        using var requestTimeoutScope = ProxyTimeoutScope.Create(cancellationToken,
+                        using var requestDeadline = args.Deadlines.Start(cancellationToken,
                             ResolveRequestTimeout(args), ProxyTimeoutKind.Request);
-                        var requestToken = requestTimeoutScope.Token;
+                        var requestToken = requestDeadline.Token;
                         args.OperationCancellationToken = requestToken;
 
                         try
@@ -298,13 +325,12 @@ public partial class ProxyServer
                             closeServerConnection = true;
                             return;
                         }
-                        catch (Exception ex) when (ex is OperationCanceledException || requestTimeoutScope.IsTimedOut())
+                        catch (Exception ex) when (ex is OperationCanceledException ||
+                                                    requestDeadline.TryGetTimeoutException(ex, out _))
                         {
-                            if (requestTimeoutScope.IsTimedOut())
+                            if (requestDeadline.TryGetTimeoutException(ex, out var timeoutEx))
                             {
-                                var timeoutEx = new ProxyTimeoutException(
-                                    "Proxy request timeout elapsed.", ProxyTimeoutKind.Request, ex);
-                                await HandleProxyTimeoutAsync(args, timeoutEx, cancellationToken);
+                                await HandleProxyTimeoutAsync(args, timeoutEx!, cancellationToken);
                                 closeServerConnection = true;
                                 return;
                             }
@@ -456,22 +482,21 @@ public partial class ProxyServer
                 await args.ClientStream.WriteHeadersAsync(continueBuilder, cancellationToken);
             }
 
-            using var idleWriteScope = ProxyTimeoutScope.Create(cancellationToken,
+            using var idleWriteDeadline = args.Deadlines.Start(cancellationToken,
                 ResolveIdleWriteTimeout(args), ProxyTimeoutKind.IdleWrite);
             try
             {
                 if (request.IsBodyRead)
                     await args.HttpClient.Connection.Stream.WriteBodyAsync(body!, request.IsChunked,
-                        request.HasTrailingHeaders ? request.TrailingHeaders : null, idleWriteScope.Token);
+                        request.HasTrailingHeaders ? request.TrailingHeaders : null, idleWriteDeadline.Token);
                 else if (!request.ExpectationFailed)
                     // get the request body unless an unsuccessful 100 continue request was made
                     await args.CopyRequestBodyAsync(args.HttpClient.Connection.Stream, TransformationMode.None,
-                        idleWriteScope.Token);
+                        idleWriteDeadline.Token);
             }
-            catch (Exception ex) when (ex is OperationCanceledException || idleWriteScope.IsTimedOut())
+            catch (OperationCanceledException ex)
             {
-                idleWriteScope.ThrowIfTimedOut(ex);
-                throw;
+                idleWriteDeadline.ThrowIfTimedOut(ex);
             }
         }
 

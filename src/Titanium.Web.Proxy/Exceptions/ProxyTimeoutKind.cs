@@ -28,5 +28,14 @@ public enum ProxyTimeoutKind
     /// <summary>
     ///     Total per-request / per-session deadline.
     /// </summary>
-    Request = 4
+    Request = 4,
+
+    /// <summary>
+    ///     Waiting for a client to finish sending the request line and headers. <c>Socket.ReceiveTimeout</c>
+    ///     does not bound this: it only fails a single blocking <c>Receive</c> call, not the asynchronous
+    ///     reads this proxy actually issues, so without this deadline a client that opens a connection and
+    ///     trickles the request line/headers arbitrarily slowly (or not at all) ties up a server-side
+    ///     read loop indefinitely.
+    /// </summary>
+    ClientHeader = 5
 }

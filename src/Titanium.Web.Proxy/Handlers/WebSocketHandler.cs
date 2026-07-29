@@ -29,12 +29,12 @@ public partial class ProxyServer
         await serverConnection.Stream.WriteRequestAsync(args.HttpClient.Request, cancellationToken);
 
         // WebSocket upgrades are exempt from short response-header deadlines; use idle-read if configured.
-        using (var idleScope = ProxyTimeoutScope.Create(cancellationToken,
+        using (var idleDeadline = args.Deadlines.Start(cancellationToken,
                    ResolveIdleReadTimeout(args), ProxyTimeoutKind.IdleRead))
         {
             try
             {
-                var httpStatus = await serverConnection.Stream.ReadResponseStatus(idleScope.Token)
+                var httpStatus = await serverConnection.Stream.ReadResponseStatus(idleDeadline.Token)
                                  ?? throw new IOException(
                                      "Server closed the connection before sending a WebSocket upgrade response.");
 
@@ -43,12 +43,11 @@ public partial class ProxyServer
                 upgradeResponse.StatusCode = httpStatus.StatusCode;
                 upgradeResponse.StatusDescription = httpStatus.Description;
 
-                await HeaderParser.ReadHeaders(serverConnection.Stream, upgradeResponse.Headers, idleScope.Token);
+                await HeaderParser.ReadHeaders(serverConnection.Stream, upgradeResponse.Headers, idleDeadline.Token);
             }
-            catch (Exception ex) when (ex is OperationCanceledException || idleScope.IsTimedOut())
+            catch (OperationCanceledException ex)
             {
-                idleScope.ThrowIfTimedOut(ex);
-                throw;
+                idleDeadline.ThrowIfTimedOut(ex);
             }
         }
 

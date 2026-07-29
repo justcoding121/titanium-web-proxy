@@ -36,6 +36,15 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// </summary>
     internal CancellationToken CancellationToken => OperationCancellationToken ?? CancellationTokenSource.Token;
 
+    /// <summary>
+    ///     The single registry every <see cref="Helpers.DeadlineRegistry.Deadline" /> composed for this
+    ///     session's request/response exchange is started against, so a firing recorded deep in one
+    ///     handler (e.g. an idle-write stall) is still attributable by a catch block in a different
+    ///     handler several layers up with no <see cref="Helpers.DeadlineRegistry.Deadline" /> of its own
+    ///     in between - see <see cref="Helpers.DeadlineRegistry" />'s remarks for why that matters.
+    /// </summary>
+    internal DeadlineRegistry Deadlines { get; } = new();
+
     private bool disposed;
     private bool enableWinAuth;
 
