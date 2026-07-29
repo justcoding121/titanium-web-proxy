@@ -220,17 +220,16 @@ public partial class ProxyServer
                 var serverStream = args.HttpClient.Connection.Stream;
                 try
                 {
-                    using var idleScope = ProxyTimeoutScope.Create(cancellationToken,
+                    using var idleDeadline = args.Deadlines.Start(cancellationToken,
                         ResolveIdleReadTimeout(args), ProxyTimeoutKind.IdleRead);
                     try
                     {
                         await serverStream.CopyBodyAsync(response, false, clientStream, TransformationMode.None,
-                            false, args, idleScope.Token);
+                            false, args, idleDeadline.Token);
                     }
-                    catch (Exception ex) when (ex is OperationCanceledException || idleScope.IsTimedOut())
+                    catch (OperationCanceledException ex)
                     {
-                        idleScope.ThrowIfTimedOut(ex);
-                        throw;
+                        idleDeadline.ThrowIfTimedOut(ex);
                     }
                 }
                 catch (ProxyTimeoutException ex)
@@ -255,15 +254,14 @@ public partial class ProxyServer
         var kind = headerTimeout.HasValue ? ProxyTimeoutKind.ResponseHeader : ProxyTimeoutKind.IdleRead;
         var timeout = headerTimeout ?? ResolveIdleReadTimeout(args);
 
-        using var scope = ProxyTimeoutScope.Create(cancellationToken, timeout, kind);
+        using var deadline = args.Deadlines.Start(cancellationToken, timeout, kind);
         try
         {
-            await args.HttpClient.ReceiveResponse(scope.Token);
+            await args.HttpClient.ReceiveResponse(deadline.Token);
         }
-        catch (Exception ex) when (ex is OperationCanceledException || scope.IsTimedOut())
+        catch (OperationCanceledException ex)
         {
-            scope.ThrowIfTimedOut(ex);
-            throw;
+            deadline.ThrowIfTimedOut(ex);
         }
     }
 
