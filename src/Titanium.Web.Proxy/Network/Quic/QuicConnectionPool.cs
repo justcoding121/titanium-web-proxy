@@ -18,7 +18,13 @@ namespace Titanium.Web.Proxy.Network.Quic;
 /// </summary>
 internal sealed class QuicConnectionPool : IAsyncDisposable
 {
-    private const int MaxConnectionsPerOrigin = 2;
+    /// <summary>
+    ///     Also the upper bound on how many stale-pooled-connection retries
+    ///     <see cref="Http3.Http3OriginBridge" /> attempts before creating a guaranteed-fresh connection:
+    ///     that many idle connections can be queued per origin, so that many dequeues may be needed
+    ///     to drain past connections MsQuic has already silently timed out.
+    /// </summary>
+    internal const int MaxConnectionsPerOrigin = 2;
     private static readonly TimeSpan IdleConnectionTimeout = TimeSpan.FromSeconds(90);
 
     private readonly ConcurrentDictionary<string, ConcurrentQueue<QuicServerConnection>> _pool = new();
