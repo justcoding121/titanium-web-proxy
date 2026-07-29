@@ -1061,6 +1061,12 @@ public partial class ProxyServer : IDisposable
                             Please manually configure your operating system to use this proxy's port and address.");
 
         SystemProxySettingsManager.RestoreOriginalSettings();
+
+        foreach (var endPoint in ProxyEndPoints.OfType<ExplicitProxyEndPoint>())
+        {
+            endPoint.IsSystemHttpProxy = false;
+            endPoint.IsSystemHttpsProxy = false;
+        }
     }
 
     /// <summary>
@@ -1201,10 +1207,19 @@ public partial class ProxyServer : IDisposable
 
         if (RunTime.IsWindows && SystemProxySettingsManager != null)
         {
-            var setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>()
-                .Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
+            var systemProxyEndPoints = ProxyEndPoints.OfType<ExplicitProxyEndPoint>()
+                .Where(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy)
+                .ToList();
 
-            if (setAsSystemProxy) SystemProxySettingsManager.RestoreOriginalSettings();
+            if (systemProxyEndPoints.Count > 0)
+            {
+                SystemProxySettingsManager.RestoreOriginalSettings();
+                foreach (var endPoint in systemProxyEndPoints)
+                {
+                    endPoint.IsSystemHttpProxy = false;
+                    endPoint.IsSystemHttpsProxy = false;
+                }
+            }
         }
 
         // Prevent accept callbacks from scheduling another accept while listeners are stopping.

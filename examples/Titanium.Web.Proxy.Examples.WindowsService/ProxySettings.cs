@@ -59,6 +59,14 @@ internal sealed class ProxySettings
     public bool DecryptSsl { get; set; }
 
     /// <summary>
+    ///     When true, registers the listening endpoint as the Windows system HTTP/HTTPS proxy
+    ///     (Current User WinINet settings). Cleared automatically on <see cref="ProxyServer.Stop" />.
+    ///     Prefer true when running interactively (`dotnet run`); for a LocalSystem service install
+    ///     this affects the service account hive, not the interactive user's browsers.
+    /// </summary>
+    public bool SetAsSystemProxy { get; set; } = true;
+
+    /// <summary>
     ///     Master switch for proxy-library diagnostic logging (bridged into the host <c>ILoggerFactory</c>).
     ///     When false, the proxy uses a no-op logger regardless of host log levels.
     /// </summary>

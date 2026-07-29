@@ -110,6 +110,21 @@ internal sealed class ProxyWorker : BackgroundService
 
         proxyServer.Start();
 
+        if (settings.SetAsSystemProxy)
+        {
+            try
+            {
+                proxyServer.SetAsSystemProxy(explicitEndPointV4, ProxyProtocolType.AllHttp);
+                logger.LogInformation(
+                    "Registered as Windows system proxy on port {ListeningPort} (cleared on stop)",
+                    settings.ListeningPort);
+            }
+            catch (NotSupportedException ex)
+            {
+                logger.LogWarning(ex, "SetAsSystemProxy is enabled but system proxy is not supported on this platform");
+            }
+        }
+
         logger.LogInformation("Service listening on port {ListeningPort}", settings.ListeningPort);
 
         return base.StartAsync(cancellationToken);
@@ -166,7 +181,28 @@ internal sealed class ProxyWorker : BackgroundService
         if (proxyServer != null && settings.LogRequests)
             proxyServer.BeforeResponse -= OnBeforeResponse;
 
-        proxyServer?.Stop();
+        try
+        {
+            // Stop restores original system proxy when SetAsSystemProxy was used.
+            if (proxyServer?.ProxyRunning == true)
+                proxyServer.Stop();
+            else if (settings.SetAsSystemProxy)
+                proxyServer?.RestoreOriginalProxySettings();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Error while stopping proxy; attempting system proxy restore");
+            try
+            {
+                if (settings.SetAsSystemProxy)
+                    proxyServer?.RestoreOriginalProxySettings();
+            }
+            catch (Exception restoreEx)
+            {
+                logger.LogWarning(restoreEx, "Failed to restore system proxy settings");
+            }
+        }
+
         // clean up here since we make a new instance every time the service starts
         proxyServer?.Dispose();
         proxyServer = null;

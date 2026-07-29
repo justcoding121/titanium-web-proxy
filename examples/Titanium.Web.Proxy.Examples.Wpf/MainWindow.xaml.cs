@@ -42,6 +42,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private int lastSessionNumber;
         private SessionListItem selectedSession;
+        private bool proxyShutdownDone;
 
         public MainWindow()
         {
@@ -163,6 +164,50 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             });
 
             InitializeComponent();
+
+            // Always clear system proxy when the window closes (graceful or App.Shutdown).
+            // Without this, browsers keep pointing at a dead :8000 and hang after exit.
+            Closed += (_, _) => ShutdownProxy();
+        }
+
+        /// <summary>
+        ///     Stops the proxy and restores Windows system proxy settings. Safe to call more than once.
+        /// </summary>
+        internal void EnsureProxyShutdown() => ShutdownProxy();
+
+        private void ShutdownProxy()
+        {
+            if (proxyShutdownDone) return;
+            proxyShutdownDone = true;
+
+            try
+            {
+                if (proxyServer.ProxyRunning)
+                    proxyServer.Stop();
+                else
+                    proxyServer.RestoreOriginalProxySettings();
+            }
+            catch (Exception)
+            {
+                // Best-effort: still try Dispose below.
+                try
+                {
+                    proxyServer.RestoreOriginalProxySettings();
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
+            }
+
+            try
+            {
+                proxyServer.Dispose();
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
         }
 
         public ObservableCollectionEx<SessionListItem> Sessions { get; } =
