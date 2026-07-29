@@ -9,6 +9,7 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -82,6 +83,29 @@ public partial class ProxyServer
 
                         request.Method = requestLine.Method;
                         request.HttpVersion = requestLine.Version;
+
+                        // Validate wire framing (Content-Length/Transfer-Encoding ambiguity) before
+                        // anything - SetOriginalHeaders, BeforeRequest, body reads, forwarding - can
+                        // observe pre-normalization values. A framing-ambiguous request can never be
+                        // safely forwarded or its connection reused: the reader and the peer no longer
+                        // agree where this message ends.
+                        try
+                        {
+                            Http1FramingValidator.Validate(request, ResolveHttp1WireFramingSource(args));
+                        }
+                        catch (Http1FramingException framingEx)
+                        {
+                            args.HttpClient.Response = new GenericResponse(framingEx.StatusCode)
+                            {
+                                HttpVersion = request.HttpVersion
+                            };
+                            args.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection,
+                                KnownHeaders.ConnectionClose);
+                            closeServerConnection = true;
+                            await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                            args.IsClientResponseCommitted = true;
+                            return;
+                        }
 
                         // we need this to syphon out data from connection if API user changes them.
                         request.SetOriginalHeaders();
@@ -687,5 +711,19 @@ public partial class ProxyServer
         }
 
         return false;
+    }
+
+    /// <summary>
+    ///     Maps a session's endpoint mode to the matching wire <see cref="FramingSource" /> for
+    ///     <see cref="Http1FramingValidator.Validate" />. Shared by every handler that parses HTTP/1
+    ///     bytes directly off a client or origin connection - the validation rules are identical across
+    ///     explicit/transparent/SOCKS; the distinct enum members exist for auditability of which mode
+    ///     produced a given rejection, not because the rules differ.
+    /// </summary>
+    internal static FramingSource ResolveHttp1WireFramingSource(SessionEventArgs args)
+    {
+        if (args.IsSocks) return FramingSource.Http1WireSocks;
+        if (args.IsTransparent) return FramingSource.Http1WireTransparent;
+        return FramingSource.Http1Wire;
     }
 }

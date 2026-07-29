@@ -6,6 +6,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.WinAuth.Security;
@@ -85,6 +86,27 @@ public partial class ProxyServer
 
         if (response.StatusCode == (int)HttpStatusCode.ProxyAuthenticationRequired)
             await Handle407ProxyAuthorization(args);
+
+        // Validate wire framing (Content-Length/Transfer-Encoding ambiguity) before anything -
+        // SetOriginalHeaders, BeforeResponse, body reads, forwarding, pooling - can observe
+        // pre-normalization values. The proxy is the recipient of this origin response, so a
+        // framing-ambiguous response can never be safely relayed or its server connection reused/
+        // pooled/retried: report it to our own client as a gateway failure (502), not as whatever
+        // status a compliant *origin* would have used for a malformed request.
+        try
+        {
+            Http1FramingValidator.Validate(response, ResolveHttp1WireFramingSource(args));
+        }
+        catch (Http1FramingException framingEx)
+        {
+            args.Exception = framingEx;
+            ProxyDiagnostics.ReportBenign(logger, "Origin response has ambiguous HTTP/1 framing", framingEx);
+            args.GenericResponse($"Bad Gateway. {framingEx.Message}", HttpStatusCode.BadGateway,
+                closeServerConnection: true);
+            await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+            args.IsClientResponseCommitted = true;
+            return;
+        }
 
         // save original values so that if user changes them
         // we can still use original values when syphoning out data from attached tcp connection.

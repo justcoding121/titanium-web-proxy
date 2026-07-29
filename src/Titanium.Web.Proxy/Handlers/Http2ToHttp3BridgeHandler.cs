@@ -215,6 +215,12 @@ public partial class ProxyServer
                 sessionArgs, this, h3Route, logger, cancellationToken);
 
             sessionArgs.Timing?.MarkResponseHeadersReceived();
+
+            // This response was decoded from real HTTP/3 frames (Http3OriginBridge), never from
+            // HttpStream-read bytes, so it is explicitly out of scope for the HTTP/1 wire validator -
+            // see Http1FramingValidator's remarks. The call is still made (as a documented no-op) so
+            // this remains one of the five insertion points the isolation test suite enumerates.
+            Http1FramingValidator.Validate(sessionArgs.HttpClient.Response, FramingSource.SynthesizedFromH3);
             sessionArgs.HttpClient.Response.SetOriginalHeaders();
 
             if (!sessionArgs.HttpClient.Response.Locked)
