@@ -1922,6 +1922,11 @@ namespace Titanium.Web.Proxy.Http2
                         connectionState.PendingFinalizations.Add(
                             FinalizeStreamAsync(resetStream, onAfterResponse, logger));
 
+                        // Wire up args so the RST_STREAM error log below can include the request URL
+                        // (args is only populated for DATA/HEADERS frames in the outer scope, so it is
+                        // always null here without this assignment).
+                        args = resetStream.SessionArgs;
+
                         var resetRr = isClient
                             ? (RequestResponseBase)resetStream.SessionArgs.HttpClient.Request
                             : resetStream.SessionArgs.HttpClient.Response;

@@ -63,19 +63,26 @@ internal class SystemProxyManager
 
     public SystemProxyManager()
     {
-        AppDomain.CurrentDomain.ProcessExit += (o, args) => RestoreOriginalSettings();
+        // Best-effort restore when the process is going away. Hard kills (e.g. End Task /
+        // taskkill /F) cannot run managed code; Start(changeSystemProxySettings: true) clears
+        // stale local-proxy entries on the next run.
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => RestoreOriginalSettings();
+        AppDomain.CurrentDomain.UnhandledException += (_, _) => RestoreOriginalSettings();
+
         if (Environment.UserInteractive && NativeMethods.GetConsoleWindow() != IntPtr.Zero)
         {
             var handler = new NativeMethods.ConsoleEventDelegate(eventType =>
             {
-                if (eventType != 2) return false;
+                // CTRL_C_EVENT=0, CTRL_BREAK_EVENT=1, CTRL_CLOSE_EVENT=2,
+                // CTRL_LOGOFF_EVENT=5, CTRL_SHUTDOWN_EVENT=6
+                if (eventType is 0 or 1 or 2 or 5 or 6)
+                    RestoreOriginalSettings();
 
-                RestoreOriginalSettings();
                 return false;
             });
             NativeMethods.Handler = handler;
 
-            // On Console exit make sure we also exit the proxy
+            // On console control events, restore system proxy before the process exits.
             NativeMethods.SetConsoleCtrlHandler(handler, true);
         }
     }
