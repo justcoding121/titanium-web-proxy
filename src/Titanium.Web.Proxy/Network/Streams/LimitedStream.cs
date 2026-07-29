@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -79,10 +78,7 @@ internal class LimitedStream : Stream
             return;
         }
 
-        var idx = chunkHead.IndexOf(";", StringComparison.Ordinal);
-        if (idx >= 0) chunkHead = chunkHead.Substring(0, idx);
-
-        if (!int.TryParse(chunkHead, NumberStyles.HexNumber, null, out var chunkSize))
+        if (!ChunkSizeParser.TryParse(chunkHead, ProxyLimits.DefaultMaxChunkSizeBytes, out var chunkSize))
             throw new ProxyHttpException($"Invalid chunk length: '{chunkHead}'", null, null);
 
         bytesRemaining = chunkSize;
