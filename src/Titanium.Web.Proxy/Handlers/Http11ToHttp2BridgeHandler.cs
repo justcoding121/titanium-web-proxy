@@ -294,7 +294,8 @@ public partial class ProxyServer
         seedConnection ??= await EstablishHttp2OriginTcpConnectionAsync(args, remoteHostName, remotePort,
             connectHost, connectPort, cancellationToken);
 
-        return await Http2OriginConnection.CreateAsync(seedConnection, logger, args.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes, cancellationToken);
+        return await Http2OriginConnection.CreateAsync(seedConnection, logger,
+            args.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes, cancellationToken, ResourceLimits);
     }
 
     /// <summary>

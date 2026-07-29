@@ -72,7 +72,7 @@ public partial class ProxyServer
             async sessionArgs => { await OnAfterResponse(sessionArgs); },
             headers => PrepareRequestHeaders(headers),
             cancellationTokenSource, clientStream.Connection.Id, logger,
-            MaxDecodedHeaderListBytes, EnableRfc8441);
+            MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits);
     }
 
     /// <summary>

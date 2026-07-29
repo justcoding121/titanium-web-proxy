@@ -89,6 +89,15 @@ public sealed class ProxyResourceLimits
     public int MaxOpenHeaderBlockFrames { get; private init; }
 
     /// <summary>
+    ///     Maximum wall-clock duration an HTTP/2 header block may stay open (from the initial
+    ///     HEADERS/PUSH_PROMISE frame sent without END_HEADERS through its terminating
+    ///     CONTINUATION), independent of <see cref="MaxOpenHeaderBlockFrames" />. Bounds a slow
+    ///     CONTINUATION-trickle variant that stays under the frame-count cap by pacing itself, which
+    ///     a frame-count-only bound cannot catch on its own. Always enforced.
+    /// </summary>
+    public TimeSpan MaxOpenHeaderBlockDuration { get; private init; }
+
+    /// <summary>
     ///     Whether upstream TCP connection pooling is enabled. Disabling pooling is an explicit choice
     ///     represented by this flag, not by giving <see cref="MaxCachedConnectionsPerHost" /> a
     ///     sentinel value that also has to be validated as "not zero, not negative, unless it means
@@ -129,6 +138,7 @@ public sealed class ProxyResourceLimits
         maxConcurrentStreamsPerConnection: 100,
         maxPeerInitiatedIncompleteStreamResets: 100,
         maxOpenHeaderBlockFrames: 128,
+        maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(10),
         connectionPoolingEnabled: true,
         maxCachedConnectionsPerHost: 4,
         maxCertificateCacheEntries: null);
@@ -150,6 +160,7 @@ public sealed class ProxyResourceLimits
         int maxConcurrentStreamsPerConnection,
         int? maxPeerInitiatedIncompleteStreamResets,
         int maxOpenHeaderBlockFrames,
+        TimeSpan maxOpenHeaderBlockDuration,
         bool connectionPoolingEnabled,
         int maxCachedConnectionsPerHost,
         int? maxCertificateCacheEntries)
@@ -164,6 +175,7 @@ public sealed class ProxyResourceLimits
         RequirePositive(maxConcurrentStreamsPerConnection, nameof(maxConcurrentStreamsPerConnection));
         RequirePositiveIfPresent(maxPeerInitiatedIncompleteStreamResets, nameof(maxPeerInitiatedIncompleteStreamResets));
         RequirePositive(maxOpenHeaderBlockFrames, nameof(maxOpenHeaderBlockFrames));
+        RequirePositive(maxOpenHeaderBlockDuration, nameof(maxOpenHeaderBlockDuration));
         RequirePositive(maxCachedConnectionsPerHost, nameof(maxCachedConnectionsPerHost));
         RequirePositiveIfPresent(maxCertificateCacheEntries, nameof(maxCertificateCacheEntries));
 
@@ -179,6 +191,7 @@ public sealed class ProxyResourceLimits
             MaxConcurrentStreamsPerConnection = maxConcurrentStreamsPerConnection,
             MaxPeerInitiatedIncompleteStreamResets = maxPeerInitiatedIncompleteStreamResets,
             MaxOpenHeaderBlockFrames = maxOpenHeaderBlockFrames,
+            MaxOpenHeaderBlockDuration = maxOpenHeaderBlockDuration,
             ConnectionPoolingEnabled = connectionPoolingEnabled,
             MaxCachedConnectionsPerHost = maxCachedConnectionsPerHost,
             MaxCertificateCacheEntries = maxCertificateCacheEntries
@@ -195,6 +208,13 @@ public sealed class ProxyResourceLimits
     private static void RequirePositive(double value, string paramName)
     {
         if (value <= 0)
+            throw new ArgumentOutOfRangeException(paramName, value,
+                "Resource limits must be strictly positive. To disable a bound that supports it, use null rather than 0 or a negative number.");
+    }
+
+    private static void RequirePositive(TimeSpan value, string paramName)
+    {
+        if (value <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(paramName, value,
                 "Resource limits must be strictly positive. To disable a bound that supports it, use null rather than 0 or a negative number.");
     }

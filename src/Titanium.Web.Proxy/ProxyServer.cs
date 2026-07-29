@@ -21,6 +21,7 @@ using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Network.WinAuth;
+using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy;
@@ -419,6 +420,18 @@ public partial class ProxyServer : IDisposable
     ///     Default: 65,536 (64 KiB). Advertised via SETTINGS_MAX_HEADER_LIST_SIZE.
     /// </summary>
     public int MaxDecodedHeaderListBytes { get; set; } = 64 * 1024;
+
+    /// <summary>
+    ///     The shared, immutable resource-bound snapshot (concurrent-stream cap, CONTINUATION
+    ///     frame-count/wall-clock bounds, peer-initiated incomplete-stream-reset budget, and the
+    ///     other limits described in <see cref="ProxyResourceLimits" />) consulted by the HTTP/2
+    ///     relay so a single proxy-owned value governs both what is enforced and what is advertised
+    ///     to each peer, rather than admitting purely against whatever the origin advertised.
+    ///     Assign a new <see cref="ProxyResourceLimits" /> (constructed via
+    ///     <see cref="ProxyResourceLimits.Create" />) to override the <see cref="ProxyResourceLimits.Default" />
+    ///     values used otherwise.
+    /// </summary>
+    public ProxyResourceLimits ResourceLimits { get; set; } = ProxyResourceLimits.Default;
 
     /// <summary>
     ///     Maximum bytes the proxy will buffer for a single request or response body when
