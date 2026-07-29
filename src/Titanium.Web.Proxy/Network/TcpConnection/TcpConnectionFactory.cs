@@ -46,8 +46,26 @@ internal class TcpConnectionFactory : IDisposable
     // Tcp connections waiting to be disposed by cleanup task
     private readonly ConcurrentBag<TcpServerConnection> disposalBag = new();
 
-    // cache object race operations lock
-    private readonly SemaphoreSlim @lock = new(1);
+    /// <summary>
+    ///     Guards <see cref="cache" /> against the rare, whole-pool operations (<see cref="ClearPools" />,
+    ///     <see cref="Dispose(bool)" />) that must see a consistent snapshot of every queue at once,
+    ///     without forcing every per-request <see cref="Release(TcpServerConnection?,bool)" /> - by far
+    ///     the hottest path through this type - to serialize behind a single process-wide semaphore
+    ///     regardless of destination.
+    ///     <para>
+    ///         <see cref="Release(TcpServerConnection?,bool)" /> and the periodic per-key trim in
+    ///         <see cref="ClearOutdatedConnections" /> take the <em>read</em> side: any number of them run
+    ///         concurrently, for the same or different destinations, contending only on the
+    ///         destination-scoped <c>lock (queue)</c> already used for that destination's own
+    ///         <see cref="ConcurrentQueue{T}" /> (unchanged from before this lock was introduced - that
+    ///         part was already sharded by cache key). <see cref="ClearPools" /> and
+    ///         <see cref="Dispose(bool)" /> take the <em>write</em> side, which is exclusive with every
+    ///         reader, so a connection cannot be handed back into a queue this type is simultaneously
+    ///         draining and about to make unreachable via <c>cache.Clear()</c> - the leak a naive removal
+    ///         of the shared lock would reintroduce.
+    ///     </para>
+    /// </summary>
+    private readonly ReaderWriterLockSlim poolLock = new(LockRecursionPolicy.NoRecursion);
 
     private bool disposed;
 
@@ -86,7 +104,7 @@ internal class TcpConnectionFactory : IDisposable
 
         try
         {
-            @lock.Wait();
+            poolLock.EnterWriteLock();
 
             foreach (var queue in cache.Select(x => x.Value).ToList())
                 while (!queue.IsEmpty)
@@ -97,7 +115,7 @@ internal class TcpConnectionFactory : IDisposable
         }
         finally
         {
-            @lock.Release();
+            poolLock.ExitWriteLock();
         }
 
         while (!disposalBag.IsEmpty)
@@ -1078,49 +1096,54 @@ internal class TcpConnectionFactory : IDisposable
     /// </summary>
     /// <param name="connection">The Tcp server connection to return.</param>
     /// <param name="close">Should we just close the connection instead of reusing?</param>
-    internal async Task Release(TcpServerConnection? connection, bool close = false)
+    internal Task Release(TcpServerConnection? connection, bool close = false)
     {
-        if (connection == null) return;
+        if (connection == null) return Task.CompletedTask;
 
         // already scheduled for disposal: never pool it again.
-        if (connection.IsDisposalScheduled) return;
+        if (connection.IsDisposalScheduled) return Task.CompletedTask;
 
         if (close || connection.IsWinAuthenticated || connection.UsedClientCertificate
             || !Server.EnableConnectionPool || connection.IsClosed)
         {
             if (connection.TryScheduleDisposal()) disposalBag.Add(connection);
-            return;
+            return Task.CompletedTask;
         }
 
         connection.LastAccess = DateTime.UtcNow;
 
+        // Read side of poolLock: any number of releases (same or different destination) run this
+        // concurrently, contending with each other only on the destination-scoped lock (queue) below,
+        // never on a single process-wide handle. Only ClearPools/Dispose take the write side.
+        poolLock.EnterReadLock();
         try
         {
-            await @lock.WaitAsync();
-
             while (true)
             {
-                if (cache.TryGetValue(connection.CacheKey, out var existingConnections))
+                var queue = cache.GetOrAdd(connection.CacheKey, static _ => new ConcurrentQueue<TcpServerConnection>());
+
+                lock (queue)
                 {
-                    while (existingConnections.Count >= Server.MaxCachedConnections)
-                        if (existingConnections.TryDequeue(out var staleConnection))
+                    // ClearOutdatedConnections removes a queue from the dictionary, under this same
+                    // per-queue lock, the moment it observes it empty. If that happened between our
+                    // GetOrAdd read above and taking this lock, `queue` is now an orphan nothing will
+                    // ever drain again - enqueueing into it would leak the connection. Re-resolve
+                    // against the dictionary instead of trusting the reference we already hold.
+                    if (!cache.TryGetValue(connection.CacheKey, out var current) || current != queue) continue;
+
+                    while (queue.Count >= Server.MaxCachedConnections)
+                        if (queue.TryDequeue(out var staleConnection))
                             if (staleConnection.TryScheduleDisposal())
                                 disposalBag.Add(staleConnection);
 
-                    if (existingConnections.Any(x => x == connection)) break;
-
-                    existingConnections.Enqueue(connection);
-                    break;
+                    if (!queue.Contains(connection)) queue.Enqueue(connection);
+                    return Task.CompletedTask;
                 }
-
-                if (cache.TryAdd(connection.CacheKey,
-                        new ConcurrentQueue<TcpServerConnection>(new[] { connection })))
-                    break;
             }
         }
         finally
         {
-            @lock.Release();
+            poolLock.ExitReadLock();
         }
     }
 
@@ -1150,43 +1173,50 @@ internal class TcpConnectionFactory : IDisposable
             try
             {
                 var cutOff = DateTime.UtcNow.AddSeconds(-Server.ConnectionTimeOutSeconds);
-                foreach (var item in cache)
-                {
-                    var queue = item.Value;
 
-                    // take the same lock used by the pool-get path so that dequeue/enqueue here
-                    // does not race with a concurrent Get on the same queue.
-                    lock (queue)
-                    {
-                        while (queue.Count > 0)
-                            if (queue.TryDequeue(out var connection))
-                            {
-                                if (!Server.EnableConnectionPool || connection.LastAccess < cutOff)
-                                {
-                                    if (connection.TryScheduleDisposal())
-                                        disposalBag.Add(connection);
-                                }
-                                else
-                                {
-                                    queue.Enqueue(connection);
-                                    break;
-                                }
-                            }
-                    }
-                }
-
+                // Read side of poolLock: excludes this pass from running concurrently with a full
+                // ClearPools/Dispose drain, without contending with concurrent Release calls (which
+                // also take the read side and only ever contend on the per-queue lock below).
+                poolLock.EnterReadLock();
                 try
                 {
-                    await @lock.WaitAsync();
+                    foreach (var item in cache)
+                    {
+                        var queue = item.Value;
 
-                    // clear empty queues
-                    foreach (var pair in cache)
-                        if (pair.Value.Count == 0)
-                            cache.TryRemove(pair.Key, out _);
+                        // take the same lock used by the pool-get and release paths so that
+                        // dequeue/enqueue/removal here does not race with either.
+                        lock (queue)
+                        {
+                            while (queue.Count > 0)
+                                if (queue.TryDequeue(out var connection))
+                                {
+                                    if (!Server.EnableConnectionPool || connection.LastAccess < cutOff)
+                                    {
+                                        if (connection.TryScheduleDisposal())
+                                            disposalBag.Add(connection);
+                                    }
+                                    else
+                                    {
+                                        queue.Enqueue(connection);
+                                        break;
+                                    }
+                                }
+
+                            // Removing the now-empty queue under the same lock a concurrent Release
+                            // re-checks against is what makes that re-check meaningful: a queue can
+                            // only ever be removed while empty, and only while nobody else holds (or
+                            // is about to be handed) this exact lock object.
+                            if (queue.IsEmpty)
+                                ((ICollection<KeyValuePair<string, ConcurrentQueue<TcpServerConnection>>>)cache)
+                                    .Remove(new KeyValuePair<string, ConcurrentQueue<TcpServerConnection>>(item.Key,
+                                        queue));
+                        }
+                    }
                 }
                 finally
                 {
-                    @lock.Release();
+                    poolLock.ExitReadLock();
                 }
 
                 while (!disposalBag.IsEmpty)
@@ -1224,7 +1254,7 @@ internal class TcpConnectionFactory : IDisposable
         {
             try
             {
-                @lock.Wait();
+                poolLock.EnterWriteLock();
 
                 foreach (var queue in cache.Select(x => x.Value).ToList())
                     while (!queue.IsEmpty)
@@ -1235,18 +1265,18 @@ internal class TcpConnectionFactory : IDisposable
             }
             finally
             {
-                @lock.Release();
+                poolLock.ExitWriteLock();
             }
 
             while (!disposalBag.IsEmpty)
                 if (disposalBag.TryTake(out var connection))
                     connection?.Dispose();
 
-            // Do not dispose _cleanupCts or @lock: the cleanup task may still be accessing
+            // Do not dispose _cleanupCts or poolLock: the cleanup task may still be accessing
             // _cleanupCts.Token (throwing ObjectDisposedException on the Token property even after
-            // Cancel()) and @lock.WaitAsync() (throwing ObjectDisposedException if disposed while
-            // the task is entering the wait). Neither holds unmanaged resources that need explicit
-            // release — the GC finalizer path is sufficient.
+            // Cancel()) and poolLock.EnterReadLock() (throwing ObjectDisposedException if disposed
+            // while the task is entering the lock). Neither holds unmanaged resources that need
+            // explicit release — the GC finalizer path is sufficient.
         }
 
         disposed = true;
