@@ -77,7 +77,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.TcpTimeWaitSeconds = 10;
             proxyServer.ConnectionTimeOutSeconds = 15;
             proxyServer.ReuseSocket = false;
-            proxyServer.EnableConnectionPool = false;
+            // Pooling reuses origin TCP/TLS sockets and sharply reduces CONNECT/cert stampede when
+            // the example is installed as the system proxy (browser + OS services share the endpoint).
+            proxyServer.EnableConnectionPool = true;
             proxyServer.ForwardToUpstreamGateway = true;
             proxyServer.CertificateManager.SaveFakeCertificates = true;
             //proxyServer.ProxyBasicAuthenticateFunc = async (args, userName, password) =>
@@ -241,7 +243,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task<IExternalProxy> OnGetCustomUpStreamProxyFunc(SessionEventArgsBase arg)
         {
-            arg.GetState().PipelineInfo.AppendLine(nameof(OnGetCustomUpStreamProxyFunc));
+            arg.GetState().AppendPipeline(nameof(OnGetCustomUpStreamProxyFunc));
 
             // this is just to show the functionality, provided values are junk
             return new ExternalProxy
@@ -257,7 +259,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task<IExternalProxy> OnCustomUpStreamProxyFailureFunc(SessionEventArgsBase arg)
         {
-            arg.GetState().PipelineInfo.AppendLine(nameof(OnCustomUpStreamProxyFailureFunc));
+            arg.GetState().AppendPipeline(nameof(OnCustomUpStreamProxyFailureFunc));
 
             // this is just to show the functionality, provided values are junk
             return new ExternalProxy
@@ -274,7 +276,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
             var hostname = e.HttpClient.Request.RequestUri.Host;
-            e.GetState().PipelineInfo.AppendLine(nameof(OnBeforeTunnelConnectRequest) + ":" + hostname);
+            e.GetState().AppendPipeline(nameof(OnBeforeTunnelConnectRequest) + ":" + hostname);
 
             var clientLocalIp = e.ClientLocalEndPoint.Address;
             if (!clientLocalIp.Equals(IPAddress.Loopback) && !clientLocalIp.Equals(IPAddress.IPv6Loopback))
@@ -329,8 +331,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private Task OnBeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
         {
-            e.GetState().PipelineInfo
-                .AppendLine(nameof(OnBeforeTunnelConnectResponse) + ":" + e.HttpClient.Request.RequestUri);
+            e.GetState().AppendPipeline(
+                nameof(OnBeforeTunnelConnectResponse) + ":" + e.HttpClient.Request.RequestUri);
 
             return Task.CompletedTask;
         }
@@ -348,7 +350,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             var state = e.GetState();
             state.RequestStartedUtc = DateTime.UtcNow;
-            state.PipelineInfo.AppendLine(nameof(OnRequest) + ":" + e.HttpClient.Request.RequestUri);
+            state.AppendPipeline(nameof(OnRequest) + ":" + e.HttpClient.Request.RequestUri);
 
             var clientLocalIp = e.ClientLocalEndPoint.Address;
             if (!clientLocalIp.Equals(IPAddress.Loopback) && !clientLocalIp.Equals(IPAddress.IPv6Loopback))
@@ -395,7 +397,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         // Modify response
         private async Task MultipartRequestPartSent(object sender, MultipartRequestPartSentEventArgs e)
         {
-            e.GetState().PipelineInfo.AppendLine(nameof(MultipartRequestPartSent));
+            e.GetState().AppendPipeline(nameof(MultipartRequestPartSent));
 
             var session = (SessionEventArgs)sender;
             WriteToConsole("Multipart form data headers:");
@@ -404,7 +406,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task OnResponse(object sender, SessionEventArgs e)
         {
-            e.GetState().PipelineInfo.AppendLine(nameof(OnResponse));
+            e.GetState().AppendPipeline(nameof(OnResponse));
 
             if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Websocket)
             {
@@ -477,7 +479,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
             WriteToConsole(line, ColorForStatusCode(statusCode));
 
 #if DEBUG
-            WriteToConsole($"Pipelineinfo: {state.PipelineInfo}", ConsoleColor.Yellow);
+            try
+            {
+                WriteToConsole($"Pipelineinfo: {state.GetPipelineInfo()}", ConsoleColor.Yellow);
+            }
+            catch
+            {
+                // PipelineInfo is diagnostic-only; ignore races/teardown.
+            }
 #endif
         }
 
@@ -530,7 +539,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         /// <param name="e"></param>
         public Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
         {
-            e.GetState().PipelineInfo.AppendLine(nameof(OnCertificateValidation));
+            e.GetState().AppendPipeline(nameof(OnCertificateValidation));
 
             // set IsValid to true/false based on Certificate Errors
             if (e.SslPolicyErrors == SslPolicyErrors.None) e.IsValid = true;
@@ -545,7 +554,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         /// <param name="e"></param>
         public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs e)
         {
-            e.GetState().PipelineInfo.AppendLine(nameof(OnCertificateSelection));
+            e.GetState().AppendPipeline(nameof(OnCertificateSelection));
 
             // set e.clientCertificate to override
 

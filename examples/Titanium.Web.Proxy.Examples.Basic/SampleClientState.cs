@@ -5,7 +5,20 @@ namespace Titanium.Web.Proxy.Examples.Basic
 {
     public class SampleClientState
     {
-        public StringBuilder PipelineInfo { get; } = new StringBuilder();
+        private readonly StringBuilder pipelineInfo = new();
+        private readonly object pipelineLock = new();
+
+        public void AppendPipeline(string line)
+        {
+            lock (pipelineLock)
+                pipelineInfo.AppendLine(line);
+        }
+
+        public string GetPipelineInfo()
+        {
+            lock (pipelineLock)
+                return pipelineInfo.ToString();
+        }
 
         /// <summary>
         ///     UTC timestamp when the request entered <c>BeforeRequest</c>, used for elapsed timing in traffic logs.

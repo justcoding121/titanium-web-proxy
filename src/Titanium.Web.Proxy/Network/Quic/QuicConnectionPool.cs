@@ -25,7 +25,10 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     ///     to drain past connections MsQuic has already silently timed out.
     /// </summary>
     internal const int MaxConnectionsPerOrigin = 2;
-    private static readonly TimeSpan IdleConnectionTimeout = TimeSpan.FromSeconds(90);
+    // MsQuic's negotiated idle timeout is often well under 90s; keeping dead connections that long
+    // causes OpenOutboundStreamAsync to fail with "timed out from inactivity" and forces the
+    // stale-retry loop on the next request. Align closer to a typical peer idle window.
+    private static readonly TimeSpan IdleConnectionTimeout = TimeSpan.FromSeconds(30);
 
     private readonly ConcurrentDictionary<string, ConcurrentQueue<QuicServerConnection>> _pool = new();
     private readonly ProxyServer _proxyServer;

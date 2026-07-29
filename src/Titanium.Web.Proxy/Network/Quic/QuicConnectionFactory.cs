@@ -56,6 +56,12 @@ internal sealed class QuicConnectionFactory
         if (upStreamProxy != null)
             throw new QuicProxyNotSupportedException(upStreamProxy.ToString() ?? "unknown");
 
+        // Auto-policy H3 (SVCB/Alt-Svc) must fail fast when UDP/443 is filtered: the .NET default
+        // HandshakeTimeout is 10s, which makes every first request to an H3-advertising origin hang
+        // before TCP fallback. Cap at ConnectTimeOutSeconds but never above 3s so page loads stay
+        // responsive on networks that advertise H3 but cannot complete a QUIC handshake.
+        var handshakeSeconds = Math.Clamp(_proxyServer.ConnectTimeOutSeconds, 1, 3);
+
         var clientOptions = new QuicClientConnectionOptions
         {
             // Connect to the SVCB TargetName (or the origin host when no TargetName).
@@ -70,6 +76,10 @@ internal sealed class QuicConnectionFactory
             },
             DefaultStreamErrorCode = (long)Http3.Http3ErrorCode.RequestCancelled,
             DefaultCloseErrorCode = (long)Http3.Http3ErrorCode.NoError,
+            HandshakeTimeout = TimeSpan.FromSeconds(handshakeSeconds),
+            // Keep idle pooled connections from being silently closed by MsQuic before our pool
+            // TTL notices (see QuicConnectionPool.IdleConnectionTimeout / stale-retry path).
+            KeepAliveInterval = TimeSpan.FromSeconds(Math.Clamp(_proxyServer.ConnectionTimeOutSeconds / 4, 5, 15)),
             // Do not bind LocalEndPoint from UpStreamEndPoint here: QuicConnection resolves via
             // Happy Eyeballs, and an IPv4-only local bind fails against IPv6-first hosts (Google).
             // TCP uses UpStreamEndPointSelector after DNS; QUIC lacks an equivalent hook today.
