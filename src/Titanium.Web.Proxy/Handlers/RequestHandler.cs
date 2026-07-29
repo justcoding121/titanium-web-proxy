@@ -12,6 +12,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
+using Titanium.Web.Proxy.Network.Streams;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Shared;
 
@@ -152,7 +153,28 @@ public partial class ProxyServer
                         }
 
                         // If user requested interception do it
-                        await OnBeforeRequest(args);
+                        try
+                        {
+                            await OnBeforeRequest(args);
+                        }
+                        catch (BodySizeLimitExceededException)
+                        {
+                            // A request-body breach is caught here, before anything has been sent to
+                            // the origin: nothing has committed the response yet, so unlike a response
+                            // breach (which can only close the connection - see the catch-all further
+                            // down and DowngradeChunkedFramingForHttp10OriginIfNeeded's caller) this one
+                            // can still produce a normal 413 to the client.
+                            args.HttpClient.Response = new GenericResponse(System.Net.HttpStatusCode.RequestEntityTooLarge)
+                            {
+                                HttpVersion = request.HttpVersion
+                            };
+                            args.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection,
+                                KnownHeaders.ConnectionClose);
+                            closeServerConnection = true;
+                            await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                            args.IsClientResponseCommitted = true;
+                            return;
+                        }
 
                         // Total per-request deadline starts after BeforeRequest so session overrides apply.
                         using var requestDeadline = args.Deadlines.Start(cancellationToken,
@@ -205,7 +227,27 @@ public partial class ProxyServer
                             // if win auth is enabled
                             // we need a cache of request body
                             // so that we can send it after authentication in WinAuthHandler.cs
-                            if (args.EnableWinAuth && request.HasBody) await args.GetRequestBody(requestToken);
+                            if (args.EnableWinAuth && request.HasBody)
+                                try
+                                {
+                                    await args.GetRequestBody(requestToken);
+                                }
+                                catch (BodySizeLimitExceededException)
+                                {
+                                    // Still request-side and still nothing sent to the origin yet, same
+                                    // as the BeforeRequest breach above.
+                                    args.HttpClient.Response =
+                                        new GenericResponse(System.Net.HttpStatusCode.RequestEntityTooLarge)
+                                        {
+                                            HttpVersion = request.HttpVersion
+                                        };
+                                    args.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection,
+                                        KnownHeaders.ConnectionClose);
+                                    closeServerConnection = true;
+                                    await clientStream.WriteResponseAsync(args.HttpClient.Response, requestToken);
+                                    args.IsClientResponseCommitted = true;
+                                    return;
+                                }
 
                             // Must run before Request.Locked is set (a few lines below, inside the
                             // Locked = true overload) - GetRequestBody() throws once Locked, exactly like
