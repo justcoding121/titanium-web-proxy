@@ -588,7 +588,7 @@ internal sealed class Http2OriginConnection
             var value = (int)BinaryPrimitives.ReadUInt32BigEndian(payload.AsSpan(i + 2, 4));
 
             if (identifier == (int)Http2SettingsId.HeaderTableSize)
-                originSettings.HeaderTableSize = value;
+                originSettings.UpdateHeaderTableSize(value);
             else if (identifier == (int)Http2SettingsId.MaxFrameSize)
             {
                 // RFC 7540 §6.5.2: values outside [16384, 16777215] are a connection-level PROTOCOL_ERROR.

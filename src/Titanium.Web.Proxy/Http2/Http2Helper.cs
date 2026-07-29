@@ -1738,7 +1738,9 @@ namespace Titanium.Web.Proxy.Http2
 
                         if (identifier == (int)Http2SettingsId.HeaderTableSize)
                         {
-                            localSettings.HeaderTableSize = (int)value;
+                            localSettings.UpdateHeaderTableSize((int)value);
+                            logger.LogTrace("[h2 settings] SETTINGS_HEADER_TABLE_SIZE={Value} from {Direction}",
+                                value, isClient ? "browser" : "origin");
                         }
                         else if (identifier == (int)Http2SettingsId.MaxFrameSize)
                         {
@@ -2015,9 +2017,23 @@ namespace Titanium.Web.Proxy.Http2
                         Breakpoint();
                     }
 
-                    await lockedOutputWrite(() =>
-                        SendBody(remoteSettings, rr, frameHeader, frameHeaderBuffer, buffer, outboundFlow,
-                            output, cancellationToken));
+                    // If the before-handler claimed exclusive bridge ownership (e.g. H2→H3 bridge), skip
+                    // SendBody: the bridge already forwarded the complete request (headers + body) on its own
+                    // transport (QUIC or TCP-fallback).  Sending it again here over the H2 TCP origin would
+                    // double-submit the request and cause a PROTOCOL_ERROR on the H2 origin connection.
+                    //
+                    // By the time Http2BeforeHandlerTask has completed the handler has already set
+                    // IsExternalBridge = true on the stream state and fired the background bridge task.  The
+                    // background task cannot have removed the stream from the dictionary yet (it hasn't
+                    // started executing on the thread pool), so TryGetValue is guaranteed to return the
+                    // already-mutated state object.
+                    connectionState.Streams.TryGetValue(streamId, out var bodyStreamState);
+                    if (bodyStreamState?.IsExternalBridge != true)
+                    {
+                        await lockedOutputWrite(() =>
+                            SendBody(remoteSettings, rr, frameHeader, frameHeaderBuffer, buffer, outboundFlow,
+                                output, cancellationToken));
+                    }
                 }
 
                 if (endStream)
@@ -2145,13 +2161,24 @@ namespace Titanium.Web.Proxy.Http2
                 writer.Write((byte)(p & 0xff));
             }
 
-            // If the peer's advertised header table size changed since our last encode, emit a Dynamic Table
-            // Size Update (RFC 7541 ?6.3) at the start of the header block fragment so the peer's decoder
-            // resizes in lockstep before any indexed reference relying on the new size is used.
-            if (encoder.MaxHeaderTableSize != settings.HeaderTableSize)
-            {
-                encoder.SetMaxHeaderTableSize(writer, settings.HeaderTableSize);
-            }
+            // RFC 7541 §6.3: Dynamic Table Size Update(s) must appear at the beginning of the first
+            // header block following any change to the peer's advertised ceiling.
+            //
+            // When multiple SETTINGS_HEADER_TABLE_SIZE updates arrive between two header blocks the spec
+            // requires signalling the smallest value that occurred first so the peer's decoder can evict
+            // entries it could no longer keep, before the encoder expands back to the final size.
+            // (Example: Google sends size=0 then size=65536 during connection setup; omitting the
+            // intermediate 0 leaves the encoder with live table entries the decoder already evicted,
+            // causing indexed references to resolve to stale/wrong slots — manifesting as a
+            // RST_STREAM(PROTOCOL_ERROR) from strict origins on the very next H2-native-relay stream.)
+            var minSize = settings.MinHeaderTableSizeSinceLastEncode;
+            var curSize = settings.HeaderTableSize;
+            if (encoder.MaxHeaderTableSize != minSize)
+                encoder.SetMaxHeaderTableSize(writer, minSize);
+            if (encoder.MaxHeaderTableSize != curSize)
+                encoder.SetMaxHeaderTableSize(writer, curSize);
+            // Reset so only updates arriving *after* this encode are rolled into the next header block.
+            settings.NotifyHeaderBlockEncoded();
 
             if (rr is Request request)
             {
@@ -2220,10 +2247,14 @@ namespace Titanium.Web.Proxy.Http2
             var ms = new MemoryStream();
             var writer = new BinaryWriter(ms);
 
-            if (encoder.MaxHeaderTableSize != settings.HeaderTableSize)
-            {
-                encoder.SetMaxHeaderTableSize(writer, settings.HeaderTableSize);
-            }
+            // Same RFC 7541 §6.3 dual-DTSU logic as SendHeader (see the detailed comment there).
+            var minSizeT = settings.MinHeaderTableSizeSinceLastEncode;
+            var curSizeT = settings.HeaderTableSize;
+            if (encoder.MaxHeaderTableSize != minSizeT)
+                encoder.SetMaxHeaderTableSize(writer, minSizeT);
+            if (encoder.MaxHeaderTableSize != curSizeT)
+                encoder.SetMaxHeaderTableSize(writer, curSizeT);
+            settings.NotifyHeaderBlockEncoded();
 
             foreach (var header in trailingHeaders)
             {

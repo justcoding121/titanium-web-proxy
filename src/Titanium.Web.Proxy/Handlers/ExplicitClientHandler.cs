@@ -185,6 +185,26 @@ public partial class ProxyServer
 
                     clientStream.Connection.SslProtocol = sslProtocol;
 
+                    // The cert name depends only on the hostname, which is known at CONNECT time.
+                    // Extract it now so we can start certificate generation in parallel with the
+                    // HTTPS/SVCB DNS and H2 capability probes that follow. Those probes can take up to
+                    // ~800ms on a cold cache (500ms SVCB DNS + 300ms H2 TCP/TLS probe); overlapping
+                    // cert generation with them hides most of that cost on warm cert caches, and avoids
+                    // adding cert-gen time on top of probe time when the cert cache is also cold.
+                    var connectHostname = requestLine.RequestUri.GetString();
+                    {
+                        var colonIdx = connectHostname.LastIndexOf(':');
+                        if (colonIdx >= 0) connectHostname = connectHostname.Substring(0, colonIdx);
+                    }
+                    var connectHostnamePort = ParseHostAndPort(requestLine.RequestUri.GetString(), 443).Port;
+
+                    // CertificateManager deduplicates concurrent calls for the same name internally.
+                    var certGenerationTask = endPoint.GenericCertificate != null
+                        ? Task.FromResult<X509Certificate2?>(endPoint.GenericCertificate)
+                        : CertificateManager.CreateServerCertificate(
+                            HttpHelper.GetWildCardDomainName(connectHostname,
+                                CertificateManager.DisableWildCardCertificates));
+
                     var http2Supported = false;
 
                     if (EnableHttp2)
@@ -200,8 +220,7 @@ public partial class ProxyServer
                         // browser side is authenticated.
                         var clientOffersHttp2 = clientHelloInfo.GetAlpn()?.Contains(SslApplicationProtocol.Http2)
                                                  == true;
-                        var (connectHost, connectPort) =
-                            ParseHostAndPort(requestLine.RequestUri.GetString(), 443);
+                        var (connectHost, connectPort) = (connectHostname, connectHostnamePort);
 
                         // Probe for H3 capability (HTTPS/SVCB DNS or forced Http3 policy) before opening
                         // any H2 origin connection. If H3 is selected, the H2→H3 bridge handles every
@@ -256,9 +275,8 @@ public partial class ProxyServer
                             true, http2Supported ? SslExtensions.Http2ProtocolAsList : null, false, true,
                             CancellationToken.None);
 
-                    var connectHostname = requestLine.RequestUri.GetString();
-                    var idx = connectHostname.IndexOf(":");
-                    if (idx >= 0) connectHostname = connectHostname.Substring(0, idx);
+                    // connectHostname and certGenerationTask were prepared above before the
+                    // DNS/H2 probes so cert generation could run in parallel with those probes.
 
                     X509Certificate2? certificate = null;
                     SslStream? sslStream = null;
@@ -266,12 +284,9 @@ public partial class ProxyServer
                     {
                         sslStream = new SslStream(clientStream, false);
 
-                        var certName = HttpHelper.GetWildCardDomainName(connectHostname,
-                            CertificateManager.DisableWildCardCertificates);
-                        certificate = endPoint.GenericCertificate ??
-                                      await CertificateManager.CreateServerCertificate(certName)
+                        certificate = await certGenerationTask
                                       ?? throw new InvalidOperationException(
-                                          $"CertificateManager returned null for '{certName}'.");
+                                          $"CertificateManager returned null for '{connectHostname}'.");
 
                         // Successfully managed to authenticate the client using the fake certificate
                         var options = new SslServerAuthenticationOptions();
