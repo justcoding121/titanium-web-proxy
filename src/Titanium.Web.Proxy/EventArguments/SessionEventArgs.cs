@@ -9,6 +9,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Streams;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.EventArguments;
@@ -130,9 +131,13 @@ public class SessionEventArgs : SessionEventArgsBase
     [Obsolete("Use [WebSocketDecoderReceive] instead")]
     public WebSocketDecoder WebSocketDecoder => WebSocketDecoderReceive;
 
-    public WebSocketDecoder WebSocketDecoderSend => webSocketDecoderSend ??= new WebSocketDecoder(BufferPool);
+    public WebSocketDecoder WebSocketDecoderSend =>
+        webSocketDecoderSend ??= new WebSocketDecoder(BufferPool,
+            MaxWebSocketFramePayloadBytes ?? Server.MaxWebSocketFramePayloadBytes);
 
-    public WebSocketDecoder WebSocketDecoderReceive => webSocketDecoderReceive ??= new WebSocketDecoder(BufferPool);
+    public WebSocketDecoder WebSocketDecoderReceive =>
+        webSocketDecoderReceive ??= new WebSocketDecoder(BufferPool,
+            MaxWebSocketFramePayloadBytes ?? Server.MaxWebSocketFramePayloadBytes);
 
     /// <summary>
     ///     Fired for each WebSocket frame after upgrade when at least one handler is subscribed.
@@ -306,7 +311,16 @@ public class SessionEventArgs : SessionEventArgsBase
     private async Task<byte[]> ReadBodyAsync(bool isRequest, CancellationToken cancellationToken)
     {
         using var bodyStream = new MemoryStream();
-        using var writer = new HttpStream(Server, bodyStream, BufferPool, cancellationToken);
+
+        // Per-chunk/per-frame sizes are already bounded elsewhere; nothing upstream of this point
+        // caps the cumulative total this loop accumulates into memory, so a body assembled from many
+        // small pieces could otherwise grow unbounded. See BoundedWriteStream for why this needs to be
+        // the actual write target rather than a length check performed only after the fact.
+        var maxBufferedBodyBytes = MaxBufferedBodyBytes ?? Server.MaxBufferedBodyBytes;
+        Stream target = maxBufferedBodyBytes > 0
+            ? new BoundedWriteStream(bodyStream, maxBufferedBodyBytes)
+            : bodyStream;
+        using var writer = new HttpStream(Server, target, BufferPool, cancellationToken);
 
         if (isRequest)
             await CopyRequestBodyAsync(writer, TransformationMode.Uncompress, cancellationToken);

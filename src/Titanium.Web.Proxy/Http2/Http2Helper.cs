@@ -18,6 +18,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2.Hpack;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Streams;
 using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
 using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
 
@@ -1532,7 +1533,41 @@ namespace Titanium.Web.Proxy.Http2
                             if (data == null)
                                 throw new InvalidOperationException("HTTP/2 body buffering was requested without a buffer.");
 
-                            data.Write(buffer, offset, length);
+                            // Native H2 whole-body buffering (BeforeRequest/BeforeResponse called
+                            // GetRequestBody/GetResponseBody) has no cumulative cap of its own: each DATA
+                            // frame is already bounded by SETTINGS_MAX_FRAME_SIZE, but per-frame limits are
+                            // not cumulative limits, so a peer sending enough frames could otherwise grow
+                            // this MemoryStream unbounded. Mirrors the extended-CONNECT relay-buffer-exceeded
+                            // handling just above: abort only this stream (not the whole connection), and
+                            // fault the waiting body-read task so ReadRequestBodyAsync/ReadResponseBodyAsync
+                            // surfaces BodySizeLimitExceededException instead of hanging forever.
+                            var maxBufferedBodyBytes = args.MaxBufferedBodyBytes ?? args.Server.MaxBufferedBodyBytes;
+                            if (maxBufferedBodyBytes > 0 && data.Length + length > maxBufferedBodyBytes)
+                            {
+                                ReportException(logger, new ProxyHttpException(
+                                    $"HTTP/2 {(isClient ? "request" : "response")} body exceeded the configured " +
+                                    $"buffering limit of {maxBufferedBodyBytes:N0} bytes.", null, args));
+
+                                var sizeLimitException = new BodySizeLimitExceededException(
+                                    $"HTTP/2 body byte count {data.Length + length:N0} exceeds the limit of {maxBufferedBodyBytes:N0}.");
+
+                                var pendingTcs = rr.ReadHttp2BodyTaskCompletionSource;
+                                rr.ReadHttp2BodyTaskCompletionSource = null;
+                                pendingTcs.TrySetException(sizeLimitException);
+
+                                rr.Http2BodyData?.Dispose();
+                                rr.Http2BodyData = null;
+
+                                RemoveAndFinalizeStream(streamId);
+                                await lockedOwnLegWrite(() => SendRstStreamAsync(
+                                    new Http2FrameHeader(), new byte[9], streamId,
+                                    Http2ErrorCode.EnhanceYourCalm, input));
+                                sendPacket = false;
+                            }
+                            else
+                            {
+                                data.Write(buffer, offset, length);
+                            }
                         }
                         else if (!rr.Http2IgnoreBodyFrames && !rr.IsBodyRead &&
                                  (isClient
