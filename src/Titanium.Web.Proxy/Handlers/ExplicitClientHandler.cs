@@ -316,8 +316,8 @@ public partial class ProxyServer
                         ProxyLog.BrowserHandshakeSucceeded(logger, connectHostname,
                             sslStream.NegotiatedApplicationProtocol);
 
-                            clientStream.Connection.NegotiatedApplicationProtocol =
- sslStream.NegotiatedApplicationProtocol;
+                        clientStream.Connection.NegotiatedApplicationProtocol =
+                            sslStream.NegotiatedApplicationProtocol;
 
                         // HTTPS server created - we can now decrypt the client's traffic
                         clientStream = new HttpClientStream(this, clientStream.Connection, sslStream, BufferPool,
@@ -519,7 +519,8 @@ public partial class ProxyServer
                                 },
                                 // Use the H3-aware delegate so per-stream Alt-Svc cache hits can upgrade
                                 // individual h2 streams to H3 mid-connection (warm path).
-                                (args, ctx) => BridgeOnBeforeRequestForH3(args, ctx, sessionConnectHost, sessionConnectPort),
+                                (args, ctx) => BridgeOnBeforeRequestForH3(args, ctx, sessionConnectHost,
+                                    sessionConnectPort, coldH3Bridge: false),
                                 async (args, ctx) => { await OnBeforeResponse(args); },
                                 async args => { await OnAfterResponse(args); },
                                 headers => PrepareRequestHeaders(headers),

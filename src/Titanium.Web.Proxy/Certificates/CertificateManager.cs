@@ -69,6 +69,14 @@ public sealed class CertificateManager : IDisposable
     private readonly SemaphoreSlim pendingCertificateCreationTaskLock = new(1);
 
     /// <summary>
+    ///     Caps concurrent leaf crypto (MakeCertificate). Without this, a CONNECT stampede
+    ///     queues dozens of <see cref="Task.Run"/> RSA generations that starve unrelated hosts
+    ///     (and even disk-cache loads that used to share that same queue).
+    /// </summary>
+    private readonly SemaphoreSlim certificateCreationThrottle =
+        new(Math.Clamp(Environment.ProcessorCount, 2, 8));
+
+    /// <summary>
     ///     A list of pending certificate creation tasks.
     /// </summary>
     private readonly Dictionary<string, Task<X509Certificate2?>> pendingCertificateCreationTasks = new();
@@ -280,15 +288,19 @@ public sealed class CertificateManager : IDisposable
         set
         {
             // Only invalidate cached leaf certificates when the signing root's identity actually
-            // changes.  Reloading the same persisted root certificate on startup should not discard
-            // valid cached leaves that were signed by that root — the leaves remain trustworthy as
-            // long as the signing root is the same.  Compare by thumbprint because thumbprint is a
-            // hash of the entire DER-encoded certificate (identity + public key + validity + chain).
-            var isSameRoot = rootCertificate != null && value != null &&
-                             string.Equals(rootCertificate.Thumbprint, value.Thumbprint,
-                                 StringComparison.OrdinalIgnoreCase);
-            if (!isSameRoot)
-                ClearRootCertificate();
+            // changes. Reloading the same persisted root on startup must NOT discard valid cached
+            // leaves. Critically: the first assignment (field still null → loaded rootCert.pfx) is
+            // not a root change — clearing here used to Directory.Delete("crts") on every process
+            // start, forcing full MakeCertificate stampede and multi-second CONNECT latency.
+            if (rootCertificate != null)
+            {
+                var rootChanged = value == null ||
+                                  !string.Equals(rootCertificate.Thumbprint, value.Thumbprint,
+                                      StringComparison.OrdinalIgnoreCase);
+                if (rootChanged)
+                    ClearRootCertificate();
+            }
+
             rootCertificate = value;
         }
     }
@@ -584,6 +596,24 @@ public sealed class CertificateManager : IDisposable
         if (TryGetValidCachedCertificate(certificateName, out var cachedCertificate))
             return cachedCertificate;
 
+        // Disk hit must not wait behind Task.Run(MakeCertificate) stampede — load synchronously.
+        if (SaveFakeCertificates)
+        {
+            var fromDisk = TryLoadFakeCertificateFromDisk(certificateName);
+            if (fromDisk != null)
+            {
+                if (cachedCertificates.TryAdd(certificateName,
+                        new CachedCertificate(fromDisk) { LastAccess = DateTime.UtcNow }))
+                {
+                    return fromDisk;
+                }
+
+                fromDisk.Dispose();
+                if (TryGetValidCachedCertificate(certificateName, out cachedCertificate))
+                    return cachedCertificate;
+            }
+        }
+
         var createdTask = false;
         Task<X509Certificate2?> createCertificateTask;
         await pendingCertificateCreationTaskLock.WaitAsync();
@@ -601,12 +631,20 @@ public sealed class CertificateManager : IDisposable
                 // run certificate creation task & add it to pending tasks
                 createCertificateTask = Task.Run(() =>
                 {
-                    var result = CreateCertificate(certificateName, false);
-                    if (result != null)
-                        cachedCertificates.TryAdd(certificateName,
-                            new CachedCertificate(result) { LastAccess = DateTime.UtcNow });
+                    certificateCreationThrottle.Wait();
+                    try
+                    {
+                        var result = CreateCertificate(certificateName, false);
+                        if (result != null)
+                            cachedCertificates.TryAdd(certificateName,
+                                new CachedCertificate(result) { LastAccess = DateTime.UtcNow });
 
-                    return result;
+                        return result;
+                    }
+                    finally
+                    {
+                        certificateCreationThrottle.Release();
+                    }
                 });
 
                 pendingCertificateCreationTasks[certificateName] = createCertificateTask;
@@ -639,6 +677,37 @@ public sealed class CertificateManager : IDisposable
         }
 
         return certificate;
+    }
+
+    /// <summary>
+    ///     Loads a previously saved leaf certificate from the disk cache (no crypto).
+    ///     Used as a fast path so CONNECT for known hosts is not queued behind unrelated keygen.
+    /// </summary>
+    private X509Certificate2? TryLoadFakeCertificateFromDisk(string certificateName)
+    {
+        try
+        {
+            var subjectName = ProxyConstants.CnRemoverRegex
+                .Replace(certificateName, string.Empty)
+                .Replace("*", "$x$");
+
+            var certificate = certificateCache.LoadCertificate(subjectName, StorageFlag);
+            if (certificate == null) return null;
+
+            if (certificate.NotAfter <= DateTime.Now)
+            {
+                OnException(new Exception($"Cached certificate for {subjectName} has expired."));
+                certificate.Dispose();
+                return null;
+            }
+
+            return certificate;
+        }
+        catch (Exception e)
+        {
+            OnException(new Exception("Failed to load fake certificate.", e));
+            return null;
+        }
     }
 
     /// <summary>
@@ -1103,6 +1172,7 @@ public sealed class CertificateManager : IDisposable
         {
             clearCertificatesTokenSource.Dispose();
             pendingCertificateCreationTaskLock.Dispose();
+            certificateCreationThrottle.Dispose();
 
             // Release native CAPI/OpenSSL handles on all cached leaf certificates (manager-owned).
             foreach (var pair in cachedCertificates)

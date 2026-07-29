@@ -320,7 +320,7 @@ public partial class ProxyServer
                                         // Use the H3-aware delegate so Alt-Svc cache hits can upgrade
                                         // individual h2 streams to H3 mid-connection (warm path).
                                         (sessionArgs, ctx) => BridgeOnBeforeRequestForH3(sessionArgs, ctx,
-                                            httpsHostName, args.ForwardHttpsPort),
+                                            httpsHostName, args.ForwardHttpsPort, coldH3Bridge: false),
                                         async (sessionArgs, ctx) => { await OnBeforeResponse(sessionArgs); },
                                         async sessionArgs => { await OnAfterResponse(sessionArgs); },
                                         headers => PrepareRequestHeaders(headers),

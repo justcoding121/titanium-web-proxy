@@ -65,7 +65,8 @@ public partial class ProxyServer
                 // honours forced Http3/Http11/Http2 (same as the warm-path factory).
                 UpstreamHttpProtocol = upstreamHttpProtocol
             },
-            (sessionArgs, ctx) => BridgeOnBeforeRequestForH3(sessionArgs, ctx, remoteHostName, remotePort),
+            (sessionArgs, ctx) => BridgeOnBeforeRequestForH3(sessionArgs, ctx, remoteHostName, remotePort,
+                coldH3Bridge: true),
             // NullOriginStream never produces real response HEADERS frames; this delegate is never invoked.
             (sessionArgs, ctx) => Task.CompletedTask,
             async sessionArgs => { await OnAfterResponse(sessionArgs); },
@@ -81,11 +82,19 @@ public partial class ProxyServer
     ///     stream as <see cref="Http2StreamState.IsExternalBridge"/> so
     ///     <see cref="Http2Helper"/> suppresses native H2 origin forwarding.
     /// </summary>
+    /// <param name="coldH3Bridge">
+    ///     <see langword="true"/> when this connection has no real H2 origin (NullOriginStream cold
+    ///     path). On a cache miss / post-eviction, the bridge must TCP-fallback itself — forwarding
+    ///     HEADERS into <see cref="NullOriginStream"/> would silently discard them and hang the
+    ///     client stream. Warm-path callers pass <see langword="false"/> so a miss falls through to
+    ///     the native H2 origin relay.
+    /// </param>
     private async Task BridgeOnBeforeRequestForH3(
         SessionEventArgs sessionArgs,
         Http2StreamContext ctx,
         string remoteHostName,
-        int remotePort)
+        int remotePort,
+        bool coldH3Bridge = false)
     {
         await OnBeforeRequest(sessionArgs);
 
@@ -108,9 +117,15 @@ public partial class ProxyServer
 
         if (!h3Route.UseH3)
         {
-            // No H3 for this stream — let Http2Helper forward HEADERS to the native H2 origin
-            // (or NullOriginStream, which discards them harmlessly on the cold path).
-            return;
+            if (!coldH3Bridge)
+            {
+                // Warm path: a real H2 origin is attached — let Http2Helper forward HEADERS there.
+                return;
+            }
+
+            // Cold path: CONNECT committed to H2→H3 with NullOriginStream. After QUIC failure evicts
+            // the capability cache, later multiplexed streams must still be answered (via TCP).
+            h3Route = Http3OriginRoute.None;
         }
 
         // Via loop detection and injection before launching background origin I/O, while the
