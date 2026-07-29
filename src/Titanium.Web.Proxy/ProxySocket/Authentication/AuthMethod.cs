@@ -98,15 +98,6 @@ internal abstract class AuthMethod
     protected int Received { get; set; }
 
     /// <summary>
-    ///     Authenticates the user.
-    /// </summary>
-    /// <exception cref="ProxyException">Authentication with the proxy server failed.</exception>
-    /// <exception cref="ProtocolViolationException">The proxy server uses an invalid protocol.</exception>
-    /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
-    /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-    public abstract void Authenticate();
-
-    /// <summary>
     ///     Authenticates the user asynchronously.
     /// </summary>
     /// <param name="callback">The method to call when the authentication is complete.</param>

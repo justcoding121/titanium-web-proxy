@@ -519,10 +519,30 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     Maximum number of concurrent connections per remote host in cache.
-    ///     Only valid when connection pooling is enabled.
+    ///     Only meaningful when <see cref="EnableConnectionPool" /> is <see langword="true" />; to
+    ///     disable pooling, set <see cref="EnableConnectionPool" /> to <see langword="false" /> rather
+    ///     than setting this to 0 - the pool eviction loop treats a value below 1 as "evict without
+    ///     limit while holding the pool-wide lock", which spins indefinitely once the cache for that
+    ///     host is empty and would stall every other connection acquire/release in the process.
+    ///     Rejected outright at assignment so that state cannot be reached.
     ///     Default value is 4.
     /// </summary>
-    public int MaxCachedConnections { get; set; } = 4;
+    /// <exception cref="ArgumentOutOfRangeException">The assigned value is less than 1.</exception>
+    public int MaxCachedConnections
+    {
+        get => maxCachedConnections;
+        set
+        {
+            if (value < 1)
+                throw new ArgumentOutOfRangeException(nameof(value), value,
+                    "MaxCachedConnections must be at least 1. To disable connection pooling, set " +
+                    nameof(EnableConnectionPool) + " to false instead.");
+
+            maxCachedConnections = value;
+        }
+    }
+
+    private int maxCachedConnections = 4;
 
     /// <summary>
     ///     SO_LINGER timeout in seconds applied to client and upstream sockets via
@@ -1095,6 +1115,14 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     Start this proxy server instance.
+    ///     <para>
+    ///         Transactional: if any endpoint fails to start, every listener this call already
+    ///         started is stopped, the system-upstream-proxy resolver (if this call created one) is
+    ///         disposed, and <see cref="ProxyRunning" /> is left <see langword="false" /> before the
+    ///         exception propagates. A caller that catches the exception is left with an instance in
+    ///         exactly the same state as before calling <see cref="Start" />, not a partially-bound
+    ///         proxy with some endpoints silently listening.
+    ///     </para>
     /// </summary>
     /// <param name="changeSystemProxySettings">
     ///     Whether or not clear any system proxy settings which is pointing to our own endpoint (causing a cycle).
@@ -1133,6 +1161,7 @@ public partial class ProxyServer : IDisposable
             }
         }
 
+        var assignedSystemUpStreamResolver = false;
         if (RunTime.IsWindows && ForwardToUpstreamGateway && GetCustomUpStreamProxyFunc == null &&
             SystemProxySettingsManager != null)
         {
@@ -1145,26 +1174,94 @@ public partial class ProxyServer : IDisposable
                 systemProxyResolver.LoadFromIe();
 
             GetCustomUpStreamProxyFunc = GetSystemUpStreamProxy;
+            assignedSystemUpStreamResolver = true;
         }
 
         ProxyRunning = true;
 
         CertificateManager.ClearIdleCertificates();
 
-        if (EnableHttp3 && ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>().Any())
-        {
-            quicListenerCts = new CancellationTokenSource();
-            foreach (var quicEndPoint in ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>())
-                ListenQuic(quicEndPoint);
-        }
-        else if (EnableHttp3)
-        {
-            Logger.LogWarning(
-                "EnableHttp3 is true but no TransparentQuicProxyEndPoint is registered. " +
-                "Add a TransparentQuicProxyEndPoint to ProxyEndPoints before calling Start().");
-        }
+        var startedTcpEndPoints = new List<ProxyEndPoint>();
+        var startedQuicEndPoints = new List<TransparentQuicProxyEndPoint>();
+        var createdQuicListenerCts = false;
 
-        foreach (var endPoint in ProxyEndPoints) Listen(endPoint);
+        try
+        {
+            if (EnableHttp3 && ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>().Any())
+            {
+                quicListenerCts = new CancellationTokenSource();
+                createdQuicListenerCts = true;
+                foreach (var quicEndPoint in ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>())
+                {
+                    ListenQuic(quicEndPoint);
+                    startedQuicEndPoints.Add(quicEndPoint);
+                }
+            }
+            else if (EnableHttp3)
+            {
+                Logger.LogWarning(
+                    "EnableHttp3 is true but no TransparentQuicProxyEndPoint is registered. " +
+                    "Add a TransparentQuicProxyEndPoint to ProxyEndPoints before calling Start().");
+            }
+
+            foreach (var endPoint in ProxyEndPoints)
+            {
+                Listen(endPoint);
+                startedTcpEndPoints.Add(endPoint);
+            }
+        }
+        catch (Exception)
+        {
+            // Roll back, in reverse dependency order, everything this call already started.
+            // QuitListen/QuitListenQuic tolerate a listener that never started (no-op), so it is
+            // safe to call them uniformly rather than re-deriving exactly how far each one got.
+            foreach (var quicEndPoint in startedQuicEndPoints) SafeRollback(() => QuitListenQuic(quicEndPoint));
+            foreach (var endPoint in startedTcpEndPoints) SafeRollback(() => QuitListen(endPoint));
+
+            if (createdQuicListenerCts)
+            {
+                SafeRollback(() => quicListenerCts?.Cancel());
+                SafeRollback(() => quicListenerCts?.Dispose());
+                quicListenerCts = null;
+            }
+
+            if (assignedSystemUpStreamResolver)
+            {
+                if (OperatingSystem.IsWindows())
+                    try
+                    {
+                        systemProxyResolver?.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        OnException(null, ex);
+                    }
+
+                systemProxyResolver = null;
+                GetCustomUpStreamProxyFunc = null;
+            }
+
+            ProxyRunning = false;
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     Runs a single <see cref="Start" /> rollback step, reporting rather than propagating a
+    ///     failure so one misbehaving teardown step cannot mask the original failure or abandon the
+    ///     rest of the rollback.
+    /// </summary>
+    private void SafeRollback(Action rollbackStep)
+    {
+        try
+        {
+            rollbackStep();
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+        }
     }
 
     /// <summary>
@@ -1194,7 +1291,10 @@ public partial class ProxyServer : IDisposable
 
         var timeout = drainTimeout ?? TimeSpan.FromSeconds(5);
         var deadline = DateTime.UtcNow + timeout;
-        while (ClientConnectionCount > 0 && DateTime.UtcNow < deadline)
+        // Http3ClientConnectionCount tracks inbound QUIC clients separately from
+        // ClientConnectionCount (TCP-based H1/H2); draining only the former would let this
+        // return, and the pools below get cleared, while HTTP/3 streams are still in flight.
+        while ((ClientConnectionCount > 0 || Http3ClientConnectionCount > 0) && DateTime.UtcNow < deadline)
             await Task.Delay(50).ConfigureAwait(false);
 
         TcpConnectionFactory.ClearPools();
@@ -1242,6 +1342,16 @@ public partial class ProxyServer : IDisposable
 
         if (clearPools) TcpConnectionFactory.ClearPools();
         if (clearPools) QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
+
+        // Start() may have wired GetCustomUpStreamProxyFunc to GetSystemUpStreamProxy and created
+        // systemProxyResolver to back it. Undo both together: leaving the callback in place while
+        // disposing its resolver below would make a subsequent Start() see GetCustomUpStreamProxyFunc
+        // != null and skip creating a fresh resolver, so the callback would call into a disposed
+        // WinHttpWebProxyFinder on the first request after restart. Only clear the callback if it is
+        // still the delegate we assigned - a caller who has since replaced it with their own must not
+        // have that overwritten here.
+        if (Equals(GetCustomUpStreamProxyFunc, (Func<SessionEventArgsBase, Task<IExternalProxy?>>)GetSystemUpStreamProxy))
+            GetCustomUpStreamProxyFunc = null;
 
         // Release the WinHTTP session handle acquired during Start() (Windows-only type).
         if (OperatingSystem.IsWindows())
@@ -1663,6 +1773,11 @@ public partial class ProxyServer : IDisposable
 
         CertificateManager?.Dispose();
         BufferPool?.Dispose();
+
+        // SystemProxyManager is [SupportedOSPlatform("windows")]; the platform analyzer cannot
+        // prove that from a null-conditional access alone, so guard explicitly (mirrors the
+        // Start() rollback path below).
+        if (RunTime.IsWindows) SystemProxySettingsManager?.Dispose();
 
         if (ownsActiveLoggerFactory)
             try
