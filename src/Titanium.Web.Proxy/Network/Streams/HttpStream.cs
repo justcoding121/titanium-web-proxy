@@ -2,7 +2,6 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -1147,11 +1146,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         // progress, any further chunks, and the trailer block - so the underlying connection is left at a
         // clean message boundary and can still be safely reused/pooled, even though none of this is
         // relayed to `writer` (the consumer already decided to stop emitting).
-        async Task drainRemainingChunkedBody(int remainingInCurrentChunk)
+        async Task drainRemainingChunkedBody(long remainingInCurrentChunk)
         {
             while (remainingInCurrentChunk > 0)
             {
-                var toRead = Math.Min(buffer.Length, remainingInCurrentChunk);
+                var toRead = (int)Math.Min(buffer.Length, remainingInCurrentChunk);
                 var bytesRead = await ReadAsync(buffer, 0, toRead, cancellationToken);
                 if (bytesRead == 0) return;
                 remainingInCurrentChunk -= bytesRead;
@@ -1165,10 +1164,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 var chunkHead = await ReadLineAsync(cancellationToken);
                 if (chunkHead == null) return;
 
-                var idx = chunkHead.IndexOf(";", StringComparison.Ordinal);
-                if (idx >= 0) chunkHead = chunkHead.Substring(0, idx);
-
-                if (!int.TryParse(chunkHead, NumberStyles.HexNumber, null, out var chunkSize))
+                if (!ChunkSizeParser.TryParse(chunkHead, ProxyLimits.DefaultMaxChunkSizeBytes, out var chunkSize))
                     throw new ProxyHttpException($"Invalid chunk length: '{chunkHead}'", null, null);
 
                 if (chunkSize == 0)
@@ -1182,7 +1178,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 var toDiscard = chunkSize;
                 while (toDiscard > 0)
                 {
-                    var toRead = Math.Min(buffer.Length, toDiscard);
+                    var toRead = (int)Math.Min(buffer.Length, toDiscard);
                     var bytesRead = await ReadAsync(buffer, 0, toRead, cancellationToken);
                     if (bytesRead == 0) return;
                     toDiscard -= bytesRead;
@@ -1202,10 +1198,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                     var chunkHead = await ReadLineAsync(cancellationToken);
                     if (chunkHead == null) break;
 
-                    var idx = chunkHead.IndexOf(";", StringComparison.Ordinal);
-                    if (idx >= 0) chunkHead = chunkHead.Substring(0, idx);
-
-                    if (!int.TryParse(chunkHead, NumberStyles.HexNumber, null, out var chunkSize))
+                    if (!ChunkSizeParser.TryParse(chunkHead, ProxyLimits.DefaultMaxChunkSizeBytes, out var chunkSize))
                         throw new ProxyHttpException($"Invalid chunk length: '{chunkHead}'", null, null);
 
                     if (chunkSize == 0)
@@ -1223,7 +1216,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                     var stop = false;
                     while (remaining > 0)
                     {
-                        var toRead = Math.Min(buffer.Length, remaining);
+                        var toRead = (int)Math.Min(buffer.Length, remaining);
                         var bytesRead = await ReadAsync(buffer, 0, toRead, cancellationToken);
                         if (bytesRead == 0)
                             throw new ProxyHttpException("Unexpected end of stream while reading chunk body.", null, args);
@@ -1323,10 +1316,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             var chunkHead = await ReadLineAsync(cancellationToken);
             if (chunkHead == null) return;
 
-            var idx = chunkHead.IndexOf(";", StringComparison.Ordinal);
-            if (idx >= 0) chunkHead = chunkHead.Substring(0, idx);
-
-            if (!int.TryParse(chunkHead, NumberStyles.HexNumber, null, out var chunkSize))
+            if (!ChunkSizeParser.TryParse(chunkHead, ProxyLimits.DefaultMaxChunkSizeBytes, out var chunkSize))
                 throw new ProxyHttpException($"Invalid chunk length: '{chunkHead}'", null, null);
 
             await writer.WriteLineAsync(chunkHead, cancellationToken);

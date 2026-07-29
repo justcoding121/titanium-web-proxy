@@ -58,4 +58,15 @@ public static class ProxyLimits
     /// Default: 3.
     /// </summary>
     public static readonly int DefaultMaxAuthRounds = 3;
+
+    /// <summary>
+    /// Maximum accepted value of a single HTTP/1 <c>chunk-size</c> line (RFC 9112 §7.1), in bytes.
+    /// The chunk-size grammar itself (<c>1*HEXDIG</c>) has no length ceiling, so this is a proxy-owned
+    /// safety bound rather than a protocol requirement: it exists to reject the two's-complement chunk-
+    /// size wrap (an attacker-supplied value like "ffffffff" must not decode to a small/negative sentinel)
+    /// and to avoid ever attempting to allocate or forward a chunk of unbounded size. Set high enough
+    /// that no legitimate chunk from real-world traffic should reach it.
+    /// Default: 1 GiB.
+    /// </summary>
+    public static readonly long DefaultMaxChunkSizeBytes = 1024L * 1024 * 1024;
 }
