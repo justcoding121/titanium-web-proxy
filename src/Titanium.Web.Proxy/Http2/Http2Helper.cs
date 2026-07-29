@@ -2174,7 +2174,19 @@ namespace Titanium.Web.Proxy.Http2
 
             foreach (var header in rr.Headers)
             {
-                encoder.EncodeHeader(writer, header.NameData, header.ValueData);
+                // Via is added by the proxy itself on every request and varies across hops; it must
+                // not enter the HPACK dynamic table.  If it did, stream N would encode it as a
+                // single-byte dynamic-table reference, and strict H2 origins (Google's play.google.com
+                // included) respond with RST_STREAM(PROTOCOL_ERROR) on any stream that carries a
+                // Via header via an indexed reference rather than an explicit literal field.
+                // IndexType.None means "literal without indexing" — the encoder skips Add() so
+                // the entry never lands in the dynamic table, and every subsequent stream gets a
+                // fresh literal representation instead of a back-reference.
+                if (header.Name.Equals("via", StringComparison.OrdinalIgnoreCase))
+                    encoder.EncodeHeader(writer, header.NameData, header.ValueData, false,
+                        HpackUtil.IndexType.None);
+                else
+                    encoder.EncodeHeader(writer, header.NameData, header.ValueData);
             }
 
             var data = ms.ToArray();
