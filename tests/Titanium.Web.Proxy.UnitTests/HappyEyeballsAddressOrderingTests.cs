@@ -55,49 +55,51 @@ public class HappyEyeballsAddressOrderingTests
     }
 
     [TestMethod]
-    public void MixedFamilies_InterleavesStartingWithIPv4_EvenWhenResolverListedIPv6First()
+    public void MixedFamilies_InterleavesStartingWithIPv6_EvenWhenResolverListedIPv4First()
     {
-        // Resolver order deliberately puts IPv6 first, to verify the interleave does not just
-        // preserve whichever family happened to come first in the input.
-        var v6A = V6("2001:db8::1");
-        var v6B = V6("2001:db8::2");
+        // Resolver order deliberately puts IPv4 first, to verify the interleave does not just
+        // preserve whichever family happened to come first in the input: IPv6 must still lead,
+        // matching real browser/OS dual-stack behavior (a direct, non-proxied connection from the
+        // same machine reaches the origin over IPv6 whenever it is available and healthy).
         var v4A = V4("192.0.2.1");
         var v4B = V4("192.0.2.2");
-        var input = new[] { v6A, v6B, v4A, v4B };
+        var v6A = V6("2001:db8::1");
+        var v6B = V6("2001:db8::2");
+        var input = new[] { v4A, v4B, v6A, v6B };
 
         var result = TcpConnectionFactory.InterleaveByAddressFamily(input);
 
-        CollectionAssert.AreEqual(new[] { v4A, v6A, v4B, v6B }, result);
+        CollectionAssert.AreEqual(new[] { v6A, v4A, v6B, v4B }, result);
     }
 
     [TestMethod]
     public void MixedFamilies_PreservesRelativeOrderWithinEachFamily()
     {
-        var v4A = V4("192.0.2.1");
-        var v4B = V4("192.0.2.2");
-        var v4C = V4("192.0.2.3");
         var v6A = V6("2001:db8::1");
-        var input = new[] { v4A, v4B, v6A, v4C };
+        var v6B = V6("2001:db8::2");
+        var v6C = V6("2001:db8::3");
+        var v4A = V4("192.0.2.1");
+        var input = new[] { v6A, v6B, v4A, v6C };
 
         var result = TcpConnectionFactory.InterleaveByAddressFamily(input);
 
-        // IPv4 addresses must stay in their original relative order (A, B, C), each paired in turn
-        // with the single IPv6 address, then the remaining IPv4 addresses trail off unchanged.
-        CollectionAssert.AreEqual(new[] { v4A, v6A, v4B, v4C }, result);
+        // IPv6 addresses must stay in their original relative order (A, B, C), each paired in turn
+        // with the single IPv4 address, then the remaining IPv6 addresses trail off unchanged.
+        CollectionAssert.AreEqual(new[] { v6A, v4A, v6B, v6C }, result);
     }
 
     [TestMethod]
     public void UnequalFamilyCounts_TrailingAddressesKeepTheirOrder()
     {
-        var v4A = V4("192.0.2.1");
         var v6A = V6("2001:db8::1");
-        var v6B = V6("2001:db8::2");
-        var v6C = V6("2001:db8::3");
-        var input = new[] { v4A, v6A, v6B, v6C };
+        var v4A = V4("192.0.2.1");
+        var v4B = V4("192.0.2.2");
+        var v4C = V4("192.0.2.3");
+        var input = new[] { v6A, v4A, v4B, v4C };
 
         var result = TcpConnectionFactory.InterleaveByAddressFamily(input);
 
-        CollectionAssert.AreEqual(new[] { v4A, v6A, v6B, v6C }, result);
+        CollectionAssert.AreEqual(new[] { v6A, v4A, v4B, v4C }, result);
     }
 
     [TestMethod]

@@ -102,10 +102,18 @@ internal sealed class Http2OriginConnection
     internal TcpServerConnection ServerConnection => connection;
 
     /// <summary>
+    ///     Connection-level WINDOW_UPDATE increment sent immediately after the connection preface,
+    ///     matching Chrome/Edge behaviour (0xEF0001 = 15663105 bytes). This grows the connection
+    ///     flow-control window from the RFC default 65535 to ~15 MB, improving throughput for
+    ///     large responses and aligning the HTTP/2 Akamai fingerprint with real browsers.
+    /// </summary>
+    private const int InitialConnectionWindowIncrement = 15663105;
+
+    /// <summary>
     ///     Establishes a new origin h2 connection over an already TLS/ALPN=h2-negotiated <see cref="TcpServerConnection" />:
-    ///     writes the client connection preface and this proxy's own SETTINGS (advertising
-    ///     <c>SETTINGS_ENABLE_PUSH=0</c>, since this bridge never generates or forwards server push), starts the
-    ///     background frame-reading loop, and waits for the origin's own initial SETTINGS frame so
+    ///     writes the client connection preface, this proxy's own SETTINGS, and an initial
+    ///     connection-level WINDOW_UPDATE (matching Chrome's preface), starts the background
+    ///     frame-reading loop, and waits for the origin's own initial SETTINGS frame so
     ///     <see cref="SendAsync" /> always has a real <c>MAX_CONCURRENT_STREAMS</c>/frame-size budget to honor.
     /// </summary>
     internal static async Task<Http2OriginConnection> CreateAsync(TcpServerConnection connection,
@@ -118,6 +126,7 @@ internal sealed class Http2OriginConnection
                 var preface = Http2Helper.ConnectionPreface;
                 await instance.stream.WriteAsync(preface, 0, preface.Length, cancellationToken);
                 await instance.SendInitialSettingsAsync(cancellationToken);
+                await instance.SendConnectionWindowUpdateAsync(InitialConnectionWindowIncrement, cancellationToken);
 
                 instance.readLoopTask = instance.ReadLoopAsync(instance.connectionCts.Token);
 
@@ -279,6 +288,21 @@ internal sealed class Http2OriginConnection
         try
         {
             await stream.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length, cancellationToken);
+        }
+        finally
+        {
+            writeLock.Release();
+        }
+    }
+
+    private async Task SendConnectionWindowUpdateAsync(int increment, CancellationToken cancellationToken)
+    {
+        var frameHeader = new Http2FrameHeader();
+        var frameHeaderBuffer = new byte[9];
+        await writeLock.WaitAsync(cancellationToken);
+        try
+        {
+            await Http2Helper.SendWindowUpdateAsync(frameHeader, frameHeaderBuffer, 0, increment, stream);
         }
         finally
         {
