@@ -3,6 +3,7 @@ using System.Net;
 using System.Security.Authentication;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.UnitTests
 {
@@ -116,6 +117,69 @@ namespace Titanium.Web.Proxy.UnitTests
             var proxy = new ProxyServer();
 
             Assert.IsTrue(proxy.EnableHttp2);
+        }
+
+        /// <summary>
+        ///     Phase F.16: a fresh <c>new ProxyServer()</c> must report <see cref="ProxyProfile.Balanced" />
+        ///     and <see cref="ProxyPolicyModes.AllEnforce" /> without the <see cref="ProxyServer.Profile" />
+        ///     setter ever having run, since every field it would set already starts at that value.
+        /// </summary>
+        [TestMethod]
+        public void DefaultConstructor_Profile_IsBalancedWithAllPolicyFamiliesEnforced()
+        {
+            var proxy = new ProxyServer();
+
+            Assert.AreEqual(ProxyProfile.Balanced, proxy.Profile);
+            Assert.AreEqual(PolicyMode.Enforce, proxy.PolicyModes[PolicyFamily.BodyBudget]);
+            Assert.AreEqual(PolicyMode.Enforce, proxy.PolicyModes[PolicyFamily.AdmissionControl]);
+            Assert.IsFalse(proxy.PolicyModes.AllowAmbiguousFraming);
+            Assert.IsFalse(proxy.BlockPrivateNetworkDestinations);
+        }
+
+        [TestMethod]
+        public void SettingProfile_ToPublicFacing_AppliesTheWholeBundleAtomically()
+        {
+            var proxy = new ProxyServer { Profile = ProxyProfile.PublicFacing };
+
+            Assert.AreEqual(ProxyProfile.PublicFacing, proxy.Profile);
+            Assert.IsTrue(proxy.BlockPrivateNetworkDestinations);
+            Assert.AreEqual(10_000, proxy.MaxConcurrentClientConnections);
+            Assert.AreEqual(SslProtocols.Tls12 | SslProtocols.Tls13, proxy.SupportedSslProtocols);
+            Assert.AreEqual(PolicyMode.Enforce, proxy.PolicyModes[PolicyFamily.AdmissionControl]);
+            Assert.IsTrue(proxy.ClientHeaderTimeoutSeconds > 0);
+        }
+
+        [TestMethod]
+        public void SettingProfile_ToLegacyCompatible_ThenBack_ToBalanced_RestoresAllEnforce()
+        {
+            var proxy = new ProxyServer { Profile = ProxyProfile.LegacyCompatible };
+            Assert.AreEqual(PolicyMode.Observe, proxy.PolicyModes[PolicyFamily.AdmissionControl]);
+
+            proxy.Profile = ProxyProfile.Balanced;
+
+            Assert.AreEqual(PolicyMode.Enforce, proxy.PolicyModes[PolicyFamily.AdmissionControl]);
+            Assert.IsFalse(proxy.BlockPrivateNetworkDestinations);
+        }
+
+        [TestMethod]
+        public void AssigningPolicyModes_AfterSelectingAProfile_OverridesOnlyPolicyModes()
+        {
+            var proxy = new ProxyServer { Profile = ProxyProfile.PublicFacing };
+
+            proxy.PolicyModes = ProxyPolicyModes.AllEnforce.With(PolicyFamily.AdmissionControl, PolicyMode.Observe);
+
+            Assert.AreEqual(PolicyMode.Observe, proxy.PolicyModes[PolicyFamily.AdmissionControl]);
+            // The rest of the PublicFacing bundle (unrelated to PolicyModes) must remain intact.
+            Assert.IsTrue(proxy.BlockPrivateNetworkDestinations);
+            Assert.AreEqual(10_000, proxy.MaxConcurrentClientConnections);
+        }
+
+        [TestMethod]
+        public void PolicyModes_Setter_RejectsNull()
+        {
+            var proxy = new ProxyServer();
+
+            Assert.ThrowsException<ArgumentNullException>(() => proxy.PolicyModes = null!);
         }
     }
 }

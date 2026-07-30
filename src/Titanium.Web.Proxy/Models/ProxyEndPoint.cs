@@ -2,6 +2,8 @@
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using Titanium.Web.Proxy.Diagnostics;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Models;
 
@@ -74,14 +76,22 @@ public abstract class ProxyEndPoint
     ///     <see cref="MaxConcurrentClients" /> via a lock-free compare-and-swap loop rather than an
     ///     increment-then-rollback, so <see cref="AdmittedClientCount" /> never transiently overshoots
     ///     the configured limit even under contention. Returns <see langword="false" /> (without
-    ///     reserving anything) once the limit is reached.
+    ///     reserving anything) once the limit is reached and <paramref name="mode" /> is
+    ///     <see cref="PolicyMode.Enforce" />. Under <see cref="PolicyMode.Observe" /> the breach is
+    ///     recorded but the slot is still admitted; under <see cref="PolicyMode.Disabled" /> the limit
+    ///     is not consulted at all.
     /// </summary>
-    internal bool TryAdmitClient()
+    internal bool TryAdmitClient(PolicyMode mode)
     {
         while (true)
         {
             var current = Volatile.Read(ref admittedClientCount);
-            if (MaxConcurrentClients is { } limit && current >= limit) return false;
+            if (mode != PolicyMode.Disabled && MaxConcurrentClients is { } limit && current >= limit)
+            {
+                ProxyMetrics.PolicyBreach(PolicyFamily.AdmissionControl, mode);
+                if (mode == PolicyMode.Enforce) return false;
+            }
+
             if (Interlocked.CompareExchange(ref admittedClientCount, current + 1, current) == current) return true;
         }
     }

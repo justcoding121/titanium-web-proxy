@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Titanium.Web.Proxy.Diagnostics;
 
 namespace Titanium.Web.Proxy.Logging;
 
@@ -73,6 +74,7 @@ internal abstract class ChannelLoggerProviderBase : ILoggerProvider
         if (channel.Writer.TryWrite(entry)) return;
 
         Interlocked.Increment(ref droppedEntries);
+        ProxyMetrics.LoggerEntryDropped("main");
 
         // The main queue is saturated. Errors/critical failures are important enough to justify
         // routing around the drop, but the single owning writer task must remain the only thread
@@ -82,7 +84,10 @@ internal abstract class ChannelLoggerProviderBase : ILoggerProvider
         // overflow goes to the small dedicated priority channel instead, via the same non-blocking
         // TryWrite discipline as the main path.
         if (entry.Level >= LogLevel.Error && !priorityChannel.Writer.TryWrite(entry))
+        {
             Interlocked.Increment(ref priorityDroppedEntries);
+            ProxyMetrics.LoggerEntryDropped("priority");
+        }
     }
 
     /// <summary>

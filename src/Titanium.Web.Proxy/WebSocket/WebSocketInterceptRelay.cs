@@ -3,6 +3,7 @@ using System.IO;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
@@ -197,6 +198,7 @@ internal static class WebSocketInterceptRelay
                     // (declared length violates the reserved-bit rule, exceeds int.MaxValue, or exceeds
                     // the configured per-frame limit) - never forwarded, so nothing to unwind here beyond
                     // reporting the close code the caller should send.
+                    ProxyMetrics.ParserError("websocket");
                     messageTracker.Reset();
                     return ex.CloseCode;
                 }

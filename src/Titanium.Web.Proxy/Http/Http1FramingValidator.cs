@@ -32,10 +32,30 @@ internal static class Http1FramingValidator
     /// <exception cref="Http1FramingException">
     ///     The message's <c>Content-Length</c>/<c>Transfer-Encoding</c> framing is ambiguous, or it
     ///     names a transfer coding this proxy does not implement. Only ever thrown for the
-    ///     <c>Http1Wire*</c> sources.
+    ///     <c>Http1Wire*</c> sources, and only when <paramref name="allowAmbiguousFraming" /> is
+    ///     <see langword="false" />.
     /// </exception>
-    public static void Validate(RequestResponseBase message, FramingSource source)
+    /// <param name="message">The message whose framing headers are being validated.</param>
+    /// <param name="source">Which parser produced <paramref name="message" /> - see the class remarks.</param>
+    /// <param name="allowAmbiguousFraming">
+    ///     The single, explicitly named, off-by-default escape hatch from this validator's otherwise
+    ///     unconditional enforcement, per the plan's rollout section: framing has no
+    ///     <see cref="Options.PolicyMode" /> because there is no safe "detect but let it through"
+    ///     action for an ambiguous message, so this is a distinct boolean, not a
+    ///     <see cref="Options.PolicyFamily" /> member, and no <see cref="Options.ProxyProfile" /> ever
+    ///     sets it - see <see cref="Options.ProxyPolicyModes.WithAllowAmbiguousFramingEnabled" />.
+    ///     <see langword="true" /> makes this call a complete no-op for every
+    ///     <see cref="FramingSource" />, relaying the message's <c>Content-Length</c>/
+    ///     <c>Transfer-Encoding</c> headers exactly as received - including a genuinely ambiguous or
+    ///     malformed combination - which is a request-smuggling primitive against whatever sits behind
+    ///     this proxy. Exists only for security research that needs to observe how a client or origin
+    ///     reacts to smuggling-shaped input relayed through the proxy.
+    /// </param>
+    public static void Validate(RequestResponseBase message, FramingSource source,
+        bool allowAmbiguousFraming = false)
     {
+        if (allowAmbiguousFraming) return;
+
         switch (source)
         {
             case FramingSource.Http1Wire:

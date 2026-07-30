@@ -456,7 +456,10 @@ internal class TcpConnectionFactory : IDisposable
                             if (recentConnection.LastAccess > cutOff
                                 && recentConnection.TcpSocket.IsGoodConnection()
                                 && IsNegotiatedProtocolCompatible(recentConnection, applicationProtocols))
+                            {
+                                ProxyMetrics.PoolReused();
                                 return recentConnection;
+                            }
 
                             if (recentConnection.TryScheduleDisposal())
                                 disposalBag.Add(recentConnection);
@@ -878,6 +881,7 @@ internal class TcpConnectionFactory : IDisposable
             if (enabledSslProtocols == SslProtocols.None) throw;
 
             retry = false;
+            ProxyMetrics.PoolDowngraded();
             goto retry;
         }
         catch (AuthenticationException ex) when (ex.HResult == unchecked((int)0x80131501) && retry &&
@@ -893,6 +897,7 @@ internal class TcpConnectionFactory : IDisposable
             if (enabledSslProtocols == SslProtocols.None) throw;
 
             retry = false;
+            ProxyMetrics.PoolDowngraded();
             goto retry;
         }
 #pragma warning restore SYSLIB0039

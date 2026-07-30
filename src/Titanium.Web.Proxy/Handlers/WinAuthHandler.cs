@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
@@ -127,6 +128,8 @@ public partial class ProxyServer
                 return;
             }
 
+            ProxyMetrics.AuthRoundCompleted(scheme ?? "winauth");
+
             var request = args.HttpClient.Request;
 
             // clear any existing headers to avoid confusing bad servers
@@ -219,6 +222,8 @@ public partial class ProxyServer
             await RewriteUnauthorizedResponse(args);
             return;
         }
+
+        ProxyMetrics.AuthRoundCompleted(scheme ?? "winauth");
 
         var request = args.HttpClient.Request;
         request.Headers.RemoveHeader(KnownHeaders.ProxyAuthorization);

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy.Network;
@@ -52,6 +53,7 @@ internal class RetryPolicy<T> where T : Exception
             if (attempts < 0 || exception == null || !(exception is T)) break;
 
             exception = null;
+            ProxyMetrics.PoolRetried();
 
             // before retry clear connection
             await tcpConnectionFactory.Release(currentConnection, true);

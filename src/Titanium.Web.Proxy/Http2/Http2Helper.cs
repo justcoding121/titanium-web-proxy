@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.Compression;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
@@ -1353,15 +1354,27 @@ namespace Titanium.Web.Proxy.Http2
                     // frames (or paces non-empty ones just slowly enough to never look byte-abusive).
                     pendingHeaderBlockFrameCount++;
                     var openMillis = Environment.TickCount64 - pendingHeaderBlockOpenedAt;
-                    if (pendingHeaderBlockFrameCount > resourceLimits.MaxOpenHeaderBlockFrames ||
-                        openMillis > resourceLimits.MaxOpenHeaderBlockDuration.TotalMilliseconds)
+                    var http2AbuseMode = pendingHeaderArgs!.Server.PolicyModes[PolicyFamily.Http2AbuseBudget];
+                    var continuationBudgetBreached = http2AbuseMode != PolicyMode.Disabled &&
+                        (pendingHeaderBlockFrameCount > resourceLimits.MaxOpenHeaderBlockFrames ||
+                         openMillis > resourceLimits.MaxOpenHeaderBlockDuration.TotalMilliseconds);
+
+                    if (continuationBudgetBreached)
                     {
-                        ReportException(logger, new ProxyHttpException(
-                            "HTTP/2 header block exceeded the maximum allowed CONTINUATION frame count or " +
-                            "stayed open too long - possible CONTINUATION flood.", null, pendingHeaderArgs));
-                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], streamId,
-                            Http2ErrorCode.EnhanceYourCalm, input));
-                        return;
+                        ProxyMetrics.PolicyBreach(PolicyFamily.Http2AbuseBudget, http2AbuseMode);
+
+                        // Enforce-only reaction: Observe records the breach (above) but must not tear
+                        // down the connection, since the whole point of Observe is measuring what a
+                        // stricter mode would have caught without acting on it yet.
+                        if (http2AbuseMode == PolicyMode.Enforce)
+                        {
+                            ReportException(logger, new ProxyHttpException(
+                                "HTTP/2 header block exceeded the maximum allowed CONTINUATION frame count or " +
+                                "stayed open too long - possible CONTINUATION flood.", null, pendingHeaderArgs));
+                            await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                                streamId, Http2ErrorCode.EnhanceYourCalm, input));
+                            return;
+                        }
                     }
 
                     pendingHeaderBlock.Write(buffer, 0, length);
@@ -1589,7 +1602,14 @@ namespace Titanium.Web.Proxy.Http2
                             // fault the waiting body-read task so ReadRequestBodyAsync/ReadResponseBodyAsync
                             // surfaces BodySizeLimitExceededException instead of hanging forever.
                             var maxBufferedBodyBytes = args.MaxBufferedBodyBytes ?? args.Server.MaxBufferedBodyBytes;
-                            if (maxBufferedBodyBytes > 0 && data.Length + length > maxBufferedBodyBytes)
+                            var bodyBudgetMode = args.Server.PolicyModes[PolicyFamily.BodyBudget];
+                            var bodyBudgetBreached = bodyBudgetMode != PolicyMode.Disabled &&
+                                                      maxBufferedBodyBytes > 0 &&
+                                                      data.Length + length > maxBufferedBodyBytes;
+
+                            if (bodyBudgetBreached) ProxyMetrics.PolicyBreach(PolicyFamily.BodyBudget, bodyBudgetMode);
+
+                            if (bodyBudgetBreached && bodyBudgetMode == PolicyMode.Enforce)
                             {
                                 ReportException(logger, new ProxyHttpException(
                                     $"HTTP/2 {(isClient ? "request" : "response")} body exceeded the configured " +
@@ -1613,6 +1633,9 @@ namespace Titanium.Web.Proxy.Http2
                             }
                             else
                             {
+                                // Disabled, or Observe: the breach (if any) was already recorded above, but
+                                // the stream is not reset and the caller's whole-body read is not faulted -
+                                // per the plan, Observe detects without acting.
                                 data.Write(buffer, offset, length);
                             }
                         }
@@ -2088,20 +2111,29 @@ namespace Titanium.Web.Proxy.Http2
                         if (isClient && resourceLimits.MaxPeerInitiatedIncompleteStreamResets.HasValue &&
                             !connectionState.ClientResetBudgetExceeded)
                         {
+                            var resetBudgetMode = args.Server.PolicyModes[PolicyFamily.Http2AbuseBudget];
                             var resetCount = Interlocked.Increment(ref connectionState.ClientIncompleteStreamResetCount);
-                            if (resetCount > resourceLimits.MaxPeerInitiatedIncompleteStreamResets.Value)
+                            if (resetBudgetMode != PolicyMode.Disabled &&
+                                resetCount > resourceLimits.MaxPeerInitiatedIncompleteStreamResets.Value)
                             {
-                                connectionState.ClientResetBudgetExceeded = true;
-                                connectionState.ClientResetBudgetLastStreamId = connectionState.LastClientStreamId;
-                                ReportException(logger, new ProxyHttpException(
-                                    "HTTP/2 abuse budget exceeded: too many client-initiated resets of " +
-                                    "incomplete streams (possible Rapid Reset / CVE-2023-44487).", null, null));
-                                await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
-                                    connectionState.ClientResetBudgetLastStreamId, Http2ErrorCode.EnhanceYourCalm,
-                                    input));
-                                // Do not return: already-admitted streams (id <= the last-stream-id just
-                                // announced) must still be allowed to drain per RFC 9113 §6.8. Only new
-                                // stream admission is refused, at the isMainHeaders check below.
+                                ProxyMetrics.PolicyBreach(PolicyFamily.Http2AbuseBudget, resetBudgetMode);
+
+                                // Enforce-only reaction, matching the CONTINUATION-flood budget above:
+                                // Observe records every breach but must not GOAWAY the connection.
+                                if (resetBudgetMode == PolicyMode.Enforce)
+                                {
+                                    connectionState.ClientResetBudgetExceeded = true;
+                                    connectionState.ClientResetBudgetLastStreamId = connectionState.LastClientStreamId;
+                                    ReportException(logger, new ProxyHttpException(
+                                        "HTTP/2 abuse budget exceeded: too many client-initiated resets of " +
+                                        "incomplete streams (possible Rapid Reset / CVE-2023-44487).", null, null));
+                                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                                        connectionState.ClientResetBudgetLastStreamId, Http2ErrorCode.EnhanceYourCalm,
+                                        input));
+                                    // Do not return: already-admitted streams (id <= the last-stream-id just
+                                    // announced) must still be allowed to drain per RFC 9113 §6.8. Only new
+                                    // stream admission is refused, at the isMainHeaders check below.
+                                }
                             }
                         }
                     }
@@ -2569,6 +2601,8 @@ namespace Titanium.Web.Proxy.Http2
         internal static async Task SendRstStreamAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             int streamId, Http2ErrorCode errorCode, Stream output)
         {
+            if (errorCode != Http2ErrorCode.NoError) ProxyMetrics.ParserError("http2");
+
             frameHeader.StreamId = streamId;
             frameHeader.Type = Http2FrameType.RstStream;
             frameHeader.Flags = 0;
@@ -2585,6 +2619,8 @@ namespace Titanium.Web.Proxy.Http2
         internal static async Task SendGoAwayAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             int lastStreamId, Http2ErrorCode errorCode, Stream output)
         {
+            if (errorCode != Http2ErrorCode.NoError) ProxyMetrics.ParserError("http2");
+
             frameHeader.StreamId = 0;
             frameHeader.Type = Http2FrameType.GoAway;
             frameHeader.Flags = 0;

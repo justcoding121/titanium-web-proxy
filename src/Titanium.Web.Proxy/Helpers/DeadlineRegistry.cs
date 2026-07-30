@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Threading;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Exceptions;
 
 namespace Titanium.Web.Proxy.Helpers;
@@ -79,14 +80,22 @@ internal sealed class DeadlineRegistry
 
     private void Record(ProxyTimeoutKind kind, long timestamp)
     {
+        var firstRecordForThisRegistry = false;
         lock (gate)
         {
             if (firedKind == null || timestamp < firedTimestamp)
             {
+                firstRecordForThisRegistry = firedKind == null;
                 firedKind = kind;
                 firedTimestamp = timestamp;
             }
         }
+
+        // Only the first firing recorded against this registry corresponds to a deadline that
+        // actually elapsed; later, earlier-timestamped corrections (an inner deadline unwinding
+        // after this call already recorded an outer one) re-attribute the same single real event
+        // to a different kind rather than describing a second timeout.
+        if (firstRecordForThisRegistry) ProxyMetrics.TimeoutFired(kind.ToString());
     }
 
     /// <summary>

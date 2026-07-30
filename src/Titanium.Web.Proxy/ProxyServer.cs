@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
@@ -733,6 +734,69 @@ public partial class ProxyServer : IDisposable
     public bool BlockPrivateNetworkDestinations { get; set; }
 
     /// <summary>
+    ///     Which resource-bound <see cref="PolicyFamily" /> is enforced, observed, or disabled, per
+    ///     the plan's rollout section. Read live by each family's enforcement call site - not baked
+    ///     into a per-request snapshot at connection accept time - so assigning a new value here (a
+    ///     whole-object replacement, never a mutation of the previous instance) takes effect for the
+    ///     next check any in-flight or new request makes, without restarting the proxy. This is the
+    ///     "runtime switch to drop to Observe without redeploying" the plan requires; see
+    ///     <see cref="ProxyPolicyModes.WithAllObservedExceptDisabled" /> for the one-call way to do that.
+    ///     <para>
+    ///         Defaults to <see cref="ProxyPolicyModes.AllEnforce" />, matching <see cref="ProxyProfile.Balanced" />.
+    ///         Assigning <see cref="Profile" /> also replaces this value with that profile's bundle;
+    ///         assign <see cref="PolicyModes" /> afterward to deviate from the selected profile's modes
+    ///         without changing anything else the profile set.
+    ///     </para>
+    /// </summary>
+    public ProxyPolicyModes PolicyModes
+    {
+        get => policyModes;
+        set => policyModes = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    private ProxyPolicyModes policyModes = ProxyPolicyModes.AllEnforce;
+
+    /// <summary>
+    ///     The last profile applied via this property's setter, defaulting to
+    ///     <see cref="ProxyProfile.Balanced" /> - the profile every field on this instance already
+    ///     starts at, so a fresh <c>new ProxyServer()</c> reports <see cref="ProxyProfile.Balanced" />
+    ///     without needing its setter to run once at construction time.
+    ///     <para>
+    ///         Assigning this property applies its entire <see cref="ProxyProfileSettings" /> bundle -
+    ///         <see cref="ResourceLimits" />, <see cref="PolicyModes" />, <see cref="SupportedSslProtocols" />,
+    ///         <see cref="BlockPrivateNetworkDestinations" />, <see cref="MaxConcurrentClientConnections" />
+    ///         and the deadline-seconds properties - as a single atomic assignment, so a reader can
+    ///         never observe a half-applied profile. Assigning any of those properties individually
+    ///         afterward overrides just that one, without reverting the rest of the profile's bundle.
+    ///     </para>
+    ///     <para>
+    ///         Logged once per <see cref="Start" /> call, by name only - never with hosts, URLs or
+    ///         secrets, per the plan's rollout section.
+    ///     </para>
+    /// </summary>
+    public ProxyProfile Profile
+    {
+        get => profile;
+        set
+        {
+            var settings = ProxyProfileSettings.For(value);
+            ResourceLimits = settings.ResourceLimits;
+            policyModes = settings.PolicyModes;
+            SupportedSslProtocols = settings.SupportedSslProtocols;
+            BlockPrivateNetworkDestinations = settings.BlockPrivateNetworkDestinations;
+            MaxConcurrentClientConnections = settings.MaxConcurrentClientConnections;
+            ClientHeaderTimeoutSeconds = settings.ClientHeaderTimeoutSeconds;
+            ResponseHeaderTimeoutSeconds = settings.ResponseHeaderTimeoutSeconds;
+            IdleReadTimeoutSeconds = settings.IdleReadTimeoutSeconds;
+            IdleWriteTimeoutSeconds = settings.IdleWriteTimeoutSeconds;
+            RequestTimeoutSeconds = settings.RequestTimeoutSeconds;
+            profile = value;
+        }
+    }
+
+    private ProxyProfile profile = ProxyProfile.Balanced;
+
+    /// <summary>
     ///     The buffer pool used throughout this proxy instance.
     ///     Set custom implementations by implementing this interface.
     ///     By default this uses DefaultBufferPool implementation available in StreamExtended library package.
@@ -1319,6 +1383,9 @@ public partial class ProxyServer : IDisposable
 
         ProxyRunning = true;
 
+        // Name only, per the plan's rollout section - never hosts, URLs or secrets.
+        ProxyLog.EffectiveProfileAtStartup(logger, profile, policyModes);
+
         CertificateManager.ClearIdleCertificates();
 
         var startedTcpEndPoints = new List<ProxyEndPoint>();
@@ -1671,21 +1738,26 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     private bool TryAdmitClientConnection(ProxyEndPoint endPoint)
     {
-        if (!TryAdmitGlobal())
+        var mode = policyModes[PolicyFamily.AdmissionControl];
+
+        if (!TryAdmitGlobal(mode))
         {
             Interlocked.Increment(ref globalAdmissionRejectionCount);
+            ProxyMetrics.ConnectionRejected("global limit");
             ProxyLog.ClientConnectionAdmissionRejected(logger, endPoint, "global limit");
             return false;
         }
 
-        if (!endPoint.TryAdmitClient())
+        if (!endPoint.TryAdmitClient(mode))
         {
             ReleaseGlobal();
             Interlocked.Increment(ref endpointAdmissionRejectionCount);
+            ProxyMetrics.ConnectionRejected("endpoint limit");
             ProxyLog.ClientConnectionAdmissionRejected(logger, endPoint, "endpoint limit");
             return false;
         }
 
+        ProxyMetrics.ConnectionAdmitted();
         return true;
     }
 
@@ -1696,16 +1768,29 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     private void ReleaseClientConnection(ProxyEndPoint endPoint)
     {
+        ProxyMetrics.ConnectionReleased();
         ReleaseGlobal();
         endPoint.ReleaseClient();
     }
 
-    private bool TryAdmitGlobal()
+    /// <summary>
+    ///     Enforces <see cref="MaxConcurrentClientConnections" /> per <paramref name="mode" />: under
+    ///     <see cref="PolicyMode.Enforce" />, a breach returns <see langword="false" /> without
+    ///     admitting; under <see cref="PolicyMode.Observe" />, the breach is recorded but the
+    ///     connection is still admitted; under <see cref="PolicyMode.Disabled" />, the limit is not
+    ///     consulted at all.
+    /// </summary>
+    private bool TryAdmitGlobal(PolicyMode mode)
     {
         while (true)
         {
             var current = Volatile.Read(ref admittedClientConnectionCount);
-            if (MaxConcurrentClientConnections is { } limit && current >= limit) return false;
+            if (mode != PolicyMode.Disabled && MaxConcurrentClientConnections is { } limit && current >= limit)
+            {
+                ProxyMetrics.PolicyBreach(PolicyFamily.AdmissionControl, mode);
+                if (mode == PolicyMode.Enforce) return false;
+            }
+
             if (Interlocked.CompareExchange(ref admittedClientConnectionCount, current + 1, current) == current)
                 return true;
         }
