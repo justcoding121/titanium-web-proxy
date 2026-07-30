@@ -16,6 +16,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Quic;
+using Titanium.Web.Proxy.Network.Streams;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -245,6 +246,13 @@ internal static class Http3OriginBridge
 
             var maxPayload = sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes;
             var bodyStream = new System.IO.MemoryStream();
+            // maxPayload above only bounds a single DATA frame (Http3Frame.ReadAsync's per-call check);
+            // an origin sending many small frames could otherwise accumulate an unbounded response body
+            // in memory. Wrap the buffering write in a cumulative BoundedWriteStream — per the hardening
+            // plan, a response-side breach must close the connection rather than deliver a truncated body
+            // as if it were complete, so the resulting BodySizeLimitExceededException is deliberately left
+            // to propagate to the catch below, which disposes (never pools) the origin connection.
+            var boundedBodyStream = new BoundedWriteStream(bodyStream, maxPayload);
             try
             {
                 if (!server.HasOnResponseBodyWriteSubscribers)
@@ -256,7 +264,7 @@ internal static class Http3OriginBridge
                         if (frame.Type == Http3FrameType.Headers)
                             break; // trailers — ignored for now
                         if (frame.Type == Http3FrameType.Data)
-                            await bodyStream.WriteAsync(frame.Payload, cancellationToken);
+                            await boundedBodyStream.WriteAsync(frame.Payload, cancellationToken);
                         // else: ignore GREASE / unknown frames per RFC 9114 §9
                     }
                 }
@@ -275,7 +283,7 @@ internal static class Http3OriginBridge
                             await server.OnBeforeResponseBodyWrite(hookArgs);
 
                             if (hookArgs.BodyBytes?.Length > 0)
-                                await bodyStream.WriteAsync(hookArgs.BodyBytes, cancellationToken);
+                                await boundedBodyStream.WriteAsync(hookArgs.BodyBytes, cancellationToken);
 
                             if (hookArgs.IsLastChunk && !isLast)
                             {
@@ -312,7 +320,11 @@ internal static class Http3OriginBridge
                 if (entries.Count > 0 && entries[0].MaxAgeSeconds > 0)
                 {
                     var originPort = request.RequestUri?.Port ?? port;
-                    var ttl = TimeSpan.FromSeconds(entries[0].MaxAgeSeconds);
+                    // Clamp to the same ceiling as Http3DiscoveryHandler's Alt-Svc handling, so an
+                    // origin cannot pin a stale H3 capability entry (e.g. after it drops H3 support)
+                    // far beyond the cache's own default lifetime by advertising an inflated ma= value.
+                    var ttlSeconds = Math.Min(entries[0].MaxAgeSeconds, Http3OriginCapabilityCache.DefaultTtl.TotalSeconds * 2);
+                    var ttl = TimeSpan.FromSeconds(ttlSeconds);
                     server.Http3OriginCapabilityCache.Set($"{sniHost}:{originPort}",
                         entries[0].Port == originPort ? int.MinValue : entries[0].Port, ttl);
                 }
@@ -456,7 +468,15 @@ internal static class Http3OriginBridge
                 request.Headers.AddHeader("Cookie", combined);
             }
 
-            body = request.CompressBodyAndUpdateContentLength();
+            // Unlike the H1 GetRequestBody() and native-H2 body-completion paths (both of which
+            // decompress on read - see SessionEventArgs.ReadBodyAsync / Http2Helper's END_STREAM
+            // handling), Http3RequestStream.ReadRequestBodyAsync stores DATA-frame payloads verbatim:
+            // Body already IS the wire-compressed representation matching Content-Encoding.
+            // CompressBodyAndUpdateContentLength() assumes the opposite (decompressed Body, to be
+            // compressed for the wire) and would double-compress it here, corrupting the payload sent
+            // to the TCP-fallback origin. Forward the bytes as-is and only fix up Content-Length.
+            body = request.IsBodyRead ? request.Body : null;
+            request.UpdateContentLength();
         }
 
         // SendRequest always writes HTTP/1.x framing — never negotiate h2/h3 on this path.

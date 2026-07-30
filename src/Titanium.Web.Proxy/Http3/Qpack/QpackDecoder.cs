@@ -10,8 +10,18 @@ namespace Titanium.Web.Proxy.Http3.Qpack;
 /// <summary>
 ///     QPACK decoder (RFC 9204). Supports both static-table-only mode and dynamic-table mode.
 ///     When <see cref="QpackContext" /> is provided, decodes the Required Insert Count prefix and
-///     waits (via <see cref="QpackContext.AwaitInsertCountAsync" />) if the dynamic table does not
-///     yet have the required number of entries. Falls back to static-only when context is null.
+///     checks it against the inbound dynamic table's current insert count. Falls back to
+///     static-only when context is null.
+///     <para>
+///         Deliberately never blocks waiting for missing dynamic-table entries: this proxy always
+///         advertises <c>SETTINGS_QPACK_BLOCKED_STREAMS = 0</c> (see <c>Http3Connection.SendServerSettingsAsync</c>),
+///         which is a promise to the peer that no stream on this connection will ever be held open
+///         waiting for encoder-stream insertions to catch up (RFC 9204 §2.1.2). A block whose Required
+///         Insert Count is not yet satisfied at decode time is therefore always a connection error -
+///         either the peer sent HEADERS before the corresponding encoder-stream instructions (a
+///         genuine ordering violation), or is relying on blocked-stream semantics this connection
+///         never offered - not a legitimate race to wait out.
+///     </para>
 /// </summary>
 internal static class QpackDecoder
 {
@@ -24,29 +34,34 @@ internal static class QpackDecoder
 
     /// <summary>
     ///     Decodes a QPACK-encoded header block, optionally using the dynamic table from
-    ///     <paramref name="context" />. When Required Insert Count &gt; 0, waits until the inbound
-    ///     dynamic table has the required number of entries or <paramref name="ct" /> is cancelled.
+    ///     <paramref name="context" />. If the block's Required Insert Count exceeds the inbound
+    ///     dynamic table's current insert count, throws <see cref="Http3ConnectionException" />
+    ///     with <see cref="Http3ErrorCode.QpackDecompressionFailed" /> immediately rather than
+    ///     waiting for it to be satisfied - see the type-level remarks for why blocking would
+    ///     contradict this connection's own SETTINGS advertisement.
     /// </summary>
-    public static async Task<List<(string Name, string Value)>> DecodeAsync(
+    public static Task<List<(string Name, string Value)>> DecodeAsync(
         ReadOnlyMemory<byte> data, QpackContext? context, CancellationToken ct)
     {
-        if (context != null)
+        ct.ThrowIfCancellationRequested();
+
+        if (context != null &&
+            data.Length >= 1 &&
+            TryReadPrefixedInt(data.Span, 8, out ulong encodedRic, out _) &&
+            encodedRic > 0)
         {
-            // Peek at the Required Insert Count before decoding the full block.
-            // We must not hold a Span across the await, so peek via the Memory indexer.
-            if (data.Length >= 1 &&
-                TryReadPrefixedInt(data.Span, 8, out ulong encodedRic, out _) &&
-                encodedRic > 0)
-            {
-                // Decode the RequiredInsertCount per RFC 9204 §4.5.1.1.
-                var requiredInsertCount = DecodeRequiredInsertCount(
-                    encodedRic, context.InboundDecoderTable.InsertCount, context.MaxTableCapacityFromPeer);
-                if (requiredInsertCount > 0)
-                    await context.AwaitInsertCountAsync(requiredInsertCount, ct);
-            }
+            // Decode the RequiredInsertCount per RFC 9204 §4.5.1.1.
+            var requiredInsertCount = DecodeRequiredInsertCount(
+                encodedRic, context.InboundDecoderTable.InsertCount, context.MaxTableCapacityFromPeer);
+            if (requiredInsertCount > context.InboundDecoderTable.InsertCount)
+                throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed,
+                    $"QPACK header block requires insert count {requiredInsertCount}, but the inbound " +
+                    $"dynamic table only has {context.InboundDecoderTable.InsertCount} entries. This " +
+                    "connection advertised SETTINGS_QPACK_BLOCKED_STREAMS = 0, so the block cannot be " +
+                    "held open waiting for it to be satisfied.");
         }
-        // Only take the Span after all awaits are done.
-        return DecodeCore(data.Span, context);
+
+        return Task.FromResult(DecodeCore(data.Span, context));
     }
 
     internal static ulong DecodeRequiredInsertCount(ulong encodedRic, ulong insertCount, uint maxTableCapacity)

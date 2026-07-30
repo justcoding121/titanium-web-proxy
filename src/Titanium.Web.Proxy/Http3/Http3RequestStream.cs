@@ -11,6 +11,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Quic;
+using Titanium.Web.Proxy.Network.Streams;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
@@ -119,11 +120,28 @@ internal static class Http3RequestStream
                 sessionArgs.CustomUpStreamProxy = authArgs.CustomUpStreamProxy;
                 sessionArgs.UpstreamHttpProtocol = authArgs.UpstreamHttpProtocol;
 
-                streamState = new Http3StreamState(stream.Id, sessionArgs);
+                streamState = new Http3StreamState(stream.Id, sessionArgs, cts);
                 onSessionCreated(sessionArgs, streamState);
 
                 // 5. Read any request DATA frames into the body (if present).
-                var bodyBytes = await ReadRequestBodyAsync(stream, sessionArgs.HttpClient.Request, server, sessionArgs, cancellationToken);
+                byte[] bodyBytes;
+                try
+                {
+                    bodyBytes = await ReadRequestBodyAsync(stream, sessionArgs.HttpClient.Request, server, sessionArgs, cancellationToken);
+                }
+                catch (BodySizeLimitExceededException)
+                {
+                    // Request-side breach: the response has not been committed yet, so (matching the
+                    // H1/H2 behavior in RequestHandler.cs) a 413 can still be returned instead of just
+                    // closing the connection. Per-frame length checks alone are not a cumulative limit
+                    // (Http3Frame.ReadAsync's maxPayloadBytes only bounds one DATA frame at a time) -
+                    // ReadRequestBodyAsync wraps its MemoryStream in a BoundedWriteStream so many small
+                    // frames cannot together exceed the configured budget either.
+                    await SendSimpleStatusResponseAsync(stream, 413, qpackContext, cancellationToken);
+                    stream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.ExcessiveLoad);
+                    return;
+                }
+
                 if (bodyBytes.Length > 0)
                 {
                 sessionArgs.HttpClient.Request.Body = bodyBytes;
@@ -172,6 +190,20 @@ internal static class Http3RequestStream
 
                 streamState.ResponseClosed = true;
                 stream.CompleteWrites();
+            }
+            catch (Http3ConnectionException ex)
+            {
+                // Unlike Http3StreamException, this signals a connection-level violation (a QPACK
+                // decompression failure corrupts the shared inbound dynamic table for every other
+                // stream on the connection too) - abort this stream for good measure, but rethrow so
+                // Http3Connection.HandleRequestStreamAsync can tear down the whole connection with
+                // the same error code rather than letting the other streams continue against
+                // corrupted shared state.
+                logger.LogDebug("HTTP/3 stream {StreamId} hit a connection-level error: {ErrorCode} {Message}",
+                    stream.Id, ex.ErrorCode, ex.Message);
+                stream.Abort(QuicAbortDirection.Write, (long)ex.ErrorCode);
+                stream.Abort(QuicAbortDirection.Read, (long)ex.ErrorCode);
+                throw;
             }
             catch (Http3StreamException ex)
             {
@@ -228,6 +260,11 @@ internal static class Http3RequestStream
         CancellationToken ct)
     {
         var body = new System.IO.MemoryStream();
+        // Http3Frame.ReadAsync's maxPayloadBytes only bounds a single DATA frame; a client sending
+        // many small frames could otherwise accumulate an unbounded body in memory before this method
+        // returns. BoundedWriteStream gives the cumulative guarantee the plan calls for.
+        var maxBufferedBodyBytes = sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes;
+        var boundedBody = new BoundedWriteStream(body, maxBufferedBodyBytes);
         try
         {
             if (!server.HasOnRequestBodyWriteSubscribers)
@@ -240,7 +277,7 @@ internal static class Http3RequestStream
                     switch (frame.Type)
                     {
                         case Http3FrameType.Data:
-                            await body.WriteAsync(frame.Payload, ct);
+                            await boundedBody.WriteAsync(frame.Payload, ct);
                             break;
                         case Http3FrameType.Headers:
                             var trailers = QpackDecoder.Decode(frame.Payload.Span);
@@ -268,7 +305,7 @@ internal static class Http3RequestStream
 
                         // Null guard: developer may have set BodyBytes = null.
                         if (hookArgs.BodyBytes?.Length > 0)
-                            await body.WriteAsync(hookArgs.BodyBytes, ct);
+                            await boundedBody.WriteAsync(hookArgs.BodyBytes, ct);
 
                         if (hookArgs.IsLastChunk && !isLast)
                         {
@@ -296,6 +333,21 @@ internal static class Http3RequestStream
         {
             body.Dispose();
         }
+    }
+
+    /// <summary>
+    ///     Sends a minimal, headers-only response (no body) with the given status code and immediately
+    ///     completes the stream's write side. Used for error paths detected before any real response is
+    ///     available, e.g. a request-body budget breach (RFC 9110 §15.5.14, status 413).
+    /// </summary>
+    private static async Task SendSimpleStatusResponseAsync(
+        QuicStream stream, int statusCode, QpackContext? qpackContext, CancellationToken ct)
+    {
+        var headers = new List<(string, string)> { (":status", statusCode.ToString()) };
+        var encoded = QpackEncoder.Encode(headers, qpackContext);
+        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, encoded, ct);
+        await stream.FlushAsync(ct);
+        stream.CompleteWrites();
     }
 
     /// <summary>

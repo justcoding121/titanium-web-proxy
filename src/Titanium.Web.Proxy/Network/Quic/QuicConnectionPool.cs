@@ -30,16 +30,26 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     // stale-retry loop on the next request. Align closer to a typical peer idle window.
     private static readonly TimeSpan IdleConnectionTimeout = TimeSpan.FromSeconds(30);
 
+    // Idle sweep interval: keep well under IdleConnectionTimeout so a connection that goes idle while
+    // its origin is never requested again (and so never hits the lazy check in GetOrCreateAsync) is
+    // still proactively disposed instead of holding its UDP socket/QUIC state open indefinitely.
+    private static readonly TimeSpan IdleSweepInterval = TimeSpan.FromSeconds(10);
+
     private readonly ConcurrentDictionary<string, ConcurrentQueue<QuicServerConnection>> _pool = new();
     private readonly ProxyServer _proxyServer;
     private readonly QuicConnectionFactory _factory;
     private readonly SemaphoreSlim _drainGate = new(1, 1);
+    private readonly CancellationTokenSource _cleanupCts = new();
+    private readonly Task _cleanupTask;
     private bool _draining;
 
     internal QuicConnectionPool(ProxyServer proxyServer)
     {
         _proxyServer = proxyServer;
         _factory = new QuicConnectionFactory(proxyServer);
+        // Run on the thread pool so the first sweep (which may complete synchronously if the pool
+        // starts empty) cannot block construction.
+        _cleanupTask = Task.Run(ClearIdleConnectionsAsync);
     }
 
     /// <summary>
@@ -70,18 +80,31 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
         var cacheKey = QuicConnectionFactory.GetCacheKey(connectHost, port, effectiveSniHost,
             upStreamProxy, upStreamEndPoint);
 
+        QuicServerConnection? pooled = null;
+        var toDispose = new List<QuicServerConnection>();
+
         if (_pool.TryGetValue(cacheKey, out var queue))
         {
-            while (queue.TryDequeue(out var pooled))
+            // Same per-queue lock as ReturnAsync/ClearIdleConnectionsAsync: dequeueing here must not
+            // race the idle sweep's dequeue-all/re-enqueue-survivors pass, or a connection this call is
+            // about to hand out could simultaneously be judged idle and disposed by the sweep.
+            lock (queue)
             {
-                if (!pooled.IsClosed && DateTime.UtcNow - pooled.LastAccess < IdleConnectionTimeout)
+                while (queue.TryDequeue(out var candidate))
                 {
-                    pooled.LastAccess = DateTime.UtcNow;
-                    return pooled;
+                    if (!candidate.IsClosed && DateTime.UtcNow - candidate.LastAccess < IdleConnectionTimeout)
+                    {
+                        candidate.LastAccess = DateTime.UtcNow;
+                        pooled = candidate;
+                        break;
+                    }
+                    toDispose.Add(candidate);
                 }
-                await pooled.DisposeAsync();
             }
         }
+
+        foreach (var stale in toDispose) await stale.DisposeAsync();
+        if (pooled != null) return pooled;
 
         return await _factory.CreateAsync(
             connectHost, effectiveSniHost, port, upStreamEndPoint, upStreamProxy,
@@ -100,13 +123,29 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
             return;
         }
 
-        var queue = _pool.GetOrAdd(connection.CacheKey, _ => new ConcurrentQueue<QuicServerConnection>());
-
         var toDispose = new List<QuicServerConnection>();
-        while (queue.Count >= MaxConnectionsPerOrigin && queue.TryDequeue(out var excess))
-            toDispose.Add(excess);
 
-        queue.Enqueue(connection);
+        while (true)
+        {
+            var queue = _pool.GetOrAdd(connection.CacheKey, static _ => new ConcurrentQueue<QuicServerConnection>());
+
+            lock (queue)
+            {
+                // ClearIdleConnectionsAsync removes a queue from the dictionary, under this same
+                // per-queue lock, only once it has observed it empty. If that happened between the
+                // GetOrAdd above and taking this lock, `queue` is now an orphan nothing will ever look
+                // at again — enqueueing into it would silently leak the connection. Re-resolve against
+                // the dictionary instead of trusting the reference already held.
+                if (!_pool.TryGetValue(connection.CacheKey, out var current) || !ReferenceEquals(current, queue))
+                    continue;
+
+                while (queue.Count >= MaxConnectionsPerOrigin && queue.TryDequeue(out var excess))
+                    toDispose.Add(excess);
+
+                queue.Enqueue(connection);
+                break;
+            }
+        }
 
         foreach (var old in toDispose) await old.DisposeAsync();
     }
@@ -135,8 +174,64 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _cleanupCts.Cancel();
+        try { await _cleanupTask; } catch { /* best effort */ }
+        _cleanupCts.Dispose();
+
         await DrainAsync();
         _drainGate.Dispose();
+    }
+
+    /// <summary>
+    ///     Periodically walks every pooled origin's queue, proactively disposing connections that have
+    ///     gone idle or closed (without waiting for a future <see cref="GetOrCreateAsync" /> call against
+    ///     that same origin, which may never come) and removing queues left empty afterward so <see cref="_pool" />
+    ///     does not grow one entry per distinct origin ever contacted for the lifetime of the proxy.
+    /// </summary>
+    private async Task ClearIdleConnectionsAsync()
+    {
+        while (!_cleanupCts.IsCancellationRequested)
+        {
+            try
+            {
+                foreach (var (key, queue) in _pool)
+                {
+                    // Per-queue lock mirrors GetOrCreateAsync/ReturnAsync's dequeue/enqueue pairs so this
+                    // sweep never races a connection being handed out or returned concurrently.
+                    lock (queue)
+                    {
+                        var kept = new List<QuicServerConnection>();
+                        while (queue.TryDequeue(out var pooled))
+                        {
+                            if (!pooled.IsClosed && DateTime.UtcNow - pooled.LastAccess < IdleConnectionTimeout)
+                                kept.Add(pooled);
+                            else
+                                _ = pooled.DisposeAsync().AsTask();
+                        }
+
+                        foreach (var pooled in kept)
+                            queue.Enqueue(pooled);
+
+                        if (queue.IsEmpty)
+                            ((ICollection<KeyValuePair<string, ConcurrentQueue<QuicServerConnection>>>)_pool)
+                                .Remove(new KeyValuePair<string, ConcurrentQueue<QuicServerConnection>>(key, queue));
+                    }
+                }
+            }
+            catch
+            {
+                // Best-effort background sweep — never let a transient failure kill the loop.
+            }
+
+            try
+            {
+                await Task.Delay(IdleSweepInterval, _cleanupCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
     }
 }
 #pragma warning restore CA1416

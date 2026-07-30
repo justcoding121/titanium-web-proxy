@@ -142,7 +142,14 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
         var bindAddr = addrFamily == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
         socket.Bind(new IPEndPoint(bindAddr, 0));
 
-        await socket.SendToAsync(queryPacket, SocketFlags.None, _dnsServerEndPoint, ct);
+        // Connect() on a UDP socket does not perform a handshake — it just filters the socket at the
+        // kernel level so only datagrams from _dnsServerEndPoint are ever delivered to ReceiveAsync.
+        // Without this, any host on the network path could race a spoofed UDP response to this
+        // ephemeral port (classic off-path DNS cache-poisoning) and Send/ReceiveTo would happily accept
+        // it, since plain SendToAsync/ReceiveAsync do not validate the peer address at all.
+        socket.Connect(_dnsServerEndPoint);
+
+        await socket.SendAsync(queryPacket, SocketFlags.None, ct);
 
         var responseBuffer = new byte[4096];
         var received = await socket.ReceiveAsync(responseBuffer.AsMemory(), SocketFlags.None, ct);

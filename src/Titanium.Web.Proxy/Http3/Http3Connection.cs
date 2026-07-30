@@ -29,10 +29,32 @@ internal sealed class Http3Connection
     private readonly BeforeQuicAuthenticateEventArgs _authArgs;
     private readonly ProxyServer _server;
     private readonly ILogger _logger;
-    private readonly CancellationToken _shutdownToken;
     private readonly Func<SessionEventArgs, Task> _onBeforeRequest;
     private readonly Func<SessionEventArgs, Task> _onBeforeResponse;
     private readonly Func<SessionEventArgs, Task> _onAfterResponse;
+
+    /// <summary>
+    ///     Connection-scoped cancellation, linked from the caller-owned shutdown token but also
+    ///     cancellable by this connection itself (e.g. from <see cref="AbortConnectionAsync" /> when a
+    ///     connection-level protocol violation is detected). Every background task this connection
+    ///     spawns - request streams, the control-stream reader, the QPACK encoder-stream reader, the
+    ///     QPACK decoder-stream ack writer - observes this token, so cancelling it once in
+    ///     <see cref="RunCoreAsync" />'s <c>finally</c> unblocks all of them before <see cref="_qpackContext" />
+    ///     or any session state is disposed. Never dispose session state while an unjoined callback
+    ///     might still hold a reference to it - the same requirement the hardening plan's "Bounded
+    ///     callbacks" section states for every protocol, generalized here from the HTTP/3 defect that
+    ///     motivated it.
+    /// </summary>
+    private readonly CancellationTokenSource _connectionCts;
+
+    /// <summary>
+    ///     Every background task spawned for this connection (per-request-stream handlers,
+    ///     unidirectional-stream handlers, the QPACK decoder-stream ack writer), so
+    ///     <see cref="JoinBackgroundTasksAsync" /> can wait for all of them to actually finish - not
+    ///     just observe that their owning token was cancelled - before shared per-connection state is
+    ///     torn down.
+    /// </summary>
+    private readonly ConcurrentBag<Task> _backgroundTasks = new();
 
     /// <summary>
     ///     Active request streams keyed by QUIC stream ID (long). Values are the per-stream state objects
@@ -80,7 +102,7 @@ internal sealed class Http3Connection
         _authArgs = authArgs;
         _server = server;
         _logger = logger;
-        _shutdownToken = shutdownToken;
+        _connectionCts = CancellationTokenSource.CreateLinkedTokenSource(shutdownToken);
         _onBeforeRequest = onBeforeRequest;
         _onBeforeResponse = onBeforeResponse;
         _onAfterResponse = onAfterResponse;
@@ -117,29 +139,29 @@ internal sealed class Http3Connection
 
             // Open our outbound control stream and send SETTINGS.
             _serverControlStream = await _connection.OpenOutboundStreamAsync(
-                QuicStreamType.Unidirectional, _shutdownToken);
-            await SendServerSettingsAsync(_serverControlStream, _qpackContext, _shutdownToken);
+                QuicStreamType.Unidirectional, _connectionCts.Token);
+            await SendServerSettingsAsync(_serverControlStream, _qpackContext, _connectionCts.Token);
 
             // When dynamic table is enabled, open outbound QPACK encoder and decoder streams and
             // start their background loops.
             if (_qpackContext != null)
             {
                 var qpackEncoderStream = await _connection.OpenOutboundStreamAsync(
-                    QuicStreamType.Unidirectional, _shutdownToken);
+                    QuicStreamType.Unidirectional, _connectionCts.Token);
                 // Write stream type byte 0x02 (QPACK encoder stream).
-                await qpackEncoderStream.WriteAsync(new byte[] { (byte)Http3StreamType.QpackEncoder }, _shutdownToken);
+                await qpackEncoderStream.WriteAsync(new byte[] { (byte)Http3StreamType.QpackEncoder }, _connectionCts.Token);
 
                 var qpackDecoderStream = await _connection.OpenOutboundStreamAsync(
-                    QuicStreamType.Unidirectional, _shutdownToken);
+                    QuicStreamType.Unidirectional, _connectionCts.Token);
                 // Write stream type byte 0x03 (QPACK decoder stream).
-                await qpackDecoderStream.WriteAsync(new byte[] { (byte)Http3StreamType.QpackDecoder }, _shutdownToken);
+                await qpackDecoderStream.WriteAsync(new byte[] { (byte)Http3StreamType.QpackDecoder }, _connectionCts.Token);
 
-                // Start the ack writer background loop.
-                _ = QpackDecoderStreamWriter.RunAsync(qpackDecoderStream, _qpackContext, _shutdownToken);
+                // Start the ack writer background loop, tracked so it is joined before teardown.
+                _backgroundTasks.Add(QpackDecoderStreamWriter.RunAsync(qpackDecoderStream, _qpackContext, _connectionCts.Token));
             }
 
             // Run request-accept loop concurrently with unidirectional stream setup.
-            var acceptTask = AcceptStreamsAsync(_shutdownToken);
+            var acceptTask = AcceptStreamsAsync(_connectionCts.Token);
             await acceptTask;
         }
         catch (OperationCanceledException) { /* shutdown */ }
@@ -155,13 +177,85 @@ internal sealed class Http3Connection
         }
         finally
         {
+            // Cancel first so every task tracked in _backgroundTasks (and every per-stream operation
+            // linked to _connectionCts.Token) unblocks promptly, then actually wait for them to finish
+            // - not just observe the token as cancelled - before anything they might still be using
+            // (QpackContext, session state) is disposed below.
+            _connectionCts.Cancel();
+            await JoinBackgroundTasksAsync();
+
             await FinalizeAllStreamsAsync();
             await SendGoAwayAsync();
 
             if (_qpackContext != null)
                 await _qpackContext.DisposeAsync();
 
+            _connectionCts.Dispose();
             _server.UpdateHttp3ClientConnectionCount(false);
+        }
+    }
+
+    /// <summary>
+    ///     Tears down the whole QUIC connection with the given HTTP/3 connection-level error code
+    ///     (RFC 9114 §8.1). Used instead of letting a per-stream/per-task catch block quietly log a
+    ///     <see cref="Http3ConnectionException" /> and move on: the violations that produce this
+    ///     exception (a missing/duplicate/misplaced control-stream SETTINGS frame, a closed critical
+    ///     stream, a QPACK decompression failure) corrupt state the whole connection depends on - the
+    ///     shared QPACK dynamic table, or the control-stream state machine itself - so no other stream
+    ///     on this connection can be trusted to continue either.
+    /// </summary>
+    private async Task AbortConnectionAsync(Http3ErrorCode errorCode, Exception ex)
+    {
+        _logger.LogWarning(ex, "HTTP/3 connection-level error, closing connection: {ErrorCode}", errorCode);
+        try
+        {
+            await _connection.CloseAsync((long)errorCode, CancellationToken.None);
+        }
+        catch (Exception closeEx)
+        {
+            _logger.LogDebug(closeEx, "Error while closing HTTP/3 connection after {ErrorCode}", errorCode);
+        }
+    }
+
+    /// <summary>
+    ///     Bound on how long <see cref="JoinBackgroundTasksAsync" /> waits for every background task to
+    ///     actually finish after <see cref="_connectionCts" /> is cancelled. Every task here is expected
+    ///     to observe that cancellation and unwind promptly; this exists only so one task that somehow
+    ///     ignores cancellation (e.g. blocked in a non-cancellable call) cannot hang connection teardown
+    ///     forever - matching the logger sink's own "leak the handle and report it rather than block
+    ///     indefinitely" drain policy.
+    /// </summary>
+    private static readonly TimeSpan BackgroundTaskDrainTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    ///     Waits for every task tracked in <see cref="_backgroundTasks" /> to finish, up to
+    ///     <see cref="BackgroundTaskDrainTimeout" />. Called only after <see cref="_connectionCts" /> has
+    ///     been cancelled, so every task is expected to unblock and complete promptly rather than hang.
+    ///     Faults are logged but not rethrown: each task already reports its own failure at its own call
+    ///     site (<see cref="AbortConnectionAsync" /> or the per-stream/per-task catch blocks), and by the
+    ///     time this connection is tearing down, there is nothing further to do with a task's fault
+    ///     except make sure it has actually stopped running before shared state is disposed.
+    /// </summary>
+    private async Task JoinBackgroundTasksAsync()
+    {
+        if (_backgroundTasks.IsEmpty) return;
+        try
+        {
+            var allDone = Task.WhenAll(_backgroundTasks);
+            var completed = await Task.WhenAny(allDone, Task.Delay(BackgroundTaskDrainTimeout));
+            if (completed != allDone)
+            {
+                _logger.LogWarning(
+                    "One or more HTTP/3 background tasks did not finish within {Timeout} of connection " +
+                    "teardown being cancelled; proceeding without waiting further.", BackgroundTaskDrainTimeout);
+                return;
+            }
+
+            await allDone;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "One or more HTTP/3 background tasks faulted during connection teardown.");
         }
     }
 
@@ -206,14 +300,16 @@ internal sealed class Http3Connection
                 return;
             }
 
-            // Route by stream type.
+            // Route by stream type. Tracked in _backgroundTasks (rather than fire-and-forget) so
+            // JoinBackgroundTasksAsync can wait for every one of them to finish before this
+            // connection's shared state (QpackContext, session state) is torn down.
             if (stream.Type == QuicStreamType.Bidirectional)
             {
-                _ = HandleRequestStreamAsync(stream, ct);
+                _backgroundTasks.Add(HandleRequestStreamAsync(stream, ct));
             }
             else
             {
-                _ = HandleUnidirectionalStreamAsync(stream, ct);
+                _backgroundTasks.Add(HandleUnidirectionalStreamAsync(stream, ct));
             }
         }
     }
@@ -251,6 +347,15 @@ internal sealed class Http3Connection
                         break;
                 }
             }
+            catch (Http3ConnectionException ex)
+            {
+                // A connection-level violation on any unidirectional stream (missing/duplicate
+                // SETTINGS or a closed critical control stream, a truncated QPACK encoder-stream
+                // instruction) invalidates state the whole connection depends on - tear it all down
+                // rather than quietly returning and letting the `await using` above dispose just
+                // this one stream as if nothing happened.
+                await AbortConnectionAsync(ex.ErrorCode, ex);
+            }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogDebug(ex, "Error on HTTP/3 unidirectional stream {StreamId}", stream.Id);
@@ -261,10 +366,28 @@ internal sealed class Http3Connection
     private async Task ProcessClientControlStreamAsync(QuicStream stream, CancellationToken ct)
     {
         var receivedSettings = false;
+        var isFirstFrame = true;
         while (!ct.IsCancellationRequested)
         {
             var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 16 * 1024, ct);
-            if (frame is null) return;
+            if (frame is null)
+                // RFC 9114 §6.2.1: "If either control stream is closed at any point, this MUST be
+                // treated as a connection error of type H3_CLOSED_CRITICAL_STREAM." The client
+                // closing its own control stream - even after a previously valid SETTINGS - is
+                // itself the violation; there is no legitimate reason for this stream to ever end.
+                throw new Http3ConnectionException(Http3ErrorCode.ClosedCriticalStream,
+                    "The client's control stream was closed.");
+
+            if (isFirstFrame)
+            {
+                isFirstFrame = false;
+                // RFC 9114 §6.2.1: "the first frame on the control stream MUST be a SETTINGS
+                // frame". Accepting MAX_PUSH_ID/CANCEL_PUSH (or anything else) before SETTINGS
+                // would let a peer configure connection-wide behavior we have not yet negotiated.
+                if (frame.Type != Http3FrameType.Settings)
+                    throw new Http3ConnectionException(Http3ErrorCode.MissingSettings,
+                        $"The first frame on the client's control stream must be SETTINGS; got type 0x{frame.Type:X}.");
+            }
 
             switch (frame.Type)
             {
@@ -317,6 +440,14 @@ internal sealed class Http3Connection
                 },
                 _onBeforeRequest, _onBeforeResponse, _onAfterResponse,
                 qpackContext: _qpackContext);
+        }
+        catch (Http3ConnectionException ex)
+        {
+            // Propagated by Http3RequestStream.HandleAsync (e.g. a QPACK decompression failure):
+            // this corrupted state - typically the shared inbound QPACK dynamic table - that every
+            // other stream on the connection depends on, so the whole connection must be torn down,
+            // not just this one stream.
+            await AbortConnectionAsync(ex.ErrorCode, ex);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
