@@ -131,6 +131,12 @@ namespace Titanium.Web.Proxy.Http2
             // for every session regardless of how it ended.
             foreach (var leftover in connectionState.Streams.Values)
             {
+                // Same rationale as the RST_STREAM case above: a stream still in-flight when the whole
+                // connection tears down never got a response, so record that as Exception before finalizing.
+                if (leftover.SessionArgs.Exception == null && !leftover.SessionArgs.HttpClient.Response.Locked)
+                    leftover.SessionArgs.Exception = new OperationCanceledException(
+                        "The HTTP/2 connection was closed before this stream received a response.");
+
                 connectionState.PendingFinalizations.Add(
                     FinalizeStreamAsync(leftover, onAfterResponse, logger));
             }
@@ -2079,6 +2085,19 @@ namespace Titanium.Web.Proxy.Http2
                         resetStream.Cancellation.Dispose();
                         connectionState.ClientSendFlow.RemoveStream(streamId);
                         connectionState.ServerSendFlow.RemoveStream(streamId);
+
+                        // A stream reset before it ever reached a response leaves SessionArgs.Response at
+                        // its default (StatusCode 0, HttpVersion null). Setting Exception here - matching
+                        // every other forwarding path's convention of recording even OperationCanceledException
+                        // on the session (see RequestHandler/Http11ToHttp2BridgeHandler/Http2ToHttp3BridgeHandler) -
+                        // lets AfterResponse consumers tell "client reset this incomplete stream" apart from
+                        // an actual proxy failure, instead of seeing an unexplained zero-status entry.
+                        if (resetStream.SessionArgs.Exception == null && !resetStream.SessionArgs.HttpClient.Response.Locked)
+                            resetStream.SessionArgs.Exception = new OperationCanceledException(
+                                isClient
+                                    ? "Stream was reset by the client before it received a response."
+                                    : "Stream was reset by the origin before it received a response.");
+
                         connectionState.PendingFinalizations.Add(
                             FinalizeStreamAsync(resetStream, onAfterResponse, logger));
 

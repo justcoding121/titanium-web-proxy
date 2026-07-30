@@ -254,6 +254,15 @@ public partial class ProxyServer
         }
         catch (Exception ex)
         {
+            // Record the failure on the session even when it is expected teardown (cancellation): this
+            // matches the convention used by every other forwarding path (H1's RequestHandler, the H1↔H2
+            // bridge), which always sets args.Exception in their outermost catch before AfterResponse runs
+            // - including for OperationCanceledException. Without this, a stream the client itself aborted
+            // (e.g. RST_STREAM on an abandoned analytics/beacon call) reaches AfterResponse with a
+            // default/unset Response (StatusCode 0, HttpVersion null) and *no* way for the caller to tell
+            // "client cancelled this" apart from "the proxy actually failed".
+            sessionArgs.Exception = ex;
+
             // Cancellation (RST_STREAM, GOAWAY, connection close) is expected teardown, not an error.
             if (!cancellationToken.IsCancellationRequested)
             {
