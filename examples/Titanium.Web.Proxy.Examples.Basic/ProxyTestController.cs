@@ -477,10 +477,18 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 ? 0
                 : (long)(DateTime.UtcNow - state.RequestStartedUtc).TotalMilliseconds;
 
+            // A status-0 response with no HttpVersion means the origin round trip never produced a
+            // response at all. Most forwarding paths (H1, H1<->H2, H2<->H3) set e.Exception in their
+            // outermost catch even for client-initiated cancellation (browser sent RST_STREAM / aborted a
+            // background beacon before it completed) - so this is expected teardown, not a proxy defect,
+            // and shouldn't be flagged like one on the traffic tape.
+            var isClientCancelled = statusCode == 0 && e.Exception is OperationCanceledException;
+
             // Compact traffic tape: METHOD host/path → status  H2↔H2  187ms
-            var line =
-                $"{request.Method,-7} {FormatUrlForConsole(request.Url)} → {statusCode,3}  {FormatHttpProtocolShort(request.HttpVersion)}↔{FormatHttpProtocolShort(response?.HttpVersion)}  {elapsedMs}ms";
-            WriteToConsole(line, ColorForStatusCode(statusCode));
+            var line = isClientCancelled
+                ? $"{request.Method,-7} {FormatUrlForConsole(request.Url)} ⇢ cancelled by client  {elapsedMs}ms"
+                : $"{request.Method,-7} {FormatUrlForConsole(request.Url)} → {statusCode,3}  {FormatHttpProtocolShort(request.HttpVersion)}↔{FormatHttpProtocolShort(response?.HttpVersion)}  {elapsedMs}ms";
+            WriteToConsole(line, isClientCancelled ? ConsoleColor.DarkGray : ColorForStatusCode(statusCode));
 
 #if DEBUG
             try
