@@ -356,6 +356,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
             if (!clientLocalIp.Equals(IPAddress.Loopback) && !clientLocalIp.Equals(IPAddress.IPv6Loopback))
                 e.HttpClient.UpStreamEndPoint = new IPEndPoint(clientLocalIp, 0);
 
+            // Subscribed here (rather than in OnResponse, once TunnelType.Websocket is known) so the
+            // proxy sees a raw-byte tap is wanted before it forwards the upgrade request - only then can
+            // it strip Sec-WebSocket-Extensions and keep frames uncompressed for WebSocketDecoder below
+            // (see WebSocketHandler.HasWebSocketDataTapHandler remarks).
+            if (e.HttpClient.Request.UpgradeToWebSocket)
+            {
+                e.DataSent += WebSocket_DataSent;
+                e.DataReceived += WebSocket_DataReceived;
+            }
+
             if (e.HttpClient.Request.Url.Contains("yahoo.com"))
                 e.CustomUpStreamProxy = new ExternalProxy("localhost", 8888);
 
@@ -407,12 +417,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private async Task OnResponse(object sender, SessionEventArgs e)
         {
             e.GetState().AppendPipeline(nameof(OnResponse));
-
-            if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Websocket)
-            {
-                e.DataSent += WebSocket_DataSent;
-                e.DataReceived += WebSocket_DataReceived;
-            }
 
             // access user data set in request to do something with it
             //var userData = e.HttpClient.UserData as CustomUserData;

@@ -262,6 +262,15 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// </summary>
     public event EventHandler<DataEventArgs>? DataReceived;
 
+    /// <summary>
+    ///     True if a raw byte-level tap (<see cref="DataSent"/> or <see cref="DataReceived"/>) is
+    ///     subscribed. Used by the WebSocket upgrade handler: a subscriber typically decodes the raw
+    ///     bytes as WebSocket frames (e.g. via <c>WebSocketDecoder</c>), which - like frame-level
+    ///     interception - cannot handle RSV-flagged frames produced by extensions such as
+    ///     permessage-deflate.
+    /// </summary>
+    internal bool HasWebSocketDataTapHandler => DataSent != null || DataReceived != null;
+
     internal void OnDataSent(byte[] buffer, int offset, int count)
     {
         try

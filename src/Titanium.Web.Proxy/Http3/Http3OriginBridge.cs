@@ -178,17 +178,26 @@ internal static class Http3OriginBridge
 
             await using var originStream = await quicConn.OpenRequestStreamAsync(cancellationToken);
 
+            // GetRequestBody() (called unconditionally by BridgeOnBeforeRequestForH3 as part of its
+            // H2 frame-reading handshake, regardless of whether any user handler wants the body)
+            // decompresses on read but leaves Content-Encoding/Content-Length on the request headers
+            // untouched - same as the H1 GetRequestBody() path (see ForwardOverTcpAsync's remarks).
+            // Every other forwarding path (H1 SendRequest, native H2 relay, H2->H1.1 bridge) re-applies
+            // compression via CompressBodyAndUpdateContentLength() before writing the request; this is
+            // the H3/QUIC equivalent. Without it, any request whose body was buffered (e.g. a gzip'd
+            // POST body such as play.google.com/log) is sent to the origin still declaring
+            // Content-Encoding: gzip and the original compressed Content-Length while actually carrying
+            // decompressed bytes - producing a "malformed request" 400 from the origin. Must run before
+            // BuildRequestHeaders so the encoded :headers frame reflects the refreshed Content-Length.
+            var body = request.HasBody ? request.CompressBodyAndUpdateContentLength() : null;
+
             // Use the origin authority (sniHost) for the :authority pseudo-header, not the connect host.
             var reqHeaders = BuildRequestHeaders(request, sniHost);
             var encodedHeaders = QpackEncoder.Encode(reqHeaders);
             await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, encodedHeaders, cancellationToken);
 
-            if (request.HasBody)
-            {
-                var body = request.IsBodyRead ? request.Body : null;
-                if (body is { Length: > 0 })
-                    await Http3Frame.WriteAsync(originStream, Http3FrameType.Data, body, cancellationToken);
-            }
+            if (body is { Length: > 0 })
+                await Http3Frame.WriteAsync(originStream, Http3FrameType.Data, body, cancellationToken);
             originStream.CompleteWrites();
             requestSent = true; // request fully on the wire — no longer safe to silently retry
             sessionArgs.Timing?.MarkRequestSent();
