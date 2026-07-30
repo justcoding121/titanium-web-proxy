@@ -45,14 +45,109 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     /// <returns>
     ///     An enumerator that can be used to iterate through the collection.
     /// </returns>
-    public IEnumerator<HttpHeader> GetEnumerator()
+    /// <remarks>
+    ///     Returns the concrete <see cref="Enumerator" /> struct rather than an interface type, matching
+    ///     the pattern used by <see cref="List{T}" />/<see cref="Dictionary{TKey, TValue}" /> in the BCL:
+    ///     a <c>foreach</c> over a variable statically typed as <see cref="HeaderCollection" /> binds to
+    ///     this overload directly and allocates nothing, whereas the previous implementation (chaining
+    ///     <see cref="Enumerable.Concat{TSource}" /> and <see cref="Enumerable.SelectMany{TSource, TResult}" />
+    ///     over the two backing dictionaries) allocated two LINQ iterator objects on every call. This
+    ///     matters here specifically because every outgoing request and response header block is
+    ///     enumerated at least once to serialize it onto the wire, making this one of the hottest paths
+    ///     in the proxy. Code that holds this collection through the <see cref="IEnumerable{T}" />
+    ///     interface (e.g. LINQ operators) still gets a correct enumerator via the explicit interface
+    ///     implementation below, at the cost of one boxing allocation - unavoidable through that surface,
+    ///     and unchanged from before this optimization.
+    /// </remarks>
+    public Enumerator GetEnumerator()
     {
-        return headers.Values.Concat(nonUniqueHeaders.Values.SelectMany(x => x)).GetEnumerator();
+        return new Enumerator(this);
+    }
+
+    IEnumerator<HttpHeader> IEnumerable<HttpHeader>.GetEnumerator()
+    {
+        return GetEnumerator();
     }
 
     IEnumerator IEnumerable.GetEnumerator()
     {
         return GetEnumerator();
+    }
+
+    /// <summary>
+    ///     Walks first the unique-header dictionary's values, then each list in the non-unique-header
+    ///     dictionary's values in turn - the same effective order as the previous
+    ///     <c>Concat(...SelectMany(...))</c> implementation - without allocating any LINQ iterator
+    ///     objects. See the remarks on <see cref="GetEnumerator" /> for why this is worth a hand-written
+    ///     enumerator instead of the equivalent LINQ expression.
+    /// </summary>
+    public struct Enumerator : IEnumerator<HttpHeader>
+    {
+        private Dictionary<string, HttpHeader>.ValueCollection.Enumerator uniqueEnumerator;
+        private Dictionary<string, List<HttpHeader>>.ValueCollection.Enumerator nonUniqueOuterEnumerator;
+        private List<HttpHeader>.Enumerator nonUniqueInnerEnumerator;
+        private bool doneWithUnique;
+        private bool hasInnerEnumerator;
+
+        internal Enumerator(HeaderCollection collection)
+        {
+            uniqueEnumerator = collection.headers.Values.GetEnumerator();
+            nonUniqueOuterEnumerator = collection.nonUniqueHeaders.Values.GetEnumerator();
+            nonUniqueInnerEnumerator = default;
+            doneWithUnique = false;
+            hasInnerEnumerator = false;
+            Current = null!;
+        }
+
+        public HttpHeader Current { get; private set; }
+
+        object IEnumerator.Current => Current;
+
+        public bool MoveNext()
+        {
+            if (!doneWithUnique)
+            {
+                if (uniqueEnumerator.MoveNext())
+                {
+                    Current = uniqueEnumerator.Current;
+                    return true;
+                }
+
+                doneWithUnique = true;
+            }
+
+            while (true)
+            {
+                if (hasInnerEnumerator)
+                {
+                    if (nonUniqueInnerEnumerator.MoveNext())
+                    {
+                        Current = nonUniqueInnerEnumerator.Current;
+                        return true;
+                    }
+
+                    hasInnerEnumerator = false;
+                }
+
+                if (!nonUniqueOuterEnumerator.MoveNext())
+                {
+                    Current = null!;
+                    return false;
+                }
+
+                nonUniqueInnerEnumerator = nonUniqueOuterEnumerator.Current.GetEnumerator();
+                hasInnerEnumerator = true;
+            }
+        }
+
+        public void Reset()
+        {
+            throw new NotSupportedException();
+        }
+
+        public void Dispose()
+        {
+        }
     }
 
     /// <summary>
@@ -108,10 +203,19 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     /// <returns></returns>
     public List<HttpHeader> GetAllHeaders()
     {
-        var result = new List<HttpHeader>();
+        // Pre-sized and hand-iterated instead of `headers.Select(...)`/`nonUniqueHeaders.SelectMany(...)`:
+        // this is called once per HTTP/3 request/response (see Http3RequestStream/Http3OriginBridge), so
+        // the LINQ iterator allocations were a repeated per-message cost for no benefit over a plain loop.
+        // headers.Count + nonUniqueHeaders.Count undercounts when any non-unique entry has more than one
+        // value, but it is still a better starting capacity than the default (0), and List<T> grows from
+        // there exactly as it would have without this hint.
+        var result = new List<HttpHeader>(headers.Count + nonUniqueHeaders.Count);
 
-        result.AddRange(headers.Select(x => x.Value));
-        result.AddRange(nonUniqueHeaders.SelectMany(x => x.Value));
+        foreach (var header in headers.Values) result.Add(header);
+
+        foreach (var list in nonUniqueHeaders.Values)
+        foreach (var header in list)
+            result.Add(header);
 
         return result;
     }

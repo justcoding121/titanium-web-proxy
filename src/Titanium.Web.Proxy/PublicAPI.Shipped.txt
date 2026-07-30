@@ -384,8 +384,14 @@ Titanium.Web.Proxy.Http.HeaderCollection.AddHeaders(System.Collections.Generic.I
 Titanium.Web.Proxy.Http.HeaderCollection.AddHeaders(System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string!, Titanium.Web.Proxy.Models.HttpHeader!>>? newHeaders) -> void
 Titanium.Web.Proxy.Http.HeaderCollection.AddHeaders(System.Collections.Generic.IEnumerable<Titanium.Web.Proxy.Models.HttpHeader!>? newHeaders) -> void
 Titanium.Web.Proxy.Http.HeaderCollection.Clear() -> void
+Titanium.Web.Proxy.Http.HeaderCollection.Enumerator
+Titanium.Web.Proxy.Http.HeaderCollection.Enumerator.Current.get -> Titanium.Web.Proxy.Models.HttpHeader!
+Titanium.Web.Proxy.Http.HeaderCollection.Enumerator.Dispose() -> void
+Titanium.Web.Proxy.Http.HeaderCollection.Enumerator.Enumerator() -> void
+Titanium.Web.Proxy.Http.HeaderCollection.Enumerator.MoveNext() -> bool
+Titanium.Web.Proxy.Http.HeaderCollection.Enumerator.Reset() -> void
 Titanium.Web.Proxy.Http.HeaderCollection.GetAllHeaders() -> System.Collections.Generic.List<Titanium.Web.Proxy.Models.HttpHeader!>!
-Titanium.Web.Proxy.Http.HeaderCollection.GetEnumerator() -> System.Collections.Generic.IEnumerator<Titanium.Web.Proxy.Models.HttpHeader!>!
+Titanium.Web.Proxy.Http.HeaderCollection.GetEnumerator() -> Titanium.Web.Proxy.Http.HeaderCollection.Enumerator
 Titanium.Web.Proxy.Http.HeaderCollection.GetFirstHeader(string! name) -> Titanium.Web.Proxy.Models.HttpHeader?
 Titanium.Web.Proxy.Http.HeaderCollection.GetHeaders(string! name) -> System.Collections.Generic.List<Titanium.Web.Proxy.Models.HttpHeader!>?
 Titanium.Web.Proxy.Http.HeaderCollection.HeaderCollection() -> void

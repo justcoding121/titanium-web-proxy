@@ -36,6 +36,7 @@ the Home page first.
 - [New: global/per-endpoint connection admission limits (opt-in)](#new-globalper-endpoint-connection-admission-limits-opt-in)
 - [New: outbound private-network destination blocking (opt-in)](#new-outbound-private-network-destination-blocking-opt-in)
 - [Policy profiles and observe/enforce modes (additive)](#policy-profiles-and-observeenforce-modes-additive)
+- [New: Happy Eyeballs (RFC 8305) address racing](#new-happy-eyeballs-rfc-8305-address-racing)
 - [Internal-only changes (no action needed)](#internal-only-changes-no-action-needed)
 
 ---
@@ -378,6 +379,20 @@ items above without code changes to individual limits:
   so any OpenTelemetry-compatible exporter can observe policy breaches, connection admission/rejection,
   timeouts, pool outcomes, parser errors, and auth rounds without code changes.
 
+## New: Happy Eyeballs (RFC 8305) address racing
+
+**Before:** `TcpConnectionFactory` tried each of a hostname's resolved addresses fully sequentially,
+each getting the full connect timeout before falling back to the next. A dual-stack host with a
+broken address family (a common real-world failure — e.g. IPv6 blackholed by network policy) paid
+that entire timeout on every single connection to that host, not just the first.
+
+**Now:** resolved addresses are interleaved by address family (RFC 8305 §4, so a broken family cannot
+starve the healthy one behind several same-family attempts) and raced with a 250ms staggered start
+per address (RFC 8305's Connection Attempt Delay) rather than tried one at a time. The first address
+to complete a TCP (or SOCKS) connect wins; every other in-flight attempt is cancelled and its socket
+disposed. This is a pure latency improvement with no configuration surface and no behavior visible
+to callers beyond faster connects on affected networks — nothing to change in your code.
+
 ## Internal-only changes (no action needed)
 
 The following were removed or replaced as part of this hardening pass but were never part of the
@@ -386,3 +401,10 @@ public API surface, so no consumer code can reference them and no action is need
 - The internal `ProxyTypes.Https` enum value and the dead synchronous SOCKS/HTTPS handler code paths
   behind it (`internal` types only).
 - The internal `ProxyTimeoutScope` type, replaced by the internal `DeadlineRegistry` mechanism.
+- `HeaderCollection.GetEnumerator()` now returns a concrete `HeaderCollection.Enumerator` struct
+  instead of `IEnumerator<HttpHeader>`, matching the pattern `List<T>`/`Dictionary<TKey,TValue>` use
+  in the BCL to make `foreach` over a `HeaderCollection`-typed variable allocation-free. This is
+  source-compatible for the overwhelming majority of callers (`foreach` loops, and code that assigns
+  the result to an `IEnumerator<HttpHeader>`-typed variable, both keep compiling unchanged); only code
+  that reflects on the exact return type of `GetEnumerator()` itself would need updating, which no
+  known consumer does.
