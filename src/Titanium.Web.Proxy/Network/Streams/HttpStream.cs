@@ -1017,7 +1017,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         }
 
         LimitedStream limitedStream;
-        Stream? decompressStream = null;
+        List<Stream>? decompressLayers = null;
 
         var contentEncoding = useOriginalHeaderValues
             ? requestResponse.OriginalContentEncoding
@@ -1027,8 +1027,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             requestResponse.TrailingHeaders);
 
         if (transformation == TransformationMode.Uncompress && contentEncoding != null)
-            s = decompressStream =
-                DecompressionFactory.Create(CompressionUtil.CompressionNameToEnum(contentEncoding), s);
+        {
+            // Content-Encoding may list multiple stacked encodings (e.g. "gzip, br"); each layer
+            // becomes its own chained decompression stream, applied in reverse order.
+            (s, decompressLayers) = CompressionUtil.CreateDecompressionChain(s, contentEncoding);
+        }
 
         // leaveOpen: true so disposing the wrapper returns its pooled buffer without
         // disposing the underlying limited/decompression stream (handled in finally).
@@ -1041,7 +1044,9 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             http.Dispose();
 
-            decompressStream?.Dispose();
+            if (decompressLayers != null)
+                for (var i = decompressLayers.Count - 1; i >= 0; i--)
+                    decompressLayers[i].Dispose();
 
             await limitedStream.Finish();
             limitedStream.Dispose();

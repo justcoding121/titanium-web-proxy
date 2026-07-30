@@ -2133,15 +2133,27 @@ namespace Titanium.Web.Proxy.Http2
 
                         if (rr.ContentEncoding != null)
                         {
-                            using (var ms = new MemoryStream())
+                            // Content-Encoding may list multiple stacked encodings (e.g. "gzip, br");
+                            // previously only a single encoding name was ever recognized here, so a
+                            // stacked value matched none of the known headers and silently fell through
+                            // CompressionNameToEnum as Unsupported.
+                            var (decompressStream, owned) =
+                                CompressionUtil.CreateDecompressionChain(new MemoryStream(body), rr.ContentEncoding);
+                            try
                             {
-                                using (var zip =
-                                    DecompressionFactory.Create(CompressionUtil.CompressionNameToEnum(rr.ContentEncoding), new MemoryStream(body)))
+                                if (owned.Count > 0)
                                 {
-                                    zip.CopyTo(ms);
+                                    using var ms = new MemoryStream();
+                                    decompressStream.CopyTo(ms);
+                                    body = ms.ToArray();
                                 }
-
-                                body = ms.ToArray();
+                                // else: unsupported/unparseable encoding - leave body as the raw wire
+                                // bytes (matching Http3OriginBridge's equivalent pass-through behavior).
+                            }
+                            finally
+                            {
+                                for (var i = owned.Count - 1; i >= 0; i--)
+                                    owned[i].Dispose();
                             }
                         }
 

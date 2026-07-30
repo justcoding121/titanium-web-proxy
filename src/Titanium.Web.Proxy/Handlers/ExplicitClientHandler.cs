@@ -191,12 +191,8 @@ public partial class ProxyServer
                     // ~800ms on a cold cache (500ms SVCB DNS + 300ms H2 TCP/TLS probe); overlapping
                     // cert generation with them hides most of that cost on warm cert caches, and avoids
                     // adding cert-gen time on top of probe time when the cert cache is also cold.
-                    var connectHostname = requestLine.RequestUri.GetString();
-                    {
-                        var colonIdx = connectHostname.LastIndexOf(':');
-                        if (colonIdx >= 0) connectHostname = connectHostname.Substring(0, colonIdx);
-                    }
-                    var connectHostnamePort = ParseHostAndPort(requestLine.RequestUri.GetString(), 443).Port;
+                    var (connectHostname, connectHostnamePort) =
+                        ParseHostAndPort(requestLine.RequestUri.GetString(), 443);
 
                     // CertificateManager deduplicates concurrent calls for the same name internally.
                     var certGenerationTask = endPoint.GenericCertificate != null
