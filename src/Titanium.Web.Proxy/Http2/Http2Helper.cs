@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading;
@@ -76,6 +77,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     ceiling in lockstep.
         /// </summary>
         private const int RfcDefaultHeaderTableSize = 4096;
+
 
         /// <summary>
         ///     Reports an HTTP/2 protocol/relay failure through the centralized logging gateway. Every
@@ -2298,8 +2300,8 @@ namespace Titanium.Web.Proxy.Http2
                     {
                         // do not cancel the write operation
                         frameHeader.CopyToBuffer(frameHeaderBuffer);
-                        await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length/*, cancellationToken*/);
-                        await output.WriteAsync(buffer, 0, frameLength /*, cancellationToken*/);
+                        await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length);
+                        await output.WriteAsync(buffer, 0, frameLength);
                     }
 
                     await lockedOutputWrite(writeFrame);
@@ -2344,6 +2346,15 @@ namespace Titanium.Web.Proxy.Http2
         private static void Breakpoint()
         {
             // when this method is called something received which is not yet implemented
+        }
+
+        /// <summary>Cheap check avoiding a ToLowerInvariant() allocation for the common already-lowercase case.</summary>
+        private static bool HasUpperCaseAscii(string s)
+        {
+            foreach (var c in s)
+                if (c is >= 'A' and <= 'Z')
+                    return true;
+            return false;
         }
 
         internal static async Task SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise)
@@ -2430,6 +2441,19 @@ namespace Titanium.Web.Proxy.Http2
 
             foreach (var header in rr.Headers)
             {
+                // RFC 7540 §8.1.2: header field names MUST be lowercase on the wire. Bridge handlers
+                // normalize this up front (see LowercaseHeaderNames in Http2ToHttp11BridgeHandler /
+                // Http2ToHttp3BridgeHandler), but that pass can be silently undone by anything that
+                // re-adds a header afterwards using its canonical mixed-case name - e.g.
+                // RequestResponseBase.ContentLength's setter picks "Content-Length" whenever
+                // HttpVersion is below 2.0, which is exactly the state an H1/H3-origin-bridged
+                // response is still in when CompressBodyAndUpdateContentLength() re-sets it right
+                // before this loop runs. Enforcing lowercase here, at the single point where every
+                // header actually gets HPACK-encoded onto an h2 wire, closes that gap regardless of
+                // which upstream code path is responsible - a mixed-case name here reaches the peer
+                // verbatim and manifests as a client RST_STREAM(PROTOCOL_ERROR).
+                var nameData = HasUpperCaseAscii(header.Name) ? header.Name.ToLowerInvariant().GetByteString() : header.NameData;
+
                 // Via is added by the proxy itself on every request and varies across hops; it must
                 // not enter the HPACK dynamic table.  If it did, stream N would encode it as a
                 // single-byte dynamic-table reference, and strict H2 origins (Google's play.google.com
@@ -2439,10 +2463,10 @@ namespace Titanium.Web.Proxy.Http2
                 // the entry never lands in the dynamic table, and every subsequent stream gets a
                 // fresh literal representation instead of a back-reference.
                 if (header.Name.Equals("via", StringComparison.OrdinalIgnoreCase))
-                    encoder.EncodeHeader(writer, header.NameData, header.ValueData, false,
+                    encoder.EncodeHeader(writer, nameData, header.ValueData, false,
                         HpackUtil.IndexType.None);
                 else
-                    encoder.EncodeHeader(writer, header.NameData, header.ValueData);
+                    encoder.EncodeHeader(writer, nameData, header.ValueData);
             }
 
             var data = ms.ToArray();
@@ -2482,7 +2506,9 @@ namespace Titanium.Web.Proxy.Http2
 
             foreach (var header in trailingHeaders)
             {
-                encoder.EncodeHeader(writer, header.NameData, header.ValueData);
+                // See the matching comment in SendHeader: field names must be lowercase on the wire.
+                var nameData = HasUpperCaseAscii(header.Name) ? header.Name.ToLowerInvariant().GetByteString() : header.NameData;
+                encoder.EncodeHeader(writer, nameData, header.ValueData);
             }
 
             var data = ms.ToArray();
@@ -2532,8 +2558,8 @@ namespace Titanium.Web.Proxy.Http2
                 frameHeader.Flags = flags;
 
                 frameHeader.CopyToBuffer(frameHeaderBuffer);
-                await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length/*, cancellationToken*/);
-                await output.WriteAsync(data, pos, chunkLength /*, cancellationToken*/);
+                await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length);
+                await output.WriteAsync(data, pos, chunkLength);
 
                 pos += chunkLength;
                 first = false;
@@ -2608,7 +2634,6 @@ namespace Titanium.Web.Proxy.Http2
                 frameHeader.Length = frameLength;
                 frameHeader.Flags = isLastFrame && endStream ? Http2FrameFlag.EndStream : (Http2FrameFlag)0;
                 frameHeader.CopyToBuffer(frameHeaderBuffer);
-
                 await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length);
                 await output.WriteAsync(data, pos, frameLength);
 
@@ -2726,9 +2751,15 @@ namespace Titanium.Web.Proxy.Http2
                 var bodyWriter = new Http2BodyStreamWriter(streamId, clientStream, clientWriteLock, clientSendFlow,
                     cancellationToken);
 
-                await response.StreamBodyWriter(bodyWriter, cancellationToken);
-
-                await bodyWriter.CompleteAsync();
+                try
+                {
+                    await response.StreamBodyWriter(bodyWriter, cancellationToken);
+                    await bodyWriter.CompleteAsync();
+                }
+                catch
+                {
+                    throw;
+                }
             }
             else
             {

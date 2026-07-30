@@ -457,11 +457,11 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     Pseudonym used in Via header fields appended to forwarded requests and responses
-    ///     (RFC 9110 §7.6.3). Defaults to <c>"titanium-web-proxy"</c>. Set to an empty string
-    ///     to disable Via header injection entirely. Loop detection uses this value: a request
-    ///     arriving with this pseudonym already present in Via is refused with 508 Loop Detected.
+    ///     (RFC 9110 §7.6.3). Defaults to an empty string (disabled). Set to a non-empty string
+    ///     to enable Via header injection; loop detection is also enabled when set, refusing
+    ///     requests that already carry this pseudonym with 508 Loop Detected.
     /// </summary>
-    public string ViaHeaderPseudonym { get; set; } = "titanium-web-proxy";
+    public string ViaHeaderPseudonym { get; set; } = "";
 
     /// <summary>
     ///     Controls which HTTP version is declared to the origin server on the request line, independently of

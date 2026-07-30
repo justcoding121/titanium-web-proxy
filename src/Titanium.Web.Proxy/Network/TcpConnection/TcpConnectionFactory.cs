@@ -1017,21 +1017,26 @@ internal class TcpConnectionFactory : IDisposable
 
     /// <summary>
     ///     Reorders resolved addresses per RFC 8305 §4 so the Happy Eyeballs race above alternates
-    ///     between address families instead of exhausting one family before trying the other. IPv4 goes
-    ///     first at every interleave position when both families are present - matching the existing,
-    ///     deliberately deterministic IPv4-first preference used elsewhere in this class for SOCKS ATYP
-    ///     selection - rather than depending on whichever order the platform resolver happens to return,
-    ///     which is not guaranteed consistent across environments. Relative order within each family
-    ///     (the resolver's own preference, e.g. RFC 6724 destination-address ordering) is preserved
-    ///     unchanged; only the interleaving across families is added.
+    ///     between address families instead of exhausting one family before trying the other. IPv6 goes
+    ///     first at every interleave position when both families are present, matching real browser/OS
+    ///     dual-stack behavior (RFC 6724 destination-address ordering ranks IPv6 higher by default, and
+    ///     browsers connect over IPv6 whenever it is available and healthy) rather than depending on
+    ///     whichever order the platform resolver happens to return, which is not guaranteed consistent
+    ///     across environments. A client behind this proxy should end up reaching the origin over the
+    ///     same address family a direct (non-proxied) connection from the same machine would have used;
+    ///     otherwise the origin can legitimately treat the two connections differently (e.g. CDN/WAF
+    ///     bot-management and IP-reputation scoring are commonly far stricter for shared/NAT'd IPv4
+    ///     ranges than for unique-per-device IPv6 addresses). Relative order within each family (the
+    ///     resolver's own preference, e.g. RFC 6724 destination-address ordering) is preserved unchanged;
+    ///     only the interleaving across families is added.
     /// </summary>
     /// <remarks>Internal (rather than private) so it can be unit tested directly.</remarks>
     internal static IPAddress[] InterleaveByAddressFamily(IPAddress[] addresses)
     {
         if (addresses.Length <= 1) return addresses;
 
-        var firstFamily = addresses.Any(a => a.AddressFamily == AddressFamily.InterNetwork)
-            ? AddressFamily.InterNetwork
+        var firstFamily = addresses.Any(a => a.AddressFamily == AddressFamily.InterNetworkV6)
+            ? AddressFamily.InterNetworkV6
             : addresses[0].AddressFamily;
         var primary = new List<IPAddress>(addresses.Length);
         var secondary = new List<IPAddress>(addresses.Length);
