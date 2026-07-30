@@ -79,7 +79,9 @@ public class Response : RequestResponseBase
             // If none are true then check if connection:close header exist, if so write response until server or client terminates the connection
             if (IsChunked || contentLength > 0 || !KeepAlive) return true;
 
-            if (ContentLength == -1 && HttpVersion == HttpHeader.Version20) return true;
+            // HTTP/2 and HTTP/3 may omit Content-Length; body length is framed by DATA/END_STREAM
+            // (or QUIC stream fin), not by Content-Length / Transfer-Encoding.
+            if (ContentLength == -1 && HttpVersion.Major >= 2) return true;
 
             // has response if connection:keep-alive header exist and when version is http/1.0
             // Because in Http 1.0 server can return a response without content-length (expectation being client would read until end of stream)

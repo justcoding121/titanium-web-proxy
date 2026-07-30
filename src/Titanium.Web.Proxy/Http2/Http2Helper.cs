@@ -2719,9 +2719,6 @@ namespace Titanium.Web.Proxy.Http2
         {
             var response = args.HttpClient.Response;
 
-            // HTTP/2 does not use chunked transfer-encoding; body framing is done via DATA frames + END_STREAM.
-            response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
-
             var frameHeader = new Http2FrameHeader { StreamId = streamId };
             var frameHeaderBuffer = new byte[9];
 
@@ -2735,6 +2732,9 @@ namespace Titanium.Web.Proxy.Http2
 
             if (response.StreamBodyWriter != null)
             {
+                // HTTP/2 does not use chunked transfer-encoding; body framing is done via DATA frames + END_STREAM.
+                response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+
                 // send the headers first; the body follows as DATA frames produced by the consumer's
                 // delegate as it runs, so it is never buffered.
                 await clientWriteLock.WaitAsync(cancellationToken);
@@ -2763,11 +2763,18 @@ namespace Titanium.Web.Proxy.Http2
             }
             else
             {
-                // buffered case (Ok/GenericResponse/Redirect/buffered Respond) - the whole body, if any, is
-                // already in memory. Note this deliberately checks the compressed body itself rather than
-                // response.IsBodyRead: that flag only means "the real server response's body was read off
-                // the wire", which is never true for a synthetic response that was never read from anywhere.
+                // buffered case (Ok/GenericResponse/Redirect/buffered Respond / H2→H3 bridge) - the whole
+                // body, if any, is already in memory. Compress WHILE Transfer-Encoding: chunked may still
+                // be present: Response.HasBody treats CL=-1 + chunked as "has body", and stripping TE
+                // first made HasBody false so CompressBodyAndUpdateContentLength zeroed Content-Length
+                // and dropped the buffered bytes (empty CDN JS/CSS through the H2→H3 bridge).
                 var body = response.CompressBodyAndUpdateContentLength();
+
+                // HTTP/2 does not use chunked transfer-encoding; body framing is done via DATA frames.
+                response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+                if (body is { Length: > 0 } && response.ContentLength < 0)
+                    response.ContentLength = body.Length;
+
                 var hasBody = body is { Length: > 0 };
 
                 await clientWriteLock.WaitAsync(cancellationToken);
