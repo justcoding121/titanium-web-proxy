@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
@@ -95,10 +96,12 @@ public partial class ProxyServer
         // status a compliant *origin* would have used for a malformed request.
         try
         {
-            Http1FramingValidator.Validate(response, ResolveHttp1WireFramingSource(args));
+            Http1FramingValidator.Validate(response, ResolveHttp1WireFramingSource(args),
+                args.Server.PolicyModes.AllowAmbiguousFraming);
         }
         catch (Http1FramingException framingEx)
         {
+            ProxyMetrics.ParserError("framing");
             args.Exception = framingEx;
             ProxyDiagnostics.ReportBenign(logger, "Origin response has ambiguous HTTP/1 framing", framingEx);
             args.GenericResponse($"Bad Gateway. {framingEx.Message}", HttpStatusCode.BadGateway,

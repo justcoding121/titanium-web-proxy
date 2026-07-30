@@ -10,6 +10,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Streams;
+using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.EventArguments;
@@ -318,7 +319,7 @@ public class SessionEventArgs : SessionEventArgsBase
         // the actual write target rather than a length check performed only after the fact.
         var maxBufferedBodyBytes = MaxBufferedBodyBytes ?? Server.MaxBufferedBodyBytes;
         Stream target = maxBufferedBodyBytes > 0
-            ? new BoundedWriteStream(bodyStream, maxBufferedBodyBytes)
+            ? new BoundedWriteStream(bodyStream, maxBufferedBodyBytes, Server.PolicyModes[PolicyFamily.BodyBudget])
             : bodyStream;
         using var writer = new HttpStream(Server, target, BufferPool, cancellationToken);
 

@@ -17,6 +17,7 @@ using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Streams;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -252,7 +253,7 @@ internal static class Http3OriginBridge
             // plan, a response-side breach must close the connection rather than deliver a truncated body
             // as if it were complete, so the resulting BodySizeLimitExceededException is deliberately left
             // to propagate to the catch below, which disposes (never pools) the origin connection.
-            var boundedBodyStream = new BoundedWriteStream(bodyStream, maxPayload);
+            var boundedBodyStream = new BoundedWriteStream(bodyStream, maxPayload, server.PolicyModes[PolicyFamily.BodyBudget]);
             try
             {
                 if (!server.HasOnResponseBodyWriteSubscribers)

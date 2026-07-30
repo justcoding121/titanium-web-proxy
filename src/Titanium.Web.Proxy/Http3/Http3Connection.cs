@@ -6,6 +6,7 @@ using System.Net.Quic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
@@ -206,6 +207,7 @@ internal sealed class Http3Connection
     /// </summary>
     private async Task AbortConnectionAsync(Http3ErrorCode errorCode, Exception ex)
     {
+        ProxyMetrics.ParserError("http3");
         _logger.LogWarning(ex, "HTTP/3 connection-level error, closing connection: {ErrorCode}", errorCode);
         try
         {

@@ -300,7 +300,8 @@ public partial class ProxyServer
             // A framing exception intentionally propagates to this method's own catch block below,
             // which already answers with a clean synthetic 502 when headers have not reached the
             // client yet - exactly the right behavior for ambiguous origin framing.
-            Http1FramingValidator.Validate(sessionArgs.HttpClient.Response, ResolveHttp1WireFramingSource(sessionArgs));
+            Http1FramingValidator.Validate(sessionArgs.HttpClient.Response, ResolveHttp1WireFramingSource(sessionArgs),
+                sessionArgs.Server.PolicyModes.AllowAmbiguousFraming);
             sessionArgs.HttpClient.Response.SetOriginalHeaders();
 
             if (!sessionArgs.HttpClient.Response.Locked) await OnBeforeResponse(sessionArgs);

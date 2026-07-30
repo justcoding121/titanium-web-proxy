@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Network.Streams;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
@@ -92,5 +93,45 @@ public class BoundedWriteStreamTests
         bounded.Write(new byte[] { 1, 2, 3, 4, 5 }, 0, 5);
 
         Assert.AreEqual(5, inner.Length);
+    }
+
+    [TestMethod]
+    public void Write_ExceedingLimit_UnderObserveMode_DoesNotThrowAndStillWritesToInner()
+    {
+        var inner = new MemoryStream();
+        var bounded = new BoundedWriteStream(inner, maxBytes: 3, mode: PolicyMode.Observe);
+
+        // Under Observe, a breach is recorded (not asserted here - see ProxyMetrics) but the write
+        // itself must still complete rather than throwing, unlike the Enforce-mode default.
+        bounded.Write(new byte[] { 1, 2, 3, 4, 5 }, 0, 5);
+
+        Assert.AreEqual(5, inner.Length);
+    }
+
+    [TestMethod]
+    public void Write_ExceedingLimit_UnderDisabledMode_NeverConsultsLimit()
+    {
+        var inner = new MemoryStream();
+        var bounded = new BoundedWriteStream(inner, maxBytes: 1, mode: PolicyMode.Disabled);
+
+        var data = new byte[10_000];
+        bounded.Write(data, 0, data.Length);
+
+        Assert.AreEqual(10_000, inner.Length);
+    }
+
+    [TestMethod]
+    public void Write_ExceedingLimit_UnderObserveMode_RecordsBreachOnlyOnce()
+    {
+        // Regression guard for the `breachRecorded` latch: repeatedly writing past the limit under
+        // Observe must not throw on any subsequent write either, since only Enforce ever throws.
+        var inner = new MemoryStream();
+        var bounded = new BoundedWriteStream(inner, maxBytes: 2, mode: PolicyMode.Observe);
+
+        bounded.Write(new byte[] { 1, 2, 3 }, 0, 3);
+        bounded.Write(new byte[] { 4, 5, 6 }, 0, 3);
+        bounded.Write(new byte[] { 7, 8, 9 }, 0, 3);
+
+        Assert.AreEqual(9, inner.Length);
     }
 }

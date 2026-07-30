@@ -32,6 +32,7 @@ using System;
 using System.Buffers;
 using System.Net.Sockets;
 using System.Text;
+using Titanium.Web.Proxy.Diagnostics;
 
 namespace Titanium.Web.Proxy.ProxySocket.Authentication;
 
@@ -172,6 +173,7 @@ internal sealed class AuthUserPass : AuthMethod
         // would leave that plaintext sitting in a buffer any unrelated caller could rent next and,
         // depending on how much of it they actually overwrite before reading, potentially observe.
         ArrayPool<byte>.Shared.Return(TakeBuffer(), clearArray: true);
+        if (exception == null) ProxyMetrics.AuthRoundCompleted("socks5-userpass");
         CallBack(exception);
     }
 }

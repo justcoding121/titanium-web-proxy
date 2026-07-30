@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Security;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
@@ -107,10 +108,12 @@ public partial class ProxyServer
                         // RequestHandler apply before anything observes pre-normalization values.
                         try
                         {
-                            Http1FramingValidator.Validate(request, ResolveHttp1WireFramingSource(args));
+                            Http1FramingValidator.Validate(request, ResolveHttp1WireFramingSource(args),
+                                args.Server.PolicyModes.AllowAmbiguousFraming);
                         }
                         catch (Http1FramingException framingEx)
                         {
+                            ProxyMetrics.ParserError("framing");
                             args.HttpClient.Response = new GenericResponse(framingEx.StatusCode)
                             {
                                 HttpVersion = request.HttpVersion
