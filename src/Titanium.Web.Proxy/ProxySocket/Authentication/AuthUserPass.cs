@@ -167,7 +167,11 @@ internal sealed class AuthUserPass : AuthMethod
 
     private void OnCallBack(Exception? exception)
     {
-        ArrayPool<byte>.Shared.Return(TakeBuffer());
+        // This buffer held the RFC 1929 username/password subnegotiation packet - the plaintext
+        // proxy password in the clear. Returning it to the shared pool without clearing it first
+        // would leave that plaintext sitting in a buffer any unrelated caller could rent next and,
+        // depending on how much of it they actually overwrite before reading, potentially observe.
+        ArrayPool<byte>.Shared.Return(TakeBuffer(), clearArray: true);
         CallBack(exception);
     }
 }
