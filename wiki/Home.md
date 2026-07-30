@@ -21,6 +21,8 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET. This wiki documents t
 - [Request timing](#request-timing)
 - [Supported frameworks](#supported-frameworks)
 - [Breaking changes: unified logging and timing](#breaking-changes-unified-logging-and-timing)
+- [Migrating from 4.x to 5.0](Migration-4.x-to-5.0)
+- [Security considerations](Security-Considerations)
 - [Protocol feature support](Protocol-Support)
 
 ## Getting started
@@ -397,6 +399,14 @@ Versions prior to 4.0 also supported .NET Framework 4.6.2 and .NET 8; starting w
 - `SessionEventArgsBase.TimeLine` (the free-form `Dictionary<string, DateTime>` of named milestones) was
   removed. Use [`Timing`/`UpstreamConnectionTiming`/`ClientTlsTiming`](#request-timing) instead, which are
   strongly typed and only allocated when `EnableRequestTimingCapture` is set.
+
+## Migrating from 4.x to 5.0
+
+5.0 bundles a large security- and correctness-hardening pass — TLS defaults, certificate storage
+location, HTTP/1 framing strictness, body-size budgets, WebSocket/HTTP-2/HTTP-3 abuse limits, and a
+few credential/redaction fixes all changed observable behavior in some way. See the dedicated
+**[Migration guide: 4.x → 5.0](Migration-4.x-to-5.0)** page for the full list, each with its rationale
+and remedy.
 
 ## Protocol feature support
 

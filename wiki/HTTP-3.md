@@ -178,12 +178,15 @@ proxyServer.EnableQpackDynamicTable = true; // opt-in
 When enabled, per accepted QUIC connection:
 
 - The proxy opens the QPACK encoder and decoder unidirectional control streams.
-- It advertises `SETTINGS_QPACK_MAX_TABLE_CAPACITY = 4096` and `SETTINGS_QPACK_BLOCKED_STREAMS = 100`
-  to the client.
+- It advertises `SETTINGS_QPACK_MAX_TABLE_CAPACITY = 4096` and `SETTINGS_QPACK_BLOCKED_STREAMS = 0`
+  to the client - the proxy never blocks a stream waiting for dynamic-table insertions.
 - A `QpackDynamicTable` (thread-safe via `ReaderWriterLockSlim`) tracks inbound and outbound table entries
   as absolute indices, per RFC 9204 §3.
-- When decoding an incoming HEADERS block whose Required Insert Count is > 0, the proxy suspends decoding
-  until the required number of insertions have been acknowledged via the encoder stream, per RFC 9204 §4.5.1.
+- Because `SETTINGS_QPACK_BLOCKED_STREAMS = 0` is advertised, decoding an incoming HEADERS block whose
+  Required Insert Count has not yet been satisfied is a protocol violation by the peer rather than
+  something the proxy waits out: the decoder immediately raises `QPACK_DECOMPRESSION_FAILED` and the
+  connection is aborted, per RFC 9204 §2.1.2/§4.5.1.1. It never suspends decoding to wait for
+  acknowledgment.
 - Section Acknowledgments are queued on a bounded `Channel` (capacity 1000, `DropNewest` on overflow) and
   written to the client's decoder stream by a background `QpackDecoderStreamWriter` task.
 - In-flight eviction protection: a table entry cannot be evicted while any open request stream holds a
