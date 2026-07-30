@@ -112,9 +112,14 @@ public sealed class CertificateManager : IDisposable
     ///     prompting for UAC if required?
     /// </param>
     /// <param name="logger">The initial logger to report certificate operations through.</param>
+    /// <param name="maxCacheEntriesProvider">
+    ///     Read live (not snapshotted) on every cache insertion, so that assigning a new
+    ///     <see cref="ProxyServer.ResourceLimits" /> after construction is honored without recreating
+    ///     this <see cref="CertificateManager" />. <see langword="null" /> return value means unbounded.
+    /// </param>
     internal CertificateManager(string? rootCertificateName, string? rootCertificateIssuerName,
         bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin,
-        ILogger logger)
+        ILogger logger, Func<int?>? maxCacheEntriesProvider = null)
     {
         Logger = logger;
 
@@ -128,6 +133,36 @@ public sealed class CertificateManager : IDisposable
         if (rootCertificateIssuerName != null) RootCertificateIssuerName = rootCertificateIssuerName;
 
         CertificateEngine = CertificateEngine.BouncyCastle;
+
+        this.maxCacheEntriesProvider = maxCacheEntriesProvider ?? NoMaxCacheEntries;
+    }
+
+    private static int? NoMaxCacheEntries() => null;
+
+    private readonly Func<int?> maxCacheEntriesProvider;
+
+    /// <summary>
+    ///     Evicts the least-recently-used cached certificates until the count is at or below
+    ///     <see cref="ProxyResourceLimits.MaxCertificateCacheEntries" /> (via the provider passed to the
+    ///     constructor). Each entry holds a full <see cref="X509Certificate2" /> with a private key in
+    ///     memory, so - unlike <see cref="ClearIdleCertificates" />'s time-based sweep, which only bounds
+    ///     how long an entry can live - nothing previously bounded how large the cache could grow
+    ///     <em>within</em> that window; a client (or attacker) requesting many distinct hostnames in a
+    ///     burst could otherwise accumulate unbounded generated-certificate memory before the next sweep.
+    /// </summary>
+    private void EnforceCertificateCacheBound()
+    {
+        var max = maxCacheEntriesProvider();
+        if (max is not > 0) return;
+
+        var excess = cachedCertificates.Count - max.Value;
+        if (excess <= 0) return;
+
+        // Evict without disposing, same as ClearIdleCertificates: the certificate object may still be
+        // held by an in-flight TLS handshake. The GC finalizer releases the native handle once nothing
+        // references it.
+        foreach (var pair in cachedCertificates.OrderBy(x => x.Value.LastAccess).Take(excess))
+            cachedCertificates.TryRemove(pair.Key, out _);
     }
 
     private ICertificateMaker CertEngine
@@ -533,6 +568,13 @@ public sealed class CertificateManager : IDisposable
                                 {
                                     //no two tasks with same subject name should together enter here 
                                     certificateCache.SaveCertificate(subjectName, createdCertificate);
+
+                                    // Unlike the in-memory dictionary, this on-disk cache has no
+                                    // process-lifetime sweep to ever remove old entries at all - every
+                                    // distinct hostname ever visited previously accumulated a permanent
+                                    // .pfx file. Prune it to the same configured bound.
+                                    if (certificateCache is DefaultCertificateDiskCache diskCache)
+                                        diskCache.PruneToMaxEntries(maxCacheEntriesProvider());
                                 }
                                 finally
                                 {
@@ -605,6 +647,7 @@ public sealed class CertificateManager : IDisposable
                 if (cachedCertificates.TryAdd(certificateName,
                         new CachedCertificate(fromDisk) { LastAccess = DateTime.UtcNow }))
                 {
+                    EnforceCertificateCacheBound();
                     return fromDisk;
                 }
 
@@ -636,8 +679,11 @@ public sealed class CertificateManager : IDisposable
                     {
                         var result = CreateCertificate(certificateName, false);
                         if (result != null)
+                        {
                             cachedCertificates.TryAdd(certificateName,
                                 new CachedCertificate(result) { LastAccess = DateTime.UtcNow });
+                            EnforceCertificateCacheBound();
+                        }
 
                         return result;
                     }
@@ -960,37 +1006,54 @@ public sealed class CertificateManager : IDisposable
         // currentUser\Personal
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
 
+        // certutil.exe only accepts the PFX password via a plain "-p password" command-line argument -
+        // it has no file/stdin-based alternative (confirmed: no documented option to read it from a
+        // file). ProcessStartInfo.Arguments is visible to any other process/user that lists this
+        // process's command line (Task Manager, Get-Process, WMI, etc.) for as long as certutil runs.
+        // The configured PfxPassword protects the *long-lived* cached root PFX on disk (see
+        // SaveRootCertificate) and must never appear there. This temp file exists only for certutil to
+        // consume for the few moments before it's deleted below, so export it under a throwaway,
+        // single-use empty password instead of reusing the real secret on the command line.
+        const string transientPfxPassword = "";
         var pfxFileName = Path.GetTempFileName();
-        File.WriteAllBytes(pfxFileName, certificate.Export(X509ContentType.Pkcs12, PfxPassword));
-
-        // currentUser\Root, currentMachine\Personal &  currentMachine\Root
-        var info = new ProcessStartInfo
-        {
-            FileName = "certutil.exe",
-            CreateNoWindow = true,
-            UseShellExecute = true,
-            Verb = "runas",
-            ErrorDialog = false,
-            WindowStyle = ProcessWindowStyle.Hidden
-        };
-
-        if (!machineTrusted)
-            info.Arguments = "-f -user -p \"" + PfxPassword + "\" -importpfx root \"" + pfxFileName + "\"";
-        else
-            info.Arguments = "-importPFX -p \"" + PfxPassword + "\" -f \"" + pfxFileName + "\"";
-
         try
         {
-            var process = Process.Start(info);
-            if (process == null) return false;
+            File.WriteAllBytes(pfxFileName, certificate.Export(X509ContentType.Pkcs12, transientPfxPassword));
 
-            process.WaitForExit();
-            File.Delete(pfxFileName);
+            // currentUser\Root, currentMachine\Personal &  currentMachine\Root
+            var info = new ProcessStartInfo
+            {
+                FileName = "certutil.exe",
+                CreateNoWindow = true,
+                UseShellExecute = true,
+                Verb = "runas",
+                ErrorDialog = false,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+
+            if (!machineTrusted)
+                info.Arguments = "-f -user -p \"" + transientPfxPassword + "\" -importpfx root \"" + pfxFileName + "\"";
+            else
+                info.Arguments = "-importPFX -p \"" + transientPfxPassword + "\" -f \"" + pfxFileName + "\"";
+
+            try
+            {
+                var process = Process.Start(info);
+                if (process == null) return false;
+
+                process.WaitForExit();
+            }
+            catch (Exception e)
+            {
+                OnException(e);
+                return false;
+            }
         }
-        catch (Exception e)
+        finally
         {
-            OnException(e);
-            return false;
+            // Guaranteed even if Export/WriteAllBytes/Process.Start/WaitForExit throws - otherwise a
+            // temporary file holding the exported root private key is left behind on disk indefinitely.
+            try { File.Delete(pfxFileName); } catch { /* best effort */ }
         }
 
         return true;

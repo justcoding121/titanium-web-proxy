@@ -174,8 +174,11 @@ internal class BcCertificateMakerFast : ICertificateMaker
         // Use ToRSAParameters + RSA.Create (not DotNetUtilities.ToRSA) — ToRSA is Windows-only via CAPI.
         if (!RunTime.IsWindows)
         {
-            var publicOnly = CertificateLoader.LoadCertificate(certificate.GetEncoded());
-            var rsa = RSA.Create();
+            // CopyWithPrivateKey returns a brand-new X509Certificate2 combining the two; both
+            // intermediates below hold unmanaged crypto handles (a native cert context and an RSA key
+            // handle respectively) that would otherwise sit unreleased until the next GC/finalizer pass.
+            using var publicOnly = CertificateLoader.LoadCertificate(certificate.GetEncoded());
+            using var rsa = RSA.Create();
             rsa.ImportParameters(DotNetUtilities.ToRSAParameters((RsaPrivateCrtKeyParameters)privateKey));
             return publicOnly.CopyWithPrivateKey(rsa);
         }

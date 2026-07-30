@@ -174,7 +174,8 @@ public partial class ProxyServer : IDisposable
         if (RunTime.IsWindows && !RunTime.IsUwpOnWindows) SystemProxySettingsManager = new SystemProxyManager();
 
         CertificateManager = new CertificateManager(rootCertificateName, rootCertificateIssuerName,
-            userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin, logger);
+            userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin, logger,
+            () => ResourceLimits.MaxCertificateCacheEntries);
     }
 
     /// <summary>
@@ -689,13 +690,15 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     List of supported Ssl versions.
+    ///     <para>
+    ///         Defaults to TLS 1.2/1.3 only as of 5.0 - a breaking change from 4.x, which also enabled
+    ///         SSL 3.0/TLS 1.0/1.1. Those legacy, broken-by-design protocols require an explicit opt-in
+    ///         by assigning this property directly (e.g. <c>SslProtocols.Tls | SslProtocols.Tls11 |
+    ///         SslProtocols.Tls12 | SslProtocols.Tls13</c>) if a legacy client/server genuinely requires
+    ///         them.
+    ///     </para>
     /// </summary>
-#pragma warning disable CS0618, SYSLIB0039 // SSL 3.0/TLS 1.0/1.1 remain opt-in defaults for legacy proxy compatibility.
-    public SslProtocols SupportedSslProtocols { get; set; } =
-        SslProtocols.Ssl3 | SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12
-        | SslProtocols.Tls13
-        ;
-#pragma warning restore CS0618, SYSLIB0039
+    public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls12 | SslProtocols.Tls13;
 
     /// <summary>
     ///     List of supported Server Ssl versions.

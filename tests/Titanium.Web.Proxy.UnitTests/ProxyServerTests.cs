@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net;
+using System.Security.Authentication;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Models;
 
@@ -8,6 +9,24 @@ namespace Titanium.Web.Proxy.UnitTests
     [TestClass]
     public class ProxyServerTests
     {
+        /// <summary>
+        ///     Phase E.14 ("Default to TLS 1.2/1.3 now rather than deferring"): a bare
+        ///     <c>new ProxyServer()</c> must negotiate only modern TLS versions; SSL 3.0/TLS 1.0/1.1
+        ///     require an explicit opt-in from the caller.
+        /// </summary>
+        [TestMethod]
+        public void DefaultConstructor_SupportedSslProtocols_IsTls12And13Only()
+        {
+            var proxy = new ProxyServer();
+
+            Assert.AreEqual(SslProtocols.Tls12 | SslProtocols.Tls13, proxy.SupportedSslProtocols);
+#pragma warning disable CS0618, SYSLIB0039 // asserting the legacy protocols are specifically excluded
+            Assert.IsFalse(proxy.SupportedSslProtocols.HasFlag(SslProtocols.Ssl3));
+            Assert.IsFalse(proxy.SupportedSslProtocols.HasFlag(SslProtocols.Tls));
+            Assert.IsFalse(proxy.SupportedSslProtocols.HasFlag(SslProtocols.Tls11));
+#pragma warning restore CS0618, SYSLIB0039
+        }
+
         [TestMethod]
         public void
             GivenOneEndpointIsAlreadyAddedToAddress_WhenAddingNewEndpointToExistingAddress_ThenExceptionIsThrown()

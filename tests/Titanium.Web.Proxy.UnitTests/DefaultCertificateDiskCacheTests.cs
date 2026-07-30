@@ -1,6 +1,9 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
@@ -52,6 +55,56 @@ public class DefaultCertificateDiskCacheTests
             {
                 // best-effort
             }
+        }
+    }
+
+    /// <summary>
+    ///     Phase E.14 ("Bound in-memory and disk certificate caches"): unlike the in-memory cache, the
+    ///     on-disk leaf-certificate cache has no other eviction path at all, so <c>PruneToMaxEntries</c>
+    ///     is the only thing preventing one permanent .pfx file per ever-visited hostname from
+    ///     accumulating forever.
+    /// </summary>
+    [TestMethod]
+    public void PruneToMaxEntries_DeletesOldestFilesFirst_KeepingOnlyTheBound()
+    {
+        if (!RunTime.IsWindows)
+            Assert.Inconclusive("PKCS#12 Exportable disk-cache characterization is Windows-focused.");
+
+        var cache = new DefaultCertificateDiskCache();
+        var certPathField = typeof(DefaultCertificateDiskCache).GetMethod("GetCertificatePath",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.IsNotNull(certPathField);
+        var certDir = (string)certPathField.Invoke(cache, new object[] { true })!;
+
+        try
+        {
+            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastleFast
+            };
+            Assert.IsTrue(mgr.CreateRootCertificate(false));
+
+            var names = new[] { "prune-a.example", "prune-b.example", "prune-c.example" };
+            foreach (var name in names)
+            {
+                using var cert = mgr.CreateCertificate(name, false);
+                cache.SaveCertificate(name, cert);
+                // Ensure distinct LastWriteTimeUtc ordering between files created back-to-back.
+                Thread.Sleep(20);
+            }
+
+            cache.PruneToMaxEntries(2);
+
+            var remaining = Directory.GetFiles(certDir, "*.pfx")
+                .Select(Path.GetFileNameWithoutExtension).ToArray();
+            Assert.AreEqual(2, remaining.Length, "cache directory should be pruned down to the bound");
+            CollectionAssert.DoesNotContain(remaining, "prune-a.example",
+                "the oldest file should have been pruned first");
+        }
+        finally
+        {
+            foreach (var name in new[] { "prune-a.example", "prune-b.example", "prune-c.example" })
+                try { File.Delete(Path.Combine(certDir, name + ".pfx")); } catch { /* best-effort */ }
         }
     }
 
