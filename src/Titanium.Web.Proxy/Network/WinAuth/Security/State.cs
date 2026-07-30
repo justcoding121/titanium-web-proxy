@@ -5,7 +5,7 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security;
 /// <summary>
 ///     Status of authenticated session
 /// </summary>
-internal class State
+internal sealed class State : IDisposable
 {
     /// <summary>
     ///     States during Windows Authentication
@@ -26,12 +26,12 @@ internal class State
     /// <summary>
     ///     Context will be used to validate HTLM hashes
     /// </summary>
-    internal Common.SecurityHandle Context;
+    internal readonly SafeSspiHandle Context;
 
     /// <summary>
     ///     Credentials used to validate NTLM hashes
     /// </summary>
-    internal Common.SecurityHandle Credentials;
+    internal readonly SafeSspiHandle Credentials;
 
     /// <summary>
     ///     Timestamp needed to calculate validity of the authenticated session
@@ -40,8 +40,8 @@ internal class State
 
     internal State()
     {
-        Credentials = new Common.SecurityHandle(0);
-        Context = new Common.SecurityHandle(0);
+        Credentials = new SafeSspiHandle(SafeSspiHandle.HandleKind.Credential);
+        Context = new SafeSspiHandle(SafeSspiHandle.HandleKind.Context);
 
         LastSeen = DateTime.UtcNow;
         AuthState = WinAuthState.Unauthorized;
@@ -49,13 +49,25 @@ internal class State
 
     internal void ResetHandles()
     {
-        Credentials.Reset();
-        Context.Reset();
+        Credentials.Free();
+        Context.Free();
         AuthState = WinAuthState.Unauthorized;
     }
 
     internal void UpdatePresence()
     {
         LastSeen = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    ///     Releases the native SSPI credentials and security-context handles owned by this state.
+    ///     Safe to call once the negotiation has reached a terminal state (<see cref="WinAuthState.Authorized" />
+    ///     or a failed round); do not call while a multi-round negotiation is still in progress, since
+    ///     a later round needs both handles to still be valid.
+    /// </summary>
+    public void Dispose()
+    {
+        Credentials.Dispose();
+        Context.Dispose();
     }
 }

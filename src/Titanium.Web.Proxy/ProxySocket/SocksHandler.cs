@@ -179,7 +179,13 @@ internal abstract class SocksHandler
     {
         if (buffer != null)
         {
-            ArrayPool<byte>.Shared.Return(buffer);
+            // SOCKS4's CONNECT request embeds the USERID field directly in this buffer (see
+            // Socks4Handler.GetHostPortBytes/GetEndPointBytes), and Socks5Handler sizes this same
+            // buffer to already accommodate Username/Password. Clear before returning to the shared
+            // pool so no identity/credential-adjacent bytes are left for an unrelated caller to rent
+            // and potentially observe - matching the same treatment AuthUserPass.OnCallBack gives the
+            // actual RFC 1929 username/password subnegotiation buffer.
+            ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
             buffer = null;
         }
 
