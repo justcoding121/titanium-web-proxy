@@ -38,6 +38,15 @@ internal class TcpConnectionFactory : IDisposable
     /// </summary>
     private const int UpstreamProxyRejectionBodyPreviewLimit = 4096;
 
+    /// <summary>
+    ///     RFC 8305 "Happy Eyeballs" stagger: how long a connection attempt to one resolved address is
+    ///     given to succeed before a concurrent attempt to the next resolved address is also raced
+    ///     alongside it. 250ms matches the upper end of RFC 8305's recommended 150-250ms range - long
+    ///     enough that a healthy address almost always wins outright, short enough that a broken address
+    ///     family (the case this exists for) does not visibly delay the connection.
+    /// </summary>
+    private const int HappyEyeballsAttemptDelayMs = 250;
+
     private static readonly string[] UpstreamProxyAuthenticationSchemes = { "Negotiate", "NTLM", "Kerberos" };
 
     // Tcp server connection pool cache
@@ -580,184 +589,249 @@ internal class TcpConnectionFactory : IDisposable
 
             timing?.MarkDnsResolved();
 
-            Array.Sort(ipAddresses, (x, y) => x.AddressFamily.CompareTo(y.AddressFamily));
+            // RFC 8305 §4 address-family interleaving: without this, racing the addresses in resolver
+            // order (which groups every address of one family before the other, e.g. all A records then
+            // all AAAA) means a fully broken family with several addresses eats one stagger delay per
+            // address in that family before the race ever reaches a healthy address in the other family.
+            // Interleaving bounds that to a single stagger delay by alternating families at each
+            // position. Relative order *within* each family (the resolver's own preference, e.g. RFC 6724
+            // destination-address ordering) is preserved; only the interleaving across families is added.
+            ipAddresses = InterleaveByAddressFamily(ipAddresses);
 
-            Exception? lastException = null;
-            for (var i = 0; i < ipAddresses.Length; i++)
+            // Resolved once up front rather than inside the per-address race below: this is the SOCKS
+            // *origin* address embedded in the ATYP payload, which does not depend on which of the
+            // SOCKS *proxy's* addresses (the ones being raced) ends up winning, so re-resolving it once
+            // per racing attempt would be redundant and (since a proxy config's outcome for this address
+            // is deterministic) would only ever fail or succeed the same way every time.
+            // Known limitation: when multiple resolved origin addresses are returned we still only
+            // attempt the first. Per-remote-address failover would require plumbing SOCKS ATYP selection
+            // into the same address race below and is left as a future improvement.
+            IPAddress[]? socksRemoteIpAddresses = null;
+            if (socks && !externalProxy!.ProxyDnsRequests)
+            {
+                socksRemoteIpAddresses = await Dns.GetHostAddressesAsync(connectHostName);
+                if (socksRemoteIpAddresses == null || socksRemoteIpAddresses.Length == 0)
+                    throw new Exception($"Could not resolve the SOCKS remote hostname {connectHostName}");
+
+                // Prefer IPv4 when both families are returned so SOCKS ATYP selection is
+                // predictable on dual-stack hosts (e.g. localhost → 127.0.0.1 before ::1).
+                Array.Sort(socksRemoteIpAddresses, (x, y) => x.AddressFamily.CompareTo(y.AddressFamily));
+
+                // Unlike ProxyDnsRequests=true (where the SOCKS proxy itself resolves the origin and
+                // this proxy never learns an address to validate - a case the hardening plan explicitly
+                // leaves for a future design spike), this branch resolves the real origin locally, so it
+                // is exactly the case BlockPrivateNetworkDestinations is meant to cover. Checked against
+                // the exact address about to be used below, not re-resolved afterward.
+                if (proxyServer.BlockPrivateNetworkDestinations &&
+                    PrivateNetworkGuard.IsBlocked(socksRemoteIpAddresses[0]))
+                    throw new OutboundDestinationBlockedException(connectHostName,
+                        socksRemoteIpAddresses[0].ToString());
+            }
+
+            var connectTimeoutMs = (int)(sessionArgs?.ConnectTimeout?.TotalMilliseconds
+                ?? proxyServer.ConnectTimeOutSeconds * 1000.0);
+            var effectiveTimeoutSecs = sessionArgs?.ConnectTimeout.HasValue == true
+                ? $"{sessionArgs.ConnectTimeout!.Value.TotalSeconds:0.#}s"
+                : $"{proxyServer.ConnectTimeOutSeconds}s";
+
+            // Attempts one resolved address end to end (socket creation through connect) and either
+            // returns the connected socket or throws. Cancelling attemptToken (either the caller's own
+            // cancellationToken, or the race below abandoning this attempt because another address
+            // already won) aborts the in-flight connect rather than leaving it to run to its own timeout.
+            async Task<(Socket Socket, IPEndPoint? BoundEndPoint)> ConnectToAddressAsync(IPAddress ipAddress,
+                CancellationToken attemptToken)
+            {
+                // externalProxy == null here means this attempt's target is the real destination
+                // (connectHostName), not an operator-configured upstream proxy address, which is
+                // always exempt (see BlockPrivateNetworkDestinations). Checked against this exact
+                // resolved address, immediately before it is used to connect below - never
+                // re-resolving the hostname afterward - so the check cannot be defeated by a DNS
+                // answer that changes between validation and use (rebinding).
+                if (proxyServer.BlockPrivateNetworkDestinations && externalProxy == null &&
+                    PrivateNetworkGuard.IsBlocked(ipAddress))
+                    throw new OutboundDestinationBlockedException(hostname, ipAddress.ToString());
+
+                // Select local bind after destination resolution so IPv4/IPv6 adapters can coexist (#951).
+                var resolvedBind = UpStreamEndPointSelector.Resolve(ipAddress.AddressFamily,
+                    sessionHttpClient.UpStreamEndPoint, sessionHttpClient.UpStreamEndPointIPv4,
+                    sessionHttpClient.UpStreamEndPointIPv6,
+                    proxyServer.UpStreamEndPoint, proxyServer.UpStreamEndPointIPv4,
+                    proxyServer.UpStreamEndPointIPv6);
+                // Prefer selector result; fall back to the legacy single endpoint only when families match.
+                if (resolvedBind == null && upStreamEndPoint != null &&
+                    upStreamEndPoint.AddressFamily == ipAddress.AddressFamily)
+                    resolvedBind = upStreamEndPoint;
+                if (resolvedBind == null && upStreamEndPointIPv4 != null &&
+                    ipAddress.AddressFamily == AddressFamily.InterNetwork)
+                    resolvedBind = upStreamEndPointIPv4;
+                if (resolvedBind == null && upStreamEndPointIPv6 != null &&
+                    ipAddress.AddressFamily == AddressFamily.InterNetworkV6)
+                    resolvedBind = upStreamEndPointIPv6;
+
+                var addressFamily = resolvedBind?.AddressFamily ?? ipAddress.AddressFamily;
+
+                Socket attemptSocket;
+                if (socks)
+                {
+                    var proxySocket =
+                        new ProxySocket.ProxySocket(addressFamily, SocketType.Stream, ProtocolType.Tcp);
+                    proxySocket.ProxyType = externalProxy!.ProxyType == ExternalProxyType.Socks4
+                        ? ProxyTypes.Socks4
+                        : ProxyTypes.Socks5;
+
+                    proxySocket.ProxyEndPoint = new IPEndPoint(ipAddress, port);
+                    var proxyUser = externalProxy.UserName;
+                    var proxyPassword = externalProxy.Password;
+
+                    // SOCKS4 authenticates with a username only (no password), so do not require a
+                    // non-null password to set the user. SOCKS5 user/password auth uses both.
+                    if (proxyUser != null && proxyUser.Length > 0)
+                    {
+                        proxySocket.ProxyUser = proxyUser;
+                        if (proxyPassword != null) proxySocket.ProxyPass = proxyPassword;
+                    }
+
+                    attemptSocket = proxySocket;
+                }
+                else
+                {
+                    attemptSocket = new Socket(addressFamily, SocketType.Stream, ProtocolType.Tcp);
+                }
+
                 try
                 {
-                    var ipAddress = ipAddresses[i];
+                    if (resolvedBind != null) attemptSocket.Bind(resolvedBind);
 
-                    // externalProxy == null here means this loop's target is the real destination
-                    // (connectHostName), not an operator-configured upstream proxy address, which is
-                    // always exempt (see BlockPrivateNetworkDestinations). Checked against this exact
-                    // resolved address, immediately before it is used to connect below - never
-                    // re-resolving the hostname afterward - so the check cannot be defeated by a DNS
-                    // answer that changes between validation and use (rebinding).
-                    if (proxyServer.BlockPrivateNetworkDestinations && externalProxy == null &&
-                        PrivateNetworkGuard.IsBlocked(ipAddress))
-                        throw new OutboundDestinationBlockedException(hostname, ipAddress.ToString());
-
-                    // Select local bind after destination resolution so IPv4/IPv6 adapters can coexist (#951).
-                    var resolvedBind = UpStreamEndPointSelector.Resolve(ipAddress.AddressFamily,
-                        sessionHttpClient.UpStreamEndPoint, sessionHttpClient.UpStreamEndPointIPv4,
-                        sessionHttpClient.UpStreamEndPointIPv6,
-                        proxyServer.UpStreamEndPoint, proxyServer.UpStreamEndPointIPv4,
-                        proxyServer.UpStreamEndPointIPv6);
-                    // Prefer selector result; fall back to the legacy single endpoint only when families match.
-                    if (resolvedBind == null && upStreamEndPoint != null &&
-                        upStreamEndPoint.AddressFamily == ipAddress.AddressFamily)
-                        resolvedBind = upStreamEndPoint;
-                    if (resolvedBind == null && upStreamEndPointIPv4 != null &&
-                        ipAddress.AddressFamily == AddressFamily.InterNetwork)
-                        resolvedBind = upStreamEndPointIPv4;
-                    if (resolvedBind == null && upStreamEndPointIPv6 != null &&
-                        ipAddress.AddressFamily == AddressFamily.InterNetworkV6)
-                        resolvedBind = upStreamEndPointIPv6;
-
-                    var addressFamily = resolvedBind?.AddressFamily ?? ipAddress.AddressFamily;
-
-                    if (socks)
-                    {
-                        var proxySocket =
-                            new ProxySocket.ProxySocket(addressFamily, SocketType.Stream, ProtocolType.Tcp);
-                        proxySocket.ProxyType = externalProxy!.ProxyType == ExternalProxyType.Socks4
-                            ? ProxyTypes.Socks4
-                            : ProxyTypes.Socks5;
-
-                        proxySocket.ProxyEndPoint = new IPEndPoint(ipAddress, port);
-                        var proxyUser = externalProxy.UserName;
-                        var proxyPassword = externalProxy.Password;
-
-                        // SOCKS4 authenticates with a username only (no password), so do not require a
-                        // non-null password to set the user. SOCKS5 user/password auth uses both.
-                        if (proxyUser != null && proxyUser.Length > 0)
-                        {
-                            proxySocket.ProxyUser = proxyUser;
-                            if (proxyPassword != null) proxySocket.ProxyPass = proxyPassword;
-                        }
-
-                        tcpServerSocket = proxySocket;
-                    }
-                    else
-                    {
-                        tcpServerSocket = new Socket(addressFamily, SocketType.Stream, ProtocolType.Tcp);
-                    }
-
-                    if (resolvedBind != null) tcpServerSocket.Bind(resolvedBind);
-
-                    tcpServerSocket.NoDelay = proxyServer.NoDelay;
-                    tcpServerSocket.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
-                    tcpServerSocket.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
-                    tcpServerSocket.LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds);
+                    attemptSocket.NoDelay = proxyServer.NoDelay;
+                    attemptSocket.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                    attemptSocket.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                    attemptSocket.LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds);
 
                     if (proxyServer.ReuseSocket && RunTime.IsSocketReuseAvailable())
-                        tcpServerSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                        attemptSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
 
                     if (proxyServer.EnableTcpKeepAlive)
-                        tcpServerSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-
-                    var connectTimeoutMs = (int)(sessionArgs?.ConnectTimeout?.TotalMilliseconds
-                        ?? proxyServer.ConnectTimeOutSeconds * 1000.0);
-                    var effectiveTimeoutSecs = sessionArgs?.ConnectTimeout.HasValue == true
-                        ? $"{sessionArgs.ConnectTimeout!.Value.TotalSeconds:0.#}s"
-                        : $"{proxyServer.ConnectTimeOutSeconds}s";
+                        attemptSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 
                     if (socks)
                     {
-                        Task connectTask;
-                        if (externalProxy!.ProxyDnsRequests)
+                        Task connectTask = externalProxy!.ProxyDnsRequests
+                            ? ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)attemptSocket,
+                                connectHostName, connectPortNumber)
+                            : ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)attemptSocket,
+                                socksRemoteIpAddresses![0], connectPortNumber);
+
+                        // Task.WhenAny never faults/cancels itself - it just resolves with whichever
+                        // constituent task finished first, so no try/catch is needed around this await;
+                        // the completion check below is what actually distinguishes success from timeout.
+                        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(attemptToken);
+                        timeoutCts.CancelAfter(connectTimeoutMs);
+                        await Task.WhenAny(connectTask, Task.Delay(Timeout.Infinite, timeoutCts.Token));
+
+                        if (!connectTask.IsCompleted || !attemptSocket.Connected)
                         {
-                            connectTask =
-                                ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)tcpServerSocket,
-                                    connectHostName, connectPortNumber);
-                        }
-                        else
-                        {
-                            var remoteIpAddresses = await Dns.GetHostAddressesAsync(connectHostName);
-                            if (remoteIpAddresses == null || remoteIpAddresses.Length == 0)
-                                throw new Exception($"Could not resolve the SOCKS remote hostname {connectHostName}");
-
-                            // Prefer IPv4 when both families are returned so SOCKS ATYP selection is
-                            // predictable on dual-stack hosts (e.g. localhost → 127.0.0.1 before ::1).
-                            // Known limitation: when multiple addresses remain we still only attempt the
-                            // first. Per-remote-address failover would require restructuring the shared
-                            // connect/timeout loop below and is left as a future improvement.
-                            Array.Sort(remoteIpAddresses, (x, y) => x.AddressFamily.CompareTo(y.AddressFamily));
-
-                            // Unlike ProxyDnsRequests=true (where the SOCKS proxy itself resolves the
-                            // origin and this proxy never learns an address to validate - a case the
-                            // hardening plan explicitly leaves for a future design spike), this branch
-                            // resolves the real origin locally, so it is exactly the case
-                            // BlockPrivateNetworkDestinations is meant to cover. Checked against the
-                            // exact address about to be used below, not re-resolved afterward.
-                            if (proxyServer.BlockPrivateNetworkDestinations &&
-                                PrivateNetworkGuard.IsBlocked(remoteIpAddresses[0]))
-                                throw new OutboundDestinationBlockedException(connectHostName,
-                                    remoteIpAddresses[0].ToString());
-
-                            connectTask = ProxySocketConnectionTaskFactory.CreateTask(
-                                (ProxySocket.ProxySocket)tcpServerSocket, remoteIpAddresses[0], connectPortNumber);
-                        }
-
-                        await Task.WhenAny(connectTask, Task.Delay(connectTimeoutMs, cancellationToken));
-                        if (!connectTask.IsCompleted || !tcpServerSocket.Connected)
-                        {
-                            // Connect race lost — dispose the socket so the in-flight BeginConnect aborts.
-                            lastException = new ProxyTimeoutException(
-                                $"Timed out connecting to {hostname}:{port} after {effectiveTimeoutSecs}.",
-                                ProxyTimeoutKind.Connect);
-
                             try { connectTask.Dispose(); } catch { /* ignore */ }
 
-                            try
-                            {
-                                tcpServerSocket?.Dispose();
-                                tcpServerSocket = null;
-                            }
-                            catch { /* ignore */ }
+                            if (attemptToken.IsCancellationRequested) attemptToken.ThrowIfCancellationRequested();
 
-                            continue;
+                            throw new ProxyTimeoutException(
+                                $"Timed out connecting to {hostname}:{port} after {effectiveTimeoutSecs}.",
+                                ProxyTimeoutKind.Connect);
                         }
                     }
                     else
                     {
                         // ConnectAsync + CancelAfter cancels the in-flight connect on timeout,
                         // avoiding ephemeral-port leaks from orphaned BeginConnect operations.
-                        using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                        using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(attemptToken);
                         connectCts.CancelAfter(connectTimeoutMs);
                         try
                         {
-                            await tcpServerSocket.ConnectAsync(new IPEndPoint(ipAddress, port), connectCts.Token);
+                            await attemptSocket.ConnectAsync(new IPEndPoint(ipAddress, port), connectCts.Token);
                         }
-                        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                        catch (OperationCanceledException) when (!attemptToken.IsCancellationRequested)
                         {
-                            lastException = new ProxyTimeoutException(
+                            throw new ProxyTimeoutException(
                                 $"Timed out connecting to {hostname}:{port} after {effectiveTimeoutSecs}.",
                                 ProxyTimeoutKind.Connect);
-
-                            try
-                            {
-                                tcpServerSocket?.Dispose();
-                                tcpServerSocket = null;
-                            }
-                            catch { /* ignore */ }
-
-                            continue;
                         }
                     }
 
-                    boundEndPoint = resolvedBind;
-                    break;
+                    return (attemptSocket, resolvedBind);
                 }
-                catch (Exception e)
+                catch
                 {
-                    // dispose the current TcpClient and try the next address
-                    lastException = e;
-                    tcpServerSocket?.Dispose();
-                    tcpServerSocket = null;
-                    if (timing != null) timing.FailedAddressAttempts++;
+                    attemptSocket.Dispose();
+                    throw;
                 }
+            }
+
+            // RFC 8305 "Happy Eyeballs": race the resolved addresses instead of trying them fully
+            // sequentially. Without this, one broken address family (a very common dual-stack failure
+            // mode - e.g. IPv6 blackholed by network policy) forces every request to pay the *full*
+            // per-address connect timeout before falling back, once per address. Staggering attempts
+            // this way means a healthy address usually wins within one delay interval of a broken one,
+            // and a fast failure (e.g. immediate ECONNREFUSED) advances to the next address immediately
+            // rather than waiting out the rest of the stagger delay.
+            Exception? lastException = null;
+            using (var raceCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                var inFlight = new List<Task<(Socket Socket, IPEndPoint? BoundEndPoint)>>(ipAddresses.Length);
+
+                for (var i = 0; i < ipAddresses.Length; i++)
+                {
+                    inFlight.Add(ConnectToAddressAsync(ipAddresses[i], raceCts.Token));
+
+                    var stagger = i == ipAddresses.Length - 1
+                        ? null // nothing left to race the last address against
+                        : Task.Delay(HappyEyeballsAttemptDelayMs);
+
+                    while (inFlight.Count > 0)
+                    {
+                        var pending = Task.WhenAny(inFlight);
+                        Task<(Socket Socket, IPEndPoint? BoundEndPoint)> doneTask;
+                        if (stagger == null)
+                        {
+                            doneTask = await pending;
+                        }
+                        else
+                        {
+                            var firstDone = await Task.WhenAny(pending, stagger);
+                            if (firstDone == stagger) break; // stagger elapsed; race in the next address
+                            doneTask = await pending; // already complete
+                        }
+
+                        inFlight.Remove(doneTask);
+
+                        if (doneTask.IsCompletedSuccessfully)
+                        {
+                            (tcpServerSocket, boundEndPoint) = doneTask.Result;
+                            raceCts.Cancel();
+                            AbandonLosingAttempts(inFlight);
+                            goto raceDecided;
+                        }
+
+                        try
+                        {
+                            // Already completed (faulted or canceled) - GetResult() synchronously
+                            // rethrows the single original exception, unwrapped exactly as `await`
+                            // would, unlike poking .Exception (null when canceled) or
+                            // .Exception.InnerException (AggregateException when faulted).
+                            doneTask.GetAwaiter().GetResult();
+                        }
+                        catch (Exception attemptEx)
+                        {
+                            lastException = attemptEx;
+                        }
+
+                        if (timing != null) timing.FailedAddressAttempts++;
+                    }
+                }
+
+                raceCts.Cancel();
+            }
+
+            raceDecided: ;
 
             if (tcpServerSocket == null)
             {
@@ -918,6 +992,69 @@ internal class TcpConnectionFactory : IDisposable
             UsedClientCertificate = usedClientCertificate,
             Timing = timing
         };
+    }
+
+    /// <summary>
+    ///     Attaches a fire-and-forget continuation to each still-in-flight Happy Eyeballs attempt after
+    ///     a race has already been decided by a different, faster address, so that a straggler which
+    ///     later connects anyway has its socket disposed instead of leaking, and neither its result nor
+    ///     its exception is ever otherwise observed (the caller has already moved on with the winner).
+    /// </summary>
+    private static void AbandonLosingAttempts(
+        IReadOnlyCollection<Task<(Socket Socket, IPEndPoint? BoundEndPoint)>> losingAttempts)
+    {
+        foreach (var attempt in losingAttempts)
+            _ = attempt.ContinueWith(
+                static completed =>
+                {
+                    if (completed.IsCompletedSuccessfully) completed.Result.Socket.Dispose();
+                    // Faulted/canceled: ConnectToAddressAsync's own catch already disposed its socket
+                    // before rethrowing, and the exception itself belongs to an abandoned attempt, not
+                    // a real failure, so it is intentionally left unobserved beyond this continuation.
+                },
+                CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+    }
+
+    /// <summary>
+    ///     Reorders resolved addresses per RFC 8305 §4 so the Happy Eyeballs race above alternates
+    ///     between address families instead of exhausting one family before trying the other. IPv4 goes
+    ///     first at every interleave position when both families are present - matching the existing,
+    ///     deliberately deterministic IPv4-first preference used elsewhere in this class for SOCKS ATYP
+    ///     selection - rather than depending on whichever order the platform resolver happens to return,
+    ///     which is not guaranteed consistent across environments. Relative order within each family
+    ///     (the resolver's own preference, e.g. RFC 6724 destination-address ordering) is preserved
+    ///     unchanged; only the interleaving across families is added.
+    /// </summary>
+    /// <remarks>Internal (rather than private) so it can be unit tested directly.</remarks>
+    internal static IPAddress[] InterleaveByAddressFamily(IPAddress[] addresses)
+    {
+        if (addresses.Length <= 1) return addresses;
+
+        var firstFamily = addresses.Any(a => a.AddressFamily == AddressFamily.InterNetwork)
+            ? AddressFamily.InterNetwork
+            : addresses[0].AddressFamily;
+        var primary = new List<IPAddress>(addresses.Length);
+        var secondary = new List<IPAddress>(addresses.Length);
+        foreach (var address in addresses)
+            if (address.AddressFamily == firstFamily)
+                primary.Add(address);
+            else
+                secondary.Add(address);
+
+        // Every address shared the same family - nothing to interleave.
+        if (secondary.Count == 0) return addresses;
+
+        var result = new IPAddress[addresses.Length];
+        var i = 0;
+        var p = 0;
+        var s = 0;
+        while (p < primary.Count || s < secondary.Count)
+        {
+            if (p < primary.Count) result[i++] = primary[p++];
+            if (s < secondary.Count) result[i++] = secondary[s++];
+        }
+
+        return result;
     }
 
     /// <summary>

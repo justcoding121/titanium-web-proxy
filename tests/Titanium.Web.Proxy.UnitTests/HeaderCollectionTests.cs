@@ -1,5 +1,9 @@
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.UnitTests
 {
@@ -144,6 +148,121 @@ namespace Titanium.Web.Proxy.UnitTests
             headers.FixProxyHeaders();
 
             Assert.AreEqual("keep-alive", headers.GetHeaderValueOrNull(KnownHeaders.Connection));
+        }
+
+        /// <summary>
+        ///     Phase F.18 allocation reduction: <see cref="HeaderCollection.GetEnumerator" /> was
+        ///     rewritten from a LINQ <c>Concat(...SelectMany(...))</c> expression to a hand-written
+        ///     struct enumerator (the every-message header-serialization path). These tests pin down
+        ///     that the visible enumeration order and contents are unchanged: unique headers first (in
+        ///     dictionary iteration order), then every non-unique header's values in insertion order,
+        ///     grouped by name.
+        /// </summary>
+        [TestMethod]
+        public void Foreach_YieldsUniqueHeadersThenNonUniqueHeadersInInsertionOrder()
+        {
+            var headers = new HeaderCollection();
+            headers.AddHeader("X-Unique-1", "u1");
+            headers.AddHeader("X-Multi", "m1");
+            headers.AddHeader("X-Unique-2", "u2");
+            headers.AddHeader("X-Multi", "m2");
+
+            var seen = new List<(string Name, string Value)>();
+            foreach (var header in headers) seen.Add((header.Name, header.Value));
+
+            Assert.AreEqual(4, seen.Count);
+            CollectionAssert.AreEquivalent(
+                new[] { "X-Unique-1", "X-Unique-2" },
+                seen.Take(2).Select(h => h.Name).ToArray());
+            CollectionAssert.AreEqual(
+                new[] { ("X-Multi", "m1"), ("X-Multi", "m2") },
+                seen.Skip(2).ToArray());
+        }
+
+        [TestMethod]
+        public void Foreach_EmptyCollection_YieldsNothing()
+        {
+            var headers = new HeaderCollection();
+
+            var count = 0;
+            foreach (var _ in headers) count++;
+
+            Assert.AreEqual(0, count);
+        }
+
+        [TestMethod]
+        public void Foreach_OnlyNonUniqueHeaders_YieldsAllValuesAcrossAllNames()
+        {
+            var headers = new HeaderCollection();
+            headers.AddHeader("Set-Cookie", "a=1");
+            headers.AddHeader("Set-Cookie", "b=2");
+            headers.AddHeader("X-Also-Multi", "x=1");
+            headers.AddHeader("X-Also-Multi", "x=2");
+
+            var values = headers.Select(h => h.Value).ToList();
+
+            CollectionAssert.AreEquivalent(new[] { "a=1", "b=2", "x=1", "x=2" }, values);
+        }
+
+        [TestMethod]
+        public void GetEnumerator_ThroughGenericIEnumerableInterface_ProducesSameResultsAsDirectForeach()
+        {
+            var headers = new HeaderCollection();
+            headers.AddHeader("X-A", "1");
+            headers.AddHeader("X-B", "2");
+            headers.AddHeader("X-B", "3");
+
+            IEnumerable<HttpHeader> asInterface = headers;
+            var viaInterface = asInterface.Select(h => h.Value).ToList();
+
+            var viaForeach = new List<string>();
+            foreach (var header in headers) viaForeach.Add(header.Value);
+
+            CollectionAssert.AreEqual(viaForeach, viaInterface);
+        }
+
+        [TestMethod]
+        public void GetEnumerator_ThroughNonGenericIEnumerableInterface_ProducesSameCount()
+        {
+            var headers = new HeaderCollection();
+            headers.AddHeader("X-A", "1");
+            headers.AddHeader("X-B", "2");
+            headers.AddHeader("X-B", "3");
+
+            IEnumerable asInterface = headers;
+            var count = 0;
+            foreach (var _ in asInterface) count++;
+
+            Assert.AreEqual(3, count);
+        }
+
+        [TestMethod]
+        public void Enumerator_MoveNextPastEnd_KeepsReturningFalse()
+        {
+            var headers = new HeaderCollection();
+            headers.AddHeader("X-A", "1");
+
+            using var enumerator = headers.GetEnumerator();
+
+            Assert.IsTrue(enumerator.MoveNext());
+            Assert.IsFalse(enumerator.MoveNext());
+            Assert.IsFalse(enumerator.MoveNext());
+        }
+
+        [TestMethod]
+        public void GetAllHeaders_MatchesForeachOrderAndContents()
+        {
+            var headers = new HeaderCollection();
+            headers.AddHeader("X-Unique", "u1");
+            headers.AddHeader("X-Multi", "m1");
+            headers.AddHeader("X-Multi", "m2");
+
+            var viaForeach = new List<string>();
+            foreach (var header in headers) viaForeach.Add(header.Value);
+
+            var viaGetAllHeaders = headers.GetAllHeaders().Select(h => h.Value).ToList();
+
+            CollectionAssert.AreEqual(viaForeach, viaGetAllHeaders);
         }
     }
 }
