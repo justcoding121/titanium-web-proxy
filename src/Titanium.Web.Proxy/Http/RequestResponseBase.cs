@@ -274,10 +274,13 @@ public abstract class RequestResponseBase
         var isChunked = IsChunked;
         var contentEncoding = ContentEncoding;
 
-        if (HasBody)
+        // Prefer a buffered body over HasBody framing heuristics. HasBody can flip false when
+        // Transfer-Encoding is stripped (HTTP/2 emit) while Content-Length is still -1, which used
+        // to discard already-read response bytes and advertise content-length: 0.
+        if (BodyInternal != null || HasBody)
         {
-            var body = Body;
-            if (contentEncoding != null && body != null)
+            var body = BodyInternal ?? Body;
+            if (contentEncoding != null && body is { Length: > 0 })
             {
                 body = GetCompressedBody(CompressionUtil.CompressionNameToEnum(contentEncoding), body);
 
@@ -285,6 +288,11 @@ public abstract class RequestResponseBase
                     ContentLength = body.Length;
                 else
                     ContentLength = -1;
+            }
+            else if (BodyInternal != null && !isChunked && ContentLength < 0)
+            {
+                // Buffered body with no Content-Length (e.g. H2/H3 origin) — publish the length.
+                ContentLength = body?.Length ?? 0;
             }
 
             return body;
