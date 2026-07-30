@@ -52,6 +52,12 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
+// GenerateAssemblyInfo is false for this project (see Titanium.Web.Proxy.csproj), so the SDK does
+// not derive these from <VersionPrefix> the way it would for a normal project - they must be kept
+// in sync with <VersionPrefix> in the csproj by hand on every version bump. A prior release let
+// these drift to "1.0.1" while the NuGet package version moved on to 5.0.0, so the shipped DLL's
+// file-properties version disagreed with the package it was published in. Keep both of the values
+// below equal to <VersionPrefix> (as Major.Minor.Build.0) whenever that property changes.
 
-[assembly: AssemblyVersion("1.0.1")]
-[assembly: AssemblyFileVersion("1.0.1")]
+[assembly: AssemblyVersion("5.0.0.0")]
+[assembly: AssemblyFileVersion("5.0.0.0")]
