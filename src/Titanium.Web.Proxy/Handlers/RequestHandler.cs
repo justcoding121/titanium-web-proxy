@@ -440,7 +440,76 @@ public partial class ProxyServer
             if (h3Route.UseH3)
             {
                 await Http3.Http3OriginBridge.ForwardAsync(args, this, h3Route, logger, cancellationToken);
-                return new RetryResult(null, null, true);
+
+                // Http3OriginBridge only fetches/buffers the origin response into args.HttpClient.Response -
+                // unlike the TCP path below, it never touches args.ClientStream. Mirror the H2->H3 bridge's
+                // response commit (Http2ToHttp3BridgeHandler.RunHttp2ToHttp3BridgeRoundTripAsync) but write
+                // H1.1 wire bytes instead of synthetic H2 frames; without this the client never receives the
+                // response and hangs waiting for bytes that were already consumed from the origin.
+                var h3Response = args.HttpClient.Response;
+
+                // Http3OriginBridge builds the response with HttpVersion 3.0 (the origin's protocol) - fine
+                // for the H2->H3 bridge, which never writes a textual status line, but the client here is
+                // HTTP/1.1 and WriteResponseAsync writes response.HttpVersion verbatim into the status line
+                // ("HTTP/3.0 200 ..."), which curl and other strict HTTP/1.1 clients don't recognize. Mirror
+                // Http2OriginConnection's H1.1-bridge convention (always the client-facing wire version, not
+                // the origin's) so the status line matches the actual protocol on this leg.
+                h3Response.HttpVersion = args.HttpClient.Request.HttpVersion;
+
+                // This response was decoded from real HTTP/3 frames (Http3OriginBridge), never from
+                // HttpStream-read bytes, so it is explicitly out of scope for the HTTP/1 wire validator -
+                // see Http1FramingValidator's remarks. The call is still made (as a documented no-op) so
+                // this remains one of the five insertion points the isolation test suite enumerates.
+                Http1FramingValidator.Validate(h3Response, FramingSource.SynthesizedFromH3);
+                h3Response.SetOriginalHeaders();
+
+                if (!h3Response.Locked) await OnBeforeResponse(args);
+
+                h3Response = args.HttpClient.Response;
+                var h3ClientStream = args.ClientStream;
+
+                if (h3Response.Locked)
+                {
+                    // user set a custom response by ignoring the original response from the origin.
+                    await h3ClientStream.WriteResponseAsync(h3Response, cancellationToken);
+                    args.IsClientResponseCommitted = true;
+
+                    if (h3Response.StreamBodyWriter != null && !h3Response.IsBodySent)
+                    {
+                        var bodyWriter = new BodyStreamWriter(h3ClientStream, h3Response.IsChunked);
+                        await h3Response.StreamBodyWriter(bodyWriter, cancellationToken);
+                        await bodyWriter.CompleteAsync(
+                            h3Response.HasTrailingHeaders ? h3Response.TrailingHeaders : null, cancellationToken);
+                        h3Response.IsBodySent = true;
+                    }
+                }
+                else
+                {
+                    if (!args.IsTransparent && !args.IsSocks)
+                    {
+                        h3Response.Headers.FixProxyHeaders();
+                        if (!string.IsNullOrEmpty(ViaHeaderPseudonym))
+                            AddViaHeader(h3Response.Headers, h3Response.HttpVersion, ViaHeaderPseudonym);
+                    }
+                    else
+                    {
+                        h3Response.Headers.NormalizeMessageFraming();
+                    }
+
+                    // HTTP/1.0 clients do not support chunked transfer encoding (RFC 7230 §4.1 / RFC 1945).
+                    if (args.HttpClient.Request.HttpVersion == HttpHeader.Version10 && h3Response.IsChunked)
+                    {
+                        await args.GetResponseBody(cancellationToken);
+                        h3Response.ContentLength = h3Response.Body.Length;
+                    }
+
+                    h3Response.Locked = true;
+                    await h3ClientStream.WriteResponseAsync(h3Response, cancellationToken);
+                    args.IsClientResponseCommitted = true;
+                    h3Response.IsBodyReceived = true;
+                }
+
+                return new RetryResult(null, null, h3Response.KeepAlive);
             }
         }
 
