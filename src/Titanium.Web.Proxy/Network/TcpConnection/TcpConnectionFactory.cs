@@ -584,6 +584,17 @@ internal class TcpConnectionFactory : IDisposable
                 try
                 {
                     var ipAddress = ipAddresses[i];
+
+                    // externalProxy == null here means this loop's target is the real destination
+                    // (connectHostName), not an operator-configured upstream proxy address, which is
+                    // always exempt (see BlockPrivateNetworkDestinations). Checked against this exact
+                    // resolved address, immediately before it is used to connect below - never
+                    // re-resolving the hostname afterward - so the check cannot be defeated by a DNS
+                    // answer that changes between validation and use (rebinding).
+                    if (proxyServer.BlockPrivateNetworkDestinations && externalProxy == null &&
+                        PrivateNetworkGuard.IsBlocked(ipAddress))
+                        throw new OutboundDestinationBlockedException(hostname, ipAddress.ToString());
+
                     // Select local bind after destination resolution so IPv4/IPv6 adapters can coexist (#951).
                     var resolvedBind = UpStreamEndPointSelector.Resolve(ipAddress.AddressFamily,
                         sessionHttpClient.UpStreamEndPoint, sessionHttpClient.UpStreamEndPointIPv4,
@@ -670,6 +681,18 @@ internal class TcpConnectionFactory : IDisposable
                             // first. Per-remote-address failover would require restructuring the shared
                             // connect/timeout loop below and is left as a future improvement.
                             Array.Sort(remoteIpAddresses, (x, y) => x.AddressFamily.CompareTo(y.AddressFamily));
+
+                            // Unlike ProxyDnsRequests=true (where the SOCKS proxy itself resolves the
+                            // origin and this proxy never learns an address to validate - a case the
+                            // hardening plan explicitly leaves for a future design spike), this branch
+                            // resolves the real origin locally, so it is exactly the case
+                            // BlockPrivateNetworkDestinations is meant to cover. Checked against the
+                            // exact address about to be used below, not re-resolved afterward.
+                            if (proxyServer.BlockPrivateNetworkDestinations &&
+                                PrivateNetworkGuard.IsBlocked(remoteIpAddresses[0]))
+                                throw new OutboundDestinationBlockedException(connectHostName,
+                                    remoteIpAddresses[0].ToString());
+
                             connectTask = ProxySocketConnectionTaskFactory.CreateTask(
                                 (ProxySocket.ProxySocket)tcpServerSocket, remoteIpAddresses[0], connectPortNumber);
                         }
@@ -761,6 +784,12 @@ internal class TcpConnectionFactory : IDisposable
 
                 if (lastException is ProxyTimeoutException timeoutException)
                     throw timeoutException;
+
+                // Rethrown unwrapped (not just as InnerException below) so a caller can specifically
+                // catch OutboundDestinationBlockedException rather than only ever seeing the generic
+                // wrapper exception.
+                if (lastException is OutboundDestinationBlockedException blockedException)
+                    throw blockedException;
 
                 throw new Exception($"Could not establish connection to {hostname}", lastException);
             }

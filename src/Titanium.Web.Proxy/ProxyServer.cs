@@ -707,6 +707,32 @@ public partial class ProxyServer : IDisposable
     public SslProtocols SupportedServerSslProtocols { get; set; } = SslProtocols.None;
 
     /// <summary>
+    ///     Outbound destination policy hook: when <see langword="true" />, every resolved destination
+    ///     IP address is checked against loopback, private (RFC 1918/4193), link-local (which subsumes
+    ///     the 169.254.169.254 cloud metadata endpoint), and other non-globally-routable ranges before
+    ///     connecting, and the connection attempt is rejected with an
+    ///     <see cref="Exceptions.OutboundDestinationBlockedException" /> if it matches.
+    ///     <para>
+    ///         Off by default: blocking private destinations would break this library's most common
+    ///         configurations, including upstream-proxy chaining to <c>localhost</c> and interception of
+    ///         local development servers. Only enable this when the proxy accepts requests from
+    ///         untrusted clients (an SSRF-relevant deployment), where those same destinations become an
+    ///         attacker-reachable pivot into the host's private network instead of an operator's own
+    ///         intentional configuration.
+    ///     </para>
+    ///     <para>
+    ///         An explicitly configured upstream proxy address (<see cref="UpStreamHttpProxy" />,
+    ///         <see cref="UpStreamHttpsProxy" />, or a per-session external proxy) is always exempt -
+    ///         that address is operator intent, not attacker-controlled. Checked against the resolved
+    ///         address actually used to connect (no re-resolution afterward, which would make the check
+    ///         a TOCTOU no-op against DNS rebinding). Not currently enforced for a SOCKS upstream with
+    ///         <c>ProxyDnsRequests</c> enabled, since the proxy never resolves the origin itself in that
+    ///         mode and has no address of its own to validate.
+    ///     </para>
+    /// </summary>
+    public bool BlockPrivateNetworkDestinations { get; set; }
+
+    /// <summary>
     ///     The buffer pool used throughout this proxy instance.
     ///     Set custom implementations by implementing this interface.
     ///     By default this uses DefaultBufferPool implementation available in StreamExtended library package.
@@ -1173,11 +1199,7 @@ public partial class ProxyServer : IDisposable
 
         SystemProxySettingsManager.RestoreOriginalSettings();
 
-        foreach (var endPoint in ProxyEndPoints.OfType<ExplicitProxyEndPoint>())
-        {
-            endPoint.IsSystemHttpProxy = false;
-            endPoint.IsSystemHttpsProxy = false;
-        }
+        ClearEndpointSystemProxyFlags(ProxyProtocolType.AllHttp);
     }
 
     /// <summary>
@@ -1190,6 +1212,12 @@ public partial class ProxyServer : IDisposable
                             Please manually configure your operating system to use this proxy's port and address.");
 
         SystemProxySettingsManager.RemoveProxy(protocolType);
+
+        // Without this, an endpoint's IsSystemHttpProxy/IsSystemHttpsProxy stays true after the
+        // corresponding registry setting has already been cleared, so a later SetAsSystemProxy call
+        // for the other protocol - or Stop()'s own best-effort registry cleanup - can read stale flags
+        // that no longer reflect the actual system proxy configuration.
+        ClearEndpointSystemProxyFlags(protocolType);
     }
 
     /// <summary>
@@ -1202,6 +1230,27 @@ public partial class ProxyServer : IDisposable
                             Please manually confugure you operating system to use this proxy's port and address.");
 
         SystemProxySettingsManager.DisableAllProxy();
+
+        ClearEndpointSystemProxyFlags(ProxyProtocolType.AllHttp);
+    }
+
+    /// <summary>
+    ///     Clears <see cref="ExplicitProxyEndPoint.IsSystemHttpProxy" />/
+    ///     <see cref="ExplicitProxyEndPoint.IsSystemHttpsProxy" /> on every endpoint for the protocol(s)
+    ///     named in <paramref name="protocolType" />, so those flags never outlive the registry setting
+    ///     they were tracking.
+    /// </summary>
+    private void ClearEndpointSystemProxyFlags(ProxyProtocolType protocolType)
+    {
+        var clearHttp = protocolType.HasFlag(ProxyProtocolType.Http);
+        var clearHttps = protocolType.HasFlag(ProxyProtocolType.Https);
+        if (!clearHttp && !clearHttps) return;
+
+        foreach (var endPoint in ProxyEndPoints.OfType<ExplicitProxyEndPoint>())
+        {
+            if (clearHttp) endPoint.IsSystemHttpProxy = false;
+            if (clearHttps) endPoint.IsSystemHttpsProxy = false;
+        }
     }
 
     /// <summary>

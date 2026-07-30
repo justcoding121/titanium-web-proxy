@@ -96,31 +96,23 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
 
     public IExternalProxy? GetProxy(Uri destination)
     {
-        // Known limitations of system-proxy resolution:
-        //  - Only the first proxy returned by the PAC/auto-config script is used; additional
-        //    fallback proxies in the list are ignored.
-        //  - The static system bypass list is not re-applied to PAC results here (the PAC script
-        //    itself is expected to return DIRECT for bypassed hosts).
+        // PAC/static-bypass precedence (matches WinHTTP's own division of responsibility, not a
+        // Titanium-specific choice): when auto-detect or an auto-config script resolves a proxy for
+        // this URL, that result is authoritative and the static bypass list is not re-applied to it -
+        // a PAC script is expected to return DIRECT itself for whatever it wants bypassed, and
+        // WinHttpGetProxyForUrl performs no bypass filtering of its own. The static bypass list
+        // (Proxy.IsBypassed / <-loopback>/<local>) governs only the static ProxyServer fallback below.
         if (GetAutoProxies(destination, out var proxies))
         {
             if (proxies == null) return null;
 
-            var proxyStr = proxies[0];
-            var port = 80;
-            if (proxyStr.Contains(":"))
-            {
-                var parts = proxyStr.Split(new[] { ':' }, 2);
-                proxyStr = parts[0];
-                port = int.Parse(parts[1]);
-            }
+            if (!TryPickFirstUsableProxy(proxies, out var host, out var port)) return null;
 
             // Authenticate to the system proxy with the current user's default credentials via
             // integrated auth (NTLM/Negotiate). This only takes effect if the proxy issues a 407
             // challenge, and mirrors how Windows authenticates to auto-detected proxies. Explicit
             // Basic credentials cannot be recovered from WinHTTP auto-config, so they are not set.
-            var systemProxy = new ExternalProxy(proxyStr, port) { UseDefaultCredentials = true };
-
-            return systemProxy;
+            return new ExternalProxy(host, port) { UseDefaultCredentials = true };
         }
 
         if (Proxy?.IsBypassed(destination) == true) return null;
@@ -137,6 +129,27 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
         }
 
         return null;
+    }
+
+    /// <summary>
+    ///     Picks the first usable "host:port" entry from an ordered PAC/auto-detect proxy candidate
+    ///     list. <c>WinHttpGetProxyForUrl</c> returns an ordered, semicolon-separated list of proxy
+    ///     servers (WinHTTP itself strips the "PROXY"/"SOCKS" access-type keyword before returning it),
+    ///     and a caller is expected to try them in order. This proxy has no failover-on-connect-failure
+    ///     path today, so the practical fix is to walk the list for the first entry that actually
+    ///     parses as a valid authority rather than blindly trusting index 0 - a PAC script can return
+    ///     garbage for one entry and a usable proxy for the next, and a hard <c>int.Parse</c> on index 0
+    ///     would crash proxy resolution for every request instead of falling back to a later entry.
+    /// </summary>
+    internal static bool TryPickFirstUsableProxy(IList<string> candidates, out string host, out int port)
+    {
+        foreach (var candidate in candidates)
+            if (AuthorityParser.TryParse(candidate, 80, out host, out port))
+                return true;
+
+        host = string.Empty;
+        port = 0;
+        return false;
     }
 
     public void LoadFromIe()
