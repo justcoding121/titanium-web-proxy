@@ -53,9 +53,18 @@ public class ExceptionControlFlowTests
             // Ignore AppDomain/test-infrastructure noise; count proxy-pipeline throws.
             var typeName = e.Exception.GetType().FullName ?? string.Empty;
             var stack = e.Exception.StackTrace ?? string.Empty;
-            if (stack.Contains("Titanium.Web.Proxy", StringComparison.Ordinal)
-                || typeName.StartsWith("Titanium.Web.Proxy", StringComparison.Ordinal))
-                Interlocked.Increment(ref firstChance);
+            if (!(stack.Contains("Titanium.Web.Proxy", StringComparison.Ordinal)
+                  || typeName.StartsWith("Titanium.Web.Proxy", StringComparison.Ordinal)))
+                return;
+
+            // Happy Eyeballs intentionally cancels losing connect attempts
+            // (TcpConnectionFactory.CreateServerConnection). That surfaces as a first-chance
+            // OperationCanceledException even on a fully successful keep-alive request.
+            if (e.Exception is OperationCanceledException
+                && stack.Contains("TcpConnectionFactory", StringComparison.Ordinal))
+                return;
+
+            Interlocked.Increment(ref firstChance);
         };
 
         AppDomain.CurrentDomain.FirstChanceException += handler;
