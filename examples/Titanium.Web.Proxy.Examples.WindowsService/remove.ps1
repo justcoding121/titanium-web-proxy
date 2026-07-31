@@ -7,9 +7,8 @@ if (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 	}
 }
 
-# This is the name of the service and will also show as the display name in services.msc.
-# This must match what the service was installed as.
-$ServiceName = "ProxyService"
+# Internal SCM name — must match install.ps1 / AddWindowsService(...) in Program.cs.
+$ServiceName = "TitaniumWebProxy"
 
 # Make sure the service is stopped.
 Stop-Service -Name $ServiceName

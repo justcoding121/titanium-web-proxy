@@ -5,6 +5,7 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET. This wiki documents t
 ## Contents
 
 - [Getting started](#getting-started)
+- [Screenshots](#screenshots)
 - [Endpoints](#endpoints)
 - [Decrypting HTTPS](#decrypting-https)
 - [Intercepting requests and responses](#intercepting-requests-and-responses)
@@ -68,6 +69,18 @@ static Task OnRequest(object sender, SessionEventArgs e)
 ```
 
 Configure your client to use `127.0.0.1:8000` as its HTTP and HTTPS proxy.
+
+Example apps live under [`examples/`](https://github.com/justcoding121/titanium-web-proxy/tree/develop/examples) in the main repository ([Basic](https://github.com/justcoding121/titanium-web-proxy/tree/develop/examples/Titanium.Web.Proxy.Examples.Basic), [WPF](https://github.com/justcoding121/titanium-web-proxy/tree/develop/examples/Titanium.Web.Proxy.Examples.Wpf), [Windows service](https://github.com/justcoding121/titanium-web-proxy/tree/develop/examples/Titanium.Web.Proxy.Examples.WindowsService)).
+
+## Screenshots
+
+**Basic console example** — compact per-request traffic tape:
+
+<img src="images/basic-screenshot.jpg" alt="Basic console proxy screenshot" width="900" />
+
+**WPF example** — session list with request/response inspection:
+
+<img src="images/wpf-screenshot.jpg" alt="WPF proxy application screenshot" width="900" />
 
 ## Endpoints
 

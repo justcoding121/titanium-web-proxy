@@ -15,9 +15,10 @@ if (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 	}
 }
 
-# This is the name of the service and will also show as the display name in services.msc.
-# Must match the ServiceName passed to AddWindowsService(...) in Program.cs.
-[String] $ServiceName = "ProxyService"
+# Internal SCM name — must match AddWindowsService(...) in Program.cs.
+[String] $ServiceName = "TitaniumWebProxy"
+# Friendly name shown in services.msc.
+[String] $ServiceDisplayName = "Titanium Web Proxy"
 # This is the name of the executable of the service (from `dotnet publish`).
 [String] $ServiceExeName = "Titanium.Web.Proxy.Examples.WindowsService.exe"
 # Use the directory of the running script and the service executable name to create a full path.
@@ -34,7 +35,7 @@ if(!$ExeFileInfo.Exists) {
 }else{
 	# Lets install the service.
 	Write-host "Installing service $ServiceExePath"
-	New-Service -Name $ServiceName -BinaryPathName $ServiceExePath -Description "HTTP proxy service" -StartupType "Automatic"
+	New-Service -Name $ServiceName -DisplayName $ServiceDisplayName -BinaryPathName $ServiceExePath -Description "Titanium Web Proxy HTTP(S) reverse/explicit proxy example service" -StartupType "Automatic"
 	# Service installed, lets start it.
 	Start-Service -Name $ServiceName
 }
