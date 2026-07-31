@@ -1,6 +1,7 @@
 #pragma warning disable CA1416
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -49,6 +50,15 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     private const ushort DnsTypeHttps = 65;
     private const ushort DnsClassIn = 1;
 
+    /// <summary>
+    ///     Backstop hard cap on <see cref="_negativeCache" />, independent of TTL expiry: with a
+    ///     one-minute default TTL, expiry alone only bounds growth if <see cref="TrimExpired" /> is
+    ///     actually called between insertions faster than the query rate, which is not guaranteed
+    ///     under a sustained burst of distinct hosts. Sized generously above realistic distinct-host
+    ///     counts for a single proxy process.
+    /// </summary>
+    private const int MaxNegativeCacheEntries = 4096;
+
     /// <summary>Maximum depth for recursive AliasMode chain following.</summary>
     private const int MaxAliasDepth = 3;
 
@@ -85,6 +95,23 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
         // Per-waiter cancellation: WaitAsync throws OperationCanceledException to THIS caller but
         // leaves the shared task running so other waiters are unaffected.
         return WrapResultAsync(sharedTask, ct);
+    }
+
+    /// <inheritdoc />
+    public void TrimExpired()
+    {
+        var now = DateTime.UtcNow;
+        foreach (var pair in _negativeCache)
+            if (pair.Value <= now)
+                _negativeCache.TryRemove(pair.Key, out _);
+
+        // Backstop: if the cache is still oversized (e.g. TTLs haven't elapsed yet under a burst of
+        // distinct hosts), evict the entries closest to expiring anyway rather than doing nothing.
+        var excess = _negativeCache.Count - MaxNegativeCacheEntries;
+        if (excess <= 0) return;
+
+        foreach (var pair in _negativeCache.OrderBy(x => x.Value).Take(excess))
+            _negativeCache.TryRemove(pair.Key, out _);
     }
 
     private static async Task<SvcbResult?> WrapResultAsync(Task<SvcbQueryState> sharedTask, CancellationToken ct)

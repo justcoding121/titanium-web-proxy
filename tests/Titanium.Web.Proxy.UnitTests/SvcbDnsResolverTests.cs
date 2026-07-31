@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Linq;
+using System.Net;
+using System.Reflection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http3.Dns;
 
@@ -388,6 +391,66 @@ public class SvcbDnsResolverTests
 
         Assert.IsNotNull(result, "Record with port=0 should still be returned (ALPN=h3 is valid).");
         Assert.AreEqual(443, result.AltPort, "Port 0 is invalid; resolver must use the queried port (443).");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TrimExpired (negative-result cache bounding)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static ConcurrentDictionary<string, DateTime> GetNegativeCache(UdpSvcbDnsResolver resolver)
+    {
+        var field = typeof(UdpSvcbDnsResolver).GetField("_negativeCache",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.IsNotNull(field, "_negativeCache field not found via reflection");
+        return (ConcurrentDictionary<string, DateTime>)field.GetValue(resolver)!;
+    }
+
+    /// <summary>
+    ///     The SVCB negative cache set TTLs but never removed expired keys, so it grew unbounded for
+    ///     the lifetime of the process purely from distinct hosts that failed to resolve H3 capability
+    ///     once. <see cref="UdpSvcbDnsResolver.TrimExpired" /> must actually remove entries whose TTL
+    ///     has elapsed.
+    /// </summary>
+    [TestMethod]
+    public void TrimExpired_RemovesExpiredNegativeCacheEntries()
+    {
+        var resolver = new UdpSvcbDnsResolver(new IPEndPoint(IPAddress.Loopback, 53));
+        var cache = GetNegativeCache(resolver);
+
+        cache["expired.example:443"] = DateTime.UtcNow.AddMinutes(-1);
+        cache["still-valid.example:443"] = DateTime.UtcNow.AddMinutes(5);
+
+        resolver.TrimExpired();
+
+        Assert.IsFalse(cache.ContainsKey("expired.example:443"),
+            "Expired negative-cache entries must be removed by TrimExpired.");
+        Assert.IsTrue(cache.ContainsKey("still-valid.example:443"),
+            "Non-expired negative-cache entries must be kept by TrimExpired.");
+    }
+
+    /// <summary>
+    ///     Backstop hard cap: even if nothing has expired yet (e.g. a burst of distinct hosts within
+    ///     one TTL window), the negative cache must never grow past the configured hard cap.
+    /// </summary>
+    [TestMethod]
+    public void TrimExpired_EnforcesHardCap_WhenNothingHasExpiredYet()
+    {
+        var resolver = new UdpSvcbDnsResolver(new IPEndPoint(IPAddress.Loopback, 53));
+        var cache = GetNegativeCache(resolver);
+
+        var capField = typeof(UdpSvcbDnsResolver).GetField("MaxNegativeCacheEntries",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.IsNotNull(capField, "MaxNegativeCacheEntries field not found via reflection");
+        var cap = (int)capField.GetValue(null)!;
+
+        // None of these are expired, but the count exceeds the hard cap.
+        for (var i = 0; i < cap + 10; i++)
+            cache[$"host{i}.example:443"] = DateTime.UtcNow.AddMinutes(5);
+
+        resolver.TrimExpired();
+
+        Assert.IsTrue(cache.Count <= cap,
+            $"negative cache must never exceed the hard cap of {cap}, had {cache.Count}");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
