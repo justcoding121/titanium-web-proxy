@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -478,17 +479,33 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 : (long)(DateTime.UtcNow - state.RequestStartedUtc).TotalMilliseconds;
 
             // A status-0 response with no HttpVersion means the origin round trip never produced a
-            // response at all. Most forwarding paths (H1, H1<->H2, H2<->H3) set e.Exception in their
-            // outermost catch even for client-initiated cancellation (browser sent RST_STREAM / aborted a
-            // background beacon before it completed) - so this is expected teardown, not a proxy defect,
-            // and shouldn't be flagged like one on the traffic tape.
-            var isClientCancelled = statusCode == 0 && e.Exception is OperationCanceledException;
+            // response at all. Classify expected teardown / origin reachability separately from
+            // genuine proxy defects so the traffic tape does not paint ad-beacon DNS misses red.
+            var tapeKind = ClassifyIncompleteSession(statusCode, e.Exception);
 
             // Compact traffic tape: METHOD host/path → status  H2↔H2  187ms
-            var line = isClientCancelled
-                ? $"{request.Method,-7} {FormatUrlForConsole(request.Url)} ⇢ cancelled by client  {elapsedMs}ms"
-                : $"{request.Method,-7} {FormatUrlForConsole(request.Url)} → {statusCode,3}  {FormatHttpProtocolShort(request.HttpVersion)}↔{FormatHttpProtocolShort(response?.HttpVersion)}  {elapsedMs}ms";
-            WriteToConsole(line, isClientCancelled ? ConsoleColor.DarkGray : ColorForStatusCode(statusCode));
+            string line;
+            ConsoleColor color;
+            switch (tapeKind)
+            {
+                case IncompleteSessionKind.ClientCancelled:
+                    line =
+                        $"{request.Method,-7} {FormatUrlForConsole(request.Url)} ⇢ cancelled by client  {elapsedMs}ms";
+                    color = ConsoleColor.DarkGray;
+                    break;
+                case IncompleteSessionKind.ConnectFailed:
+                    line =
+                        $"{request.Method,-7} {FormatUrlForConsole(request.Url)} ⇢ connect failed  {FormatHttpProtocolShort(request.HttpVersion)}↔?  {elapsedMs}ms";
+                    color = ConsoleColor.DarkYellow;
+                    break;
+                default:
+                    line =
+                        $"{request.Method,-7} {FormatUrlForConsole(request.Url)} → {statusCode,3}  {FormatHttpProtocolShort(request.HttpVersion)}↔{FormatHttpProtocolShort(response?.HttpVersion)}  {elapsedMs}ms";
+                    color = ColorForStatusCode(statusCode);
+                    break;
+            }
+
+            WriteToConsole(line, color);
 
 #if DEBUG
             try
@@ -500,6 +517,83 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 // PipelineInfo is diagnostic-only; ignore races/teardown.
             }
 #endif
+        }
+
+        private enum IncompleteSessionKind
+        {
+            None,
+            ClientCancelled,
+            ConnectFailed
+        }
+
+        /// <summary>
+        ///     Maps status-0 sessions to traffic-tape presentation. Client aborts and origin
+        ///     connect/DNS/TLS failures are expected under heavy browsing; only unclassified
+        ///     status-0 (and real 5xx responses) stay red.
+        /// </summary>
+        private static IncompleteSessionKind ClassifyIncompleteSession(int statusCode, Exception exception)
+        {
+            if (statusCode != 0 || exception == null)
+                return IncompleteSessionKind.None;
+
+            if (exception is OperationCanceledException ||
+                GetInnermostException(exception) is OperationCanceledException)
+                return IncompleteSessionKind.ClientCancelled;
+
+            if (IsOriginConnectFailure(exception))
+                return IncompleteSessionKind.ConnectFailed;
+
+            return IncompleteSessionKind.None;
+        }
+
+        private static bool IsOriginConnectFailure(Exception exception)
+        {
+            for (var ex = exception; ex != null; ex = ex.InnerException)
+            {
+                switch (ex)
+                {
+                    case SocketException socketEx:
+                        switch (socketEx.SocketErrorCode)
+                        {
+                            case SocketError.HostNotFound:
+                            case SocketError.NoData:
+                            case SocketError.TryAgain:
+                            case SocketError.NetworkUnreachable:
+                            case SocketError.HostUnreachable:
+                            case SocketError.ConnectionRefused:
+                            case SocketError.TimedOut:
+                            case SocketError.NetworkDown:
+                            case SocketError.ConnectionReset:
+                            case SocketError.ConnectionAborted:
+                                return true;
+                        }
+
+                        break;
+
+                    case IOException ioEx:
+                        // TLS/TCP peer closed before headers (common for flaky ad sync endpoints).
+                        if (ioEx.InnerException is SocketException)
+                            return true;
+                        if (ioEx.Message.IndexOf("unexpected EOF", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            ioEx.Message.IndexOf("0 bytes from the transport stream", StringComparison.OrdinalIgnoreCase) >=
+                            0)
+                            return true;
+                        break;
+
+                    case RetryableServerConnectionException:
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static Exception GetInnermostException(Exception exception)
+        {
+            var current = exception;
+            while (current.InnerException != null)
+                current = current.InnerException;
+            return current;
         }
 
         private static ConsoleColor ColorForStatusCode(int statusCode)
