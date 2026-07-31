@@ -2676,6 +2676,11 @@ namespace Titanium.Web.Proxy.Http2
             BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), lastStreamId & 0x7fffffff);
             BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(4, 4), (int)errorCode);
             await output.WriteAsync(payload, 0, 8);
+
+            // GOAWAY is often immediately followed by connection teardown (the sending relay returns
+            // and cancels its peer). Flush so the frame reaches the wire before the socket is closed;
+            // otherwise clients can observe a TCP RST without ever seeing the error code.
+            await output.FlushAsync();
         }
 
         /// <summary>Writes a WINDOW_UPDATE frame (RFC 7540 ?6.9) granting the given amount of flow-control credit.</summary>
