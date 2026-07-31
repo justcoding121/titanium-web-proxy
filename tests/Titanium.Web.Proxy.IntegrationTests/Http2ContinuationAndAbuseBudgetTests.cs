@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -79,7 +80,16 @@ public class Http2ContinuationAndAbuseBudgetTests
         {
             while (true)
             {
-                var frame = await connection.ReadFrameAsync();
+                Http2RawFrame.Frame frame;
+                try
+                {
+                    frame = await connection.ReadFrameAsync();
+                }
+                catch (IOException ex) when (cts.IsCancellationRequested)
+                {
+                    throw new TimeoutException("Timed out waiting for a GOAWAY frame.", ex);
+                }
+
                 if (frame.Type == Http2FrameType.GoAway)
                 {
                     var ec = (frame.Payload[4] << 24) | (frame.Payload[5] << 16) |
@@ -87,11 +97,12 @@ public class Http2ContinuationAndAbuseBudgetTests
                     return (Http2ErrorCode)ec;
                 }
             }
-        });
+        }, cts.Token);
 
-        var completed = await Task.WhenAny(readTask, Task.Delay(timeout, cts.Token));
+        var completed = await Task.WhenAny(readTask, Task.Delay(timeout, CancellationToken.None));
         if (completed != readTask)
         {
+            cts.Cancel();
             Assert.Fail("Timed out waiting for a GOAWAY frame.");
         }
 
@@ -117,6 +128,10 @@ public class Http2ContinuationAndAbuseBudgetTests
         using var rawClient =
             await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, serverUri.Host, serverUri.Port);
 
+        // Start reading before the flood so GOAWAY is observed even if the proxy tears the TCP
+        // connection down immediately afterward (common on busy CI runners).
+        var goAwayTask = ReadUntilGoAwayAsync(rawClient.Connection, TimeSpan.FromSeconds(10));
+
         // Open a header block on stream 1 without END_HEADERS, so the proxy starts buffering and
         // counting CONTINUATION frames for it.
         await rawClient.Connection.WriteFrameAsync(Http2FrameType.Headers, 1, 0, Array.Empty<byte>());
@@ -125,10 +140,18 @@ public class Http2ContinuationAndAbuseBudgetTests
         // frames never advance the byte-based cap, so only the frame-count bound can catch this.
         for (var i = 0; i < 10; i++)
         {
-            await rawClient.Connection.WriteFrameAsync(Http2FrameType.Continuation, 1, 0, Array.Empty<byte>());
+            try
+            {
+                await rawClient.Connection.WriteFrameAsync(Http2FrameType.Continuation, 1, 0, Array.Empty<byte>());
+            }
+            catch (IOException)
+            {
+                // Proxy may close the socket as soon as the CONTINUATION budget is breached.
+                break;
+            }
         }
 
-        var errorCode = await ReadUntilGoAwayAsync(rawClient.Connection, TimeSpan.FromSeconds(10));
+        var errorCode = await goAwayTask;
 
         Assert.AreEqual(Http2ErrorCode.EnhanceYourCalm, errorCode,
             "An open header block that exceeds the configured CONTINUATION frame-count bound must be " +
