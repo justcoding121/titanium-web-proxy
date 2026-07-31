@@ -59,6 +59,10 @@ public partial class ProxyServer
         // HandleHttpSessionRequest pipeline.
         var requiresH2OriginBridge = false;
 
+        // Set when CONNECT-time H3 route resolution (HTTPS/SVCB DNS or forced UpstreamHttpProtocol.Http3)
+        // selected HTTP/3 as the origin protocol. The H2→H3 bridge then handles every stream.
+        var requiresH3Bridge = false;
+
         try
         {
             var method = await HttpHelper.GetMethod(clientStream, BufferPool, cancellationToken);
@@ -181,6 +185,22 @@ public partial class ProxyServer
 
                     clientStream.Connection.SslProtocol = sslProtocol;
 
+                    // The cert name depends only on the hostname, which is known at CONNECT time.
+                    // Extract it now so we can start certificate generation in parallel with the
+                    // HTTPS/SVCB DNS and H2 capability probes that follow. Those probes can take up to
+                    // ~800ms on a cold cache (500ms SVCB DNS + 300ms H2 TCP/TLS probe); overlapping
+                    // cert generation with them hides most of that cost on warm cert caches, and avoids
+                    // adding cert-gen time on top of probe time when the cert cache is also cold.
+                    var (connectHostname, connectHostnamePort) =
+                        ParseHostAndPort(requestLine.RequestUri.GetString(), 443);
+
+                    // CertificateManager deduplicates concurrent calls for the same name internally.
+                    var certGenerationTask = endPoint.GenericCertificate != null
+                        ? Task.FromResult<X509Certificate2?>(endPoint.GenericCertificate)
+                        : CertificateManager.CreateServerCertificate(
+                            HttpHelper.GetWildCardDomainName(connectHostname,
+                                CertificateManager.DisableWildCardCertificates));
+
                     var http2Supported = false;
 
                     if (EnableHttp2)
@@ -196,21 +216,40 @@ public partial class ProxyServer
                         // browser side is authenticated.
                         var clientOffersHttp2 = clientHelloInfo.GetAlpn()?.Contains(SslApplicationProtocol.Http2)
                                                  == true;
-                        var (connectHost, connectPort) =
-                            ParseHostAndPort(requestLine.RequestUri.GetString(), 443);
-                        var negotiation = await ResolveHttp2ForClientAsync(connectArgs, clientOffersHttp2,
-                            connectHost, connectPort, null, null, connectArgs.UpstreamHttpProtocol,
-                            connectArgs.AllowHttpProtocolTranslation, EnableTcpServerConnectionPrefetch,
+                        var (connectHost, connectPort) = (connectHostname, connectHostnamePort);
+
+                        // Probe for H3 capability (HTTPS/SVCB DNS or forced Http3 policy) before opening
+                        // any H2 origin connection. If H3 is selected, the H2→H3 bridge handles every
+                        // stream and no H2 origin connection is needed.
+                        var h3RouteAtConnect = await ResolveHttp3OriginAsync(
+                            connectHost, connectPort,
+                            connectArgs.UpstreamHttpProtocol,
+                            allowDnsProbe: true,
                             cancellationToken);
-                        requiresHttp11Bridge = negotiation.RequiresHttp11Bridge;
-                        requiresH2OriginBridge = negotiation.RequiresH2OriginBridge;
-                        // The client is offered "h2" both when the origin itself speaks it (and no
-                        // client-facing bridge is needed) and when a translation bridge will stand in for an
-                        // HTTP/1.1-only origin. RequiresH2OriginBridge is the mirror image - the origin
-                        // speaks h2 but the client itself does not, so "h2" must never be offered to it.
-                        http2Supported = (negotiation.OriginSupportsHttp2 && !requiresH2OriginBridge)
-                                         || requiresHttp11Bridge;
-                        prefetchConnectionTask = negotiation.RetainedConnectionTask;
+
+                        if (h3RouteAtConnect.UseH3)
+                        {
+                            // Offer h2 to the client (the bridge translates h2 streams onto QUIC).
+                            http2Supported = clientOffersHttp2;
+                            requiresH3Bridge = true;
+                            // No H2 origin connection needed; any pre-CONNECT prefetch is discarded below.
+                        }
+                        else
+                        {
+                            var negotiation = await ResolveHttp2ForClientAsync(connectArgs, clientOffersHttp2,
+                                connectHost, connectPort, null, null, connectArgs.UpstreamHttpProtocol,
+                                connectArgs.AllowHttpProtocolTranslation, EnableTcpServerConnectionPrefetch,
+                                cancellationToken);
+                            requiresHttp11Bridge = negotiation.RequiresHttp11Bridge;
+                            requiresH2OriginBridge = negotiation.RequiresH2OriginBridge;
+                            // The client is offered "h2" both when the origin itself speaks it (and no
+                            // client-facing bridge is needed) and when a translation bridge will stand in for an
+                            // HTTP/1.1-only origin. RequiresH2OriginBridge is the mirror image - the origin
+                            // speaks h2 but the client itself does not, so "h2" must never be offered to it.
+                            http2Supported = (negotiation.OriginSupportsHttp2 && !requiresH2OriginBridge)
+                                             || requiresHttp11Bridge;
+                            prefetchConnectionTask = negotiation.RetainedConnectionTask;
+                        }
                     }
 
                     // Skip the generic single-connection prefetch entirely when the session will be routed
@@ -220,7 +259,8 @@ public partial class ProxyServer
                     // worse, using http2Supported (true in the bridge case, so the client can be offered
                     // "h2") to pick the prefetch's ALPN offer would incorrectly probe the origin - which this
                     // policy pins to HTTP/1.1 - with "h2" too.
-                    if (prefetchConnectionTask == null && EnableTcpServerConnectionPrefetch && !requiresHttp11Bridge)
+                    if (prefetchConnectionTask == null && EnableTcpServerConnectionPrefetch
+                        && !requiresHttp11Bridge && !requiresH3Bridge)
                         // don't pass cancellation token here
                         // it could cause floating server connections when client exits.
                         // Pass the ALPN that the actual request will use so the prefetched connection
@@ -231,9 +271,8 @@ public partial class ProxyServer
                             true, http2Supported ? SslExtensions.Http2ProtocolAsList : null, false, true,
                             CancellationToken.None);
 
-                    var connectHostname = requestLine.RequestUri.GetString();
-                    var idx = connectHostname.IndexOf(":");
-                    if (idx >= 0) connectHostname = connectHostname.Substring(0, idx);
+                    // connectHostname and certGenerationTask were prepared above before the
+                    // DNS/H2 probes so cert generation could run in parallel with those probes.
 
                     X509Certificate2? certificate = null;
                     SslStream? sslStream = null;
@@ -241,12 +280,9 @@ public partial class ProxyServer
                     {
                         sslStream = new SslStream(clientStream, false);
 
-                        var certName = HttpHelper.GetWildCardDomainName(connectHostname,
-                            CertificateManager.DisableWildCardCertificates);
-                        certificate = endPoint.GenericCertificate ??
-                                      await CertificateManager.CreateServerCertificate(certName)
+                        certificate = await certGenerationTask
                                       ?? throw new InvalidOperationException(
-                                          $"CertificateManager returned null for '{certName}'.");
+                                          $"CertificateManager returned null for '{connectHostname}'.");
 
                         // Successfully managed to authenticate the client using the fake certificate
                         var options = new SslServerAuthenticationOptions();
@@ -276,10 +312,8 @@ public partial class ProxyServer
                         ProxyLog.BrowserHandshakeSucceeded(logger, connectHostname,
                             sslStream.NegotiatedApplicationProtocol);
 
-#if NET6_0_OR_GREATER
-                            clientStream.Connection.NegotiatedApplicationProtocol =
- sslStream.NegotiatedApplicationProtocol;
-#endif
+                        clientStream.Connection.NegotiatedApplicationProtocol =
+                            sslStream.NegotiatedApplicationProtocol;
 
                         // HTTPS server created - we can now decrypt the client's traffic
                         clientStream = new HttpClientStream(this, clientStream.Connection, sslStream, BufferPool,
@@ -416,9 +450,22 @@ public partial class ProxyServer
                     if (line != string.Empty)
                         throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
 
+                    if (requiresH3Bridge)
+                    {
+                        // HTTPS/SVCB DNS or forced Http3 at CONNECT time: release any pre-CONNECT
+                        // prefetched TCP connection and route every h2 stream to the QUIC origin.
+                        await TcpConnectionFactory.Release(prefetchConnectionTask, true);
+                        prefetchConnectionTask = null;
+                        var (h3BridgeHost, h3BridgePort) =
+                            ParseHostAndPort(connectArgs.HttpClient.ConnectRequest!.Authority.GetString(), 443);
+                        await SendHttp2ToHttp3Bridge(clientStream, endPoint, connectArgs.HttpClient.ConnectRequest,
+                            connectArgs.UserData, h3BridgeHost, h3BridgePort,
+                            connectArgs.CancellationTokenSource, connectArgs.UpstreamHttpProtocol);
+                        return;
+                    }
+
                     if (requiresHttp11Bridge)
                     {
-#if NET6_0_OR_GREATER
                         // UpstreamHttpProtocol.Http11 + AllowHttpProtocolTranslation: no origin connection was
                         // negotiated/retained above (RequiresHttp11Bridge implies OriginSupportsHttp2 is false
                         // and RetainedConnectionTask is null) - every h2 stream on this connection instead gets
@@ -428,7 +475,6 @@ public partial class ProxyServer
                         await SendHttp2ToHttp11Bridge(clientStream, endPoint, connectArgs.HttpClient.ConnectRequest,
                             connectArgs.UserData, bridgeHost, bridgePort, null, null,
                             connectArgs.CancellationTokenSource);
-#endif
                         return;
                     }
 
@@ -456,21 +502,26 @@ public partial class ProxyServer
                         connectArgs.Timing.MarkConnectionReady(connection.Id, !connection.ClaimFirstUse());
                     try
                     {
-#if NET6_0_OR_GREATER
                             var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
                             await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
                             await Http2Helper.SendHttp2(clientStream, connection.Stream,
                                 () => new SessionEventArgs(this, endPoint, clientStream, connectArgs?.HttpClient.ConnectRequest, cancellationTokenSource)
                                 {
-                                    UserData = connectArgs?.UserData
+                                    UserData = connectArgs?.UserData,
+                                    // Seed the connection-level protocol policy so per-stream resolution
+                                    // correctly honours forced Http11/Http2 and never attempts H3 when
+                                    // the connection-level policy explicitly prohibits it.
+                                    UpstreamHttpProtocol = connectArgs?.UpstreamHttpProtocol
                                 },
-                                async (args, ctx) => { await OnBeforeRequest(args); },
+                                // Use the H3-aware delegate so per-stream Alt-Svc cache hits can upgrade
+                                // individual h2 streams to H3 mid-connection (warm path).
+                                (args, ctx) => BridgeOnBeforeRequestForH3(args, ctx, sessionConnectHost,
+                                    sessionConnectPort, coldH3Bridge: false),
                                 async (args, ctx) => { await OnBeforeResponse(args); },
                                 async args => { await OnAfterResponse(args); },
                                 headers => PrepareRequestHeaders(headers),
                                 connectArgs.CancellationTokenSource, clientStream.Connection.Id, logger,
-                                MaxDecodedHeaderListBytes, EnableRfc8441);
-#endif
+                                MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits);
                     }
                     finally
                     {
@@ -490,7 +541,6 @@ public partial class ProxyServer
 
             if (requiresH2OriginBridge)
             {
-#if NET6_0_OR_GREATER
                 // UpstreamHttpProtocol.Http2 + AllowHttpProtocolTranslation: the client never offered "h2"
                 // (see the http2Supported computation above), so it stays on the normal HTTP/1.1 wire format,
                 // but every request must be translated onto the already-established h2 origin connection
@@ -502,7 +552,6 @@ public partial class ProxyServer
                 await SendHttp11ToHttp2Bridge(clientStream, endPoint, connectArgs.HttpClient.ConnectRequest,
                     connectArgs.UserData, bridgeHost, bridgePort, null, null, prefetchTask,
                     connectArgs.CancellationTokenSource);
-#endif
                 return;
             }
 
@@ -539,6 +588,7 @@ public partial class ProxyServer
         {
             if (!cancellationTokenSource.IsCancellationRequested) cancellationTokenSource.Cancel();
             UnregisterSessionCancellation(cancellationTokenSource);
+            cancellationTokenSource.Dispose();
 
             await TcpConnectionFactory.Release(prefetchConnectionTask, closeServerConnection);
 

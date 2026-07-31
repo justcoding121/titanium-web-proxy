@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Buffers;
 using System.IO;
 using System.Text;
@@ -74,7 +74,6 @@ internal class HeaderBuilder
     {
         var encoding = HttpHeader.Encoding;
 
-#if NET6_0_OR_GREATER
         var buf = ArrayPool<byte>.Shared.Rent(encoding.GetMaxByteCount(str.Length));
         try
         {
@@ -86,10 +85,6 @@ internal class HeaderBuilder
         {
             ArrayPool<byte>.Shared.Return(buf);
         }
-#else
-        var data = encoding.GetBytes(str);
-        stream.Write(data, 0, data.Length);
-#endif
     }
 
     public ArraySegment<byte> GetBuffer()

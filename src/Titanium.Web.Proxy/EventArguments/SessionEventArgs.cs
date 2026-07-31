@@ -9,6 +9,8 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Streams;
+using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.EventArguments;
@@ -69,6 +71,48 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     public TimeSpan? RequestTimeout { get; set; }
 
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.MaxBufferedBodyBytes" />.
+    ///     <see langword="null" /> uses the server default. Set in <c>BeforeRequest</c> to increase the
+    ///     limit for large uploads/downloads without relaxing the global limit for all requests.
+    /// </summary>
+    public int? MaxBufferedBodyBytes { get; set; }
+
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.NetworkFailureRetryAttempts" />.
+    ///     <see langword="null" /> uses the server default. Set to 0 in <c>BeforeRequest</c> for
+    ///     non-idempotent methods (POST, PATCH) to prevent unsafe retries.
+    /// </summary>
+    public int? NetworkFailureRetryAttempts { get; set; }
+
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.MaxWebSocketFramePayloadBytes" />.
+    ///     <see langword="null" /> uses the server default. Set in <c>BeforeRequest</c> before the
+    ///     WebSocket upgrade completes.
+    /// </summary>
+    public int? MaxWebSocketFramePayloadBytes { get; set; }
+
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.OriginHttpVersionPolicy" />.
+    ///     <see langword="null" /> uses the server default (<see cref="Models.OriginHttpVersionPolicy.PreserveClientVersion" />
+    ///     unless the server property was changed). Set in <c>BeforeRequest</c>.
+    /// </summary>
+    public Models.OriginHttpVersionPolicy? OriginHttpVersionPolicy { get; set; }
+
+    /// <summary>
+    ///     Per-request outbound protocol version policy. Overrides the connection-level
+    ///     <see cref="Models.UpstreamHttpProtocol" /> value set during <c>BeforeSslAuthenticate</c> /
+    ///     <c>BeforeQuicAuthenticate</c> for this single request stream only.
+    ///     <see langword="null" /> uses the connection-level policy (or <see cref="Models.UpstreamHttpProtocol.Auto" />
+    ///     if none was set). Evaluated in <c>BeforeRequest</c>; changes after that have no effect.
+    ///     <para>
+    ///         On an H3 inbound connection (one client QUIC connection serving many concurrent streams),
+    ///         each stream resolves its outbound protocol independently after <c>BeforeRequest</c> fires,
+    ///         making per-stream protocol overrides possible even though the inbound leg is already QUIC.
+    ///     </para>
+    /// </summary>
+    public Models.UpstreamHttpProtocol? UpstreamHttpProtocol { get; set; }
+
     internal bool HasMulipartEventSubscribers => MultipartRequestPartSent != null;
 
     /// <summary>
@@ -88,9 +132,13 @@ public class SessionEventArgs : SessionEventArgsBase
     [Obsolete("Use [WebSocketDecoderReceive] instead")]
     public WebSocketDecoder WebSocketDecoder => WebSocketDecoderReceive;
 
-    public WebSocketDecoder WebSocketDecoderSend => webSocketDecoderSend ??= new WebSocketDecoder(BufferPool);
+    public WebSocketDecoder WebSocketDecoderSend =>
+        webSocketDecoderSend ??= new WebSocketDecoder(BufferPool,
+            MaxWebSocketFramePayloadBytes ?? Server.MaxWebSocketFramePayloadBytes);
 
-    public WebSocketDecoder WebSocketDecoderReceive => webSocketDecoderReceive ??= new WebSocketDecoder(BufferPool);
+    public WebSocketDecoder WebSocketDecoderReceive =>
+        webSocketDecoderReceive ??= new WebSocketDecoder(BufferPool,
+            MaxWebSocketFramePayloadBytes ?? Server.MaxWebSocketFramePayloadBytes);
 
     /// <summary>
     ///     Fired for each WebSocket frame after upgrade when at least one handler is subscribed.
@@ -264,7 +312,16 @@ public class SessionEventArgs : SessionEventArgsBase
     private async Task<byte[]> ReadBodyAsync(bool isRequest, CancellationToken cancellationToken)
     {
         using var bodyStream = new MemoryStream();
-        using var writer = new HttpStream(Server, bodyStream, BufferPool, cancellationToken);
+
+        // Per-chunk/per-frame sizes are already bounded elsewhere; nothing upstream of this point
+        // caps the cumulative total this loop accumulates into memory, so a body assembled from many
+        // small pieces could otherwise grow unbounded. See BoundedWriteStream for why this needs to be
+        // the actual write target rather than a length check performed only after the fact.
+        var maxBufferedBodyBytes = MaxBufferedBodyBytes ?? Server.MaxBufferedBodyBytes;
+        Stream target = maxBufferedBodyBytes > 0
+            ? new BoundedWriteStream(bodyStream, maxBufferedBodyBytes, Server.PolicyModes[PolicyFamily.BodyBudget])
+            : bodyStream;
+        using var writer = new HttpStream(Server, target, BufferPool, cancellationToken);
 
         if (isRequest)
             await CopyRequestBodyAsync(writer, TransformationMode.Uncompress, cancellationToken);
@@ -766,7 +823,17 @@ public class SessionEventArgs : SessionEventArgsBase
     {
         if (disposed) return;
 
-        if (disposing) MultipartRequestPartSent = null;
+        if (disposing)
+        {
+            MultipartRequestPartSent = null;
+
+            // Dispose any accumulated HTTP/2 body MemoryStreams so their backing arrays
+            // are returned to the LOH promptly rather than waiting for GC finalization.
+            HttpClient.Request.Http2BodyData?.Dispose();
+            HttpClient.Request.Http2BodyData = null;
+            HttpClient.Response.Http2BodyData?.Dispose();
+            HttpClient.Response.Http2BodyData = null;
+        }
 
         disposed = true;
 

@@ -26,6 +26,14 @@ using System.Runtime.InteropServices;
                               "de7f3ba0bdad35ec2d6057ee1846091b34be2abc3f97dc7e72c16fd4958c15126b12923df76964" +
                               "7d84922c3f4f3b80ee0ae8e4cb40bc1973b782afb90bb00519fd16adf960f217e23696e7c31654" +
                               "01d0acd6")]
+// Benchmarks needs internal access (HeaderParser, HttpStream.ReadLineInternalAsync) so the
+// measurement harness exercises the real parser code paths rather than a reimplementation of them.
+[assembly: InternalsVisibleTo("Titanium.Web.Proxy.Benchmarks, PublicKey=" +
+                              "0024000004800000940000000602000000240000525341310004000001000100e7368e0ccc717e" +
+                              "eb4d57d35ad6a8305cbbed14faa222e13869405e92c83856266d400887d857005f1393ffca2b92" +
+                              "de7f3ba0bdad35ec2d6057ee1846091b34be2abc3f97dc7e72c16fd4958c15126b12923df76964" +
+                              "7d84922c3f4f3b80ee0ae8e4cb40bc1973b782afb90bb00519fd16adf960f217e23696e7c31654" +
+                              "01d0acd6")]
 
 // Setting ComVisible to false makes the types in this assembly not visible 
 // to COM components.  If you need to access a type in this assembly from 
@@ -44,6 +52,12 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
+// GenerateAssemblyInfo is false for this project (see Titanium.Web.Proxy.csproj), so the SDK does
+// not derive these from <VersionPrefix> the way it would for a normal project - they must be kept
+// in sync with <VersionPrefix> in the csproj by hand on every version bump. A prior release let
+// these drift to "1.0.1" while the NuGet package version moved on to 5.0.0, so the shipped DLL's
+// file-properties version disagreed with the package it was published in. Keep both of the values
+// below equal to <VersionPrefix> (as Major.Minor.Build.0) whenever that property changes.
 
-[assembly: AssemblyVersion("1.0.1")]
-[assembly: AssemblyFileVersion("1.0.1")]
+[assembly: AssemblyVersion("5.0.0.0")]
+[assembly: AssemblyFileVersion("5.0.0.0")]

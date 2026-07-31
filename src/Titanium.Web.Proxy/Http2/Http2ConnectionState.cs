@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.Collections.Concurrent;
 using System.Threading;
@@ -118,6 +117,29 @@ internal sealed class Http2ConnectionState
     public int ServerLastStreamId = int.MaxValue;
 
     /// <summary>
+    ///     Count of RST_STREAM frames received directly from the client for a stream that had not yet
+    ///     completed normally (still tracked in <see cref="Streams" /> at the moment the reset
+    ///     arrived) - the abuse signal for a Rapid Reset (CVE-2023-44487) style attack, where a client
+    ///     opens and immediately cancels streams to make the proxy perform unbounded per-stream setup
+    ///     work for zero completed responses. Proxy-initiated resets are never counted: only the
+    ///     client->server relay task's own handling of an RST_STREAM frame it read directly from the
+    ///     client increments this.
+    /// </summary>
+    public int ClientIncompleteStreamResetCount;
+
+    /// <summary>
+    ///     Set once <see cref="ClientIncompleteStreamResetCount" /> exceeds the configured budget.
+    ///     Streams already admitted (id &lt;= <see cref="ClientResetBudgetLastStreamId" />) are still
+    ///     allowed to drain normally; any new client-initiated stream above that id is refused - RFC
+    ///     9113 §6.8's graceful-shutdown semantics, rather than tearing the whole connection down and
+    ///     discarding in-flight work immediately.
+    /// </summary>
+    public volatile bool ClientResetBudgetExceeded;
+
+    /// <summary>The last-stream-id sent in the GOAWAY triggered by <see cref="ClientResetBudgetExceeded" />.</summary>
+    public int ClientResetBudgetLastStreamId = int.MaxValue;
+
+    /// <summary>
     ///     Registers a newly observed stream (first HEADERS frame) in both the stream registry and both
     ///     flow-control send windows.
     /// </summary>
@@ -143,4 +165,3 @@ internal sealed class Http2ConnectionState
         ServerSendFlow.RemoveStream(streamId);
     }
 }
-#endif

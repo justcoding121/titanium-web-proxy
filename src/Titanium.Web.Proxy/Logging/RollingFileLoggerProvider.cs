@@ -105,8 +105,27 @@ internal sealed class RollingFileLoggerProvider : ChannelLoggerProviderBase
 
     protected override void DisposeSink()
     {
-        writer?.Flush();
-        writer?.Dispose();
-        writer = null;
+        try
+        {
+            // ChannelLoggerProviderBase.Dispose() only *bounded*-waits for the background writer task to
+            // drain before calling here; on a slow/loaded runner (e.g. under code-coverage instrumentation)
+            // that task can still be mid-write when the timeout elapses. Racing a synchronous Flush/Dispose
+            // against that in-flight async write throws (typically InvalidOperationException: "stream is
+            // currently in use"). Same best-effort philosophy as WriteEntryAsync/Roll: never let sink
+            // teardown throw into the caller.
+            writer?.Flush();
+            writer?.Dispose();
+        }
+        catch (InvalidOperationException)
+        {
+            // Covers ObjectDisposedException too (it derives from InvalidOperationException).
+        }
+        catch (IOException)
+        {
+        }
+        finally
+        {
+            writer = null;
+        }
     }
 }

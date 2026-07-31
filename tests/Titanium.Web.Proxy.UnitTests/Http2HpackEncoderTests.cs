@@ -1,7 +1,6 @@
 // The Encoder type (like Http2Helper) only compiles for net6.0+ targets; this whole file is a no-op
 // on net462/net48, matching that existing convention. It activates once the unit test project itself
 // moves to net10.0 or is otherwise built against a net6.0+ target.
-#if NET6_0_OR_GREATER
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -96,4 +95,3 @@ namespace Titanium.Web.Proxy.UnitTests
         }
     }
 }
-#endif

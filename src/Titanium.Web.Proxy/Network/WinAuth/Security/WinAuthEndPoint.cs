@@ -34,29 +34,29 @@ internal class WinAuthEndPoint
         var serverToken = new SecurityBufferDescription();
 
         var clientToken = new SecurityBufferDescription(MaximumTokenSize);
-        var authDataPtr = IntPtr.Zero;
+        MarshaledAuthIdentity? authIdentity = null;
+        var state = new State();
+        var stateStored = false;
 
         try
         {
-            var state = new State();
-
             if (credentials != null)
-                authDataPtr = MarshalAuthIdentity(credentials);
+                authIdentity = MarshaledAuthIdentity.Create(credentials);
 
             var result = AcquireCredentialsHandle(
                 credentials == null ? WindowsIdentity.GetCurrent().Name : null!,
                 authScheme,
                 SecurityCredentialsOutbound,
                 IntPtr.Zero,
-                authDataPtr,
+                authIdentity?.StructPtr ?? IntPtr.Zero,
                 0,
                 IntPtr.Zero,
-                ref state.Credentials,
+                ref state.Credentials.RawHandle,
                 ref NewLifeTime);
 
             if (result != SuccessfulResult) return null;
 
-            result = InitializeSecurityContext(ref state.Credentials,
+            result = InitializeSecurityContext(ref state.Credentials.RawHandle,
                 IntPtr.Zero,
                 hostname,
                 attributes,
@@ -64,7 +64,7 @@ internal class WinAuthEndPoint
                 SecurityNativeDataRepresentation,
                 ref serverToken,
                 0,
-                out state.Context,
+                out state.Context.RawHandle,
                 out clientToken,
                 out NewContextAttributes,
                 out NewLifeTime);
@@ -76,10 +76,15 @@ internal class WinAuthEndPoint
                 : State.WinAuthState.InitialToken;
             token = clientToken.GetBytes();
             data.Add(AuthStateKey, state);
+            stateStored = true;
         }
         finally
         {
-            if (authDataPtr != IntPtr.Zero) Marshal.FreeHGlobal(authDataPtr);
+            // Only the caller that failed to store `state` still owns it; once stored under
+            // AuthStateKey, AcquireFinalSecurityToken (or an abandoned negotiation's finalizer) owns
+            // its disposal instead.
+            if (!stateStored) state.Dispose();
+            authIdentity?.Dispose();
             DisposeToken(clientToken);
             DisposeToken(serverToken);
         }
@@ -87,25 +92,105 @@ internal class WinAuthEndPoint
         return token;
     }
 
-    private static IntPtr MarshalAuthIdentity(WinAuthCredentials credentials)
+    /// <summary>
+    ///     Manually marshals a <c>SEC_WINNT_AUTH_IDENTITY</c> so the plaintext password's unmanaged
+    ///     buffer is one this code owns directly and can zero before freeing.
+    ///     <para>
+    ///         The straightforward alternative — a <see cref="Marshal.StructureToPtr{T}" /> struct with
+    ///         <see langword="string" /> fields — has the CLR marshaler allocate a hidden unmanaged
+    ///         buffer per string that native code never exposes a pointer to, so it can never be zeroed
+    ///         before <see cref="Marshal.DestroyStructure{T}" />/<see cref="Marshal.FreeHGlobal" /> frees
+    ///         it: the plaintext password would sit in freed-but-unzeroed heap memory indefinitely.
+    ///     </para>
+    /// </summary>
+    private sealed class MarshaledAuthIdentity : IDisposable
     {
-        var user = credentials.UserName ?? string.Empty;
-        var domain = credentials.Domain ?? string.Empty;
-        var password = credentials.Password ?? string.Empty;
-        var identity = new SecWinntAuthIdentity
-        {
-            User = user,
-            UserLength = user.Length,
-            Domain = domain,
-            DomainLength = domain.Length,
-            Password = password,
-            PasswordLength = password.Length,
-            Flags = SecWinntAuthIdentityUnicode
-        };
+        private IntPtr userPtr;
+        private IntPtr domainPtr;
+        private IntPtr passwordPtr;
+        private int passwordLength;
 
-        var ptr = Marshal.AllocHGlobal(Marshal.SizeOf<SecWinntAuthIdentity>());
-        Marshal.StructureToPtr(identity, ptr, false);
-        return ptr;
+        internal IntPtr StructPtr { get; private set; }
+
+        internal static MarshaledAuthIdentity Create(WinAuthCredentials credentials)
+        {
+            var result = new MarshaledAuthIdentity();
+            try
+            {
+                var user = credentials.UserName ?? string.Empty;
+                var domain = credentials.Domain ?? string.Empty;
+                var password = credentials.Password ?? string.Empty;
+
+                result.userPtr = Marshal.StringToHGlobalUni(user);
+                result.domainPtr = Marshal.StringToHGlobalUni(domain);
+                result.passwordPtr = Marshal.StringToHGlobalUni(password);
+                result.passwordLength = password.Length;
+
+                var identity = new SecWinntAuthIdentity
+                {
+                    User = result.userPtr,
+                    UserLength = user.Length,
+                    Domain = result.domainPtr,
+                    DomainLength = domain.Length,
+                    Password = result.passwordPtr,
+                    PasswordLength = password.Length,
+                    Flags = SecWinntAuthIdentityUnicode
+                };
+
+                result.StructPtr = Marshal.AllocHGlobal(Marshal.SizeOf<SecWinntAuthIdentity>());
+                Marshal.StructureToPtr(identity, result.StructPtr, false);
+                return result;
+            }
+            catch
+            {
+                result.Dispose();
+                throw;
+            }
+        }
+
+        public void Dispose()
+        {
+            // Password first and most carefully: it is the actual credential secret. User/Domain are
+            // identifiers rather than secrets, but zeroing them too costs nothing and keeps the
+            // "no plaintext credential material left in freed heap memory" guarantee uniform.
+            ZeroAndFreeUniString(ref passwordPtr, passwordLength);
+            ZeroAndFreeUniString(ref userPtr, -1); // length not tracked separately - scan for the terminator
+            ZeroAndFreeUniString(ref domainPtr, -1);
+
+            if (StructPtr != IntPtr.Zero)
+            {
+                // Zero the struct itself too — it only holds pointers/lengths/flags, but leaving stale
+                // pointers to (now-freed) buffers around is its own minor hygiene issue.
+                var size = Marshal.SizeOf<SecWinntAuthIdentity>();
+                for (var i = 0; i < size; i++) Marshal.WriteByte(StructPtr, i, 0);
+                Marshal.FreeHGlobal(StructPtr);
+                StructPtr = IntPtr.Zero;
+            }
+        }
+
+        /// <summary>
+        ///     Zeroes a <see cref="Marshal.StringToHGlobalUni" />-allocated buffer before freeing it.
+        ///     <paramref name="knownCharLength" /> of -1 means "unknown" - the null terminator is
+        ///     located by scanning, since <see cref="Marshal.StringToHGlobalUni" /> always produces a
+        ///     null-terminated buffer.
+        /// </summary>
+        private static void ZeroAndFreeUniString(ref IntPtr ptr, int knownCharLength)
+        {
+            if (ptr == IntPtr.Zero) return;
+
+            var charLength = knownCharLength;
+            if (charLength < 0)
+            {
+                charLength = 0;
+                while (Marshal.ReadInt16(ptr, charLength * 2) != 0) charLength++;
+            }
+
+            // +1 to also clear the null terminator.
+            for (var i = 0; i <= charLength; i++) Marshal.WriteInt16(ptr, i * 2, 0);
+
+            Marshal.FreeHGlobal(ptr);
+            ptr = IntPtr.Zero;
+        }
     }
 
     /// <summary>
@@ -126,37 +211,48 @@ internal class WinAuthEndPoint
         var serverToken = new SecurityBufferDescription(serverChallenge);
 
         var clientToken = new SecurityBufferDescription(MaximumTokenSize);
+        var state = data.GetAs<State>(AuthStateKey);
+        var shouldDisposeState = false;
 
         try
         {
-            var state = data.GetAs<State>(AuthStateKey);
-
             state.UpdatePresence();
 
-            var result = InitializeSecurityContext(ref state.Credentials,
-                ref state.Context,
+            var result = InitializeSecurityContext(ref state.Credentials.RawHandle,
+                ref state.Context.RawHandle,
                 hostname,
                 attributes,
                 0,
                 SecurityNativeDataRepresentation,
                 ref serverToken,
                 0,
-                out state.Context,
+                out state.Context.RawHandle,
                 out clientToken,
                 out NewContextAttributes,
                 out NewLifeTime);
 
             // SuccessfulResult => authentication complete.
             // IntermediateResult => another leg is required (multi-round Negotiate).
-            if (result != SuccessfulResult && result != IntermediateResult) return null;
+            if (result != SuccessfulResult && result != IntermediateResult)
+            {
+                // Negotiation failed outright: neither handle will be used again.
+                shouldDisposeState = true;
+                return null;
+            }
 
             state.AuthState = result == SuccessfulResult
                 ? State.WinAuthState.Authorized
                 : State.WinAuthState.FinalToken;
             token = clientToken.GetBytes();
+
+            // Authorized is terminal for this flow — WinAuthHandler never calls back in for another
+            // round once the peer accepts the final token — so the SSPI handles can be released now
+            // rather than waiting for the owning InternalDataStore (and this State) to be collected.
+            shouldDisposeState = state.AuthState == State.WinAuthState.Authorized;
         }
         finally
         {
+            if (shouldDisposeState) state.Dispose();
             DisposeToken(clientToken);
             DisposeToken(serverToken);
         }
@@ -184,21 +280,34 @@ internal class WinAuthEndPoint
                     // What we need to do here is to grab a hold of the pvBuffer allocate by the individual
                     // SecBuffer and release it...
                     var currentOffset = index * Marshal.SizeOf(typeof(SecurityBuffer));
+                    var cbBuffer = Marshal.ReadInt32(clientToken.pBuffers, currentOffset);
                     var secBufferpvBuffer = Marshal.ReadIntPtr(clientToken.pBuffers,
                         currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
+                    ZeroBuffer(secBufferpvBuffer, cbBuffer);
                     Marshal.FreeHGlobal(secBufferpvBuffer);
                 }
             }
 
+            ZeroBuffer(clientToken.pBuffers, clientToken.cBuffers * Marshal.SizeOf(typeof(SecurityBuffer)));
             Marshal.FreeHGlobal(clientToken.pBuffers);
             clientToken.pBuffers = IntPtr.Zero;
         }
+    }
+
+    /// <summary>Overwrites an unmanaged buffer with zeros before it is freed (best-effort defense in
+    /// depth for the NTLM/Kerberos token bytes these buffers carry - see <see cref="MarshaledAuthIdentity"/>
+    /// for the analogous, more critical case of the plaintext password).</summary>
+    private static void ZeroBuffer(IntPtr ptr, int length)
+    {
+        if (ptr == IntPtr.Zero || length <= 0) return;
+        for (var i = 0; i < length; i++) Marshal.WriteByte(ptr, i, 0);
     }
 
     private static void DisposeSecBuffer(SecurityBuffer thisSecBuffer)
     {
         if (thisSecBuffer.pvBuffer != IntPtr.Zero)
         {
+            ZeroBuffer(thisSecBuffer.pvBuffer, thisSecBuffer.cbBuffer);
             Marshal.FreeHGlobal(thisSecBuffer.pvBuffer);
             thisSecBuffer.pvBuffer = IntPtr.Zero;
         }
@@ -290,14 +399,19 @@ internal class WinAuthEndPoint
         ref SecurityHandle phCredential, // SecHandle // PCtxtHandle ref
         ref SecurityInteger ptsExpiry); // PTimeStamp // TimeStamp ref
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    /// <summary>
+    ///     Field types are deliberately <see cref="IntPtr" /> rather than <see langword="string" />: see
+    ///     <see cref="MarshaledAuthIdentity" /> for why automatic string marshaling cannot satisfy the
+    ///     "zero the plaintext password before freeing it" requirement.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
     private struct SecWinntAuthIdentity
     {
-        public string User;
+        public IntPtr User;
         public int UserLength;
-        public string Domain;
+        public IntPtr Domain;
         public int DomainLength;
-        public string Password;
+        public IntPtr Password;
         public int PasswordLength;
         public int Flags;
     }

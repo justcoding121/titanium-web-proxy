@@ -41,11 +41,15 @@ internal sealed class ConsoleLoggerProvider : ChannelLoggerProviderBase
 
     protected override Task WriteEntryAsync(LogEntry entry)
     {
-        WriteEntrySync(entry);
+        WriteLine(entry);
         return Task.CompletedTask;
     }
 
-    protected override void WriteEntrySync(LogEntry entry)
+    /// <summary>
+    ///     Console I/O is cheap enough to do synchronously; only ever called from the single
+    ///     background writer task owned by <see cref="ChannelLoggerProviderBase" />.
+    /// </summary>
+    private void WriteLine(LogEntry entry)
     {
         var line = ProxyLog.FormatLine(entry);
         var toStderr = entry.Level >= LogLevel.Warning;

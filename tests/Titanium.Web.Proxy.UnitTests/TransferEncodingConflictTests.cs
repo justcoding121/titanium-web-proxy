@@ -44,7 +44,7 @@ public class TransferEncodingConflictTests
     }
 
     [TestMethod]
-    public void LimitedStream_ChunkExtension_IsIgnoredWhenParsingSize()
+    public async Task LimitedStream_ChunkExtension_IsIgnoredWhenParsingSize()
     {
         // "5;name=value\r\nhello\r\n0\r\n\r\n" — extension after ';' must not break size parse.
         var payload = Encoding.ASCII.GetBytes("5;name=value\r\nhello\r\n0\r\n\r\n");
@@ -53,13 +53,13 @@ public class TransferEncodingConflictTests
         using var limited = new LimitedStream(httpStream, new DefaultBufferPool(), true, -1);
 
         var buffer = new byte[16];
-        var read = limited.Read(buffer, 0, buffer.Length);
+        var read = await limited.ReadAsync(buffer, 0, buffer.Length);
         Assert.AreEqual(5, read);
         Assert.AreEqual("hello", Encoding.ASCII.GetString(buffer, 0, read));
     }
 
     [TestMethod]
-    public void LimitedStream_OverflowChunkSize_ThrowsProxyHttpException()
+    public async Task LimitedStream_OverflowChunkSize_ThrowsProxyHttpException()
     {
         // Hex larger than int.MaxValue cannot be parsed by int.TryParse → ProxyHttpException.
         var payload = Encoding.ASCII.GetBytes("100000000\r\n");
@@ -68,7 +68,14 @@ public class TransferEncodingConflictTests
         using var limited = new LimitedStream(httpStream, new DefaultBufferPool(), true, -1);
 
         var buffer = new byte[16];
-        Assert.ThrowsException<ProxyHttpException>(() => limited.Read(buffer, 0, buffer.Length));
+        await Assert.ThrowsExceptionAsync<ProxyHttpException>(async () =>
+        {
+            // Single-shot probe: oversized chunk size must fail during framing parse,
+            // before any body bytes are returned (CA2022 does not apply to exception paths).
+#pragma warning disable CA2022
+            _ = await limited.ReadAsync(buffer, 0, buffer.Length);
+#pragma warning restore CA2022
+        });
     }
 
     [TestMethod]

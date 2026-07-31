@@ -119,7 +119,12 @@ internal class ProxyInfo
     }
 
     /// <summary>
-    ///     Parse the system proxy setting values
+    ///     Parse the system proxy setting values. The registry/WinINet <c>ProxyServer</c> value takes
+    ///     two forms: either a semicolon-separated list of <c>protocol=host:port</c> entries (the
+    ///     "Use different proxy for each protocol" case), or - the common case when a user sets a
+    ///     single proxy without expanding "Advanced" - one bare <c>host:port</c> entry with no
+    ///     protocol prefix at all, meaning "use this proxy for every protocol". Every entry is parsed
+    ///     independently so a mix of both forms across ';'-separated entries still resolves correctly.
     /// </summary>
     /// <param name="proxyServerValues"></param>
     /// <returns></returns>
@@ -129,33 +134,24 @@ internal class ProxyInfo
 
         if (string.IsNullOrWhiteSpace(proxyServerValues)) return result;
 
-        var proxyValues = proxyServerValues!.Split(';');
-
-        if (proxyValues.Length > 0)
-        {
-            foreach (var str in proxyValues)
-            {
-                var proxyValue = ParseProxyValue(str);
-                if (proxyValue != null) result.Add(proxyValue);
-            }
-        }
-        else
-        {
-            var parsedValue = ParseProxyValue(proxyServerValues);
-            if (parsedValue != null) result.Add(parsedValue);
-        }
+        foreach (var str in proxyServerValues!.Split(';'))
+            result.AddRange(ParseProxyValue(str));
 
         return result;
     }
 
     /// <summary>
-    ///     Parses the system proxy setting string
+    ///     Parses one <c>ProxyServer</c> entry, returning one <see cref="HttpSystemProxyValue" /> for a
+    ///     <c>protocol=host:port</c> entry, or two (HTTP and HTTPS) for a bare global <c>host:port</c>
+    ///     entry. Returns an empty sequence - never throws - for a malformed entry, so a single bad
+    ///     entry cannot take down proxy resolution for every other entry in the list.
     /// </summary>
     /// <param name="value"></param>
     /// <returns></returns>
-    private static HttpSystemProxyValue? ParseProxyValue(string value)
+    private static IEnumerable<HttpSystemProxyValue> ParseProxyValue(string value)
     {
         var tmp = Regex.Replace(value, @"\s+", " ").Trim();
+        if (tmp.Length == 0) yield break;
 
         var equalsIndex = tmp.IndexOf("=", StringComparison.InvariantCulture);
         if (equalsIndex >= 0)
@@ -163,13 +159,23 @@ internal class ProxyInfo
             var protocolTypeStr = tmp.Substring(0, equalsIndex);
             var protocolType = ParseProtocolType(protocolTypeStr);
 
-            if (protocolType.HasValue)
-            {
-                var endPointParts = tmp.Substring(equalsIndex + 1).Split(':');
-                return new HttpSystemProxyValue(endPointParts[0], int.Parse(endPointParts[1]), protocolType.Value);
-            }
-        }
+            // An unrecognized protocol prefix (e.g. "ftp=", "socks="): Titanium only forwards
+            // HTTP/HTTPS via this path, so silently skip rather than misattributing the entry.
+            if (!protocolType.HasValue) yield break;
 
-        return null;
+            if (!AuthorityParser.TryParse(tmp.Substring(equalsIndex + 1), -1, out var host, out var port) ||
+                port < 0)
+                yield break;
+
+            yield return new HttpSystemProxyValue(host, port, protocolType.Value);
+        }
+        else
+        {
+            // Bare "host:port" (or bracketed "[::1]:port") with no protocol prefix - applies to both.
+            if (!AuthorityParser.TryParse(tmp, -1, out var host, out var port) || port < 0) yield break;
+
+            yield return new HttpSystemProxyValue(host, port, ProxyProtocolType.Http);
+            yield return new HttpSystemProxyValue(host, port, ProxyProtocolType.Https);
+        }
     }
 }

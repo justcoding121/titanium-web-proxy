@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Quic;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
@@ -28,6 +29,12 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         public static readonly DependencyProperty ServerConnectionCountProperty = DependencyProperty.Register(
             nameof(ServerConnectionCount), typeof(int), typeof(MainWindow), new PropertyMetadata(default(int)));
 
+        public static readonly DependencyProperty Http3ClientConnectionCountProperty = DependencyProperty.Register(
+            nameof(Http3ClientConnectionCount), typeof(int), typeof(MainWindow), new PropertyMetadata(default(int)));
+
+        public static readonly DependencyProperty Http3ServerConnectionCountProperty = DependencyProperty.Register(
+            nameof(Http3ServerConnectionCount), typeof(int), typeof(MainWindow), new PropertyMetadata(default(int)));
+
         private readonly ProxyServer proxyServer;
 
         private readonly Dictionary<HttpWebClient, SessionListItem> sessionDictionary =
@@ -35,14 +42,22 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private int lastSessionNumber;
         private SessionListItem selectedSession;
+        private bool proxyShutdownDone;
 
         public MainWindow()
         {
             proxyServer = new ProxyServer();
 
-            // Log Information and above (and everything the proxy catches, even when handled) to the
-            // console by default; set to LogLevel.Trace while diagnosing an issue for full detail.
-            proxyServer.Logging.MinimumLevel = LogLevel.Information;
+            // Session traffic is shown in the UI. Library diagnostics go to a rolling file (not the
+            // console — WinExe usually has none). Debug builds capture full protocol diagnostics.
+            proxyServer.Logging.EnableConsole = false;
+            proxyServer.Logging.EnableFile = true;
+            proxyServer.Logging.FilePath = Path.Combine(AppContext.BaseDirectory, "logs", "wpf-proxy.log");
+#if DEBUG
+            proxyServer.Logging.MinimumLevel = LogLevel.Trace;
+#else
+            proxyServer.Logging.MinimumLevel = LogLevel.Warning;
+#endif
 
             var certificateDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -101,6 +116,24 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             //proxyServer.AddEndPoint(socksEndPoint);
 
+            // HTTP/3 transparent QUIC endpoint (experimental — suppress TWP001 to opt in).
+            // Requires MsQuic and a supported OS (Windows 11 / Server 2022+, or libmsquic on Linux/macOS).
+            // UDP traffic must be redirected here; see wiki/HTTP-3.md.
+#pragma warning disable TWP001
+            if (QuicListener.IsSupported)
+            {
+                proxyServer.EnableHttp3 = true;
+                var quicEndPoint = new TransparentQuicProxyEndPoint(IPAddress.Any, 443)
+                {
+                    // Replace with IOriginalDestinationResolver for real NAT-transparent interception.
+                    ForwardHost = "localhost",
+                    ForwardPort = 443
+                };
+                quicEndPoint.BeforeQuicAuthenticate += ProxyServer_BeforeQuicAuthenticate;
+                proxyServer.AddEndPoint(quicEndPoint);
+            }
+#pragma warning restore TWP001
+
             proxyServer.BeforeRequest += ProxyServer_BeforeRequest;
             proxyServer.BeforeResponse += ProxyServer_BeforeResponse;
             proxyServer.AfterResponse += ProxyServer_AfterResponse;
@@ -114,6 +147,14 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             {
                 Dispatcher.Invoke(() => { ServerConnectionCount = proxyServer.ServerConnectionCount; });
             };
+            proxyServer.Http3ClientConnectionCountChanged += delegate
+            {
+                Dispatcher.Invoke(() => { Http3ClientConnectionCount = proxyServer.Http3ClientConnectionCount; });
+            };
+            proxyServer.Http3ServerConnectionCountChanged += delegate
+            {
+                Dispatcher.Invoke(() => { Http3ServerConnectionCount = proxyServer.Http3ServerConnectionCount; });
+            };
             proxyServer.Start();
 
             proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp, new SystemProxySettings
@@ -123,6 +164,50 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             });
 
             InitializeComponent();
+
+            // Always clear system proxy when the window closes (graceful or App.Shutdown).
+            // Without this, browsers keep pointing at a dead :8000 and hang after exit.
+            Closed += (_, _) => ShutdownProxy();
+        }
+
+        /// <summary>
+        ///     Stops the proxy and restores Windows system proxy settings. Safe to call more than once.
+        /// </summary>
+        internal void EnsureProxyShutdown() => ShutdownProxy();
+
+        private void ShutdownProxy()
+        {
+            if (proxyShutdownDone) return;
+            proxyShutdownDone = true;
+
+            try
+            {
+                if (proxyServer.ProxyRunning)
+                    proxyServer.Stop();
+                else
+                    proxyServer.RestoreOriginalProxySettings();
+            }
+            catch (Exception)
+            {
+                // Best-effort: still try Dispose below.
+                try
+                {
+                    proxyServer.RestoreOriginalProxySettings();
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
+            }
+
+            try
+            {
+                proxyServer.Dispose();
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
         }
 
         public ObservableCollectionEx<SessionListItem> Sessions { get; } =
@@ -152,6 +237,25 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             get => (int)GetValue(ServerConnectionCountProperty);
             set => SetValue(ServerConnectionCountProperty, value);
         }
+
+        public int Http3ClientConnectionCount
+        {
+            get => (int)GetValue(Http3ClientConnectionCountProperty);
+            set => SetValue(Http3ClientConnectionCountProperty, value);
+        }
+
+        public int Http3ServerConnectionCount
+        {
+            get => (int)GetValue(Http3ServerConnectionCountProperty);
+            set => SetValue(Http3ServerConnectionCountProperty, value);
+        }
+
+#pragma warning disable TWP001
+        private Task ProxyServer_BeforeQuicAuthenticate(object sender, BeforeQuicAuthenticateEventArgs e)
+        {
+            return Task.CompletedTask;
+        }
+#pragma warning restore TWP001
 
         private async Task ProxyServer_BeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
@@ -250,10 +354,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                     if (tunnelType != TunnelType.Unknown) li.Protocol = TunnelTypeToString(tunnelType);
 
                     li.ReceivedDataCount += args.Count;
-
-                    //if (tunnelType == TunnelType.Http2)
-                    AppendTransferLog(session.GetHashCode() + (isTunnelConnect ? "_tunnel" : "") + "_received",
-                        args.Buffer, args.Offset, args.Count);
                 }
             };
 
@@ -267,44 +367,11 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                     if (tunnelType != TunnelType.Unknown) li.Protocol = TunnelTypeToString(tunnelType);
 
                     li.SentDataCount += args.Count;
-
-                    //if (tunnelType == TunnelType.Http2)
-                    AppendTransferLog(session.GetHashCode() + (isTunnelConnect ? "_tunnel" : "") + "_sent",
-                        args.Buffer, args.Offset, args.Count);
                 }
             };
 
-            if (e is TunnelConnectSessionEventArgs te)
-            {
-                te.DecryptedDataReceived += (sender, args) =>
-                {
-                    var session = (SessionEventArgsBase)sender;
-                    //var tunnelType = session.HttpClient.ConnectRequest?.TunnelType ?? TunnelType.Unknown;
-                    //if (tunnelType == TunnelType.Http2)
-                    AppendTransferLog(session.GetHashCode() + "_decrypted_received", args.Buffer, args.Offset,
-                        args.Count);
-                };
-
-                te.DecryptedDataSent += (sender, args) =>
-                {
-                    var session = (SessionEventArgsBase)sender;
-                    //var tunnelType = session.HttpClient.ConnectRequest?.TunnelType ?? TunnelType.Unknown;
-                    //if (tunnelType == TunnelType.Http2)
-                    AppendTransferLog(session.GetHashCode() + "_decrypted_sent", args.Buffer, args.Offset, args.Count);
-                };
-            }
-
             item.Update(e);
             return item;
-        }
-
-        private void AppendTransferLog(string fileName, byte[] buffer, int offset, int count)
-        {
-            //string basePath = @"c:\!titanium\";
-            //using (var fs = new FileStream(basePath + fileName, FileMode.Append, FileAccess.Write, FileShare.Read))
-            //{
-            //    fs.Write(buffer, offset, count);
-            //}
         }
 
         private string TunnelTypeToString(TunnelType tunnelType)

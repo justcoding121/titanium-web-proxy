@@ -1,13 +1,15 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Linq;
 using System.Net;
+using System.Net.Quic;
 using System.Net.Security;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Examples.Basic.Helpers;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -18,7 +20,13 @@ namespace Titanium.Web.Proxy.Examples.Basic
 {
     public class ProxyTestController : IDisposable
     {
+        private const int MaxUrlLength = 100;
+        private const int MaxWebSocketTextLength = 120;
+
         private readonly ProxyServer proxyServer;
+#if !DEBUG
+        private readonly ILoggerFactory compactLoggerFactory;
+#endif
 
         private readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
 
@@ -26,6 +34,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
             = new ConcurrentQueue<Tuple<ConsoleColor?, string>>();
 
         private ExplicitProxyEndPoint explicitEndPoint;
+
+#pragma warning disable TWP001 // HTTP/3 is experimental — example intentionally exercises this API
+#nullable enable
+        private TransparentQuicProxyEndPoint? quicEndPoint;
+#nullable restore
+#pragma warning restore TWP001
 
         public ProxyTestController()
         {
@@ -46,16 +60,27 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.CertificateManager.TrustRootCertificate();
             //proxyServer.CertificateManager.TrustRootCertificateAsAdmin();
 
+            // Library diagnostics stay quiet on the traffic tape: one-line errors (no stacks) in Release.
+            // DEBUG keeps the built-in Trace console (full stacks) for deep diagnosis.
 #if DEBUG
             proxyServer.Logging.MinimumLevel = LogLevel.Trace;
+            proxyServer.Logging.EnableFile = true;
+            proxyServer.Logging.FilePath = Path.Combine(
+                AppContext.BaseDirectory, "logs", "basic-proxy.log");
 #else
-            proxyServer.Logging.MinimumLevel = LogLevel.Information;
+            proxyServer.Logging.MinimumLevel = LogLevel.Warning;
+            proxyServer.Logging.EnableConsole = false;
+            compactLoggerFactory = new CompactConsoleLoggerFactory((level, line) =>
+                WriteToConsole(line, level >= LogLevel.Error ? ConsoleColor.Red : ConsoleColor.Yellow));
+            proxyServer.Logging.LoggerFactory = compactLoggerFactory;
 #endif
 
             proxyServer.TcpTimeWaitSeconds = 10;
             proxyServer.ConnectionTimeOutSeconds = 15;
             proxyServer.ReuseSocket = false;
-            proxyServer.EnableConnectionPool = false;
+            // Pooling reuses origin TCP/TLS sockets and sharply reduces CONNECT/cert stampede when
+            // the example is installed as the system proxy (browser + OS services share the endpoint).
+            proxyServer.EnableConnectionPool = true;
             proxyServer.ForwardToUpstreamGateway = true;
             proxyServer.CertificateManager.SaveFakeCertificates = true;
             //proxyServer.ProxyBasicAuthenticateFunc = async (args, userName, password) =>
@@ -81,6 +106,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             cancellationTokenSource.Dispose();
             proxyServer.Dispose();
+#if !DEBUG
+            compactLoggerFactory?.Dispose();
+#endif
         }
 
         public void StartProxy()
@@ -107,6 +135,40 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // An explicit endpoint is where the client knows about the existence of a proxy
             // So client sends request in a proxy friendly manner
             proxyServer.AddEndPoint(explicitEndPoint);
+
+            // HTTP/3 transparent QUIC endpoint (experimental — suppress TWP001 to opt in).
+            // Requires MsQuic native library and a supported OS:
+            //   Windows: Windows 11 / Server 2022+
+            //   Linux:   apt install libmsquic
+            //   macOS:   bundle libmsquic + libssl + libcrypto with @loader_path RPATH
+            // Traffic must be redirected here (e.g. via iptables/nftables UDP REDIRECT on Linux,
+            // WFP on Windows, or pf rdr on macOS). See wiki/HTTP-3.md for setup details.
+#pragma warning disable TWP001
+            if (QuicListener.IsSupported)
+            {
+                proxyServer.EnableHttp3 = true;
+                // EnableHttpsSvcbDnsDiscovery inherits EnableHttp3 (cold-path H3 via HTTPS/SVCB).
+                // DnsServerEndPoint defaults to 8.8.8.8:53; override if you need a corporate resolver.
+                quicEndPoint = new TransparentQuicProxyEndPoint(IPAddress.Any, 443)
+                {
+                    // Replace with IOriginalDestinationResolver for real NAT-transparent interception.
+                    // ForwardHost and ForwardPort are used as a fallback when no resolver is set.
+                    ForwardHost = "localhost",
+                    ForwardPort = 443
+                };
+                quicEndPoint.BeforeQuicAuthenticate += OnBeforeQuicAuthenticate;
+                proxyServer.AddEndPoint(quicEndPoint);
+                Console.WriteLine("HTTP/3 QUIC endpoint started on UDP 443.");
+            }
+            else
+            {
+                Console.WriteLine("[HTTP/3] Skipped: QuicListener.IsSupported is false on this platform.");
+                Console.WriteLine("  Windows: requires Windows 11 / Server 2022+.");
+                Console.WriteLine("  Linux:   apt install libmsquic");
+                Console.WriteLine("  macOS:   bundle libmsquic + libssl + libcrypto with @loader_path RPATH.");
+            }
+#pragma warning restore TWP001
+
             proxyServer.Start();
 
             // Transparent endpoint is useful for reverse proxy (client is not aware of the existence of proxy)
@@ -158,11 +220,19 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public void Stop()
         {
+            WriteToConsole("Stopping proxy...");
+
             explicitEndPoint.BeforeTunnelConnectRequest -= OnBeforeTunnelConnectRequest;
             explicitEndPoint.BeforeTunnelConnectResponse -= OnBeforeTunnelConnectResponse;
 
+#pragma warning disable TWP001
+            if (quicEndPoint != null)
+                quicEndPoint.BeforeQuicAuthenticate -= OnBeforeQuicAuthenticate;
+#pragma warning restore TWP001
+
             proxyServer.BeforeRequest -= OnRequest;
             proxyServer.BeforeResponse -= OnResponse;
+            proxyServer.AfterResponse -= OnAfterResponse;
             proxyServer.ServerCertificateValidationCallback -= OnCertificateValidation;
             proxyServer.ClientCertificateSelectionCallback -= OnCertificateSelection;
 
@@ -174,7 +244,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task<IExternalProxy> OnGetCustomUpStreamProxyFunc(SessionEventArgsBase arg)
         {
-            arg.GetState().PipelineInfo.AppendLine(nameof(OnGetCustomUpStreamProxyFunc));
+            arg.GetState().AppendPipeline(nameof(OnGetCustomUpStreamProxyFunc));
 
             // this is just to show the functionality, provided values are junk
             return new ExternalProxy
@@ -190,7 +260,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task<IExternalProxy> OnCustomUpStreamProxyFailureFunc(SessionEventArgsBase arg)
         {
-            arg.GetState().PipelineInfo.AppendLine(nameof(OnCustomUpStreamProxyFailureFunc));
+            arg.GetState().AppendPipeline(nameof(OnCustomUpStreamProxyFailureFunc));
 
             // this is just to show the functionality, provided values are junk
             return new ExternalProxy
@@ -207,8 +277,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private async Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
             var hostname = e.HttpClient.Request.RequestUri.Host;
-            e.GetState().PipelineInfo.AppendLine(nameof(OnBeforeTunnelConnectRequest) + ":" + hostname);
-            WriteToConsole("Tunnel to: " + hostname);
+            e.GetState().AppendPipeline(nameof(OnBeforeTunnelConnectRequest) + ":" + hostname);
 
             var clientLocalIp = e.ClientLocalEndPoint.Address;
             if (!clientLocalIp.Equals(IPAddress.Loopback) && !clientLocalIp.Equals(IPAddress.IPv6Loopback))
@@ -219,6 +288,15 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 // Useful for clients that use certificate pinning
                 // for example dropbox.com
                 e.DecryptSsl = false;
+
+            // Opaque tunnels (no decrypt) get a single line; decrypted hosts show up as request lines later.
+            // DEBUG also logs every CONNECT for diagnosis.
+            if (!e.DecryptSsl)
+                WriteToConsole($"TUNNEL {hostname} (ssl passthrough)");
+#if DEBUG
+            else
+                WriteToConsole("Tunnel to: " + hostname);
+#endif
         }
 
         private void WebSocket_DataSent(object sender, DataEventArgs e)
@@ -236,43 +314,61 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private void WebSocketDataSentReceived(SessionEventArgs args, DataEventArgs e, bool sent)
         {
             var color = sent ? ConsoleColor.Green : ConsoleColor.Blue;
+            var arrow = sent ? "→" : "←";
             var decoder = sent ? args.WebSocketDecoderSend : args.WebSocketDecoderReceive;
 
             foreach (var frame in decoder.Decode(e.Buffer, e.Offset, e.Count))
             {
                 if (frame.OpCode == WebsocketOpCode.Binary)
                 {
-                    var data = frame.Data.ToArray();
-                    var str = string.Join(",", data.ToArray().Select(x => x.ToString("X2")));
-                    WriteToConsole(str, color);
+                    WriteToConsole($"WS {arrow} binary {frame.Data.Length}B", color);
+                    continue;
                 }
 
-                if (frame.OpCode == WebsocketOpCode.Text) WriteToConsole(frame.GetText(), color);
+                if (frame.OpCode == WebsocketOpCode.Text)
+                    WriteToConsole($"WS {arrow} {Truncate(frame.GetText(), MaxWebSocketTextLength)}", color);
             }
         }
 
         private Task OnBeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
         {
-            e.GetState().PipelineInfo
-                .AppendLine(nameof(OnBeforeTunnelConnectResponse) + ":" + e.HttpClient.Request.RequestUri);
+            e.GetState().AppendPipeline(
+                nameof(OnBeforeTunnelConnectResponse) + ":" + e.HttpClient.Request.RequestUri);
 
             return Task.CompletedTask;
         }
 
+#pragma warning disable TWP001
+        private Task OnBeforeQuicAuthenticate(object sender, BeforeQuicAuthenticateEventArgs e)
+        {
+            WriteToConsole($"[QUIC] Connection from {e.RemoteEndPoint} (SNI: {e.SniHostName})");
+            return Task.CompletedTask;
+        }
+#pragma warning restore TWP001
+
         // intercept & cancel redirect or update requests
         private async Task OnRequest(object sender, SessionEventArgs e)
         {
-            e.GetState().PipelineInfo.AppendLine(nameof(OnRequest) + ":" + e.HttpClient.Request.RequestUri);
+            var state = e.GetState();
+            state.RequestStartedUtc = DateTime.UtcNow;
+            state.AppendPipeline(nameof(OnRequest) + ":" + e.HttpClient.Request.RequestUri);
 
             var clientLocalIp = e.ClientLocalEndPoint.Address;
             if (!clientLocalIp.Equals(IPAddress.Loopback) && !clientLocalIp.Equals(IPAddress.IPv6Loopback))
                 e.HttpClient.UpStreamEndPoint = new IPEndPoint(clientLocalIp, 0);
 
+            // Subscribed here (rather than in OnResponse, once TunnelType.Websocket is known) so the
+            // proxy sees a raw-byte tap is wanted before it forwards the upgrade request - only then can
+            // it strip Sec-WebSocket-Extensions and keep frames uncompressed for WebSocketDecoder below
+            // (see WebSocketHandler.HasWebSocketDataTapHandler remarks).
+            if (e.HttpClient.Request.UpgradeToWebSocket)
+            {
+                e.DataSent += WebSocket_DataSent;
+                e.DataReceived += WebSocket_DataReceived;
+            }
+
             if (e.HttpClient.Request.Url.Contains("yahoo.com"))
                 e.CustomUpStreamProxy = new ExternalProxy("localhost", 8888);
-
-            WriteToConsole("Active Client Connections:" + ((ProxyServer)sender).ClientConnectionCount);
-            WriteToConsole(e.HttpClient.Request.Url);
 
             // store it in the UserData property
             // It can be a simple integer, Guid, or any type
@@ -312,7 +408,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         // Modify response
         private async Task MultipartRequestPartSent(object sender, MultipartRequestPartSentEventArgs e)
         {
-            e.GetState().PipelineInfo.AppendLine(nameof(MultipartRequestPartSent));
+            e.GetState().AppendPipeline(nameof(MultipartRequestPartSent));
 
             var session = (SessionEventArgs)sender;
             WriteToConsole("Multipart form data headers:");
@@ -321,21 +417,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task OnResponse(object sender, SessionEventArgs e)
         {
-            e.GetState().PipelineInfo.AppendLine(nameof(OnResponse));
-
-            if (e.HttpClient.ConnectRequest?.TunnelType == TunnelType.Websocket)
-            {
-                e.DataSent += WebSocket_DataSent;
-                e.DataReceived += WebSocket_DataReceived;
-            }
-
-            WriteToConsole("Active Server Connections:" + ((ProxyServer)sender).ServerConnectionCount);
-
-            var ext = Path.GetExtension(e.HttpClient.Request.RequestUri.AbsolutePath);
+            e.GetState().AppendPipeline(nameof(OnResponse));
 
             // access user data set in request to do something with it
             //var userData = e.HttpClient.UserData as CustomUserData;
 
+            //var ext = Path.GetExtension(e.HttpClient.Request.RequestUri.AbsolutePath);
             //if (ext == ".gif" || ext == ".png" || ext == ".jpg")
             //{ 
             //    byte[] btBody = Encoding.UTF8.GetBytes("<!DOCTYPE html>" +
@@ -383,7 +470,172 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private async Task OnAfterResponse(object sender, SessionEventArgs e)
         {
-            WriteToConsole($"Pipelineinfo: {e.GetState().PipelineInfo}", ConsoleColor.Yellow);
+            var state = e.GetState();
+            var request = e.HttpClient.Request;
+            var response = e.HttpClient.Response;
+            var statusCode = response?.StatusCode ?? 0;
+            var elapsedMs = state.RequestStartedUtc == default
+                ? 0
+                : (long)(DateTime.UtcNow - state.RequestStartedUtc).TotalMilliseconds;
+
+            // A status-0 response with no HttpVersion means the origin round trip never produced a
+            // response at all. Classify expected teardown / origin reachability separately from
+            // genuine proxy defects so the traffic tape does not paint ad-beacon DNS misses red.
+            var tapeKind = ClassifyIncompleteSession(statusCode, e.Exception);
+
+            // Compact traffic tape: METHOD host/path → status  H2↔H2  187ms
+            string line;
+            ConsoleColor color;
+            switch (tapeKind)
+            {
+                case IncompleteSessionKind.ClientCancelled:
+                    line =
+                        $"{request.Method,-7} {FormatUrlForConsole(request.Url)} ⇢ cancelled by client  {elapsedMs}ms";
+                    color = ConsoleColor.DarkGray;
+                    break;
+                case IncompleteSessionKind.ConnectFailed:
+                    line =
+                        $"{request.Method,-7} {FormatUrlForConsole(request.Url)} ⇢ connect failed  {FormatHttpProtocolShort(request.HttpVersion)}↔?  {elapsedMs}ms";
+                    color = ConsoleColor.DarkYellow;
+                    break;
+                default:
+                    line =
+                        $"{request.Method,-7} {FormatUrlForConsole(request.Url)} → {statusCode,3}  {FormatHttpProtocolShort(request.HttpVersion)}↔{FormatHttpProtocolShort(response?.HttpVersion)}  {elapsedMs}ms";
+                    color = ColorForStatusCode(statusCode);
+                    break;
+            }
+
+            WriteToConsole(line, color);
+
+#if DEBUG
+            try
+            {
+                WriteToConsole($"Pipelineinfo: {state.GetPipelineInfo()}", ConsoleColor.Yellow);
+            }
+            catch
+            {
+                // PipelineInfo is diagnostic-only; ignore races/teardown.
+            }
+#endif
+        }
+
+        private enum IncompleteSessionKind
+        {
+            None,
+            ClientCancelled,
+            ConnectFailed
+        }
+
+        /// <summary>
+        ///     Maps status-0 sessions to traffic-tape presentation. Client aborts and origin
+        ///     connect/DNS/TLS failures are expected under heavy browsing; only unclassified
+        ///     status-0 (and real 5xx responses) stay red.
+        /// </summary>
+        private static IncompleteSessionKind ClassifyIncompleteSession(int statusCode, Exception exception)
+        {
+            if (statusCode != 0 || exception == null)
+                return IncompleteSessionKind.None;
+
+            if (exception is OperationCanceledException ||
+                GetInnermostException(exception) is OperationCanceledException)
+                return IncompleteSessionKind.ClientCancelled;
+
+            if (IsOriginConnectFailure(exception))
+                return IncompleteSessionKind.ConnectFailed;
+
+            return IncompleteSessionKind.None;
+        }
+
+        private static bool IsOriginConnectFailure(Exception exception)
+        {
+            for (var ex = exception; ex != null; ex = ex.InnerException)
+            {
+                switch (ex)
+                {
+                    case SocketException socketEx:
+                        switch (socketEx.SocketErrorCode)
+                        {
+                            case SocketError.HostNotFound:
+                            case SocketError.NoData:
+                            case SocketError.TryAgain:
+                            case SocketError.NetworkUnreachable:
+                            case SocketError.HostUnreachable:
+                            case SocketError.ConnectionRefused:
+                            case SocketError.TimedOut:
+                            case SocketError.NetworkDown:
+                            case SocketError.ConnectionReset:
+                            case SocketError.ConnectionAborted:
+                                return true;
+                        }
+
+                        break;
+
+                    case IOException ioEx:
+                        // TLS/TCP peer closed before headers (common for flaky ad sync endpoints).
+                        if (ioEx.InnerException is SocketException)
+                            return true;
+                        if (ioEx.Message.IndexOf("unexpected EOF", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            ioEx.Message.IndexOf("0 bytes from the transport stream", StringComparison.OrdinalIgnoreCase) >=
+                            0)
+                            return true;
+                        break;
+
+                    case RetryableServerConnectionException:
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static Exception GetInnermostException(Exception exception)
+        {
+            var current = exception;
+            while (current.InnerException != null)
+                current = current.InnerException;
+            return current;
+        }
+
+        private static ConsoleColor ColorForStatusCode(int statusCode)
+        {
+            if (statusCode >= 500 || statusCode == 0)
+                return ConsoleColor.Red;
+            if (statusCode >= 400)
+                return ConsoleColor.Yellow;
+            return ConsoleColor.Cyan;
+        }
+
+        /// <summary>
+        ///     Host + path for the console; drops long query strings and truncates.
+        /// </summary>
+        private static string FormatUrlForConsole(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return url;
+
+            string compact;
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            {
+                compact = uri.IsDefaultPort
+                    ? uri.Host + uri.AbsolutePath
+                    : uri.Host + ":" + uri.Port + uri.AbsolutePath;
+                if (uri.Query.Length > 1)
+                    compact += "?…";
+            }
+            else
+            {
+                compact = url;
+            }
+
+            return Truncate(compact, MaxUrlLength);
+        }
+
+        private static string Truncate(string value, int maxLength)
+        {
+            if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
+                return value;
+
+            return value.Substring(0, maxLength - 1) + "…";
         }
 
         /// <summary>
@@ -393,7 +645,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         /// <param name="e"></param>
         public Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
         {
-            e.GetState().PipelineInfo.AppendLine(nameof(OnCertificateValidation));
+            e.GetState().AppendPipeline(nameof(OnCertificateValidation));
 
             // set IsValid to true/false based on Certificate Errors
             if (e.SslPolicyErrors == SslPolicyErrors.None) e.IsValid = true;
@@ -408,11 +660,25 @@ namespace Titanium.Web.Proxy.Examples.Basic
         /// <param name="e"></param>
         public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs e)
         {
-            e.GetState().PipelineInfo.AppendLine(nameof(OnCertificateSelection));
+            e.GetState().AppendPipeline(nameof(OnCertificateSelection));
 
             // set e.clientCertificate to override
 
             return Task.CompletedTask;
+        }
+
+        /// <summary>
+        ///     Formats an HTTP version for brief console logs (e.g. H1.1, H2, H3).
+        /// </summary>
+        private static string FormatHttpProtocolShort(Version version)
+        {
+            if (version == null || version.Major == 0)
+                return "?";
+
+            if (version.Major >= 2)
+                return "H" + version.Major;
+
+            return "H" + version.Major + "." + version.Minor;
         }
 
         private void WriteToConsole(string message, ConsoleColor? consoleColor = null)

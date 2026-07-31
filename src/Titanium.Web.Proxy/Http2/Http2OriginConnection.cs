@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
@@ -16,6 +15,7 @@ using Titanium.Web.Proxy.Http2.Hpack;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Streams;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Options;
 using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
 
 namespace Titanium.Web.Proxy.Http2;
@@ -60,12 +60,11 @@ internal sealed class Http2OriginConnection
     /// <summary>Maximum total header block (HEADERS + CONTINUATION fragments) we accept from origin before treating it as a protocol violation.</summary>
     private const int MaxHeaderBlockBytes = 256 * 1024;
 
-    private const int DefaultConcurrencyCap = 100;
-
     private readonly TcpServerConnection connection;
     private readonly Stream stream;
     private readonly ILogger logger;
     private readonly long maxBufferedBodyBytes;
+    private readonly ProxyResourceLimits resourceLimits;
     private readonly SemaphoreSlim writeLock = new(1, 1);
     private readonly Http2FlowController sendFlow = new();
     private readonly Http2Settings originSettings = new();
@@ -82,12 +81,14 @@ internal sealed class Http2OriginConnection
     private int goAwayLastStreamId = int.MaxValue;
     private Task? readLoopTask;
 
-    private Http2OriginConnection(TcpServerConnection connection, ILogger logger, long maxBufferedBodyBytes)
+    private Http2OriginConnection(TcpServerConnection connection, ILogger logger, long maxBufferedBodyBytes,
+        ProxyResourceLimits resourceLimits)
     {
         this.connection = connection;
         stream = connection.Stream;
         this.logger = logger;
         this.maxBufferedBodyBytes = maxBufferedBodyBytes;
+        this.resourceLimits = resourceLimits;
     }
 
     /// <summary>True while this connection may still be leased for a new request.</summary>
@@ -101,22 +102,33 @@ internal sealed class Http2OriginConnection
     internal TcpServerConnection ServerConnection => connection;
 
     /// <summary>
+    ///     Connection-level WINDOW_UPDATE increment sent immediately after the connection preface,
+    ///     matching Chrome/Edge behaviour (0xEF0001 = 15663105 bytes). This grows the connection
+    ///     flow-control window from the RFC default 65535 to ~15 MB, improving throughput for
+    ///     large responses and aligning the HTTP/2 Akamai fingerprint with real browsers.
+    /// </summary>
+    private const int InitialConnectionWindowIncrement = 15663105;
+
+    /// <summary>
     ///     Establishes a new origin h2 connection over an already TLS/ALPN=h2-negotiated <see cref="TcpServerConnection" />:
-    ///     writes the client connection preface and this proxy's own SETTINGS (advertising
-    ///     <c>SETTINGS_ENABLE_PUSH=0</c>, since this bridge never generates or forwards server push), starts the
-    ///     background frame-reading loop, and waits for the origin's own initial SETTINGS frame so
+    ///     writes the client connection preface, this proxy's own SETTINGS, and an initial
+    ///     connection-level WINDOW_UPDATE (matching Chrome's preface), starts the background
+    ///     frame-reading loop, and waits for the origin's own initial SETTINGS frame so
     ///     <see cref="SendAsync" /> always has a real <c>MAX_CONCURRENT_STREAMS</c>/frame-size budget to honor.
     /// </summary>
     internal static async Task<Http2OriginConnection> CreateAsync(TcpServerConnection connection,
-        ILogger logger, long maxBufferedBodyBytes, CancellationToken cancellationToken)
+        ILogger logger, long maxBufferedBodyBytes, CancellationToken cancellationToken,
+        ProxyResourceLimits? resourceLimits = null)
     {
-                var instance = new Http2OriginConnection(connection, logger, maxBufferedBodyBytes);
+                var instance = new Http2OriginConnection(connection, logger, maxBufferedBodyBytes,
+                    resourceLimits ?? ProxyResourceLimits.Default);
 
                 var preface = Http2Helper.ConnectionPreface;
                 await instance.stream.WriteAsync(preface, 0, preface.Length, cancellationToken);
                 await instance.SendInitialSettingsAsync(cancellationToken);
+                await instance.SendConnectionWindowUpdateAsync(InitialConnectionWindowIncrement, cancellationToken);
 
-                instance.readLoopTask = Task.Run(() => instance.ReadLoopAsync(instance.connectionCts.Token));
+                instance.readLoopTask = instance.ReadLoopAsync(instance.connectionCts.Token);
 
                 try
                 {
@@ -283,6 +295,21 @@ internal sealed class Http2OriginConnection
         }
     }
 
+    private async Task SendConnectionWindowUpdateAsync(int increment, CancellationToken cancellationToken)
+    {
+        var frameHeader = new Http2FrameHeader();
+        var frameHeaderBuffer = new byte[9];
+        await writeLock.WaitAsync(cancellationToken);
+        try
+        {
+            await Http2Helper.SendWindowUpdateAsync(frameHeader, frameHeaderBuffer, 0, increment, stream);
+        }
+        finally
+        {
+            writeLock.Release();
+        }
+    }
+
     private async Task SendPingAckAsync(byte[] payload, CancellationToken cancellationToken)
     {
         var frameHeader = new Http2FrameHeader
@@ -415,9 +442,17 @@ internal sealed class Http2OriginConnection
                         await SendSettingsAckAsync(cancellationToken);
                         if (!initialSettingsReceived.Task.IsCompleted)
                         {
+                            // Consolidated with Http2Helper's client-facing admission check: both now
+                            // derive from the same proxy-owned ProxyResourceLimits.MaxConcurrentStreamsPerConnection
+                            // rather than each hard-coding its own default, so the two mechanisms cannot
+                            // silently drift apart. This gate additionally respects a lower
+                            // origin-advertised value (never a higher one) since it self-throttles the
+                            // proxy's own outbound usage of this shared origin connection - unlike
+                            // Http2Helper's check, there is no wire value here to keep in sync with.
+                            var proxyCap = resourceLimits.MaxConcurrentStreamsPerConnection;
                             var cap = originSettings.MaxConcurrentStreams == int.MaxValue
-                                ? DefaultConcurrencyCap
-                                : Math.Max(1, Math.Min(originSettings.MaxConcurrentStreams, DefaultConcurrencyCap * 4));
+                                ? proxyCap
+                                : Math.Max(1, Math.Min(originSettings.MaxConcurrentStreams, proxyCap));
                             concurrencyGate = new SemaphoreSlim(cap, cap);
                             initialSettingsReceived.TrySetResult(true);
                         }
@@ -589,7 +624,7 @@ internal sealed class Http2OriginConnection
             var value = (int)BinaryPrimitives.ReadUInt32BigEndian(payload.AsSpan(i + 2, 4));
 
             if (identifier == (int)Http2SettingsId.HeaderTableSize)
-                originSettings.HeaderTableSize = value;
+                originSettings.UpdateHeaderTableSize(value);
             else if (identifier == (int)Http2SettingsId.MaxFrameSize)
             {
                 // RFC 7540 §6.5.2: values outside [16384, 16777215] are a connection-level PROTOCOL_ERROR.
@@ -770,6 +805,9 @@ internal sealed class Http2OriginConnection
     {
         Fail(new ObjectDisposedException(nameof(Http2OriginConnection)), false);
         connectionCts.Cancel();
+        connectionCts.Dispose();
+        writeLock.Dispose();
+        concurrencyGate?.Dispose();
         connection.Dispose();
     }
 
@@ -848,4 +886,3 @@ internal sealed class Http2OriginExchange
 
     internal HeaderCollection? TrailingHeaders { get; }
 }
-#endif

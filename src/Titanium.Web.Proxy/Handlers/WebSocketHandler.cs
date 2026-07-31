@@ -19,22 +19,27 @@ public partial class ProxyServer
         HttpClientStream clientStream, TcpServerConnection serverConnection,
         CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
     {
-        // When frame-level interception is active, strip extensions that produce RSV-flagged frames
-        // (e.g. permessage-deflate sets RSV1=1) because the proxy cannot decode or re-encode them.
-        // The server will therefore not negotiate any extension, keeping the wire format plain.
+        // When frame-level interception - or a raw DataSent/DataReceived tap, which typically decodes
+        // the same bytes as WebSocket frames via WebSocketDecoder - is active, strip extensions that
+        // produce RSV-flagged frames (e.g. permessage-deflate sets RSV1=1) because the proxy cannot
+        // decode or re-encode them. The server will therefore not negotiate any extension, keeping the
+        // wire format plain. Otherwise a compressed Text frame's still-deflated bytes get handed to
+        // WebSocketFrame.GetText() as if they were UTF-8, producing garbage. Only catches taps
+        // subscribed by the time this request is forwarded (e.g. from a BeforeRequest handler) -
+        // subscribing later, from BeforeResponse, is too late to influence the extensions offered here.
         // Phase 6 will add permessage-deflate support and relax this restriction.
-        if (args.HasWebSocketFrameInterceptHandler)
+        if (args.HasWebSocketFrameInterceptHandler || args.HasWebSocketDataTapHandler)
             args.HttpClient.Request.Headers.RemoveHeader("Sec-WebSocket-Extensions");
 
         await serverConnection.Stream.WriteRequestAsync(args.HttpClient.Request, cancellationToken);
 
         // WebSocket upgrades are exempt from short response-header deadlines; use idle-read if configured.
-        using (var idleScope = ProxyTimeoutScope.Create(cancellationToken,
+        using (var idleDeadline = args.Deadlines.Start(cancellationToken,
                    ResolveIdleReadTimeout(args), ProxyTimeoutKind.IdleRead))
         {
             try
             {
-                var httpStatus = await serverConnection.Stream.ReadResponseStatus(idleScope.Token)
+                var httpStatus = await serverConnection.Stream.ReadResponseStatus(idleDeadline.Token)
                                  ?? throw new IOException(
                                      "Server closed the connection before sending a WebSocket upgrade response.");
 
@@ -43,12 +48,11 @@ public partial class ProxyServer
                 upgradeResponse.StatusCode = httpStatus.StatusCode;
                 upgradeResponse.StatusDescription = httpStatus.Description;
 
-                await HeaderParser.ReadHeaders(serverConnection.Stream, upgradeResponse.Headers, idleScope.Token);
+                await HeaderParser.ReadHeaders(serverConnection.Stream, upgradeResponse.Headers, idleDeadline.Token);
             }
-            catch (Exception ex) when (ex is OperationCanceledException || idleScope.IsTimedOut())
+            catch (OperationCanceledException ex)
             {
-                idleScope.ThrowIfTimedOut(ex);
-                throw;
+                idleDeadline.ThrowIfTimedOut(ex);
             }
         }
 

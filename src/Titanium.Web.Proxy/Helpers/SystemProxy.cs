@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.Versioning;
@@ -47,10 +47,8 @@ internal class HttpSystemProxyValue
 /// </summary>
 [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType",
     Justification = "Reviewed.")]
-#if !NETFRAMEWORK
 [SupportedOSPlatform("windows")]
-#endif
-internal class SystemProxyManager
+internal class SystemProxyManager : IDisposable
 {
     private const string RegKeyInternetSettings = "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
     private const string RegAutoConfigUrl = "AutoConfigURL";
@@ -63,22 +61,59 @@ internal class SystemProxyManager
 
     private ProxyInfo? originalValues;
 
+    private readonly EventHandler processExitHandler;
+    private readonly UnhandledExceptionEventHandler unhandledExceptionHandler;
+    private readonly NativeMethods.ConsoleEventDelegate? consoleEventHandler;
+    private bool disposed;
+
     public SystemProxyManager()
     {
-        AppDomain.CurrentDomain.ProcessExit += (o, args) => RestoreOriginalSettings();
+        // Best-effort restore when the process is going away. Hard kills (e.g. End Task /
+        // taskkill /F) cannot run managed code; Start(changeSystemProxySettings: true) clears
+        // stale local-proxy entries on the next run.
+        processExitHandler = (_, _) => RestoreOriginalSettings();
+        unhandledExceptionHandler = (_, _) => RestoreOriginalSettings();
+        AppDomain.CurrentDomain.ProcessExit += processExitHandler;
+        AppDomain.CurrentDomain.UnhandledException += unhandledExceptionHandler;
+
         if (Environment.UserInteractive && NativeMethods.GetConsoleWindow() != IntPtr.Zero)
         {
-            var handler = new NativeMethods.ConsoleEventDelegate(eventType =>
+            consoleEventHandler = eventType =>
             {
-                if (eventType != 2) return false;
+                // CTRL_C_EVENT=0, CTRL_BREAK_EVENT=1, CTRL_CLOSE_EVENT=2,
+                // CTRL_LOGOFF_EVENT=5, CTRL_SHUTDOWN_EVENT=6
+                if (eventType is 0 or 1 or 2 or 5 or 6)
+                    RestoreOriginalSettings();
 
-                RestoreOriginalSettings();
                 return false;
-            });
-            NativeMethods.Handler = handler;
+            };
+            NativeMethods.Handler = consoleEventHandler;
 
-            // On Console exit make sure we also exit the proxy
-            NativeMethods.SetConsoleCtrlHandler(handler, true);
+            // On console control events, restore system proxy before the process exits.
+            NativeMethods.SetConsoleCtrlHandler(consoleEventHandler, true);
+        }
+    }
+
+    /// <summary>
+    ///     Unsubscribes the AppDomain and console-control handlers registered by the constructor.
+    ///     Without this, every <see cref="ProxyServer" /> created and disposed over an
+    ///     application's lifetime (e.g. in tests, or short-lived proxy instances) leaks a retained
+    ///     reference through <see cref="AppDomain.ProcessExit" />/<see cref="AppDomain.UnhandledException" />,
+    ///     and a disposed instance's console handler could still fire and call into a torn-down object.
+    /// </summary>
+    public void Dispose()
+    {
+        if (disposed) return;
+        disposed = true;
+
+        AppDomain.CurrentDomain.ProcessExit -= processExitHandler;
+        AppDomain.CurrentDomain.UnhandledException -= unhandledExceptionHandler;
+
+        if (consoleEventHandler != null)
+        {
+            NativeMethods.SetConsoleCtrlHandler(consoleEventHandler, false);
+            if (ReferenceEquals(NativeMethods.Handler, consoleEventHandler))
+                NativeMethods.Handler = null;
         }
     }
 

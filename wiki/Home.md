@@ -12,6 +12,7 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET. This wiki documents t
 - [Custom and redirected responses](#custom-and-redirected-responses)
 - [Streaming bodies](#streaming-bodies)
 - [HTTP/2](#http2)
+- [HTTP/3](#http3)
 - [Tunnel (CONNECT) interception](#tunnel-connect-interception)
 - [Upstream proxies](#upstream-proxies)
 - [Authentication](#authentication)
@@ -20,6 +21,8 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET. This wiki documents t
 - [Request timing](#request-timing)
 - [Supported frameworks](#supported-frameworks)
 - [Breaking changes: unified logging and timing](#breaking-changes-unified-logging-and-timing)
+- [Migrating from 4.x to 5.0](Migration-4.x-to-5.0)
+- [Security considerations](Security-Considerations)
 - [Protocol feature support](Protocol-Support)
 
 ## Getting started
@@ -217,6 +220,22 @@ the synthetic-response APIs (`Ok`/`Respond`/`Redirect`/`GenericResponse`/`Respon
 HTTP/2 the same as over HTTP/1.x — see [Streaming Bodies](Streaming-Bodies). Not supported: HTTP/2 server
 push and cleartext h2c upgrade. See [Protocol Feature Support](Protocol-Support) for the full breakdown.
 
+## HTTP/3
+
+HTTP/3 support is available as an opt-in feature.  See the **[HTTP/3](HTTP-3)** page for the full
+setup guide.  Quick start:
+
+```csharp
+proxy.EnableHttp3 = true;
+var quicEndPoint = new TransparentQuicProxyEndPoint(IPAddress.Any, 443);
+proxy.AddEndPoint(quicEndPoint);
+proxy.Start();
+```
+
+All existing `BeforeRequest`/`BeforeResponse`/`AfterResponse` event handlers work unchanged for HTTP/3
+streams.  The proxy auto-discovers HTTP/3 capability via `Alt-Svc` response headers and will transparently
+use HTTP/3 for subsequent requests to the same origin when capability is cached.
+
 ## Tunnel (CONNECT) interception
 
 On an `ExplicitProxyEndPoint`, decide per-`CONNECT` whether to decrypt:
@@ -381,8 +400,17 @@ Versions prior to 4.0 also supported .NET Framework 4.6.2 and .NET 8; starting w
   removed. Use [`Timing`/`UpstreamConnectionTiming`/`ClientTlsTiming`](#request-timing) instead, which are
   strongly typed and only allocated when `EnableRequestTimingCapture` is set.
 
+## Migrating from 4.x to 5.0
+
+5.0 bundles a large security- and correctness-hardening pass — TLS defaults, certificate storage
+location, HTTP/1 framing strictness, body-size budgets, WebSocket/HTTP-2/HTTP-3 abuse limits, and a
+few credential/redaction fixes all changed observable behavior in some way. See the dedicated
+**[Migration guide: 4.x → 5.0](Migration-4.x-to-5.0)** page for the full list, each with its rationale
+and remedy.
+
 ## Protocol feature support
 
-Wondering whether a specific HTTP/1.x or HTTP/2 feature (trailers, interim 1xx responses, HPACK, server
-push, ...) is supported? See the **[Protocol Feature Support](Protocol-Support)** page for a full
+Wondering whether a specific HTTP/1.x, HTTP/2, or HTTP/3 feature (trailers, interim 1xx responses, HPACK,
+QPACK, Alt-Svc, server push, ...) is supported? See the **[Protocol Feature Support](Protocol-Support)** page
+for a full
 Yes/No/Partial breakdown.

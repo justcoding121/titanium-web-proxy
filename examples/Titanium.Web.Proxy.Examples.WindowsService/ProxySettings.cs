@@ -36,6 +36,18 @@ internal sealed class ProxySettings
 
     public bool EnableHttp2 { get; set; } = true;
 
+    /// <summary>
+    ///     Enable experimental HTTP/3 (QUIC) support. Requires MsQuic and a supported OS
+    ///     (<see cref="System.Net.Quic.QuicListener.IsSupported" />). When true, a
+    ///     <c>TransparentQuicProxyEndPoint</c> is bound on <see cref="QuicListeningPort" />.
+    /// </summary>
+    public bool EnableHttp3 { get; set; } = true;
+
+    /// <summary>
+    ///     UDP port for the transparent HTTP/3 QUIC endpoint. Only used when <see cref="EnableHttp3" /> is true.
+    /// </summary>
+    public int QuicListeningPort { get; set; } = 443;
+
     public bool NoDelay { get; set; } = true;
 
     /// <summary>
@@ -46,5 +58,23 @@ internal sealed class ProxySettings
 
     public bool DecryptSsl { get; set; }
 
-    public bool LogErrors { get; set; } = true;
+    /// <summary>
+    ///     When true, registers the listening endpoint as the Windows system HTTP/HTTPS proxy
+    ///     (Current User WinINet settings). Cleared automatically on <see cref="ProxyServer.Stop" />.
+    ///     Prefer true when running interactively (`dotnet run`); for a LocalSystem service install
+    ///     this affects the service account hive, not the interactive user's browsers.
+    /// </summary>
+    public bool SetAsSystemProxy { get; set; } = true;
+
+    /// <summary>
+    ///     Master switch for proxy-library diagnostic logging (bridged into the host <c>ILoggerFactory</c>).
+    ///     When false, the proxy uses a no-op logger regardless of host log levels.
+    /// </summary>
+    public bool EnableProxyLogging { get; set; } = true;
+
+    /// <summary>
+    ///     When true, each completed response is logged at Information (files only — Event Log is Warning+).
+    ///     Disable under high traffic if you only need errors and lifecycle messages.
+    /// </summary>
+    public bool LogRequests { get; set; } = true;
 }

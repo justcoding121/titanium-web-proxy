@@ -36,6 +36,15 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// </summary>
     internal CancellationToken CancellationToken => OperationCancellationToken ?? CancellationTokenSource.Token;
 
+    /// <summary>
+    ///     The single registry every <see cref="Helpers.DeadlineRegistry.Deadline" /> composed for this
+    ///     session's request/response exchange is started against, so a firing recorded deep in one
+    ///     handler (e.g. an idle-write stall) is still attributable by a catch block in a different
+    ///     handler several layers up with no <see cref="Helpers.DeadlineRegistry.Deadline" /> of its own
+    ///     in between - see <see cref="Helpers.DeadlineRegistry" />'s remarks for why that matters.
+    /// </summary>
+    internal DeadlineRegistry Deadlines { get; } = new();
+
     private bool disposed;
     private bool enableWinAuth;
 
@@ -100,6 +109,14 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
         get => HttpClient.UserData;
         set => HttpClient.UserData = value;
     }
+
+    /// <summary>
+    ///     Per-session override for <see cref="ProxyServer.ConnectTimeOutSeconds" />.
+    ///     <see langword="null" /> uses the server default; <see cref="TimeSpan.Zero" /> or negative
+    ///     disables the connect timeout. Set in <c>BeforeRequest</c> to speed up or slow down the
+    ///     TCP connect race for this individual request.
+    /// </summary>
+    public TimeSpan? ConnectTimeout { get; set; }
 
     /// <summary>
     ///     Enable/disable Windows Authentication (NTLM/Kerberos) for the current session.
@@ -178,9 +195,9 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     public ProxyEndPoint LocalEndPoint => ProxyEndPoint;
 
     /// <summary>
-    ///     Is this a transparent endpoint?
+    ///     Is this a transparent endpoint (TCP or QUIC)?
     /// </summary>
-    public bool IsTransparent => ProxyEndPoint is TransparentProxyEndPoint;
+    public bool IsTransparent => ProxyEndPoint is TransparentBaseProxyEndPoint;
 
     /// <summary>
     ///     Is this a SOCKS endpoint?
@@ -244,6 +261,15 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     ///     Fired when data is received within this session from client/server.
     /// </summary>
     public event EventHandler<DataEventArgs>? DataReceived;
+
+    /// <summary>
+    ///     True if a raw byte-level tap (<see cref="DataSent"/> or <see cref="DataReceived"/>) is
+    ///     subscribed. Used by the WebSocket upgrade handler: a subscriber typically decodes the raw
+    ///     bytes as WebSocket frames (e.g. via <c>WebSocketDecoder</c>), which - like frame-level
+    ///     interception - cannot handle RSV-flagged frames produced by extensions such as
+    ///     permessage-deflate.
+    /// </summary>
+    internal bool HasWebSocketDataTapHandler => DataSent != null || DataReceived != null;
 
     internal void OnDataSent(byte[] buffer, int offset, int count)
     {

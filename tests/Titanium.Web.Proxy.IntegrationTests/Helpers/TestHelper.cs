@@ -12,16 +12,21 @@ public static class TestHelper
     {
         var proxy = new TestProxy($"http://localhost:{localProxyPort}", enableBasicProxyAuthorization);
 
-        var handler = CreateHandler();
+        var handler = CreateHandler(useProxy: true);
         handler.Proxy = proxy;
-        handler.UseProxy = true;
 
         return new HttpClient(handler);
     }
 
+    /// <summary>
+    ///     Direct (no proxy) client for reverse/transparent endpoint tests.
+    ///     Always sets <see cref="HttpClientHandler.UseProxy"/> to <see langword="false"/> so a machine
+    ///     WinINET/system proxy — e.g. the Basic example listening on localhost:8000 after
+    ///     <c>dotnet run</c> — cannot intercept traffic meant for the in-process test proxy.
+    /// </summary>
     public static HttpClient GetHttpClient()
     {
-        return new HttpClient(CreateHandler());
+        return new HttpClient(CreateHandler(useProxy: false));
     }
 
     /// <summary>
@@ -50,10 +55,14 @@ public static class TestHelper
         };
     }
 
-    private static HttpClientHandler CreateHandler()
+    private static HttpClientHandler CreateHandler(bool useProxy)
     {
         return new HttpClientHandler
         {
+            // Default UseProxy=true would send reverse-proxy test traffic through the machine's
+            // system proxy (often the Basic example on :8000), which MITMs with the product root
+            // and breaks CustomRootTrust validation against the test CA.
+            UseProxy = useProxy,
             ServerCertificateCustomValidationCallback =
                 (_, certificate, _, errors) => TestCertificateAuthority.Validate(certificate, errors)
         };

@@ -43,9 +43,6 @@ internal enum ProxyTypes
     /// <summary>No proxy server; the ProxySocket object behaves exactly like an ordinary Socket object.</summary>
     None,
 
-    /// <summary>A HTTPS (CONNECT) proxy server.</summary>
-    Https,
-
     /// <summary>A SOCKS4[A] proxy server.</summary>
     Socks4,
 
@@ -157,87 +154,6 @@ internal class ProxySocket : Socket
     }
 
     /// <summary>
-    ///     Establishes a connection to a remote device.
-    /// </summary>
-    /// <param name="address">An EndPoint address that represents the remote device.</param>
-    /// <param name="port">An EndPoint port that represents the remote device.</param>
-    /// <exception cref="ArgumentNullException">The remoteEP parameter is a null reference (Nothing in Visual Basic).</exception>
-    /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
-    /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-    /// <exception cref="ProxyException">An error occurred while talking to the proxy server.</exception>
-    public new void Connect(IPAddress address, int port)
-    {
-        var remoteEp = new IPEndPoint(address, port);
-        Connect(remoteEp);
-    }
-
-    /// <summary>
-    ///     Establishes a connection to a remote device.
-    /// </summary>
-    /// <param name="remoteEp">An EndPoint that represents the remote device.</param>
-    /// <exception cref="ArgumentNullException">The remoteEP parameter is a null reference (Nothing in Visual Basic).</exception>
-    /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
-    /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-    /// <exception cref="ProxyException">An error occurred while talking to the proxy server.</exception>
-    public new void Connect(EndPoint remoteEp)
-    {
-        if (remoteEp == null)
-            throw new ArgumentNullException("<remoteEP> cannot be null.");
-        if (ProtocolType != ProtocolType.Tcp || ProxyType == ProxyTypes.None || ProxyEndPoint == null)
-        {
-            base.Connect(remoteEp);
-        }
-        else
-        {
-            base.Connect(ProxyEndPoint);
-            if (ProxyType == ProxyTypes.Https)
-                new HttpsHandler(this, ProxyUser, ProxyPass).Negotiate((IPEndPoint)remoteEp);
-            else if (ProxyType == ProxyTypes.Socks4)
-                new Socks4Handler(this, ProxyUser).Negotiate((IPEndPoint)remoteEp);
-            else if (ProxyType == ProxyTypes.Socks5)
-                new Socks5Handler(this, ProxyUser, ProxyPass).Negotiate((IPEndPoint)remoteEp);
-        }
-    }
-
-    /// <summary>
-    ///     Establishes a connection to a remote device.
-    /// </summary>
-    /// <param name="host">The remote host to connect to.</param>
-    /// <param name="port">The remote port to connect to.</param>
-    /// <exception cref="ArgumentNullException">The host parameter is a null reference (Nothing in Visual Basic).</exception>
-    /// <exception cref="ArgumentException">The port parameter is invalid.</exception>
-    /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
-    /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-    /// <exception cref="ProxyException">An error occurred while talking to the proxy server.</exception>
-    /// <remarks>
-    ///     If you use this method with a SOCKS4 server, it will let the server resolve the hostname. Not all SOCKS4
-    ///     servers support this 'remote DNS' though.
-    /// </remarks>
-    public new void Connect(string host, int port)
-    {
-        if (host == null)
-            throw new ArgumentNullException(nameof(host));
-
-        if (port <= 0 || port > 65535)
-            throw new ArgumentException(nameof(port));
-
-        if (ProtocolType != ProtocolType.Tcp || ProxyType == ProxyTypes.None || ProxyEndPoint == null)
-        {
-            base.Connect(new IPEndPoint(Dns.GetHostEntry(host).AddressList[0], port));
-        }
-        else
-        {
-            base.Connect(ProxyEndPoint);
-            if (ProxyType == ProxyTypes.Https)
-                new HttpsHandler(this, ProxyUser, ProxyPass).Negotiate(host, port);
-            else if (ProxyType == ProxyTypes.Socks4)
-                new Socks4Handler(this, ProxyUser).Negotiate(host, port);
-            else if (ProxyType == ProxyTypes.Socks5)
-                new Socks5Handler(this, ProxyUser, ProxyPass).Negotiate(host, port);
-        }
-    }
-
-    /// <summary>
     ///     Begins an asynchronous request for a connection to a network device.
     /// </summary>
     /// <param name="address">An EndPoint address that represents the remote device.</param>
@@ -274,12 +190,6 @@ internal class ProxySocket : Socket
 
         var result = new AsyncProxyResult(state);
         HandShakeComplete protocolComplete = error => OnHandShakeComplete(result, callback, error);
-        if (ProxyType == ProxyTypes.Https)
-        {
-            return new HttpsHandler(this, ProxyUser, ProxyPass).BeginNegotiate((IPEndPoint)remoteEp,
-                protocolComplete, ProxyEndPoint, result);
-        }
-
         if (ProxyType == ProxyTypes.Socks4)
         {
             return new Socks4Handler(this, ProxyUser).BeginNegotiate((IPEndPoint)remoteEp,
@@ -319,12 +229,6 @@ internal class ProxySocket : Socket
         {
             BeginDns(host, port, protocolComplete, result);
             return result;
-        }
-
-        if (ProxyType == ProxyTypes.Https)
-        {
-            return new HttpsHandler(this, ProxyUser, ProxyPass).BeginNegotiate(host, port,
-                protocolComplete, ProxyEndPoint, result);
         }
 
         if (ProxyType == ProxyTypes.Socks4)

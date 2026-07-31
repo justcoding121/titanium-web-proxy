@@ -226,11 +226,16 @@ public class LoggingTests
         try
         {
             var options = new ProxyLoggingOptions { QueueCapacity = 64 };
-            using var provider = new ConsoleLoggerProvider(options);
+            var provider = new ConsoleLoggerProvider(options);
             var logger = provider.CreateLogger("test");
 
             logger.LogInformation("info goes to stdout");
             logger.LogError("error goes to stderr");
+
+            // Dispose explicitly here so the background drain flushes to outWriter/errorWriter
+            // while they are still the active console streams. Using `using var` would also
+            // dispose before finally, but an explicit call makes the ordering unambiguous.
+            provider.Dispose();
         }
         finally
         {

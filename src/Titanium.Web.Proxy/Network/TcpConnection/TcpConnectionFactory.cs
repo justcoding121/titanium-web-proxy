@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -38,6 +38,15 @@ internal class TcpConnectionFactory : IDisposable
     /// </summary>
     private const int UpstreamProxyRejectionBodyPreviewLimit = 4096;
 
+    /// <summary>
+    ///     RFC 8305 "Happy Eyeballs" stagger: how long a connection attempt to one resolved address is
+    ///     given to succeed before a concurrent attempt to the next resolved address is also raced
+    ///     alongside it. 250ms matches the upper end of RFC 8305's recommended 150-250ms range - long
+    ///     enough that a healthy address almost always wins outright, short enough that a broken address
+    ///     family (the case this exists for) does not visibly delay the connection.
+    /// </summary>
+    private const int HappyEyeballsAttemptDelayMs = 250;
+
     private static readonly string[] UpstreamProxyAuthenticationSchemes = { "Negotiate", "NTLM", "Kerberos" };
 
     // Tcp server connection pool cache
@@ -46,17 +55,44 @@ internal class TcpConnectionFactory : IDisposable
     // Tcp connections waiting to be disposed by cleanup task
     private readonly ConcurrentBag<TcpServerConnection> disposalBag = new();
 
-    // cache object race operations lock
-    private readonly SemaphoreSlim @lock = new(1);
+    /// <summary>
+    ///     Guards <see cref="cache" /> against the rare, whole-pool operations (<see cref="ClearPools" />,
+    ///     <see cref="Dispose(bool)" />) that must see a consistent snapshot of every queue at once,
+    ///     without forcing every per-request <see cref="Release(TcpServerConnection?,bool)" /> - by far
+    ///     the hottest path through this type - to serialize behind a single process-wide semaphore
+    ///     regardless of destination.
+    ///     <para>
+    ///         <see cref="Release(TcpServerConnection?,bool)" /> and the periodic per-key trim in
+    ///         <see cref="ClearOutdatedConnections" /> take the <em>read</em> side: any number of them run
+    ///         concurrently, for the same or different destinations, contending only on the
+    ///         destination-scoped <c>lock (queue)</c> already used for that destination's own
+    ///         <see cref="ConcurrentQueue{T}" /> (unchanged from before this lock was introduced - that
+    ///         part was already sharded by cache key). <see cref="ClearPools" /> and
+    ///         <see cref="Dispose(bool)" /> take the <em>write</em> side, which is exclusive with every
+    ///         reader, so a connection cannot be handed back into a queue this type is simultaneously
+    ///         draining and about to make unreachable via <c>cache.Clear()</c> - the leak a naive removal
+    ///         of the shared lock would reintroduce.
+    ///     </para>
+    /// </summary>
+    private readonly ReaderWriterLockSlim poolLock = new(LockRecursionPolicy.NoRecursion);
 
     private bool disposed;
 
     private volatile bool runCleanUpTask = true;
 
+    /// <summary>
+    ///     Cancels the <see cref="Task.Delay" /> inside <see cref="ClearOutdatedConnections" /> so the
+    ///     background cleanup task can exit promptly when the factory is disposed, rather than sleeping
+    ///     for the full 3-second interval before checking <see cref="runCleanUpTask" />.
+    /// </summary>
+    private readonly CancellationTokenSource _cleanupCts = new();
+
     internal TcpConnectionFactory(ProxyServer server)
     {
         Server = server ?? throw new ArgumentNullException(nameof(server));
-        Task.Run(async () => await ClearOutdatedConnections());
+        // Run on the thread pool so the first cleanup iteration (which may complete
+        // WaitAsync synchronously) cannot block ProxyServer's constructor.
+        _ = Task.Run(ClearOutdatedConnections);
     }
 
     internal ProxyServer Server { get; }
@@ -77,7 +113,7 @@ internal class TcpConnectionFactory : IDisposable
 
         try
         {
-            @lock.Wait();
+            poolLock.EnterWriteLock();
 
             foreach (var queue in cache.Select(x => x.Value).ToList())
                 while (!queue.IsEmpty)
@@ -88,7 +124,7 @@ internal class TcpConnectionFactory : IDisposable
         }
         finally
         {
-            @lock.Release();
+            poolLock.ExitWriteLock();
         }
 
         while (!disposalBag.IsEmpty)
@@ -163,8 +199,7 @@ internal class TcpConnectionFactory : IDisposable
         // NUL separator cannot appear in the individual parts, avoiding ambiguity between
         // e.g. ("ab", "c") and ("a", "bc").
         var material = (userName ?? string.Empty) + "\0" + (password ?? string.Empty);
-        using var sha = SHA256.Create();
-        var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(material));
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(material));
         return Convert.ToBase64String(hash);
     }
 
@@ -336,8 +371,12 @@ internal class TcpConnectionFactory : IDisposable
             var idx = authority.IndexOf((byte)':');
             if (idx == -1)
             {
+                // H2/H3 :authority is typically hostname-only for the default port.
+                // Defaulting to 80 here made HTTPS TCP fallbacks (e.g. H2→H3 bridge after
+                // QUIC failure) attempt TLS against port 80, which surfaces as
+                // AuthenticationException: "Cannot determine the frame size or a corrupted frame".
                 host = authority.GetString();
-                port = 80;
+                port = isHttps ? 443 : 80;
             }
             else
             {
@@ -426,7 +465,10 @@ internal class TcpConnectionFactory : IDisposable
                             if (recentConnection.LastAccess > cutOff
                                 && recentConnection.TcpSocket.IsGoodConnection()
                                 && IsNegotiatedProtocolCompatible(recentConnection, applicationProtocols))
+                            {
+                                ProxyMetrics.PoolReused();
                                 return recentConnection;
+                            }
 
                             if (recentConnection.TryScheduleDisposal())
                                 disposalBag.Add(recentConnection);
@@ -520,6 +562,10 @@ internal class TcpConnectionFactory : IDisposable
         var timing = proxyServer.EnableRequestTimingCapture ? new UpstreamConnectionTiming(DateTime.UtcNow) : null;
         IPEndPoint? boundEndPoint = null;
 
+        // Capture before the retry label: nullable flow analysis treats sessionArgs as maybe-null
+        // across goto retry combined with later sessionArgs?. / sessionArgs != null checks.
+        var sessionHttpClient = sessionArgs.HttpClient;
+
         retry:
         try
         {
@@ -543,146 +589,249 @@ internal class TcpConnectionFactory : IDisposable
 
             timing?.MarkDnsResolved();
 
-            Array.Sort(ipAddresses, (x, y) => x.AddressFamily.CompareTo(y.AddressFamily));
+            // RFC 8305 §4 address-family interleaving: without this, racing the addresses in resolver
+            // order (which groups every address of one family before the other, e.g. all A records then
+            // all AAAA) means a fully broken family with several addresses eats one stagger delay per
+            // address in that family before the race ever reaches a healthy address in the other family.
+            // Interleaving bounds that to a single stagger delay by alternating families at each
+            // position. Relative order *within* each family (the resolver's own preference, e.g. RFC 6724
+            // destination-address ordering) is preserved; only the interleaving across families is added.
+            ipAddresses = InterleaveByAddressFamily(ipAddresses);
 
-            Exception? lastException = null;
-            for (var i = 0; i < ipAddresses.Length; i++)
+            // Resolved once up front rather than inside the per-address race below: this is the SOCKS
+            // *origin* address embedded in the ATYP payload, which does not depend on which of the
+            // SOCKS *proxy's* addresses (the ones being raced) ends up winning, so re-resolving it once
+            // per racing attempt would be redundant and (since a proxy config's outcome for this address
+            // is deterministic) would only ever fail or succeed the same way every time.
+            // Known limitation: when multiple resolved origin addresses are returned we still only
+            // attempt the first. Per-remote-address failover would require plumbing SOCKS ATYP selection
+            // into the same address race below and is left as a future improvement.
+            IPAddress[]? socksRemoteIpAddresses = null;
+            if (socks && !externalProxy!.ProxyDnsRequests)
+            {
+                socksRemoteIpAddresses = await Dns.GetHostAddressesAsync(connectHostName);
+                if (socksRemoteIpAddresses == null || socksRemoteIpAddresses.Length == 0)
+                    throw new Exception($"Could not resolve the SOCKS remote hostname {connectHostName}");
+
+                // Prefer IPv4 when both families are returned so SOCKS ATYP selection is
+                // predictable on dual-stack hosts (e.g. localhost → 127.0.0.1 before ::1).
+                Array.Sort(socksRemoteIpAddresses, (x, y) => x.AddressFamily.CompareTo(y.AddressFamily));
+
+                // Unlike ProxyDnsRequests=true (where the SOCKS proxy itself resolves the origin and
+                // this proxy never learns an address to validate - a case the hardening plan explicitly
+                // leaves for a future design spike), this branch resolves the real origin locally, so it
+                // is exactly the case BlockPrivateNetworkDestinations is meant to cover. Checked against
+                // the exact address about to be used below, not re-resolved afterward.
+                if (proxyServer.BlockPrivateNetworkDestinations &&
+                    PrivateNetworkGuard.IsBlocked(socksRemoteIpAddresses[0]))
+                    throw new OutboundDestinationBlockedException(connectHostName,
+                        socksRemoteIpAddresses[0].ToString());
+            }
+
+            var connectTimeoutMs = (int)(sessionArgs?.ConnectTimeout?.TotalMilliseconds
+                ?? proxyServer.ConnectTimeOutSeconds * 1000.0);
+            var effectiveTimeoutSecs = sessionArgs?.ConnectTimeout.HasValue == true
+                ? $"{sessionArgs.ConnectTimeout!.Value.TotalSeconds:0.#}s"
+                : $"{proxyServer.ConnectTimeOutSeconds}s";
+
+            // Attempts one resolved address end to end (socket creation through connect) and either
+            // returns the connected socket or throws. Cancelling attemptToken (either the caller's own
+            // cancellationToken, or the race below abandoning this attempt because another address
+            // already won) aborts the in-flight connect rather than leaving it to run to its own timeout.
+            async Task<(Socket Socket, IPEndPoint? BoundEndPoint)> ConnectToAddressAsync(IPAddress ipAddress,
+                CancellationToken attemptToken)
+            {
+                // externalProxy == null here means this attempt's target is the real destination
+                // (connectHostName), not an operator-configured upstream proxy address, which is
+                // always exempt (see BlockPrivateNetworkDestinations). Checked against this exact
+                // resolved address, immediately before it is used to connect below - never
+                // re-resolving the hostname afterward - so the check cannot be defeated by a DNS
+                // answer that changes between validation and use (rebinding).
+                if (proxyServer.BlockPrivateNetworkDestinations && externalProxy == null &&
+                    PrivateNetworkGuard.IsBlocked(ipAddress))
+                    throw new OutboundDestinationBlockedException(hostname, ipAddress.ToString());
+
+                // Select local bind after destination resolution so IPv4/IPv6 adapters can coexist (#951).
+                var resolvedBind = UpStreamEndPointSelector.Resolve(ipAddress.AddressFamily,
+                    sessionHttpClient.UpStreamEndPoint, sessionHttpClient.UpStreamEndPointIPv4,
+                    sessionHttpClient.UpStreamEndPointIPv6,
+                    proxyServer.UpStreamEndPoint, proxyServer.UpStreamEndPointIPv4,
+                    proxyServer.UpStreamEndPointIPv6);
+                // Prefer selector result; fall back to the legacy single endpoint only when families match.
+                if (resolvedBind == null && upStreamEndPoint != null &&
+                    upStreamEndPoint.AddressFamily == ipAddress.AddressFamily)
+                    resolvedBind = upStreamEndPoint;
+                if (resolvedBind == null && upStreamEndPointIPv4 != null &&
+                    ipAddress.AddressFamily == AddressFamily.InterNetwork)
+                    resolvedBind = upStreamEndPointIPv4;
+                if (resolvedBind == null && upStreamEndPointIPv6 != null &&
+                    ipAddress.AddressFamily == AddressFamily.InterNetworkV6)
+                    resolvedBind = upStreamEndPointIPv6;
+
+                var addressFamily = resolvedBind?.AddressFamily ?? ipAddress.AddressFamily;
+
+                Socket attemptSocket;
+                if (socks)
+                {
+                    var proxySocket =
+                        new ProxySocket.ProxySocket(addressFamily, SocketType.Stream, ProtocolType.Tcp);
+                    proxySocket.ProxyType = externalProxy!.ProxyType == ExternalProxyType.Socks4
+                        ? ProxyTypes.Socks4
+                        : ProxyTypes.Socks5;
+
+                    proxySocket.ProxyEndPoint = new IPEndPoint(ipAddress, port);
+                    var proxyUser = externalProxy.UserName;
+                    var proxyPassword = externalProxy.Password;
+
+                    // SOCKS4 authenticates with a username only (no password), so do not require a
+                    // non-null password to set the user. SOCKS5 user/password auth uses both.
+                    if (proxyUser != null && proxyUser.Length > 0)
+                    {
+                        proxySocket.ProxyUser = proxyUser;
+                        if (proxyPassword != null) proxySocket.ProxyPass = proxyPassword;
+                    }
+
+                    attemptSocket = proxySocket;
+                }
+                else
+                {
+                    attemptSocket = new Socket(addressFamily, SocketType.Stream, ProtocolType.Tcp);
+                }
+
                 try
                 {
-                    var ipAddress = ipAddresses[i];
-                    // Select local bind after destination resolution so IPv4/IPv6 adapters can coexist (#951).
-                    var resolvedBind = UpStreamEndPointSelector.Resolve(ipAddress.AddressFamily,
-                        sessionArgs.HttpClient.UpStreamEndPoint, sessionArgs.HttpClient.UpStreamEndPointIPv4,
-                        sessionArgs.HttpClient.UpStreamEndPointIPv6,
-                        proxyServer.UpStreamEndPoint, proxyServer.UpStreamEndPointIPv4,
-                        proxyServer.UpStreamEndPointIPv6);
-                    // Prefer selector result; fall back to the legacy single endpoint only when families match.
-                    if (resolvedBind == null && upStreamEndPoint != null &&
-                        upStreamEndPoint.AddressFamily == ipAddress.AddressFamily)
-                        resolvedBind = upStreamEndPoint;
-                    if (resolvedBind == null && upStreamEndPointIPv4 != null &&
-                        ipAddress.AddressFamily == AddressFamily.InterNetwork)
-                        resolvedBind = upStreamEndPointIPv4;
-                    if (resolvedBind == null && upStreamEndPointIPv6 != null &&
-                        ipAddress.AddressFamily == AddressFamily.InterNetworkV6)
-                        resolvedBind = upStreamEndPointIPv6;
+                    if (resolvedBind != null) attemptSocket.Bind(resolvedBind);
 
-                    var addressFamily = resolvedBind?.AddressFamily ?? ipAddress.AddressFamily;
+                    attemptSocket.NoDelay = proxyServer.NoDelay;
+                    attemptSocket.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                    attemptSocket.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
+                    attemptSocket.LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds);
+
+                    if (proxyServer.ReuseSocket && RunTime.IsSocketReuseAvailable())
+                        attemptSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+
+                    if (proxyServer.EnableTcpKeepAlive)
+                        attemptSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 
                     if (socks)
                     {
-                        var proxySocket =
-                            new ProxySocket.ProxySocket(addressFamily, SocketType.Stream, ProtocolType.Tcp);
-                        proxySocket.ProxyType = externalProxy!.ProxyType == ExternalProxyType.Socks4
-                            ? ProxyTypes.Socks4
-                            : ProxyTypes.Socks5;
+                        Task connectTask = externalProxy!.ProxyDnsRequests
+                            ? ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)attemptSocket,
+                                connectHostName, connectPortNumber)
+                            : ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)attemptSocket,
+                                socksRemoteIpAddresses![0], connectPortNumber);
 
-                        proxySocket.ProxyEndPoint = new IPEndPoint(ipAddress, port);
-                        var proxyUser = externalProxy.UserName;
-                        var proxyPassword = externalProxy.Password;
+                        // Task.WhenAny never faults/cancels itself - it just resolves with whichever
+                        // constituent task finished first, so no try/catch is needed around this await;
+                        // the completion check below is what actually distinguishes success from timeout.
+                        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(attemptToken);
+                        timeoutCts.CancelAfter(connectTimeoutMs);
+                        await Task.WhenAny(connectTask, Task.Delay(Timeout.Infinite, timeoutCts.Token));
 
-                        // SOCKS4 authenticates with a username only (no password), so do not require a
-                        // non-null password to set the user. SOCKS5 user/password auth uses both.
-                        if (proxyUser != null && proxyUser.Length > 0)
+                        if (!connectTask.IsCompleted || !attemptSocket.Connected)
                         {
-                            proxySocket.ProxyUser = proxyUser;
-                            if (proxyPassword != null) proxySocket.ProxyPass = proxyPassword;
-                        }
+                            try { connectTask.Dispose(); } catch { /* ignore */ }
 
-                        tcpServerSocket = proxySocket;
+                            if (attemptToken.IsCancellationRequested) attemptToken.ThrowIfCancellationRequested();
+
+                            throw new ProxyTimeoutException(
+                                $"Timed out connecting to {hostname}:{port} after {effectiveTimeoutSecs}.",
+                                ProxyTimeoutKind.Connect);
+                        }
                     }
                     else
                     {
-                        tcpServerSocket = new Socket(addressFamily, SocketType.Stream, ProtocolType.Tcp);
+                        // ConnectAsync + CancelAfter cancels the in-flight connect on timeout,
+                        // avoiding ephemeral-port leaks from orphaned BeginConnect operations.
+                        using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(attemptToken);
+                        connectCts.CancelAfter(connectTimeoutMs);
+                        try
+                        {
+                            await attemptSocket.ConnectAsync(new IPEndPoint(ipAddress, port), connectCts.Token);
+                        }
+                        catch (OperationCanceledException) when (!attemptToken.IsCancellationRequested)
+                        {
+                            throw new ProxyTimeoutException(
+                                $"Timed out connecting to {hostname}:{port} after {effectiveTimeoutSecs}.",
+                                ProxyTimeoutKind.Connect);
+                        }
                     }
 
-                    if (resolvedBind != null) tcpServerSocket.Bind(resolvedBind);
+                    return (attemptSocket, resolvedBind);
+                }
+                catch
+                {
+                    attemptSocket.Dispose();
+                    throw;
+                }
+            }
 
-                    tcpServerSocket.NoDelay = proxyServer.NoDelay;
-                    tcpServerSocket.ReceiveTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
-                    tcpServerSocket.SendTimeout = proxyServer.ConnectionTimeOutSeconds * 1000;
-                    tcpServerSocket.LingerState = new LingerOption(true, proxyServer.TcpTimeWaitSeconds);
+            // RFC 8305 "Happy Eyeballs": race the resolved addresses instead of trying them fully
+            // sequentially. Without this, one broken address family (a very common dual-stack failure
+            // mode - e.g. IPv6 blackholed by network policy) forces every request to pay the *full*
+            // per-address connect timeout before falling back, once per address. Staggering attempts
+            // this way means a healthy address usually wins within one delay interval of a broken one,
+            // and a fast failure (e.g. immediate ECONNREFUSED) advances to the next address immediately
+            // rather than waiting out the rest of the stagger delay.
+            Exception? lastException = null;
+            using (var raceCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                var inFlight = new List<Task<(Socket Socket, IPEndPoint? BoundEndPoint)>>(ipAddresses.Length);
 
-                    if (proxyServer.ReuseSocket && RunTime.IsSocketReuseAvailable())
-                        tcpServerSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                for (var i = 0; i < ipAddresses.Length; i++)
+                {
+                    inFlight.Add(ConnectToAddressAsync(ipAddresses[i], raceCts.Token));
 
-                    Task connectTask;
+                    var stagger = i == ipAddresses.Length - 1
+                        ? null // nothing left to race the last address against
+                        : Task.Delay(HappyEyeballsAttemptDelayMs);
 
-                    if (socks)
+                    while (inFlight.Count > 0)
                     {
-                        if (externalProxy!.ProxyDnsRequests)
+                        var pending = Task.WhenAny(inFlight);
+                        Task<(Socket Socket, IPEndPoint? BoundEndPoint)> doneTask;
+                        if (stagger == null)
                         {
-                            connectTask =
-                                ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)tcpServerSocket,
-                                    connectHostName, connectPortNumber);
+                            doneTask = await pending;
                         }
                         else
                         {
-                            var remoteIpAddresses = await Dns.GetHostAddressesAsync(connectHostName);
-                            if (remoteIpAddresses == null || remoteIpAddresses.Length == 0)
-                                throw new Exception($"Could not resolve the SOCKS remote hostname {connectHostName}");
-
-                            // Prefer IPv4 when both families are returned so SOCKS ATYP selection is
-                            // predictable on dual-stack hosts (e.g. localhost → 127.0.0.1 before ::1).
-                            // Known limitation: when multiple addresses remain we still only attempt the
-                            // first. Per-remote-address failover would require restructuring the shared
-                            // connect/timeout loop below and is left as a future improvement.
-                            Array.Sort(remoteIpAddresses, (x, y) => x.AddressFamily.CompareTo(y.AddressFamily));
-                            connectTask = ProxySocketConnectionTaskFactory.CreateTask(
-                                (ProxySocket.ProxySocket)tcpServerSocket, remoteIpAddresses[0], connectPortNumber);
+                            var firstDone = await Task.WhenAny(pending, stagger);
+                            if (firstDone == stagger) break; // stagger elapsed; race in the next address
+                            doneTask = await pending; // already complete
                         }
-                    }
-                    else
-                    {
-                        connectTask = SocketConnectionTaskFactory.CreateTask(tcpServerSocket, ipAddress, port);
-                    }
 
-                    await Task.WhenAny(connectTask,
-                        Task.Delay(proxyServer.ConnectTimeOutSeconds * 1000, cancellationToken));
-                    if (!connectTask.IsCompleted || !tcpServerSocket.Connected)
-                    {
-                        // Connect race lost to ConnectTimeOutSeconds — surface a typed timeout so
-                        // diagnostics / callers can distinguish it from other connect failures.
-                        lastException = new ProxyTimeoutException(
-                            $"Timed out connecting to {hostname}:{port} after {proxyServer.ConnectTimeOutSeconds}s.",
-                            ProxyTimeoutKind.Connect);
+                        inFlight.Remove(doneTask);
 
-                        // here we can just do some cleanup and let the loop continue since
-                        // we will either get a connection or wind up with a null tcpClient
-                        // which will throw
-                        try
+                        if (doneTask.IsCompletedSuccessfully)
                         {
-                            connectTask.Dispose();
-                        }
-                        catch
-                        {
-                            // ignore
+                            (tcpServerSocket, boundEndPoint) = doneTask.Result;
+                            raceCts.Cancel();
+                            AbandonLosingAttempts(inFlight);
+                            goto raceDecided;
                         }
 
                         try
                         {
-                            tcpServerSocket?.Dispose();
-                            tcpServerSocket = null;
+                            // Already completed (faulted or canceled) - GetResult() synchronously
+                            // rethrows the single original exception, unwrapped exactly as `await`
+                            // would, unlike poking .Exception (null when canceled) or
+                            // .Exception.InnerException (AggregateException when faulted).
+                            doneTask.GetAwaiter().GetResult();
                         }
-                        catch
+                        catch (Exception attemptEx)
                         {
-                            // ignore
+                            lastException = attemptEx;
                         }
 
-                        continue;
+                        if (timing != null) timing.FailedAddressAttempts++;
                     }
+                }
 
-                    boundEndPoint = resolvedBind;
-                    break;
-                }
-                catch (Exception e)
-                {
-                    // dispose the current TcpClient and try the next address
-                    lastException = e;
-                    tcpServerSocket?.Dispose();
-                    tcpServerSocket = null;
-                    if (timing != null) timing.FailedAddressAttempts++;
-                }
+                raceCts.Cancel();
+            }
+
+            raceDecided: ;
 
             if (tcpServerSocket == null)
             {
@@ -712,6 +861,12 @@ internal class TcpConnectionFactory : IDisposable
 
                 if (lastException is ProxyTimeoutException timeoutException)
                     throw timeoutException;
+
+                // Rethrown unwrapped (not just as InnerException below) so a caller can specifically
+                // catch OutboundDestinationBlockedException rather than only ever seeing the generic
+                // wrapper exception.
+                if (lastException is OutboundDestinationBlockedException blockedException)
+                    throw blockedException;
 
                 throw new Exception($"Could not establish connection to {hostname}", lastException);
             }
@@ -780,9 +935,7 @@ internal class TcpConnectionFactory : IDisposable
 
                 ProxyLog.OriginHandshakeStarting(proxyServer.Logger, remoteHostName, remotePort, applicationProtocols);
                 await sslStream.AuthenticateAsClientAsync(options, cancellationToken);
-#if NET6_0_OR_GREATER
                 negotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
-#endif
                 ProxyLog.OriginHandshakeSucceeded(proxyServer.Logger, remoteHostName, remotePort, negotiatedApplicationProtocol);
 
                 timing?.MarkTlsHandshakeCompleted();
@@ -802,6 +955,7 @@ internal class TcpConnectionFactory : IDisposable
             if (enabledSslProtocols == SslProtocols.None) throw;
 
             retry = false;
+            ProxyMetrics.PoolDowngraded();
             goto retry;
         }
         catch (AuthenticationException ex) when (ex.HResult == unchecked((int)0x80131501) && retry &&
@@ -817,6 +971,7 @@ internal class TcpConnectionFactory : IDisposable
             if (enabledSslProtocols == SslProtocols.None) throw;
 
             retry = false;
+            ProxyMetrics.PoolDowngraded();
             goto retry;
         }
 #pragma warning restore SYSLIB0039
@@ -837,6 +992,74 @@ internal class TcpConnectionFactory : IDisposable
             UsedClientCertificate = usedClientCertificate,
             Timing = timing
         };
+    }
+
+    /// <summary>
+    ///     Attaches a fire-and-forget continuation to each still-in-flight Happy Eyeballs attempt after
+    ///     a race has already been decided by a different, faster address, so that a straggler which
+    ///     later connects anyway has its socket disposed instead of leaking, and neither its result nor
+    ///     its exception is ever otherwise observed (the caller has already moved on with the winner).
+    /// </summary>
+    private static void AbandonLosingAttempts(
+        IReadOnlyCollection<Task<(Socket Socket, IPEndPoint? BoundEndPoint)>> losingAttempts)
+    {
+        foreach (var attempt in losingAttempts)
+            _ = attempt.ContinueWith(
+                static completed =>
+                {
+                    if (completed.IsCompletedSuccessfully) completed.Result.Socket.Dispose();
+                    // Faulted/canceled: ConnectToAddressAsync's own catch already disposed its socket
+                    // before rethrowing, and the exception itself belongs to an abandoned attempt, not
+                    // a real failure, so it is intentionally left unobserved beyond this continuation.
+                },
+                CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+    }
+
+    /// <summary>
+    ///     Reorders resolved addresses per RFC 8305 §4 so the Happy Eyeballs race above alternates
+    ///     between address families instead of exhausting one family before trying the other. IPv6 goes
+    ///     first at every interleave position when both families are present, matching real browser/OS
+    ///     dual-stack behavior (RFC 6724 destination-address ordering ranks IPv6 higher by default, and
+    ///     browsers connect over IPv6 whenever it is available and healthy) rather than depending on
+    ///     whichever order the platform resolver happens to return, which is not guaranteed consistent
+    ///     across environments. A client behind this proxy should end up reaching the origin over the
+    ///     same address family a direct (non-proxied) connection from the same machine would have used;
+    ///     otherwise the origin can legitimately treat the two connections differently (e.g. CDN/WAF
+    ///     bot-management and IP-reputation scoring are commonly far stricter for shared/NAT'd IPv4
+    ///     ranges than for unique-per-device IPv6 addresses). Relative order within each family (the
+    ///     resolver's own preference, e.g. RFC 6724 destination-address ordering) is preserved unchanged;
+    ///     only the interleaving across families is added.
+    /// </summary>
+    /// <remarks>Internal (rather than private) so it can be unit tested directly.</remarks>
+    internal static IPAddress[] InterleaveByAddressFamily(IPAddress[] addresses)
+    {
+        if (addresses.Length <= 1) return addresses;
+
+        var firstFamily = addresses.Any(a => a.AddressFamily == AddressFamily.InterNetworkV6)
+            ? AddressFamily.InterNetworkV6
+            : addresses[0].AddressFamily;
+        var primary = new List<IPAddress>(addresses.Length);
+        var secondary = new List<IPAddress>(addresses.Length);
+        foreach (var address in addresses)
+            if (address.AddressFamily == firstFamily)
+                primary.Add(address);
+            else
+                secondary.Add(address);
+
+        // Every address shared the same family - nothing to interleave.
+        if (secondary.Count == 0) return addresses;
+
+        var result = new IPAddress[addresses.Length];
+        var i = 0;
+        var p = 0;
+        var s = 0;
+        while (p < primary.Count || s < secondary.Count)
+        {
+            if (p < primary.Count) result[i++] = primary[p++];
+            if (s < secondary.Count) result[i++] = secondary[s++];
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -963,7 +1186,7 @@ internal class TcpConnectionFactory : IDisposable
     private static async Task<string?> DrainUpstreamProxyResponseBody(HttpServerStream stream,
         HeaderCollection headers, CancellationToken cancellationToken)
     {
-        var preview = new MemoryStream();
+        using var preview = new MemoryStream();
 
         var transferEncoding = headers.GetHeaderValueOrNull(KnownHeaders.TransferEncoding);
         if (transferEncoding != null && transferEncoding.ContainsIgnoreCase(KnownHeaders.TransferEncodingChunked.String))
@@ -1049,49 +1272,54 @@ internal class TcpConnectionFactory : IDisposable
     /// </summary>
     /// <param name="connection">The Tcp server connection to return.</param>
     /// <param name="close">Should we just close the connection instead of reusing?</param>
-    internal async Task Release(TcpServerConnection? connection, bool close = false)
+    internal Task Release(TcpServerConnection? connection, bool close = false)
     {
-        if (connection == null) return;
+        if (connection == null) return Task.CompletedTask;
 
         // already scheduled for disposal: never pool it again.
-        if (connection.IsDisposalScheduled) return;
+        if (connection.IsDisposalScheduled) return Task.CompletedTask;
 
         if (close || connection.IsWinAuthenticated || connection.UsedClientCertificate
             || !Server.EnableConnectionPool || connection.IsClosed)
         {
             if (connection.TryScheduleDisposal()) disposalBag.Add(connection);
-            return;
+            return Task.CompletedTask;
         }
 
         connection.LastAccess = DateTime.UtcNow;
 
+        // Read side of poolLock: any number of releases (same or different destination) run this
+        // concurrently, contending with each other only on the destination-scoped lock (queue) below,
+        // never on a single process-wide handle. Only ClearPools/Dispose take the write side.
+        poolLock.EnterReadLock();
         try
         {
-            await @lock.WaitAsync();
-
             while (true)
             {
-                if (cache.TryGetValue(connection.CacheKey, out var existingConnections))
+                var queue = cache.GetOrAdd(connection.CacheKey, static _ => new ConcurrentQueue<TcpServerConnection>());
+
+                lock (queue)
                 {
-                    while (existingConnections.Count >= Server.MaxCachedConnections)
-                        if (existingConnections.TryDequeue(out var staleConnection))
+                    // ClearOutdatedConnections removes a queue from the dictionary, under this same
+                    // per-queue lock, the moment it observes it empty. If that happened between our
+                    // GetOrAdd read above and taking this lock, `queue` is now an orphan nothing will
+                    // ever drain again - enqueueing into it would leak the connection. Re-resolve
+                    // against the dictionary instead of trusting the reference we already hold.
+                    if (!cache.TryGetValue(connection.CacheKey, out var current) || current != queue) continue;
+
+                    while (queue.Count >= Server.MaxCachedConnections)
+                        if (queue.TryDequeue(out var staleConnection))
                             if (staleConnection.TryScheduleDisposal())
                                 disposalBag.Add(staleConnection);
 
-                    if (existingConnections.Any(x => x == connection)) break;
-
-                    existingConnections.Enqueue(connection);
-                    break;
+                    if (!queue.Contains(connection)) queue.Enqueue(connection);
+                    return Task.CompletedTask;
                 }
-
-                if (cache.TryAdd(connection.CacheKey,
-                        new ConcurrentQueue<TcpServerConnection>(new[] { connection })))
-                    break;
             }
         }
         finally
         {
-            @lock.Release();
+            poolLock.ExitReadLock();
         }
     }
 
@@ -1117,61 +1345,78 @@ internal class TcpConnectionFactory : IDisposable
     private async Task ClearOutdatedConnections()
     {
         while (runCleanUpTask)
+        {
             try
             {
                 var cutOff = DateTime.UtcNow.AddSeconds(-Server.ConnectionTimeOutSeconds);
-                foreach (var item in cache)
-                {
-                    var queue = item.Value;
 
-                    // take the same lock used by the pool-get path so that dequeue/enqueue here
-                    // does not race with a concurrent Get on the same queue.
-                    lock (queue)
-                    {
-                        while (queue.Count > 0)
-                            if (queue.TryDequeue(out var connection))
-                            {
-                                if (!Server.EnableConnectionPool || connection.LastAccess < cutOff)
-                                {
-                                    if (connection.TryScheduleDisposal())
-                                        disposalBag.Add(connection);
-                                }
-                                else
-                                {
-                                    queue.Enqueue(connection);
-                                    break;
-                                }
-                            }
-                    }
-                }
-
+                // Read side of poolLock: excludes this pass from running concurrently with a full
+                // ClearPools/Dispose drain, without contending with concurrent Release calls (which
+                // also take the read side and only ever contend on the per-queue lock below).
+                poolLock.EnterReadLock();
                 try
                 {
-                    await @lock.WaitAsync();
+                    foreach (var item in cache)
+                    {
+                        var queue = item.Value;
 
-                    // clear empty queues
-                    var emptyKeys = cache.ToArray().Where(x => x.Value.Count == 0).Select(x => x.Key);
-                    foreach (var key in emptyKeys) cache.TryRemove(key, out _);
+                        // take the same lock used by the pool-get and release paths so that
+                        // dequeue/enqueue/removal here does not race with either.
+                        lock (queue)
+                        {
+                            while (queue.Count > 0)
+                                if (queue.TryDequeue(out var connection))
+                                {
+                                    if (!Server.EnableConnectionPool || connection.LastAccess < cutOff)
+                                    {
+                                        if (connection.TryScheduleDisposal())
+                                            disposalBag.Add(connection);
+                                    }
+                                    else
+                                    {
+                                        queue.Enqueue(connection);
+                                        break;
+                                    }
+                                }
+
+                            // Removing the now-empty queue under the same lock a concurrent Release
+                            // re-checks against is what makes that re-check meaningful: a queue can
+                            // only ever be removed while empty, and only while nobody else holds (or
+                            // is about to be handed) this exact lock object.
+                            if (queue.IsEmpty)
+                                ((ICollection<KeyValuePair<string, ConcurrentQueue<TcpServerConnection>>>)cache)
+                                    .Remove(new KeyValuePair<string, ConcurrentQueue<TcpServerConnection>>(item.Key,
+                                        queue));
+                        }
+                    }
                 }
                 finally
                 {
-                    @lock.Release();
+                    poolLock.ExitReadLock();
                 }
 
                 while (!disposalBag.IsEmpty)
                     if (disposalBag.TryTake(out var connection))
                         connection?.Dispose();
+
+                Server.TrimOriginCapabilityCaches();
             }
             catch (Exception e)
             {
                 ProxyDiagnostics.ReportException(Server.Logger, "An error occurred when disposing server connections",
                     e);
             }
-            finally
+
+            // cleanup every 3 seconds by default; exit promptly when disposed.
+            try
             {
-                // cleanup every 3 seconds by default
-                await Task.Delay(1000 * 3);
+                await Task.Delay(1000 * 3, _cleanupCts.Token);
             }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
     }
 
     protected virtual void Dispose(bool disposing)
@@ -1179,12 +1424,13 @@ internal class TcpConnectionFactory : IDisposable
         if (disposed) return;
 
         runCleanUpTask = false;
+        _cleanupCts.Cancel();
 
         if (disposing)
         {
             try
             {
-                @lock.Wait();
+                poolLock.EnterWriteLock();
 
                 foreach (var queue in cache.Select(x => x.Value).ToList())
                     while (!queue.IsEmpty)
@@ -1195,37 +1441,21 @@ internal class TcpConnectionFactory : IDisposable
             }
             finally
             {
-                @lock.Release();
+                poolLock.ExitWriteLock();
             }
 
             while (!disposalBag.IsEmpty)
                 if (disposalBag.TryTake(out var connection))
                     connection?.Dispose();
+
+            // Do not dispose _cleanupCts or poolLock: the cleanup task may still be accessing
+            // _cleanupCts.Token (throwing ObjectDisposedException on the Token property even after
+            // Cancel()) and poolLock.EnterReadLock() (throwing ObjectDisposedException if disposed
+            // while the task is entering the lock). Neither holds unmanaged resources that need
+            // explicit release — the GC finalizer path is sufficient.
         }
 
         disposed = true;
-    }
-
-    private static class SocketConnectionTaskFactory
-    {
-        private static IAsyncResult BeginConnect(IPAddress address, int port, AsyncCallback? requestCallback,
-            object? state)
-        {
-            var socket = state as Socket ?? throw new InvalidOperationException("Socket APM state is missing.");
-            return socket.BeginConnect(address, port, requestCallback, state);
-        }
-
-        private static void EndConnect(IAsyncResult asyncResult)
-        {
-            var socket = asyncResult.AsyncState as Socket
-                         ?? throw new InvalidOperationException("Socket APM state is missing.");
-            socket.EndConnect(asyncResult);
-        }
-
-        public static Task CreateTask(Socket socket, IPAddress ipAddress, int port)
-        {
-            return Task.Factory.FromAsync(BeginConnect, EndConnect, ipAddress, port, socket);
-        }
     }
 
     private static class ProxySocketConnectionTaskFactory

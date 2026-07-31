@@ -1,17 +1,19 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
+using Titanium.Web.Proxy.Network.Streams;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Shared;
 
@@ -53,26 +55,53 @@ public partial class ProxyServer
             {
                 if (clientStream.IsClosed) return;
 
-                // read the request line
-                var requestLine = await clientStream.ReadRequestLine(cancellationToken);
-                if (requestLine.IsEmpty()) return;
-
-                var args = new SessionEventArgs(this, endPoint, clientStream, connectRequest, cancellationTokenSource)
+                // Bounds the request line and header read together as one continuous window - not
+                // Socket.ReceiveTimeout, which only bounds a single blocking Receive and does nothing for
+                // the asynchronous reads actually issued here. A standalone registry (rather than
+                // args.Deadlines) because no SessionEventArgs exists yet for a request line that never
+                // arrives at all - the common, entirely expected "client closed its idle keep-alive
+                // connection" case below, which must stay silent and args-free exactly as before.
+                RequestStatusInfo requestLine;
+                SessionEventArgs? args = null;
+                var headerDeadlineRegistry = new DeadlineRegistry();
+                using (var headerDeadline = headerDeadlineRegistry.Start(cancellationToken,
+                           ResolveClientHeaderTimeout(), ProxyTimeoutKind.ClientHeader))
                 {
-                    UserData = connectArgs?.UserData
-                };
+                    try
+                    {
+                        // read the request line
+                        requestLine = await clientStream.ReadRequestLine(headerDeadline.Token);
+                        if (requestLine.IsEmpty()) return;
 
-                var request = args.HttpClient.Request;
+                        args = new SessionEventArgs(this, endPoint, clientStream, connectRequest,
+                            cancellationTokenSource)
+                        {
+                            UserData = connectArgs?.UserData
+                        };
+
+                        // Read the request headers in to unique and non-unique header collections
+                        await HeaderParser.ReadHeaders(clientStream, args.HttpClient.Request.Headers,
+                            headerDeadline.Token);
+                    }
+                    catch (OperationCanceledException ex)
+                    {
+                        // No response was ever attempted (there may be no request line at all yet, or no
+                        // Host/Method to safely answer with) and no OnAfterResponse subscriber should see a
+                        // session that never had a request - dispose directly rather than falling through
+                        // to the try/finally below that pairs a real attempt with AfterResponse.
+                        args?.Dispose();
+                        headerDeadline.ThrowIfTimedOut(ex);
+                        throw; // unreachable: ThrowIfTimedOut always throws; satisfies definite-assignment analysis.
+                    }
+                }
+
+                var request = args!.HttpClient.Request;
                 if (isHttps) request.IsHttps = true;
 
                 try
                 {
                     try
                     {
-                        // Read the request headers in to unique and non-unique header collections
-                        await HeaderParser.ReadHeaders(clientStream, args.HttpClient.Request.Headers,
-                            cancellationToken);
-
                         if (connectRequest != null)
                         {
                             request.IsHttps = connectRequest.IsHttps;
@@ -83,6 +112,31 @@ public partial class ProxyServer
 
                         request.Method = requestLine.Method;
                         request.HttpVersion = requestLine.Version;
+
+                        // Validate wire framing (Content-Length/Transfer-Encoding ambiguity) before
+                        // anything - SetOriginalHeaders, BeforeRequest, body reads, forwarding - can
+                        // observe pre-normalization values. A framing-ambiguous request can never be
+                        // safely forwarded or its connection reused: the reader and the peer no longer
+                        // agree where this message ends.
+                        try
+                        {
+                            Http1FramingValidator.Validate(request, ResolveHttp1WireFramingSource(args),
+                                args.Server.PolicyModes.AllowAmbiguousFraming);
+                        }
+                        catch (Http1FramingException framingEx)
+                        {
+                            ProxyMetrics.ParserError("framing");
+                            args.HttpClient.Response = new GenericResponse(framingEx.StatusCode)
+                            {
+                                HttpVersion = request.HttpVersion
+                            };
+                            args.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection,
+                                KnownHeaders.ConnectionClose);
+                            closeServerConnection = true;
+                            await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                            args.IsClientResponseCommitted = true;
+                            return;
+                        }
 
                         // we need this to syphon out data from connection if API user changes them.
                         request.SetOriginalHeaders();
@@ -102,12 +156,33 @@ public partial class ProxyServer
                         }
 
                         // If user requested interception do it
-                        await OnBeforeRequest(args);
+                        try
+                        {
+                            await OnBeforeRequest(args);
+                        }
+                        catch (BodySizeLimitExceededException)
+                        {
+                            // A request-body breach is caught here, before anything has been sent to
+                            // the origin: nothing has committed the response yet, so unlike a response
+                            // breach (which can only close the connection - see the catch-all further
+                            // down and DowngradeChunkedFramingForHttp10OriginIfNeeded's caller) this one
+                            // can still produce a normal 413 to the client.
+                            args.HttpClient.Response = new GenericResponse(System.Net.HttpStatusCode.RequestEntityTooLarge)
+                            {
+                                HttpVersion = request.HttpVersion
+                            };
+                            args.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection,
+                                KnownHeaders.ConnectionClose);
+                            closeServerConnection = true;
+                            await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                            args.IsClientResponseCommitted = true;
+                            return;
+                        }
 
                         // Total per-request deadline starts after BeforeRequest so session overrides apply.
-                        using var requestTimeoutScope = ProxyTimeoutScope.Create(cancellationToken,
+                        using var requestDeadline = args.Deadlines.Start(cancellationToken,
                             ResolveRequestTimeout(args), ProxyTimeoutKind.Request);
-                        var requestToken = requestTimeoutScope.Token;
+                        var requestToken = requestDeadline.Token;
                         args.OperationCancellationToken = requestToken;
 
                         try
@@ -155,7 +230,32 @@ public partial class ProxyServer
                             // if win auth is enabled
                             // we need a cache of request body
                             // so that we can send it after authentication in WinAuthHandler.cs
-                            if (args.EnableWinAuth && request.HasBody) await args.GetRequestBody(requestToken);
+                            if (args.EnableWinAuth && request.HasBody)
+                                try
+                                {
+                                    await args.GetRequestBody(requestToken);
+                                }
+                                catch (BodySizeLimitExceededException)
+                                {
+                                    // Still request-side and still nothing sent to the origin yet, same
+                                    // as the BeforeRequest breach above.
+                                    args.HttpClient.Response =
+                                        new GenericResponse(System.Net.HttpStatusCode.RequestEntityTooLarge)
+                                        {
+                                            HttpVersion = request.HttpVersion
+                                        };
+                                    args.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection,
+                                        KnownHeaders.ConnectionClose);
+                                    closeServerConnection = true;
+                                    await clientStream.WriteResponseAsync(args.HttpClient.Response, requestToken);
+                                    args.IsClientResponseCommitted = true;
+                                    return;
+                                }
+
+                            // Must run before Request.Locked is set (a few lines below, inside the
+                            // Locked = true overload) - GetRequestBody() throws once Locked, exactly like
+                            // the WinAuth buffering immediately above it.
+                            await DowngradeChunkedFramingForHttp10OriginIfNeeded(args, requestToken);
 
                             var response = args.HttpClient.Response;
 
@@ -270,13 +370,12 @@ public partial class ProxyServer
                             closeServerConnection = true;
                             return;
                         }
-                        catch (Exception ex) when (ex is OperationCanceledException || requestTimeoutScope.IsTimedOut())
+                        catch (Exception ex) when (ex is OperationCanceledException ||
+                                                    requestDeadline.TryGetTimeoutException(ex, out _))
                         {
-                            if (requestTimeoutScope.IsTimedOut())
+                            if (requestDeadline.TryGetTimeoutException(ex, out var timeoutEx))
                             {
-                                var timeoutEx = new ProxyTimeoutException(
-                                    "Proxy request timeout elapsed.", ProxyTimeoutKind.Request, ex);
-                                await HandleProxyTimeoutAsync(args, timeoutEx, cancellationToken);
+                                await HandleProxyTimeoutAsync(args, timeoutEx!, cancellationToken);
                                 closeServerConnection = true;
                                 return;
                             }
@@ -327,6 +426,93 @@ public partial class ProxyServer
 
         if (noCache) serverConnection = null;
 
+        // H1.1 client → H3 origin bridge: resolve route (including SVCB DNS on cold start).
+        if (!args.HttpClient.Request.UpgradeToWebSocket)
+        {
+            var reqHost = args.HttpClient.Request.RequestUri?.Host ?? string.Empty;
+            var reqPort = args.HttpClient.Request.RequestUri?.Port ?? 443;
+            var h3Route = await ResolveHttp3OriginAsync(
+                reqHost, reqPort,
+                args.UpstreamHttpProtocol,
+                allowDnsProbe: true,
+                cancellationToken);
+
+            if (h3Route.UseH3)
+            {
+                await Http3.Http3OriginBridge.ForwardAsync(args, this, h3Route, logger, cancellationToken);
+
+                // Http3OriginBridge only fetches/buffers the origin response into args.HttpClient.Response -
+                // unlike the TCP path below, it never touches args.ClientStream. Mirror the H2->H3 bridge's
+                // response commit (Http2ToHttp3BridgeHandler.RunHttp2ToHttp3BridgeRoundTripAsync) but write
+                // H1.1 wire bytes instead of synthetic H2 frames; without this the client never receives the
+                // response and hangs waiting for bytes that were already consumed from the origin.
+                var h3Response = args.HttpClient.Response;
+
+                // Http3OriginBridge builds the response with HttpVersion 3.0 (the origin's protocol) - fine
+                // for the H2->H3 bridge, which never writes a textual status line, but the client here is
+                // HTTP/1.1 and WriteResponseAsync writes response.HttpVersion verbatim into the status line
+                // ("HTTP/3.0 200 ..."), which curl and other strict HTTP/1.1 clients don't recognize. Mirror
+                // Http2OriginConnection's H1.1-bridge convention (always the client-facing wire version, not
+                // the origin's) so the status line matches the actual protocol on this leg.
+                h3Response.HttpVersion = args.HttpClient.Request.HttpVersion;
+
+                // This response was decoded from real HTTP/3 frames (Http3OriginBridge), never from
+                // HttpStream-read bytes, so it is explicitly out of scope for the HTTP/1 wire validator -
+                // see Http1FramingValidator's remarks. The call is still made (as a documented no-op) so
+                // this remains one of the five insertion points the isolation test suite enumerates.
+                Http1FramingValidator.Validate(h3Response, FramingSource.SynthesizedFromH3);
+                h3Response.SetOriginalHeaders();
+
+                if (!h3Response.Locked) await OnBeforeResponse(args);
+
+                h3Response = args.HttpClient.Response;
+                var h3ClientStream = args.ClientStream;
+
+                if (h3Response.Locked)
+                {
+                    // user set a custom response by ignoring the original response from the origin.
+                    await h3ClientStream.WriteResponseAsync(h3Response, cancellationToken);
+                    args.IsClientResponseCommitted = true;
+
+                    if (h3Response.StreamBodyWriter != null && !h3Response.IsBodySent)
+                    {
+                        var bodyWriter = new BodyStreamWriter(h3ClientStream, h3Response.IsChunked);
+                        await h3Response.StreamBodyWriter(bodyWriter, cancellationToken);
+                        await bodyWriter.CompleteAsync(
+                            h3Response.HasTrailingHeaders ? h3Response.TrailingHeaders : null, cancellationToken);
+                        h3Response.IsBodySent = true;
+                    }
+                }
+                else
+                {
+                    if (!args.IsTransparent && !args.IsSocks)
+                    {
+                        h3Response.Headers.FixProxyHeaders();
+                        if (!string.IsNullOrEmpty(ViaHeaderPseudonym))
+                            AddViaHeader(h3Response.Headers, h3Response.HttpVersion, ViaHeaderPseudonym);
+                    }
+                    else
+                    {
+                        h3Response.Headers.NormalizeMessageFraming();
+                    }
+
+                    // HTTP/1.0 clients do not support chunked transfer encoding (RFC 7230 §4.1 / RFC 1945).
+                    if (args.HttpClient.Request.HttpVersion == HttpHeader.Version10 && h3Response.IsChunked)
+                    {
+                        await args.GetResponseBody(cancellationToken);
+                        h3Response.ContentLength = h3Response.Body.Length;
+                    }
+
+                    h3Response.Locked = true;
+                    await h3ClientStream.WriteResponseAsync(h3Response, cancellationToken);
+                    args.IsClientResponseCommitted = true;
+                    h3Response.IsBodyReceived = true;
+                }
+
+                return new RetryResult(null, null, h3Response.KeepAlive);
+            }
+        }
+
         // a connection generator task with captured parameters via closure.
         var generator = () =>
             TcpConnectionFactory.GetServerConnection(this,
@@ -342,7 +528,7 @@ public partial class ProxyServer
         /// because subsequent try will not have data to read from client 
         /// and will hang at clientStream.ReadAsync call.
         /// So, throw RetryableServerConnectionException only when we are sure we can retry safely.
-        return await RetryPolicy<RetryableServerConnectionException>().ExecuteAsync(async connection =>
+        return await RetryPolicy<RetryableServerConnectionException>(args).ExecuteAsync(async connection =>
         {
             // set the connection and send request headers
             args.HttpClient.SetConnection(connection);
@@ -376,7 +562,7 @@ public partial class ProxyServer
         var body = request.CompressBodyAndUpdateContentLength();
 
         await args.HttpClient.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
-            OriginHttpVersionPolicy, cancellationToken);
+            args.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy, cancellationToken);
 
         // If a successful 100 continue request was made, inform that to the client and reset response
         if (request.ExpectationSucceeded)
@@ -410,22 +596,21 @@ public partial class ProxyServer
                 await args.ClientStream.WriteHeadersAsync(continueBuilder, cancellationToken);
             }
 
-            using var idleWriteScope = ProxyTimeoutScope.Create(cancellationToken,
+            using var idleWriteDeadline = args.Deadlines.Start(cancellationToken,
                 ResolveIdleWriteTimeout(args), ProxyTimeoutKind.IdleWrite);
             try
             {
                 if (request.IsBodyRead)
                     await args.HttpClient.Connection.Stream.WriteBodyAsync(body!, request.IsChunked,
-                        request.HasTrailingHeaders ? request.TrailingHeaders : null, idleWriteScope.Token);
+                        request.HasTrailingHeaders ? request.TrailingHeaders : null, idleWriteDeadline.Token);
                 else if (!request.ExpectationFailed)
                     // get the request body unless an unsuccessful 100 continue request was made
                     await args.CopyRequestBodyAsync(args.HttpClient.Connection.Stream, TransformationMode.None,
-                        idleWriteScope.Token);
+                        idleWriteDeadline.Token);
             }
-            catch (Exception ex) when (ex is OperationCanceledException || idleWriteScope.IsTimedOut())
+            catch (OperationCanceledException ex)
             {
-                idleWriteScope.ThrowIfTimedOut(ex);
-                throw;
+                idleWriteDeadline.ThrowIfTimedOut(ex);
             }
         }
 
@@ -445,11 +630,21 @@ public partial class ProxyServer
         if (acceptEncoding != null)
         {
             var supportedAcceptEncoding = new List<string>();
+            var remaining = acceptEncoding.AsSpan();
+            while (remaining.Length > 0)
+            {
+                int comma = remaining.IndexOf(',');
+                var token = (comma < 0 ? remaining : remaining.Slice(0, comma)).Trim();
+                if (token.Length > 0)
+                {
+                    var s = token.ToString();
+                    if (ProxyConstants.ProxySupportedCompressions.Contains(s))
+                        supportedAcceptEncoding.Add(s);
+                }
 
-            // only allow proxy supported compressions
-            supportedAcceptEncoding.AddRange(acceptEncoding.Split(',')
-                .Select(x => x.Trim())
-                .Where(x => ProxyConstants.ProxySupportedCompressions.Contains(x)));
+                if (comma < 0) break;
+                remaining = remaining.Slice(comma + 1);
+            }
 
             // uncompressed is always supported by proxy
             supportedAcceptEncoding.Add("identity");
@@ -503,7 +698,10 @@ public partial class ProxyServer
     /// </summary>
     internal static void AddViaHeader(HeaderCollection headers, Version httpVersion, string pseudonym)
     {
-        var protocol = httpVersion.Major == 2 ? "2" : $"1.{httpVersion.Minor}";
+        // Via uses HTTP's protocol-version token, whose canonical form includes both digits
+        // (RFC 9110 §2.5/§7.6.3): 1.1, 2.0, 3.0. Sending "2" is accepted by many origins,
+        // but strict servers such as play.google.com reject it with RST_STREAM(PROTOCOL_ERROR).
+        var protocol = $"{httpVersion.Major}.{httpVersion.Minor}";
         var entry = $"{protocol} {pseudonym}";
 
         var existing = headers.GetHeaders("Via");
@@ -512,9 +710,26 @@ public partial class ProxyServer
             // Keep this operation idempotent only for the exact received-protocol
             // entry. The same pseudonym with a different protocol represents a
             // distinct hop and must not suppress the correct entry.
-            bool alreadyPresent = existing
-                .SelectMany(header => header.Value.Split(','))
-                .Any(value => ViaEntryMatches(value.Trim(), protocol, pseudonym));
+            bool alreadyPresent = false;
+            foreach (var header in existing)
+            {
+                var remaining = header.Value.AsSpan();
+                while (remaining.Length > 0)
+                {
+                    int comma = remaining.IndexOf(',');
+                    var token = (comma < 0 ? remaining : remaining.Slice(0, comma)).Trim();
+                    if (token.Length > 0 && ViaEntryMatches(token.ToString(), protocol, pseudonym))
+                    {
+                        alreadyPresent = true;
+                        break;
+                    }
+
+                    if (comma < 0) break;
+                    remaining = remaining.Slice(comma + 1);
+                }
+
+                if (alreadyPresent) break;
+            }
 
             if (!alreadyPresent)
                 existing[0].SetValue($"{existing[0].Value}, {entry}");
@@ -532,9 +747,11 @@ public partial class ProxyServer
         }
     }
 
+    private static readonly char[] ViaWhitespaceChars = { ' ', '\t' };
+
     private static bool ViaEntryMatches(string viaEntry, string protocol, string pseudonym)
     {
-        int separator = viaEntry.IndexOfAny(new[] { ' ', '\t' });
+        int separator = viaEntry.IndexOfAny(ViaWhitespaceChars);
         if (separator <= 0 ||
             !string.Equals(viaEntry.Substring(0, separator), protocol, StringComparison.OrdinalIgnoreCase))
         {
@@ -553,7 +770,7 @@ public partial class ProxyServer
     {
         // A Via entry is: received-protocol RWS received-by [ RWS comment ].
         // RFC 9110 RWS permits SP or HTAB, and received-by can include an optional port.
-        int separator = viaEntry.IndexOfAny(new[] { ' ', '\t' });
+        int separator = viaEntry.IndexOfAny(ViaWhitespaceChars);
         if (separator < 0) return false;
 
         int receivedByStart = separator;
@@ -624,9 +841,68 @@ public partial class ProxyServer
         var viaHeaders = headers.GetHeaders("Via");
         if (viaHeaders == null || viaHeaders.Count == 0) return false;
 
-        return viaHeaders
-            .SelectMany(h => h.Value.Split(','))
-            .Select(v => v.Trim())
-            .Any(v => ViaTokenMatches(v, pseudonym));
+        foreach (var header in viaHeaders)
+        {
+            var remaining = header.Value.AsSpan();
+            while (remaining.Length > 0)
+            {
+                int comma = remaining.IndexOf(',');
+                var token = (comma < 0 ? remaining : remaining.Slice(0, comma)).Trim();
+                if (token.Length > 0 && ViaTokenMatches(token.ToString(), pseudonym)) return true;
+                if (comma < 0) break;
+                remaining = remaining.Slice(comma + 1);
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Maps a session's endpoint mode to the matching wire <see cref="FramingSource" /> for
+    ///     <see cref="Http1FramingValidator.Validate" />. Shared by every handler that parses HTTP/1
+    ///     bytes directly off a client or origin connection - the validation rules are identical across
+    ///     explicit/transparent/SOCKS; the distinct enum members exist for auditability of which mode
+    ///     produced a given rejection, not because the rules differ.
+    /// </summary>
+    internal static FramingSource ResolveHttp1WireFramingSource(SessionEventArgs args)
+    {
+        if (args.IsSocks) return FramingSource.Http1WireSocks;
+        if (args.IsTransparent) return FramingSource.Http1WireTransparent;
+        return FramingSource.Http1Wire;
+    }
+
+    /// <summary>
+    ///     HTTP/1.0 has no <c>chunked</c> transfer-coding at all (it predates RFC 2616's introduction of
+    ///     it), so a request that is still <see cref="Request.IsChunked" /> when
+    ///     <see cref="HttpWebClient.ResolveOriginHttpVersion" /> says the origin will be declared "HTTP/1.0"
+    ///     on the wire cannot be forwarded as-is: <see cref="OriginHttpVersionPolicy.PreserveClientVersion" />
+    ///     (the default) mirrors whatever version the client declared, so an HTTP/1.0 client whose request
+    ///     was itself re-chunked by this proxy - or a non-conformant HTTP/1.0 client that sent
+    ///     <c>Transfer-Encoding: chunked</c> anyway - would otherwise have that chunked framing relayed
+    ///     verbatim to a peer that cannot parse it.
+    ///     <para>
+    ///         The fix is to buffer the whole request body (the same bounded whole-body read every other
+    ///         whole-body API in this class already performs, e.g. WinAuth) and switch to
+    ///         <c>Content-Length</c> framing before <see cref="HttpWebClient.SendRequest" /> writes the
+    ///         request line/headers, rather than attempting to translate the chunked wire encoding
+    ///         mid-stream. Applies uniformly to the explicit, transparent and SOCKS paths, since all three
+    ///         share this single call site.
+    ///     </para>
+    /// </summary>
+    private static async Task DowngradeChunkedFramingForHttp10OriginIfNeeded(SessionEventArgs args,
+        CancellationToken cancellationToken)
+    {
+        var request = args.HttpClient.Request;
+        if (!request.IsChunked) return;
+
+        var originHttpVersion = HttpWebClient.ResolveOriginHttpVersion(request.HttpVersion,
+            args.OriginHttpVersionPolicy ?? args.Server.OriginHttpVersionPolicy);
+        if (originHttpVersion != HttpHeader.Version10) return;
+
+        if (!request.IsBodyRead) await args.GetRequestBody(cancellationToken);
+
+        // The ContentLength setter also clears IsChunked (removes Transfer-Encoding), so this single
+        // assignment performs the whole downgrade.
+        request.ContentLength = request.Body.Length;
     }
 }

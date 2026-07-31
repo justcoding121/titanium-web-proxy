@@ -1,8 +1,9 @@
-A feature-by-feature snapshot of what Titanium Web Proxy actually implements for HTTP/1.0, HTTP/1.1, and
-HTTP/2, so you can tell at a glance whether something you depend on is fully supported, relayed
-best-effort, or not implemented yet. "Yes" means the proxy actively parses/enforces the feature (and you
-can observe/modify it via the public API where relevant); "Partial" means it works for the common case but
-has a known gap; "No" means it isn't implemented.
+A feature-by-feature snapshot of what Titanium Web Proxy actually implements for HTTP/1.0, HTTP/1.1,
+HTTP/2, and HTTP/3, so you can tell at a glance whether something you depend on is fully supported,
+relayed best-effort, or not implemented yet. "Yes" means the proxy actively parses/enforces the feature
+(and you can observe/modify it via the public API where relevant); "Partial" means it works for the common
+case but has a known gap; "No" means it isn't implemented; "N/A" means the concept does not apply to that
+protocol version.
 
 This table reflects the `develop` branch as of the HTTP/1.x and HTTP/2 gap-closure work (chunked trailers,
 interim 1xx responses, and TLS body-write-hook parity for HTTP/1.x; HPACK dynamic-table correctness/reuse,
@@ -11,56 +12,61 @@ SETTINGS/PING/GOAWAY handling, and synthetic-response API parity for HTTP/2), pl
 policy and safety hardening work (HTTP/2 frame/header-list bounds, bounded body streaming, RFC 8441 WebSocket
 over HTTP/2 including both the h2-client-to-h1-origin bridge and the native h2↔h2 tunnel, WebSocket frame
 validation, Via header injection, multipart streaming, stacked Content-Encoding parsing, and authentication retry
-bounds). HTTP/2 has gone through a full regression pass and is now **on by default** (`ProxyServer.EnableHttp2 =
-true`); set it to `false` to force HTTP/1.1 only. If you find something inaccurate, please open an issue.
+bounds), and the HTTP/3 (QUIC) opt-in feature — including the six HTTP/3 gap-closure features: request-lifecycle
+timing, 1xx interim response relay, per-chunk streaming body hooks (`OnRequestBodyWrite`/`OnResponseBodyWrite`),
+upstream proxy chaining with TCP fallback, HTTPS/SVCB DNS discovery, and QPACK dynamic table (opt-in via
+`ProxyServer.EnableQpackDynamicTable`). HTTP/2 has gone through a full regression pass and is now **on by
+default** (`ProxyServer.EnableHttp2 = true`); set it to `false` to force HTTP/1.1 only. HTTP/3 is
+`[Experimental("TWP001")]` and opt-in (`ProxyServer.EnableHttp3 = true`). If you find something inaccurate,
+please open an issue.
 
 ## Connections and framing
 
-| Feature | HTTP/1.0 | HTTP/1.1 | HTTP/2 | Notes |
-|---|---|---|---|---|
-| Persistent connections / keep-alive | Yes | Yes | Yes (inherent) | `Connection: keep-alive` (1.0) / default (1.1); HTTP/2 multiplexes over one connection. |
-| Chunked transfer-encoding | N/A (no chunked in 1.0) | Yes | N/A (HTTP/2 uses DATA frames, not chunking) | Read and write, both request and response, via `HttpStream`. |
-| Chunked trailers (trailing headers) | N/A | Yes | Yes | See `RequestResponseBase.TrailingHeaders`; forwarded/emitted for HTTP/1.x. For HTTP/2, a second HEADERS block without request/status pseudo-headers is decoded as trailers and re-encoded/relayed without re-firing `BeforeRequest`/`BeforeResponse`. |
-| `Expect: 100-continue` | Yes | Yes | N/A (no equivalent frame flow) | `ProxyServer.Enable100ContinueBehaviour`. Set `CompatibilityMode100Continue = true` to emit a synthetic `100 Continue` to clients that block on it when `Enable100ContinueBehaviour = false`. |
-| Other 1xx interim responses (e.g. 103 Early Hints) | N/A | Yes | Yes | Relayed to the client (looping past on the HTTP/1.x server connection, or on their own HEADERS frame for HTTP/2) without invoking `BeforeResponse`/locking the final `Response`; not yet exposed as a dedicated event. |
-| HEADERS/CONTINUATION reassembly and re-splitting | N/A | N/A | Yes | Multi-frame inbound header blocks are reassembled before HPACK decoding; outbound blocks larger than the peer's `SETTINGS_MAX_FRAME_SIZE` are split back across HEADERS + CONTINUATION. |
-| `Upgrade` / WebSocket (101 Switching Protocols) | N/A | Yes | N/A | Raw duplex relay once upgraded; see `RequestHandler.HandleWebSocketUpgrade`. |
-| `CONNECT` tunneling | Yes | Yes | Yes (via `ExplicitProxyEndPoint`) | Supports both decrypt-and-inspect and pass-through-as-opaque-tunnel. |
-| ALPN-based protocol routing | N/A | N/A | Yes | A decrypted tunnel (`ExplicitProxyEndPoint` CONNECT) or a decrypted transparent TLS connection (`TransparentProxyEndPoint`) is only routed to the HTTP/2 relay when the TLS handshake actually negotiated `h2` via ALPN; an HTTP/2 connection-preface (`PRI * HTTP/2.0...`) received on a connection that negotiated `http/1.1` (or no ALPN at all - including cleartext h2c, not implemented) is rejected as a protocol violation rather than opportunistically switching protocols after the fact. |
-| Origin HTTP/2 discovery/prefetch connection ownership | N/A | N/A | Yes | Deciding whether an origin supports HTTP/2 (needed before the client TLS handshake, since ALPN cannot change afterward) and starting a connection ahead of time while the client handshake is still in progress are coordinated through one shared negotiation step - shared by explicit CONNECT tunnels and transparent TLS connections alike, so transparent mode carries none of the duplicated logic or extra origin connections a separate implementation would add: a cold capability-cache discovery connection is retained and adopted directly as the session connection once it is confirmed healthy and correctly keyed, and a cache-hit prefetch connection is adopted the same way, rather than either being opened, validated, and then wastefully discarded in favor of a brand-new connection. A stale, mismatched, or broken retained connection is still released and replaced with a fresh one. For transparent connections, the capability/pool cache key is derived from the identity (SNI/certificate hostname) plus the effective forward target (`BeforeSslAuthenticateEventArgs.ForwardHttpsHostName`/`ForwardHttpsPort`, defaulting from `TransparentProxyEndPoint.ForwardHost`/`ForwardPort`), so different forward targets behind the same SNI never share a cached capability result. |
-| Stream multiplexing | N/A | N/A | Yes | Concurrent streams tracked per connection in `Http2Helper`; a slow synthetic response on one stream no longer blocks frames for other streams. |
-| HPACK header compression | N/A | N/A | Yes | Both decode and encode reuse a persistent, connection-direction-scoped dynamic table, so repeated headers are indexed/re-indexed correctly on both sides. |
-| Flow control (`WINDOW_UPDATE`) | N/A | N/A | Yes | Independent send-side window accounting per connection and per stream on each of the two TLS legs (client↔proxy, proxy↔server); validates length/increment/overflow and translates rather than blindly relays. |
-| Server push (`PUSH_PROMISE`) | N/A | N/A | No | `SETTINGS_ENABLE_PUSH=0` is always forced toward the origin (overriding/appending it in the relayed client SETTINGS frame), and any PUSH_PROMISE received anyway (from either peer) is treated as a connection-level `PROTOCOL_ERROR` (`GOAWAY`) rather than decoded, relayed, or silently forwarded. Push is deprecated in browsers, so no public API originates one. |
-| `PING` / keepalive frames | N/A | N/A | Yes | ACKed locally by the proxy on each leg; not blindly relayed. |
-| `SETTINGS` negotiation | N/A | N/A | Yes | `HEADER_TABLE_SIZE`, `MAX_FRAME_SIZE`, `INITIAL_WINDOW_SIZE`, and `MAX_CONCURRENT_STREAMS` are validated/tracked and applied per leg. The proxy relays each peer's own SETTINGS frame to the other leg (rather than generating a fully independent proxy-authored SETTINGS frame per leg) except for the forced `ENABLE_PUSH=0` override above; the proxy also enforces that the first frame after the connection preface is SETTINGS on both legs, and that client-initiated stream ids are odd and strictly increasing (RFC 7540 §5.1.1/§3.5), rejecting violations with `GOAWAY`. |
-| `RST_STREAM` / per-stream cancellation | N/A | N/A | Yes | Cleans up the corresponding session/flow-control state, relays the error code, and still runs exactly one `AfterResponse`/dispose for the affected stream (see below). |
-| `GOAWAY` / connection shutdown | N/A | N/A | Yes | Parses `lastStreamId`/error code, stops admitting new streams above it, cancels in-flight work that can't complete, relays to the other leg, and the proxy itself sends a best-effort graceful `GOAWAY` to the other leg when either side of the relay disconnects. |
-| `MAX_CONCURRENT_STREAMS` admission | N/A | N/A | Yes | A new client-initiated stream that would exceed the origin's advertised limit is refused locally (`RST_STREAM`/`REFUSED_STREAM`) rather than forwarded. |
-| Flow-control reservation timeout | N/A | N/A | Yes | An outbound `DATA` write that cannot obtain flow-control credit within 60 seconds (peer stopped sending `WINDOW_UPDATE`) fails the stream instead of waiting indefinitely. |
+| Feature | HTTP/1.0 | HTTP/1.1 | HTTP/2 | HTTP/3 | Notes |
+|---|---|---|---|---|---|
+| Persistent connections / keep-alive | Yes | Yes | Yes (inherent) | Yes (inherent) | `Connection: keep-alive` (1.0) / default (1.1); HTTP/2 multiplexes over one connection; HTTP/3 QUIC connections persist across streams. |
+| Chunked transfer-encoding | N/A (no chunked in 1.0) | Yes | N/A (HTTP/2 uses DATA frames, not chunking) | N/A (HTTP/3 uses DATA frames) | Read and write, both request and response, via `HttpStream`. |
+| Chunked trailers (trailing headers) | N/A | Yes | Yes | Yes | See `RequestResponseBase.TrailingHeaders`; forwarded/emitted for HTTP/1.x. For HTTP/2, a second HEADERS block without request/status pseudo-headers is decoded as trailers. For HTTP/3, a trailing HEADERS frame after the final DATA frame is decoded as trailers per RFC 9114 §4.1. |
+| `Expect: 100-continue` | Yes | Yes | N/A (no equivalent frame flow) | N/A | `ProxyServer.Enable100ContinueBehaviour`. Set `CompatibilityMode100Continue = true` to emit a synthetic `100 Continue` to clients that block on it when `Enable100ContinueBehaviour = false`. |
+| Other 1xx interim responses (e.g. 103 Early Hints) | N/A | Yes | Yes | Yes | Relayed for all protocol versions. HTTP/3: `Http3OriginBridge` loops on 1xx responses from the origin (up to 20 per request) and forwards each interim HEADERS frame to the client before the final response. |
+| HEADERS/CONTINUATION reassembly and re-splitting | N/A | N/A | Yes | N/A | HTTP/3 uses QPACK (no CONTINUATION frames); multi-frame header blocks do not exist in HTTP/3. |
+| `Upgrade` / WebSocket (101 Switching Protocols) | N/A | Yes | N/A | N/A | HTTP/3 uses extended CONNECT (RFC 9220) for WebSocket — not yet implemented. |
+| `CONNECT` tunneling | Yes | Yes | Yes (via `ExplicitProxyEndPoint`) | No | HTTP/3 transparent endpoint only; no explicit QUIC proxy yet (see [HTTP-3](HTTP-3) §Why no explicit endpoint). |
+| ALPN-based protocol routing | N/A | N/A | Yes | Yes | HTTP/3 negotiates `h3` via QUIC TLS 1.3; the QUIC listener only accepts connections with `h3` ALPN. |
+| Origin HTTP/3 discovery / Alt-Svc caching | N/A | N/A | N/A | Yes | `Http3OriginCapabilityCache` stores per-origin H3 capability with TTL from `Alt-Svc: h3=...; ma=...` headers; all protocols use the cache for origin selection when `EnableHttp3 = true`. |
+| Stream multiplexing | N/A | N/A | Yes | Yes | HTTP/2: concurrent streams tracked per connection in `Http2Helper`. HTTP/3: QUIC bidirectional streams, one per request/response pair. |
+| HPACK header compression | N/A | N/A | Yes | N/A | HTTP/3 uses QPACK (RFC 9204); see QPACK row in the HTTP/3 section below. |
+| Flow control (`WINDOW_UPDATE`) | N/A | N/A | Yes | N/A | HTTP/3 relies on QUIC transport-layer flow control; there is no HTTP/3-layer `WINDOW_UPDATE` frame. |
+| Server push (`PUSH_PROMISE`) | N/A | N/A | No | No | Disabled for HTTP/2 (`SETTINGS_ENABLE_PUSH=0`). Removed from HTTP/3 by RFC 9114. |
+| `PING` / keepalive frames | N/A | N/A | Yes | N/A | HTTP/3 uses QUIC PING at the transport layer; there is no HTTP/3-layer PING frame. |
+| `SETTINGS` negotiation | N/A | N/A | Yes | Yes | HTTP/3 SETTINGS are sent on the outbound unidirectional control stream (RFC 9114 §7.2.4). |
+| `RST_STREAM` / per-stream cancellation | N/A | N/A | Yes | Yes | HTTP/3 uses QUIC `RESET_STREAM`/`STOP_SENDING`; stream-level cancellation cleans up session state and guarantees exactly one `AfterResponse`. |
+| `GOAWAY` / connection shutdown | N/A | N/A | Yes | Yes | HTTP/3 GOAWAY carries the last stream ID; `Http3Connection` sends and handles GOAWAY for graceful shutdown. |
+| `MAX_CONCURRENT_STREAMS` admission | N/A | N/A | Yes | Yes | HTTP/3: `TransparentQuicProxyEndPoint.MaxInboundBidirectionalStreams` (default 100) limits concurrent request streams per QUIC connection. |
+| Flow-control reservation timeout | N/A | N/A | Yes | N/A | HTTP/3 relies on QUIC's own idle-timeout and flow-control mechanisms. |
 
 ## Body handling and streaming
 
-| Feature | HTTP/1.0 | HTTP/1.1 | HTTP/2 | Notes |
-|---|---|---|---|---|
-| Buffered body read/modify (`GetRequestBody`/`SetResponseBodyString`, etc.) | Yes | Yes | Yes | Body bytes buffered up to `MaxBufferedBodyBytes` (default 4 MiB); larger bodies are rejected. |
-| Per-chunk streaming hooks (`OnRequestBodyWrite`/`OnResponseBodyWrite`) - plain HTTP | Yes | Yes | Yes | |
-| Per-chunk streaming hooks - TLS-decrypted connections | Yes | Yes | Yes | Fixed for HTTP/1.x: the hook now fires with parity for `SslStream`-backed connections, not just plain `NetworkStream`. |
-| Synthetic streamed responses (`RespondStreaming`) | Yes | Yes | Yes | Chunked or fixed-length framing chosen automatically from the response headers you set. |
-| Automatic decompression for body inspection (gzip/deflate/brotli) | Yes | Yes | Yes | Stacked encodings (e.g. `gzip, deflate`) are unwrapped layer-by-layer. |
-| Multipart/form-data boundary-aware streaming | Yes | Yes | Yes | Multipart request bodies are observed incrementally without buffering the full body. `MultipartRequestPartSent` receives each part's MIME headers even when boundaries or headers span HTTP/2 DATA frames; standard initial delimiters and subsequent CRLF-prefixed delimiters are distinguished from boundary-like bytes inside part content. |
-| Bounded body streaming | Yes | Yes | Yes | `BoundedBodyPipe` wraps the underlying pipe; reads beyond `MaxBufferedBodyBytes` fail fast rather than OOM-ing the process. |
+| Feature | HTTP/1.0 | HTTP/1.1 | HTTP/2 | HTTP/3 | Notes |
+|---|---|---|---|---|---|
+| Buffered body read/modify (`GetRequestBody`/`SetResponseBodyString`, etc.) | Yes | Yes | Yes | Yes | Body bytes buffered up to `MaxBufferedBodyBytes` (default 4 MiB); larger bodies are rejected. |
+| Per-chunk streaming hooks (`OnRequestBodyWrite`/`OnResponseBodyWrite`) - plain HTTP | Yes | Yes | Yes | N/A | HTTP/3 is always TLS-encrypted (QUIC mandates TLS 1.3). |
+| Per-chunk streaming hooks - TLS-decrypted connections | Yes | Yes | Yes | Yes | `Http3RequestStream` fires `OnRequestBodyWrite` and `Http3OriginBridge` fires `OnResponseBodyWrite` for each DATA frame, using a one-frame lookahead so `IsLastChunk` is accurate. The fast path (no subscribers) skips all hook allocations. |
+| Synthetic streamed responses (`RespondStreaming`) | Yes | Yes | Yes | Yes | Chunked or fixed-length framing chosen automatically from the response headers you set. |
+| Automatic decompression for body inspection (gzip/deflate/brotli) | Yes | Yes | Yes | Yes | Stacked encodings (e.g. `gzip, deflate`) are unwrapped layer-by-layer. |
+| Multipart/form-data boundary-aware streaming | Yes | Yes | Yes | Yes | Multipart request bodies are observed incrementally without buffering the full body. |
+| Bounded body streaming | Yes | Yes | Yes | Yes | `BoundedBodyPipe` wraps the underlying pipe; reads beyond `MaxBufferedBodyBytes` fail fast rather than OOM-ing the process. |
 
 ## Interception APIs
 
-| Feature | HTTP/1.0 | HTTP/1.1 | HTTP/2 | Notes |
-|---|---|---|---|---|
-| Header/body modification in `BeforeRequest`/`BeforeResponse` | Yes | Yes | Yes | Every HEADERS block is fully decoded/transcoded, so mutations made in the event handler are re-encoded and relayed rather than passed through opaquely. |
-| Synthetic responses (`Ok`, `Respond`, `Redirect`, `GenericResponse`) from `BeforeRequest` | Yes | Yes | Yes | The request is never forwarded upstream; any unfinished client request body already in flight is drained with flow-control credit returned. |
-| `Respond` replacing an already-received response from `BeforeResponse` | Yes | Yes | Yes | The origin's own response body, if still arriving, is discarded (with flow-control credit still returned) in favor of the replacement. |
-| `RespondStreaming` (synthetic streamed body) | Yes | Yes | Yes | See "Synthetic streamed responses" above for framing details. |
-| `AfterResponse` / per-request disposal | Yes | Yes | Yes | Every h2 stream - whether it completes normally, is reset (`RST_STREAM`), or is still open when the connection itself tears down - gets exactly one `AfterResponse` invocation and one `SessionEventArgs.Dispose()`, matching the HTTP/1.x `finally` guarantee. Request-header preparation (`Accept-Encoding` filtering, hop-by-hop header stripping) also now runs for h2 requests before they are forwarded upstream, matching HTTP/1.x. |
-| `SessionEventArgs.TimeLine` milestones | Yes | Yes | Yes | `Http2Helper` now stamps `"Request Sent"`, `"Response Received"`, and `"Response Sent"` at the same logical points in the h2 stream lifecycle (terminating HEADERS or DATA frame observed on each direction) as `RequestHandler`/`ResponseHandler` do for HTTP/1.x, so latency diagnostics built on `TimeLine` behave the same regardless of which protocol a session actually used. |
+| Feature | HTTP/1.0 | HTTP/1.1 | HTTP/2 | HTTP/3 | Notes |
+|---|---|---|---|---|---|
+| Header/body modification in `BeforeRequest`/`BeforeResponse` | Yes | Yes | Yes | Yes | Every HEADERS block is fully decoded/transcoded (HPACK for h2, QPACK for h3), so mutations made in the event handler are re-encoded and relayed rather than passed through opaquely. |
+| Synthetic responses (`Ok`, `Respond`, `Redirect`, `GenericResponse`) from `BeforeRequest` | Yes | Yes | Yes | Yes | The request is never forwarded upstream; any unfinished client request body already in flight is drained. |
+| `Respond` replacing an already-received response from `BeforeResponse` | Yes | Yes | Yes | Yes | The origin's own response body, if still arriving, is discarded in favor of the replacement. |
+| `RespondStreaming` (synthetic streamed body) | Yes | Yes | Yes | Yes | See "Synthetic streamed responses" above for framing details. |
+| `AfterResponse` / per-request disposal | Yes | Yes | Yes | Yes | Every HTTP/3 stream — whether it completes normally, is reset, or is still open when the QUIC connection tears down — gets exactly one `AfterResponse` invocation and one `SessionEventArgs.Dispose()`, guaranteed by an atomic `FinalizedFlag`. |
+| `SessionEventArgs.TimeLine` milestones | Yes | Yes | Yes | Yes | All five `HttpRequestTiming` milestones are stamped for HTTP/3: `RequestHeadersReceived` (after QPACK decode), `ConnectionReady` (pool lease, with `UpstreamConnectionReused` flag), `RequestSent` (after `CompleteWrites`), `ResponseHeadersReceived` (final non-1xx response), and `CompletedAt` (always, even on error). |
 
 ## HTTP/2 safety and frame validation
 
@@ -79,24 +85,50 @@ true`); set it to `false` to force HTTP/1.1 only. If you find something inaccura
 | Reserved opcode rejection | Yes | WebSocket frames with opcodes not defined by RFC 6455 (or not enabled by a negotiated extension) are rejected by closing the WebSocket with status `1002 Protocol Error`. |
 | Control frame size / fragmentation | Yes | Control frames (Close, Ping, Pong) exceeding 125 bytes or marked as fragmented are rejected per RFC 6455 §5.5. |
 | Extension bit stripping | Yes | RSV1/RSV2/RSV3 bits set without a corresponding negotiated extension trigger frame rejection; extension bits are stripped from relayed frames. |
-| Maximum frame payload size | Yes | Frames exceeding `MaxWebSocketFramePayloadBytes` (default 16 MiB) are rejected to prevent unbounded memory allocation. |
+| Maximum frame payload size | Yes | The declared payload length is validated against `MaxWebSocketFramePayloadBytes` (default 16 MiB) *before* any payload is buffered — frames exceeding it are rejected with a `1009 Message Too Big` close, without ever allocating the oversized buffer. Reserved bits in a 64-bit declared length, and lengths exceeding `int.MaxValue`, are rejected the same way. |
 
 ## Proxying, auth, and misc
 
-| Feature | Support | Notes |
-|---|---|---|
-| Explicit, transparent, and SOCKS4/5 endpoints | Yes | `ExplicitProxyEndPoint`, `TransparentProxyEndPoint`, `SocksProxyEndPoint`. |
-| Upstream proxy chaining (HTTP/HTTPS/SOCKS) | Yes | Static, per-request (`GetCustomUpStreamProxyFunc`), or system-gateway detection. |
-| Proxy Basic authentication | Yes | `ProxyBasicAuthenticateFunc`. |
-| Windows authentication (Kerberos/NTLM) to upstream servers | Yes (h1.1); not applicable to h2 | `EnableWinAuth`. NTLM/Negotiate is connection-oriented, per-TCP-connection state; RFC 7540 §9.2.3 (HTTP/2) states such schemes "cannot be used with the connection reuse in HTTP/2" and are expected not to be offered by compliant h2 origins, so `Http2Helper` does not implement a WinAuth handshake loop. Origin connections are still never returned to the pool once `IsWinAuthenticated` is set (see `TcpConnectionFactory.Release`), which already applies uniformly regardless of which protocol ends up negotiated on that connection. |
-| Mutual TLS to upstream servers | Yes (all protocols) | `ClientCertificateSelectionCallback` / `ServerCertificateValidationCallback`. Client-certificate selection happens during `SslStream.AuthenticateAsClientAsync`, before ALPN is resolved, so it is shared unchanged by the h1.1 and h2 code paths - there is no protocol-specific origin-connection setup to duplicate. |
-| Upstream connection pooling | Yes | `EnableConnectionPool` (default on). |
-| Per-connection upstream HTTP version policy | Yes | `UpstreamHttpProtocol`/`AllowHttpProtocolTranslation` on `TunnelConnectSessionEventArgs`/`BeforeSslAuthenticateEventArgs` decouple which HTTP version the proxy uses toward the origin from which version the client negotiates with the proxy. `Auto` (default) preserves existing coupled behavior. `Http11`/`Http2` pin the origin-facing protocol; without `AllowHttpProtocolTranslation`, `Http11` simply never offers "h2" to the client (so no mismatch is possible) and `Http2` fails the connection outright if the client or origin cannot also do HTTP/2. Setting `AllowHttpProtocolTranslation` lets the proxy bridge a client/origin protocol mismatch instead of failing: an h2 client talking to an HTTP/1.1-only origin is served by one independently managed HTTP/1.1 transaction per h2 stream, and an HTTP/1.1 client talking to an h2-only origin is served by leasing one h2 stream per HTTP/1.1 request from a persistent origin connection (bound to that one client connection). Both bridge directions are wired identically for explicit CONNECT tunnels and transparent TLS endpoints, and both are covered by acceptance tests for large streamed bodies, `BeforeRequest`-time synthetic short-circuiting (the origin is never contacted), `BeforeResponse` header mutation, and client-initiated `RST_STREAM`/cancellation mid-response. Both directions run the same `BeforeRequest`/`BeforeResponse`/`AfterResponse` interception pipeline as the non-translated paths; response bodies crossing a bridge are fully buffered rather than streamed frame-by-frame, and only one origin `TcpServerConnection`/h2 connection is ever open per bridged client connection (no cross-client h2 stream multiplexing yet). WinAuth (NTLM/Negotiate), client-certificate-bound, and custom-per-session-upstream-proxy connections are never shared or translated across bridge boundaries. |
-| Origin-facing HTTP/1.0 request-version normalization | Yes | `ProxyServer.OriginHttpVersionPolicy` (default `PreserveClientVersion`) controls whether the HTTP version the proxy declares to an HTTP/1.1-wire origin matches the client's own declared version verbatim (default, matching historical pass-through behavior) or is always normalized to `HTTP/1.1` (`NormalizeToHttp11`) so a compliant origin can be pooled/reused as a persistent connection regardless of whether individual clients are still HTTP/1.0. This never changes the client-facing `Request.HttpVersion` that event handlers observe, nor the version/persistence rules used to write the response back to the client. |
-| `Via` header injection | Yes (default) | `ViaHeaderPseudonym` defaults to `"titanium-web-proxy"`, appending `Via: {version} {pseudonym}` to forwarded HTTP/1.x and native/bridged HTTP/2 requests and responses (RFC 9110 §7.6.3). HTTP/2 uses the `2` received-protocol token, while responses record the origin response version. Set to an empty string to disable. Loop detection checks exact received-by tokens across every `Via` field and refuses matches with `508 Loop Detected`. |
-| Authentication retry bounds | Yes | NTLM/Negotiate and 407/401 retry loops are capped at 3 round-trips per session to prevent indefinite handshake cycles against a misbehaving peer. |
+| Feature | Support (H1.0/H1.1/H2) | HTTP/3 | Notes |
+|---|---|---|---|
+| Explicit, transparent, and SOCKS4/5 endpoints | Yes | Yes (`TransparentQuicProxyEndPoint`) | H1/H2: `ExplicitProxyEndPoint`, `TransparentProxyEndPoint`, `SocksProxyEndPoint`. HTTP/3 adds `TransparentQuicProxyEndPoint` (UDP/QUIC only; no explicit QUIC proxy yet). |
+| Upstream proxy chaining (HTTP/HTTPS/SOCKS) | Yes | Yes | H1/H2: static, per-request (`GetCustomUpStreamProxyFunc`), or system-gateway detection. HTTP/3: `Http3OriginBridge` mirrors the full upstream-proxy resolution logic (static → per-request callback → system gateway). Because `System.Net.Quic` does not support HTTP CONNECT tunnelling or SOCKS5 UDP ASSOCIATE, a configured upstream proxy causes `QuicProxyNotSupportedException` to be thrown and the request automatically falls back to `ForwardOverTcpAsync` where standard proxy rules apply. |
+| Proxy Basic authentication | Yes | No | Not implemented for QUIC endpoints. |
+| Windows authentication (Kerberos/NTLM) to upstream servers | Yes (h1.1); not applicable to h2 | N/A | NTLM/Negotiate is connection-oriented; RFC 7540 §9.2.3 excludes it from HTTP/2. HTTP/3 shares the same exclusion and additionally runs over QUIC where connection-oriented auth is impractical. |
+| Mutual TLS to upstream servers | Yes (all TCP protocols) | Yes | `ServerCertificateValidationCallback` fires for QUIC origin connections via `QuicConnectionFactory`; QUIC always uses TLS 1.3 so certificate validation is always active. |
+| Upstream connection pooling | Yes | Yes | H1/H2: `TcpConnectionPool`. HTTP/3: `QuicConnectionPool` leases live `QuicConnection` objects per origin; pool is drained on `ProxyServer.Stop()`. |
+| Per-connection upstream HTTP version policy | Yes | Yes | H1/H2: `UpstreamHttpProtocol`/`AllowHttpProtocolTranslation` on `BeforeSslAuthenticateEventArgs`. HTTP/3: `BeforeQuicAuthenticateEventArgs.UpstreamHttpProtocol` (per-connection) and `SessionEventArgs.UpstreamHttpProtocol` (per-stream override). |
+| `BeforeQuicAuthenticate` connection event | N/A | Yes | Fired once per accepted QUIC connection (analogous to `BeforeSslAuthenticate` for TCP); allows per-connection protocol pinning, custom cert validation, and connection rejection. |
+| Origin HTTP/1.0 request-version normalization | Yes | N/A | `ProxyServer.OriginHttpVersionPolicy`; not applicable when the origin connection is HTTP/3. |
+| `Via` header injection | Yes | Yes | `ViaHeaderPseudonym` defaults to `"titanium-web-proxy"`, appending `Via: {version} {pseudonym}` for all protocol versions including HTTP/3 (version token `"3.0"`). Loop detection checks across all `Via` fields and refuses with `508 Loop Detected`. |
+| Authentication retry bounds | Yes | N/A | NTLM/Negotiate 407/401 loops are capped at 3 round-trips for TCP protocols; not applicable to HTTP/3. |
 
-## Protocol Policy Properties (New in this Release)
+## HTTP/3 (QUIC) — opt-in, experimental
+
+HTTP/3 support is gated behind `ProxyServer.EnableHttp3 = true` (marked `[Experimental("TWP001")]`).
+It requires the MsQuic native library and `System.Net.Quic.QuicListener.IsSupported == true` at runtime
+(available on Windows 11/Server 2022+ and Linux with a recent `libmsquic` package; on macOS, bundle
+`libmsquic`, `libssl`, and `libcrypto` with `@loader_path` RPATH — see [HTTP-3](HTTP-3) for details).
+
+| Feature | Support | Notes |
+|---------|---------|-------|
+| Inbound HTTP/3 (client → proxy over QUIC) | Yes | `TransparentQuicProxyEndPoint` — QUIC only; explicit QUIC proxying is not yet standardised. |
+| QPACK header compression | Yes | **Static table** (always active): RFC 9204 static-table indexed encoding and literal encoding. **Dynamic table** (opt-in): set `ProxyServer.EnableQpackDynamicTable = true` to enable RFC 9204 §3 dynamic table synchronisation. When enabled, the proxy advertises `SETTINGS_QPACK_MAX_TABLE_CAPACITY = 4096` and `SETTINGS_QPACK_BLOCKED_STREAMS = 0` to the client (it never blocks a stream waiting on dynamic-table insertions); opens the QPACK encoder/decoder unidirectional control streams; tracks per-connection inbound and outbound tables in `QpackDynamicTable` (thread-safe via `ReaderWriterLockSlim`); immediately raises `QPACK_DECOMPRESSION_FAILED` per RFC 9204 §4.5.1.1 if a field section's Required Insert Count is not yet satisfied, rather than waiting for it; and sends Section Acknowledgments on a bounded `Channel` (capacity 1000, `DropNewest` on full). In-flight eviction protection prevents removing a table entry while any open stream holds a reference to it. |
+| HTTP/3 frame codec | Yes | HEADERS, DATA, SETTINGS, GOAWAY, and unknown/reserved frame types per RFC 9114. |
+| Per-stream request/response lifecycle | Yes | `BeforeRequest`, `BeforeResponse`, `AfterResponse` (exactly once per stream), `Via` header injection, per-stream `UpstreamHttpProtocol` override, `ConnectTimeout` override. |
+| Outbound H3→H3 (proxy → origin over QUIC) | Yes | `QuicConnectionPool` leases a live `QuicConnection` per origin; streams are opened per-request. |
+| Outbound H3→H2 bridge | Yes | Falls through to `TcpConnectionFactory` with h2 ALPN when `UpstreamHttpProtocol.Http2` is set. |
+| Outbound H3→H1.1 bridge | Yes | Falls through to `TcpConnectionFactory` with default ALPN negotiation. |
+| Inbound H1.1/H2 → H3 origin bridge | Yes | `RequestHandler` checks `Http3OriginCapabilityCache` before opening a TCP connection; if H3 is cached, `Http3OriginBridge.ForwardAsync` is used instead. |
+| Alt-Svc discovery | Yes | Response `Alt-Svc: h3=":443"; ma=86400` headers are parsed and cached in `Http3OriginCapabilityCache` with the advertised max-age TTL, enabling proactive H3 reuse on subsequent requests. |
+| HTTPS/SVCB DNS discovery | Yes | Enable with `ProxyServer.EnableHttpsSvcbDnsDiscovery = true` (experimental). `UdpSvcbDnsResolver` performs RFC 9460 HTTPS RR queries over UDP to the configured `DnsServerEndPoint` (default `127.0.0.1:53`). Results are cached with the advertised TTL (capped at 1 hour); NXDOMAIN, alias-mode (SvcPriority=0), and missing h3 ALPN are treated as negative cache entries. Query coalescing prevents duplicate in-flight queries for the same origin. The resolver is pluggable via `ProxyServer.HttpsSvcbResolver` (replace with a mock in tests). |
+| `BeforeQuicAuthenticate` event | Yes | Fired once per accepted QUIC connection (analogous to `BeforeSslAuthenticate`); allows setting `UpstreamHttpProtocol`, custom cert validation, and `AllowHttpProtocolTranslation` per connection. |
+| `IOriginalDestinationResolver` | Yes | Plug-in interface for resolving the pre-NAT (real) destination of a transparently intercepted QUIC connection. |
+| QUIC connection pool drain on stop | Yes | `QuicConnectionPool.DrainAsync` is called during `ProxyServer.Stop`/`DrainAsync`/`Dispose`. |
+| QUIC control stream (server→client) | Yes | `Http3Connection` sends its own outbound control stream with a SETTINGS frame on startup. |
+| Server push | No | Not defined in RFC 9114 (server push was removed from HTTP/3). |
+| 0-RTT / early data | No | Not supported by `System.Net.Quic`; all connections start with a 1-RTT handshake. |
+| QUIC connection migration | No | `System.Net.Quic` does not expose migration APIs in .NET 10. |
 
 | Property | Default | Description |
 |----------|---------|-------------|
@@ -106,8 +138,13 @@ true`); set it to `false` to force HTTP/1.1 only. If you find something inaccura
 | `ViaHeaderPseudonym` | `"titanium-web-proxy"` | Token appended to `Via` headers on forwarded requests and responses. Set to an empty string to disable. Loop detection rejects incoming requests whose `Via` already contains this token with `508 Loop Detected`. |
 | `CompatibilityMode100Continue` | `false` | Sends a synthetic `100 Continue` to the client before reading the request body when `Enable100ContinueBehaviour = false`, preventing deadlock with strict `Expect: 100-continue` clients. |
 | `EnableRfc8441` | `false` | Enables WebSocket over HTTP/2 extended CONNECT negotiation (RFC 8441). When enabled, the proxy advertises `ENABLE_CONNECT_PROTOCOL=1` to h2 clients and selects the appropriate tunnel path: if the origin also advertises `ENABLE_CONNECT_PROTOCOL=1`, the proxy uses the native h2↔h2 DATA relay path; otherwise it falls back to opening an HTTP/1.1 WebSocket upgrade to the origin. |
+| `EnableHttp3` | `false` | Enables HTTP/3 (QUIC) support (opt-in, experimental — suppress `TWP001`). See [HTTP-3](HTTP-3) wiki page for full details. |
+| `EnableQpackDynamicTable` | `false` | Enables QPACK dynamic table synchronisation per RFC 9204. Requires `EnableHttp3 = true`. See [HTTP-3](HTTP-3) for details. |
+| `EnableHttpsSvcbDnsDiscovery` | `false` | Enables proactive HTTP/3 capability discovery via HTTPS/SVCB DNS queries (RFC 9460). Requires `EnableHttp3 = true`. Configure `DnsServerEndPoint` for a custom DNS server. |
+| `DnsServerEndPoint` | `127.0.0.1:53` | UDP endpoint of the DNS server used for HTTPS/SVCB queries when `EnableHttpsSvcbDnsDiscovery = true`. |
 
 ## Where to look for more detail
 
 - [Streaming Bodies](Streaming-Bodies) - the `OnRequestBodyWrite`/`OnResponseBodyWrite`/`RespondStreaming` APIs in depth.
+- [HTTP/3](HTTP-3) - HTTP/3 and QUIC support, `TransparentQuicProxyEndPoint`, protocol bridges, and `EnableHttp3`.
 - [Home](Home) - general usage and the rest of the public API surface.

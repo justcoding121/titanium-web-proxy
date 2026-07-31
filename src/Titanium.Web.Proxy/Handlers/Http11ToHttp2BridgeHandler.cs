@@ -1,14 +1,15 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.Net;
 using System.Net.Security;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
@@ -101,6 +102,30 @@ public partial class ProxyServer
                         request.RequestUriString8 = requestLine.RequestUri;
                         request.Method = requestLine.Method;
                         request.HttpVersion = requestLine.Version;
+
+                        // The client leg here is genuine HTTP/1.1 wire bytes (this bridge only changes
+                        // what the *origin* connection speaks), so the same wire-framing rules as
+                        // RequestHandler apply before anything observes pre-normalization values.
+                        try
+                        {
+                            Http1FramingValidator.Validate(request, ResolveHttp1WireFramingSource(args),
+                                args.Server.PolicyModes.AllowAmbiguousFraming);
+                        }
+                        catch (Http1FramingException framingEx)
+                        {
+                            ProxyMetrics.ParserError("framing");
+                            args.HttpClient.Response = new GenericResponse(framingEx.StatusCode)
+                            {
+                                HttpVersion = request.HttpVersion
+                            };
+                            args.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection,
+                                KnownHeaders.ConnectionClose);
+                            closeConnection = true;
+                            await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                            args.IsClientResponseCommitted = true;
+                            return;
+                        }
+
                         request.SetOriginalHeaders();
 
                         // Fill default Host before BeforeRequest so handlers can read or override it.
@@ -272,7 +297,8 @@ public partial class ProxyServer
         seedConnection ??= await EstablishHttp2OriginTcpConnectionAsync(args, remoteHostName, remotePort,
             connectHost, connectPort, cancellationToken);
 
-        return await Http2OriginConnection.CreateAsync(seedConnection, logger, MaxBufferedBodyBytes, cancellationToken);
+        return await Http2OriginConnection.CreateAsync(seedConnection, logger,
+            args.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes, cancellationToken, ResourceLimits);
     }
 
     /// <summary>
@@ -429,6 +455,12 @@ public partial class ProxyServer
             foreach (var header in exchange.TrailingHeaders)
                 response.TrailingHeaders.AddHeader(header);
 
+        // This response was decoded from real HTTP/2 frames (Http2OriginConnection), never from
+        // HttpStream-read bytes, so it is explicitly out of scope for the HTTP/1 wire validator - see
+        // Http1FramingValidator's remarks. The call is still made (as a documented no-op) so this
+        // remains one of the five insertion points the isolation test suite enumerates, rather than a
+        // silently-uncovered SetOriginalHeaders() call site.
+        Http1FramingValidator.Validate(response, FramingSource.SynthesizedFromH2);
         response.SetOriginalHeaders();
         args.HttpClient.Response = response;
 
@@ -536,4 +568,3 @@ public partial class ProxyServer
         return headerValue != null && headerValue.EqualsIgnoreCase(KnownHeaders.ConnectionClose.String);
     }
 }
-#endif

@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 namespace Titanium.Web.Proxy.Http2;
 
 /// <summary>
@@ -21,4 +20,3 @@ internal enum Http2ErrorCode
     InadequateSecurity = 0xc,
     Http11Required = 0xd
 }
-#endif

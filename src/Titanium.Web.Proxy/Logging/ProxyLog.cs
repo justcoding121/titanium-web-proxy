@@ -102,6 +102,53 @@ internal static class ProxyLog
             host, port, Describe(ex));
     }
 
+    /// <summary>
+    ///     A client connection was rejected by the admission gate in <c>ProxyServer.OnAcceptConnection</c>.
+    ///     Tagged by <paramref name="reason" /> (one of a small fixed set: "global limit"/"endpoint
+    ///     limit") and by the endpoint's own <c>ip:port</c>, both naturally bounded label spaces, so this
+    ///     stays cardinality-safe however many endpoints a host application creates.
+    /// </summary>
+    internal static void ClientConnectionAdmissionRejected(ILogger logger, Models.ProxyEndPoint endPoint,
+        string reason)
+    {
+        if (!logger.IsEnabled(LogLevel.Warning)) return;
+        logger.LogWarning("Rejected a client connection on {Endpoint} ({Reason}).",
+            $"{endPoint.IpAddress}:{endPoint.Port}", reason);
+    }
+
+    /// <summary>
+    ///     Logs the effective profile and per-family policy modes once per <c>Start()</c> call, per
+    ///     the plan's rollout section: name only, never hosts, URLs or secrets.
+    /// </summary>
+    internal static void EffectiveProfileAtStartup(ILogger logger, Options.ProxyProfile profile,
+        Options.ProxyPolicyModes policyModes)
+    {
+        if (!logger.IsEnabled(LogLevel.Information)) return;
+        logger.LogInformation(
+            "Starting with profile {Profile} (body={Body}, decompressionRatio={DecompressionRatio}, headerLimits={HeaderLimits}, admission={Admission}, http2AbuseBudget={Http2AbuseBudget}, allowAmbiguousFraming={AllowAmbiguousFraming}).",
+            profile,
+            policyModes[Options.PolicyFamily.BodyBudget],
+            policyModes[Options.PolicyFamily.DecompressionRatio],
+            policyModes[Options.PolicyFamily.HeaderLimits],
+            policyModes[Options.PolicyFamily.AdmissionControl],
+            policyModes[Options.PolicyFamily.Http2AbuseBudget],
+            policyModes.AllowAmbiguousFraming);
+    }
+
+    /// <summary>
+    ///     A resource-bound policy family's limit was breached. Logged at Warning when the breach was
+    ///     enforced (rejected/closed/reset) and at Debug when only observed, so an
+    ///     <see cref="Options.PolicyMode.Observe" /> deployment measuring what a stricter profile would
+    ///     catch does not produce Warning-level noise for every hit.
+    /// </summary>
+    internal static void PolicyBreach(ILogger logger, Options.PolicyFamily family, Options.PolicyMode mode,
+        string detail)
+    {
+        var level = mode == Options.PolicyMode.Enforce ? LogLevel.Warning : LogLevel.Debug;
+        if (!logger.IsEnabled(level)) return;
+        logger.Log(level, "Policy family {Family} breached under {Mode}: {Detail}", family, mode, detail);
+    }
+
     internal static void Http2ProbeResult(ILogger logger, string connectTarget, bool fromCache, bool supported,
         Exception? failure)
     {

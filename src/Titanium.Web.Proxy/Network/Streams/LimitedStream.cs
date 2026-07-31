@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -57,48 +56,6 @@ internal class LimitedStream : Stream
         set => throw new NotSupportedException();
     }
 
-    private void GetNextChunk()
-    {
-        if (readChunkTrail)
-        {
-            // read the chunk trail of the previous chunk
-            var s = baseReader.ReadLineAsync().Result;
-            if (s == null)
-            {
-                bytesRemaining = -1;
-                return;
-            }
-        }
-
-        readChunkTrail = true;
-
-        var chunkHead = baseReader.ReadLineAsync().Result;
-        if (chunkHead == null)
-        {
-            bytesRemaining = -1;
-            return;
-        }
-
-        var idx = chunkHead.IndexOf(";", StringComparison.Ordinal);
-        if (idx >= 0) chunkHead = chunkHead.Substring(0, idx);
-
-        if (!int.TryParse(chunkHead, NumberStyles.HexNumber, null, out var chunkSize))
-            throw new ProxyHttpException($"Invalid chunk length: '{chunkHead}'", null, null);
-
-        bytesRemaining = chunkSize;
-
-        if (chunkSize == 0)
-        {
-            bytesRemaining = -1;
-
-            // Trailer header block, strictly through the terminating blank line (see ChunkedTrailerHelper) -
-            // reading only a single line here (as before) left any additional trailer lines unread on the
-            // source, corrupting a pooled keep-alive connection's next message.
-            ChunkedTrailerHelper.ReadTrailingHeaders(baseReader, trailingHeaders ?? new HeaderCollection(), null)
-                .AsTask().GetAwaiter().GetResult();
-        }
-    }
-
     private async Task GetNextChunkAsync()
     {
         if (readChunkTrail)
@@ -121,10 +78,7 @@ internal class LimitedStream : Stream
             return;
         }
 
-        var idx = chunkHead.IndexOf(";", StringComparison.Ordinal);
-        if (idx >= 0) chunkHead = chunkHead.Substring(0, idx);
-
-        if (!int.TryParse(chunkHead, NumberStyles.HexNumber, null, out var chunkSize))
+        if (!ChunkSizeParser.TryParse(chunkHead, ProxyLimits.DefaultMaxChunkSizeBytes, out var chunkSize))
             throw new ProxyHttpException($"Invalid chunk length: '{chunkHead}'", null, null);
 
         bytesRemaining = chunkSize;
@@ -158,25 +112,7 @@ internal class LimitedStream : Stream
 
     public override int Read(byte[] buffer, int offset, int count)
     {
-        if (bytesRemaining == -1) return 0;
-
-        if (bytesRemaining == 0)
-        {
-            if (isChunked)
-                GetNextChunk();
-            else
-                bytesRemaining = -1;
-        }
-
-        if (bytesRemaining == -1) return 0;
-
-        var toRead = (int)Math.Min(count, bytesRemaining);
-        var res = baseReader.Read(buffer, offset, toRead);
-        bytesRemaining -= res;
-
-        if (res == 0) bytesRemaining = -1;
-
-        return res;
+        throw new NotSupportedException("Use ReadAsync.");
     }
 
     public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
@@ -204,18 +140,23 @@ internal class LimitedStream : Stream
 
     public async Task Finish()
     {
-        if (bytesRemaining != -1)
+        if (bytesRemaining == -1) return;
+
+        // Drain any unread framing bytes so the underlying keep-alive connection stays aligned.
+        // (Previously this threw when leftover payload remained after decompression, which is
+        // exactly the case Finish must clean up.)
+        var buffer = bufferPool.GetBuffer();
+        try
         {
-            var buffer = bufferPool.GetBuffer();
-            try
+            while (bytesRemaining != -1)
             {
                 var res = await ReadAsync(buffer, 0, buffer.Length);
-                if (res != 0) throw new Exception("Data received after stream end");
+                if (res == 0) break;
             }
-            finally
-            {
-                bufferPool.ReturnBuffer(buffer);
-            }
+        }
+        finally
+        {
+            bufferPool.ReturnBuffer(buffer);
         }
     }
 

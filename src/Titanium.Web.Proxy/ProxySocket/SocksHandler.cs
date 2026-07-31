@@ -150,30 +150,6 @@ internal abstract class SocksHandler
     }
 
     /// <summary>
-    ///     Reads a specified number of bytes from the Server socket.
-    /// </summary>
-    /// <param name="buffer">The result buffer.</param>
-    /// <param name="count">The number of bytes to return.</param>
-    /// <returns>An array of bytes.</returns>
-    /// <exception cref="ArgumentException">The number of bytes to read is invalid.</exception>
-    /// <exception cref="SocketException">An operating system error occurs while accessing the Socket.</exception>
-    /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
-    protected void ReadBytes(byte[] buffer, int count)
-    {
-        if (count <= 0)
-            throw new ArgumentException();
-
-        var received = 0;
-        while (received != count)
-        {
-            var recv = Server.Receive(buffer, received, count - received, SocketFlags.None);
-            if (recv == 0) throw new SocketException(10054);
-
-            received += recv;
-        }
-    }
-
-    /// <summary>
     ///     Reads number of received bytes and ensures that socket was not shut down
     /// </summary>
     /// <param name="ar">IAsyncResult for receive operation</param>
@@ -203,25 +179,18 @@ internal abstract class SocksHandler
     {
         if (buffer != null)
         {
-            ArrayPool<byte>.Shared.Return(buffer);
+            // SOCKS4's CONNECT request embeds the USERID field directly in this buffer (see
+            // Socks4Handler.GetHostPortBytes/GetEndPointBytes), and Socks5Handler sizes this same
+            // buffer to already accommodate Username/Password. Clear before returning to the shared
+            // pool so no identity/credential-adjacent bytes are left for an unrelated caller to rent
+            // and potentially observe - matching the same treatment AuthUserPass.OnCallBack gives the
+            // actual RFC 1929 username/password subnegotiation buffer.
+            ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
             buffer = null;
         }
 
         ProtocolComplete(exception);
     }
-
-    /// <summary>
-    ///     Starts negotiating with a SOCKS proxy server.
-    /// </summary>
-    /// <param name="host">The remote server to connect to.</param>
-    /// <param name="port">The remote port to connect to.</param>
-    public abstract void Negotiate(string host, int port);
-
-    /// <summary>
-    ///     Starts negotiating with a SOCKS proxy server.
-    /// </summary>
-    /// <param name="remoteEp">The remote endpoint to connect to.</param>
-    public abstract void Negotiate(IPEndPoint remoteEp);
 
     /// <summary>
     ///     Starts negotiating asynchronously with a SOCKS proxy server.

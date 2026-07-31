@@ -49,6 +49,9 @@ public class Http2TransparentTests
     {
         var handler = new SocketsHttpHandler
         {
+            // Direct to the transparent endpoint — must not ride the machine system proxy
+            // (Basic example on :8000) which would MITM with the product root instead.
+            UseProxy = false,
             SslOptions =
             {
                 RemoteCertificateValidationCallback =

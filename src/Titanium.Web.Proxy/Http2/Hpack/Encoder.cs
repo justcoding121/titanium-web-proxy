@@ -1,4 +1,3 @@
-﻿#if NET6_0_OR_GREATER
 /*
  * Copyright 2014 Twitter, Inc
  * This file is a derivative work modified by Ringo Leese
@@ -573,4 +572,3 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         }
     }
 }
-#endif

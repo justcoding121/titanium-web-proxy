@@ -1,10 +1,12 @@
 using System;
 using System.Net;
+using System.Net.Quic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Examples.WindowsService;
@@ -69,16 +71,94 @@ internal sealed class ProxyWorker : BackgroundService
             proxyServer.AddEndPoint(explicitEndPointV6);
         }
 
-        // Bridge the proxy's diagnostic logging into the host's own ILoggerFactory (e.g. configured via
-        // appsettings.json's Logging.LogLevel.Default), rather than using the built-in Console/File sinks.
-        proxyServer.Logging.Enabled = settings.LogErrors;
+        // HTTP/3 transparent QUIC endpoint (experimental — suppress TWP001 to opt in).
+        // Requires MsQuic and a supported OS. UDP traffic must be redirected here; see wiki/HTTP-3.md.
+#pragma warning disable TWP001
+        if (settings.EnableHttp3)
+        {
+            if (QuicListener.IsSupported)
+            {
+                if (settings.QuicListeningPort <= 0 || settings.QuicListeningPort > 65535)
+                    throw new InvalidOperationException("Invalid QUIC listening port");
+
+                proxyServer.EnableHttp3 = true;
+                var quicEndPoint = new TransparentQuicProxyEndPoint(IPAddress.Any, settings.QuicListeningPort)
+                {
+                    // Replace with IOriginalDestinationResolver for real NAT-transparent interception.
+                    ForwardHost = "localhost",
+                    ForwardPort = 443
+                };
+                proxyServer.AddEndPoint(quicEndPoint);
+                logger.LogInformation("HTTP/3 QUIC endpoint started on UDP {QuicListeningPort}",
+                    settings.QuicListeningPort);
+            }
+            else
+            {
+                logger.LogWarning(
+                    "EnableHttp3 is true but QuicListener.IsSupported is false on this platform. " +
+                    "HTTP/3 skipped. Windows requires Windows 11 / Server 2022+.");
+            }
+        }
+#pragma warning restore TWP001
+
+        // Bridge the proxy's diagnostic logging into the host's Serilog pipeline (rolling files + Event Log).
+        proxyServer.Logging.Enabled = settings.EnableProxyLogging;
         proxyServer.Logging.LoggerFactory = loggerFactory;
 
+        if (settings.LogRequests)
+            proxyServer.BeforeResponse += OnBeforeResponse;
+
         proxyServer.Start();
+
+        if (settings.SetAsSystemProxy)
+        {
+            try
+            {
+                proxyServer.SetAsSystemProxy(explicitEndPointV4, ProxyProtocolType.AllHttp);
+                logger.LogInformation(
+                    "Registered as Windows system proxy on port {ListeningPort} (cleared on stop)",
+                    settings.ListeningPort);
+            }
+            catch (NotSupportedException ex)
+            {
+                logger.LogWarning(ex, "SetAsSystemProxy is enabled but system proxy is not supported on this platform");
+            }
+        }
 
         logger.LogInformation("Service listening on port {ListeningPort}", settings.ListeningPort);
 
         return base.StartAsync(cancellationToken);
+    }
+
+    private Task OnBeforeResponse(object sender, SessionEventArgs e)
+    {
+        var request = e.HttpClient.Request;
+        var response = e.HttpClient.Response;
+        var statusCode = response?.StatusCode ?? 0;
+
+        // Aligned with the Basic/WPF traffic line shape; Information goes to files (Event Log is Warning+).
+        logger.LogInformation(
+            "{Method} {Url} → {StatusCode} | client↔proxy: {ClientProtocol} | proxy↔server: {ServerProtocol}",
+            request.Method,
+            request.Url,
+            statusCode,
+            FormatHttpProtocol(request.HttpVersion),
+            FormatHttpProtocol(response?.HttpVersion));
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    ///     Formats an HTTP version for brief logs (e.g. HTTP/1.1, HTTP/2, HTTP/3).
+    /// </summary>
+    private static string FormatHttpProtocol(Version? version)
+    {
+        if (version == null || version.Major == 0)
+            return "unknown";
+
+        if (version.Major >= 2)
+            return "HTTP/" + version.Major;
+
+        return "HTTP/" + version.Major + "." + version.Minor;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -96,7 +176,33 @@ internal sealed class ProxyWorker : BackgroundService
 
     public override Task StopAsync(CancellationToken cancellationToken)
     {
-        proxyServer?.Stop();
+        logger.LogInformation("Stopping proxy service...");
+
+        if (proxyServer != null && settings.LogRequests)
+            proxyServer.BeforeResponse -= OnBeforeResponse;
+
+        try
+        {
+            // Stop restores original system proxy when SetAsSystemProxy was used.
+            if (proxyServer?.ProxyRunning == true)
+                proxyServer.Stop();
+            else if (settings.SetAsSystemProxy)
+                proxyServer?.RestoreOriginalProxySettings();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Error while stopping proxy; attempting system proxy restore");
+            try
+            {
+                if (settings.SetAsSystemProxy)
+                    proxyServer?.RestoreOriginalProxySettings();
+            }
+            catch (Exception restoreEx)
+            {
+                logger.LogWarning(restoreEx, "Failed to restore system proxy settings");
+            }
+        }
+
         // clean up here since we make a new instance every time the service starts
         proxyServer?.Dispose();
         proxyServer = null;

@@ -1,4 +1,3 @@
-#if NET6_0_OR_GREATER
 using System;
 using System.IO;
 using System.Linq;
@@ -93,7 +92,7 @@ public partial class ProxyServer
             async sessionArgs => { await OnAfterResponse(sessionArgs); },
             headers => PrepareRequestHeaders(headers),
             cancellationTokenSource, clientStream.Connection.Id, logger,
-            MaxDecodedHeaderListBytes, EnableRfc8441);
+            MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits);
     }
 
     /// <summary>
@@ -283,7 +282,7 @@ public partial class ProxyServer
             // unlike the HTTP/1.1 path which may still need to copy the body live off the client stream).
             var body = request.CompressBodyAndUpdateContentLength();
 
-            await sessionArgs.HttpClient.SendRequest(Enable100ContinueBehaviour, true, OriginHttpVersionPolicy,
+            await sessionArgs.HttpClient.SendRequest(Enable100ContinueBehaviour, true, sessionArgs.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy,
                 cancellationToken);
 
             if (request.HasBody && !request.ExpectationFailed)
@@ -295,6 +294,14 @@ public partial class ProxyServer
             await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
             sessionArgs.Timing?.MarkResponseHeadersReceived();
 
+            // The origin here is always HTTP/1.1 (see the GetServerConnection call above), so this
+            // response is genuine wire bytes even though the client leg is h2 - the same wire-framing
+            // rules ResponseHandler applies to a plain HTTP/1.1-to-HTTP/1.1 exchange apply here too.
+            // A framing exception intentionally propagates to this method's own catch block below,
+            // which already answers with a clean synthetic 502 when headers have not reached the
+            // client yet - exactly the right behavior for ambiguous origin framing.
+            Http1FramingValidator.Validate(sessionArgs.HttpClient.Response, ResolveHttp1WireFramingSource(sessionArgs),
+                sessionArgs.Server.PolicyModes.AllowAmbiguousFraming);
             sessionArgs.HttpClient.Response.SetOriginalHeaders();
 
             if (!sessionArgs.HttpClient.Response.Locked) await OnBeforeResponse(sessionArgs);
@@ -820,4 +827,3 @@ public partial class ProxyServer
         }
     }
 }
-#endif

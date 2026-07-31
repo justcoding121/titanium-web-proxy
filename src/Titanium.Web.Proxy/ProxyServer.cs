@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
@@ -21,6 +22,7 @@ using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Network.WinAuth;
+using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy;
@@ -48,6 +50,38 @@ public partial class ProxyServer : IDisposable
     private int clientConnectionCount;
 
     /// <summary>
+    ///     Backing field for <see cref="Http3ClientConnectionCount" />.
+    /// </summary>
+    private int http3ClientConnectionCount;
+
+    /// <summary>
+    ///     Global admission counter for the admission gate, incremented/decremented synchronously at
+    ///     <see cref="HandleClient(Socket,ProxyEndPoint)" /> entry/exit. Deliberately independent of
+    ///     <see cref="clientConnectionCount" />: that counter is decremented from a fire-and-forget task
+    ///     behind a hardcoded one-second TIME_WAIT delay in <see cref="TcpClientConnection.Dispose" />,
+    ///     so gating admission on it would reject healthy traffic for a full second after every closed
+    ///     connection.
+    /// </summary>
+    private int admittedClientConnectionCount;
+
+    /// <summary>
+    ///     Number of client connections rejected by the global admission gate (see
+    ///     <see cref="MaxConcurrentClientConnections" />). A single bounded counter, not broken down by
+    ///     endpoint, so it stays cardinality-safe regardless of how many endpoints a host application adds.
+    /// </summary>
+    private long globalAdmissionRejectionCount;
+
+    /// <summary>
+    ///     Number of client connections rejected by a per-endpoint admission gate (see
+    ///     <see cref="ProxyEndPoint.MaxConcurrentClients" />), aggregated across all endpoints into one
+    ///     counter for the same cardinality-safety reason as <see cref="globalAdmissionRejectionCount" />.
+    ///     Per-endpoint rejection counts remain available, without adding label cardinality, via
+    ///     <see cref="ProxyEndPoint.AdmittedClientCount" /> and <see cref="ProxyEndPoint.MaxConcurrentClients" />
+    ///     on each of the caller's own, already-bounded <see cref="ProxyEndPoints" /> instances.
+    /// </summary>
+    private long endpointAdmissionRejectionCount;
+
+    /// <summary>
     ///     Per-session cancellation tokens for in-flight client handlers. Cancelled on Stop/StopAsync
     ///     so active relays do not outlive the listener (issues #919 / #799 / #809).
     /// </summary>
@@ -57,6 +91,11 @@ public partial class ProxyServer : IDisposable
     ///     Backing field for exposed public property.
     /// </summary>
     private int serverConnectionCount;
+
+    /// <summary>
+    ///     Backing field for <see cref="Http3ServerConnectionCount" />.
+    /// </summary>
+    private int http3ServerConnectionCount;
 
     /// <summary>
     ///     Upstream proxy manager.
@@ -132,24 +171,48 @@ public partial class ProxyServer : IDisposable
         BufferPool = new DefaultBufferPool();
         ProxyEndPoints = new List<ProxyEndPoint>();
         TcpConnectionFactory = new TcpConnectionFactory(this);
+        QuicConnectionPool = new Network.Quic.QuicConnectionPool(this);
         if (RunTime.IsWindows && !RunTime.IsUwpOnWindows) SystemProxySettingsManager = new SystemProxyManager();
 
         CertificateManager = new CertificateManager(rootCertificateName, rootCertificateIssuerName,
-            userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin, logger);
+            userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin, logger,
+            () => ResourceLimits.MaxCertificateCacheEntries);
     }
 
     /// <summary>
     ///     An factory that creates tcp connection to server.
     /// </summary>
-    private TcpConnectionFactory TcpConnectionFactory { get; }
+    internal TcpConnectionFactory TcpConnectionFactory { get; }
+
+    /// <summary>
+    ///     Pool of outbound QUIC connections to HTTP/3 origin servers.
+    ///     Drained on proxy stop and disposed with the proxy.
+    /// </summary>
+    internal Network.Quic.QuicConnectionPool QuicConnectionPool { get; }
 
     /// <summary>
     ///     Caches, per upstream host:port, whether the real origin negotiates HTTP/2 via TLS ALPN - so that
     ///     repeat CONNECT tunnels to the same host (very common with real browsers) do not each pay for their
     ///     own redundant probe TLS handshake. See <see cref="Http2OriginCapabilityCache" />.
     /// </summary>
-    private Http2OriginCapabilityCache Http2OriginCapabilityCache { get; } =
+    internal Http2OriginCapabilityCache Http2OriginCapabilityCache { get; } =
         new(TimeSpan.FromMinutes(5));
+
+    /// <summary>
+    ///     Caches, per upstream host:port, whether the real origin supports HTTP/3 (QUIC), as discovered via
+    ///     <c>Alt-Svc</c> response headers or HTTPS/SVCB DNS records. See <see cref="Http3.Http3OriginCapabilityCache" />.
+    /// </summary>
+    internal Http3.Http3OriginCapabilityCache Http3OriginCapabilityCache { get; } = new();
+
+    /// <summary>
+    ///     Removes expired entries from both origin-capability caches. Called from the connection-pool
+    ///     cleanup loop every few seconds so stale origin records do not accumulate indefinitely.
+    /// </summary>
+    internal void TrimOriginCapabilityCaches()
+    {
+        Http2OriginCapabilityCache.TrimExpired();
+        Http3OriginCapabilityCache.TrimExpired();
+    }
 
     /// <summary>
     ///     Manage system proxy settings.
@@ -238,6 +301,95 @@ public partial class ProxyServer : IDisposable
     public bool EnableRfc8441 { get; set; } = false;
 
     /// <summary>
+    ///     Enable HTTP/3 (QUIC) support. When <see langword="true" />:
+    ///     <list type="bullet">
+    ///       <item>
+    ///         <description>
+    ///           Any <c>TransparentQuicProxyEndPoint</c> added to <see cref="ProxyEndPoints" /> is started as
+    ///           a QUIC listener that accepts inbound HTTP/3 connections.
+    ///         </description>
+    ///       </item>
+    ///       <item>
+    ///         <description>
+    ///           With <see cref="UpstreamHttpProtocol.Auto" /> (default), the proxy automatically uses HTTP/3
+    ///           for outbound connections to origins whose Alt-Svc or HTTPS/SVCB capability is cached, falling
+    ///           back to HTTP/2 then HTTP/1.1 on failure.
+    ///         </description>
+    ///       </item>
+    ///     </list>
+    ///     Requires MsQuic native library and a supported operating-system version
+    ///     (<see cref="System.Net.Quic.QuicListener.IsSupported" />). Setting to <see langword="true" /> with
+    ///     no <c>TransparentQuicProxyEndPoint</c> configured emits a warning and skips QUIC initialization.
+    ///     Default: <see langword="false" /> (opt-in).
+    ///     <para>
+    ///         <b>Experimental:</b> HTTP/3 support has not yet completed the full interop/soak/fuzz gate
+    ///         process. Suppress <c>TWP001</c> to opt in; the attribute is removed when the feature
+    ///         graduates to stable.
+    ///     </para>
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
+    public bool EnableHttp3 { get; set; } = false;
+
+    private bool? _enableHttpsSvcbDnsDiscovery;
+
+    /// <summary>
+    ///     When <see langword="true" />, the proxy queries the configured DNS server for an HTTPS/SVCB RR
+    ///     (DNS type 65) before each first connection to an uncached origin in
+    ///     <see cref="Models.UpstreamHttpProtocol.Auto" /> mode. A positive result (ALPN <c>h3</c> found)
+    ///     upgrades the outbound connection to HTTP/3 and caches the result for the record's TTL.
+    ///     Negative results are cached for 1 minute to avoid a DNS round-trip on every request to
+    ///     HTTP/2-only origins.
+    ///     <para>
+    ///         Defaults to <see langword="true" /> whenever <see cref="EnableHttp3" /> is
+    ///         <see langword="true" />, because proactive SVCB discovery is required to use HTTP/3 on the
+    ///         first connection to an origin (before any <c>Alt-Svc</c> header has been received and cached).
+    ///         Set explicitly to <see langword="false" /> to disable DNS discovery even when HTTP/3 is
+    ///         enabled — for example, when the configured DNS server is untrusted or unreachable.
+    ///     </para>
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
+    public bool EnableHttpsSvcbDnsDiscovery
+    {
+        // When the caller has not explicitly set this flag, inherit EnableHttp3 so SVCB discovery
+        // is automatically active for every proxy that opts into HTTP/3.
+        get => _enableHttpsSvcbDnsDiscovery ?? EnableHttp3;
+        set => _enableHttpsSvcbDnsDiscovery = value;
+    }
+
+    /// <summary>
+    ///     When <see langword="true" />, enables RFC 9204 QPACK dynamic table encoding and decoding for
+    ///     inbound HTTP/3 connections. Each connection gets its own <see cref="Http3.Qpack.QpackContext" />
+    ///     with two independent 4096-byte tables (one inbound, one outbound). Defaults to
+    ///     <see langword="false" /> (static-table-only); existing deployments are unaffected.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
+    public bool EnableQpackDynamicTable { get; set; } = false;
+
+    /// <summary>
+    ///     DNS server endpoint used by <see cref="Http3.Dns.UdpSvcbDnsResolver" /> for HTTPS/SVCB
+    ///     queries. Defaults to Google Public DNS (<c>8.8.8.8:53</c>). Override to use a corporate
+    ///     resolver, or set to <c>127.0.0.1:53</c> only when a local recursive resolver is running
+    ///     (the previous default was loopback, which silently disabled cold-path H3 discovery on
+    ///     typical developer machines).
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
+    public IPEndPoint DnsServerEndPoint { get; set; } = new(System.Net.IPAddress.Parse("8.8.8.8"), 53);
+
+    private Http3.Dns.IHttpsSvcbResolver? _httpsSvcbResolver;
+
+    /// <summary>
+    ///     Resolver used to perform HTTPS/SVCB DNS lookups when <see cref="EnableHttpsSvcbDnsDiscovery" />
+    ///     is enabled. Defaults to <see cref="Http3.Dns.UdpSvcbDnsResolver" /> using
+    ///     <see cref="DnsServerEndPoint" />. Replace with a mock in tests.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
+    internal Http3.Dns.IHttpsSvcbResolver HttpsSvcbResolver
+    {
+        get => _httpsSvcbResolver ??= new Http3.Dns.UdpSvcbDnsResolver(DnsServerEndPoint);
+        set => _httpsSvcbResolver = value;
+    }
+
+    /// <summary>
     ///     Should we check for certificate revocation during SSL authentication to servers
     ///     Note: If enabled can reduce performance. Defaults to false.
     /// </summary>
@@ -270,6 +422,18 @@ public partial class ProxyServer : IDisposable
     ///     Default: 65,536 (64 KiB). Advertised via SETTINGS_MAX_HEADER_LIST_SIZE.
     /// </summary>
     public int MaxDecodedHeaderListBytes { get; set; } = 64 * 1024;
+
+    /// <summary>
+    ///     The shared, immutable resource-bound snapshot (concurrent-stream cap, CONTINUATION
+    ///     frame-count/wall-clock bounds, peer-initiated incomplete-stream-reset budget, and the
+    ///     other limits described in <see cref="ProxyResourceLimits" />) consulted by the HTTP/2
+    ///     relay so a single proxy-owned value governs both what is enforced and what is advertised
+    ///     to each peer, rather than admitting purely against whatever the origin advertised.
+    ///     Assign a new <see cref="ProxyResourceLimits" /> (constructed via
+    ///     <see cref="ProxyResourceLimits.Create" />) to override the <see cref="ProxyResourceLimits.Default" />
+    ///     values used otherwise.
+    /// </summary>
+    public ProxyResourceLimits ResourceLimits { get; set; } = ProxyResourceLimits.Default;
 
     /// <summary>
     ///     Maximum bytes the proxy will buffer for a single request or response body when
@@ -360,6 +524,20 @@ public partial class ProxyServer : IDisposable
     public int ConnectTimeOutSeconds { get; set; } = 20;
 
     /// <summary>
+    ///     Seconds to wait for a client to finish sending the request line and headers, from the moment
+    ///     this proxy starts reading a new request on the connection. Enforced with a linked
+    ///     <see cref="System.Threading.CancellationTokenSource" /> around the request-line and header
+    ///     read, not <c>Socket.ReceiveTimeout</c>: that property only bounds a single blocking
+    ///     <c>Receive</c> call, not the asynchronous reads this proxy actually issues, so without this
+    ///     deadline a client that opens a connection and trickles bytes arbitrarily slowly (or stops
+    ///     sending entirely) after the first byte ties up a read loop indefinitely.
+    ///     Default is 0 (disabled), matching every other deadline in this class - no per-session
+    ///     override exists because there is no <see cref="EventArguments.SessionEventArgs" /> for this
+    ///     request yet at the point this deadline applies.
+    /// </summary>
+    public int ClientHeaderTimeoutSeconds { get; set; }
+
+    /// <summary>
     ///     Seconds to wait for the origin to send the response status line and headers after the
     ///     request has been sent. Enforced with a linked <see cref="System.Threading.CancellationTokenSource" />
     ///     (not Socket receive timeout alone). When the deadline elapses a
@@ -397,19 +575,51 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     Maximum number of concurrent connections per remote host in cache.
-    ///     Only valid when connection pooling is enabled.
+    ///     Only meaningful when <see cref="EnableConnectionPool" /> is <see langword="true" />; to
+    ///     disable pooling, set <see cref="EnableConnectionPool" /> to <see langword="false" /> rather
+    ///     than setting this to 0 - the pool eviction loop treats a value below 1 as "evict without
+    ///     limit while holding the pool-wide lock", which spins indefinitely once the cache for that
+    ///     host is empty and would stall every other connection acquire/release in the process.
+    ///     Rejected outright at assignment so that state cannot be reached.
     ///     Default value is 4.
     /// </summary>
-    public int MaxCachedConnections { get; set; } = 4;
+    /// <exception cref="ArgumentOutOfRangeException">The assigned value is less than 1.</exception>
+    public int MaxCachedConnections
+    {
+        get => maxCachedConnections;
+        set
+        {
+            if (value < 1)
+                throw new ArgumentOutOfRangeException(nameof(value), value,
+                    "MaxCachedConnections must be at least 1. To disable connection pooling, set " +
+                    nameof(EnableConnectionPool) + " to false instead.");
+
+            maxCachedConnections = value;
+        }
+    }
+
+    private int maxCachedConnections = 4;
 
     /// <summary>
     ///     SO_LINGER timeout in seconds applied to client and upstream sockets via
     ///     <see cref="LingerOption" /> (enabled with this timeout).
     ///     This is <b>not</b> the kernel TCP TIME_WAIT duration — TIME_WAIT is controlled by the OS.
     ///     A positive value means <c>Close</c> may block up to that many seconds flushing send buffers;
-    ///     use 0 for an abortive close (RST). Default is 30.
+    ///     use 0 for an abortive close (RST). Default is 0 so high-churn proxies avoid TIME_WAIT
+    ///     accumulation; the 1-second connection disposal delay already prefers peer-first close.
     /// </summary>
-    public int TcpTimeWaitSeconds { get; set; } = 30;
+    public int TcpTimeWaitSeconds { get; set; } = 0;
+
+    /// <summary>
+    ///     Enable TCP KeepAlive on client and server sockets so NAT/firewall mappings for
+    ///     long-lived CONNECT tunnels are refreshed. Default: true.
+    /// </summary>
+    public bool EnableTcpKeepAlive { get; set; } = true;
+
+    /// <summary>
+    ///     TCP listener accept backlog. Default: 512 for burst connection handling.
+    /// </summary>
+    public int ListenerBackLog { get; set; } = 512;
 
     /// <summary>
     ///     Should we reuse client/server tcp sockets.
@@ -418,14 +628,61 @@ public partial class ProxyServer : IDisposable
     public bool ReuseSocket { get; set; } = true;
 
     /// <summary>
-    ///     Total number of active client connections.
+    ///     Total number of active TCP client connections.
+    ///     Does not include inbound HTTP/3 (QUIC) clients; see <see cref="Http3ClientConnectionCount" />.
     /// </summary>
     public int ClientConnectionCount => clientConnectionCount;
 
     /// <summary>
-    ///     Total number of active server connections.
+    ///     Total number of active server connections (TCP plus upstream QUIC).
+    ///     For HTTP/3-only upstreams see <see cref="Http3ServerConnectionCount" />.
     /// </summary>
     public int ServerConnectionCount => serverConnectionCount;
+
+    /// <summary>
+    ///     Total number of active inbound HTTP/3 (QUIC) client connections.
+    /// </summary>
+    public int Http3ClientConnectionCount => http3ClientConnectionCount;
+
+    /// <summary>
+    ///     Total number of active upstream HTTP/3 (QUIC) server connections.
+    ///     These are also included in <see cref="ServerConnectionCount" />.
+    /// </summary>
+    public int Http3ServerConnectionCount => http3ServerConnectionCount;
+
+    /// <summary>
+    ///     Maximum number of client connections admitted across all TCP-based endpoints at once.
+    ///     <see langword="null" /> (the default) disables the global admission gate, preserving today's
+    ///     unbounded behavior. When set, a connection beyond this limit is rejected and disposed
+    ///     immediately after accept, before a handler task is even started.
+    ///     <para>
+    ///         Enforced independently of <see cref="ClientConnectionCount" />: see
+    ///         <see cref="admittedClientConnectionCount" /> for why. See also
+    ///         <see cref="ProxyEndPoint.MaxConcurrentClients" /> for a per-endpoint cap layered on top of
+    ///         this global one.
+    ///     </para>
+    /// </summary>
+    public int? MaxConcurrentClientConnections { get; set; }
+
+    /// <summary>
+    ///     Number of client connections currently admitted (accepted and past the admission gate, not
+    ///     yet finished being handled), across all TCP-based endpoints. Unlike
+    ///     <see cref="ClientConnectionCount" />, this drops to zero as soon as the handler returns,
+    ///     without the trailing TIME_WAIT delay.
+    /// </summary>
+    public int AdmittedClientConnectionCount => Volatile.Read(ref admittedClientConnectionCount);
+
+    /// <summary>
+    ///     Total number of client connections rejected by <see cref="MaxConcurrentClientConnections" />
+    ///     since this instance was created.
+    /// </summary>
+    public long GlobalAdmissionRejectionCount => Interlocked.Read(ref globalAdmissionRejectionCount);
+
+    /// <summary>
+    ///     Total number of client connections rejected by any endpoint's
+    ///     <see cref="ProxyEndPoint.MaxConcurrentClients" /> since this instance was created.
+    /// </summary>
+    public long EndpointAdmissionRejectionCount => Interlocked.Read(ref endpointAdmissionRejectionCount);
 
     /// <summary>
     ///     Realm used during Proxy Basic Authentication.
@@ -434,21 +691,110 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     List of supported Ssl versions.
+    ///     <para>
+    ///         Defaults to TLS 1.2/1.3 only as of 5.0 - a breaking change from 4.x, which also enabled
+    ///         SSL 3.0/TLS 1.0/1.1. Those legacy, broken-by-design protocols require an explicit opt-in
+    ///         by assigning this property directly (e.g. <c>SslProtocols.Tls | SslProtocols.Tls11 |
+    ///         SslProtocols.Tls12 | SslProtocols.Tls13</c>) if a legacy client/server genuinely requires
+    ///         them.
+    ///     </para>
     /// </summary>
-#pragma warning disable CS0618, SYSLIB0039 // SSL 3.0/TLS 1.0/1.1 remain opt-in defaults for legacy proxy compatibility.
-    public SslProtocols SupportedSslProtocols { get; set; } =
-        SslProtocols.Ssl3 | SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12
-#if NET6_0_OR_GREATER
-        | SslProtocols.Tls13
-#endif
-        ;
-#pragma warning restore CS0618, SYSLIB0039
+    public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls12 | SslProtocols.Tls13;
 
     /// <summary>
     ///     List of supported Server Ssl versions.
     ///     Using SslProtocol.None means to require the same SSL protocol as the proxy client.
     /// </summary>
     public SslProtocols SupportedServerSslProtocols { get; set; } = SslProtocols.None;
+
+    /// <summary>
+    ///     Outbound destination policy hook: when <see langword="true" />, every resolved destination
+    ///     IP address is checked against loopback, private (RFC 1918/4193), link-local (which subsumes
+    ///     the 169.254.169.254 cloud metadata endpoint), and other non-globally-routable ranges before
+    ///     connecting, and the connection attempt is rejected with an
+    ///     <see cref="Exceptions.OutboundDestinationBlockedException" /> if it matches.
+    ///     <para>
+    ///         Off by default: blocking private destinations would break this library's most common
+    ///         configurations, including upstream-proxy chaining to <c>localhost</c> and interception of
+    ///         local development servers. Only enable this when the proxy accepts requests from
+    ///         untrusted clients (an SSRF-relevant deployment), where those same destinations become an
+    ///         attacker-reachable pivot into the host's private network instead of an operator's own
+    ///         intentional configuration.
+    ///     </para>
+    ///     <para>
+    ///         An explicitly configured upstream proxy address (<see cref="UpStreamHttpProxy" />,
+    ///         <see cref="UpStreamHttpsProxy" />, or a per-session external proxy) is always exempt -
+    ///         that address is operator intent, not attacker-controlled. Checked against the resolved
+    ///         address actually used to connect (no re-resolution afterward, which would make the check
+    ///         a TOCTOU no-op against DNS rebinding). Not currently enforced for a SOCKS upstream with
+    ///         <c>ProxyDnsRequests</c> enabled, since the proxy never resolves the origin itself in that
+    ///         mode and has no address of its own to validate.
+    ///     </para>
+    /// </summary>
+    public bool BlockPrivateNetworkDestinations { get; set; }
+
+    /// <summary>
+    ///     Which resource-bound <see cref="PolicyFamily" /> is enforced, observed, or disabled, per
+    ///     the plan's rollout section. Read live by each family's enforcement call site - not baked
+    ///     into a per-request snapshot at connection accept time - so assigning a new value here (a
+    ///     whole-object replacement, never a mutation of the previous instance) takes effect for the
+    ///     next check any in-flight or new request makes, without restarting the proxy. This is the
+    ///     "runtime switch to drop to Observe without redeploying" the plan requires; see
+    ///     <see cref="ProxyPolicyModes.WithAllObservedExceptDisabled" /> for the one-call way to do that.
+    ///     <para>
+    ///         Defaults to <see cref="ProxyPolicyModes.AllEnforce" />, matching <see cref="ProxyProfile.Balanced" />.
+    ///         Assigning <see cref="Profile" /> also replaces this value with that profile's bundle;
+    ///         assign <see cref="PolicyModes" /> afterward to deviate from the selected profile's modes
+    ///         without changing anything else the profile set.
+    ///     </para>
+    /// </summary>
+    public ProxyPolicyModes PolicyModes
+    {
+        get => policyModes;
+        set => policyModes = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    private ProxyPolicyModes policyModes = ProxyPolicyModes.AllEnforce;
+
+    /// <summary>
+    ///     The last profile applied via this property's setter, defaulting to
+    ///     <see cref="ProxyProfile.Balanced" /> - the profile every field on this instance already
+    ///     starts at, so a fresh <c>new ProxyServer()</c> reports <see cref="ProxyProfile.Balanced" />
+    ///     without needing its setter to run once at construction time.
+    ///     <para>
+    ///         Assigning this property applies its entire <see cref="ProxyProfileSettings" /> bundle -
+    ///         <see cref="ResourceLimits" />, <see cref="PolicyModes" />, <see cref="SupportedSslProtocols" />,
+    ///         <see cref="BlockPrivateNetworkDestinations" />, <see cref="MaxConcurrentClientConnections" />
+    ///         and the deadline-seconds properties - as a single atomic assignment, so a reader can
+    ///         never observe a half-applied profile. Assigning any of those properties individually
+    ///         afterward overrides just that one, without reverting the rest of the profile's bundle.
+    ///     </para>
+    ///     <para>
+    ///         Logged once per <see cref="Start" /> call, by name only - never with hosts, URLs or
+    ///         secrets, per the plan's rollout section.
+    ///     </para>
+    /// </summary>
+    public ProxyProfile Profile
+    {
+        get => profile;
+        set
+        {
+            var settings = ProxyProfileSettings.For(value);
+            ResourceLimits = settings.ResourceLimits;
+            policyModes = settings.PolicyModes;
+            SupportedSslProtocols = settings.SupportedSslProtocols;
+            BlockPrivateNetworkDestinations = settings.BlockPrivateNetworkDestinations;
+            MaxConcurrentClientConnections = settings.MaxConcurrentClientConnections;
+            ClientHeaderTimeoutSeconds = settings.ClientHeaderTimeoutSeconds;
+            ResponseHeaderTimeoutSeconds = settings.ResponseHeaderTimeoutSeconds;
+            IdleReadTimeoutSeconds = settings.IdleReadTimeoutSeconds;
+            IdleWriteTimeoutSeconds = settings.IdleWriteTimeoutSeconds;
+            RequestTimeoutSeconds = settings.RequestTimeoutSeconds;
+            profile = value;
+        }
+    }
+
+    private ProxyProfile profile = ProxyProfile.Balanced;
 
     /// <summary>
     ///     The buffer pool used throughout this proxy instance.
@@ -645,6 +991,16 @@ public partial class ProxyServer : IDisposable
     public event EventHandler? ServerConnectionCountChanged;
 
     /// <summary>
+    ///     Event occurs when inbound HTTP/3 client connection count changed.
+    /// </summary>
+    public event EventHandler? Http3ClientConnectionCountChanged;
+
+    /// <summary>
+    ///     Event occurs when upstream HTTP/3 server connection count changed.
+    /// </summary>
+    public event EventHandler? Http3ServerConnectionCountChanged;
+
+    /// <summary>
     ///     Event to override the default verification logic of remote SSL certificate received during authentication.
     /// </summary>
     public event AsyncEventHandler<CertificateValidationEventArgs>? ServerCertificateValidationCallback;
@@ -677,6 +1033,15 @@ public partial class ProxyServer : IDisposable
     ///     without buffering the whole body. Do not combine with SessionEventArgs.GetResponseBody (which buffers).
     /// </summary>
     public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnResponseBodyWrite;
+
+    internal bool HasOnRequestBodyWriteSubscribers => OnRequestBodyWrite != null;
+    internal bool HasOnResponseBodyWriteSubscribers => OnResponseBodyWrite != null;
+
+    internal Task InvokeOnRequestBodyWriteAsync(object sender, BeforeBodyWriteEventArgs args) =>
+        OnRequestBodyWrite?.Invoke(sender, args) ?? Task.CompletedTask;
+
+    internal Task InvokeOnResponseBodyWriteAsync(object sender, BeforeBodyWriteEventArgs args) =>
+        OnResponseBodyWrite?.Invoke(sender, args) ?? Task.CompletedTask;
 
     /// <summary>
     ///     Intercept after response event from server.
@@ -715,7 +1080,15 @@ public partial class ProxyServer : IDisposable
 
         ProxyEndPoints.Add(endPoint);
 
-        if (ProxyRunning) Listen(endPoint);
+        if (ProxyRunning && endPoint is TransparentQuicProxyEndPoint quicEndPoint)
+        {
+            quicListenerCts ??= new CancellationTokenSource();
+            ListenQuic(quicEndPoint);
+        }
+        else if (ProxyRunning)
+        {
+            Listen(endPoint);
+        }
     }
 
     /// <summary>
@@ -730,7 +1103,10 @@ public partial class ProxyServer : IDisposable
 
         ProxyEndPoints.Remove(endPoint);
 
-        if (ProxyRunning) QuitListen(endPoint);
+        if (ProxyRunning && endPoint is TransparentQuicProxyEndPoint quicEndPoint)
+            QuitListenQuic(quicEndPoint);
+        else if (ProxyRunning)
+            QuitListen(endPoint);
     }
 
     /// <summary>
@@ -886,6 +1262,8 @@ public partial class ProxyServer : IDisposable
                             Please manually configure your operating system to use this proxy's port and address.");
 
         SystemProxySettingsManager.RestoreOriginalSettings();
+
+        ClearEndpointSystemProxyFlags(ProxyProtocolType.AllHttp);
     }
 
     /// <summary>
@@ -898,6 +1276,12 @@ public partial class ProxyServer : IDisposable
                             Please manually configure your operating system to use this proxy's port and address.");
 
         SystemProxySettingsManager.RemoveProxy(protocolType);
+
+        // Without this, an endpoint's IsSystemHttpProxy/IsSystemHttpsProxy stays true after the
+        // corresponding registry setting has already been cleared, so a later SetAsSystemProxy call
+        // for the other protocol - or Stop()'s own best-effort registry cleanup - can read stale flags
+        // that no longer reflect the actual system proxy configuration.
+        ClearEndpointSystemProxyFlags(protocolType);
     }
 
     /// <summary>
@@ -910,10 +1294,39 @@ public partial class ProxyServer : IDisposable
                             Please manually confugure you operating system to use this proxy's port and address.");
 
         SystemProxySettingsManager.DisableAllProxy();
+
+        ClearEndpointSystemProxyFlags(ProxyProtocolType.AllHttp);
+    }
+
+    /// <summary>
+    ///     Clears <see cref="ExplicitProxyEndPoint.IsSystemHttpProxy" />/
+    ///     <see cref="ExplicitProxyEndPoint.IsSystemHttpsProxy" /> on every endpoint for the protocol(s)
+    ///     named in <paramref name="protocolType" />, so those flags never outlive the registry setting
+    ///     they were tracking.
+    /// </summary>
+    private void ClearEndpointSystemProxyFlags(ProxyProtocolType protocolType)
+    {
+        var clearHttp = protocolType.HasFlag(ProxyProtocolType.Http);
+        var clearHttps = protocolType.HasFlag(ProxyProtocolType.Https);
+        if (!clearHttp && !clearHttps) return;
+
+        foreach (var endPoint in ProxyEndPoints.OfType<ExplicitProxyEndPoint>())
+        {
+            if (clearHttp) endPoint.IsSystemHttpProxy = false;
+            if (clearHttps) endPoint.IsSystemHttpsProxy = false;
+        }
     }
 
     /// <summary>
     ///     Start this proxy server instance.
+    ///     <para>
+    ///         Transactional: if any endpoint fails to start, every listener this call already
+    ///         started is stopped, the system-upstream-proxy resolver (if this call created one) is
+    ///         disposed, and <see cref="ProxyRunning" /> is left <see langword="false" /> before the
+    ///         exception propagates. A caller that catches the exception is left with an instance in
+    ///         exactly the same state as before calling <see cref="Start" />, not a partially-bound
+    ///         proxy with some endpoints silently listening.
+    ///     </para>
     /// </summary>
     /// <param name="changeSystemProxySettings">
     ///     Whether or not clear any system proxy settings which is pointing to our own endpoint (causing a cycle).
@@ -952,6 +1365,7 @@ public partial class ProxyServer : IDisposable
             }
         }
 
+        var assignedSystemUpStreamResolver = false;
         if (RunTime.IsWindows && ForwardToUpstreamGateway && GetCustomUpStreamProxyFunc == null &&
             SystemProxySettingsManager != null)
         {
@@ -964,13 +1378,97 @@ public partial class ProxyServer : IDisposable
                 systemProxyResolver.LoadFromIe();
 
             GetCustomUpStreamProxyFunc = GetSystemUpStreamProxy;
+            assignedSystemUpStreamResolver = true;
         }
 
         ProxyRunning = true;
 
+        // Name only, per the plan's rollout section - never hosts, URLs or secrets.
+        ProxyLog.EffectiveProfileAtStartup(logger, profile, policyModes);
+
         CertificateManager.ClearIdleCertificates();
 
-        foreach (var endPoint in ProxyEndPoints) Listen(endPoint);
+        var startedTcpEndPoints = new List<ProxyEndPoint>();
+        var startedQuicEndPoints = new List<TransparentQuicProxyEndPoint>();
+        var createdQuicListenerCts = false;
+
+        try
+        {
+            if (EnableHttp3 && ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>().Any())
+            {
+                quicListenerCts = new CancellationTokenSource();
+                createdQuicListenerCts = true;
+                foreach (var quicEndPoint in ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>())
+                {
+                    ListenQuic(quicEndPoint);
+                    startedQuicEndPoints.Add(quicEndPoint);
+                }
+            }
+            else if (EnableHttp3)
+            {
+                Logger.LogWarning(
+                    "EnableHttp3 is true but no TransparentQuicProxyEndPoint is registered. " +
+                    "Add a TransparentQuicProxyEndPoint to ProxyEndPoints before calling Start().");
+            }
+
+            foreach (var endPoint in ProxyEndPoints)
+            {
+                Listen(endPoint);
+                startedTcpEndPoints.Add(endPoint);
+            }
+        }
+        catch (Exception)
+        {
+            // Roll back, in reverse dependency order, everything this call already started.
+            // QuitListen/QuitListenQuic tolerate a listener that never started (no-op), so it is
+            // safe to call them uniformly rather than re-deriving exactly how far each one got.
+            foreach (var quicEndPoint in startedQuicEndPoints) SafeRollback(() => QuitListenQuic(quicEndPoint));
+            foreach (var endPoint in startedTcpEndPoints) SafeRollback(() => QuitListen(endPoint));
+
+            if (createdQuicListenerCts)
+            {
+                SafeRollback(() => quicListenerCts?.Cancel());
+                SafeRollback(() => quicListenerCts?.Dispose());
+                quicListenerCts = null;
+            }
+
+            if (assignedSystemUpStreamResolver)
+            {
+                if (OperatingSystem.IsWindows())
+                    try
+                    {
+                        systemProxyResolver?.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        OnException(null, ex);
+                    }
+
+                systemProxyResolver = null;
+                GetCustomUpStreamProxyFunc = null;
+            }
+
+            ProxyRunning = false;
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     Runs a single <see cref="Start" /> rollback step, reporting rather than propagating a
+    ///     failure so one misbehaving teardown step cannot mask the original failure or abandon the
+    ///     rest of the rollback.
+    /// </summary>
+    private void SafeRollback(Action rollbackStep)
+    {
+        try
+        {
+            rollbackStep();
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+        }
     }
 
     /// <summary>
@@ -1000,10 +1498,14 @@ public partial class ProxyServer : IDisposable
 
         var timeout = drainTimeout ?? TimeSpan.FromSeconds(5);
         var deadline = DateTime.UtcNow + timeout;
-        while (ClientConnectionCount > 0 && DateTime.UtcNow < deadline)
+        // Http3ClientConnectionCount tracks inbound QUIC clients separately from
+        // ClientConnectionCount (TCP-based H1/H2); draining only the former would let this
+        // return, and the pools below get cleared, while HTTP/3 streams are still in flight.
+        while ((ClientConnectionCount > 0 || Http3ClientConnectionCount > 0) && DateTime.UtcNow < deadline)
             await Task.Delay(50).ConfigureAwait(false);
 
         TcpConnectionFactory.ClearPools();
+        await QuicConnectionPool.DrainAsync();
     }
 
     private void StopCore(bool cancelSessions, bool clearPools)
@@ -1012,10 +1514,19 @@ public partial class ProxyServer : IDisposable
 
         if (RunTime.IsWindows && SystemProxySettingsManager != null)
         {
-            var setAsSystemProxy = ProxyEndPoints.OfType<ExplicitProxyEndPoint>()
-                .Any(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy);
+            var systemProxyEndPoints = ProxyEndPoints.OfType<ExplicitProxyEndPoint>()
+                .Where(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy)
+                .ToList();
 
-            if (setAsSystemProxy) SystemProxySettingsManager.RestoreOriginalSettings();
+            if (systemProxyEndPoints.Count > 0)
+            {
+                SystemProxySettingsManager.RestoreOriginalSettings();
+                foreach (var endPoint in systemProxyEndPoints)
+                {
+                    endPoint.IsSystemHttpProxy = false;
+                    endPoint.IsSystemHttpsProxy = false;
+                }
+            }
         }
 
         // Prevent accept callbacks from scheduling another accept while listeners are stopping.
@@ -1025,11 +1536,34 @@ public partial class ProxyServer : IDisposable
 
         foreach (var endPoint in ProxyEndPoints) QuitListen(endPoint);
 
+        // Cancel and wait for QUIC accept loops to exit.
+        quicListenerCts?.Cancel();
+        foreach (var quicEndPoint in ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>())
+            QuitListenQuic(quicEndPoint);
+        quicListenerCts?.Dispose();
+        quicListenerCts = null;
+
         // Keep ProxyEndPoints so Start() can re-bind the same listeners (issue #799).
 
         CertificateManager?.StopClearIdleCertificates();
 
         if (clearPools) TcpConnectionFactory.ClearPools();
+        if (clearPools) QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
+
+        // Start() may have wired GetCustomUpStreamProxyFunc to GetSystemUpStreamProxy and created
+        // systemProxyResolver to back it. Undo both together: leaving the callback in place while
+        // disposing its resolver below would make a subsequent Start() see GetCustomUpStreamProxyFunc
+        // != null and skip creating a fresh resolver, so the callback would call into a disposed
+        // WinHttpWebProxyFinder on the first request after restart. Only clear the callback if it is
+        // still the delegate we assigned - a caller who has since replaced it with their own must not
+        // have that overwritten here.
+        if (Equals(GetCustomUpStreamProxyFunc, (Func<SessionEventArgsBase, Task<IExternalProxy?>>)GetSystemUpStreamProxy))
+            GetCustomUpStreamProxyFunc = null;
+
+        // Release the WinHTTP session handle acquired during Start() (Windows-only type).
+        if (OperatingSystem.IsWindows())
+            systemProxyResolver?.Dispose();
+        systemProxyResolver = null;
     }
 
     internal void RegisterSessionCancellation(CancellationTokenSource cancellationTokenSource)
@@ -1068,7 +1602,7 @@ public partial class ProxyServer : IDisposable
 
         try
         {
-            endPoint.Listener.Start();
+            endPoint.Listener.Start(ListenerBackLog);
 
             endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
 
@@ -1150,34 +1684,121 @@ public partial class ProxyServer : IDisposable
         {
             if (ProxyRunning)
             {
-                try
+                // Gate before spending anything on this socket beyond the accept itself: a rejected
+                // connection is disposed immediately, without a handler task ever being scheduled.
+                if (!TryAdmitClientConnection(endPoint))
                 {
-                    tcpClient.NoDelay = NoDelay;
+                    tcpClient.Dispose();
                 }
-                catch (Exception ex)
+                else
                 {
-                    OnException(null, ex);
-                }
-
-                var acceptedClient = tcpClient;
-                Task.Run(async () =>
-                {
-                    // HandleClient runs detached (fire-and-forget); an unobserved exception here would
-                    // otherwise never surface anywhere and, depending on the .NET unobserved-task-
-                    // exception policy, could tear down the process. Always report it instead.
                     try
                     {
-                        await HandleClient(acceptedClient, endPoint);
+                        tcpClient.NoDelay = NoDelay;
                     }
                     catch (Exception ex)
                     {
-                        ProxyDiagnostics.ReportException(logger, "Unhandled exception while handling a client connection", ex);
+                        OnException(null, ex);
                     }
-                });
+
+                    var acceptedClient = tcpClient;
+                    Task.Run(async () =>
+                    {
+                        // HandleClient runs detached (fire-and-forget); an unobserved exception here would
+                        // otherwise never surface anywhere and, depending on the .NET unobserved-task-
+                        // exception policy, could tear down the process. Always report it instead.
+                        try
+                        {
+                            await HandleClient(acceptedClient, endPoint);
+                        }
+                        catch (Exception ex)
+                        {
+                            ProxyDiagnostics.ReportException(logger, "Unhandled exception while handling a client connection", ex);
+                        }
+                        finally
+                        {
+                            // Synchronous, unconditional release: never tied to the TIME_WAIT-delayed
+                            // decrement in TcpClientConnection.Dispose, so a burst of short-lived
+                            // connections cannot starve admission for a following burst.
+                            ReleaseClientConnection(endPoint);
+                        }
+                    });
+                }
             }
             else
                 tcpClient.Dispose();
         }
+    }
+
+    /// <summary>
+    ///     Admission gate evaluated synchronously before an accepted socket is dispatched to a handler
+    ///     task. Checks the global cap first, then the endpoint-specific one; a rejection anywhere
+    ///     rolls back only what this call itself admitted; released via
+    ///     <see cref="ReleaseClientConnection" /> once the corresponding handler completes.
+    /// </summary>
+    private bool TryAdmitClientConnection(ProxyEndPoint endPoint)
+    {
+        var mode = policyModes[PolicyFamily.AdmissionControl];
+
+        if (!TryAdmitGlobal(mode))
+        {
+            Interlocked.Increment(ref globalAdmissionRejectionCount);
+            ProxyMetrics.ConnectionRejected("global limit");
+            ProxyLog.ClientConnectionAdmissionRejected(logger, endPoint, "global limit");
+            return false;
+        }
+
+        if (!endPoint.TryAdmitClient(mode))
+        {
+            ReleaseGlobal();
+            Interlocked.Increment(ref endpointAdmissionRejectionCount);
+            ProxyMetrics.ConnectionRejected("endpoint limit");
+            ProxyLog.ClientConnectionAdmissionRejected(logger, endPoint, "endpoint limit");
+            return false;
+        }
+
+        ProxyMetrics.ConnectionAdmitted();
+        return true;
+    }
+
+    /// <summary>
+    ///     Releases the admission slot acquired by a prior successful <see cref="TryAdmitClientConnection" />
+    ///     call for the same endpoint. Must be called exactly once per admitted connection, regardless of
+    ///     whether its handler completed normally or threw.
+    /// </summary>
+    private void ReleaseClientConnection(ProxyEndPoint endPoint)
+    {
+        ProxyMetrics.ConnectionReleased();
+        ReleaseGlobal();
+        endPoint.ReleaseClient();
+    }
+
+    /// <summary>
+    ///     Enforces <see cref="MaxConcurrentClientConnections" /> per <paramref name="mode" />: under
+    ///     <see cref="PolicyMode.Enforce" />, a breach returns <see langword="false" /> without
+    ///     admitting; under <see cref="PolicyMode.Observe" />, the breach is recorded but the
+    ///     connection is still admitted; under <see cref="PolicyMode.Disabled" />, the limit is not
+    ///     consulted at all.
+    /// </summary>
+    private bool TryAdmitGlobal(PolicyMode mode)
+    {
+        while (true)
+        {
+            var current = Volatile.Read(ref admittedClientConnectionCount);
+            if (mode != PolicyMode.Disabled && MaxConcurrentClientConnections is { } limit && current >= limit)
+            {
+                ProxyMetrics.PolicyBreach(PolicyFamily.AdmissionControl, mode);
+                if (mode == PolicyMode.Enforce) return false;
+            }
+
+            if (Interlocked.CompareExchange(ref admittedClientConnectionCount, current + 1, current) == current)
+                return true;
+        }
+    }
+
+    private void ReleaseGlobal()
+    {
+        Interlocked.Decrement(ref admittedClientConnectionCount);
     }
 
     /// <summary>
@@ -1242,6 +1863,9 @@ public partial class ProxyServer : IDisposable
         tcpClientSocket.SendTimeout = ConnectionTimeOutSeconds * 1000;
 
         tcpClientSocket.LingerState = new LingerOption(true, TcpTimeWaitSeconds);
+
+        if (EnableTcpKeepAlive)
+            tcpClientSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 
         await InvokeClientConnectionCreateEvent(tcpClientSocket);
 
@@ -1320,6 +1944,48 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
+    ///     Update inbound HTTP/3 client connection count.
+    /// </summary>
+    /// <param name="increment">Should we increment/decrement?</param>
+    internal void UpdateHttp3ClientConnectionCount(bool increment)
+    {
+        if (increment)
+            Interlocked.Increment(ref http3ClientConnectionCount);
+        else
+            Interlocked.Decrement(ref http3ClientConnectionCount);
+
+        try
+        {
+            Http3ClientConnectionCountChanged?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+        }
+    }
+
+    /// <summary>
+    ///     Update upstream HTTP/3 server connection count.
+    /// </summary>
+    /// <param name="increment">Should we increment/decrement?</param>
+    internal void UpdateHttp3ServerConnectionCount(bool increment)
+    {
+        if (increment)
+            Interlocked.Increment(ref http3ServerConnectionCount);
+        else
+            Interlocked.Decrement(ref http3ServerConnectionCount);
+
+        try
+        {
+            Http3ServerConnectionCountChanged?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+        }
+    }
+
+    /// <summary>
     ///     Invoke client tcp connection events if subscribed by API user.
     /// </summary>
     /// <param name="clientSocket">The TcpClient object.</param>
@@ -1351,6 +2017,16 @@ public partial class ProxyServer : IDisposable
         return new RetryPolicy<T>(NetworkFailureRetryAttempts, TcpConnectionFactory);
     }
 
+    /// <summary>
+    ///     Connection retry policy that respects the per-session
+    ///     <see cref="SessionEventArgs.NetworkFailureRetryAttempts" /> override when set.
+    /// </summary>
+    private RetryPolicy<T> RetryPolicy<T>(SessionEventArgs? sessionOverride) where T : Exception
+    {
+        var attempts = sessionOverride?.NetworkFailureRetryAttempts ?? NetworkFailureRetryAttempts;
+        return new RetryPolicy<T>(attempts, TcpConnectionFactory);
+    }
+
     private bool disposed;
 
     public void Dispose()
@@ -1380,8 +2056,22 @@ public partial class ProxyServer : IDisposable
             // ignore
         }
 
+        try
+        {
+            QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // ignore
+        }
+
         CertificateManager?.Dispose();
         BufferPool?.Dispose();
+
+        // SystemProxyManager is [SupportedOSPlatform("windows")]; the platform analyzer cannot
+        // prove that from a null-conditional access alone, so guard explicitly (mirrors the
+        // Start() rollback path below).
+        if (RunTime.IsWindows) SystemProxySettingsManager?.Dispose();
 
         if (ownsActiveLoggerFactory)
             try

@@ -321,9 +321,6 @@ public partial class ProxyServer
     /// </summary>
     private static (string Host, int Port) ParseHostAndPort(string authority, int defaultPort)
     {
-        var idx = authority.LastIndexOf(':');
-        return idx < 0
-            ? (authority, defaultPort)
-            : (authority.Substring(0, idx), int.Parse(authority.Substring(idx + 1)));
+        return AuthorityParser.Parse(authority, defaultPort);
     }
 }

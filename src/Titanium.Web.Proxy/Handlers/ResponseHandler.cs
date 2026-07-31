@@ -2,10 +2,12 @@ using System;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.WinAuth.Security;
@@ -85,6 +87,29 @@ public partial class ProxyServer
 
         if (response.StatusCode == (int)HttpStatusCode.ProxyAuthenticationRequired)
             await Handle407ProxyAuthorization(args);
+
+        // Validate wire framing (Content-Length/Transfer-Encoding ambiguity) before anything -
+        // SetOriginalHeaders, BeforeResponse, body reads, forwarding, pooling - can observe
+        // pre-normalization values. The proxy is the recipient of this origin response, so a
+        // framing-ambiguous response can never be safely relayed or its server connection reused/
+        // pooled/retried: report it to our own client as a gateway failure (502), not as whatever
+        // status a compliant *origin* would have used for a malformed request.
+        try
+        {
+            Http1FramingValidator.Validate(response, ResolveHttp1WireFramingSource(args),
+                args.Server.PolicyModes.AllowAmbiguousFraming);
+        }
+        catch (Http1FramingException framingEx)
+        {
+            ProxyMetrics.ParserError("framing");
+            args.Exception = framingEx;
+            ProxyDiagnostics.ReportBenign(logger, "Origin response has ambiguous HTTP/1 framing", framingEx);
+            args.GenericResponse($"Bad Gateway. {framingEx.Message}", HttpStatusCode.BadGateway,
+                closeServerConnection: true);
+            await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+            args.IsClientResponseCommitted = true;
+            return;
+        }
 
         // save original values so that if user changes them
         // we can still use original values when syphoning out data from attached tcp connection.
@@ -198,17 +223,16 @@ public partial class ProxyServer
                 var serverStream = args.HttpClient.Connection.Stream;
                 try
                 {
-                    using var idleScope = ProxyTimeoutScope.Create(cancellationToken,
+                    using var idleDeadline = args.Deadlines.Start(cancellationToken,
                         ResolveIdleReadTimeout(args), ProxyTimeoutKind.IdleRead);
                     try
                     {
                         await serverStream.CopyBodyAsync(response, false, clientStream, TransformationMode.None,
-                            false, args, idleScope.Token);
+                            false, args, idleDeadline.Token);
                     }
-                    catch (Exception ex) when (ex is OperationCanceledException || idleScope.IsTimedOut())
+                    catch (OperationCanceledException ex)
                     {
-                        idleScope.ThrowIfTimedOut(ex);
-                        throw;
+                        idleDeadline.ThrowIfTimedOut(ex);
                     }
                 }
                 catch (ProxyTimeoutException ex)
@@ -233,15 +257,14 @@ public partial class ProxyServer
         var kind = headerTimeout.HasValue ? ProxyTimeoutKind.ResponseHeader : ProxyTimeoutKind.IdleRead;
         var timeout = headerTimeout ?? ResolveIdleReadTimeout(args);
 
-        using var scope = ProxyTimeoutScope.Create(cancellationToken, timeout, kind);
+        using var deadline = args.Deadlines.Start(cancellationToken, timeout, kind);
         try
         {
-            await args.HttpClient.ReceiveResponse(scope.Token);
+            await args.HttpClient.ReceiveResponse(deadline.Token);
         }
-        catch (Exception ex) when (ex is OperationCanceledException || scope.IsTimedOut())
+        catch (OperationCanceledException ex)
         {
-            scope.ThrowIfTimedOut(ex);
-            throw;
+            deadline.ThrowIfTimedOut(ex);
         }
     }
 
@@ -309,6 +332,9 @@ public partial class ProxyServer
     private async Task OnAfterResponse(SessionEventArgs args)
     {
         if (AfterResponse != null) await AfterResponse.InvokeAsync(this, args, logger);
+
+        // Process Alt-Svc header to cache HTTP/3 capability for future requests.
+        TryUpdateHttp3CapabilityFromResponse(args);
 
         // Marked after the user event (rather than before) so that TotalDuration/ResponseDeliveryDuration
         // include any time spent in an AfterResponse handler, matching what a caller actually experienced.

@@ -10,6 +10,16 @@ namespace Titanium.Web.Proxy;
 public partial class ProxyServer
 {
     /// <summary>
+    ///     Effective client request-line/header deadline, or null when disabled. No per-session override
+    ///     exists: this deadline covers the read that happens before any <see cref="SessionEventArgs" />
+    ///     for the request exists to override it on.
+    /// </summary>
+    internal TimeSpan? ResolveClientHeaderTimeout()
+    {
+        return ClientHeaderTimeoutSeconds > 0 ? TimeSpan.FromSeconds(ClientHeaderTimeoutSeconds) : null;
+    }
+
+    /// <summary>
     ///     Effective response-header deadline for <paramref name="args" />, or null when disabled /
     ///     exempt (WebSocket, SSE, already-committed client response).
     /// </summary>

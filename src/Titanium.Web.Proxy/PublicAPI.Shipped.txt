@@ -1,0 +1,1054 @@
+﻿#nullable enable
+[TWP001]override Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.GenericCertificateName.get -> string!
+[TWP001]override Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.GenericCertificateName.set -> void
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.AllowHttpProtocolTranslation.get -> bool
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.AllowHttpProtocolTranslation.set -> void
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.CustomUpStreamProxy.get -> Titanium.Web.Proxy.Models.IExternalProxy?
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.CustomUpStreamProxy.set -> void
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.ForwardHost.get -> string!
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.ForwardHost.set -> void
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.ForwardPort.get -> int
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.ForwardPort.set -> void
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.LocalEndPoint.get -> System.Net.IPEndPoint!
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.OriginalDestinationHost.get -> string!
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.OriginalDestinationPort.get -> int
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.Reject() -> void
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.RemoteEndPoint.get -> System.Net.IPEndPoint!
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.SniHostName.get -> string?
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.UpstreamHttpProtocol.get -> Titanium.Web.Proxy.Models.UpstreamHttpProtocol
+[TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.UpstreamHttpProtocol.set -> void
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.AdvertiseToHttpClients.get -> bool
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.AdvertiseToHttpClients.set -> void
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.BeforeQuicAuthenticate -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs!>?
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.HandshakeTimeout.get -> System.TimeSpan
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.HandshakeTimeout.set -> void
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.IdleTimeout.get -> System.TimeSpan
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.IdleTimeout.set -> void
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.MaxInboundBidirectionalStreams.get -> int
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.MaxInboundBidirectionalStreams.set -> void
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.MaxInboundUnidirectionalStreams.get -> int
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.MaxInboundUnidirectionalStreams.set -> void
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.OriginalDestinationResolver.get -> Titanium.Web.Proxy.Network.Quic.IOriginalDestinationResolver?
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.OriginalDestinationResolver.set -> void
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.TransparentQuicProxyEndPoint(int port) -> void
+[TWP001]Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.TransparentQuicProxyEndPoint(System.Net.IPAddress! ipAddress, int port) -> void
+[TWP001]Titanium.Web.Proxy.ProxyServer.DnsServerEndPoint.get -> System.Net.IPEndPoint!
+[TWP001]Titanium.Web.Proxy.ProxyServer.DnsServerEndPoint.set -> void
+[TWP001]Titanium.Web.Proxy.ProxyServer.EnableHttp3.get -> bool
+[TWP001]Titanium.Web.Proxy.ProxyServer.EnableHttp3.set -> void
+[TWP001]Titanium.Web.Proxy.ProxyServer.EnableHttpsSvcbDnsDiscovery.get -> bool
+[TWP001]Titanium.Web.Proxy.ProxyServer.EnableHttpsSvcbDnsDiscovery.set -> void
+[TWP001]Titanium.Web.Proxy.ProxyServer.EnableQpackDynamicTable.get -> bool
+[TWP001]Titanium.Web.Proxy.ProxyServer.EnableQpackDynamicTable.set -> void
+abstract Titanium.Web.Proxy.Http.RequestResponseBase.HasBody.get -> bool
+abstract Titanium.Web.Proxy.Http.RequestResponseBase.HeaderText.get -> string!
+abstract Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.GenericCertificateName.get -> string!
+abstract Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.GenericCertificateName.set -> void
+const Titanium.Web.Proxy.Http2.Hpack.HpackUtil.HuffmanEos = 256 -> int
+const Titanium.Web.Proxy.Models.HttpHeader.HttpHeaderOverhead = 32 -> int
+override Titanium.Web.Proxy.Http.KnownHeader.ToString() -> string!
+override Titanium.Web.Proxy.Http.Request.HasBody.get -> bool
+override Titanium.Web.Proxy.Http.Request.HeaderText.get -> string!
+override Titanium.Web.Proxy.Http.RequestResponseBase.ToString() -> string!
+override Titanium.Web.Proxy.Http.Response.HasBody.get -> bool
+override Titanium.Web.Proxy.Http.Response.HeaderText.get -> string!
+override Titanium.Web.Proxy.Models.ExternalProxy.ToString() -> string!
+override Titanium.Web.Proxy.Models.HttpHeader.ToString() -> string!
+override Titanium.Web.Proxy.Models.SocksProxyEndPoint.GenericCertificateName.get -> string!
+override Titanium.Web.Proxy.Models.SocksProxyEndPoint.GenericCertificateName.set -> void
+override Titanium.Web.Proxy.Models.TransparentProxyEndPoint.GenericCertificateName.get -> string!
+override Titanium.Web.Proxy.Models.TransparentProxyEndPoint.GenericCertificateName.set -> void
+override Titanium.Web.Proxy.StreamExtended.ClientHelloInfo.ToString() -> string!
+override Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.ToString() -> string!
+static readonly Titanium.Web.Proxy.Http2.Hpack.HpackUtil.HuffmanCodeLengths -> byte[]!
+static readonly Titanium.Web.Proxy.Http2.Hpack.HpackUtil.HuffmanCodes -> int[]!
+static readonly Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Instance -> Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder!
+static readonly Titanium.Web.Proxy.ProxyLimits.DefaultMaxAuthRounds -> int
+static readonly Titanium.Web.Proxy.ProxyLimits.DefaultMaxBufferedBodyBytes -> long
+static readonly Titanium.Web.Proxy.ProxyLimits.DefaultMaxChunkSizeBytes -> long
+static readonly Titanium.Web.Proxy.ProxyLimits.DefaultMaxDecodedHeaderListBytes -> int
+static readonly Titanium.Web.Proxy.ProxyLimits.DefaultMaxWebSocketFramePayloadBytes -> int
+static readonly Titanium.Web.Proxy.ProxyLimits.DefaultMaxWebSocketMessageBytes -> long
+static readonly Titanium.Web.Proxy.ProxyLimits.DefaultViaPseudonym -> string!
+static Titanium.Web.Proxy.Helpers.RunTime.IsLinux.get -> bool
+static Titanium.Web.Proxy.Helpers.RunTime.IsMac.get -> bool
+static Titanium.Web.Proxy.Helpers.RunTime.IsSocketReuseAvailable() -> bool
+static Titanium.Web.Proxy.Helpers.RunTime.IsUwpOnWindows.get -> bool
+static Titanium.Web.Proxy.Helpers.RunTime.IsWindows.get -> bool
+static Titanium.Web.Proxy.Http.KnownHeader.implicit operator Titanium.Web.Proxy.Http.KnownHeader!(string! str) -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.Accept -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.AcceptEncoding -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.Authorization -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.Connection -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ConnectionClose -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ConnectionKeepAlive -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ContentEncoding -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingBrotli -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingDeflate -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingGzip -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ContentLength -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ContentLengthHttp2 -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ContentType -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ContentTypeBoundary -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ContentTypeCharset -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.Expect -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.Expect100Continue -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.Host -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.Location -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ProxyAuthenticate -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ProxyAuthorization -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ProxyAuthorizationBasic -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ProxyConnection -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.ProxyConnectionClose -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.Trailer -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.TransferEncoding -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.TransferEncodingChunked -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.Upgrade -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Http.KnownHeaders.UpgradeWebsocket -> Titanium.Web.Proxy.Http.KnownHeader!
+static Titanium.Web.Proxy.Models.HttpHeader.Encoding.get -> System.Text.Encoding!
+static Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Failed() -> Titanium.Web.Proxy.Models.ProxyAuthenticationContext!
+static Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Succeeded() -> Titanium.Web.Proxy.Models.ProxyAuthenticationContext!
+static Titanium.Web.Proxy.Options.ProxyPolicyModes.AllEnforce.get -> Titanium.Web.Proxy.Options.ProxyPolicyModes!
+static Titanium.Web.Proxy.Options.ProxyPolicyModes.Create(Titanium.Web.Proxy.Options.PolicyMode bodyBudget, Titanium.Web.Proxy.Options.PolicyMode decompressionRatio, Titanium.Web.Proxy.Options.PolicyMode headerLimits, Titanium.Web.Proxy.Options.PolicyMode admissionControl, Titanium.Web.Proxy.Options.PolicyMode http2AbuseBudget) -> Titanium.Web.Proxy.Options.ProxyPolicyModes!
+static Titanium.Web.Proxy.Options.ProxyProfileSettings.Balanced.get -> Titanium.Web.Proxy.Options.ProxyProfileSettings!
+static Titanium.Web.Proxy.Options.ProxyProfileSettings.For(Titanium.Web.Proxy.Options.ProxyProfile profile) -> Titanium.Web.Proxy.Options.ProxyProfileSettings!
+static Titanium.Web.Proxy.Options.ProxyProfileSettings.LegacyCompatible.get -> Titanium.Web.Proxy.Options.ProxyProfileSettings!
+static Titanium.Web.Proxy.Options.ProxyProfileSettings.PublicFacing.get -> Titanium.Web.Proxy.Options.ProxyProfileSettings!
+static Titanium.Web.Proxy.Options.ProxyResourceLimits.Create(long maxHeaderLineBytes, int maxHeaderCount, long maxHeaderAggregateBytes, long? maxEncodedBodyBytes, long? maxDecodedBodyBytes, double? maxDecompressionRatio, int? maxConcurrentClients, int maxConcurrentStreamsPerConnection, int? maxPeerInitiatedIncompleteStreamResets, int maxOpenHeaderBlockFrames, System.TimeSpan maxOpenHeaderBlockDuration, bool connectionPoolingEnabled, int maxCachedConnectionsPerHost, int? maxCertificateCacheEntries) -> Titanium.Web.Proxy.Options.ProxyResourceLimits!
+static Titanium.Web.Proxy.Options.ProxyResourceLimits.Default.get -> Titanium.Web.Proxy.Options.ProxyResourceLimits!
+static Titanium.Web.Proxy.Options.ProxyTimeoutOptions.Create(System.TimeSpan clientHeaderTimeout, System.TimeSpan connectTimeout, System.TimeSpan responseHeaderTimeout, System.TimeSpan idleReadTimeout, System.TimeSpan idleWriteTimeout, System.TimeSpan? callbackTimeout, System.TimeSpan drainTimeout, System.TimeSpan? streamTimeout, System.TimeSpan? totalRequestTimeout) -> Titanium.Web.Proxy.Options.ProxyTimeoutOptions!
+static Titanium.Web.Proxy.Options.ProxyTimeoutOptions.Default.get -> Titanium.Web.Proxy.Options.ProxyTimeoutOptions!
+static Titanium.Web.Proxy.Options.ResolvedSessionPolicy.Create(Titanium.Web.Proxy.Options.ProxyResourceLimits! resourceLimits, Titanium.Web.Proxy.Options.ProxyTimeoutOptions! timeouts) -> Titanium.Web.Proxy.Options.ResolvedSessionPolicy!
+static Titanium.Web.Proxy.Options.ResolvedSessionPolicy.Default.get -> Titanium.Web.Proxy.Options.ResolvedSessionPolicy!
+static Titanium.Web.Proxy.WebSocketFrameEncoder.Encode(Titanium.Web.Proxy.WebsocketOpCode opCode, System.ReadOnlySpan<byte> payload, bool mask, bool isFinal = true, uint maskKey = 0) -> byte[]!
+Titanium.Web.Proxy.Diagnostics.ClientTlsTiming
+Titanium.Web.Proxy.Diagnostics.ClientTlsTiming.CompletedAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.ClientTlsTiming.HandshakeDuration.get -> System.TimeSpan?
+Titanium.Web.Proxy.Diagnostics.ClientTlsTiming.StartedAt.get -> System.DateTime
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.AttemptCount.get -> int
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ClientRequestReadDuration.get -> System.TimeSpan?
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.CompletedAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ConnectionReadyAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ConnectionWaitDuration.get -> System.TimeSpan?
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.IsComplete.get -> bool
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.RequestHeadersReceivedAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.RequestSendDuration.get -> System.TimeSpan?
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.RequestSentAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ResponseDeliveryDuration.get -> System.TimeSpan?
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ResponseHeadersReceivedAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.SessionCreatedAt.get -> System.DateTime
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.TimeToFirstByte.get -> System.TimeSpan?
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.TotalDuration.get -> System.TimeSpan
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.UpstreamConnectionId.get -> System.Guid?
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.UpstreamConnectionReused.get -> bool
+Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming
+Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.ConnectStartedAt.get -> System.DateTime
+Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.DnsDuration.get -> System.TimeSpan?
+Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.DnsResolvedAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.EstablishedAt.get -> System.DateTime
+Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.FailedAddressAttempts.get -> int
+Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.TcpConnectDuration.get -> System.TimeSpan?
+Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.TcpConnectedAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.TlsHandshakeCompletedAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.TlsHandshakeDuration.get -> System.TimeSpan?
+Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.TotalDuration.get -> System.TimeSpan
+Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.UpstreamProxyConnectDuration.get -> System.TimeSpan?
+Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.UpstreamProxyConnectedAt.get -> System.DateTime?
+Titanium.Web.Proxy.EventArguments.AsyncEventHandler<TEventArgs>
+Titanium.Web.Proxy.EventArguments.BeforeBodyWriteEventArgs
+Titanium.Web.Proxy.EventArguments.BeforeBodyWriteEventArgs.BodyBytes.get -> byte[]!
+Titanium.Web.Proxy.EventArguments.BeforeBodyWriteEventArgs.BodyBytes.set -> void
+Titanium.Web.Proxy.EventArguments.BeforeBodyWriteEventArgs.IsChunked.get -> bool
+Titanium.Web.Proxy.EventArguments.BeforeBodyWriteEventArgs.IsLastChunk.get -> bool
+Titanium.Web.Proxy.EventArguments.BeforeBodyWriteEventArgs.IsLastChunk.set -> void
+Titanium.Web.Proxy.EventArguments.BeforeBodyWriteEventArgs.Session.get -> Titanium.Web.Proxy.EventArguments.SessionEventArgs!
+Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs
+Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.AllowHttpProtocolTranslation.get -> bool
+Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.AllowHttpProtocolTranslation.set -> void
+Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.DecryptSsl.get -> bool
+Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.DecryptSsl.set -> void
+Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsHostName.get -> string!
+Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsHostName.set -> void
+Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsPort.get -> int
+Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.ForwardHttpsPort.set -> void
+Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.SniHostName.get -> string!
+Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.TerminateSession() -> void
+Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.UpstreamHttpProtocol.get -> Titanium.Web.Proxy.Models.UpstreamHttpProtocol
+Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.UpstreamHttpProtocol.set -> void
+Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs
+Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs.AcceptableIssuers.get -> string![]!
+Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs.CertificateSelectionEventArgs(Titanium.Web.Proxy.EventArguments.SessionEventArgsBase! session, string! targetHost, System.Security.Cryptography.X509Certificates.X509CertificateCollection! localCertificates, System.Security.Cryptography.X509Certificates.X509Certificate? remoteCertificate, string![]! acceptableIssuers) -> void
+Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs.ClientCertificate.get -> System.Security.Cryptography.X509Certificates.X509Certificate?
+Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs.ClientCertificate.set -> void
+Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs.LocalCertificates.get -> System.Security.Cryptography.X509Certificates.X509CertificateCollection!
+Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs.RemoteCertificate.get -> System.Security.Cryptography.X509Certificates.X509Certificate?
+Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs.Session.get -> Titanium.Web.Proxy.EventArguments.SessionEventArgsBase!
+Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs.TargetHost.get -> string!
+Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs
+Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.Certificate.get -> System.Security.Cryptography.X509Certificates.X509Certificate?
+Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.CertificateValidationEventArgs(Titanium.Web.Proxy.EventArguments.SessionEventArgsBase! session, System.Security.Cryptography.X509Certificates.X509Certificate? certificate, System.Security.Cryptography.X509Certificates.X509Chain? chain, System.Net.Security.SslPolicyErrors sslPolicyErrors) -> void
+Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.Chain.get -> System.Security.Cryptography.X509Certificates.X509Chain?
+Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.IsValid.get -> bool
+Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.IsValid.set -> void
+Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.Session.get -> Titanium.Web.Proxy.EventArguments.SessionEventArgsBase!
+Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.SslPolicyErrors.get -> System.Net.Security.SslPolicyErrors
+Titanium.Web.Proxy.EventArguments.EmptyProxyEventArgs
+Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs
+Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs.Boundary.get -> string!
+Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs.Headers.get -> Titanium.Web.Proxy.Http.HeaderCollection!
+Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs.Session.get -> Titanium.Web.Proxy.EventArguments.SessionEventArgs!
+Titanium.Web.Proxy.EventArguments.ProxyEventArgsBase
+Titanium.Web.Proxy.EventArguments.ProxyEventArgsBase.ClientUserData.get -> object?
+Titanium.Web.Proxy.EventArguments.ProxyEventArgsBase.ClientUserData.set -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.BeforeWebSocketFrame -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs!>?
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.DrainClientBodyAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.DrainServerBodyAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(byte[]! result, System.Net.HttpStatusCode status, System.Collections.Generic.IDictionary<string!, Titanium.Web.Proxy.Models.HttpHeader!>! headers, bool closeServerConnection = false) -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(byte[]! result, System.Net.HttpStatusCode status, System.Collections.Generic.IEnumerable<Titanium.Web.Proxy.Models.HttpHeader!>? headers, bool closeServerConnection = false) -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(string! html, System.Net.HttpStatusCode status, System.Collections.Generic.IDictionary<string!, Titanium.Web.Proxy.Models.HttpHeader!>? headers, bool closeServerConnection = false) -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(string! html, System.Net.HttpStatusCode status, System.Collections.Generic.IEnumerable<Titanium.Web.Proxy.Models.HttpHeader!>? headers = null, bool closeServerConnection = false) -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBody(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<byte[]!>!
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBodyAsString(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<string!>!
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBody(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<byte[]!>!
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBodyAsString(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<string!>!
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.IdleReadTimeout.get -> System.TimeSpan?
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.IdleReadTimeout.set -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.IdleWriteTimeout.get -> System.TimeSpan?
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.IdleWriteTimeout.set -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.IsPromise.get -> bool
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.MaxBufferedBodyBytes.get -> int?
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.MaxBufferedBodyBytes.set -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.MaxWebSocketFramePayloadBytes.get -> int?
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.MaxWebSocketFramePayloadBytes.set -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.MultipartRequestPartSent -> System.EventHandler<Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs!>?
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.NetworkFailureRetryAttempts.get -> int?
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.NetworkFailureRetryAttempts.set -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(byte[]! result, System.Collections.Generic.IDictionary<string!, Titanium.Web.Proxy.Models.HttpHeader!>? headers, bool closeServerConnection = false) -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(byte[]! result, System.Collections.Generic.IEnumerable<Titanium.Web.Proxy.Models.HttpHeader!>? headers = null, bool closeServerConnection = false) -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(string! html, System.Collections.Generic.IDictionary<string!, Titanium.Web.Proxy.Models.HttpHeader!>? headers, bool closeServerConnection = false) -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(string! html, System.Collections.Generic.IEnumerable<Titanium.Web.Proxy.Models.HttpHeader!>? headers = null, bool closeServerConnection = false) -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.OriginHttpVersionPolicy.get -> Titanium.Web.Proxy.Models.OriginHttpVersionPolicy?
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.OriginHttpVersionPolicy.set -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.Redirect(string! url, bool closeServerConnection = false) -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.RequestTimeout.get -> System.TimeSpan?
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.RequestTimeout.set -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.ReRequest.get -> bool
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.ReRequest.set -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.Respond(Titanium.Web.Proxy.Http.Response! response, bool closeServerConnection = false) -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.RespondStreaming(Titanium.Web.Proxy.Http.Response! response, System.Func<System.IO.Stream!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! writeBody, bool closeServerConnection = false) -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.ResponseHeaderTimeout.get -> System.TimeSpan?
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.ResponseHeaderTimeout.set -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBody(byte[]! body) -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBodyString(string! body) -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBody(byte[]! body) -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBodyString(string! body) -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.TerminateServerConnection() -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.UpstreamHttpProtocol.get -> Titanium.Web.Proxy.Models.UpstreamHttpProtocol?
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.UpstreamHttpProtocol.set -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketClientWriter.get -> Titanium.Web.Proxy.WebSocketFrameWriter?
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoder.get -> Titanium.Web.Proxy.WebSocketDecoder!
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderReceive.get -> Titanium.Web.Proxy.WebSocketDecoder!
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderSend.get -> Titanium.Web.Proxy.WebSocketDecoder!
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketServerWriter.get -> Titanium.Web.Proxy.WebSocketFrameWriter?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientConnectionId.get -> System.Guid
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientEndPoint.get -> System.Net.IPEndPoint!
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientLocalEndPoint.get -> System.Net.IPEndPoint!
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientRemoteEndPoint.get -> System.Net.IPEndPoint!
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ConnectTimeout.get -> System.TimeSpan?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ConnectTimeout.set -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.CustomUpStreamProxy.get -> Titanium.Web.Proxy.Models.IExternalProxy?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.CustomUpStreamProxy.set -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.CustomUpStreamProxyUsed.get -> Titanium.Web.Proxy.Models.IExternalProxy?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.DataReceived -> System.EventHandler<Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs!>?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.DataSent -> System.EventHandler<Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs!>?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Dispose() -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.EnableWinAuth.get -> bool
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.EnableWinAuth.set -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Exception.get -> System.Exception?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.HttpClient.get -> Titanium.Web.Proxy.Http.HttpWebClient!
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsHttps.get -> bool
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsSocks.get -> bool
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsTransparent.get -> bool
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.LocalEndPoint.get -> Titanium.Web.Proxy.Models.ProxyEndPoint!
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyEndPoint.get -> Titanium.Web.Proxy.Models.ProxyEndPoint!
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ServerConnectionId.get -> System.Guid
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ServerIpAddress.get -> System.Net.IPAddress?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ServerRemoteEndPoint.get -> System.Net.IPEndPoint?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TerminateSession() -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.Timing.get -> Titanium.Web.Proxy.Diagnostics.HttpRequestTiming?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UpstreamConnectionTiming.get -> Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UserData.get -> object?
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.UserData.set -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.WebSession.get -> Titanium.Web.Proxy.Http.HttpWebClient!
+Titanium.Web.Proxy.EventArguments.SocksAuthenticateEventArgs
+Titanium.Web.Proxy.EventArguments.SocksAuthenticateEventArgs.ClientRemoteEndPoint.get -> System.Net.IPEndPoint!
+Titanium.Web.Proxy.EventArguments.SocksAuthenticateEventArgs.Password.get -> string!
+Titanium.Web.Proxy.EventArguments.SocksAuthenticateEventArgs.ProxyEndPoint.get -> Titanium.Web.Proxy.Models.SocksProxyEndPoint!
+Titanium.Web.Proxy.EventArguments.SocksAuthenticateEventArgs.UserName.get -> string!
+Titanium.Web.Proxy.EventArguments.TunnelConnectFailureEventArgs
+Titanium.Web.Proxy.EventArguments.TunnelConnectFailureEventArgs.Exception.get -> System.Exception!
+Titanium.Web.Proxy.EventArguments.TunnelConnectFailureEventArgs.Response.get -> Titanium.Web.Proxy.Http.Response!
+Titanium.Web.Proxy.EventArguments.TunnelConnectFailureEventArgs.Response.set -> void
+Titanium.Web.Proxy.EventArguments.TunnelConnectFailureEventArgs.Session.get -> Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs!
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.AllowHttpProtocolTranslation.get -> bool
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.AllowHttpProtocolTranslation.set -> void
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.ClientTlsTiming.get -> Titanium.Web.Proxy.Diagnostics.ClientTlsTiming?
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.DecryptedDataReceived -> System.EventHandler<Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs!>?
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.DecryptedDataSent -> System.EventHandler<Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs!>?
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.DecryptSsl.get -> bool
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.DecryptSsl.set -> void
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.DenyConnect.get -> bool
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.DenyConnect.set -> void
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.EstablishServerConnectionBeforeResponse.get -> bool
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.EstablishServerConnectionBeforeResponse.set -> void
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.IsHttpsConnect.get -> bool
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.UpstreamHttpProtocol.get -> Titanium.Web.Proxy.Models.UpstreamHttpProtocol
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.UpstreamHttpProtocol.set -> void
+Titanium.Web.Proxy.EventArguments.WebSocketFrameDirection
+Titanium.Web.Proxy.EventArguments.WebSocketFrameDirection.ClientToServer = 0 -> Titanium.Web.Proxy.EventArguments.WebSocketFrameDirection
+Titanium.Web.Proxy.EventArguments.WebSocketFrameDirection.ServerToClient = 1 -> Titanium.Web.Proxy.EventArguments.WebSocketFrameDirection
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptAction
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptAction.Drop = 1 -> Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptAction
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptAction.Forward = 0 -> Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptAction
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptAction.Replace = 2 -> Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptAction
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.Action.get -> Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptAction
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.Action.set -> void
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.Data.get -> byte[]!
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.Data.set -> void
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.Delay.get -> System.TimeSpan
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.Delay.set -> void
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.Direction.get -> Titanium.Web.Proxy.EventArguments.WebSocketFrameDirection
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.Drop() -> void
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.IsFinal.get -> bool
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.IsFinal.set -> void
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.OpCode.get -> Titanium.Web.Proxy.WebsocketOpCode
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.OpCode.set -> void
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.Replace(byte[]! newData, Titanium.Web.Proxy.WebsocketOpCode? opCode = null) -> void
+Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.Session.get -> Titanium.Web.Proxy.EventArguments.SessionEventArgs!
+Titanium.Web.Proxy.Exceptions.BodyNotFoundException
+Titanium.Web.Proxy.Exceptions.OutboundDestinationBlockedException
+Titanium.Web.Proxy.Exceptions.OutboundDestinationBlockedException.BlockedAddress.get -> string!
+Titanium.Web.Proxy.Exceptions.OutboundDestinationBlockedException.Hostname.get -> string!
+Titanium.Web.Proxy.Exceptions.ProxyAuthorizationException
+Titanium.Web.Proxy.Exceptions.ProxyAuthorizationException.Headers.get -> System.Collections.Generic.IEnumerable<Titanium.Web.Proxy.Models.HttpHeader!>!
+Titanium.Web.Proxy.Exceptions.ProxyAuthorizationException.Session.get -> Titanium.Web.Proxy.EventArguments.SessionEventArgsBase!
+Titanium.Web.Proxy.Exceptions.ProxyConnectException
+Titanium.Web.Proxy.Exceptions.ProxyConnectException.Session.get -> Titanium.Web.Proxy.EventArguments.SessionEventArgsBase!
+Titanium.Web.Proxy.Exceptions.ProxyException
+Titanium.Web.Proxy.Exceptions.ProxyException.ProxyException(string! message) -> void
+Titanium.Web.Proxy.Exceptions.ProxyException.ProxyException(string! message, System.Exception? innerException) -> void
+Titanium.Web.Proxy.Exceptions.ProxyHttpException
+Titanium.Web.Proxy.Exceptions.ProxyHttpException.Session.get -> Titanium.Web.Proxy.EventArguments.SessionEventArgs?
+Titanium.Web.Proxy.Exceptions.ProxyTimeoutException
+Titanium.Web.Proxy.Exceptions.ProxyTimeoutException.Kind.get -> Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind
+Titanium.Web.Proxy.Exceptions.ProxyTimeoutException.ProxyTimeoutException(string! message, Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind kind, System.Exception? innerException = null) -> void
+Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind
+Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind.ClientHeader = 5 -> Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind
+Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind.Connect = 0 -> Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind
+Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind.IdleRead = 2 -> Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind
+Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind.IdleWrite = 3 -> Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind
+Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind.Request = 4 -> Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind
+Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind.ResponseHeader = 1 -> Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind
+Titanium.Web.Proxy.Exceptions.RetryableServerConnectionException
+Titanium.Web.Proxy.Exceptions.UpstreamProxyConnectException
+Titanium.Web.Proxy.Exceptions.UpstreamProxyConnectException.BodyPreview.get -> string?
+Titanium.Web.Proxy.Exceptions.UpstreamProxyConnectException.Headers.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Titanium.Web.Proxy.Exceptions.UpstreamProxyConnectException.StatusCode.get -> int
+Titanium.Web.Proxy.Exceptions.UpstreamProxyConnectException.StatusDescription.get -> string!
+Titanium.Web.Proxy.Helpers.RunTime
+Titanium.Web.Proxy.Http.ConnectRequest
+Titanium.Web.Proxy.Http.ConnectRequest.ClientHelloInfo.get -> Titanium.Web.Proxy.StreamExtended.ClientHelloInfo?
+Titanium.Web.Proxy.Http.ConnectRequest.ClientHelloInfo.set -> void
+Titanium.Web.Proxy.Http.ConnectRequest.TunnelType.get -> Titanium.Web.Proxy.Http.TunnelType
+Titanium.Web.Proxy.Http.ConnectResponse
+Titanium.Web.Proxy.Http.ConnectResponse.ConnectResponse() -> void
+Titanium.Web.Proxy.Http.ConnectResponse.ServerHelloInfo.get -> Titanium.Web.Proxy.StreamExtended.ServerHelloInfo?
+Titanium.Web.Proxy.Http.ConnectResponse.ServerHelloInfo.set -> void
+Titanium.Web.Proxy.Http.FramingSource
+Titanium.Web.Proxy.Http.FramingSource.Http1Wire = 0 -> Titanium.Web.Proxy.Http.FramingSource
+Titanium.Web.Proxy.Http.FramingSource.Http1WireSocks = 2 -> Titanium.Web.Proxy.Http.FramingSource
+Titanium.Web.Proxy.Http.FramingSource.Http1WireTransparent = 1 -> Titanium.Web.Proxy.Http.FramingSource
+Titanium.Web.Proxy.Http.FramingSource.SynthesizedFromH2 = 3 -> Titanium.Web.Proxy.Http.FramingSource
+Titanium.Web.Proxy.Http.FramingSource.SynthesizedFromH3 = 4 -> Titanium.Web.Proxy.Http.FramingSource
+Titanium.Web.Proxy.Http.HeaderCollection
+Titanium.Web.Proxy.Http.HeaderCollection.AddHeader(string! name, string! value) -> void
+Titanium.Web.Proxy.Http.HeaderCollection.AddHeader(Titanium.Web.Proxy.Models.HttpHeader! newHeader) -> void
+Titanium.Web.Proxy.Http.HeaderCollection.AddHeaders(System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string!, string!>>? newHeaders) -> void
+Titanium.Web.Proxy.Http.HeaderCollection.AddHeaders(System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string!, Titanium.Web.Proxy.Models.HttpHeader!>>? newHeaders) -> void
+Titanium.Web.Proxy.Http.HeaderCollection.AddHeaders(System.Collections.Generic.IEnumerable<Titanium.Web.Proxy.Models.HttpHeader!>? newHeaders) -> void
+Titanium.Web.Proxy.Http.HeaderCollection.Clear() -> void
+Titanium.Web.Proxy.Http.HeaderCollection.Enumerator
+Titanium.Web.Proxy.Http.HeaderCollection.Enumerator.Current.get -> Titanium.Web.Proxy.Models.HttpHeader!
+Titanium.Web.Proxy.Http.HeaderCollection.Enumerator.Dispose() -> void
+Titanium.Web.Proxy.Http.HeaderCollection.Enumerator.Enumerator() -> void
+Titanium.Web.Proxy.Http.HeaderCollection.Enumerator.MoveNext() -> bool
+Titanium.Web.Proxy.Http.HeaderCollection.Enumerator.Reset() -> void
+Titanium.Web.Proxy.Http.HeaderCollection.GetAllHeaders() -> System.Collections.Generic.List<Titanium.Web.Proxy.Models.HttpHeader!>!
+Titanium.Web.Proxy.Http.HeaderCollection.GetEnumerator() -> Titanium.Web.Proxy.Http.HeaderCollection.Enumerator
+Titanium.Web.Proxy.Http.HeaderCollection.GetFirstHeader(string! name) -> Titanium.Web.Proxy.Models.HttpHeader?
+Titanium.Web.Proxy.Http.HeaderCollection.GetHeaders(string! name) -> System.Collections.Generic.List<Titanium.Web.Proxy.Models.HttpHeader!>?
+Titanium.Web.Proxy.Http.HeaderCollection.HeaderCollection() -> void
+Titanium.Web.Proxy.Http.HeaderCollection.HeaderExists(string! name) -> bool
+Titanium.Web.Proxy.Http.HeaderCollection.Headers.get -> System.Collections.ObjectModel.ReadOnlyDictionary<string!, Titanium.Web.Proxy.Models.HttpHeader!>!
+Titanium.Web.Proxy.Http.HeaderCollection.NonUniqueHeaders.get -> System.Collections.ObjectModel.ReadOnlyDictionary<string!, System.Collections.Generic.List<Titanium.Web.Proxy.Models.HttpHeader!>!>!
+Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader(string! headerName) -> bool
+Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader(Titanium.Web.Proxy.Http.KnownHeader! headerName) -> bool
+Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader(Titanium.Web.Proxy.Models.HttpHeader! header) -> bool
+Titanium.Web.Proxy.Http.HttpWebClient
+Titanium.Web.Proxy.Http.HttpWebClient.ConnectRequest.get -> Titanium.Web.Proxy.Http.ConnectRequest?
+Titanium.Web.Proxy.Http.HttpWebClient.IsHttps.get -> bool
+Titanium.Web.Proxy.Http.HttpWebClient.ProcessId.get -> System.Lazy<int>!
+Titanium.Web.Proxy.Http.HttpWebClient.Request.get -> Titanium.Web.Proxy.Http.Request!
+Titanium.Web.Proxy.Http.HttpWebClient.Response.get -> Titanium.Web.Proxy.Http.Response!
+Titanium.Web.Proxy.Http.HttpWebClient.UpStreamEndPoint.get -> System.Net.IPEndPoint?
+Titanium.Web.Proxy.Http.HttpWebClient.UpStreamEndPoint.set -> void
+Titanium.Web.Proxy.Http.HttpWebClient.UpStreamEndPointIPv4.get -> System.Net.IPEndPoint?
+Titanium.Web.Proxy.Http.HttpWebClient.UpStreamEndPointIPv4.set -> void
+Titanium.Web.Proxy.Http.HttpWebClient.UpStreamEndPointIPv6.get -> System.Net.IPEndPoint?
+Titanium.Web.Proxy.Http.HttpWebClient.UpStreamEndPointIPv6.set -> void
+Titanium.Web.Proxy.Http.HttpWebClient.UserData.get -> object?
+Titanium.Web.Proxy.Http.HttpWebClient.UserData.set -> void
+Titanium.Web.Proxy.Http.KnownHeader
+Titanium.Web.Proxy.Http.KnownHeader.String -> string!
+Titanium.Web.Proxy.Http.KnownHeaders
+Titanium.Web.Proxy.Http.Request
+Titanium.Web.Proxy.Http.Request.ExpectationFailed.get -> bool
+Titanium.Web.Proxy.Http.Request.ExpectationSucceeded.get -> bool
+Titanium.Web.Proxy.Http.Request.ExpectContinue.get -> bool
+Titanium.Web.Proxy.Http.Request.ExtendedConnectProtocol.get -> string?
+Titanium.Web.Proxy.Http.Request.Host.get -> string?
+Titanium.Web.Proxy.Http.Request.Host.set -> void
+Titanium.Web.Proxy.Http.Request.IsHttps.get -> bool
+Titanium.Web.Proxy.Http.Request.IsMultipartFormData.get -> bool
+Titanium.Web.Proxy.Http.Request.Method.get -> string!
+Titanium.Web.Proxy.Http.Request.Method.set -> void
+Titanium.Web.Proxy.Http.Request.Request() -> void
+Titanium.Web.Proxy.Http.Request.RequestUri.get -> System.Uri!
+Titanium.Web.Proxy.Http.Request.RequestUri.set -> void
+Titanium.Web.Proxy.Http.Request.RequestUriString.get -> string!
+Titanium.Web.Proxy.Http.Request.RequestUriString.set -> void
+Titanium.Web.Proxy.Http.Request.UpgradeToWebSocket.get -> bool
+Titanium.Web.Proxy.Http.Request.Url.get -> string!
+Titanium.Web.Proxy.Http.Request.Url.set -> void
+Titanium.Web.Proxy.Http.RequestResponseBase
+Titanium.Web.Proxy.Http.RequestResponseBase.Body.get -> byte[]!
+Titanium.Web.Proxy.Http.RequestResponseBase.BodyInternal.get -> byte[]?
+Titanium.Web.Proxy.Http.RequestResponseBase.BodyString.get -> string!
+Titanium.Web.Proxy.Http.RequestResponseBase.ContentEncoding.get -> string?
+Titanium.Web.Proxy.Http.RequestResponseBase.ContentLength.get -> long
+Titanium.Web.Proxy.Http.RequestResponseBase.ContentLength.set -> void
+Titanium.Web.Proxy.Http.RequestResponseBase.ContentType.get -> string?
+Titanium.Web.Proxy.Http.RequestResponseBase.ContentType.set -> void
+Titanium.Web.Proxy.Http.RequestResponseBase.Encoding.get -> System.Text.Encoding!
+Titanium.Web.Proxy.Http.RequestResponseBase.Headers.get -> Titanium.Web.Proxy.Http.HeaderCollection!
+Titanium.Web.Proxy.Http.RequestResponseBase.HttpVersion.get -> System.Version!
+Titanium.Web.Proxy.Http.RequestResponseBase.HttpVersion.set -> void
+Titanium.Web.Proxy.Http.RequestResponseBase.IsBodyRead.get -> bool
+Titanium.Web.Proxy.Http.RequestResponseBase.IsChunked.get -> bool
+Titanium.Web.Proxy.Http.RequestResponseBase.IsChunked.set -> void
+Titanium.Web.Proxy.Http.RequestResponseBase.KeepBody.get -> bool
+Titanium.Web.Proxy.Http.RequestResponseBase.KeepBody.set -> void
+Titanium.Web.Proxy.Http.RequestResponseBase.RequestResponseBase() -> void
+Titanium.Web.Proxy.Http.RequestResponseBase.TrailingHeaders.get -> Titanium.Web.Proxy.Http.HeaderCollection!
+Titanium.Web.Proxy.Http.Response
+Titanium.Web.Proxy.Http.Response.KeepAlive.get -> bool
+Titanium.Web.Proxy.Http.Response.Response() -> void
+Titanium.Web.Proxy.Http.Response.Response(byte[]! body) -> void
+Titanium.Web.Proxy.Http.Response.StatusCode.get -> int
+Titanium.Web.Proxy.Http.Response.StatusCode.set -> void
+Titanium.Web.Proxy.Http.Response.StatusDescription.get -> string!
+Titanium.Web.Proxy.Http.Response.StatusDescription.set -> void
+Titanium.Web.Proxy.Http.Responses.GenericResponse
+Titanium.Web.Proxy.Http.Responses.GenericResponse.GenericResponse(int statusCode, string! statusDescription) -> void
+Titanium.Web.Proxy.Http.Responses.GenericResponse.GenericResponse(System.Net.HttpStatusCode status) -> void
+Titanium.Web.Proxy.Http.Responses.OkResponse
+Titanium.Web.Proxy.Http.Responses.OkResponse.OkResponse() -> void
+Titanium.Web.Proxy.Http.Responses.OkResponse.OkResponse(byte[]! body) -> void
+Titanium.Web.Proxy.Http.Responses.RedirectResponse
+Titanium.Web.Proxy.Http.Responses.RedirectResponse.RedirectResponse() -> void
+Titanium.Web.Proxy.Http.TunnelType
+Titanium.Web.Proxy.Http.TunnelType.Http2 = 3 -> Titanium.Web.Proxy.Http.TunnelType
+Titanium.Web.Proxy.Http.TunnelType.Https = 1 -> Titanium.Web.Proxy.Http.TunnelType
+Titanium.Web.Proxy.Http.TunnelType.Unknown = 0 -> Titanium.Web.Proxy.Http.TunnelType
+Titanium.Web.Proxy.Http.TunnelType.Websocket = 2 -> Titanium.Web.Proxy.Http.TunnelType
+Titanium.Web.Proxy.Http2.Hpack.DynamicTable
+Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Add(Titanium.Web.Proxy.Models.HttpHeader! header) -> void
+Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Capacity.get -> int
+Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Clear() -> void
+Titanium.Web.Proxy.Http2.Hpack.DynamicTable.DynamicTable(int initialCapacity) -> void
+Titanium.Web.Proxy.Http2.Hpack.DynamicTable.GetEntry(int index) -> Titanium.Web.Proxy.Models.HttpHeader!
+Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Length() -> int
+Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Remove() -> Titanium.Web.Proxy.Models.HttpHeader?
+Titanium.Web.Proxy.Http2.Hpack.DynamicTable.SetCapacity(int capacity) -> void
+Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Size.get -> int
+Titanium.Web.Proxy.Http2.Hpack.HpackUtil
+Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType
+Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.Incremental = 0 -> Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType
+Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.Never = 2 -> Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType
+Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.None = 1 -> Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType
+Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder
+Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Decode(byte[]! buf) -> System.ReadOnlyMemory<byte>
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsole.get -> bool
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsole.set -> void
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsoleColors.get -> bool
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsoleColors.set -> void
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.Enabled.get -> bool
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.Enabled.set -> void
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableFile.get -> bool
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableFile.set -> void
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.FilePath.get -> string!
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.FilePath.set -> void
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.LoggerFactory.get -> Microsoft.Extensions.Logging.ILoggerFactory?
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.LoggerFactory.set -> void
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxFileSizeBytes.get -> long
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxFileSizeBytes.set -> void
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxRolledFiles.get -> int
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxRolledFiles.set -> void
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MinimumLevel.get -> Microsoft.Extensions.Logging.LogLevel
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MinimumLevel.set -> void
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.ProxyLoggingOptions() -> void
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.QueueCapacity.get -> int
+Titanium.Web.Proxy.Logging.ProxyLoggingOptions.QueueCapacity.set -> void
+Titanium.Web.Proxy.Models.ExplicitProxyEndPoint
+Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.BeforeTunnelConnectFailure -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.TunnelConnectFailureEventArgs!>?
+Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.BeforeTunnelConnectRequest -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs!>?
+Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.BeforeTunnelConnectResponse -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs!>?
+Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.ExplicitProxyEndPoint(System.Net.IPAddress! ipAddress, int port, bool decryptSsl = true) -> void
+Titanium.Web.Proxy.Models.ExternalProxy
+Titanium.Web.Proxy.Models.ExternalProxy.BypassLocalhost.get -> bool
+Titanium.Web.Proxy.Models.ExternalProxy.BypassLocalhost.set -> void
+Titanium.Web.Proxy.Models.ExternalProxy.ExternalProxy() -> void
+Titanium.Web.Proxy.Models.ExternalProxy.ExternalProxy(string! hostName, int port) -> void
+Titanium.Web.Proxy.Models.ExternalProxy.ExternalProxy(string! hostName, int port, string! userName, string! password) -> void
+Titanium.Web.Proxy.Models.ExternalProxy.HostName.get -> string!
+Titanium.Web.Proxy.Models.ExternalProxy.HostName.set -> void
+Titanium.Web.Proxy.Models.ExternalProxy.NextHop.get -> Titanium.Web.Proxy.Models.IExternalProxy?
+Titanium.Web.Proxy.Models.ExternalProxy.NextHop.set -> void
+Titanium.Web.Proxy.Models.ExternalProxy.Password.get -> string?
+Titanium.Web.Proxy.Models.ExternalProxy.Password.set -> void
+Titanium.Web.Proxy.Models.ExternalProxy.Port.get -> int
+Titanium.Web.Proxy.Models.ExternalProxy.Port.set -> void
+Titanium.Web.Proxy.Models.ExternalProxy.ProxyDnsRequests.get -> bool
+Titanium.Web.Proxy.Models.ExternalProxy.ProxyDnsRequests.set -> void
+Titanium.Web.Proxy.Models.ExternalProxy.ProxyType.get -> Titanium.Web.Proxy.Models.ExternalProxyType
+Titanium.Web.Proxy.Models.ExternalProxy.ProxyType.set -> void
+Titanium.Web.Proxy.Models.ExternalProxy.UseDefaultCredentials.get -> bool
+Titanium.Web.Proxy.Models.ExternalProxy.UseDefaultCredentials.set -> void
+Titanium.Web.Proxy.Models.ExternalProxy.UserName.get -> string?
+Titanium.Web.Proxy.Models.ExternalProxy.UserName.set -> void
+Titanium.Web.Proxy.Models.ExternalProxyType
+Titanium.Web.Proxy.Models.ExternalProxyType.Http = 0 -> Titanium.Web.Proxy.Models.ExternalProxyType
+Titanium.Web.Proxy.Models.ExternalProxyType.Socks4 = 1 -> Titanium.Web.Proxy.Models.ExternalProxyType
+Titanium.Web.Proxy.Models.ExternalProxyType.Socks5 = 2 -> Titanium.Web.Proxy.Models.ExternalProxyType
+Titanium.Web.Proxy.Models.HttpHeader
+Titanium.Web.Proxy.Models.HttpHeader.HttpHeader(string! name, string! value) -> void
+Titanium.Web.Proxy.Models.HttpHeader.Name.get -> string!
+Titanium.Web.Proxy.Models.HttpHeader.Size.get -> int
+Titanium.Web.Proxy.Models.HttpHeader.Value.get -> string!
+Titanium.Web.Proxy.Models.IExternalProxy
+Titanium.Web.Proxy.Models.IExternalProxy.BypassLocalhost.get -> bool
+Titanium.Web.Proxy.Models.IExternalProxy.BypassLocalhost.set -> void
+Titanium.Web.Proxy.Models.IExternalProxy.HostName.get -> string!
+Titanium.Web.Proxy.Models.IExternalProxy.HostName.set -> void
+Titanium.Web.Proxy.Models.IExternalProxy.NextHop.get -> Titanium.Web.Proxy.Models.IExternalProxy?
+Titanium.Web.Proxy.Models.IExternalProxy.NextHop.set -> void
+Titanium.Web.Proxy.Models.IExternalProxy.Password.get -> string?
+Titanium.Web.Proxy.Models.IExternalProxy.Password.set -> void
+Titanium.Web.Proxy.Models.IExternalProxy.Port.get -> int
+Titanium.Web.Proxy.Models.IExternalProxy.Port.set -> void
+Titanium.Web.Proxy.Models.IExternalProxy.ProxyDnsRequests.get -> bool
+Titanium.Web.Proxy.Models.IExternalProxy.ProxyDnsRequests.set -> void
+Titanium.Web.Proxy.Models.IExternalProxy.ProxyType.get -> Titanium.Web.Proxy.Models.ExternalProxyType
+Titanium.Web.Proxy.Models.IExternalProxy.ProxyType.set -> void
+Titanium.Web.Proxy.Models.IExternalProxy.ToString() -> string!
+Titanium.Web.Proxy.Models.IExternalProxy.UseDefaultCredentials.get -> bool
+Titanium.Web.Proxy.Models.IExternalProxy.UseDefaultCredentials.set -> void
+Titanium.Web.Proxy.Models.IExternalProxy.UserName.get -> string?
+Titanium.Web.Proxy.Models.IExternalProxy.UserName.set -> void
+Titanium.Web.Proxy.Models.OriginHttpVersionPolicy
+Titanium.Web.Proxy.Models.OriginHttpVersionPolicy.NormalizeToHttp11 = 1 -> Titanium.Web.Proxy.Models.OriginHttpVersionPolicy
+Titanium.Web.Proxy.Models.OriginHttpVersionPolicy.PreserveClientVersion = 0 -> Titanium.Web.Proxy.Models.OriginHttpVersionPolicy
+Titanium.Web.Proxy.Models.ProxyAuthenticationContext
+Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Continuation.get -> string?
+Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Continuation.set -> void
+Titanium.Web.Proxy.Models.ProxyAuthenticationContext.ProxyAuthenticationContext() -> void
+Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Result.get -> Titanium.Web.Proxy.Models.ProxyAuthenticationResult
+Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Result.set -> void
+Titanium.Web.Proxy.Models.ProxyAuthenticationResult
+Titanium.Web.Proxy.Models.ProxyAuthenticationResult.ContinuationNeeded = 2 -> Titanium.Web.Proxy.Models.ProxyAuthenticationResult
+Titanium.Web.Proxy.Models.ProxyAuthenticationResult.Failure = 1 -> Titanium.Web.Proxy.Models.ProxyAuthenticationResult
+Titanium.Web.Proxy.Models.ProxyAuthenticationResult.Success = 0 -> Titanium.Web.Proxy.Models.ProxyAuthenticationResult
+Titanium.Web.Proxy.Models.ProxyEndPoint
+Titanium.Web.Proxy.Models.ProxyEndPoint.AdmittedClientCount.get -> int
+Titanium.Web.Proxy.Models.ProxyEndPoint.DecryptSsl.get -> bool
+Titanium.Web.Proxy.Models.ProxyEndPoint.GenericCertificate.get -> System.Security.Cryptography.X509Certificates.X509Certificate2?
+Titanium.Web.Proxy.Models.ProxyEndPoint.GenericCertificate.set -> void
+Titanium.Web.Proxy.Models.ProxyEndPoint.IpAddress.get -> System.Net.IPAddress!
+Titanium.Web.Proxy.Models.ProxyEndPoint.MaxConcurrentClients.get -> int?
+Titanium.Web.Proxy.Models.ProxyEndPoint.MaxConcurrentClients.set -> void
+Titanium.Web.Proxy.Models.ProxyEndPoint.Port.get -> int
+Titanium.Web.Proxy.Models.ProxyEndPoint.ProxyEndPoint(System.Net.IPAddress! ipAddress, int port, bool decryptSsl) -> void
+Titanium.Web.Proxy.Models.ProxyProtocolType
+Titanium.Web.Proxy.Models.ProxyProtocolType.AllHttp = Titanium.Web.Proxy.Models.ProxyProtocolType.Http | Titanium.Web.Proxy.Models.ProxyProtocolType.Https -> Titanium.Web.Proxy.Models.ProxyProtocolType
+Titanium.Web.Proxy.Models.ProxyProtocolType.Http = 1 -> Titanium.Web.Proxy.Models.ProxyProtocolType
+Titanium.Web.Proxy.Models.ProxyProtocolType.Https = 2 -> Titanium.Web.Proxy.Models.ProxyProtocolType
+Titanium.Web.Proxy.Models.ProxyProtocolType.None = 0 -> Titanium.Web.Proxy.Models.ProxyProtocolType
+Titanium.Web.Proxy.Models.SocksProxyEndPoint
+Titanium.Web.Proxy.Models.SocksProxyEndPoint.AuthenticateUserFunc.get -> System.Func<Titanium.Web.Proxy.EventArguments.SocksAuthenticateEventArgs!, System.Threading.Tasks.Task<bool>!>?
+Titanium.Web.Proxy.Models.SocksProxyEndPoint.AuthenticateUserFunc.set -> void
+Titanium.Web.Proxy.Models.SocksProxyEndPoint.BeforeSslAuthenticate -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs!>?
+Titanium.Web.Proxy.Models.SocksProxyEndPoint.SocksProxyEndPoint(System.Net.IPAddress! ipAddress, int port, bool decryptSsl = true) -> void
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardHost.get -> string?
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardHost.set -> void
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardPort.get -> int?
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardPort.set -> void
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TransparentBaseProxyEndPoint(System.Net.IPAddress! ipAddress, int port, bool decryptSsl) -> void
+Titanium.Web.Proxy.Models.TransparentProxyEndPoint
+Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeSslAuthenticate -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs!>?
+Titanium.Web.Proxy.Models.TransparentProxyEndPoint.TransparentProxyEndPoint(System.Net.IPAddress! ipAddress, int port, bool decryptSsl = true) -> void
+Titanium.Web.Proxy.Models.UpstreamHttpProtocol
+Titanium.Web.Proxy.Models.UpstreamHttpProtocol.Auto = 0 -> Titanium.Web.Proxy.Models.UpstreamHttpProtocol
+Titanium.Web.Proxy.Models.UpstreamHttpProtocol.Http11 = 1 -> Titanium.Web.Proxy.Models.UpstreamHttpProtocol
+Titanium.Web.Proxy.Models.UpstreamHttpProtocol.Http2 = 2 -> Titanium.Web.Proxy.Models.UpstreamHttpProtocol
+Titanium.Web.Proxy.Models.UpstreamHttpProtocol.Http3 = 3 -> Titanium.Web.Proxy.Models.UpstreamHttpProtocol
+Titanium.Web.Proxy.Models.WinAuthCredentials
+Titanium.Web.Proxy.Models.WinAuthCredentials.Domain.get -> string?
+Titanium.Web.Proxy.Models.WinAuthCredentials.Domain.set -> void
+Titanium.Web.Proxy.Models.WinAuthCredentials.Password.get -> string!
+Titanium.Web.Proxy.Models.WinAuthCredentials.Password.set -> void
+Titanium.Web.Proxy.Models.WinAuthCredentials.UserName.get -> string!
+Titanium.Web.Proxy.Models.WinAuthCredentials.UserName.set -> void
+Titanium.Web.Proxy.Models.WinAuthCredentials.WinAuthCredentials() -> void
+Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
+Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameDirectoryName = 5 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
+Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameDnsName = 3 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
+Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameGuid = 10 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
+Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameIpAddress = 8 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
+Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameOtherName = 1 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
+Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameRegisteredId = 9 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
+Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameRfc822Name = 2 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
+Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameUnknown = 0 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
+Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameUrl = 7 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
+Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameUserPrincipleName = 11 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
+Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringAny = 7 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64 = 1 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Any = 6 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Header = 0 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Requestheader = 3 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Uri = 13 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64X509Crlheader = 9 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBinary = 2 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringChain = 256 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringEncodemask = 255 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHashdata = 268435456 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHex = 4 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexaddr = 10 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexAny = 8 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexascii = 5 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexasciiaddr = 11 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexraw = 12 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringNocr = -2147483648 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringNocrlf = 1073741824 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringPercentescape = 134217728 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringStrict = 536870912 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringText = 512 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
+Titanium.Web.Proxy.Network.CertificateEngine
+Titanium.Web.Proxy.Network.CertificateEngine.BouncyCastle = 0 -> Titanium.Web.Proxy.Network.CertificateEngine
+Titanium.Web.Proxy.Network.CertificateEngine.BouncyCastleFast = 2 -> Titanium.Web.Proxy.Network.CertificateEngine
+Titanium.Web.Proxy.Network.CertificateEngine.DefaultWindows = 1 -> Titanium.Web.Proxy.Network.CertificateEngine
+Titanium.Web.Proxy.Network.CertificateManager
+Titanium.Web.Proxy.Network.CertificateManager.CertificateCacheTimeOutMinutes.get -> int
+Titanium.Web.Proxy.Network.CertificateManager.CertificateCacheTimeOutMinutes.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.CertificateEngine.get -> Titanium.Web.Proxy.Network.CertificateEngine
+Titanium.Web.Proxy.Network.CertificateManager.CertificateEngine.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.CertificateGraceDays.get -> int
+Titanium.Web.Proxy.Network.CertificateManager.CertificateGraceDays.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.CertificateStorage.get -> Titanium.Web.Proxy.Network.ICertificateCache!
+Titanium.Web.Proxy.Network.CertificateManager.CertificateStorage.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.CertificateValidDays.get -> int
+Titanium.Web.Proxy.Network.CertificateManager.CertificateValidDays.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.ClearRootCertificate() -> void
+Titanium.Web.Proxy.Network.CertificateManager.CreateRootCertificate(bool persistToFile = true) -> bool
+Titanium.Web.Proxy.Network.CertificateManager.CreateServerCertificate(string! certificateName) -> System.Threading.Tasks.Task<System.Security.Cryptography.X509Certificates.X509Certificate2?>!
+Titanium.Web.Proxy.Network.CertificateManager.DisableWildCardCertificates.get -> bool
+Titanium.Web.Proxy.Network.CertificateManager.DisableWildCardCertificates.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.Dispose() -> void
+Titanium.Web.Proxy.Network.CertificateManager.EnsureRootCertificate() -> void
+Titanium.Web.Proxy.Network.CertificateManager.EnsureRootCertificate(bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin = false) -> void
+Titanium.Web.Proxy.Network.CertificateManager.IntermediateCertificates.get -> System.Security.Cryptography.X509Certificates.X509Certificate2Collection?
+Titanium.Web.Proxy.Network.CertificateManager.IntermediateCertificates.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.IsRootCertificateMachineTrusted() -> bool
+Titanium.Web.Proxy.Network.CertificateManager.IsRootCertificateUserTrusted() -> bool
+Titanium.Web.Proxy.Network.CertificateManager.LoadRootCertificate() -> System.Security.Cryptography.X509Certificates.X509Certificate2?
+Titanium.Web.Proxy.Network.CertificateManager.LoadRootCertificate(string! pfxFilePath, string! password, bool overwritePfXFile = true, System.Security.Cryptography.X509Certificates.X509KeyStorageFlags storageFlag = System.Security.Cryptography.X509Certificates.X509KeyStorageFlags.Exportable) -> bool
+Titanium.Web.Proxy.Network.CertificateManager.OverwritePfxFile.get -> bool
+Titanium.Web.Proxy.Network.CertificateManager.OverwritePfxFile.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.PfxFilePath.get -> string!
+Titanium.Web.Proxy.Network.CertificateManager.PfxFilePath.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.PfxPassword.get -> string!
+Titanium.Web.Proxy.Network.CertificateManager.PfxPassword.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.RemoveTrustedRootCertificate(bool machineTrusted = false) -> void
+Titanium.Web.Proxy.Network.CertificateManager.RemoveTrustedRootCertificateAsAdmin(bool machineTrusted = false) -> bool
+Titanium.Web.Proxy.Network.CertificateManager.RootCertificate.get -> System.Security.Cryptography.X509Certificates.X509Certificate2?
+Titanium.Web.Proxy.Network.CertificateManager.RootCertificate.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.RootCertificateIssuerName.get -> string!
+Titanium.Web.Proxy.Network.CertificateManager.RootCertificateIssuerName.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.RootCertificateName.get -> string!
+Titanium.Web.Proxy.Network.CertificateManager.RootCertificateName.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.SaveFakeCertificates.get -> bool
+Titanium.Web.Proxy.Network.CertificateManager.SaveFakeCertificates.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.StorageFlag.get -> System.Security.Cryptography.X509Certificates.X509KeyStorageFlags
+Titanium.Web.Proxy.Network.CertificateManager.StorageFlag.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.TrustRootCertificate(bool machineTrusted = false) -> void
+Titanium.Web.Proxy.Network.CertificateManager.TrustRootCertificateAsAdmin(bool machineTrusted = false) -> bool
+Titanium.Web.Proxy.Network.DefaultCertificateDiskCache
+Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.Clear() -> void
+Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.DefaultCertificateDiskCache() -> void
+Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.LoadCertificate(string! subjectName, System.Security.Cryptography.X509Certificates.X509KeyStorageFlags storageFlags) -> System.Security.Cryptography.X509Certificates.X509Certificate2?
+Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.LoadRootCertificate(string! pathOrName, string! password, System.Security.Cryptography.X509Certificates.X509KeyStorageFlags storageFlags) -> System.Security.Cryptography.X509Certificates.X509Certificate2?
+Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.PruneToMaxEntries(int? maxEntries) -> void
+Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.SaveCertificate(string! subjectName, System.Security.Cryptography.X509Certificates.X509Certificate2! certificate) -> void
+Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.SaveRootCertificate(string! pathOrName, string! password, System.Security.Cryptography.X509Certificates.X509Certificate2! certificate) -> void
+Titanium.Web.Proxy.Network.ICertificateCache
+Titanium.Web.Proxy.Network.ICertificateCache.Clear() -> void
+Titanium.Web.Proxy.Network.ICertificateCache.LoadCertificate(string! subjectName, System.Security.Cryptography.X509Certificates.X509KeyStorageFlags storageFlags) -> System.Security.Cryptography.X509Certificates.X509Certificate2?
+Titanium.Web.Proxy.Network.ICertificateCache.LoadRootCertificate(string! pathOrName, string! password, System.Security.Cryptography.X509Certificates.X509KeyStorageFlags storageFlags) -> System.Security.Cryptography.X509Certificates.X509Certificate2?
+Titanium.Web.Proxy.Network.ICertificateCache.SaveCertificate(string! subjectName, System.Security.Cryptography.X509Certificates.X509Certificate2! certificate) -> void
+Titanium.Web.Proxy.Network.ICertificateCache.SaveRootCertificate(string! pathOrName, string! password, System.Security.Cryptography.X509Certificates.X509Certificate2! certificate) -> void
+Titanium.Web.Proxy.Network.Quic.IOriginalDestinationResolver
+Titanium.Web.Proxy.Network.Quic.IOriginalDestinationResolver.ResolveAsync(System.Net.IPEndPoint! localEndPoint, System.Net.IPEndPoint! remoteEndPoint, string? sniHostName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<(string! hostName, int port)?>
+Titanium.Web.Proxy.Options.PolicyFamily
+Titanium.Web.Proxy.Options.PolicyFamily.AdmissionControl = 3 -> Titanium.Web.Proxy.Options.PolicyFamily
+Titanium.Web.Proxy.Options.PolicyFamily.BodyBudget = 0 -> Titanium.Web.Proxy.Options.PolicyFamily
+Titanium.Web.Proxy.Options.PolicyFamily.DecompressionRatio = 1 -> Titanium.Web.Proxy.Options.PolicyFamily
+Titanium.Web.Proxy.Options.PolicyFamily.HeaderLimits = 2 -> Titanium.Web.Proxy.Options.PolicyFamily
+Titanium.Web.Proxy.Options.PolicyFamily.Http2AbuseBudget = 4 -> Titanium.Web.Proxy.Options.PolicyFamily
+Titanium.Web.Proxy.Options.PolicyMode
+Titanium.Web.Proxy.Options.PolicyMode.Disabled = 0 -> Titanium.Web.Proxy.Options.PolicyMode
+Titanium.Web.Proxy.Options.PolicyMode.Enforce = 2 -> Titanium.Web.Proxy.Options.PolicyMode
+Titanium.Web.Proxy.Options.PolicyMode.Observe = 1 -> Titanium.Web.Proxy.Options.PolicyMode
+Titanium.Web.Proxy.Options.ProxyPolicyModes
+Titanium.Web.Proxy.Options.ProxyPolicyModes.AllowAmbiguousFraming.get -> bool
+Titanium.Web.Proxy.Options.ProxyPolicyModes.this[Titanium.Web.Proxy.Options.PolicyFamily family].get -> Titanium.Web.Proxy.Options.PolicyMode
+Titanium.Web.Proxy.Options.ProxyPolicyModes.With(Titanium.Web.Proxy.Options.PolicyFamily family, Titanium.Web.Proxy.Options.PolicyMode mode) -> Titanium.Web.Proxy.Options.ProxyPolicyModes!
+Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllObservedExceptDisabled() -> Titanium.Web.Proxy.Options.ProxyPolicyModes!
+Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllowAmbiguousFramingEnabled() -> Titanium.Web.Proxy.Options.ProxyPolicyModes!
+Titanium.Web.Proxy.Options.ProxyProfile
+Titanium.Web.Proxy.Options.ProxyProfile.Balanced = 0 -> Titanium.Web.Proxy.Options.ProxyProfile
+Titanium.Web.Proxy.Options.ProxyProfile.LegacyCompatible = 1 -> Titanium.Web.Proxy.Options.ProxyProfile
+Titanium.Web.Proxy.Options.ProxyProfile.PublicFacing = 2 -> Titanium.Web.Proxy.Options.ProxyProfile
+Titanium.Web.Proxy.Options.ProxyProfileSettings
+Titanium.Web.Proxy.Options.ProxyProfileSettings.BlockPrivateNetworkDestinations.get -> bool
+Titanium.Web.Proxy.Options.ProxyProfileSettings.ClientHeaderTimeoutSeconds.get -> int
+Titanium.Web.Proxy.Options.ProxyProfileSettings.IdleReadTimeoutSeconds.get -> int
+Titanium.Web.Proxy.Options.ProxyProfileSettings.IdleWriteTimeoutSeconds.get -> int
+Titanium.Web.Proxy.Options.ProxyProfileSettings.MaxConcurrentClientConnections.get -> int?
+Titanium.Web.Proxy.Options.ProxyProfileSettings.PolicyModes.get -> Titanium.Web.Proxy.Options.ProxyPolicyModes!
+Titanium.Web.Proxy.Options.ProxyProfileSettings.RequestTimeoutSeconds.get -> int
+Titanium.Web.Proxy.Options.ProxyProfileSettings.ResourceLimits.get -> Titanium.Web.Proxy.Options.ProxyResourceLimits!
+Titanium.Web.Proxy.Options.ProxyProfileSettings.ResponseHeaderTimeoutSeconds.get -> int
+Titanium.Web.Proxy.Options.ProxyProfileSettings.SupportedSslProtocols.get -> System.Security.Authentication.SslProtocols
+Titanium.Web.Proxy.Options.ProxyResourceLimits
+Titanium.Web.Proxy.Options.ProxyResourceLimits.ConnectionPoolingEnabled.get -> bool
+Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCachedConnectionsPerHost.get -> int
+Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCertificateCacheEntries.get -> int?
+Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxConcurrentClients.get -> int?
+Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxConcurrentStreamsPerConnection.get -> int
+Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDecodedBodyBytes.get -> long?
+Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDecompressionRatio.get -> double?
+Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxEncodedBodyBytes.get -> long?
+Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHeaderAggregateBytes.get -> long
+Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHeaderCount.get -> int
+Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHeaderLineBytes.get -> long
+Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOpenHeaderBlockDuration.get -> System.TimeSpan
+Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOpenHeaderBlockFrames.get -> int
+Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxPeerInitiatedIncompleteStreamResets.get -> int?
+Titanium.Web.Proxy.Options.ProxyTimeoutOptions
+Titanium.Web.Proxy.Options.ProxyTimeoutOptions.CallbackTimeout.get -> System.TimeSpan?
+Titanium.Web.Proxy.Options.ProxyTimeoutOptions.ClientHeaderTimeout.get -> System.TimeSpan
+Titanium.Web.Proxy.Options.ProxyTimeoutOptions.ConnectTimeout.get -> System.TimeSpan
+Titanium.Web.Proxy.Options.ProxyTimeoutOptions.DrainTimeout.get -> System.TimeSpan
+Titanium.Web.Proxy.Options.ProxyTimeoutOptions.IdleReadTimeout.get -> System.TimeSpan
+Titanium.Web.Proxy.Options.ProxyTimeoutOptions.IdleWriteTimeout.get -> System.TimeSpan
+Titanium.Web.Proxy.Options.ProxyTimeoutOptions.ResponseHeaderTimeout.get -> System.TimeSpan
+Titanium.Web.Proxy.Options.ProxyTimeoutOptions.StreamTimeout.get -> System.TimeSpan?
+Titanium.Web.Proxy.Options.ProxyTimeoutOptions.TotalRequestTimeout.get -> System.TimeSpan?
+Titanium.Web.Proxy.Options.ResolvedSessionPolicy
+Titanium.Web.Proxy.Options.ResolvedSessionPolicy.ResourceLimits.get -> Titanium.Web.Proxy.Options.ProxyResourceLimits!
+Titanium.Web.Proxy.Options.ResolvedSessionPolicy.Timeouts.get -> Titanium.Web.Proxy.Options.ProxyTimeoutOptions!
+Titanium.Web.Proxy.Options.ResolvedSessionPolicy.WithResourceLimits(Titanium.Web.Proxy.Options.ProxyResourceLimits! resourceLimits) -> Titanium.Web.Proxy.Options.ResolvedSessionPolicy!
+Titanium.Web.Proxy.ProxyLimits
+Titanium.Web.Proxy.ProxyServer
+Titanium.Web.Proxy.ProxyServer.AddEndPoint(Titanium.Web.Proxy.Models.ProxyEndPoint! endPoint) -> void
+Titanium.Web.Proxy.ProxyServer.AdmittedClientConnectionCount.get -> int
+Titanium.Web.Proxy.ProxyServer.AfterResponse -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.SessionEventArgs!>?
+Titanium.Web.Proxy.ProxyServer.ApplyLoggingConfiguration() -> void
+Titanium.Web.Proxy.ProxyServer.BeforeRequest -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.SessionEventArgs!>?
+Titanium.Web.Proxy.ProxyServer.BeforeResponse -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.SessionEventArgs!>?
+Titanium.Web.Proxy.ProxyServer.BeforeUpStreamConnectRequest -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.Http.ConnectRequest!>?
+Titanium.Web.Proxy.ProxyServer.BlockPrivateNetworkDestinations.get -> bool
+Titanium.Web.Proxy.ProxyServer.BlockPrivateNetworkDestinations.set -> void
+Titanium.Web.Proxy.ProxyServer.BufferPool.get -> Titanium.Web.Proxy.StreamExtended.BufferPool.IBufferPool!
+Titanium.Web.Proxy.ProxyServer.BufferPool.set -> void
+Titanium.Web.Proxy.ProxyServer.CertificateManager.get -> Titanium.Web.Proxy.Network.CertificateManager!
+Titanium.Web.Proxy.ProxyServer.CheckCertificateRevocation.get -> System.Security.Cryptography.X509Certificates.X509RevocationMode
+Titanium.Web.Proxy.ProxyServer.CheckCertificateRevocation.set -> void
+Titanium.Web.Proxy.ProxyServer.ClientCertificateSelectionCallback -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.CertificateSelectionEventArgs!>?
+Titanium.Web.Proxy.ProxyServer.ClientConnectionCount.get -> int
+Titanium.Web.Proxy.ProxyServer.ClientConnectionCountChanged -> System.EventHandler?
+Titanium.Web.Proxy.ProxyServer.ClientHeaderTimeoutSeconds.get -> int
+Titanium.Web.Proxy.ProxyServer.ClientHeaderTimeoutSeconds.set -> void
+Titanium.Web.Proxy.ProxyServer.CompatibilityMode100Continue.get -> bool
+Titanium.Web.Proxy.ProxyServer.CompatibilityMode100Continue.set -> void
+Titanium.Web.Proxy.ProxyServer.ConnectionTimeOutSeconds.get -> int
+Titanium.Web.Proxy.ProxyServer.ConnectionTimeOutSeconds.set -> void
+Titanium.Web.Proxy.ProxyServer.ConnectTimeOutSeconds.get -> int
+Titanium.Web.Proxy.ProxyServer.ConnectTimeOutSeconds.set -> void
+Titanium.Web.Proxy.ProxyServer.CustomUpStreamProxyFailureFunc.get -> System.Func<Titanium.Web.Proxy.EventArguments.SessionEventArgsBase!, System.Threading.Tasks.Task<Titanium.Web.Proxy.Models.IExternalProxy?>!>?
+Titanium.Web.Proxy.ProxyServer.CustomUpStreamProxyFailureFunc.set -> void
+Titanium.Web.Proxy.ProxyServer.DisableAllSystemProxies() -> void
+Titanium.Web.Proxy.ProxyServer.DisableSystemHttpProxy() -> void
+Titanium.Web.Proxy.ProxyServer.DisableSystemHttpsProxy() -> void
+Titanium.Web.Proxy.ProxyServer.DisableSystemProxy(Titanium.Web.Proxy.Models.ProxyProtocolType protocolType) -> void
+Titanium.Web.Proxy.ProxyServer.Dispose() -> void
+Titanium.Web.Proxy.ProxyServer.Enable100ContinueBehaviour.get -> bool
+Titanium.Web.Proxy.ProxyServer.Enable100ContinueBehaviour.set -> void
+Titanium.Web.Proxy.ProxyServer.EnableConnectionPool.get -> bool
+Titanium.Web.Proxy.ProxyServer.EnableConnectionPool.set -> void
+Titanium.Web.Proxy.ProxyServer.EnableHttp2.get -> bool
+Titanium.Web.Proxy.ProxyServer.EnableHttp2.set -> void
+Titanium.Web.Proxy.ProxyServer.EnableRequestTimingCapture.get -> bool
+Titanium.Web.Proxy.ProxyServer.EnableRequestTimingCapture.set -> void
+Titanium.Web.Proxy.ProxyServer.EnableRfc8441.get -> bool
+Titanium.Web.Proxy.ProxyServer.EnableRfc8441.set -> void
+Titanium.Web.Proxy.ProxyServer.EnableTcpKeepAlive.get -> bool
+Titanium.Web.Proxy.ProxyServer.EnableTcpKeepAlive.set -> void
+Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch.get -> bool
+Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch.set -> void
+Titanium.Web.Proxy.ProxyServer.EnableWinAuth.get -> bool
+Titanium.Web.Proxy.ProxyServer.EnableWinAuth.set -> void
+Titanium.Web.Proxy.ProxyServer.EndpointAdmissionRejectionCount.get -> long
+Titanium.Web.Proxy.ProxyServer.ForwardToUpstreamGateway.get -> bool
+Titanium.Web.Proxy.ProxyServer.ForwardToUpstreamGateway.set -> void
+Titanium.Web.Proxy.ProxyServer.GetCustomUpStreamProxyFunc.get -> System.Func<Titanium.Web.Proxy.EventArguments.SessionEventArgsBase!, System.Threading.Tasks.Task<Titanium.Web.Proxy.Models.IExternalProxy?>!>?
+Titanium.Web.Proxy.ProxyServer.GetCustomUpStreamProxyFunc.set -> void
+Titanium.Web.Proxy.ProxyServer.GlobalAdmissionRejectionCount.get -> long
+Titanium.Web.Proxy.ProxyServer.Http3ClientConnectionCount.get -> int
+Titanium.Web.Proxy.ProxyServer.Http3ClientConnectionCountChanged -> System.EventHandler?
+Titanium.Web.Proxy.ProxyServer.Http3ServerConnectionCount.get -> int
+Titanium.Web.Proxy.ProxyServer.Http3ServerConnectionCountChanged -> System.EventHandler?
+Titanium.Web.Proxy.ProxyServer.IdleReadTimeoutSeconds.get -> int
+Titanium.Web.Proxy.ProxyServer.IdleReadTimeoutSeconds.set -> void
+Titanium.Web.Proxy.ProxyServer.IdleWriteTimeoutSeconds.get -> int
+Titanium.Web.Proxy.ProxyServer.IdleWriteTimeoutSeconds.set -> void
+Titanium.Web.Proxy.ProxyServer.ListenerBackLog.get -> int
+Titanium.Web.Proxy.ProxyServer.ListenerBackLog.set -> void
+Titanium.Web.Proxy.ProxyServer.Logger.get -> Microsoft.Extensions.Logging.ILogger!
+Titanium.Web.Proxy.ProxyServer.Logging.get -> Titanium.Web.Proxy.Logging.ProxyLoggingOptions!
+Titanium.Web.Proxy.ProxyServer.Logging.set -> void
+Titanium.Web.Proxy.ProxyServer.MaxBufferedBodyBytes.get -> int
+Titanium.Web.Proxy.ProxyServer.MaxBufferedBodyBytes.set -> void
+Titanium.Web.Proxy.ProxyServer.MaxCachedConnections.get -> int
+Titanium.Web.Proxy.ProxyServer.MaxCachedConnections.set -> void
+Titanium.Web.Proxy.ProxyServer.MaxConcurrentClientConnections.get -> int?
+Titanium.Web.Proxy.ProxyServer.MaxConcurrentClientConnections.set -> void
+Titanium.Web.Proxy.ProxyServer.MaxDecodedHeaderListBytes.get -> int
+Titanium.Web.Proxy.ProxyServer.MaxDecodedHeaderListBytes.set -> void
+Titanium.Web.Proxy.ProxyServer.MaxWebSocketFramePayloadBytes.get -> int
+Titanium.Web.Proxy.ProxyServer.MaxWebSocketFramePayloadBytes.set -> void
+Titanium.Web.Proxy.ProxyServer.NetworkFailureRetryAttempts.get -> int
+Titanium.Web.Proxy.ProxyServer.NetworkFailureRetryAttempts.set -> void
+Titanium.Web.Proxy.ProxyServer.NoDelay.get -> bool
+Titanium.Web.Proxy.ProxyServer.NoDelay.set -> void
+Titanium.Web.Proxy.ProxyServer.OnClientConnectionCreate -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<System.Net.Sockets.Socket!>?
+Titanium.Web.Proxy.ProxyServer.OnRequestBodyWrite -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.BeforeBodyWriteEventArgs!>?
+Titanium.Web.Proxy.ProxyServer.OnResponseBodyWrite -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.BeforeBodyWriteEventArgs!>?
+Titanium.Web.Proxy.ProxyServer.OnServerConnectionCreate -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<System.Net.Sockets.Socket!>?
+Titanium.Web.Proxy.ProxyServer.OriginHttpVersionPolicy.get -> Titanium.Web.Proxy.Models.OriginHttpVersionPolicy
+Titanium.Web.Proxy.ProxyServer.OriginHttpVersionPolicy.set -> void
+Titanium.Web.Proxy.ProxyServer.PolicyModes.get -> Titanium.Web.Proxy.Options.ProxyPolicyModes!
+Titanium.Web.Proxy.ProxyServer.PolicyModes.set -> void
+Titanium.Web.Proxy.ProxyServer.Profile.get -> Titanium.Web.Proxy.Options.ProxyProfile
+Titanium.Web.Proxy.ProxyServer.Profile.set -> void
+Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationRealm.get -> string!
+Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationRealm.set -> void
+Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationSchemes.get -> System.Collections.Generic.IEnumerable<string!>!
+Titanium.Web.Proxy.ProxyServer.ProxyAuthenticationSchemes.set -> void
+Titanium.Web.Proxy.ProxyServer.ProxyBasicAuthenticateFunc.get -> System.Func<Titanium.Web.Proxy.EventArguments.SessionEventArgsBase?, string!, string!, System.Threading.Tasks.Task<bool>!>?
+Titanium.Web.Proxy.ProxyServer.ProxyBasicAuthenticateFunc.set -> void
+Titanium.Web.Proxy.ProxyServer.ProxyEndPoints.get -> System.Collections.Generic.List<Titanium.Web.Proxy.Models.ProxyEndPoint!>!
+Titanium.Web.Proxy.ProxyServer.ProxyEndPoints.set -> void
+Titanium.Web.Proxy.ProxyServer.ProxyRunning.get -> bool
+Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc.get -> System.Func<Titanium.Web.Proxy.EventArguments.SessionEventArgsBase!, string!, string!, System.Threading.Tasks.Task<Titanium.Web.Proxy.Models.ProxyAuthenticationContext!>!>?
+Titanium.Web.Proxy.ProxyServer.ProxySchemeAuthenticateFunc.set -> void
+Titanium.Web.Proxy.ProxyServer.ProxyServer(bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false, bool trustRootCertificateAsAdmin = false) -> void
+Titanium.Web.Proxy.ProxyServer.ProxyServer(string? rootCertificateName, string? rootCertificateIssuerName, bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false, bool trustRootCertificateAsAdmin = false) -> void
+Titanium.Web.Proxy.ProxyServer.RemoveEndPoint(Titanium.Web.Proxy.Models.ProxyEndPoint! endPoint) -> void
+Titanium.Web.Proxy.ProxyServer.RequestTimeoutSeconds.get -> int
+Titanium.Web.Proxy.ProxyServer.RequestTimeoutSeconds.set -> void
+Titanium.Web.Proxy.ProxyServer.ResourceLimits.get -> Titanium.Web.Proxy.Options.ProxyResourceLimits!
+Titanium.Web.Proxy.ProxyServer.ResourceLimits.set -> void
+Titanium.Web.Proxy.ProxyServer.ResponseHeaderTimeoutSeconds.get -> int
+Titanium.Web.Proxy.ProxyServer.ResponseHeaderTimeoutSeconds.set -> void
+Titanium.Web.Proxy.ProxyServer.RestoreOriginalProxySettings() -> void
+Titanium.Web.Proxy.ProxyServer.ReuseSocket.get -> bool
+Titanium.Web.Proxy.ProxyServer.ReuseSocket.set -> void
+Titanium.Web.Proxy.ProxyServer.ServerCertificateValidationCallback -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs!>?
+Titanium.Web.Proxy.ProxyServer.ServerConnectionCount.get -> int
+Titanium.Web.Proxy.ProxyServer.ServerConnectionCountChanged -> System.EventHandler?
+Titanium.Web.Proxy.ProxyServer.SetAsSystemHttpProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint! endPoint) -> void
+Titanium.Web.Proxy.ProxyServer.SetAsSystemHttpProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint! endPoint, Titanium.Web.Proxy.SystemProxySettings! settings) -> void
+Titanium.Web.Proxy.ProxyServer.SetAsSystemHttpsProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint! endPoint) -> void
+Titanium.Web.Proxy.ProxyServer.SetAsSystemHttpsProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint! endPoint, Titanium.Web.Proxy.SystemProxySettings! settings) -> void
+Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint! endPoint, Titanium.Web.Proxy.Models.ProxyProtocolType protocolType) -> void
+Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint! endPoint, Titanium.Web.Proxy.Models.ProxyProtocolType protocolType, Titanium.Web.Proxy.SystemProxySettings? settings) -> void
+Titanium.Web.Proxy.ProxyServer.Start(bool changeSystemProxySettings = true) -> void
+Titanium.Web.Proxy.ProxyServer.Stop() -> void
+Titanium.Web.Proxy.ProxyServer.StopAsync(System.TimeSpan? drainTimeout = null) -> System.Threading.Tasks.Task!
+Titanium.Web.Proxy.ProxyServer.SupportedServerSslProtocols.get -> System.Security.Authentication.SslProtocols
+Titanium.Web.Proxy.ProxyServer.SupportedServerSslProtocols.set -> void
+Titanium.Web.Proxy.ProxyServer.SupportedSslProtocols.get -> System.Security.Authentication.SslProtocols
+Titanium.Web.Proxy.ProxyServer.SupportedSslProtocols.set -> void
+Titanium.Web.Proxy.ProxyServer.TcpTimeWaitSeconds.get -> int
+Titanium.Web.Proxy.ProxyServer.TcpTimeWaitSeconds.set -> void
+Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread.get -> int
+Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread.set -> void
+Titanium.Web.Proxy.ProxyServer.UpStreamEndPoint.get -> System.Net.IPEndPoint?
+Titanium.Web.Proxy.ProxyServer.UpStreamEndPoint.set -> void
+Titanium.Web.Proxy.ProxyServer.UpStreamEndPointIPv4.get -> System.Net.IPEndPoint?
+Titanium.Web.Proxy.ProxyServer.UpStreamEndPointIPv4.set -> void
+Titanium.Web.Proxy.ProxyServer.UpStreamEndPointIPv6.get -> System.Net.IPEndPoint?
+Titanium.Web.Proxy.ProxyServer.UpStreamEndPointIPv6.set -> void
+Titanium.Web.Proxy.ProxyServer.UpStreamHttpProxy.get -> Titanium.Web.Proxy.Models.IExternalProxy?
+Titanium.Web.Proxy.ProxyServer.UpStreamHttpProxy.set -> void
+Titanium.Web.Proxy.ProxyServer.UpStreamHttpsProxy.get -> Titanium.Web.Proxy.Models.IExternalProxy?
+Titanium.Web.Proxy.ProxyServer.UpStreamHttpsProxy.set -> void
+Titanium.Web.Proxy.ProxyServer.UpstreamProxyConfigurationScript.get -> System.Uri?
+Titanium.Web.Proxy.ProxyServer.UpstreamProxyConfigurationScript.set -> void
+Titanium.Web.Proxy.ProxyServer.ViaHeaderPseudonym.get -> string!
+Titanium.Web.Proxy.ProxyServer.ViaHeaderPseudonym.set -> void
+Titanium.Web.Proxy.ProxyServer.WinAuthCredentialsProvider.get -> System.Func<Titanium.Web.Proxy.EventArguments.SessionEventArgs!, System.Threading.Tasks.Task<Titanium.Web.Proxy.Models.WinAuthCredentials?>!>?
+Titanium.Web.Proxy.ProxyServer.WinAuthCredentialsProvider.set -> void
+Titanium.Web.Proxy.StreamExtended.BufferPool.IBufferPool
+Titanium.Web.Proxy.StreamExtended.BufferPool.IBufferPool.BufferSize.get -> int
+Titanium.Web.Proxy.StreamExtended.BufferPool.IBufferPool.GetBuffer() -> byte[]!
+Titanium.Web.Proxy.StreamExtended.BufferPool.IBufferPool.GetBuffer(int bufferSize) -> byte[]!
+Titanium.Web.Proxy.StreamExtended.BufferPool.IBufferPool.ReturnBuffer(byte[]! buffer) -> void
+Titanium.Web.Proxy.StreamExtended.ClientHelloInfo
+Titanium.Web.Proxy.StreamExtended.ClientHelloInfo.Ciphers.get -> int[]!
+Titanium.Web.Proxy.StreamExtended.ClientHelloInfo.CompressionData.get -> byte[]?
+Titanium.Web.Proxy.StreamExtended.ClientHelloInfo.Extensions.get -> System.Collections.Generic.Dictionary<string!, Titanium.Web.Proxy.StreamExtended.Models.SslExtension!>?
+Titanium.Web.Proxy.StreamExtended.ClientHelloInfo.Extensions.set -> void
+Titanium.Web.Proxy.StreamExtended.ClientHelloInfo.HandshakeVersion.get -> int
+Titanium.Web.Proxy.StreamExtended.ClientHelloInfo.MajorVersion.get -> int
+Titanium.Web.Proxy.StreamExtended.ClientHelloInfo.MinorVersion.get -> int
+Titanium.Web.Proxy.StreamExtended.ClientHelloInfo.Random.get -> byte[]!
+Titanium.Web.Proxy.StreamExtended.ClientHelloInfo.SessionId.get -> byte[]!
+Titanium.Web.Proxy.StreamExtended.ClientHelloInfo.SslProtocol.get -> System.Security.Authentication.SslProtocols
+Titanium.Web.Proxy.StreamExtended.ClientHelloInfo.Time.get -> System.DateTime
+Titanium.Web.Proxy.StreamExtended.Models.SslExtension
+Titanium.Web.Proxy.StreamExtended.Models.SslExtension.Data.get -> string!
+Titanium.Web.Proxy.StreamExtended.Models.SslExtension.Name.get -> string!
+Titanium.Web.Proxy.StreamExtended.Models.SslExtension.Position.get -> int
+Titanium.Web.Proxy.StreamExtended.Models.SslExtension.SslExtension(int value, System.ReadOnlyMemory<byte> data, int position) -> void
+Titanium.Web.Proxy.StreamExtended.Models.SslExtension.Value.get -> int
+Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs
+Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs.Buffer.get -> byte[]!
+Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs.Count.get -> int
+Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs.DataEventArgs(byte[]! buffer, int offset, int count) -> void
+Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs.Offset.get -> int
+Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader
+Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.CopyBodyAsync(Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter! writer, bool isChunked, long contentLength, bool isRequest, Titanium.Web.Proxy.EventArguments.SessionEventArgs! args, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.Read(byte[]! buffer, int offset, int count) -> int
+Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
+Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter
+Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.IsNetworkStream.get -> bool
+Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.Write(byte[]! buffer, int offset, int count) -> void
+Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.WriteLineAsync(string! value, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.WriteLineAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.StreamExtended.Network.ILineStream
+Titanium.Web.Proxy.StreamExtended.Network.ILineStream.DataAvailable.get -> bool
+Titanium.Web.Proxy.StreamExtended.Network.ILineStream.FillBufferAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Titanium.Web.Proxy.StreamExtended.Network.ILineStream.ReadByteFromBuffer() -> byte
+Titanium.Web.Proxy.StreamExtended.Network.ILineStream.ReadLineAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<string?>
+Titanium.Web.Proxy.StreamExtended.Network.IPeekStream
+Titanium.Web.Proxy.StreamExtended.Network.IPeekStream.PeekByteAsync(int index, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+Titanium.Web.Proxy.StreamExtended.Network.IPeekStream.PeekByteFromBuffer(int index) -> byte
+Titanium.Web.Proxy.StreamExtended.Network.IPeekStream.PeekBytesAsync(byte[]! buffer, int offset, int index, int count, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+Titanium.Web.Proxy.StreamExtended.Network.TaskResult
+Titanium.Web.Proxy.StreamExtended.Network.TaskResult.AsyncState.get -> object?
+Titanium.Web.Proxy.StreamExtended.Network.TaskResult.AsyncWaitHandle.get -> System.Threading.WaitHandle!
+Titanium.Web.Proxy.StreamExtended.Network.TaskResult.CompletedSynchronously.get -> bool
+Titanium.Web.Proxy.StreamExtended.Network.TaskResult.GetResult() -> void
+Titanium.Web.Proxy.StreamExtended.Network.TaskResult.IsCompleted.get -> bool
+Titanium.Web.Proxy.StreamExtended.Network.TaskResult.TaskResult(System.Threading.Tasks.Task! pTask, object? state) -> void
+Titanium.Web.Proxy.StreamExtended.Network.TaskResult<T>
+Titanium.Web.Proxy.StreamExtended.Network.TaskResult<T>.AsyncState.get -> object?
+Titanium.Web.Proxy.StreamExtended.Network.TaskResult<T>.AsyncWaitHandle.get -> System.Threading.WaitHandle!
+Titanium.Web.Proxy.StreamExtended.Network.TaskResult<T>.CompletedSynchronously.get -> bool
+Titanium.Web.Proxy.StreamExtended.Network.TaskResult<T>.IsCompleted.get -> bool
+Titanium.Web.Proxy.StreamExtended.Network.TaskResult<T>.Result.get -> T
+Titanium.Web.Proxy.StreamExtended.Network.TaskResult<T>.TaskResult(System.Threading.Tasks.Task<T>! pTask, object? state) -> void
+Titanium.Web.Proxy.StreamExtended.ServerHelloInfo
+Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.CipherSuite.get -> int
+Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.CompressionMethod.get -> byte
+Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.CompressionMethod.set -> void
+Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.Extensions.get -> System.Collections.Generic.Dictionary<string!, Titanium.Web.Proxy.StreamExtended.Models.SslExtension!>?
+Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.Extensions.set -> void
+Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.HandshakeVersion.get -> int
+Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.MajorVersion.get -> int
+Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.MinorVersion.get -> int
+Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.Random.get -> byte[]!
+Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.ServerHelloInfo(int handshakeVersion, int majorVersion, int minorVersion, byte[]! random, byte[]! sessionId, int cipherSuite, int serverHelloLength) -> void
+Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.SessionId.get -> byte[]!
+Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.Time.get -> System.DateTime
+Titanium.Web.Proxy.SystemProxyBypassRuleMode
+Titanium.Web.Proxy.SystemProxyBypassRuleMode.Merge = 0 -> Titanium.Web.Proxy.SystemProxyBypassRuleMode
+Titanium.Web.Proxy.SystemProxyBypassRuleMode.Replace = 1 -> Titanium.Web.Proxy.SystemProxyBypassRuleMode
+Titanium.Web.Proxy.SystemProxyLoopbackPlacement
+Titanium.Web.Proxy.SystemProxyLoopbackPlacement.First = 0 -> Titanium.Web.Proxy.SystemProxyLoopbackPlacement
+Titanium.Web.Proxy.SystemProxyLoopbackPlacement.Last = 1 -> Titanium.Web.Proxy.SystemProxyLoopbackPlacement
+Titanium.Web.Proxy.SystemProxySettings
+Titanium.Web.Proxy.SystemProxySettings.BypassRuleMode.get -> Titanium.Web.Proxy.SystemProxyBypassRuleMode
+Titanium.Web.Proxy.SystemProxySettings.BypassRuleMode.set -> void
+Titanium.Web.Proxy.SystemProxySettings.BypassRules.get -> System.Collections.Generic.IList<string!>!
+Titanium.Web.Proxy.SystemProxySettings.ProxyLoopback.get -> bool
+Titanium.Web.Proxy.SystemProxySettings.ProxyLoopback.set -> void
+Titanium.Web.Proxy.SystemProxySettings.ProxyLoopbackPlacement.get -> Titanium.Web.Proxy.SystemProxyLoopbackPlacement
+Titanium.Web.Proxy.SystemProxySettings.ProxyLoopbackPlacement.set -> void
+Titanium.Web.Proxy.SystemProxySettings.SystemProxySettings() -> void
+Titanium.Web.Proxy.WebSocketDecoder
+Titanium.Web.Proxy.WebSocketDecoder.Decode(byte[]! data, int offset, int count) -> System.Collections.Generic.IEnumerable<Titanium.Web.Proxy.WebSocketFrame!>!
+Titanium.Web.Proxy.WebSocketFrame
+Titanium.Web.Proxy.WebSocketFrame.Data.get -> System.ReadOnlyMemory<byte>
+Titanium.Web.Proxy.WebSocketFrame.GetText() -> string!
+Titanium.Web.Proxy.WebSocketFrame.GetText(System.Text.Encoding! encoding) -> string!
+Titanium.Web.Proxy.WebSocketFrame.IsFinal.get -> bool
+Titanium.Web.Proxy.WebSocketFrame.OpCode.get -> Titanium.Web.Proxy.WebsocketOpCode
+Titanium.Web.Proxy.WebSocketFrame.WebSocketFrame() -> void
+Titanium.Web.Proxy.WebSocketFrameEncoder
+Titanium.Web.Proxy.WebSocketFrameWriter
+Titanium.Web.Proxy.WebSocketFrameWriter.WriteAsync(Titanium.Web.Proxy.WebsocketOpCode opCode, System.ReadOnlyMemory<byte> payload, bool isFinal = true, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Titanium.Web.Proxy.WebSocketFrameWriter.WriteTextAsync(string! text, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Titanium.Web.Proxy.WebsocketOpCode
+Titanium.Web.Proxy.WebsocketOpCode.Binary = 2 -> Titanium.Web.Proxy.WebsocketOpCode
+Titanium.Web.Proxy.WebsocketOpCode.ConnectionClose = 8 -> Titanium.Web.Proxy.WebsocketOpCode
+Titanium.Web.Proxy.WebsocketOpCode.Continuation = 0 -> Titanium.Web.Proxy.WebsocketOpCode
+Titanium.Web.Proxy.WebsocketOpCode.Ping = 9 -> Titanium.Web.Proxy.WebsocketOpCode
+Titanium.Web.Proxy.WebsocketOpCode.Pong = 10 -> Titanium.Web.Proxy.WebsocketOpCode
+Titanium.Web.Proxy.WebsocketOpCode.Text = 1 -> Titanium.Web.Proxy.WebsocketOpCode
+Titanium.Web.Proxy.WebSocketProtocolException
+Titanium.Web.Proxy.WebSocketProtocolException.CloseCode.get -> ushort
+Titanium.Web.Proxy.WebSocketProtocolException.WebSocketProtocolException(string! message, ushort closeCode) -> void
+virtual Titanium.Web.Proxy.EventArguments.AsyncEventHandler<TEventArgs>.Invoke(object! sender, TEventArgs e) -> System.Threading.Tasks.Task!

@@ -69,6 +69,14 @@ public sealed class CertificateManager : IDisposable
     private readonly SemaphoreSlim pendingCertificateCreationTaskLock = new(1);
 
     /// <summary>
+    ///     Caps concurrent leaf crypto (MakeCertificate). Without this, a CONNECT stampede
+    ///     queues dozens of <see cref="Task.Run"/> RSA generations that starve unrelated hosts
+    ///     (and even disk-cache loads that used to share that same queue).
+    /// </summary>
+    private readonly SemaphoreSlim certificateCreationThrottle =
+        new(Math.Clamp(Environment.ProcessorCount, 2, 8));
+
+    /// <summary>
     ///     A list of pending certificate creation tasks.
     /// </summary>
     private readonly Dictionary<string, Task<X509Certificate2?>> pendingCertificateCreationTasks = new();
@@ -104,9 +112,14 @@ public sealed class CertificateManager : IDisposable
     ///     prompting for UAC if required?
     /// </param>
     /// <param name="logger">The initial logger to report certificate operations through.</param>
+    /// <param name="maxCacheEntriesProvider">
+    ///     Read live (not snapshotted) on every cache insertion, so that assigning a new
+    ///     <see cref="ProxyServer.ResourceLimits" /> after construction is honored without recreating
+    ///     this <see cref="CertificateManager" />. <see langword="null" /> return value means unbounded.
+    /// </param>
     internal CertificateManager(string? rootCertificateName, string? rootCertificateIssuerName,
         bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin,
-        ILogger logger)
+        ILogger logger, Func<int?>? maxCacheEntriesProvider = null)
     {
         Logger = logger;
 
@@ -120,6 +133,36 @@ public sealed class CertificateManager : IDisposable
         if (rootCertificateIssuerName != null) RootCertificateIssuerName = rootCertificateIssuerName;
 
         CertificateEngine = CertificateEngine.BouncyCastle;
+
+        this.maxCacheEntriesProvider = maxCacheEntriesProvider ?? NoMaxCacheEntries;
+    }
+
+    private static int? NoMaxCacheEntries() => null;
+
+    private readonly Func<int?> maxCacheEntriesProvider;
+
+    /// <summary>
+    ///     Evicts the least-recently-used cached certificates until the count is at or below
+    ///     <see cref="ProxyResourceLimits.MaxCertificateCacheEntries" /> (via the provider passed to the
+    ///     constructor). Each entry holds a full <see cref="X509Certificate2" /> with a private key in
+    ///     memory, so - unlike <see cref="ClearIdleCertificates" />'s time-based sweep, which only bounds
+    ///     how long an entry can live - nothing previously bounded how large the cache could grow
+    ///     <em>within</em> that window; a client (or attacker) requesting many distinct hostnames in a
+    ///     burst could otherwise accumulate unbounded generated-certificate memory before the next sweep.
+    /// </summary>
+    private void EnforceCertificateCacheBound()
+    {
+        var max = maxCacheEntriesProvider();
+        if (max is not > 0) return;
+
+        var excess = cachedCertificates.Count - max.Value;
+        if (excess <= 0) return;
+
+        // Evict without disposing, same as ClearIdleCertificates: the certificate object may still be
+        // held by an in-flight TLS handshake. The GC finalizer releases the native handle once nothing
+        // references it.
+        foreach (var pair in cachedCertificates.OrderBy(x => x.Value.LastAccess).Take(excess))
+            cachedCertificates.TryRemove(pair.Key, out _);
     }
 
     private ICertificateMaker CertEngine
@@ -280,15 +323,19 @@ public sealed class CertificateManager : IDisposable
         set
         {
             // Only invalidate cached leaf certificates when the signing root's identity actually
-            // changes.  Reloading the same persisted root certificate on startup should not discard
-            // valid cached leaves that were signed by that root — the leaves remain trustworthy as
-            // long as the signing root is the same.  Compare by thumbprint because thumbprint is a
-            // hash of the entire DER-encoded certificate (identity + public key + validity + chain).
-            var isSameRoot = rootCertificate != null && value != null &&
-                             string.Equals(rootCertificate.Thumbprint, value.Thumbprint,
-                                 StringComparison.OrdinalIgnoreCase);
-            if (!isSameRoot)
-                ClearRootCertificate();
+            // changes. Reloading the same persisted root on startup must NOT discard valid cached
+            // leaves. Critically: the first assignment (field still null → loaded rootCert.pfx) is
+            // not a root change — clearing here used to Directory.Delete("crts") on every process
+            // start, forcing full MakeCertificate stampede and multi-second CONNECT latency.
+            if (rootCertificate != null)
+            {
+                var rootChanged = value == null ||
+                                  !string.Equals(rootCertificate.Thumbprint, value.Thumbprint,
+                                      StringComparison.OrdinalIgnoreCase);
+                if (rootChanged)
+                    ClearRootCertificate();
+            }
+
             rootCertificate = value;
         }
     }
@@ -492,6 +539,7 @@ public sealed class CertificateManager : IDisposable
                     if (certificate != null && certificate.NotAfter <= DateTime.Now)
                     {
                         OnException(new Exception($"Cached certificate for {subjectName} has expired."));
+                        certificate.Dispose();
                         certificate = null;
                     }
                 }
@@ -520,6 +568,13 @@ public sealed class CertificateManager : IDisposable
                                 {
                                     //no two tasks with same subject name should together enter here 
                                     certificateCache.SaveCertificate(subjectName, createdCertificate);
+
+                                    // Unlike the in-memory dictionary, this on-disk cache has no
+                                    // process-lifetime sweep to ever remove old entries at all - every
+                                    // distinct hostname ever visited previously accumulated a permanent
+                                    // .pfx file. Prune it to the same configured bound.
+                                    if (certificateCache is DefaultCertificateDiskCache diskCache)
+                                        diskCache.PruneToMaxEntries(maxCacheEntriesProvider());
                                 }
                                 finally
                                 {
@@ -583,6 +638,25 @@ public sealed class CertificateManager : IDisposable
         if (TryGetValidCachedCertificate(certificateName, out var cachedCertificate))
             return cachedCertificate;
 
+        // Disk hit must not wait behind Task.Run(MakeCertificate) stampede — load synchronously.
+        if (SaveFakeCertificates)
+        {
+            var fromDisk = TryLoadFakeCertificateFromDisk(certificateName);
+            if (fromDisk != null)
+            {
+                if (cachedCertificates.TryAdd(certificateName,
+                        new CachedCertificate(fromDisk) { LastAccess = DateTime.UtcNow }))
+                {
+                    EnforceCertificateCacheBound();
+                    return fromDisk;
+                }
+
+                fromDisk.Dispose();
+                if (TryGetValidCachedCertificate(certificateName, out cachedCertificate))
+                    return cachedCertificate;
+            }
+        }
+
         var createdTask = false;
         Task<X509Certificate2?> createCertificateTask;
         await pendingCertificateCreationTaskLock.WaitAsync();
@@ -600,12 +674,23 @@ public sealed class CertificateManager : IDisposable
                 // run certificate creation task & add it to pending tasks
                 createCertificateTask = Task.Run(() =>
                 {
-                    var result = CreateCertificate(certificateName, false);
-                    if (result != null)
-                        cachedCertificates.TryAdd(certificateName,
-                            new CachedCertificate(result) { LastAccess = DateTime.UtcNow });
+                    certificateCreationThrottle.Wait();
+                    try
+                    {
+                        var result = CreateCertificate(certificateName, false);
+                        if (result != null)
+                        {
+                            cachedCertificates.TryAdd(certificateName,
+                                new CachedCertificate(result) { LastAccess = DateTime.UtcNow });
+                            EnforceCertificateCacheBound();
+                        }
 
-                    return result;
+                        return result;
+                    }
+                    finally
+                    {
+                        certificateCreationThrottle.Release();
+                    }
                 });
 
                 pendingCertificateCreationTasks[certificateName] = createCertificateTask;
@@ -641,6 +726,37 @@ public sealed class CertificateManager : IDisposable
     }
 
     /// <summary>
+    ///     Loads a previously saved leaf certificate from the disk cache (no crypto).
+    ///     Used as a fast path so CONNECT for known hosts is not queued behind unrelated keygen.
+    /// </summary>
+    private X509Certificate2? TryLoadFakeCertificateFromDisk(string certificateName)
+    {
+        try
+        {
+            var subjectName = ProxyConstants.CnRemoverRegex
+                .Replace(certificateName, string.Empty)
+                .Replace("*", "$x$");
+
+            var certificate = certificateCache.LoadCertificate(subjectName, StorageFlag);
+            if (certificate == null) return null;
+
+            if (certificate.NotAfter <= DateTime.Now)
+            {
+                OnException(new Exception($"Cached certificate for {subjectName} has expired."));
+                certificate.Dispose();
+                return null;
+            }
+
+            return certificate;
+        }
+        catch (Exception e)
+        {
+            OnException(new Exception("Failed to load fake certificate.", e));
+            return null;
+        }
+    }
+
+    /// <summary>
     ///     A method to clear outdated certificates
     /// </summary>
     internal async void ClearIdleCertificates()
@@ -657,10 +773,10 @@ public sealed class CertificateManager : IDisposable
                 var outdated = cachedCertificates.Where(x => x.Value.LastAccess < cutOff).ToList();
 
                 foreach (var cache in outdated)
-                    // dispose the evicted certificate so its native handle is released promptly
-                    // rather than waiting for finalization.
-                    if (cachedCertificates.TryRemove(cache.Key, out var removed))
-                        removed.Certificate.Dispose();
+                    // Evict stale entries without disposing the certificate — the cert object may still
+                    // be held by an in-flight TLS handshake. The GC finalizer will release the native
+                    // handle once all references drop, which typically happens within milliseconds.
+                    cachedCertificates.TryRemove(cache.Key, out _);
             }
             catch (Exception e)
             {
@@ -699,9 +815,10 @@ public sealed class CertificateManager : IDisposable
     ///     <para>
     ///         Uses <c>offline: true</c> so chain building does not consult the Windows certificate stores or the
     ///         network. Without that, Schannel can latch onto a different root that happens to share the same
-    ///         subject DN (common when a previously-trusted Titanium root remains in CurrentUser\Root) and then
-    ///         present a store-backed leaf instead of the one we just generated — breaking CustomRootTrust
-    ///         validation against the in-memory test/session root.
+    ///         subject DN — for example the product default <c>Titanium Root Certificate Authority</c> that the
+    ///         Basic/WPF examples trust into CurrentUser\Root on <c>ProxyServer.Start()</c> — and then present a
+    ///         store-backed leaf instead of the one we just generated, breaking callers that validate against a
+    ///         different in-memory/session root (integration tests, or a second proxy instance).
     ///     </para>
     /// </summary>
     internal System.Net.Security.SslStreamCertificateContext CreateSslCertificateContext(X509Certificate2 leaf)
@@ -746,6 +863,7 @@ public sealed class CertificateManager : IDisposable
                     if (rootCert != null && rootCert.NotAfter <= DateTime.Now)
                     {
                         OnException(new Exception("Loaded root certificate has expired."));
+                        rootCert.Dispose();
                         return false;
                     }
 
@@ -807,6 +925,7 @@ public sealed class CertificateManager : IDisposable
             if (rootCert != null && rootCert.NotAfter <= DateTime.Now)
             {
                 OnException(new ArgumentException("Loaded root certificate has expired."));
+                rootCert.Dispose();
                 return null;
             }
 
@@ -887,37 +1006,54 @@ public sealed class CertificateManager : IDisposable
         // currentUser\Personal
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
 
+        // certutil.exe only accepts the PFX password via a plain "-p password" command-line argument -
+        // it has no file/stdin-based alternative (confirmed: no documented option to read it from a
+        // file). ProcessStartInfo.Arguments is visible to any other process/user that lists this
+        // process's command line (Task Manager, Get-Process, WMI, etc.) for as long as certutil runs.
+        // The configured PfxPassword protects the *long-lived* cached root PFX on disk (see
+        // SaveRootCertificate) and must never appear there. This temp file exists only for certutil to
+        // consume for the few moments before it's deleted below, so export it under a throwaway,
+        // single-use empty password instead of reusing the real secret on the command line.
+        const string transientPfxPassword = "";
         var pfxFileName = Path.GetTempFileName();
-        File.WriteAllBytes(pfxFileName, certificate.Export(X509ContentType.Pkcs12, PfxPassword));
-
-        // currentUser\Root, currentMachine\Personal &  currentMachine\Root
-        var info = new ProcessStartInfo
-        {
-            FileName = "certutil.exe",
-            CreateNoWindow = true,
-            UseShellExecute = true,
-            Verb = "runas",
-            ErrorDialog = false,
-            WindowStyle = ProcessWindowStyle.Hidden
-        };
-
-        if (!machineTrusted)
-            info.Arguments = "-f -user -p \"" + PfxPassword + "\" -importpfx root \"" + pfxFileName + "\"";
-        else
-            info.Arguments = "-importPFX -p \"" + PfxPassword + "\" -f \"" + pfxFileName + "\"";
-
         try
         {
-            var process = Process.Start(info);
-            if (process == null) return false;
+            File.WriteAllBytes(pfxFileName, certificate.Export(X509ContentType.Pkcs12, transientPfxPassword));
 
-            process.WaitForExit();
-            File.Delete(pfxFileName);
+            // currentUser\Root, currentMachine\Personal &  currentMachine\Root
+            var info = new ProcessStartInfo
+            {
+                FileName = "certutil.exe",
+                CreateNoWindow = true,
+                UseShellExecute = true,
+                Verb = "runas",
+                ErrorDialog = false,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+
+            if (!machineTrusted)
+                info.Arguments = "-f -user -p \"" + transientPfxPassword + "\" -importpfx root \"" + pfxFileName + "\"";
+            else
+                info.Arguments = "-importPFX -p \"" + transientPfxPassword + "\" -f \"" + pfxFileName + "\"";
+
+            try
+            {
+                var process = Process.Start(info);
+                if (process == null) return false;
+
+                process.WaitForExit();
+            }
+            catch (Exception e)
+            {
+                OnException(e);
+                return false;
+            }
         }
-        catch (Exception e)
+        finally
         {
-            OnException(e);
-            return false;
+            // Guaranteed even if Export/WriteAllBytes/Process.Start/WaitForExit throws - otherwise a
+            // temporary file holding the exported root private key is left behind on disk indefinitely.
+            try { File.Delete(pfxFileName); } catch { /* best effort */ }
         }
 
         return true;
@@ -1079,7 +1215,15 @@ public sealed class CertificateManager : IDisposable
     public void ClearRootCertificate()
     {
         certificateCache.Clear();
-        cachedCertificates.Clear();
+
+        // Dispose every cached leaf cert before clearing so native CAPI/OpenSSL handles
+        // are released promptly rather than waiting for GC finalization.
+        foreach (var pair in cachedCertificates)
+            if (cachedCertificates.TryRemove(pair.Key, out var entry))
+                try { entry.Certificate.Dispose(); } catch { }
+
+        // Do not dispose rootCertificate: it may have been supplied by the caller and still
+        // referenced outside this manager (e.g. shared test CA / persisted root reload).
         rootCertificate = null;
     }
 
@@ -1087,7 +1231,20 @@ public sealed class CertificateManager : IDisposable
     {
         if (disposed) return;
 
-        if (disposing) clearCertificatesTokenSource.Dispose();
+        if (disposing)
+        {
+            clearCertificatesTokenSource.Dispose();
+            pendingCertificateCreationTaskLock.Dispose();
+            certificateCreationThrottle.Dispose();
+
+            // Release native CAPI/OpenSSL handles on all cached leaf certificates (manager-owned).
+            foreach (var pair in cachedCertificates)
+                if (cachedCertificates.TryRemove(pair.Key, out var entry))
+                    try { entry.Certificate.Dispose(); } catch { }
+
+            // Do not dispose rootCertificate: ownership may belong to the caller.
+            rootCertificate = null;
+        }
 
         disposed = true;
     }

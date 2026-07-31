@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel;
 using System.IO;
 using System.Threading;
@@ -56,7 +56,19 @@ public class Response : RequestResponseBase
     {
         get
         {
+            // RFC 9110 section 6.4.1: a 1xx, 204 or 304 response never has a body, regardless of
+            // any Content-Length/Transfer-Encoding header the server sent - those headers describe
+            // the representation the resource *would* carry, not bytes actually on this wire (a
+            // 304's Content-Length, for instance, must not be used for framing). A response to
+            // HEAD never has a body for the same reason, and a successful (2xx) response to
+            // CONNECT never has one either: once tunneling begins there is no further HTTP framing
+            // on the connection. These status/method exclusions must run before any framing check
+            // below, since "!KeepAlive" would otherwise short-circuit a 204/304 "Connection: close"
+            // response to "has body".
+            if (StatusCode is >= 100 and < 200) return false;
+            if (StatusCode == 204 || StatusCode == 304) return false;
             if (RequestMethod == "HEAD") return false;
+            if (RequestMethod == "CONNECT" && StatusCode is >= 200 and < 300) return false;
 
             var contentLength = ContentLength;
 
@@ -67,7 +79,9 @@ public class Response : RequestResponseBase
             // If none are true then check if connection:close header exist, if so write response until server or client terminates the connection
             if (IsChunked || contentLength > 0 || !KeepAlive) return true;
 
-            if (ContentLength == -1 && HttpVersion == HttpHeader.Version20) return true;
+            // HTTP/2 and HTTP/3 may omit Content-Length; body length is framed by DATA/END_STREAM
+            // (or QUIC stream fin), not by Content-Length / Transfer-Encoding.
+            if (ContentLength == -1 && HttpVersion.Major >= 2) return true;
 
             // has response if connection:keep-alive header exist and when version is http/1.0
             // Because in Http 1.0 server can return a response without content-length (expectation being client would read until end of stream)
@@ -141,20 +155,12 @@ public class Response : RequestResponseBase
         var secondSpace = httpStatus.IndexOf(' ', firstSpace + 1);
         if (secondSpace != -1)
         {
-#if NET6_0_OR_GREATER
             statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1, secondSpace - firstSpace - 1));
-#else
-            statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1, secondSpace - firstSpace - 1).ToString());
-#endif
             statusDescription = httpStatus.AsSpan(secondSpace + 1).ToString();
         }
         else
         {
-#if NET6_0_OR_GREATER
             statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1));
-#else
-            statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1).ToString());
-#endif
             statusDescription = string.Empty;
         }
     }

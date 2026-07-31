@@ -82,15 +82,7 @@ public class SslExtension
                 {
                     int nameType = data[index];
                     var count = (data[index + 1] << 8) + data[index + 2];
-#if NET6_0_OR_GREATER
                     var str = Encoding.ASCII.GetString(data.Slice(index + 3, count));
-#else
-                    string str;
-                    fixed (byte* bp = data.Slice(index + 3))
-                    {
-                        str = Encoding.ASCII.GetString(bp, count);
-                    }
-#endif
                     if (nameType == 0)
                     {
                         if (stringBuilder.Length > 0)
@@ -121,11 +113,7 @@ public class SslExtension
                 return GetSignatureAlgorithms(data);
             case 16:
                 var protocols = GetApplicationLayerProtocolNegotiation(data);
-#if NET6_0_OR_GREATER
                 return string.Join(", ", protocols.Select(x => Encoding.UTF8.GetString(x.Protocol.Span)));
-#else
-                return string.Join(", ", protocols.Select(x => x.ToString()));
-#endif
             case 21:
                 for (int i = 0; i < data.Length; i++)
                 {

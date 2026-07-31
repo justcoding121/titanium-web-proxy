@@ -1,31 +1,34 @@
-﻿using System;
+using System;
 using System.Buffers.Text;
 using System.Buffers;
-using System.Globalization;
 using System.Text;
 
 namespace Titanium.Web.Proxy.Extensions;
 
 internal static class StringExtensions
 {
+    // These compare HTTP protocol tokens (scheme names, header values, etc.), which are ASCII
+    // and whose case-insensitive equivalence is defined by the HTTP specs, not by the current
+    // thread's culture. CurrentCulture comparisons can both under- and over-match depending on
+    // the OS locale (e.g. the Turkish "I"/"i" casing exception), so use ordinal comparisons.
     internal static bool EqualsIgnoreCase(this string str, string? value)
     {
-        return str.Equals(value, StringComparison.CurrentCultureIgnoreCase);
+        return str.Equals(value, StringComparison.OrdinalIgnoreCase);
     }
 
     internal static bool EqualsIgnoreCase(this ReadOnlySpan<char> str, ReadOnlySpan<char> value)
     {
-        return str.Equals(value, StringComparison.CurrentCultureIgnoreCase);
+        return str.Equals(value, StringComparison.OrdinalIgnoreCase);
     }
 
     internal static bool ContainsIgnoreCase(this string str, string value)
     {
-        return CultureInfo.CurrentCulture.CompareInfo.IndexOf(str, value, CompareOptions.IgnoreCase) >= 0;
+        return str.Contains(value, StringComparison.OrdinalIgnoreCase);
     }
 
     internal static int IndexOfIgnoreCase(this string str, string value)
     {
-        return CultureInfo.CurrentCulture.CompareInfo.IndexOf(str, value, CompareOptions.IgnoreCase);
+        return str.IndexOf(value, StringComparison.OrdinalIgnoreCase);
     }
 
     internal static unsafe string ByteArrayToHexString(this ReadOnlySpan<byte> data)
@@ -45,13 +48,6 @@ internal static class StringExtensions
             buf2 = buf2.Slice(3);
         }
 
-#if NET6_0_OR_GREATER
         return Encoding.UTF8.GetString(buf.Slice(0, length - 1));
-#else
-        fixed (byte* bp = buf)
-        {
-            return Encoding.UTF8.GetString(bp, length -1);
-        }
-#endif
     }
 }
