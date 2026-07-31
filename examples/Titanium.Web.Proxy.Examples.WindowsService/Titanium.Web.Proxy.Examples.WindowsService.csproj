@@ -5,6 +5,9 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>Titanium.Web.Proxy.Examples.WindowsService</RootNamespace>
     <AssemblyName>Titanium.Web.Proxy.Examples.WindowsService</AssemblyName>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <AssemblyTitle>Titanium Web Proxy</AssemblyTitle>
+    <Product>Titanium Web Proxy</Product>
     <UserSecretsId>3c9a9e1e-6c5b-4f9d-8f2a-6a2f6f8b8b6a</UserSecretsId>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

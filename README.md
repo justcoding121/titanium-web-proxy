@@ -105,6 +105,16 @@ Configure your client to use `127.0.0.1:8000` as its HTTP and HTTPS proxy. Trust
 - [Windows service](examples/Titanium.Web.Proxy.Examples.WindowsService)
 - [API documentation](https://justcoding121.github.io/titanium-web-proxy/docs/api/Titanium.Web.Proxy.ProxyServer.html)
 
+### Screenshots
+
+**Basic console example** — compact per-request traffic tape:
+
+<img src="wiki/images/basic-screenshot.jpg" alt="Basic console proxy screenshot" width="900" />
+
+**WPF example** — session list with request/response inspection:
+
+<img src="wiki/images/wpf-screenshot.jpg" alt="WPF proxy application screenshot" width="900" />
+
 ## Support and contributing
 
 - Report reproducible bugs and feature requests through [GitHub Issues](https://github.com/justcoding121/Titanium-Web-Proxy/issues).
