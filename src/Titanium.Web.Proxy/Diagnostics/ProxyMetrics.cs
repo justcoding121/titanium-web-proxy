@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Runtime.CompilerServices;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Diagnostics;
@@ -84,6 +86,36 @@ internal static class ProxyMetrics
     private static readonly Counter<long> LoggerDrops =
         Meter.CreateCounter<long>("twp.logger.drops", "{entry}",
             "Log entries dropped because a channel was saturated, tagged by channel.");
+
+    /// <summary>
+    ///     Tracks every live <see cref="CertificateManager" /> by weak reference, so the observable
+    ///     gauge below can sum current cache occupancy across however many are alive in this process
+    ///     without keeping any of them alive itself (a strong-referencing static registry would be a
+    ///     leak in its own right, and there is no single natural place to unregister from given
+    ///     <see cref="CertificateManager" /> is disposed on <see cref="ProxyServer" /> teardown, not
+    ///     necessarily before process exit).
+    /// </summary>
+    private static readonly ConditionalWeakTable<CertificateManager, object?> LiveCertificateManagers = new();
+
+    private static readonly ObservableGauge<long> CachedCertificates =
+        Meter.CreateObservableGauge("twp.certificates.cached", ObserveCachedCertificateCount, "{certificate}",
+            "Leaf certificates currently held in the in-memory certificate cache, summed across every " +
+            "live CertificateManager in this process. Operators can use this to confirm " +
+            "ResourceLimits.MaxCertificateCacheEntries is holding the cache bounded rather than " +
+            "inferring it indirectly from process working set.");
+
+    private static IEnumerable<Measurement<long>> ObserveCachedCertificateCount()
+    {
+        long total = 0;
+        foreach (var pair in LiveCertificateManagers)
+            total += pair.Key.CachedCertificateCount;
+
+        yield return new Measurement<long>(total);
+    }
+
+    /// <summary>Called once by each <see cref="CertificateManager" /> constructor.</summary>
+    internal static void RegisterCertificateManager(CertificateManager manager) =>
+        LiveCertificateManagers.AddOrUpdate(manager, null);
 
     public static void ConnectionAdmitted() => ActiveConnections.Add(1);
 

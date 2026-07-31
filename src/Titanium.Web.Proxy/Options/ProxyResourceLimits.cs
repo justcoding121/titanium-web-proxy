@@ -115,9 +115,24 @@ public sealed class ProxyResourceLimits
 
     /// <summary>
     ///     Maximum number of generated leaf certificates held in the in-memory certificate cache.
-    ///     <see langword="null" /> disables the bound.
+    ///     Each entry holds a full <see cref="System.Security.Cryptography.X509Certificates.X509Certificate2" />
+    ///     with its private key, so unlike most other limits in this type this one defends against
+    ///     unbounded memory growth from ordinary browsing (many distinct MITM'd hosts), not just
+    ///     against an adversarial peer. <see langword="null" /> disables the bound and is <em>not</em>
+    ///     the shipped default - see <see cref="Default" />.
     /// </summary>
     public int? MaxCertificateCacheEntries { get; private init; }
+
+    /// <summary>
+    ///     Maximum number of generated leaf certificate files retained in the on-disk cache
+    ///     (<see cref="Certificates.CertificateManager.SaveFakeCertificates" />), pruned independently
+    ///     of <see cref="MaxCertificateCacheEntries" />. Disk is far cheaper than the in-memory cache's
+    ///     live <see cref="System.Security.Cryptography.X509Certificates.X509Certificate2" /> handles,
+    ///     and a warm disk cache avoids repeating expensive certificate generation across process
+    ///     restarts, so this bound is deliberately independent and typically much larger (or
+    ///     unbounded). <see langword="null" /> disables the bound.
+    /// </summary>
+    public int? MaxCertificateDiskCacheEntries { get; private init; }
 
     /// <summary>
     ///     Today's shipped values, carried forward as the <c>Balanced</c> profile's starting point
@@ -126,6 +141,16 @@ public sealed class ProxyResourceLimits
     ///     CONTINUATION frame count, reset budget, admission cap) are set high enough that no
     ///     browser-generated traffic should reach them; they are expected to move once the benchmark
     ///     project has real numbers behind them.
+    ///     <para>
+    ///         <see cref="MaxCertificateCacheEntries" /> is the one deliberate exception to "unchanged
+    ///         for existing traffic": measurement showed process memory holding steady at ~100 MB
+    ///         above baseline after closing every browser tab and idling for minutes, tracking the
+    ///         number of distinct MITM'd hosts rather than any live connection or session count.
+    ///         Unbounded in-memory certificate retention is a defect, not a compatibility guarantee,
+    ///         so the shipped default now bounds it at 1024 entries (roughly 10 MB, comfortably above
+    ///         real single-session browsing) rather than leaving it unbounded like every other
+    ///         nullable limit here defaults to.
+    ///     </para>
     /// </summary>
     public static ProxyResourceLimits Default { get; } = Create(
         maxHeaderLineBytes: 64 * 1024,
@@ -141,7 +166,7 @@ public sealed class ProxyResourceLimits
         maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(10),
         connectionPoolingEnabled: true,
         maxCachedConnectionsPerHost: 4,
-        maxCertificateCacheEntries: null);
+        maxCertificateCacheEntries: 1024);
 
     /// <summary>
     ///     Validates and constructs a <see cref="ProxyResourceLimits" /> snapshot. Every non-nullable
@@ -195,6 +220,46 @@ public sealed class ProxyResourceLimits
             ConnectionPoolingEnabled = connectionPoolingEnabled,
             MaxCachedConnectionsPerHost = maxCachedConnectionsPerHost,
             MaxCertificateCacheEntries = maxCertificateCacheEntries
+        };
+    }
+
+    /// <summary>
+    ///     Returns a copy of this instance with <see cref="MaxCertificateCacheEntries" /> and
+    ///     <see cref="MaxCertificateDiskCacheEntries" /> replaced, leaving every other limit
+    ///     unchanged. Added instead of extending <see cref="Create" /> - which is public API already
+    ///     shipped with a fixed parameter list - so that adding the independent disk-cache bound
+    ///     could not be a breaking change for existing callers.
+    /// </summary>
+    /// <param name="maxCertificateCacheEntries">
+    ///     See <see cref="MaxCertificateCacheEntries" />. <see langword="null" /> disables the bound.
+    /// </param>
+    /// <param name="maxCertificateDiskCacheEntries">
+    ///     See <see cref="MaxCertificateDiskCacheEntries" />. <see langword="null" /> disables the bound.
+    /// </param>
+    /// <exception cref="ArgumentOutOfRangeException">A supplied value is zero or negative.</exception>
+    public ProxyResourceLimits WithCertificateCacheBounds(
+        int? maxCertificateCacheEntries, int? maxCertificateDiskCacheEntries)
+    {
+        RequirePositiveIfPresent(maxCertificateCacheEntries, nameof(maxCertificateCacheEntries));
+        RequirePositiveIfPresent(maxCertificateDiskCacheEntries, nameof(maxCertificateDiskCacheEntries));
+
+        return new ProxyResourceLimits
+        {
+            MaxHeaderLineBytes = MaxHeaderLineBytes,
+            MaxHeaderCount = MaxHeaderCount,
+            MaxHeaderAggregateBytes = MaxHeaderAggregateBytes,
+            MaxEncodedBodyBytes = MaxEncodedBodyBytes,
+            MaxDecodedBodyBytes = MaxDecodedBodyBytes,
+            MaxDecompressionRatio = MaxDecompressionRatio,
+            MaxConcurrentClients = MaxConcurrentClients,
+            MaxConcurrentStreamsPerConnection = MaxConcurrentStreamsPerConnection,
+            MaxPeerInitiatedIncompleteStreamResets = MaxPeerInitiatedIncompleteStreamResets,
+            MaxOpenHeaderBlockFrames = MaxOpenHeaderBlockFrames,
+            MaxOpenHeaderBlockDuration = MaxOpenHeaderBlockDuration,
+            ConnectionPoolingEnabled = ConnectionPoolingEnabled,
+            MaxCachedConnectionsPerHost = MaxCachedConnectionsPerHost,
+            MaxCertificateCacheEntries = maxCertificateCacheEntries,
+            MaxCertificateDiskCacheEntries = maxCertificateDiskCacheEntries
         };
     }
 

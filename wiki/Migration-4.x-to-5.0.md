@@ -377,7 +377,8 @@ items above without code changes to individual limits:
   [above](#ambiguous-http1-framing-is-now-rejected)).
 - Typed metrics are published on an `System.Diagnostics.Metrics.Meter` named `ProxyMetrics.MeterName`,
   so any OpenTelemetry-compatible exporter can observe policy breaches, connection admission/rejection,
-  timeouts, pool outcomes, parser errors, and auth rounds without code changes.
+  timeouts, pool outcomes, parser errors, auth rounds, and in-memory certificate cache occupancy
+  (`twp.certificates.cached`) without code changes.
 
 ## New: Happy Eyeballs (RFC 8305) address racing
 

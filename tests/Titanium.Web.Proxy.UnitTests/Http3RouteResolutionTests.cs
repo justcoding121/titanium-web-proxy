@@ -30,6 +30,7 @@ public class Http3RouteResolutionTests
         internal StubSvcbResolver(SvcbResult? result) => _result = result;
         public Task<SvcbResult?> TryGetH3CapabilityAsync(string host, int port, CancellationToken ct)
             => Task.FromResult(_result);
+        public void TrimExpired() { }
     }
 
     private static ProxyServer MakeServer(bool enableH3 = true, bool enableSvcb = false,
@@ -347,5 +348,7 @@ public class Http3RouteResolutionTests
             ProbeCount++;
             return Task.FromResult(_result);
         }
+
+        public void TrimExpired() { }
     }
 }

@@ -176,7 +176,8 @@ public partial class ProxyServer : IDisposable
 
         CertificateManager = new CertificateManager(rootCertificateName, rootCertificateIssuerName,
             userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin, logger,
-            () => ResourceLimits.MaxCertificateCacheEntries);
+            () => ResourceLimits.MaxCertificateCacheEntries,
+            () => ResourceLimits.MaxCertificateDiskCacheEntries);
     }
 
     /// <summary>
@@ -205,13 +206,19 @@ public partial class ProxyServer : IDisposable
     internal Http3.Http3OriginCapabilityCache Http3OriginCapabilityCache { get; } = new();
 
     /// <summary>
-    ///     Removes expired entries from both origin-capability caches. Called from the connection-pool
-    ///     cleanup loop every few seconds so stale origin records do not accumulate indefinitely.
+    ///     Removes expired entries from both origin-capability caches and, if one has been created, the
+    ///     HTTPS/SVCB resolver's negative-result cache. Called from the connection-pool cleanup loop
+    ///     every few seconds so stale origin records do not accumulate indefinitely.
     /// </summary>
     internal void TrimOriginCapabilityCaches()
     {
         Http2OriginCapabilityCache.TrimExpired();
         Http3OriginCapabilityCache.TrimExpired();
+
+        // Read the backing field directly (not the HttpsSvcbResolver property) so this periodic sweep
+        // never itself causes the lazy default UdpSvcbDnsResolver to be instantiated when SVCB
+        // discovery has never actually been used.
+        _httpsSvcbResolver?.TrimExpired();
     }
 
     /// <summary>
