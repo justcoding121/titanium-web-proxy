@@ -55,10 +55,19 @@ public sealed class ProxyProfileSettings
     ///     family is enforced (not observed) because Observe still allocates and would leave the OOM
     ///     paths live by default; TLS 1.2/1.3 only; no outbound destination blocking; no admission cap;
     ///     no deadlines beyond what already ships disabled today.
+    ///     <para>
+    ///         Certificate cache bounds are pinned explicitly here (rather than inherited implicitly
+    ///         from <see cref="ProxyResourceLimits.Default" />) so this profile's real-world memory
+    ///         behavior stays fixed even if the shared default's value is retuned later: 1024
+    ///         in-memory entries (roughly 10 MB, comfortably above single-session desktop/dev
+    ///         browsing), unbounded on-disk entries (disk is cheap and a warm cache avoids repeat
+    ///         certificate generation across restarts for a trusted, single-user deployment).
+    ///     </para>
     /// </summary>
     public static ProxyProfileSettings Balanced { get; } = new()
     {
-        ResourceLimits = ProxyResourceLimits.Default,
+        ResourceLimits = ProxyResourceLimits.Default.WithCertificateCacheBounds(
+            maxCertificateCacheEntries: 1024, maxCertificateDiskCacheEntries: null),
         PolicyModes = ProxyPolicyModes.AllEnforce,
         SupportedSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
         BlockPrivateNetworkDestinations = false,
@@ -84,7 +93,10 @@ public sealed class ProxyProfileSettings
     /// </summary>
     public static ProxyProfileSettings LegacyCompatible { get; } = new()
     {
-        ResourceLimits = ProxyResourceLimits.Default,
+        // Same certificate cache bounds as Balanced: this profile is meant to differ only in TLS
+        // version support and policy modes, not in memory-retention behavior.
+        ResourceLimits = ProxyResourceLimits.Default.WithCertificateCacheBounds(
+            maxCertificateCacheEntries: 1024, maxCertificateDiskCacheEntries: null),
         PolicyModes = ProxyPolicyModes.Create(
             bodyBudget: PolicyMode.Enforce,
             decompressionRatio: PolicyMode.Enforce,
@@ -107,10 +119,21 @@ public sealed class ProxyProfileSettings
     ///     Opt-in for deployments exposed to untrusted clients: <see cref="Balanced" /> plus outbound
     ///     destination blocking and finite admission/deadline values, none of which are bounded by
     ///     default under <see cref="Balanced" />.
+    ///     <para>
+    ///         Certificate cache bounds are larger than <see cref="Balanced" /> in both dimensions:
+    ///         4096 in-memory entries (~40 MB), since many concurrent untrusted clients legitimately
+    ///         touch far more distinct origins than one desktop session, and thrashing certificate
+    ///         generation under a too-small bound is itself a DoS vector. Unlike <see cref="Balanced" />,
+    ///         the on-disk cache is also bounded (50,000 entries): untrusted clients can freely
+    ///         enumerate hostnames, and an unbounded on-disk cache would otherwise be a disk-exhaustion
+    ///         vector that <see cref="Balanced" />'s trusted, single-user assumption does not have to
+    ///         defend against.
+    ///     </para>
     /// </summary>
     public static ProxyProfileSettings PublicFacing { get; } = new()
     {
-        ResourceLimits = ProxyResourceLimits.Default,
+        ResourceLimits = ProxyResourceLimits.Default.WithCertificateCacheBounds(
+            maxCertificateCacheEntries: 4096, maxCertificateDiskCacheEntries: 50_000),
         PolicyModes = ProxyPolicyModes.AllEnforce,
         SupportedSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
         BlockPrivateNetworkDestinations = true,

@@ -1,1 +1,3 @@
 ﻿#nullable enable
+Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCertificateDiskCacheEntries.get -> int?
+Titanium.Web.Proxy.Options.ProxyResourceLimits.WithCertificateCacheBounds(int? maxCertificateCacheEntries, int? maxCertificateDiskCacheEntries) -> Titanium.Web.Proxy.Options.ProxyResourceLimits!

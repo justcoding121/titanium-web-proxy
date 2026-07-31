@@ -14,6 +14,7 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Examples.Basic
@@ -83,6 +84,15 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.EnableConnectionPool = true;
             proxyServer.ForwardToUpstreamGateway = true;
             proxyServer.CertificateManager.SaveFakeCertificates = true;
+
+            // ProxyResourceLimits.Default already bounds the in-memory certificate cache at 1024
+            // entries (see its doc comment for why an unbounded cache was a defect, not a feature).
+            // Shown explicitly here so this example documents a realistic desktop/dev configuration:
+            // a slightly larger in-memory bound for a browsing-heavy manual test session, and an
+            // unbounded on-disk cache (independent knob) so repeated runs against the same hosts
+            // reuse previously generated certificates instead of regenerating them.
+            proxyServer.ResourceLimits = ProxyResourceLimits.Default.WithCertificateCacheBounds(
+                maxCertificateCacheEntries: 2048, maxCertificateDiskCacheEntries: null);
             //proxyServer.ProxyBasicAuthenticateFunc = async (args, userName, password) =>
             //{
             //    return true;

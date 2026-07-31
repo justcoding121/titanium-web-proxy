@@ -133,6 +133,41 @@ Useful `CertificateManager` members:
 
 Only decrypt endpoints where you need to see content; leave `decryptSsl: false` to pass HTTPS through as an opaque tunnel.
 
+### Certificate cache memory bounds
+
+Every distinct MITM'd host gets its own generated leaf certificate, kept in an in-memory cache
+(each entry holds a full `X509Certificate2` plus private key) so repeat connections to the same
+host don't re-run certificate generation. Two independent, nullable knobs on
+`ProxyResourceLimits` bound this:
+
+- `MaxCertificateCacheEntries` — caps the in-memory cache. `ProxyResourceLimits.Default` (and the
+  `Balanced`/`LegacyCompatible` profiles) set this to `1024` (roughly 10 MB), comfortably above a
+  typical single-session browsing workload. `null` disables the bound.
+- `MaxCertificateDiskCacheEntries` — caps the on-disk cache used when `SaveFakeCertificates` is
+  `true`, independently of the in-memory bound. Disk is far cheaper than a live certificate handle,
+  so `Default`/`Balanced`/`LegacyCompatible` leave this `null` (unbounded) so a warm disk cache
+  survives process restarts. The `PublicFacing` profile bounds it at `50,000`, since untrusted
+  clients can enumerate hostnames and an unbounded disk cache would otherwise be a disk-exhaustion
+  vector.
+
+Both entries in a cached certificate that age out (idle longer than `CertificateCacheTimeOutMinutes`,
+default 60) or get evicted to stay within the bound are disposed a sweep interval later, not
+immediately — this gives any TLS handshake that grabbed a reference just before eviction time to
+finish, while still reclaiming native key handles well before the next full GC.
+
+Use `ProxyResourceLimits.Default.WithCertificateCacheBounds(...)` to change either bound without
+having to reconstruct every other limit:
+
+```csharp
+proxyServer.ResourceLimits = ProxyResourceLimits.Default.WithCertificateCacheBounds(
+    maxCertificateCacheEntries: 4096,
+    maxCertificateDiskCacheEntries: 50_000);
+```
+
+The `twp.certificates.cached` observable gauge (see [Logging and diagnostics](#logging-and-diagnostics))
+reports live in-memory cache occupancy, so you can confirm the bound is holding instead of
+inferring it indirectly from process working set.
+
 ## Intercepting requests and responses
 
 Subscribe to the proxy lifecycle events. All handlers are `async`.

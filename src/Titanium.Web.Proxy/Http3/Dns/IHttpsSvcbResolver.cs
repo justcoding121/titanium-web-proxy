@@ -16,4 +16,13 @@ internal interface IHttpsSvcbResolver
     ///     SvcParam, or timeout).
     /// </summary>
     Task<SvcbResult?> TryGetH3CapabilityAsync(string host, int port, CancellationToken ct);
+
+    /// <summary>
+    ///     Removes expired entries from any internal negative-result cache and enforces any backstop
+    ///     size cap. Called periodically from <see cref="ProxyServer.TrimOriginCapabilityCaches" />
+    ///     (driven by the connection-pool cleanup loop) so a resolver that caches definitive negative
+    ///     results does not grow unbounded purely from TTL expiry with no eviction. A no-op for
+    ///     resolvers that hold no such state.
+    /// </summary>
+    void TrimExpired();
 }

@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Network.Certificate;
@@ -59,6 +60,16 @@ public sealed class CertificateManager : IDisposable
     ///     Cache dictionary
     /// </summary>
     private readonly ConcurrentDictionary<string, CachedCertificate> cachedCertificates = new();
+
+    /// <summary>
+    ///     Certificates removed from <see cref="cachedCertificates" /> by <see cref="EnforceCertificateCacheBound" />
+    ///     or the idle sweep in <see cref="ClearIdleCertificates" />, awaiting disposal. Not disposed at
+    ///     eviction time because the certificate object may still be held by an in-flight TLS
+    ///     handshake; <see cref="DisposePendingEvictions" /> reclaims the native CAPI/OpenSSL key
+    ///     handle once at least one full sweep interval has passed, which is comfortably longer than
+    ///     any handshake, instead of waiting on GC finalization indefinitely.
+    /// </summary>
+    private readonly ConcurrentQueue<PendingCertificateDisposal> pendingDisposals = new();
 
     private readonly CancellationTokenSource clearCertificatesTokenSource = new();
 
@@ -115,11 +126,16 @@ public sealed class CertificateManager : IDisposable
     /// <param name="maxCacheEntriesProvider">
     ///     Read live (not snapshotted) on every cache insertion, so that assigning a new
     ///     <see cref="ProxyServer.ResourceLimits" /> after construction is honored without recreating
-    ///     this <see cref="CertificateManager" />. <see langword="null" /> return value means unbounded.
+    ///     this <see cref="CertificateManager" />. Bounds the in-memory cache only. <see langword="null" />
+    ///     return value means unbounded.
+    /// </param>
+    /// <param name="maxDiskCacheEntriesProvider">
+    ///     Read live on every disk save, independently of <paramref name="maxCacheEntriesProvider" />.
+    ///     <see langword="null" /> return value means unbounded.
     /// </param>
     internal CertificateManager(string? rootCertificateName, string? rootCertificateIssuerName,
         bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin,
-        ILogger logger, Func<int?>? maxCacheEntriesProvider = null)
+        ILogger logger, Func<int?>? maxCacheEntriesProvider = null, Func<int?>? maxDiskCacheEntriesProvider = null)
     {
         Logger = logger;
 
@@ -135,11 +151,30 @@ public sealed class CertificateManager : IDisposable
         CertificateEngine = CertificateEngine.BouncyCastle;
 
         this.maxCacheEntriesProvider = maxCacheEntriesProvider ?? NoMaxCacheEntries;
+        this.maxDiskCacheEntriesProvider = maxDiskCacheEntriesProvider ?? NoMaxCacheEntries;
+
+        ProxyMetrics.RegisterCertificateManager(this);
     }
+
+    /// <summary>
+    ///     Current number of entries in the in-memory certificate cache, for the
+    ///     <c>twp.certificates.cached</c> observable gauge in <see cref="ProxyMetrics" />.
+    /// </summary>
+    internal int CachedCertificateCount => cachedCertificates.Count;
 
     private static int? NoMaxCacheEntries() => null;
 
     private readonly Func<int?> maxCacheEntriesProvider;
+
+    /// <summary>
+    ///     Read live on every disk save, independently of <see cref="maxCacheEntriesProvider" /> (the
+    ///     in-memory bound): disk is far cheaper than a live <see cref="X509Certificate2" /> handle, so
+    ///     the two are deliberately separate knobs rather than the memory bound also silently pruning
+    ///     <c>.pfx</c> files on disk. <see langword="null" /> return value means unbounded.
+    /// </summary>
+    private readonly Func<int?> maxDiskCacheEntriesProvider;
+
+    private readonly record struct PendingCertificateDisposal(X509Certificate2 Certificate, DateTime EvictedAtUtc);
 
     /// <summary>
     ///     Evicts the least-recently-used cached certificates until the count is at or below
@@ -158,11 +193,36 @@ public sealed class CertificateManager : IDisposable
         var excess = cachedCertificates.Count - max.Value;
         if (excess <= 0) return;
 
-        // Evict without disposing, same as ClearIdleCertificates: the certificate object may still be
-        // held by an in-flight TLS handshake. The GC finalizer releases the native handle once nothing
-        // references it.
         foreach (var pair in cachedCertificates.OrderBy(x => x.Value.LastAccess).Take(excess))
-            cachedCertificates.TryRemove(pair.Key, out _);
+            EvictCertificate(pair.Key);
+    }
+
+    /// <summary>
+    ///     Removes <paramref name="certificateName" /> from the in-memory cache without disposing it
+    ///     immediately, queuing it for <see cref="DisposePendingEvictions" /> instead. See
+    ///     <see cref="pendingDisposals" /> for why disposal is deferred.
+    /// </summary>
+    private void EvictCertificate(string certificateName)
+    {
+        if (cachedCertificates.TryRemove(certificateName, out var removed))
+            pendingDisposals.Enqueue(new PendingCertificateDisposal(removed.Certificate, DateTime.UtcNow));
+    }
+
+    /// <summary>
+    ///     Disposes certificates queued by <see cref="EvictCertificate" /> once at least one full sweep
+    ///     interval (<see cref="ClearIdleCertificates" />'s one-minute cadence) has elapsed since
+    ///     eviction, so native CAPI/OpenSSL key handles are released promptly instead of waiting on GC
+    ///     finalization, while still giving any in-flight TLS handshake that grabbed a reference just
+    ///     before eviction comfortably long enough to finish using it.
+    /// </summary>
+    private void DisposePendingEvictions()
+    {
+        var cutoff = DateTime.UtcNow.AddMinutes(-1);
+        while (pendingDisposals.TryPeek(out var pending) && pending.EvictedAtUtc <= cutoff)
+        {
+            if (pendingDisposals.TryDequeue(out pending))
+                try { pending.Certificate.Dispose(); } catch { /* best effort */ }
+        }
     }
 
     private ICertificateMaker CertEngine
@@ -572,9 +632,11 @@ public sealed class CertificateManager : IDisposable
                                     // Unlike the in-memory dictionary, this on-disk cache has no
                                     // process-lifetime sweep to ever remove old entries at all - every
                                     // distinct hostname ever visited previously accumulated a permanent
-                                    // .pfx file. Prune it to the same configured bound.
+                                    // .pfx file. Prune it to the disk-specific bound, which is
+                                    // deliberately independent of the in-memory bound (see
+                                    // maxDiskCacheEntriesProvider).
                                     if (certificateCache is DefaultCertificateDiskCache diskCache)
-                                        diskCache.PruneToMaxEntries(maxCacheEntriesProvider());
+                                        diskCache.PruneToMaxEntries(maxDiskCacheEntriesProvider());
                                 }
                                 finally
                                 {
@@ -773,10 +835,15 @@ public sealed class CertificateManager : IDisposable
                 var outdated = cachedCertificates.Where(x => x.Value.LastAccess < cutOff).ToList();
 
                 foreach (var cache in outdated)
-                    // Evict stale entries without disposing the certificate — the cert object may still
-                    // be held by an in-flight TLS handshake. The GC finalizer will release the native
-                    // handle once all references drop, which typically happens within milliseconds.
-                    cachedCertificates.TryRemove(cache.Key, out _);
+                    EvictCertificate(cache.Key);
+
+                // A runtime change to ResourceLimits (e.g. lowering MaxCertificateCacheEntries) was
+                // previously only honored on the next cache insertion; enforcing it here too means a
+                // lowered bound - or a burst that grew the cache between sweeps - is corrected within
+                // one sweep interval even on an otherwise-idle proxy.
+                EnforceCertificateCacheBound();
+
+                DisposePendingEvictions();
             }
             catch (Exception e)
             {
@@ -1222,6 +1289,11 @@ public sealed class CertificateManager : IDisposable
             if (cachedCertificates.TryRemove(pair.Key, out var entry))
                 try { entry.Certificate.Dispose(); } catch { }
 
+        // Also dispose anything already evicted but still waiting out its grace period: the root is
+        // changing, so leaves signed by the old root are not worth holding onto even briefly.
+        while (pendingDisposals.TryDequeue(out var pending))
+            try { pending.Certificate.Dispose(); } catch { }
+
         // Do not dispose rootCertificate: it may have been supplied by the caller and still
         // referenced outside this manager (e.g. shared test CA / persisted root reload).
         rootCertificate = null;
@@ -1241,6 +1313,10 @@ public sealed class CertificateManager : IDisposable
             foreach (var pair in cachedCertificates)
                 if (cachedCertificates.TryRemove(pair.Key, out var entry))
                     try { entry.Certificate.Dispose(); } catch { }
+
+            // Also dispose anything already evicted but still waiting out its grace period.
+            while (pendingDisposals.TryDequeue(out var pending))
+                try { pending.Certificate.Dispose(); } catch { }
 
             // Do not dispose rootCertificate: ownership may belong to the caller.
             rootCertificate = null;
