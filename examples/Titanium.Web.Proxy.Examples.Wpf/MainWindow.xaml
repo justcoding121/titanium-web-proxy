@@ -10,9 +10,9 @@
         DataContext="{Binding RelativeSource={RelativeSource Self}}">
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="500" />
+            <ColumnDefinition Width="*" MinWidth="720" />
             <ColumnDefinition Width="3" />
-            <ColumnDefinition />
+            <ColumnDefinition Width="360" MinWidth="280" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition />
@@ -21,20 +21,21 @@
         <GridSplitter Grid.Column="1" Grid.Row="0" HorizontalAlignment="Stretch" />
         <ListView Grid.Column="0" Grid.Row="0" HorizontalAlignment="Stretch" ItemsSource="{Binding Sessions}"
                   SelectedItem="{Binding SelectedSession}"
-                  KeyDown="ListViewSessions_OnKeyDown">
+                  KeyDown="ListViewSessions_OnKeyDown"
+                  ScrollViewer.HorizontalScrollBarVisibility="Auto">
             <ListView.View>
                 <GridView>
-                    <GridViewColumn Header="Result" DisplayMemberBinding="{Binding StatusCode}" />
-                    <GridViewColumn Header="Client↔Server" DisplayMemberBinding="{Binding Protocol}" Width="140" />
-                    <GridViewColumn Header="Host" DisplayMemberBinding="{Binding Host}" />
-                    <GridViewColumn Header="Url" DisplayMemberBinding="{Binding Url}" />
-                    <GridViewColumn Header="BodySize" DisplayMemberBinding="{Binding BodySize}" />
-                    <GridViewColumn Header="Process" DisplayMemberBinding="{Binding Process}" />
-                    <GridViewColumn Header="SentBytes" DisplayMemberBinding="{Binding SentDataCount}" />
-                    <GridViewColumn Header="ReceivedBytes" DisplayMemberBinding="{Binding ReceivedDataCount}" />
-                    <GridViewColumn Header="ClientRemoteEndPoint" DisplayMemberBinding="{Binding ClientRemoteEndPoint}" />
-                    <GridViewColumn Header="ClientConnectionId" DisplayMemberBinding="{Binding ClientConnectionId}" />
-                    <GridViewColumn Header="ServerConnectionId" DisplayMemberBinding="{Binding ServerConnectionId}" />
+                    <GridViewColumn Header="Result" Width="55" DisplayMemberBinding="{Binding StatusCode}" />
+                    <GridViewColumn Header="Client↔Server" Width="130" DisplayMemberBinding="{Binding Protocol}" />
+                    <GridViewColumn Header="Host" Width="140" DisplayMemberBinding="{Binding Host}" />
+                    <GridViewColumn Header="Url" Width="160" DisplayMemberBinding="{Binding Url}" />
+                    <GridViewColumn Header="BodySize" Width="70" DisplayMemberBinding="{Binding BodySize}" />
+                    <GridViewColumn Header="Process" Width="100" DisplayMemberBinding="{Binding Process}" />
+                    <GridViewColumn Header="SentBytes" Width="75" DisplayMemberBinding="{Binding SentDataCount}" />
+                    <GridViewColumn Header="ReceivedBytes" Width="90" DisplayMemberBinding="{Binding ReceivedDataCount}" />
+                    <GridViewColumn Header="ClientRemoteEndPoint" Width="140" DisplayMemberBinding="{Binding ClientRemoteEndPoint}" />
+                    <GridViewColumn Header="ClientConnectionId" Width="240" DisplayMemberBinding="{Binding ClientConnectionId}" />
+                    <GridViewColumn Header="ServerConnectionId" Width="240" DisplayMemberBinding="{Binding ServerConnectionId}" />
                 </GridView>
             </ListView.View>
         </ListView>
@@ -58,16 +59,17 @@
                 </Grid>
             </TabItem>
         </TabControl>
-        <StackPanel Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal">
-            <ToggleButton IsChecked="True" Content="On/Off" Click="ButtonProxyOnOff_OnClick" />
-            <TextBlock Text="ClientConnectionCount:" />
-            <TextBlock Text="{Binding ClientConnectionCount}" Margin="10,0,20,0" />
-            <TextBlock Text="ServerConnectionCount:" />
-            <TextBlock Text="{Binding ServerConnectionCount}" Margin="10,0,20,0" />
-            <TextBlock Text="Http3ClientConnectionCount:" />
-            <TextBlock Text="{Binding Http3ClientConnectionCount}" Margin="10,0,20,0" />
-            <TextBlock Text="Http3ServerConnectionCount:" />
-            <TextBlock Text="{Binding Http3ServerConnectionCount}" Margin="10,0,20,0" />
+        <StackPanel Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="4,6">
+            <ToggleButton IsChecked="True" Content="System Proxy" Margin="0,0,16,0"
+                          Click="ButtonProxyOnOff_OnClick" ToolTip="Register or restore Windows system proxy settings" />
+            <TextBlock Text="TCP clients:" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding ClientConnectionCount}" Margin="6,0,16,0" VerticalAlignment="Center" />
+            <TextBlock Text="Servers (all):" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding ServerConnectionCount}" Margin="6,0,16,0" VerticalAlignment="Center" />
+            <TextBlock Text="QUIC clients:" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Http3ClientConnectionCount}" Margin="6,0,16,0" VerticalAlignment="Center" />
+            <TextBlock Text="QUIC servers:" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Http3ServerConnectionCount}" Margin="6,0,16,0" VerticalAlignment="Center" />
         </StackPanel>
     </Grid>
 </Window>
