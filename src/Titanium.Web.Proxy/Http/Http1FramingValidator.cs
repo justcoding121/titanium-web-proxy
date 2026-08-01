@@ -51,7 +51,7 @@ internal static class Http1FramingValidator
     ///     this proxy. Exists only for security research that needs to observe how a client or origin
     ///     reacts to smuggling-shaped input relayed through the proxy.
     /// </param>
-    public static void Validate(RequestResponseBase message, FramingSource source,
+    internal static void Validate(RequestResponseBase message, FramingSource source,
         bool allowAmbiguousFraming = false)
     {
         if (allowAmbiguousFraming) return;

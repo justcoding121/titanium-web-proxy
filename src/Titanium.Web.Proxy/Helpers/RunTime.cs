@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.Helpers;
 /// <summary>
 ///     Run time helpers
 /// </summary>
-public static class RunTime
+internal static class RunTime
 {
     private static readonly Lazy<bool> isRunningOnMono = new(() => Type.GetType("Mono.Runtime") != null);
 

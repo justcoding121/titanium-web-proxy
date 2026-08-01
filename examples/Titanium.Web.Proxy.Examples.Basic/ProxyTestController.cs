@@ -10,8 +10,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Examples.Basic.Helpers;
-using Titanium.Web.Proxy.Exceptions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Options;
@@ -255,7 +253,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // Only explicit proxies can be set as system proxy!
             //proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
             //proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
-            if (RunTime.IsWindows) proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
+            if (OperatingSystem.IsWindows()) proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
         }
 
         public void Stop()
@@ -620,9 +618,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
                             0)
                             return true;
                         break;
-
-                    case RetryableServerConnectionException:
-                        return true;
                 }
             }
 

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
@@ -891,16 +892,55 @@ public sealed class CertificateManager : IDisposable
     internal System.Net.Security.SslStreamCertificateContext CreateSslCertificateContext(X509Certificate2 leaf)
     {
         var extras = new X509Certificate2Collection();
+        System.Net.Security.SslCertificateTrust? trust = null;
 
         if (rootCertificate != null && !IsSelfSigned(rootCertificate))
+        {
             extras.Add(rootCertificate);
+            // Offline Create has no path to a system trust anchor when the configured signer is
+            // an intermediate CA. Custom trust lets Create assemble leaf → intermediate.
+            trust = System.Net.Security.SslCertificateTrust.CreateForX509Collection(
+                new X509Certificate2Collection(rootCertificate), sendTrustInHandshake: false);
+            // Windows SslStreamCertificateContext's constructor rebuilds the chain without
+            // ExtraStore/custom trust; when that OS build throws (rather than returning false),
+            // its own "add to Intermediate CA store" fallback never runs. Stage the intermediate
+            // first so the constructor's chain build can succeed.
+            StageIntermediateForOsChainBuild(rootCertificate);
+        }
 
         if (IntermediateCertificates != null)
             foreach (X509Certificate2 cert in IntermediateCertificates)
                 extras.Add(cert);
 
-        return System.Net.Security.SslStreamCertificateContext.Create(
-            leaf, extras.Count > 0 ? extras : null, offline: true);
+        try
+        {
+            return System.Net.Security.SslStreamCertificateContext.Create(
+                leaf, extras.Count > 0 ? extras : null, offline: true, trust);
+        }
+        catch (CryptographicException) when (trust != null)
+        {
+            return System.Net.Security.SslStreamCertificateContext.Create(
+                leaf, null, offline: true, trust);
+        }
+    }
+
+    /// <summary>
+    ///     Best-effort staging of an intermediate into the CurrentUser Intermediate CA store so
+    ///     Windows <see cref="System.Net.Security.SslStreamCertificateContext" /> construction can
+    ///     complete its OS chain build. Mirrors the store fallback inside that type's constructor.
+    /// </summary>
+    private static void StageIntermediateForOsChainBuild(X509Certificate2 intermediate)
+    {
+        try
+        {
+            using var store = new X509Store(StoreName.CertificateAuthority, StoreLocation.CurrentUser);
+            store.Open(OpenFlags.ReadWrite);
+            store.Add(intermediate);
+        }
+        catch (CryptographicException)
+        {
+            // Permission or store issues - Create may still succeed via custom trust alone.
+        }
     }
 
     private static bool IsSelfSigned(X509Certificate2 cert) =>

@@ -313,7 +313,7 @@ internal class WinCertificateMaker : ICertificateMaker
     }
 }
 
-public enum EncodingType
+internal enum EncodingType
 {
     XcnCryptStringAny = 7,
     XcnCryptStringBase64 = 1,
@@ -339,7 +339,7 @@ public enum EncodingType
     XcnCryptStringText = 0x200
 }
 
-public enum AlternativeNameType
+internal enum AlternativeNameType
 {
     XcnCertAltNameDirectoryName = 5,
     XcnCertAltNameDnsName = 3,

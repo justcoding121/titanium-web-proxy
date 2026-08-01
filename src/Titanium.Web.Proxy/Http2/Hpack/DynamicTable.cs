@@ -20,7 +20,7 @@ using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http2.Hpack;
 
-public class DynamicTable
+internal class DynamicTable
 {
     // a circular queue of header fields
     private HttpHeader?[] headerFields = Array.Empty<HttpHeader?>();

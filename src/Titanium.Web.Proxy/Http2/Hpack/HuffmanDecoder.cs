@@ -20,7 +20,7 @@ using System.IO;
 
 namespace Titanium.Web.Proxy.Http2.Hpack;
 
-public class HuffmanDecoder
+internal class HuffmanDecoder
 {
     /// <summary>
     ///     Huffman Decoder

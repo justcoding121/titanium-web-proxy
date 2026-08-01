@@ -17,7 +17,7 @@
 
 namespace Titanium.Web.Proxy.Http2.Hpack;
 
-public static class HpackUtil
+internal static class HpackUtil
 {
     // Section 6.2. Literal Header Field Representation
     public enum IndexType
