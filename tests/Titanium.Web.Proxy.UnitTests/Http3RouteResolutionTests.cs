@@ -235,46 +235,41 @@ public class Http3RouteResolutionTests
     }
 
     [TestMethod]
-    public async Task ResolveH3_Auto_CacheMiss_SvcbHit_ReturnsSvcbRoute()
+    public async Task ResolveH3_Auto_CacheMiss_SvcbEnabled_ReturnsNoneImmediately()
     {
+        // Auto-mode never awaits DNS on the critical path: first connection falls through to H2/H1.
         var svcb = new SvcbResult(AltPort: 443, Ttl: TimeSpan.FromMinutes(5), TargetName: null);
         using var server = MakeServer(enableH3: true, enableSvcb: true, svcbResult: svcb);
 
         var route = await server.ResolveHttp3OriginAsync(
             "example.com", 443, UpstreamHttpProtocol.Auto, true, CancellationToken.None);
 
-        Assert.IsTrue(route.UseH3);
-        Assert.AreEqual(Http3RouteSource.HttpsSvcb, route.Source);
-        Assert.AreEqual(443, route.QuicPort);
-        Assert.IsNull(route.QuicHost);
+        Assert.IsFalse(route.UseH3, "Cache miss must not block CONNECT waiting for SVCB.");
+        Assert.AreEqual(Http3RouteSource.None, route.Source);
     }
 
     [TestMethod]
-    public async Task ResolveH3_Auto_CacheMiss_SvcbHit_WithTargetName_SetsQuicHost()
+    public async Task ResolveH3_Auto_CacheMiss_SvcbHit_WarmsCacheInBackground()
     {
-        var svcb = new SvcbResult(AltPort: 443, Ttl: TimeSpan.FromMinutes(5), TargetName: "target.example.com");
+        var svcb = new SvcbResult(AltPort: 8443, Ttl: TimeSpan.FromMinutes(10), TargetName: "target.example.com");
         using var server = MakeServer(enableH3: true, enableSvcb: true, svcbResult: svcb);
 
         var route = await server.ResolveHttp3OriginAsync(
             "example.com", 443, UpstreamHttpProtocol.Auto, true, CancellationToken.None);
+        Assert.IsFalse(route.UseH3);
 
-        Assert.IsTrue(route.UseH3);
-        Assert.AreEqual("target.example.com", route.QuicHost);
-    }
+        // Background discovery should populate the capability cache for subsequent connections.
+        Http3OriginRoute cachedRoute = Http3OriginRoute.None;
+        for (var i = 0; i < 50; i++)
+        {
+            cachedRoute = server.ShouldUseHttp3OriginCached("example.com", 443, UpstreamHttpProtocol.Auto);
+            if (cachedRoute.UseH3) break;
+            await Task.Delay(20);
+        }
 
-    [TestMethod]
-    public async Task ResolveH3_Auto_CacheMiss_SvcbHit_PopulatesCache()
-    {
-        var svcb = new SvcbResult(AltPort: 8443, Ttl: TimeSpan.FromMinutes(10), TargetName: null);
-        using var server = MakeServer(enableH3: true, enableSvcb: true, svcbResult: svcb);
-
-        await server.ResolveHttp3OriginAsync(
-            "example.com", 443, UpstreamHttpProtocol.Auto, true, CancellationToken.None);
-
-        // Subsequent cache-only check must succeed without DNS.
-        var cachedRoute = server.ShouldUseHttp3OriginCached("example.com", 443, UpstreamHttpProtocol.Auto);
-        Assert.IsTrue(cachedRoute.UseH3, "SVCB result must be stored in capability cache.");
+        Assert.IsTrue(cachedRoute.UseH3, "Background SVCB result must warm the capability cache.");
         Assert.AreEqual(8443, cachedRoute.QuicPort);
+        Assert.AreEqual("target.example.com", cachedRoute.QuicHost);
     }
 
     [TestMethod]
@@ -283,7 +278,26 @@ public class Http3RouteResolutionTests
         using var server = MakeServer(enableH3: true, enableSvcb: true, svcbResult: null);
         var route = await server.ResolveHttp3OriginAsync(
             "example.com", 443, UpstreamHttpProtocol.Auto, true, CancellationToken.None);
-        Assert.IsFalse(route.UseH3, "SVCB returns null → no H3.");
+        Assert.IsFalse(route.UseH3, "SVCB miss → no H3 on the current connection.");
+    }
+
+    [TestMethod]
+    public async Task ResolveH3_Auto_ConcurrentMisses_CoalesceToOneDiscovery()
+    {
+        var resolver = new CountingResolver(new SvcbResult(443, TimeSpan.FromMinutes(1)));
+        using var server = new ProxyServer(false, false, false) { EnableHttp3 = true };
+        server.EnableHttpsSvcbDnsDiscovery = true;
+        server.HttpsSvcbResolver = resolver;
+
+        await Task.WhenAll(
+            server.ResolveHttp3OriginAsync("example.com", 443, UpstreamHttpProtocol.Auto, true, CancellationToken.None),
+            server.ResolveHttp3OriginAsync("example.com", 443, UpstreamHttpProtocol.Auto, true, CancellationToken.None),
+            server.ResolveHttp3OriginAsync("example.com", 443, UpstreamHttpProtocol.Auto, true, CancellationToken.None));
+
+        for (var i = 0; i < 50 && resolver.ProbeCount == 0; i++)
+            await Task.Delay(20);
+
+        Assert.AreEqual(1, resolver.ProbeCount, "Concurrent misses must share one background discovery.");
     }
 
     [TestMethod]

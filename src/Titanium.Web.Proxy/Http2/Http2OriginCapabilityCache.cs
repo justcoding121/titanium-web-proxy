@@ -56,6 +56,11 @@ internal sealed class Http2OriginCapabilityCache
     }
 
     /// <summary>
+    ///     Removes a stale or incorrect capability entry so the next tunnel re-probes the origin.
+    /// </summary>
+    internal void Evict(string hostAndPort) => cache.TryRemove(hostAndPort, out _);
+
+    /// <summary>
     ///     Removes entries whose TTL has elapsed. Called periodically from the connection-pool cleanup
     ///     loop to prevent unbounded growth of the dictionary in long-running proxies that handle many
     ///     unique origins.
