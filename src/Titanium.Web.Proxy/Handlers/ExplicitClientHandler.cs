@@ -378,6 +378,13 @@ public partial class ProxyServer
                         true, null,
                         true, false, cancellationToken))!;
 
+                    // This tunnel owns the connection outright, but the relay drives connection.Stream
+                    // directly instead of the HTTP/1.1 request/response machinery, so bind metadata only
+                    // (no SetConnection) and keep HasConnection false on a raw byte relay.
+                    if (connectArgs.Timing != null)
+                        connectArgs.Timing.MarkConnectionReady(connection.Id, !connection.ClaimFirstUse());
+                    connectArgs.HttpClient.BindUpstreamConnection(connection);
+
                     try
                     {
                         if (isClientHello)
