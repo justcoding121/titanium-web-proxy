@@ -41,7 +41,7 @@ internal class TcpServerConnection : IDisposable
         CacheKey = cacheKey;
     }
 
-    public Guid Id { get; } = Guid.NewGuid();
+    public long Id { get; } = ConnectionId.Next();
 
     /// <summary>
     ///     Structured establishment timing for this connection (DNS/TCP/upstream-proxy/TLS), populated only

@@ -17,7 +17,7 @@ public class UpstreamConnectionBindTests
     public void BindUpstreamConnection_SetsIdentityEndPointAndTiming()
     {
         var client = new HttpWebClient(null, new Request(), new Lazy<int>(() => 0));
-        var id = Guid.NewGuid();
+        const long id = 42;
         var endpoint = new IPEndPoint(IPAddress.Parse("203.0.113.10"), 443);
         var timing = new UpstreamConnectionTiming(DateTime.UtcNow);
 
@@ -34,7 +34,7 @@ public class UpstreamConnectionBindTests
     {
         var client = new HttpWebClient(null, new Request(), new Lazy<int>(() => 0));
 
-        client.BindUpstreamConnection(Guid.NewGuid(), null, null);
+        client.BindUpstreamConnection(7, null, null);
 
         Assert.IsNotNull(client.UpstreamConnectionId);
         Assert.IsNull(client.UpstreamRemoteEndPoint);
@@ -48,10 +48,10 @@ public class UpstreamConnectionBindTests
         // Mirrors the H3 path falling back to TCP after a QUIC attempt already bound its own metadata:
         // nothing from the abandoned connection may survive.
         var client = new HttpWebClient(null, new Request(), new Lazy<int>(() => 0));
-        client.BindUpstreamConnection(Guid.NewGuid(), new IPEndPoint(IPAddress.Parse("203.0.113.10"), 443),
+        client.BindUpstreamConnection(11, new IPEndPoint(IPAddress.Parse("203.0.113.10"), 443),
             new UpstreamConnectionTiming(DateTime.UtcNow));
 
-        var tcpId = Guid.NewGuid();
+        const long tcpId = 22;
         var tcpEndPoint = new IPEndPoint(IPAddress.Parse("198.51.100.7"), 8080);
         client.BindUpstreamConnection(tcpId, tcpEndPoint, null);
 
@@ -64,7 +64,7 @@ public class UpstreamConnectionBindTests
     public void FinishSession_ClearsBoundUpstreamMetadata()
     {
         var client = new HttpWebClient(null, new Request(), new Lazy<int>(() => 0));
-        client.BindUpstreamConnection(Guid.NewGuid(), new IPEndPoint(IPAddress.Loopback, 8443),
+        client.BindUpstreamConnection(33, new IPEndPoint(IPAddress.Loopback, 8443),
             new UpstreamConnectionTiming(DateTime.UtcNow));
 
         client.FinishSession();

@@ -142,7 +142,7 @@ Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ResponseHeadersReceivedAt.get -
 Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.SessionCreatedAt.get -> System.DateTime
 Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.TimeToFirstByte.get -> System.TimeSpan?
 Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.TotalDuration.get -> System.TimeSpan
-Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.UpstreamConnectionId.get -> System.Guid?
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.UpstreamConnectionId.get -> long?
 Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.UpstreamConnectionReused.get -> bool
 Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming
 Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.ConnectStartedAt.get -> System.DateTime
@@ -255,7 +255,7 @@ Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderReceive.get -
 Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderSend.get -> Titanium.Web.Proxy.WebSocketDecoder!
 Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketServerWriter.get -> Titanium.Web.Proxy.WebSocketFrameWriter?
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase
-Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientConnectionId.get -> System.Guid
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientConnectionId.get -> long
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientEndPoint.get -> System.Net.IPEndPoint!
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientLocalEndPoint.get -> System.Net.IPEndPoint!
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientRemoteEndPoint.get -> System.Net.IPEndPoint!
@@ -276,7 +276,7 @@ Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsSocks.get -> bool
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsTransparent.get -> bool
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.LocalEndPoint.get -> Titanium.Web.Proxy.Models.ProxyEndPoint!
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyEndPoint.get -> Titanium.Web.Proxy.Models.ProxyEndPoint!
-Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ServerConnectionId.get -> System.Guid
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ServerConnectionId.get -> long
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ServerIpAddress.get -> System.Net.IPAddress?
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ServerRemoteEndPoint.get -> System.Net.IPEndPoint?
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TerminateSession() -> void

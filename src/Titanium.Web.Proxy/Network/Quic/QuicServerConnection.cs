@@ -44,7 +44,7 @@ internal sealed class QuicServerConnection : IAsyncDisposable
         NegotiatedApplicationProtocol = SslApplicationProtocol.Http3;
     }
 
-    public Guid Id { get; } = Guid.NewGuid();
+    public long Id { get; } = ConnectionId.Next();
 
     private ProxyServer ProxyServer { get; }
 

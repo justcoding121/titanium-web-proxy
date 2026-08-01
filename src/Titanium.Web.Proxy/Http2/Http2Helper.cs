@@ -104,7 +104,7 @@ namespace Titanium.Web.Proxy.Http2
             Func<SessionEventArgs, Http2StreamContext, Task> onBeforeRequest,
             Func<SessionEventArgs, Http2StreamContext, Task> onBeforeResponse,
             Func<SessionEventArgs, Task> onAfterResponse, Action<HeaderCollection> prepareRequestHeaders,
-            CancellationTokenSource cancellationTokenSource, Guid connectionId,
+            CancellationTokenSource cancellationTokenSource, long connectionId,
             ILogger logger, int maxDecodedHeaderListBytes = 64 * 1024, bool enableRfc8441 = false,
             ProxyResourceLimits? resourceLimits = null,
             TcpServerConnection? originConnection = null)
