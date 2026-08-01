@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Quic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,6 +11,7 @@ using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Tcp;
 namespace Titanium.Web.Proxy.Http3;
 
 /// <summary>
@@ -87,6 +89,12 @@ internal sealed class Http3Connection
     /// </summary>
     private QpackContext? _qpackContext;
 
+    /// <summary>
+    ///     Shared client-connection adapter for every multiplexed request stream on this QUIC
+    ///     connection so <c>ClientConnectionId</c> is stable across sessions.
+    /// </summary>
+    private QuicClientConnection? _clientConnection;
+
     private Http3Connection(
         QuicConnection connection,
         TransparentQuicProxyEndPoint endPoint,
@@ -134,6 +142,11 @@ internal sealed class Http3Connection
         _server.UpdateHttp3ClientConnectionCount(true);
         try
         {
+            _clientConnection = new QuicClientConnection(
+                _server,
+                (IPEndPoint)_connection.LocalEndPoint,
+                (IPEndPoint)_connection.RemoteEndPoint);
+
             // Instantiate QPACK context when dynamic table is enabled.
             if (_server.EnableQpackDynamicTable)
                 _qpackContext = new QpackContext(4096);
@@ -190,6 +203,9 @@ internal sealed class Http3Connection
 
             if (_qpackContext != null)
                 await _qpackContext.DisposeAsync();
+
+            _clientConnection?.Dispose();
+            _clientConnection = null;
 
             _connectionCts.Dispose();
             _server.UpdateHttp3ClientConnectionCount(false);
@@ -441,7 +457,8 @@ internal sealed class Http3Connection
                     _activeStreams[streamId] = state;
                 },
                 _onBeforeRequest, _onBeforeResponse, _onAfterResponse,
-                qpackContext: _qpackContext);
+                qpackContext: _qpackContext,
+                clientConnection: _clientConnection!);
         }
         catch (Http3ConnectionException ex)
         {

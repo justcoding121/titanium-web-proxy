@@ -17,6 +17,12 @@ public class HttpWebClient
 {
     private TcpServerConnection? connection;
 
+    /// <summary>
+    ///     Upstream transport connection identity for multiplexed H2/H3 (and any path that binds an id
+    ///     without transferring HTTP/1.1 TCP ownership via <see cref="SetConnection" />).
+    /// </summary>
+    private Guid? upstreamConnectionId;
+
     internal HttpWebClient(ConnectRequest? connectRequest, Request request, Lazy<int> processIdFunc)
     {
         ConnectRequest = connectRequest;
@@ -39,6 +45,12 @@ public class HttpWebClient
     }
 
     internal bool HasConnection => connection != null;
+
+    /// <summary>
+    ///     Upstream connection identity when bound via <see cref="BindUpstreamConnectionId" /> or
+    ///     <see cref="SetConnection" />; otherwise <see langword="null" />.
+    /// </summary>
+    internal Guid? UpstreamConnectionId => upstreamConnectionId ?? connection?.Id;
 
     /// <summary>
     ///     Should we close the server connection at the end of this HTTP request/response session.
@@ -108,7 +120,16 @@ public class HttpWebClient
     {
         serverConnection.LastAccess = DateTime.UtcNow;
         connection = serverConnection;
+        // Overwrite any previously bound multiplexed (e.g. QUIC) id so TCP fallback is accurate.
+        upstreamConnectionId = serverConnection.Id;
     }
+
+    /// <summary>
+    ///     Bind the upstream transport connection identity without transferring HTTP/1.1 TCP stream
+    ///     ownership. Used for multiplexed H2/H3 so <c>ServerConnectionId</c> is visible while
+    ///     <see cref="HasConnection" /> stays false (H1 syphon/drain must not touch the shared socket).
+    /// </summary>
+    internal void BindUpstreamConnectionId(Guid id) => upstreamConnectionId = id;
 
     /// <summary>
     ///     Resolves the HTTP version that will actually be declared to the origin on the request line, per
@@ -257,6 +278,7 @@ public class HttpWebClient
     internal void FinishSession()
     {
         connection = null;
+        upstreamConnectionId = null;
 
         ConnectRequest?.FinishSession();
         Request?.FinishSession();

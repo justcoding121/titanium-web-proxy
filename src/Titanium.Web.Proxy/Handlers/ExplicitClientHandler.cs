@@ -520,9 +520,11 @@ public partial class ProxyServer
                     // The whole h2 client connection multiplexes every request-carrying stream over this
                     // one shared origin connection, so - unlike HTTP/1.1's per-request pool acquisition -
                     // its establishment timing is attributed to the tunnel/CONNECT session rather than any
-                    // individual per-stream SessionEventArgs (which never itself acquires a connection).
+                    // individual per-stream SessionEventArgs. Streams BindUpstreamConnectionId only (no
+                    // SetConnection) so HasConnection stays false on the multiplexed socket.
                     if (connectArgs.Timing != null)
                         connectArgs.Timing.MarkConnectionReady(connection.Id, !connection.ClaimFirstUse());
+                    connectArgs.HttpClient.BindUpstreamConnectionId(connection.Id);
                     try
                     {
                             var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
@@ -544,7 +546,8 @@ public partial class ProxyServer
                                 async args => { await OnAfterResponse(args); },
                                 headers => PrepareRequestHeaders(headers),
                                 connectArgs.CancellationTokenSource, clientStream.Connection.Id, logger,
-                                MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits);
+                                MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
+                                originConnection: connection);
                     }
                     finally
                     {

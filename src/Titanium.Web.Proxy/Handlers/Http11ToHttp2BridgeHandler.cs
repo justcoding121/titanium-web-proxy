@@ -357,11 +357,12 @@ public partial class ProxyServer
         var request = args.HttpClient.Request;
         var clientStream = args.ClientStream;
 
+        // Bind shared h2 origin identity without SetConnection: this bridge owns frame I/O via
+        // Http2OriginConnection, and HasConnection must stay false so H1 syphon paths never run.
+        var serverConnection = originConnection.ServerConnection;
+        args.HttpClient.BindUpstreamConnectionId(serverConnection.Id);
         if (args.Timing != null)
-        {
-            var serverConnection = originConnection.ServerConnection;
             args.Timing.MarkConnectionReady(serverConnection.Id, !serverConnection.ClaimFirstUse());
-        }
 
         try
         {
@@ -408,11 +409,10 @@ public partial class ProxyServer
                 originConnection = await AcquireHttp2OriginConnectionAsync(args, remoteHostName, remotePort,
                     connectHost, connectPort, null, cancellationToken);
 
+                var retriedConnection = originConnection.ServerConnection;
+                args.HttpClient.BindUpstreamConnectionId(retriedConnection.Id);
                 if (args.Timing != null)
-                {
-                    var retriedConnection = originConnection.ServerConnection;
                     args.Timing.MarkConnectionReady(retriedConnection.Id, !retriedConnection.ClaimFirstUse());
-                }
 
                 args.Timing?.MarkRequestSent();
                 exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken);
@@ -471,8 +471,8 @@ public partial class ProxyServer
         if (response.Locked)
         {
             // The user replaced the response inside BeforeResponse - write it out generically. There is no
-            // backing server connection to syphon a leftover body from (HttpClient.HasConnection is always
-            // false for this bridge), matching the normal pipeline's own guard for that case.
+            // backing server connection to syphon a leftover body from (HasConnection stays false —
+            // this bridge binds UpstreamConnectionId only), matching the normal pipeline's guard.
             await clientStream.WriteResponseAsync(response, cancellationToken);
 
             if (response.StreamBodyWriter != null && !response.IsBodySent)

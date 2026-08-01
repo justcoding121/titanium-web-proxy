@@ -19,7 +19,8 @@ internal sealed class QuicClientConnection : TcpClientConnection
         ProxyServer proxyServer,
         IPEndPoint localEndPoint,
         IPEndPoint remoteEndPoint)
-        : base(proxyServer, localEndPoint, remoteEndPoint)
+        // QUIC clients are counted via Http3ClientConnectionCount, not the TCP client counter.
+        : base(proxyServer, localEndPoint, remoteEndPoint, trackClientConnectionCount: false)
     {
         // Seed with TLS 1.3 and H3 since QUIC mandates both.
         SslProtocol = SslProtocols.Tls13;

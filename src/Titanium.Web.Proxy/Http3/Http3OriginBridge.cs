@@ -175,6 +175,9 @@ internal static class Http3OriginBridge
 
             reused = !quicConn.ClaimFirstUse();
             sessionArgs.Timing?.MarkConnectionReady(quicConn.Id, reused);
+            // Multiplexed QUIC origin: bind identity without SetConnection (TCP-only ownership API).
+            // SetConnection on TCP fallback overwrites this id if QUIC fails later in the loop.
+            sessionArgs.HttpClient.BindUpstreamConnectionId(quicConn.Id);
 
             await using var originStream = await quicConn.OpenRequestStreamAsync(cancellationToken);
 
