@@ -29,16 +29,21 @@ internal sealed class ProxySettings
     public bool EnableWinAuth { get; set; }
 
     /// <summary>
-    ///     Resolve Windows system/PAC upstream gateways when present. Enabled for realistic
-    ///     system-proxy demos (same as the Basic example).
+    ///     Resolve Windows system/PAC upstream gateways per destination. Off by default: a service
+    ///     usually runs as LocalSystem, whose WinINet/PAC configuration is empty or unrelated to the
+    ///     interactive user's, and PAC resolution adds per-destination latency.
     /// </summary>
-    public bool ForwardToUpstreamGateway { get; set; } = true;
+    public bool ForwardToUpstreamGateway { get; set; }
 
     public int MaxCachedConnections { get; set; } = 2;
 
     public bool ReuseSocket { get; set; } = true;
 
-    public int TcpTimeWaitSeconds { get; set; } = 10;
+    /// <summary>
+    ///     Socket linger seconds on close. Matches the library default of 0 (abortive close), which
+    ///     keeps a high-churn proxy from accumulating TIME_WAIT sockets.
+    /// </summary>
+    public int TcpTimeWaitSeconds { get; set; }
 
     public bool SaveFakeCertificates { get; set; } = true;
 

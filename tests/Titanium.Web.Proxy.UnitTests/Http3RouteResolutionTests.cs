@@ -10,9 +10,9 @@ using Titanium.Web.Proxy.Models;
 namespace Titanium.Web.Proxy.UnitTests;
 
 /// <summary>
-///     Unit tests for <see cref="ProxyServer.ResolveHttp3OriginAsync" /> and
-///     <see cref="ProxyServer.ShouldUseHttp3OriginCached" /> covering the complete route-selection
-///     precedence described in the plan (section 1 and section 4).
+///     Unit tests for <see cref="ProxyServer.ResolveHttp3Origin" /> covering the complete
+///     route-selection precedence described in the plan (section 1 and section 4), in both the
+///     warming (<c>allowDnsProbe: true</c>) and cache-only (<c>allowDnsProbe: false</c>) modes.
 /// </summary>
 [TestClass]
 public class Http3RouteResolutionTests
@@ -97,10 +97,10 @@ public class Http3RouteResolutionTests
     // ─────────────────────────────────────────────────────────────────────────
 
     [TestMethod]
-    public async Task ResolveH3_H3Disabled_ReturnsNone()
+    public void ResolveH3_H3Disabled_ReturnsNone()
     {
         using var server = MakeServer(enableH3: false);
-        var route = await server.ResolveHttp3OriginAsync("example.com", 443, null, true, CancellationToken.None);
+        var route = server.ResolveHttp3Origin("example.com", 443, null, true);
         Assert.IsFalse(route.UseH3, "H3 disabled → no H3 route.");
     }
 
@@ -109,7 +109,7 @@ public class Http3RouteResolutionTests
     {
         using var server = MakeServer(enableH3: false);
         server.Http3OriginCapabilityCache.Set("example.com:443");
-        var route = server.ShouldUseHttp3OriginCached("example.com", 443, null);
+        var route = server.ResolveHttp3Origin("example.com", 443, null, allowDnsProbe: false);
         Assert.IsFalse(route.UseH3, "H3 disabled → cached entry must be ignored.");
     }
 
@@ -118,11 +118,11 @@ public class Http3RouteResolutionTests
     // ─────────────────────────────────────────────────────────────────────────
 
     [TestMethod]
-    public async Task ResolveH3_ForcedHttp3_ReturnsForced()
+    public void ResolveH3_ForcedHttp3_ReturnsForced()
     {
         using var server = MakeServer();
-        var route = await server.ResolveHttp3OriginAsync(
-            "example.com", 443, UpstreamHttpProtocol.Http3, false, CancellationToken.None);
+        var route = server.ResolveHttp3Origin(
+            "example.com", 443, UpstreamHttpProtocol.Http3, false);
 
         Assert.IsTrue(route.UseH3);
         Assert.IsTrue(route.ForcedH3, "Forced Http3 policy must set ForcedH3.");
@@ -134,7 +134,8 @@ public class Http3RouteResolutionTests
     public void CachedRoute_ForcedHttp3_ReturnsForced()
     {
         using var server = MakeServer();
-        var route = server.ShouldUseHttp3OriginCached("example.com", 443, UpstreamHttpProtocol.Http3);
+        var route = server.ResolveHttp3Origin("example.com", 443, UpstreamHttpProtocol.Http3,
+            allowDnsProbe: false);
 
         Assert.IsTrue(route.UseH3);
         Assert.IsTrue(route.ForcedH3);
@@ -146,23 +147,23 @@ public class Http3RouteResolutionTests
     // ─────────────────────────────────────────────────────────────────────────
 
     [TestMethod]
-    public async Task ResolveH3_ForcedHttp11_ReturnsNone()
+    public void ResolveH3_ForcedHttp11_ReturnsNone()
     {
         using var server = MakeServer();
         // Even with a cache hit, Http11 forces no H3.
         server.Http3OriginCapabilityCache.Set("example.com:443");
-        var route = await server.ResolveHttp3OriginAsync(
-            "example.com", 443, UpstreamHttpProtocol.Http11, true, CancellationToken.None);
+        var route = server.ResolveHttp3Origin(
+            "example.com", 443, UpstreamHttpProtocol.Http11, true);
         Assert.IsFalse(route.UseH3, "Forced Http11 must never select H3.");
     }
 
     [TestMethod]
-    public async Task ResolveH3_ForcedHttp2_ReturnsNone()
+    public void ResolveH3_ForcedHttp2_ReturnsNone()
     {
         using var server = MakeServer();
         server.Http3OriginCapabilityCache.Set("example.com:443");
-        var route = await server.ResolveHttp3OriginAsync(
-            "example.com", 443, UpstreamHttpProtocol.Http2, true, CancellationToken.None);
+        var route = server.ResolveHttp3Origin(
+            "example.com", 443, UpstreamHttpProtocol.Http2, true);
         Assert.IsFalse(route.UseH3, "Forced Http2 must never select H3.");
     }
 
@@ -171,7 +172,8 @@ public class Http3RouteResolutionTests
     {
         using var server = MakeServer();
         server.Http3OriginCapabilityCache.Set("example.com:443");
-        var route = server.ShouldUseHttp3OriginCached("example.com", 443, UpstreamHttpProtocol.Http11);
+        var route = server.ResolveHttp3Origin("example.com", 443, UpstreamHttpProtocol.Http11,
+            allowDnsProbe: false);
         Assert.IsFalse(route.UseH3);
     }
 
@@ -180,13 +182,13 @@ public class Http3RouteResolutionTests
     // ─────────────────────────────────────────────────────────────────────────
 
     [TestMethod]
-    public async Task ResolveH3_Auto_CacheHit_ReturnsCachedRoute()
+    public void ResolveH3_Auto_CacheHit_ReturnsCachedRoute()
     {
         using var server = MakeServer();
         server.Http3OriginCapabilityCache.Set("example.com:443"); // same-port
 
-        var route = await server.ResolveHttp3OriginAsync(
-            "example.com", 443, UpstreamHttpProtocol.Auto, false, CancellationToken.None);
+        var route = server.ResolveHttp3Origin(
+            "example.com", 443, UpstreamHttpProtocol.Auto, false);
 
         Assert.IsTrue(route.UseH3);
         Assert.AreEqual(Http3RouteSource.AltSvcCache, route.Source);
@@ -195,27 +197,27 @@ public class Http3RouteResolutionTests
     }
 
     [TestMethod]
-    public async Task ResolveH3_Auto_CacheHit_AltPort_ReturnsCachedAltPort()
+    public void ResolveH3_Auto_CacheHit_AltPort_ReturnsCachedAltPort()
     {
         using var server = MakeServer();
         server.Http3OriginCapabilityCache.Set("example.com:443", altPort: 8443);
 
-        var route = await server.ResolveHttp3OriginAsync(
-            "example.com", 443, UpstreamHttpProtocol.Auto, false, CancellationToken.None);
+        var route = server.ResolveHttp3Origin(
+            "example.com", 443, UpstreamHttpProtocol.Auto, false);
 
         Assert.IsTrue(route.UseH3);
         Assert.AreEqual(8443, route.QuicPort);
     }
 
     [TestMethod]
-    public async Task ResolveH3_Auto_CacheHit_WithTargetName_ReturnsQuicHost()
+    public void ResolveH3_Auto_CacheHit_WithTargetName_ReturnsQuicHost()
     {
         using var server = MakeServer();
         server.Http3OriginCapabilityCache.Set("example.com:443",
             altPort: int.MinValue, targetName: "quic-target.cdn.example.com");
 
-        var route = await server.ResolveHttp3OriginAsync(
-            "example.com", 443, UpstreamHttpProtocol.Auto, false, CancellationToken.None);
+        var route = server.ResolveHttp3Origin(
+            "example.com", 443, UpstreamHttpProtocol.Auto, false);
 
         Assert.IsTrue(route.UseH3);
         Assert.AreEqual("quic-target.cdn.example.com", route.QuicHost);
@@ -226,23 +228,23 @@ public class Http3RouteResolutionTests
     // ─────────────────────────────────────────────────────────────────────────
 
     [TestMethod]
-    public async Task ResolveH3_Auto_CacheMiss_SvcbDisabled_ReturnsNone()
+    public void ResolveH3_Auto_CacheMiss_SvcbDisabled_ReturnsNone()
     {
         using var server = MakeServer(enableH3: true, enableSvcb: false);
-        var route = await server.ResolveHttp3OriginAsync(
-            "example.com", 443, UpstreamHttpProtocol.Auto, true, CancellationToken.None);
+        var route = server.ResolveHttp3Origin(
+            "example.com", 443, UpstreamHttpProtocol.Auto, true);
         Assert.IsFalse(route.UseH3, "SVCB disabled + no cache hit → no H3.");
     }
 
     [TestMethod]
-    public async Task ResolveH3_Auto_CacheMiss_SvcbEnabled_ReturnsNoneImmediately()
+    public void ResolveH3_Auto_CacheMiss_SvcbEnabled_ReturnsNoneImmediately()
     {
         // Auto-mode never awaits DNS on the critical path: first connection falls through to H2/H1.
         var svcb = new SvcbResult(AltPort: 443, Ttl: TimeSpan.FromMinutes(5), TargetName: null);
         using var server = MakeServer(enableH3: true, enableSvcb: true, svcbResult: svcb);
 
-        var route = await server.ResolveHttp3OriginAsync(
-            "example.com", 443, UpstreamHttpProtocol.Auto, true, CancellationToken.None);
+        var route = server.ResolveHttp3Origin(
+            "example.com", 443, UpstreamHttpProtocol.Auto, true);
 
         Assert.IsFalse(route.UseH3, "Cache miss must not block CONNECT waiting for SVCB.");
         Assert.AreEqual(Http3RouteSource.None, route.Source);
@@ -254,15 +256,16 @@ public class Http3RouteResolutionTests
         var svcb = new SvcbResult(AltPort: 8443, Ttl: TimeSpan.FromMinutes(10), TargetName: "target.example.com");
         using var server = MakeServer(enableH3: true, enableSvcb: true, svcbResult: svcb);
 
-        var route = await server.ResolveHttp3OriginAsync(
-            "example.com", 443, UpstreamHttpProtocol.Auto, true, CancellationToken.None);
+        var route = server.ResolveHttp3Origin(
+            "example.com", 443, UpstreamHttpProtocol.Auto, true);
         Assert.IsFalse(route.UseH3);
 
         // Background discovery should populate the capability cache for subsequent connections.
         Http3OriginRoute cachedRoute = Http3OriginRoute.None;
         for (var i = 0; i < 50; i++)
         {
-            cachedRoute = server.ShouldUseHttp3OriginCached("example.com", 443, UpstreamHttpProtocol.Auto);
+            cachedRoute = server.ResolveHttp3Origin("example.com", 443, UpstreamHttpProtocol.Auto,
+                allowDnsProbe: false);
             if (cachedRoute.UseH3) break;
             await Task.Delay(20);
         }
@@ -273,11 +276,11 @@ public class Http3RouteResolutionTests
     }
 
     [TestMethod]
-    public async Task ResolveH3_Auto_CacheMiss_SvcbMiss_ReturnsNone()
+    public void ResolveH3_Auto_CacheMiss_SvcbMiss_ReturnsNone()
     {
         using var server = MakeServer(enableH3: true, enableSvcb: true, svcbResult: null);
-        var route = await server.ResolveHttp3OriginAsync(
-            "example.com", 443, UpstreamHttpProtocol.Auto, true, CancellationToken.None);
+        var route = server.ResolveHttp3Origin(
+            "example.com", 443, UpstreamHttpProtocol.Auto, true);
         Assert.IsFalse(route.UseH3, "SVCB miss → no H3 on the current connection.");
     }
 
@@ -289,10 +292,9 @@ public class Http3RouteResolutionTests
         server.EnableHttpsSvcbDnsDiscovery = true;
         server.HttpsSvcbResolver = resolver;
 
-        await Task.WhenAll(
-            server.ResolveHttp3OriginAsync("example.com", 443, UpstreamHttpProtocol.Auto, true, CancellationToken.None),
-            server.ResolveHttp3OriginAsync("example.com", 443, UpstreamHttpProtocol.Auto, true, CancellationToken.None),
-            server.ResolveHttp3OriginAsync("example.com", 443, UpstreamHttpProtocol.Auto, true, CancellationToken.None));
+        server.ResolveHttp3Origin("example.com", 443, UpstreamHttpProtocol.Auto, true);
+        server.ResolveHttp3Origin("example.com", 443, UpstreamHttpProtocol.Auto, true);
+        server.ResolveHttp3Origin("example.com", 443, UpstreamHttpProtocol.Auto, true);
 
         for (var i = 0; i < 50 && resolver.ProbeCount == 0; i++)
             await Task.Delay(20);
@@ -301,7 +303,7 @@ public class Http3RouteResolutionTests
     }
 
     [TestMethod]
-    public async Task ResolveH3_AllowDnsProbe_False_SkipsDnsEvenIfEnabled()
+    public void ResolveH3_AllowDnsProbe_False_SkipsDnsEvenIfEnabled()
     {
         // DNS probe is blocked on the per-stream hot path even when SVCB discovery is enabled.
         var resolver = new CountingResolver(new SvcbResult(443, TimeSpan.FromMinutes(1)));
@@ -309,8 +311,8 @@ public class Http3RouteResolutionTests
         var server = new ProxyServer(false, false, false) { EnableHttp3 = true };
         server.HttpsSvcbResolver = resolver;
 
-        var route = await server.ResolveHttp3OriginAsync(
-            "example.com", 443, null, allowDnsProbe: false, CancellationToken.None);
+        var route = server.ResolveHttp3Origin(
+            "example.com", 443, null, allowDnsProbe: false);
 
         Assert.IsFalse(route.UseH3, "allowDnsProbe=false must skip DNS.");
         Assert.AreEqual(0, resolver.ProbeCount, "DNS probe must not be invoked.");
@@ -322,13 +324,13 @@ public class Http3RouteResolutionTests
     // ─────────────────────────────────────────────────────────────────────────
 
     [TestMethod]
-    public async Task ResolveH3_NullProtocol_TreatedAsAuto()
+    public void ResolveH3_NullProtocol_TreatedAsAuto()
     {
         using var server = MakeServer();
         server.Http3OriginCapabilityCache.Set("example.com:443");
 
-        var route = await server.ResolveHttp3OriginAsync(
-            "example.com", 443, effectiveProtocol: null, false, CancellationToken.None);
+        var route = server.ResolveHttp3Origin(
+            "example.com", 443, effectiveProtocol: null, false);
 
         Assert.IsTrue(route.UseH3, "null protocol → Auto → cache hit → H3.");
     }
