@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 
 namespace Titanium.Web.Proxy.IntegrationTests;
@@ -69,10 +71,13 @@ public class Http2MultiStreamTlsTests
 
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
+        proxy.EnableRequestTimingCapture = true;
 
         var serverIds = new List<Guid>();
         var clientIds = new List<Guid>();
         var hasConnectionFlags = new List<bool>();
+        var remoteEndPoints = new List<IPEndPoint?>();
+        var connectionTimings = new List<UpstreamConnectionTiming?>();
         proxy.BeforeResponse += (_, args) =>
         {
             lock (serverIds)
@@ -80,6 +85,8 @@ public class Http2MultiStreamTlsTests
                 serverIds.Add(args.ServerConnectionId);
                 clientIds.Add(args.ClientConnectionId);
                 hasConnectionFlags.Add(args.HttpClient.HasConnection);
+                remoteEndPoints.Add(args.ServerRemoteEndPoint);
+                connectionTimings.Add(args.UpstreamConnectionTiming);
             }
 
             return Task.CompletedTask;
@@ -103,6 +110,15 @@ public class Http2MultiStreamTlsTests
         Assert.AreEqual(1, serverIds.Distinct().Count(), "multiplexed H2 streams should share one upstream connection id");
         Assert.AreEqual(1, clientIds.Distinct().Count(), "multiplexed H2 streams should share one client connection id");
         Assert.IsTrue(hasConnectionFlags.All(v => !v),
-            "native H2 must BindUpstreamConnectionId only — HasConnection must stay false");
+            "native H2 must BindUpstreamConnection only — HasConnection must stay false");
+        Assert.IsTrue(remoteEndPoints.All(ep => ep != null),
+            "Bind-only native H2 must still expose ServerRemoteEndPoint");
+        Assert.AreEqual(1, remoteEndPoints.Distinct().Count(),
+            "multiplexed H2 streams should share one ServerRemoteEndPoint");
+        Assert.AreEqual(server.HttpsListeningPort, remoteEndPoints[0]!.Port);
+        Assert.IsTrue(connectionTimings.All(t => t != null),
+            "Bind-only native H2 must still expose UpstreamConnectionTiming");
+        Assert.AreEqual(1, connectionTimings.Distinct().Count(),
+            "multiplexed H2 streams should share one UpstreamConnectionTiming instance");
     }
 }
