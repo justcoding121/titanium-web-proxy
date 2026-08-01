@@ -58,7 +58,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // generate root certificate without storing it in file system
             //proxyServer.CertificateManager.CreateRootCertificate(false);
 
-            //proxyServer.CertificateManager.TrustRootCertificate();
+            // Trust the MITM root so browsers (including Chrome MCP) accept decrypted HTTPS.
+            // Current-user store is enough for interactive measurement; AsAdmin also covers Local Machine.
+            proxyServer.CertificateManager.EnsureRootCertificate();
+            proxyServer.CertificateManager.TrustRootCertificate();
             //proxyServer.CertificateManager.TrustRootCertificateAsAdmin();
 
             // Library diagnostics stay quiet on the traffic tape: one-line errors (no stacks) in Release.
@@ -82,6 +85,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // Pooling reuses origin TCP/TLS sockets and sharply reduces CONNECT/cert stampede when
             // the example is installed as the system proxy (browser + OS services share the endpoint).
             proxyServer.EnableConnectionPool = true;
+            proxyServer.EnableRequestTimingCapture = true;
             // May invoke PAC/WinHTTP upstream resolution per destination when a system/upstream
             // gateway is configured — leave enabled for realistic system-proxy demos.
             proxyServer.ForwardToUpstreamGateway = true;

@@ -82,6 +82,7 @@ internal sealed class ProxyWorker : BackgroundService
                     throw new InvalidOperationException("Invalid QUIC listening port");
 
                 proxyServer.EnableHttp3 = true;
+                proxyServer.EnableHttpsSvcbDnsDiscovery = settings.EnableHttpsSvcbDnsDiscovery;
                 var quicEndPoint = new TransparentQuicProxyEndPoint(IPAddress.Any, settings.QuicListeningPort)
                 {
                     // Replace with IOriginalDestinationResolver for real NAT-transparent interception.
@@ -89,8 +90,10 @@ internal sealed class ProxyWorker : BackgroundService
                     ForwardPort = 443
                 };
                 proxyServer.AddEndPoint(quicEndPoint);
-                logger.LogInformation("HTTP/3 QUIC endpoint started on UDP {QuicListeningPort}",
-                    settings.QuicListeningPort);
+                logger.LogInformation(
+                    "HTTP/3 QUIC endpoint started on UDP {QuicListeningPort} (SVCB discovery={SvcbDiscovery})",
+                    settings.QuicListeningPort,
+                    settings.EnableHttpsSvcbDnsDiscovery ? "on" : "off");
             }
             else
             {
