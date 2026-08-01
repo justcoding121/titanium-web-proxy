@@ -103,12 +103,13 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 
     /// <summary>
     ///     Structured timing for the upstream connection currently used by this session, populated only
-    ///     when <see cref="ProxyServer.EnableRequestTimingCapture" /> is enabled. <see langword="null" />
-    ///     when timing capture is disabled or no upstream connection has been acquired yet (e.g. the
-    ///     request was answered synthetically). See <see cref="UpstreamConnectionTiming" />.
+    ///     when <see cref="ProxyServer.EnableRequestTimingCapture" /> is enabled, including multiplexed
+    ///     HTTP/2 and HTTP/3 sessions that bind identity without transferring HTTP/1.1 TCP ownership
+    ///     (those sharing one origin connection expose the same instance). <see langword="null" /> when
+    ///     timing capture is disabled or no upstream connection has been acquired yet (e.g. the request
+    ///     was answered synthetically). See <see cref="UpstreamConnectionTiming" />.
     /// </summary>
-    public UpstreamConnectionTiming? UpstreamConnectionTiming =>
-        HttpClient.HasConnection ? ServerConnection.Timing : null;
+    public UpstreamConnectionTiming? UpstreamConnectionTiming => HttpClient.UpstreamConnectionTiming;
 
     /// <summary>
     ///     Returns a user data for this request/response session which is
@@ -162,14 +163,15 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     public IPEndPoint ClientEndPoint => ClientRemoteEndPoint;
 
     /// <summary>
-    ///     Physical peer of the established upstream TCP connection (no second DNS lookup).
+    ///     Physical peer of the established upstream connection (no second DNS lookup).
     ///     Available after the server connection is established (for example in
-    ///     <see cref="ProxyServer.BeforeResponse" />). When an upstream HTTP/SOCKS proxy is used,
-    ///     this is the proxy hop endpoint, not the origin server. <see langword="null" /> when no
-    ///     upstream connection exists (for example a synthetic local response).
+    ///     <see cref="ProxyServer.BeforeResponse" />), including multiplexed HTTP/2 and HTTP/3
+    ///     sessions that bind identity without transferring HTTP/1.1 TCP ownership. When an
+    ///     upstream HTTP/SOCKS proxy is used, this is the proxy hop endpoint, not the origin
+    ///     server. <see langword="null" /> when no upstream connection exists (for example a
+    ///     synthetic local response).
     /// </summary>
-    public IPEndPoint? ServerRemoteEndPoint =>
-        HttpClient.HasConnection ? ServerConnection.RemoteEndPoint : null;
+    public IPEndPoint? ServerRemoteEndPoint => HttpClient.UpstreamRemoteEndPoint;
 
     /// <summary>
     ///     IP address of <see cref="ServerRemoteEndPoint" />.

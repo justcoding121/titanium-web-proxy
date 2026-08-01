@@ -73,6 +73,26 @@ internal sealed class QuicServerConnection : IAsyncDisposable
     internal UpstreamConnectionTiming? Timing { get; set; }
 
     /// <summary>
+    ///     Physical peer of the established QUIC connection, mirroring
+    ///     <see cref="Tcp.TcpServerConnection.RemoteEndPoint" />. When an upstream proxy is used this is
+    ///     the proxy hop, not the origin. <see langword="null" /> once the underlying handle is gone.
+    /// </summary>
+    internal IPEndPoint? RemoteEndPoint
+    {
+        get
+        {
+            try
+            {
+                return Connection.RemoteEndPoint;
+            }
+            catch (ObjectDisposedException)
+            {
+                return null;
+            }
+        }
+    }
+
+    /// <summary>
     ///     <see langword="true" /> if the connection has been closed by the remote or is otherwise
     ///     unusable. Quick check using the QUIC connection state (not a round-trip).
     /// </summary>
