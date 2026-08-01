@@ -61,7 +61,7 @@ public partial class ProxyServer
             () => new SessionEventArgs(this, endPoint, clientStream, connectRequest, cancellationTokenSource)
             {
                 UserData = userData,
-                // Seed connection-level protocol policy so per-stream ShouldUseHttp3OriginCached
+                // Seed connection-level protocol policy so per-stream H3 route resolution
                 // honours forced Http3/Http11/Http2 (same as the warm-path factory).
                 UpstreamHttpProtocol = upstreamHttpProtocol
             },
@@ -113,7 +113,8 @@ public partial class ProxyServer
         // Synchronous (cache-only) H3 route resolution — DNS I/O must never block the H2 frame reader.
         var reqHost = sessionArgs.HttpClient.Request.RequestUri?.Host ?? remoteHostName;
         var reqPort = sessionArgs.HttpClient.Request.RequestUri?.Port ?? remotePort;
-        var h3Route = ShouldUseHttp3OriginCached(reqHost, reqPort, sessionArgs.UpstreamHttpProtocol);
+        var h3Route = ResolveHttp3Origin(reqHost, reqPort, sessionArgs.UpstreamHttpProtocol,
+            allowDnsProbe: false);
 
         if (!h3Route.UseH3)
         {

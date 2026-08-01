@@ -36,6 +36,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private ExplicitProxyEndPoint explicitEndPoint;
 
+        private readonly bool trustRootCertificate;
+
 #pragma warning disable TWP001 // HTTP/3 is experimental — example intentionally exercises this API
 #nullable enable
         private TransparentQuicProxyEndPoint? quicEndPoint;
@@ -58,11 +60,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // generate root certificate without storing it in file system
             //proxyServer.CertificateManager.CreateRootCertificate(false);
 
-            // Trust the MITM root so browsers (including Chrome MCP) accept decrypted HTTPS.
-            // Current-user store is enough for interactive measurement; AsAdmin also covers Local Machine.
-            proxyServer.CertificateManager.EnsureRootCertificate();
-            proxyServer.CertificateManager.TrustRootCertificate();
-            //proxyServer.CertificateManager.TrustRootCertificateAsAdmin();
+            // Installing a MITM root into the user's trust store is opt-in: set TWP_TRUST_ROOT=1 for
+            // browser-driven runs. Nothing is added to any certificate store without it, and
+            // RemoveTrustedRootCertificate() in Stop() takes it back out again.
+            trustRootCertificate = Environment.GetEnvironmentVariable("TWP_TRUST_ROOT") is "1" or "true" or "TRUE";
+            if (trustRootCertificate)
+            {
+                proxyServer.CertificateManager.EnsureRootCertificate();
+                proxyServer.CertificateManager.TrustRootCertificate();
+                //proxyServer.CertificateManager.TrustRootCertificateAsAdmin();
+            }
 
             // Library diagnostics stay quiet on the traffic tape: one-line errors (no stacks) in Release.
             // DEBUG keeps the built-in Trace console (full stacks) for deep diagnosis.
@@ -79,13 +86,15 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.Logging.LoggerFactory = compactLoggerFactory;
 #endif
 
-            proxyServer.TcpTimeWaitSeconds = 10;
-            // Keep the library default ConnectionTimeOutSeconds (60): a 15s idle pool lifetime
-            // forces full TCP/TLS reconnects after normal interactive think time.
+            // Keep the library defaults for TcpTimeWaitSeconds (0 — abortive close, so a high-churn
+            // proxy does not accumulate TIME_WAIT) and ConnectionTimeOutSeconds (60 — a short idle
+            // pool lifetime forces full TCP/TLS reconnects after normal interactive think time).
             // Pooling reuses origin TCP/TLS sockets and sharply reduces CONNECT/cert stampede when
             // the example is installed as the system proxy (browser + OS services share the endpoint).
             proxyServer.EnableConnectionPool = true;
-            proxyServer.EnableRequestTimingCapture = true;
+            // Per-request timing marks are measurement scaffolding; opt in for latency runs.
+            proxyServer.EnableRequestTimingCapture =
+                Environment.GetEnvironmentVariable("TWP_CAPTURE_TIMING") is "1" or "true" or "TRUE";
             // May invoke PAC/WinHTTP upstream resolution per destination when a system/upstream
             // gateway is configured — leave enabled for realistic system-proxy demos.
             proxyServer.ForwardToUpstreamGateway = true;
@@ -269,8 +278,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             proxyServer.Stop();
 
-            // remove the generated certificates
-            //proxyServer.CertificateManager.RemoveTrustedRootCertificates();
+            // Only undo what this run installed (see TWP_TRUST_ROOT above).
+            if (trustRootCertificate)
+                proxyServer.CertificateManager.RemoveTrustedRootCertificate();
         }
 
         private async Task<IExternalProxy> OnGetCustomUpStreamProxyFunc(SessionEventArgsBase arg)

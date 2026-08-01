@@ -104,11 +104,10 @@ public partial class ProxyServer
 
                     // H3 route selection is independent of EnableHttp2 so EnableHttp2=false does not
                     // accidentally suppress forced-H3 / cached-H3 CONNECT routing.
-                    var h3RouteAtConnect = await ResolveHttp3OriginAsync(
+                    var h3RouteAtConnect = ResolveHttp3Origin(
                         httpsHostName, args.ForwardHttpsPort,
                         args.UpstreamHttpProtocol,
-                        allowDnsProbe: true,
-                        cancellationToken);
+                        allowDnsProbe: true);
 
                     if (h3RouteAtConnect.UseH3)
                     {

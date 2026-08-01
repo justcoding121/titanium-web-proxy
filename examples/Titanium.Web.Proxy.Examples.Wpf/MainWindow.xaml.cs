@@ -82,11 +82,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             ////if create new Root certificate file(.pfx) ====> delete folder "crts"
             //proxyServer.CertificateManager.SaveFakeCertificates = true;
 
-            // Match Basic example interactive-proxy knobs: pool reuse + library default
-            // ConnectionTimeOutSeconds (60). A short idle lifetime forces full TCP/TLS
-            // reconnects after normal think time.
-            proxyServer.TcpTimeWaitSeconds = 10;
-            proxyServer.EnableConnectionPool = true;
             proxyServer.ForwardToUpstreamGateway = true;
 
             //increase the ThreadPool (for server prod)

@@ -426,16 +426,15 @@ public partial class ProxyServer
 
         if (noCache) serverConnection = null;
 
-        // H1.1 client → H3 origin bridge: resolve route (including SVCB DNS on cold start).
+        // H1.1 client → H3 origin bridge: resolve route from cache, warming SVCB in the background.
         if (!args.HttpClient.Request.UpgradeToWebSocket)
         {
             var reqHost = args.HttpClient.Request.RequestUri?.Host ?? string.Empty;
             var reqPort = args.HttpClient.Request.RequestUri?.Port ?? 443;
-            var h3Route = await ResolveHttp3OriginAsync(
+            var h3Route = ResolveHttp3Origin(
                 reqHost, reqPort,
                 args.UpstreamHttpProtocol,
-                allowDnsProbe: true,
-                cancellationToken);
+                allowDnsProbe: true);
 
             if (h3Route.UseH3)
             {
