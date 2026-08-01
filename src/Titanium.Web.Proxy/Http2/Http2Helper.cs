@@ -830,17 +830,17 @@ namespace Titanium.Web.Proxy.Http2
                                 {
                                     // Origin supports RFC 8441 - forward the extended CONNECT HEADERS.
                                     if (originConnection != null)
-                                        sessionArgs.HttpClient.BindUpstreamConnectionId(originConnection.Id);
+                                        sessionArgs.HttpClient.BindUpstreamConnection(originConnection);
                                     await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                         request, endStreamFlag, output, isPromise));
                                 }
                             }
                             else
                             {
-                                // Bind shared origin identity without SetConnection so HasConnection stays
+                                // Bind shared origin metadata without SetConnection so HasConnection stays
                                 // false (H1 syphon/drain must not touch the multiplexed H2 socket).
                                 if (originConnection != null)
-                                    sessionArgs.HttpClient.BindUpstreamConnectionId(originConnection.Id);
+                                    sessionArgs.HttpClient.BindUpstreamConnection(originConnection);
                                 await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                     request, endStreamFlag, output, isPromise));
                             }

@@ -3,9 +3,11 @@ using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy.Http;
@@ -22,6 +24,20 @@ public class HttpWebClient
     ///     without transferring HTTP/1.1 TCP ownership via <see cref="SetConnection" />).
     /// </summary>
     private Guid? upstreamConnectionId;
+
+    /// <summary>
+    ///     Upstream peer endpoint paired with <see cref="upstreamConnectionId" /> for Bind-only
+    ///     multiplexed sessions (H2/H3), so <c>ServerRemoteEndPoint</c> works without
+    ///     <see cref="HasConnection" />.
+    /// </summary>
+    private IPEndPoint? upstreamRemoteEndPoint;
+
+    /// <summary>
+    ///     Establishment timing of the connection paired with <see cref="upstreamConnectionId" /> for
+    ///     Bind-only multiplexed sessions (H2/H3), so <c>UpstreamConnectionTiming</c> works without
+    ///     <see cref="HasConnection" />. Only populated when timing capture is enabled.
+    /// </summary>
+    private UpstreamConnectionTiming? upstreamConnectionTiming;
 
     internal HttpWebClient(ConnectRequest? connectRequest, Request request, Lazy<int> processIdFunc)
     {
@@ -47,10 +63,24 @@ public class HttpWebClient
     internal bool HasConnection => connection != null;
 
     /// <summary>
-    ///     Upstream connection identity when bound via <see cref="BindUpstreamConnectionId" /> or
-    ///     <see cref="SetConnection" />; otherwise <see langword="null" />.
+    ///     Upstream connection identity when bound via <see cref="BindUpstreamConnection(TcpServerConnection)" />
+    ///     or <see cref="SetConnection" />; otherwise <see langword="null" />.
     /// </summary>
     internal Guid? UpstreamConnectionId => upstreamConnectionId ?? connection?.Id;
+
+    /// <summary>
+    ///     Upstream peer endpoint when bound via <see cref="BindUpstreamConnection(TcpServerConnection)" />
+    ///     or <see cref="SetConnection" />; otherwise <see langword="null" />.
+    /// </summary>
+    internal IPEndPoint? UpstreamRemoteEndPoint => upstreamRemoteEndPoint ?? connection?.RemoteEndPoint;
+
+    /// <summary>
+    ///     Establishment timing of the upstream connection when bound via
+    ///     <see cref="BindUpstreamConnection(TcpServerConnection)" /> or <see cref="SetConnection" />;
+    ///     <see langword="null" /> when timing capture is disabled or nothing is bound yet.
+    /// </summary>
+    internal UpstreamConnectionTiming? UpstreamConnectionTiming =>
+        upstreamConnectionTiming ?? connection?.Timing;
 
     /// <summary>
     ///     Should we close the server connection at the end of this HTTP request/response session.
@@ -120,16 +150,42 @@ public class HttpWebClient
     {
         serverConnection.LastAccess = DateTime.UtcNow;
         connection = serverConnection;
-        // Overwrite any previously bound multiplexed (e.g. QUIC) id so TCP fallback is accurate.
-        upstreamConnectionId = serverConnection.Id;
+        // Overwrite any previously bound multiplexed (e.g. QUIC) metadata so TCP fallback is accurate.
+        BindUpstreamConnection(serverConnection);
     }
 
     /// <summary>
-    ///     Bind the upstream transport connection identity without transferring HTTP/1.1 TCP stream
-    ///     ownership. Used for multiplexed H2/H3 so <c>ServerConnectionId</c> is visible while
-    ///     <see cref="HasConnection" /> stays false (H1 syphon/drain must not touch the shared socket).
+    ///     Bind the metadata of a multiplexed HTTP/2 origin connection without transferring HTTP/1.1 TCP
+    ///     stream ownership, so <c>ServerConnectionId</c>, <c>ServerRemoteEndPoint</c> and
+    ///     <c>UpstreamConnectionTiming</c> are visible while <see cref="HasConnection" /> stays false
+    ///     (H1 syphon/drain must not touch the shared socket).
     /// </summary>
-    internal void BindUpstreamConnectionId(Guid id) => upstreamConnectionId = id;
+    internal void BindUpstreamConnection(TcpServerConnection serverConnection)
+    {
+        BindUpstreamConnection(serverConnection.Id, serverConnection.RemoteEndPoint, serverConnection.Timing);
+    }
+
+    /// <summary>
+    ///     Bind the metadata of a multiplexed QUIC (HTTP/3) origin connection. A later
+    ///     <see cref="SetConnection" /> overwrites it, keeping TCP fallback accurate.
+    /// </summary>
+    internal void BindUpstreamConnection(QuicServerConnection quicConnection)
+    {
+        BindUpstreamConnection(quicConnection.Id, quicConnection.RemoteEndPoint, quicConnection.Timing);
+    }
+
+    /// <summary>
+    ///     Snapshots upstream connection metadata by value. Read eagerly rather than through the
+    ///     connection object because the socket/QUIC handle may be torn down before a consumer reads
+    ///     <c>ServerRemoteEndPoint</c> in a later event.
+    /// </summary>
+    internal void BindUpstreamConnection(Guid id, IPEndPoint? remoteEndPoint,
+        UpstreamConnectionTiming? timing)
+    {
+        upstreamConnectionId = id;
+        upstreamRemoteEndPoint = remoteEndPoint;
+        upstreamConnectionTiming = timing;
+    }
 
     /// <summary>
     ///     Resolves the HTTP version that will actually be declared to the origin on the request line, per
@@ -279,6 +335,8 @@ public class HttpWebClient
     {
         connection = null;
         upstreamConnectionId = null;
+        upstreamRemoteEndPoint = null;
+        upstreamConnectionTiming = null;
 
         ConnectRequest?.FinishSession();
         Request?.FinishSession();
