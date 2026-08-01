@@ -67,7 +67,7 @@ internal class TcpClientConnection : IDisposable
 
     private ProxyServer ProxyServer { get; }
 
-    public Guid Id { get; } = Guid.NewGuid();
+    public long Id { get; } = ConnectionId.Next();
 
     public EndPoint LocalEndPoint => LocalEndPointOverride
                                      ?? tcpClientSocket?.LocalEndPoint

@@ -73,8 +73,8 @@ public class Http2MultiStreamTlsTests
         proxy.EnableHttp2 = true;
         proxy.EnableRequestTimingCapture = true;
 
-        var serverIds = new List<Guid>();
-        var clientIds = new List<Guid>();
+        var serverIds = new List<long>();
+        var clientIds = new List<long>();
         var hasConnectionFlags = new List<bool>();
         var remoteEndPoints = new List<IPEndPoint?>();
         var connectionTimings = new List<UpstreamConnectionTiming?>();
@@ -106,7 +106,7 @@ public class Http2MultiStreamTlsTests
         for (var i = 0; i < 50 && serverIds.Count < 3; i++) await Task.Delay(20);
 
         Assert.AreEqual(3, serverIds.Count);
-        Assert.IsTrue(serverIds.All(id => id != Guid.Empty), "each H2 stream should expose a non-empty ServerConnectionId");
+        Assert.IsTrue(serverIds.All(id => id != 0), "each H2 stream should expose a non-empty ServerConnectionId");
         Assert.AreEqual(1, serverIds.Distinct().Count(), "multiplexed H2 streams should share one upstream connection id");
         Assert.AreEqual(1, clientIds.Distinct().Count(), "multiplexed H2 streams should share one client connection id");
         Assert.IsTrue(hasConnectionFlags.All(v => !v),

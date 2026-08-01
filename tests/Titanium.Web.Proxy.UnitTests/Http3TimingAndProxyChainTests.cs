@@ -56,7 +56,7 @@ public class Http3TimingAndProxyChainTests
         Thread.Sleep(1);
         t.MarkRequestHeadersReceived();
         Thread.Sleep(1);
-        t.MarkConnectionReady(Guid.NewGuid(), reused: false);
+        t.MarkConnectionReady(1, reused: false);
         Thread.Sleep(1);
         t.MarkRequestSent();
         Thread.Sleep(1);
@@ -93,7 +93,7 @@ public class Http3TimingAndProxyChainTests
     public void Timing_MarkConnectionReady_RecordsReusedFlag()
     {
         var t = new HttpRequestTiming(DateTime.UtcNow);
-        var connId = Guid.NewGuid();
+        const long connId = 99;
 
         t.MarkConnectionReady(connId, reused: true);
 
@@ -106,7 +106,7 @@ public class Http3TimingAndProxyChainTests
     public void Timing_MarkConnectionReady_FirstUseNotReused()
     {
         var t = new HttpRequestTiming(DateTime.UtcNow);
-        t.MarkConnectionReady(Guid.NewGuid(), reused: false);
+        t.MarkConnectionReady(100, reused: false);
 
         Assert.IsFalse(t.UpstreamConnectionReused);
     }

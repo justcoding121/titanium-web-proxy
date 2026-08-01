@@ -447,6 +447,10 @@ Versions prior to 4.0 also supported .NET Framework 4.6.2 and .NET 8; starting w
 - `SessionEventArgsBase.TimeLine` (the free-form `Dictionary<string, DateTime>` of named milestones) was
   removed. Use [`Timing`/`UpstreamConnectionTiming`/`ClientTlsTiming`](#request-timing) instead, which are
   strongly typed and only allocated when `EnableRequestTimingCapture` is set.
+- `ClientConnectionId` / `ServerConnectionId` / `HttpRequestTiming.UpstreamConnectionId` changed from
+  `Guid` to process-wide monotonic `long` counters (unbound server id is `0`, not `Guid.Empty`). See
+  [Connection IDs are monotonic `long` counters, not `Guid`](Migration-4.x-to-5.0#connection-ids-are-monotonic-long-counters-not-guid)
+  in the 5.0 migration guide.
 
 ## Migrating from 4.x to 5.0
 

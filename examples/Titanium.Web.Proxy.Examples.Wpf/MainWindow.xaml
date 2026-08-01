@@ -34,8 +34,8 @@
                     <GridViewColumn Header="SentBytes" Width="75" DisplayMemberBinding="{Binding SentDataCount}" />
                     <GridViewColumn Header="ReceivedBytes" Width="90" DisplayMemberBinding="{Binding ReceivedDataCount}" />
                     <GridViewColumn Header="ClientRemoteEndPoint" Width="140" DisplayMemberBinding="{Binding ClientRemoteEndPoint}" />
-                    <GridViewColumn Header="ClientConnectionId" Width="240" DisplayMemberBinding="{Binding ClientConnectionId}" />
-                    <GridViewColumn Header="ServerConnectionId" Width="240" DisplayMemberBinding="{Binding ServerConnectionId}" />
+                    <GridViewColumn Header="ClientConnectionId" Width="120" DisplayMemberBinding="{Binding ClientConnectionId}" />
+                    <GridViewColumn Header="ServerConnectionId" Width="120" DisplayMemberBinding="{Binding ServerConnectionId}" />
                 </GridView>
             </ListView.View>
         </ListView>

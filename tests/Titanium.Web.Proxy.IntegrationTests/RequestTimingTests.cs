@@ -135,8 +135,8 @@ public class RequestTimingTests
         var proxy = testSuite.GetProxy();
         proxy.EnableRequestTimingCapture = true;
 
-        Guid? serverConnectionId = null;
-        Guid? timingUpstreamId = null;
+        long? serverConnectionId = null;
+        long? timingUpstreamId = null;
         proxy.BeforeResponse += (_, args) =>
         {
             serverConnectionId = args.ServerConnectionId;
@@ -150,7 +150,7 @@ public class RequestTimingTests
         for (var i = 0; i < 50 && serverConnectionId == null; i++) await Task.Delay(20);
 
         Assert.IsNotNull(serverConnectionId);
-        Assert.AreNotEqual(Guid.Empty, serverConnectionId.Value);
+        Assert.AreNotEqual(0, serverConnectionId.Value);
         Assert.AreEqual(timingUpstreamId, serverConnectionId);
     }
 

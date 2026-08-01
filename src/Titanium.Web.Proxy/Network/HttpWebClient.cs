@@ -23,7 +23,7 @@ public class HttpWebClient
     ///     Upstream transport connection identity for multiplexed H2/H3 (and any path that binds an id
     ///     without transferring HTTP/1.1 TCP ownership via <see cref="SetConnection" />).
     /// </summary>
-    private Guid? upstreamConnectionId;
+    private long? upstreamConnectionId;
 
     /// <summary>
     ///     Upstream peer endpoint paired with <see cref="upstreamConnectionId" /> for Bind-only
@@ -66,7 +66,7 @@ public class HttpWebClient
     ///     Upstream connection identity when bound via <see cref="BindUpstreamConnection(TcpServerConnection)" />
     ///     or <see cref="SetConnection" />; otherwise <see langword="null" />.
     /// </summary>
-    internal Guid? UpstreamConnectionId => upstreamConnectionId ?? connection?.Id;
+    internal long? UpstreamConnectionId => upstreamConnectionId ?? connection?.Id;
 
     /// <summary>
     ///     Upstream peer endpoint when bound via <see cref="BindUpstreamConnection(TcpServerConnection)" />
@@ -179,7 +179,7 @@ public class HttpWebClient
     ///     connection object because the socket/QUIC handle may be torn down before a consumer reads
     ///     <c>ServerRemoteEndPoint</c> in a later event.
     /// </summary>
-    internal void BindUpstreamConnection(Guid id, IPEndPoint? remoteEndPoint,
+    internal void BindUpstreamConnection(long id, IPEndPoint? remoteEndPoint,
         UpstreamConnectionTiming? timing)
     {
         upstreamConnectionId = id;

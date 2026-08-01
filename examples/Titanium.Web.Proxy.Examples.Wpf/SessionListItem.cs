@@ -11,26 +11,26 @@ namespace Titanium.Web.Proxy.Examples.Wpf
     public class SessionListItem : INotifyPropertyChanged
     {
         private long? bodySize;
-        private Guid clientConnectionId;
+        private long clientConnectionId;
         private Exception exception;
         private string host;
         private int processId;
         private string protocol;
         private long receivedDataCount;
         private long sentDataCount;
-        private Guid serverConnectionId;
+        private long serverConnectionId;
         private string statusCode;
         private string url;
 
         public int Number { get; set; }
 
-        public Guid ClientConnectionId
+        public long ClientConnectionId
         {
             get => clientConnectionId;
             set => SetField(ref clientConnectionId, value);
         }
 
-        public Guid ServerConnectionId
+        public long ServerConnectionId
         {
             get => serverConnectionId;
             set => SetField(ref serverConnectionId, value);
