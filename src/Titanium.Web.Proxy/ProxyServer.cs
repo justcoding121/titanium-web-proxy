@@ -197,7 +197,7 @@ public partial class ProxyServer : IDisposable
     ///     own redundant probe TLS handshake. See <see cref="Http2OriginCapabilityCache" />.
     /// </summary>
     internal Http2OriginCapabilityCache Http2OriginCapabilityCache { get; } =
-        new(TimeSpan.FromMinutes(5));
+        new(TimeSpan.FromMinutes(30));
 
     /// <summary>
     ///     Caches, per upstream host:port, whether the real origin supports HTTP/3 (QUIC), as discovered via
@@ -206,19 +206,21 @@ public partial class ProxyServer : IDisposable
     internal Http3.Http3OriginCapabilityCache Http3OriginCapabilityCache { get; } = new();
 
     /// <summary>
-    ///     Removes expired entries from both origin-capability caches and, if one has been created, the
-    ///     HTTPS/SVCB resolver's negative-result cache. Called from the connection-pool cleanup loop
-    ///     every few seconds so stale origin records do not accumulate indefinitely.
+    ///     Removes expired entries from both origin-capability caches and, if they have been created, the
+    ///     HTTPS/SVCB resolver's negative-result cache and the discovery coordinator's own miss-suppression
+    ///     cache. Called from the connection-pool cleanup loop every few seconds so stale origin records
+    ///     do not accumulate indefinitely.
     /// </summary>
     internal void TrimOriginCapabilityCaches()
     {
         Http2OriginCapabilityCache.TrimExpired();
         Http3OriginCapabilityCache.TrimExpired();
 
-        // Read the backing field directly (not the HttpsSvcbResolver property) so this periodic sweep
-        // never itself causes the lazy default UdpSvcbDnsResolver to be instantiated when SVCB
+        // Read the backing fields directly (not the HttpsSvcbResolver/SvcbDiscoveryCoordinator
+        // properties) so this periodic sweep never itself instantiates either one when SVCB
         // discovery has never actually been used.
         _httpsSvcbResolver?.TrimExpired();
+        _svcbDiscoveryCoordinator?.TrimExpired();
     }
 
     /// <summary>
@@ -340,18 +342,16 @@ public partial class ProxyServer : IDisposable
     private bool? _enableHttpsSvcbDnsDiscovery;
 
     /// <summary>
-    ///     When <see langword="true" />, the proxy queries the configured DNS server for an HTTPS/SVCB RR
-    ///     (DNS type 65) before each first connection to an uncached origin in
-    ///     <see cref="Models.UpstreamHttpProtocol.Auto" /> mode. A positive result (ALPN <c>h3</c> found)
-    ///     upgrades the outbound connection to HTTP/3 and caches the result for the record's TTL.
-    ///     Negative results are cached for 1 minute to avoid a DNS round-trip on every request to
-    ///     HTTP/2-only origins.
+    ///     When <see langword="true" />, the proxy queues a background HTTPS/SVCB RR (DNS type 65) lookup
+    ///     after an Auto-mode capability-cache miss. A positive result (ALPN <c>h3</c> found) warms
+    ///     <see cref="Http3.Http3OriginCapabilityCache" /> for subsequent connections; the CONNECT /
+    ///     request path itself never awaits DNS. Negative results are cached for 1 minute; transient
+    ///     failures use a short backoff.
     ///     <para>
     ///         Defaults to <see langword="true" /> whenever <see cref="EnableHttp3" /> is
-    ///         <see langword="true" />, because proactive SVCB discovery is required to use HTTP/3 on the
-    ///         first connection to an origin (before any <c>Alt-Svc</c> header has been received and cached).
-    ///         Set explicitly to <see langword="false" /> to disable DNS discovery even when HTTP/3 is
-    ///         enabled — for example, when the configured DNS server is untrusted or unreachable.
+    ///         <see langword="true" />. Set explicitly to <see langword="false" /> to disable discovery
+    ///         even when HTTP/3 is enabled — for example, when the configured DNS server is untrusted
+    ///         or unreachable. First-connection HTTP/3 adoption then comes from <c>Alt-Svc</c>.
     ///     </para>
     /// </summary>
     [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
@@ -372,27 +372,72 @@ public partial class ProxyServer : IDisposable
     [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
     public bool EnableQpackDynamicTable { get; set; } = false;
 
+    private IPEndPoint? _dnsServerEndPoint;
+    private static readonly IPEndPoint UnavailableDnsServerEndPoint = new(IPAddress.None, 0);
+
     /// <summary>
     ///     DNS server endpoint used by <see cref="Http3.Dns.UdpSvcbDnsResolver" /> for HTTPS/SVCB
-    ///     queries. Defaults to Google Public DNS (<c>8.8.8.8:53</c>). Override to use a corporate
-    ///     resolver, or set to <c>127.0.0.1:53</c> only when a local recursive resolver is running
-    ///     (the previous default was loopback, which silently disabled cold-path H3 discovery on
-    ///     typical developer machines).
+    ///     queries. Defaults to the first usable OS-configured plain-UDP DNS server discovered via
+    ///     <see cref="System.Net.NetworkInformation.NetworkInterface" />. This is a best-effort
+    ///     default and does <b>not</b> honor Windows NRPT, DoH, or VPN split-DNS policy.
+    ///     <para>
+    ///         When no OS-configured DNS server can be discovered, the property reports
+    ///         <c>0.0.0.0:0</c> and proactive SVCB discovery is skipped (never falls back to a public
+    ///         third-party resolver). Assign an explicit endpoint to override discovery.
+    ///     </para>
     /// </summary>
     [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
-    public IPEndPoint DnsServerEndPoint { get; set; } = new(System.Net.IPAddress.Parse("8.8.8.8"), 53);
+    public IPEndPoint DnsServerEndPoint
+    {
+        get
+        {
+            if (_dnsServerEndPoint != null) return _dnsServerEndPoint;
+
+            _dnsServerEndPoint = Http3.Dns.OsConfiguredDnsServer.TryGetPrimaryDnsServer()
+                                 ?? UnavailableDnsServerEndPoint;
+            return _dnsServerEndPoint;
+        }
+        set => _dnsServerEndPoint = value ?? throw new ArgumentNullException(nameof(value));
+    }
 
     private Http3.Dns.IHttpsSvcbResolver? _httpsSvcbResolver;
+    private Http3.Dns.Http3SvcbDiscoveryCoordinator? _svcbDiscoveryCoordinator;
+
+    /// <summary>
+    ///     Lifecycle-owned Auto-mode SVCB discovery coordinator. Created lazily so proxies that never
+    ///     enable HTTP/3 pay nothing.
+    /// </summary>
+    internal Http3.Dns.Http3SvcbDiscoveryCoordinator SvcbDiscoveryCoordinator =>
+        _svcbDiscoveryCoordinator ??= new Http3.Dns.Http3SvcbDiscoveryCoordinator(this);
+
+    /// <summary>
+    ///     <see langword="true" /> when a caller replaced the default UDP resolver (tests / custom DoH).
+    /// </summary>
+    internal bool HasCustomHttpsSvcbResolver => _httpsSvcbResolver != null;
 
     /// <summary>
     ///     Resolver used to perform HTTPS/SVCB DNS lookups when <see cref="EnableHttpsSvcbDnsDiscovery" />
     ///     is enabled. Defaults to <see cref="Http3.Dns.UdpSvcbDnsResolver" /> using
-    ///     <see cref="DnsServerEndPoint" />. Replace with a mock in tests.
+    ///     <see cref="DnsServerEndPoint" /> when that endpoint is usable, or to a resolver that always
+    ///     reports "no H3 capability found" when it is not — reading this property never throws.
+    ///     Replace with a mock in tests.
     /// </summary>
     [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
     internal Http3.Dns.IHttpsSvcbResolver HttpsSvcbResolver
     {
-        get => _httpsSvcbResolver ??= new Http3.Dns.UdpSvcbDnsResolver(DnsServerEndPoint);
+        get
+        {
+            if (_httpsSvcbResolver != null) return _httpsSvcbResolver;
+
+            var endpoint = DnsServerEndPoint;
+            if (!Http3.Dns.Http3SvcbDiscoveryCoordinator.IsUsableDnsServer(endpoint))
+                // Deliberately not cached: DnsServerEndPoint may still be assigned explicitly after
+                // this first (failed) read, at which point a real resolver should be built instead.
+                return Http3.Dns.NoOpHttpsSvcbResolver.Instance;
+
+            _httpsSvcbResolver = new Http3.Dns.UdpSvcbDnsResolver(endpoint);
+            return _httpsSvcbResolver;
+        }
         set => _httpsSvcbResolver = value;
     }
 
@@ -2074,6 +2119,7 @@ public partial class ProxyServer : IDisposable
 
         CertificateManager?.Dispose();
         BufferPool?.Dispose();
+        _svcbDiscoveryCoordinator?.Dispose();
 
         // SystemProxyManager is [SupportedOSPlatform("windows")]; the platform analyzer cannot
         // prove that from a null-conditional access alone, so guard explicitly (mirrors the

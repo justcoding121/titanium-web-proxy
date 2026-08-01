@@ -87,6 +87,26 @@ internal static class ProxyMetrics
         Meter.CreateCounter<long>("twp.logger.drops", "{entry}",
             "Log entries dropped because a channel was saturated, tagged by channel.");
 
+    private static readonly Counter<long> SvcbQueued =
+        Meter.CreateCounter<long>("twp.svcb.queued", "{lookup}",
+            "HTTPS/SVCB background discovery lookups queued after an Auto-mode cache miss.");
+
+    private static readonly Histogram<double> SvcbDurationMs =
+        Meter.CreateHistogram<double>("twp.svcb.duration_ms", "ms",
+            "HTTPS/SVCB discovery duration in milliseconds, tagged by result.");
+
+    private static readonly Counter<long> Http2CapabilityLookups =
+        Meter.CreateCounter<long>("twp.http2.capability_lookups", "{lookup}",
+            "HTTP/2 origin capability cache lookups, tagged by hit or miss.");
+
+    private static readonly Histogram<double> Http2ProbeDurationMs =
+        Meter.CreateHistogram<double>("twp.http2.probe_duration_ms", "ms",
+            "Live HTTP/2 origin capability probe duration in milliseconds.");
+
+    private static readonly Counter<long> Http2CapabilityMismatches =
+        Meter.CreateCounter<long>("twp.http2.capability_mismatches", "{mismatch}",
+            "Stale HTTP/2 capability cache positives detected after client ALPN was already committed.");
+
     /// <summary>
     ///     Tracks every live <see cref="CertificateManager" /> by weak reference, so the observable
     ///     gauge below can sum current cache occupancy across however many are alive in this process
@@ -173,4 +193,18 @@ internal static class ProxyMetrics
 
     public static void LoggerEntryDropped(string channel) =>
         LoggerDrops.Add(1, new KeyValuePair<string, object?>("channel", channel));
+
+    public static void SvcbDiscoveryQueued() => SvcbQueued.Add(1);
+
+    public static void SvcbDiscoveryCompleted(double durationMs, string result) =>
+        SvcbDurationMs.Record(durationMs, new KeyValuePair<string, object?>("result", result));
+
+    public static void Http2CapabilityLookup(bool cacheHit) =>
+        Http2CapabilityLookups.Add(1,
+            new KeyValuePair<string, object?>("outcome", cacheHit ? "hit" : "miss"));
+
+    public static void Http2ProbeCompleted(double durationMs) =>
+        Http2ProbeDurationMs.Record(durationMs);
+
+    public static void Http2CapabilityMismatch() => Http2CapabilityMismatches.Add(1);
 }

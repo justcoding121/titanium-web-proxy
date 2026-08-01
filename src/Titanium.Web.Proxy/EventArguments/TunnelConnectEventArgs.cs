@@ -77,6 +77,14 @@ public class TunnelConnectSessionEventArgs : SessionEventArgsBase
     public ClientTlsTiming? ClientTlsTiming { get; internal set; }
 
     /// <summary>
+    ///     CONNECT-phase milestones (certificate readiness, origin capability resolution, HTTP/2 probe,
+    ///     browser TLS) populated only when <see cref="ProxyServer.EnableRequestTimingCapture" /> is
+    ///     enabled and <see cref="DecryptSsl" /> is <see langword="true" />; otherwise
+    ///     <see langword="null" />.
+    /// </summary>
+    public TunnelConnectTiming? ConnectTiming { get; internal set; }
+
+    /// <summary>
     ///     Is this a connect request to secure HTTP server? Or is it to some other protocol.
     /// </summary>
     public bool IsHttpsConnect

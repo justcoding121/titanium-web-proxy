@@ -162,6 +162,12 @@ internal static class ProxyLog
                 connectTarget, Describe(failure));
     }
 
+    internal static void SvcbDnsUnavailable(ILogger logger, string detail)
+    {
+        if (!logger.IsEnabled(LogLevel.Warning)) return;
+        logger.LogWarning("[svcb] {Detail}", detail);
+    }
+
     private static string FormatAlpn(IReadOnlyList<SslApplicationProtocol>? alpn)
     {
         if (alpn == null || alpn.Count == 0) return "(none)";

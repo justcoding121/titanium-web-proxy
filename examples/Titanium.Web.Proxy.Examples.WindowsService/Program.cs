@@ -29,7 +29,7 @@ Log.Logger = new LoggerConfiguration()
         retainedFileCountLimit: 5,
         shared: true)
     .WriteTo.EventLog(
-        source: "ProxyService",
+        source: "Titanium Web Proxy",
         logName: "Application",
         manageEventSource: false,
         restrictedToMinimumLevel: LogEventLevel.Warning)
@@ -37,11 +37,21 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
+    try
+    {
+        Console.Title = "Titanium Web Proxy";
+    }
+    catch (IOException)
+    {
+        // No console when running under the Service Control Manager.
+    }
+
     var builder = Host.CreateApplicationBuilder(args);
 
     // Registers this process as a Windows Service host when launched by the Service Control Manager
     // (falls back to a normal console app when run interactively, e.g. `dotnet run`).
-    builder.Services.AddWindowsService(options => options.ServiceName = "ProxyService");
+    // Must match the service Name in install.ps1 / remove.ps1.
+    builder.Services.AddWindowsService(options => options.ServiceName = "TitaniumWebProxy");
 
     // Serilog owns all sinks (file + Event Log Warning+ + console); drop default MEL providers.
     builder.Logging.ClearProviders();

@@ -104,29 +104,30 @@ RFC 9460 HTTPS resource record queries:
 ```csharp
 #pragma warning disable TWP001
 proxyServer.EnableHttp3 = true;
-proxyServer.EnableHttpsSvcbDnsDiscovery = true; // opt-in
+// EnableHttpsSvcbDnsDiscovery inherits EnableHttp3; set false to rely on Alt-Svc only.
+proxyServer.EnableHttpsSvcbDnsDiscovery = true;
 
-// Optional: use a specific DNS server (default: 127.0.0.1:53)
-// proxyServer.DnsServerEndPoint = new IPEndPoint(IPAddress.Parse("8.8.8.8"), 53);
+// Optional: override the OS-configured plain-UDP DNS server (best-effort default).
+// proxyServer.DnsServerEndPoint = new IPEndPoint(IPAddress.Parse("192.168.1.1"), 53);
 #pragma warning restore TWP001
 ```
 
-When enabled, the proxy issues a DNS HTTPS RR query for an origin before opening the first connection.
-If the DNS response contains an HTTPS record with ALPN `h3`, HTTP/3 is used immediately rather than
-waiting for an `Alt-Svc` response header.
+When enabled, Auto-mode CONNECT/request paths never await DNS. A cache miss queues a single coalesced
+background HTTPS RR lookup; if it finds ALPN `h3`, later connections to that origin use HTTP/3.
+First-connection adoption also still comes from `Alt-Svc` on the first response.
 
 **Behavior:**
 
-- Queries are sent over UDP to `DnsServerEndPoint` with a 1-second timeout.
-- Results are cached with the record's TTL, capped at 1 hour.
-- NXDOMAIN, alias-mode entries (SvcPriority = 0), and records without `h3` in the ALPN list are
-  cached as negative entries (suppress further queries for the TTL duration).
-- Query coalescing: concurrent requests for the same origin share one in-flight DNS query.
+- Queries are sent over UDP to `DnsServerEndPoint` with a 500 ms timeout.
+- Positive results are cached with the record's TTL, capped at 1 hour.
+- NXDOMAIN and NOERROR-without-`h3` are definitive negatives (1-minute TTL).
+- SERVFAIL/REFUSED/timeouts/truncation use short transient suppression plus resolver backoff.
+- Query coalescing: concurrent misses for the same origin share one in-flight DNS query.
 - The resolver is pluggable: set `ProxyServer.HttpsSvcbResolver` to a custom `IHttpsSvcbResolver`
   implementation (e.g. for testing with pre-built responses).
 
-> **Note:** HTTPS/SVCB discovery adds a DNS round-trip before the first QUIC connection to any origin.
-> On a LAN or loopback resolver this is typically < 1 ms. Enable it selectively if you control the
+> **Note:** Background SVCB discovery no longer adds DNS latency to page loads. Enable it when you
+> want earlier H3 adoption than `Alt-Svc` alone; disable it if you control the
 > DNS infrastructure; leave it disabled if you rely on the OS resolver (`/etc/resolv.conf` / WinDNS)
 > and cannot guarantee HTTPS RR support.
 

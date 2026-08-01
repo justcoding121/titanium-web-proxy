@@ -16,6 +16,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 // fix console hang due to QuickEdit mode
                 ConsoleHelper.DisableQuickEditMode();
 
+            Console.Title = "Titanium Web Proxy";
+
             // Ctrl+C / Ctrl+Break: cancel the default terminate so finally can clear system proxy.
             Console.CancelKeyPress += (_, e) =>
             {

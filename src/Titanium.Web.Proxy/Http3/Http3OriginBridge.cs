@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy.Http3;
 ///       <item><description>H3→H2: TCP origin via <c>Http2OriginConnection</c>.</description></item>
 ///       <item><description>H3→H1.1: TCP origin via the normal HTTP/1.1 server pipeline.</description></item>
 ///     </list>
-///     Protocol selection is delegated entirely to <see cref="ProxyServer.ResolveHttp3OriginAsync" />;
+///     Protocol selection is delegated entirely to <see cref="ProxyServer.ResolveHttp3Origin" />;
 ///     callers that have a pre-resolved <see cref="Http3OriginRoute" /> should use the route-based
 ///     overload to avoid redundant cache/DNS lookups.
 /// </summary>
@@ -41,7 +41,7 @@ internal static class Http3OriginBridge
 
     /// <summary>
     ///     Forwards the request using a pre-resolved <paramref name="route" /> produced by
-    ///     <see cref="ProxyServer.ResolveHttp3OriginAsync" />.  This overload skips internal
+    ///     <see cref="ProxyServer.ResolveHttp3Origin" />.  This overload skips internal
     ///     protocol-selection and uses the effective QUIC port (and optional connect host) from the
     ///     route, which may differ from the URI port/host when Alt-Svc or SVCB advertises an
     ///     alternative service.
@@ -81,7 +81,7 @@ internal static class Http3OriginBridge
 
     /// <summary>
     ///     Forwards the request to the origin after resolving the H3 route via
-    ///     <see cref="ProxyServer.ResolveHttp3OriginAsync" />.  Use this overload when no pre-resolved
+    ///     <see cref="ProxyServer.ResolveHttp3Origin" />.  Use this overload when no pre-resolved
     ///     route is available (e.g. from the inbound H3 request path).
     /// </summary>
     /// <param name="onInterimResponse">
@@ -98,10 +98,10 @@ internal static class Http3OriginBridge
         var host = request.RequestUri?.Host ?? string.Empty;
         var port = request.RequestUri?.Port ?? 443;
 
-        // Delegate route resolution to the centralised authority; DNS probing is safe here since
-        // we are not inside an H2 frame-reading loop.
-        var route = await server.ResolveHttp3OriginAsync(
-            host, port, sessionArgs.UpstreamHttpProtocol, allowDnsProbe: true, cancellationToken);
+        // Delegate route resolution to the centralised authority; background SVCB warming is safe
+        // here since we are not inside an H2 frame-reading loop.
+        var route = server.ResolveHttp3Origin(
+            host, port, sessionArgs.UpstreamHttpProtocol, allowDnsProbe: true);
 
         await ForwardAsync(sessionArgs, server, route, logger, cancellationToken, onInterimResponse);
     }
@@ -175,6 +175,9 @@ internal static class Http3OriginBridge
 
             reused = !quicConn.ClaimFirstUse();
             sessionArgs.Timing?.MarkConnectionReady(quicConn.Id, reused);
+            // Multiplexed QUIC origin: bind identity without SetConnection (TCP-only ownership API).
+            // SetConnection on TCP fallback overwrites this id if QUIC fails later in the loop.
+            sessionArgs.HttpClient.BindUpstreamConnectionId(quicConn.Id);
 
             await using var originStream = await quicConn.OpenRequestStreamAsync(cancellationToken);
 

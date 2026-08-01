@@ -36,6 +36,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private ExplicitProxyEndPoint explicitEndPoint;
 
+        private readonly bool trustRootCertificate;
+
 #pragma warning disable TWP001 // HTTP/3 is experimental — example intentionally exercises this API
 #nullable enable
         private TransparentQuicProxyEndPoint? quicEndPoint;
@@ -58,8 +60,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // generate root certificate without storing it in file system
             //proxyServer.CertificateManager.CreateRootCertificate(false);
 
-            //proxyServer.CertificateManager.TrustRootCertificate();
-            //proxyServer.CertificateManager.TrustRootCertificateAsAdmin();
+            // Installing a MITM root into the user's trust store is opt-in: set TWP_TRUST_ROOT=1 for
+            // browser-driven runs. Nothing is added to any certificate store without it, and
+            // RemoveTrustedRootCertificate() in Stop() takes it back out again.
+            trustRootCertificate = Environment.GetEnvironmentVariable("TWP_TRUST_ROOT") is "1" or "true" or "TRUE";
+            if (trustRootCertificate)
+            {
+                proxyServer.CertificateManager.EnsureRootCertificate();
+                proxyServer.CertificateManager.TrustRootCertificate();
+                //proxyServer.CertificateManager.TrustRootCertificateAsAdmin();
+            }
 
             // Library diagnostics stay quiet on the traffic tape: one-line errors (no stacks) in Release.
             // DEBUG keeps the built-in Trace console (full stacks) for deep diagnosis.
@@ -76,12 +86,17 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.Logging.LoggerFactory = compactLoggerFactory;
 #endif
 
-            proxyServer.TcpTimeWaitSeconds = 10;
-            proxyServer.ConnectionTimeOutSeconds = 15;
-            proxyServer.ReuseSocket = false;
+            // Keep the library defaults for TcpTimeWaitSeconds (0 — abortive close, so a high-churn
+            // proxy does not accumulate TIME_WAIT) and ConnectionTimeOutSeconds (60 — a short idle
+            // pool lifetime forces full TCP/TLS reconnects after normal interactive think time).
             // Pooling reuses origin TCP/TLS sockets and sharply reduces CONNECT/cert stampede when
             // the example is installed as the system proxy (browser + OS services share the endpoint).
             proxyServer.EnableConnectionPool = true;
+            // Per-request timing marks are measurement scaffolding; opt in for latency runs.
+            proxyServer.EnableRequestTimingCapture =
+                Environment.GetEnvironmentVariable("TWP_CAPTURE_TIMING") is "1" or "true" or "TRUE";
+            // May invoke PAC/WinHTTP upstream resolution per destination when a system/upstream
+            // gateway is configured — leave enabled for realistic system-proxy demos.
             proxyServer.ForwardToUpstreamGateway = true;
             proxyServer.CertificateManager.SaveFakeCertificates = true;
 
@@ -154,11 +169,25 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // Traffic must be redirected here (e.g. via iptables/nftables UDP REDIRECT on Linux,
             // WFP on Windows, or pf rdr on macOS). See wiki/HTTP-3.md for setup details.
 #pragma warning disable TWP001
-            if (QuicListener.IsSupported)
+            // Measurement matrix overrides (optional):
+            //   TWP_ENABLE_HTTP3=1|0
+            //   TWP_ENABLE_SVCB_DNS=1|0
+            var enableHttp3Env = Environment.GetEnvironmentVariable("TWP_ENABLE_HTTP3");
+            var enableSvcbEnv = Environment.GetEnvironmentVariable("TWP_ENABLE_SVCB_DNS");
+            var enableHttp3 = enableHttp3Env switch
+            {
+                "1" or "true" or "TRUE" => true,
+                "0" or "false" or "FALSE" => false,
+                _ => QuicListener.IsSupported
+            };
+
+            if (enableHttp3 && QuicListener.IsSupported)
             {
                 proxyServer.EnableHttp3 = true;
-                // EnableHttpsSvcbDnsDiscovery inherits EnableHttp3 (cold-path H3 via HTTPS/SVCB).
-                // DnsServerEndPoint defaults to 8.8.8.8:53; override if you need a corporate resolver.
+                // Interactive system-proxy browsing: learn H3 from Alt-Svc on the first response.
+                // Proactive SVCB discovery is opt-in via TWP_ENABLE_SVCB_DNS so measurement runs can
+                // re-enable the matrix without editing this file.
+                proxyServer.EnableHttpsSvcbDnsDiscovery = enableSvcbEnv is "1" or "true" or "TRUE";
                 quicEndPoint = new TransparentQuicProxyEndPoint(IPAddress.Any, 443)
                 {
                     // Replace with IOriginalDestinationResolver for real NAT-transparent interception.
@@ -168,11 +197,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 };
                 quicEndPoint.BeforeQuicAuthenticate += OnBeforeQuicAuthenticate;
                 proxyServer.AddEndPoint(quicEndPoint);
-                Console.WriteLine("HTTP/3 QUIC endpoint started on UDP 443.");
+                Console.WriteLine(
+                    $"HTTP/3 QUIC endpoint started on UDP 443 (SVCB discovery={(proxyServer.EnableHttpsSvcbDnsDiscovery ? "on" : "off")}).");
             }
             else
             {
-                Console.WriteLine("[HTTP/3] Skipped: QuicListener.IsSupported is false on this platform.");
+                Console.WriteLine("[HTTP/3] Skipped: QuicListener.IsSupported is false on this platform, or TWP_ENABLE_HTTP3 disabled it.");
                 Console.WriteLine("  Windows: requires Windows 11 / Server 2022+.");
                 Console.WriteLine("  Linux:   apt install libmsquic");
                 Console.WriteLine("  macOS:   bundle libmsquic + libssl + libcrypto with @loader_path RPATH.");
@@ -248,8 +278,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             proxyServer.Stop();
 
-            // remove the generated certificates
-            //proxyServer.CertificateManager.RemoveTrustedRootCertificates();
+            // Only undo what this run installed (see TWP_TRUST_ROOT above).
+            if (trustRootCertificate)
+                proxyServer.CertificateManager.RemoveTrustedRootCertificate();
         }
 
         private async Task<IExternalProxy> OnGetCustomUpStreamProxyFunc(SessionEventArgsBase arg)

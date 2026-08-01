@@ -273,15 +273,41 @@ public class SvcbDnsResolverTests
     // ─────────────────────────────────────────────────────────────────────────
 
     [TestMethod]
-    public void ParseDnsResponse_ServFail_ReturnsNull()
+    public void ParseDnsResponse_ServFail_ReturnsNullAndIsTransient()
     {
-        // RCODE=2 (SERVFAIL) — definitive negative.
+        // RCODE=2 (SERVFAIL) — resolver failure, not "origin has no H3".
         var response = BuildNxDomainResponseWithRcode(ValidId, rcode: 2);
 
         var result = UdpSvcbDnsResolver.ParseDnsResponseInternal(
             response.AsSpan(), ValidId.AsSpan(), "example.com", 443);
 
         Assert.IsNull(result, "SERVFAIL (RCODE=2) should return null.");
+        Assert.IsTrue(
+            UdpSvcbDnsResolver.ParseDnsResponseIsTransientInternal(
+                response.AsSpan(), ValidId.AsSpan(), "example.com", 443),
+            "SERVFAIL must be classified as transient, not a definitive negative.");
+    }
+
+    [TestMethod]
+    public void ParseDnsResponse_NxDomain_IsDefinitiveNegative()
+    {
+        var response = BuildNxDomainResponseWithRcode(ValidId, rcode: 3);
+
+        Assert.IsNull(UdpSvcbDnsResolver.ParseDnsResponseInternal(
+            response.AsSpan(), ValidId.AsSpan(), "example.com", 443));
+        Assert.IsFalse(
+            UdpSvcbDnsResolver.ParseDnsResponseIsTransientInternal(
+                response.AsSpan(), ValidId.AsSpan(), "example.com", 443),
+            "NXDOMAIN must remain a definitive negative.");
+    }
+
+    [TestMethod]
+    public void ParseDnsResponse_Refused_IsTransient()
+    {
+        var response = BuildNxDomainResponseWithRcode(ValidId, rcode: 5);
+        Assert.IsTrue(
+            UdpSvcbDnsResolver.ParseDnsResponseIsTransientInternal(
+                response.AsSpan(), ValidId.AsSpan(), "example.com", 443));
     }
 
     // ─────────────────────────────────────────────────────────────────────────

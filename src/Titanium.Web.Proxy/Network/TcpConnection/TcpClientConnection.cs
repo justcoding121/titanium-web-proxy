@@ -21,10 +21,17 @@ internal class TcpClientConnection : IDisposable
 
     private int? processId;
 
+    /// <summary>
+    ///     When false, this adapter does not participate in <see cref="ProxyServer.ClientConnectionCount" />
+    ///     (used by QUIC clients, which are tracked via <see cref="ProxyServer.Http3ClientConnectionCount" />).
+    /// </summary>
+    private readonly bool trackClientConnectionCount;
+
     internal TcpClientConnection(ProxyServer proxyServer, Socket tcpClientSocket)
     {
         this.tcpClientSocket = tcpClientSocket;
         ProxyServer = proxyServer;
+        trackClientConnectionCount = true;
         ProxyServer.UpdateClientConnectionCount(true);
     }
 
@@ -34,13 +41,20 @@ internal class TcpClientConnection : IDisposable
     ///     <see cref="RemoteEndPoint" /> via the <paramref name="localEndPoint" /> and
     ///     <paramref name="remoteEndPoint" /> parameters.
     /// </summary>
-    protected TcpClientConnection(ProxyServer proxyServer, IPEndPoint localEndPoint, IPEndPoint remoteEndPoint)
+    /// <param name="trackClientConnectionCount">
+    ///     Pass <see langword="false" /> for QUIC adapters so they do not inflate the TCP-only
+    ///     <see cref="ProxyServer.ClientConnectionCount" />.
+    /// </param>
+    protected TcpClientConnection(ProxyServer proxyServer, IPEndPoint localEndPoint, IPEndPoint remoteEndPoint,
+        bool trackClientConnectionCount = true)
     {
         tcpClientSocket = null;
         LocalEndPointOverride = localEndPoint;
         RemoteEndPointOverride = remoteEndPoint;
         ProxyServer = proxyServer;
-        ProxyServer.UpdateClientConnectionCount(true);
+        this.trackClientConnectionCount = trackClientConnectionCount;
+        if (trackClientConnectionCount)
+            ProxyServer.UpdateClientConnectionCount(true);
     }
 
     /// <summary>Stored local endpoint for socket-less subclasses (e.g., QUIC).</summary>
@@ -81,7 +95,8 @@ internal class TcpClientConnection : IDisposable
             // so that client have enough time to call close first.
             // This way we can push tcp Time_Wait to client side when possible.
             await Task.Delay(1000);
-            ProxyServer.UpdateClientConnectionCount(false);
+            if (trackClientConnectionCount)
+                ProxyServer.UpdateClientConnectionCount(false);
 
             if (tcpClientSocket == null) return;
             try
