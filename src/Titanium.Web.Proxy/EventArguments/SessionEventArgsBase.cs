@@ -80,9 +80,19 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 
     internal HttpClientStream ClientStream { get; }
 
+    /// <summary>
+    ///     Identity of the inbound client transport connection. Multiplexed HTTP/2 and HTTP/3 streams
+    ///     that share one client connection expose the same value.
+    /// </summary>
     public Guid ClientConnectionId => ClientConnection.Id;
 
-    public Guid ServerConnectionId => HttpClient.HasConnection ? ServerConnection.Id : Guid.Empty;
+    /// <summary>
+    ///     Identity of the upstream origin transport connection when one has been acquired for this
+    ///     session; otherwise <see cref="Guid.Empty" />. Multiplexed HTTP/2 and HTTP/3 sessions that
+    ///     share one origin connection expose the same value. This does not imply per-session pool
+    ///     ownership of that connection.
+    /// </summary>
+    public Guid ServerConnectionId => HttpClient.UpstreamConnectionId ?? Guid.Empty;
 
     /// <summary>
     ///     Structured timing for this session's request/response exchange, populated only when

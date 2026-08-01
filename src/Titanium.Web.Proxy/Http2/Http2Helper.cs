@@ -21,6 +21,7 @@ using Titanium.Web.Proxy.Http2.Hpack;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Streams;
+using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Options;
 using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
 using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
@@ -105,7 +106,8 @@ namespace Titanium.Web.Proxy.Http2
             Func<SessionEventArgs, Task> onAfterResponse, Action<HeaderCollection> prepareRequestHeaders,
             CancellationTokenSource cancellationTokenSource, Guid connectionId,
             ILogger logger, int maxDecodedHeaderListBytes = 64 * 1024, bool enableRfc8441 = false,
-            ProxyResourceLimits? resourceLimits = null)
+            ProxyResourceLimits? resourceLimits = null,
+            TcpServerConnection? originConnection = null)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
             var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource);
@@ -115,11 +117,11 @@ namespace Titanium.Web.Proxy.Http2
                 CopyHttp2FrameAsync(clientStream, serverStream, connectionState,
                     sessionFactory, onBeforeRequest, onAfterResponse, prepareRequestHeaders, true,
                     cancellationTokenSource.Token, logger, maxDecodedHeaderListBytes, enableRfc8441,
-                    resourceLimits);
+                    resourceLimits, originConnection);
             var receiveRelay =
                 CopyHttp2FrameAsync(serverStream, clientStream, connectionState,
                     sessionFactory, onBeforeResponse, onAfterResponse, null, false, cancellationTokenSource.Token,
-                    logger, maxDecodedHeaderListBytes, enableRfc8441, resourceLimits);
+                    logger, maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, originConnection);
 
             await Task.WhenAny(sendRelay, receiveRelay);
             cancellationTokenSource.Cancel();
@@ -210,7 +212,8 @@ namespace Titanium.Web.Proxy.Http2
             ILogger logger,
             int maxDecodedHeaderListBytes = 64 * 1024,
             bool enableRfc8441 = false,
-            ProxyResourceLimits? resourceLimits = null)
+            ProxyResourceLimits? resourceLimits = null,
+            TcpServerConnection? originConnection = null)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
             var connectionId = connectionState.ConnectionId;
@@ -826,12 +829,18 @@ namespace Titanium.Web.Proxy.Http2
                                 else
                                 {
                                     // Origin supports RFC 8441 - forward the extended CONNECT HEADERS.
+                                    if (originConnection != null)
+                                        sessionArgs.HttpClient.BindUpstreamConnectionId(originConnection.Id);
                                     await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                         request, endStreamFlag, output, isPromise));
                                 }
                             }
                             else
                             {
+                                // Bind shared origin identity without SetConnection so HasConnection stays
+                                // false (H1 syphon/drain must not touch the multiplexed H2 socket).
+                                if (originConnection != null)
+                                    sessionArgs.HttpClient.BindUpstreamConnectionId(originConnection.Id);
                                 await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                     request, endStreamFlag, output, isPromise));
                             }

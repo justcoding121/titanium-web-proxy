@@ -60,7 +60,8 @@ internal static class Http3RequestStream
         Func<SessionEventArgs, Task> onBeforeRequest,
         Func<SessionEventArgs, Task> onBeforeResponse,
         Func<SessionEventArgs, Task> onAfterResponse,
-        QpackContext? qpackContext = null)
+        QpackContext? qpackContext = null,
+        QuicClientConnection? clientConnection = null)
     {
         await using (stream)
         {
@@ -91,10 +92,12 @@ internal static class Http3RequestStream
                     throw new Http3StreamException(Http3ErrorCode.MessageError,
                         "Mandatory pseudo-headers :method or :authority are missing.");
 
-                // 3. Build a Request object and create a QuicClientConnection adapter.
-                var remoteEndPoint = (System.Net.IPEndPoint)connection.RemoteEndPoint;
-                var localEndPoint = (System.Net.IPEndPoint)connection.LocalEndPoint;
-                var clientConnection = new QuicClientConnection(server, localEndPoint, remoteEndPoint);
+                // 3. Build a Request; reuse the connection-scoped QuicClientConnection so multiplexed
+                // streams share one ClientConnectionId (caller owns dispose).
+                clientConnection ??= new QuicClientConnection(
+                    server,
+                    (System.Net.IPEndPoint)connection.LocalEndPoint,
+                    (System.Net.IPEndPoint)connection.RemoteEndPoint);
 
                 var request = new Request();
                 request.Method = method;
