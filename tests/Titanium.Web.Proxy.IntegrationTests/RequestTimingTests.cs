@@ -125,6 +125,37 @@ public class RequestTimingTests
 
     [TestMethod]
     [Timeout(30 * 1000)]
+    public async Task Http11_Exposes_NonEmpty_ServerConnectionId_Matching_Timing()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("ok"));
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableRequestTimingCapture = true;
+
+        Guid? serverConnectionId = null;
+        Guid? timingUpstreamId = null;
+        proxy.BeforeResponse += (_, args) =>
+        {
+            serverConnectionId = args.ServerConnectionId;
+            timingUpstreamId = args.Timing?.UpstreamConnectionId;
+            return Task.CompletedTask;
+        };
+
+        using var client = testSuite.GetClient(proxy);
+        Assert.AreEqual("ok", await client.GetStringAsync(server.ListeningHttpUrl));
+
+        for (var i = 0; i < 50 && serverConnectionId == null; i++) await Task.Delay(20);
+
+        Assert.IsNotNull(serverConnectionId);
+        Assert.AreNotEqual(Guid.Empty, serverConnectionId.Value);
+        Assert.AreEqual(timingUpstreamId, serverConnectionId);
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
     public async Task Request_Timing_Marks_Upstream_Connection_Reused_On_Second_Request()
     {
         using var testSuite = new TestSuite(sharedServer);
