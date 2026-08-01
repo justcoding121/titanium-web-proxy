@@ -206,19 +206,21 @@ public partial class ProxyServer : IDisposable
     internal Http3.Http3OriginCapabilityCache Http3OriginCapabilityCache { get; } = new();
 
     /// <summary>
-    ///     Removes expired entries from both origin-capability caches and, if one has been created, the
-    ///     HTTPS/SVCB resolver's negative-result cache. Called from the connection-pool cleanup loop
-    ///     every few seconds so stale origin records do not accumulate indefinitely.
+    ///     Removes expired entries from both origin-capability caches and, if they have been created, the
+    ///     HTTPS/SVCB resolver's negative-result cache and the discovery coordinator's own miss-suppression
+    ///     cache. Called from the connection-pool cleanup loop every few seconds so stale origin records
+    ///     do not accumulate indefinitely.
     /// </summary>
     internal void TrimOriginCapabilityCaches()
     {
         Http2OriginCapabilityCache.TrimExpired();
         Http3OriginCapabilityCache.TrimExpired();
 
-        // Read the backing field directly (not the HttpsSvcbResolver property) so this periodic sweep
-        // never itself causes the lazy default UdpSvcbDnsResolver to be instantiated when SVCB
+        // Read the backing fields directly (not the HttpsSvcbResolver/SvcbDiscoveryCoordinator
+        // properties) so this periodic sweep never itself instantiates either one when SVCB
         // discovery has never actually been used.
         _httpsSvcbResolver?.TrimExpired();
+        _svcbDiscoveryCoordinator?.TrimExpired();
     }
 
     /// <summary>
@@ -416,7 +418,9 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     Resolver used to perform HTTPS/SVCB DNS lookups when <see cref="EnableHttpsSvcbDnsDiscovery" />
     ///     is enabled. Defaults to <see cref="Http3.Dns.UdpSvcbDnsResolver" /> using
-    ///     <see cref="DnsServerEndPoint" /> when that endpoint is usable. Replace with a mock in tests.
+    ///     <see cref="DnsServerEndPoint" /> when that endpoint is usable, or to a resolver that always
+    ///     reports "no H3 capability found" when it is not — reading this property never throws.
+    ///     Replace with a mock in tests.
     /// </summary>
     [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
     internal Http3.Dns.IHttpsSvcbResolver HttpsSvcbResolver
@@ -427,9 +431,9 @@ public partial class ProxyServer : IDisposable
 
             var endpoint = DnsServerEndPoint;
             if (!Http3.Dns.Http3SvcbDiscoveryCoordinator.IsUsableDnsServer(endpoint))
-                throw new InvalidOperationException(
-                    "No usable DNS server is configured for HTTPS/SVCB discovery. " +
-                    "Set ProxyServer.DnsServerEndPoint explicitly or supply HttpsSvcbResolver.");
+                // Deliberately not cached: DnsServerEndPoint may still be assigned explicitly after
+                // this first (failed) read, at which point a real resolver should be built instead.
+                return Http3.Dns.NoOpHttpsSvcbResolver.Instance;
 
             _httpsSvcbResolver = new Http3.Dns.UdpSvcbDnsResolver(endpoint);
             return _httpsSvcbResolver;
