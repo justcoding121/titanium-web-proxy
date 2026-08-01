@@ -7,7 +7,7 @@ namespace Titanium.Web.Proxy.StreamExtended.Network;
 /// <summary>
 ///     Mimic a Task but you can set AsyncState
 /// </summary>
-public class TaskResult : IAsyncResult
+internal class TaskResult : IAsyncResult
 {
     private readonly Task task;
 
@@ -35,7 +35,7 @@ public class TaskResult : IAsyncResult
 ///     Mimic a Task&lt;T&gt; but you can set AsyncState
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public class TaskResult<T> : IAsyncResult
+internal class TaskResult<T> : IAsyncResult
 {
     private readonly Task<T> task;
 
