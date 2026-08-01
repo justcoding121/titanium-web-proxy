@@ -77,11 +77,13 @@ namespace Titanium.Web.Proxy.Examples.Basic
 #endif
 
             proxyServer.TcpTimeWaitSeconds = 10;
-            proxyServer.ConnectionTimeOutSeconds = 15;
-            proxyServer.ReuseSocket = false;
+            // Keep the library default ConnectionTimeOutSeconds (60): a 15s idle pool lifetime
+            // forces full TCP/TLS reconnects after normal interactive think time.
             // Pooling reuses origin TCP/TLS sockets and sharply reduces CONNECT/cert stampede when
             // the example is installed as the system proxy (browser + OS services share the endpoint).
             proxyServer.EnableConnectionPool = true;
+            // May invoke PAC/WinHTTP upstream resolution per destination when a system/upstream
+            // gateway is configured — leave enabled for realistic system-proxy demos.
             proxyServer.ForwardToUpstreamGateway = true;
             proxyServer.CertificateManager.SaveFakeCertificates = true;
 
@@ -154,11 +156,25 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // Traffic must be redirected here (e.g. via iptables/nftables UDP REDIRECT on Linux,
             // WFP on Windows, or pf rdr on macOS). See wiki/HTTP-3.md for setup details.
 #pragma warning disable TWP001
-            if (QuicListener.IsSupported)
+            // Measurement matrix overrides (optional):
+            //   TWP_ENABLE_HTTP3=1|0
+            //   TWP_ENABLE_SVCB_DNS=1|0
+            var enableHttp3Env = Environment.GetEnvironmentVariable("TWP_ENABLE_HTTP3");
+            var enableSvcbEnv = Environment.GetEnvironmentVariable("TWP_ENABLE_SVCB_DNS");
+            var enableHttp3 = enableHttp3Env switch
+            {
+                "1" or "true" or "TRUE" => true,
+                "0" or "false" or "FALSE" => false,
+                _ => QuicListener.IsSupported
+            };
+
+            if (enableHttp3 && QuicListener.IsSupported)
             {
                 proxyServer.EnableHttp3 = true;
-                // EnableHttpsSvcbDnsDiscovery inherits EnableHttp3 (cold-path H3 via HTTPS/SVCB).
-                // DnsServerEndPoint defaults to 8.8.8.8:53; override if you need a corporate resolver.
+                // Interactive system-proxy browsing: learn H3 from Alt-Svc on the first response.
+                // Proactive SVCB discovery is opt-in via TWP_ENABLE_SVCB_DNS so measurement runs can
+                // re-enable the matrix without editing this file.
+                proxyServer.EnableHttpsSvcbDnsDiscovery = enableSvcbEnv is "1" or "true" or "TRUE";
                 quicEndPoint = new TransparentQuicProxyEndPoint(IPAddress.Any, 443)
                 {
                     // Replace with IOriginalDestinationResolver for real NAT-transparent interception.
@@ -168,11 +184,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 };
                 quicEndPoint.BeforeQuicAuthenticate += OnBeforeQuicAuthenticate;
                 proxyServer.AddEndPoint(quicEndPoint);
-                Console.WriteLine("HTTP/3 QUIC endpoint started on UDP 443.");
+                Console.WriteLine(
+                    $"HTTP/3 QUIC endpoint started on UDP 443 (SVCB discovery={(proxyServer.EnableHttpsSvcbDnsDiscovery ? "on" : "off")}).");
             }
             else
             {
-                Console.WriteLine("[HTTP/3] Skipped: QuicListener.IsSupported is false on this platform.");
+                Console.WriteLine("[HTTP/3] Skipped: QuicListener.IsSupported is false on this platform, or TWP_ENABLE_HTTP3 disabled it.");
                 Console.WriteLine("  Windows: requires Windows 11 / Server 2022+.");
                 Console.WriteLine("  Linux:   apt install libmsquic");
                 Console.WriteLine("  macOS:   bundle libmsquic + libssl + libcrypto with @loader_path RPATH.");

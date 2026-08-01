@@ -20,15 +20,16 @@ namespace Titanium.Web.Proxy.Http3.Dns;
 ///     <list type="bullet">
 ///       <item>Per-query UDP <see cref="Socket" /> — avoids shared-socket threading issues.</item>
 ///       <item>Random query-ID validated in the response.</item>
-///       <item>RCODE check — NXDOMAIN/SERVFAIL is a definitive negative and is negative-cached.</item>
-///       <item>TC (Truncated) flag — truncated UDP responses are treated as transient and not cached.</item>
+///       <item>RCODE check — NXDOMAIN and NOERROR-without-answer are definitive negatives;
+///         SERVFAIL/REFUSED/NOTIMP/FORMERR are transient.</item>
+///       <item>TC (Truncated) flag — truncated UDP responses are treated as transient.</item>
 ///       <item>Query coalescing — concurrent requests for the same host:port share one UDP round-trip.
 ///         The shared task uses its own internal timeout CTS so one caller's cancellation cannot
 ///         abort or poison the lookup for other callers.</item>
 ///       <item>Per-waiter cancellation — callers cancel their own wait via <see cref="Task.WaitAsync" />
 ///         without affecting the shared task or other waiters.</item>
-///       <item>Negative caching — only for definitive results (NXDOMAIN, valid no-H3 response).
-///         Transient failures (timeout, socket error, TC bit) are not negative-cached.</item>
+///       <item>Negative caching — definitive results use a 1-minute TTL; transient failures use a
+///         short per-host TTL plus resolver-level exponential backoff with half-open recovery.</item>
 ///       <item>SvcPriority selection — returns the ServiceMode record with the lowest SvcPriority.</item>
 ///       <item>AliasMode chain — bounded recursive resolution (max depth <see cref="MaxAliasDepth" />)
 ///         with loop protection via the same-host guard.</item>
@@ -49,6 +50,12 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     private const int DnsQueryTimeoutMs = 500;
     private const ushort DnsTypeHttps = 65;
     private const ushort DnsClassIn = 1;
+    private const int DnsRcodeNoError = 0;
+    private const int DnsRcodeFormErr = 1;
+    private const int DnsRcodeServFail = 2;
+    private const int DnsRcodeNxDomain = 3;
+    private const int DnsRcodeNotImp = 4;
+    private const int DnsRcodeRefused = 5;
 
     /// <summary>
     ///     Backstop hard cap on <see cref="_negativeCache" />, independent of TTL expiry: with a
@@ -59,8 +66,13 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     /// </summary>
     private const int MaxNegativeCacheEntries = 4096;
 
+    private const int MaxTransientCacheEntries = 4096;
+
     /// <summary>Maximum depth for recursive AliasMode chain following.</summary>
     private const int MaxAliasDepth = 3;
+
+    private static readonly TimeSpan MinResolverBackoff = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan MaxResolverBackoff = TimeSpan.FromMinutes(5);
 
     private readonly IPEndPoint _dnsServerEndPoint;
 
@@ -72,21 +84,40 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     // Negative cache: stores the expiry for definitive "no H3" results only.
     private readonly ConcurrentDictionary<string, DateTime> _negativeCache = new();
 
-    private readonly TimeSpan _negativeCacheTtl;
+    // Short-lived suppression for transient failures (timeout, SERVFAIL, etc.).
+    private readonly ConcurrentDictionary<string, DateTime> _transientCache = new();
 
-    internal UdpSvcbDnsResolver(IPEndPoint dnsServerEndPoint, TimeSpan? negativeCacheTtl = null)
+    private readonly TimeSpan _negativeCacheTtl;
+    private readonly TimeSpan _transientCacheTtl;
+    private readonly object _backoffGate = new();
+    private int _consecutiveTransientFailures;
+    private DateTime _resolverBackoffUntilUtc = DateTime.MinValue;
+    private int _halfOpenProbeInFlight;
+
+    internal UdpSvcbDnsResolver(IPEndPoint dnsServerEndPoint, TimeSpan? negativeCacheTtl = null,
+        TimeSpan? transientCacheTtl = null)
     {
         _dnsServerEndPoint = dnsServerEndPoint;
         _negativeCacheTtl = negativeCacheTtl ?? TimeSpan.FromMinutes(1);
+        _transientCacheTtl = transientCacheTtl ?? TimeSpan.FromSeconds(30);
     }
 
     /// <inheritdoc />
     public Task<SvcbResult?> TryGetH3CapabilityAsync(string host, int port, CancellationToken ct)
     {
         var key = $"{host}:{port}";
+        var now = DateTime.UtcNow;
 
         // Fast path: definitive negative already cached.
-        if (_negativeCache.TryGetValue(key, out var expires) && DateTime.UtcNow < expires)
+        if (_negativeCache.TryGetValue(key, out var expires) && now < expires)
+            return Task.FromResult<SvcbResult?>(null);
+
+        // Per-host transient suppression.
+        if (_transientCache.TryGetValue(key, out var transientExpires) && now < transientExpires)
+            return Task.FromResult<SvcbResult?>(null);
+
+        // Resolver-level backoff with a single half-open probe when the window elapses.
+        if (!TryEnterResolverProbe(now))
             return Task.FromResult<SvcbResult?>(null);
 
         // Coalesce: reuse in-flight shared task or start a new one.
@@ -101,23 +132,73 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     public void TrimExpired()
     {
         var now = DateTime.UtcNow;
-        foreach (var pair in _negativeCache)
-            if (pair.Value <= now)
-                _negativeCache.TryRemove(pair.Key, out _);
+        TrimExpiredDictionary(_negativeCache, now, MaxNegativeCacheEntries);
+        TrimExpiredDictionary(_transientCache, now, MaxTransientCacheEntries);
+    }
 
-        // Backstop: if the cache is still oversized (e.g. TTLs haven't elapsed yet under a burst of
-        // distinct hosts), evict the entries closest to expiring anyway rather than doing nothing.
-        var excess = _negativeCache.Count - MaxNegativeCacheEntries;
+    private static void TrimExpiredDictionary(ConcurrentDictionary<string, DateTime> cache, DateTime now,
+        int maxEntries)
+    {
+        foreach (var pair in cache)
+            if (pair.Value <= now)
+                cache.TryRemove(pair.Key, out _);
+
+        var excess = cache.Count - maxEntries;
         if (excess <= 0) return;
 
-        foreach (var pair in _negativeCache.OrderBy(x => x.Value).Take(excess))
-            _negativeCache.TryRemove(pair.Key, out _);
+        foreach (var pair in cache.OrderBy(x => x.Value).Take(excess))
+            cache.TryRemove(pair.Key, out _);
     }
 
     private static async Task<SvcbResult?> WrapResultAsync(Task<SvcbQueryState> sharedTask, CancellationToken ct)
     {
         var state = ct.CanBeCanceled ? await sharedTask.WaitAsync(ct) : await sharedTask;
         return state.Result;
+    }
+
+    private bool TryEnterResolverProbe(DateTime now)
+    {
+        lock (_backoffGate)
+        {
+            // Still inside the backoff window — reject all probes.
+            if (now < _resolverBackoffUntilUtc)
+                return false;
+
+            // Window open. If recovering from failures, allow exactly one half-open probe.
+            if (_consecutiveTransientFailures > 0)
+            {
+                if (_halfOpenProbeInFlight != 0)
+                    return false;
+
+                _halfOpenProbeInFlight = 1;
+            }
+
+            return true;
+        }
+    }
+
+    private void NoteQuerySuccess()
+    {
+        lock (_backoffGate)
+        {
+            _consecutiveTransientFailures = 0;
+            _resolverBackoffUntilUtc = DateTime.MinValue;
+            Volatile.Write(ref _halfOpenProbeInFlight, 0);
+        }
+    }
+
+    private void NoteQueryTransientFailure()
+    {
+        lock (_backoffGate)
+        {
+            _consecutiveTransientFailures = Math.Min(_consecutiveTransientFailures + 1, 16);
+            var exp = Math.Min(MaxResolverBackoff.TotalMilliseconds,
+                MinResolverBackoff.TotalMilliseconds * Math.Pow(2, Math.Max(0, _consecutiveTransientFailures - 1)));
+            // Full jitter in [exp/2, exp].
+            var jittered = exp / 2 + Random.Shared.NextDouble() * (exp / 2);
+            _resolverBackoffUntilUtc = DateTime.UtcNow + TimeSpan.FromMilliseconds(jittered);
+            Volatile.Write(ref _halfOpenProbeInFlight, 0);
+        }
     }
 
     private async Task<SvcbQueryState> RunSharedQueryAsync(string key, string host, int port)
@@ -128,20 +209,35 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
             using var timeoutCts = new CancellationTokenSource(DnsQueryTimeoutMs);
             var (result, isTransient) = await QueryCoreAsync(host, port, timeoutCts.Token);
 
-            // Only negative-cache definitive results; transient failures allow a fresh retry.
-            if (!isTransient && result == null)
-                _negativeCache[key] = DateTime.UtcNow + _negativeCacheTtl;
+            if (result != null)
+            {
+                NoteQuerySuccess();
+                return new SvcbQueryState(result);
+            }
 
-            return new SvcbQueryState(result);
+            if (isTransient)
+            {
+                _transientCache[key] = DateTime.UtcNow + _transientCacheTtl;
+                NoteQueryTransientFailure();
+            }
+            else
+            {
+                _negativeCache[key] = DateTime.UtcNow + _negativeCacheTtl;
+                NoteQuerySuccess(); // definitive answer means the resolver itself is healthy
+            }
+
+            return new SvcbQueryState(null);
         }
         catch (OperationCanceledException)
         {
-            // Internal timeout: transient, not negative-cached.
+            _transientCache[key] = DateTime.UtcNow + _transientCacheTtl;
+            NoteQueryTransientFailure();
             return new SvcbQueryState(null);
         }
         catch
         {
-            // Socket / IO / unexpected error: treat as transient.
+            _transientCache[key] = DateTime.UtcNow + _transientCacheTtl;
+            NoteQueryTransientFailure();
             return new SvcbQueryState(null);
         }
         finally
@@ -244,6 +340,13 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
         ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, string host, int queriedPort)
         => ParseDnsResponseCore(response, expectedId, host, queriedPort).BestRecord;
 
+    /// <summary>
+    ///     Public test hook — returns whether a raw DNS response is classified as transient.
+    /// </summary>
+    internal static bool ParseDnsResponseIsTransientInternal(
+        ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, string host, int queriedPort)
+        => ParseDnsResponseCore(response, expectedId, host, queriedPort).IsTransient;
+
     private static DnsParseResult ParseDnsResponseCore(
         ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, string host, int queriedPort)
     {
@@ -256,9 +359,15 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
         // TC (Truncated) flag — bit 1 of byte 2. Truncated UDP responses are transient.
         if ((response[2] & 0x02) != 0) return DnsParseResult.Transient;
 
-        // RCODE (lower 4 bits of byte 3): non-zero means NXDOMAIN, SERVFAIL, etc.
+        // RCODE (lower 4 bits of byte 3):
+        //   NOERROR (0) → continue parsing
+        //   NXDOMAIN (3) → definitive negative (name does not exist)
+        //   FORMERR/SERVFAIL/NOTIMP/REFUSED → resolver/transient failure, not "no H3"
         var rcode = response[3] & 0x0F;
-        if (rcode != 0) return DnsParseResult.DefinitiveNegative;
+        if (rcode == DnsRcodeNxDomain) return DnsParseResult.DefinitiveNegative;
+        if (rcode is DnsRcodeFormErr or DnsRcodeServFail or DnsRcodeNotImp or DnsRcodeRefused)
+            return DnsParseResult.Transient;
+        if (rcode != DnsRcodeNoError) return DnsParseResult.Transient;
 
         int anCount = (response[6] << 8) | response[7];
         if (anCount == 0) return DnsParseResult.DefinitiveNegative;

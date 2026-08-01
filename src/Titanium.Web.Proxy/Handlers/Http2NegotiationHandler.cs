@@ -74,6 +74,7 @@ public partial class ProxyServer
 
         if (Http2OriginCapabilityCache.TryGet(capabilityCacheKey, out var cachedSupport))
         {
+            Diagnostics.ProxyMetrics.Http2CapabilityLookup(cacheHit: true);
             ProxyLog.Http2ProbeResult(logger, capabilityCacheKey, true, cachedSupport, null);
 
             Task<TcpServerConnection?>? retained = null;
@@ -91,10 +92,13 @@ public partial class ProxyServer
             return new Http2NegotiationResult(cachedSupport, retained);
         }
 
+        Diagnostics.ProxyMetrics.Http2CapabilityLookup(cacheHit: false);
+
         // Cold cache: client ALPN advertisement depends on origin capability, so this single discovery
         // connection must be awaited before the client is authenticated. It doubles as the capability
         // probe and, on success, the retained connection reused for the session that follows - replacing
         // what used to be up to three separate origin connections (probe, prefetch, session) with one.
+        var probeStarted = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             var connection = await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
@@ -105,6 +109,7 @@ public partial class ProxyServer
                              connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2;
 
             Http2OriginCapabilityCache.Set(capabilityCacheKey, supported);
+            Diagnostics.ProxyMetrics.Http2ProbeCompleted(probeStarted.Elapsed.TotalMilliseconds);
             ProxyLog.Http2ProbeResult(logger, capabilityCacheKey, false, supported, null);
 
             return new Http2NegotiationResult(supported, Task.FromResult(connection));
@@ -114,9 +119,41 @@ public partial class ProxyServer
             // Do not cache a failed probe: it may be a transient network/cert issue rather than a genuine
             // lack of HTTP/2 support, and caching "false" here would pin every subsequent tunnel to this
             // host to HTTP/1.1 for the full TTL.
+            Diagnostics.ProxyMetrics.Http2ProbeCompleted(probeStarted.Elapsed.TotalMilliseconds);
             ProxyLog.Http2ProbeResult(logger, capabilityCacheKey, false, false, ex);
             return new Http2NegotiationResult(false, null);
         }
+    }
+
+    /// <summary>
+    ///     Guards against a stale positive HTTP/2 capability cache entry after the client has already
+    ///     been offered <c>h2</c>. Evicts the entry; when translation is allowed, returns
+    ///     <see langword="null" /> so the caller can route through the H2→H1.1 bridge; otherwise fails
+    ///     the tunnel without writing HTTP/2 frames to a non-HTTP/2 origin.
+    /// </summary>
+    private async Task<TcpServerConnection?> EnsureHttp2OriginConnectionAsync(
+        TcpServerConnection? connection, string capabilityCacheKey, SessionEventArgsBase sessionArgs,
+        bool allowHttpProtocolTranslation)
+    {
+        if (connection != null &&
+            connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2)
+            return connection;
+
+        Diagnostics.ProxyMetrics.Http2CapabilityMismatch();
+        Http2OriginCapabilityCache.Evict(capabilityCacheKey);
+
+        if (connection != null)
+            await TcpConnectionFactory.Release(connection, true);
+
+        if (allowHttpProtocolTranslation)
+            return null;
+
+        throw new ProxyConnectException(
+            $"Cached HTTP/2 capability for '{capabilityCacheKey}' was stale: the origin did not " +
+            "negotiate HTTP/2 via ALPN. AllowHttpProtocolTranslation is disabled, so the tunnel " +
+            "cannot be recovered via the H2→H1.1 bridge.",
+            new NotSupportedException("Origin does not support HTTP/2."),
+            sessionArgs);
     }
 
     /// <summary>
@@ -259,6 +296,21 @@ public partial class ProxyServer
 
         return TcpConnectionFactory.GetConnectionCacheKey(remoteHostName, remotePort, true,
             SslExtensions.Http2ProtocolAsList, upStreamEndPoint, externalProxy, connectHost, connectPort);
+    }
+
+    /// <summary>
+    ///     Computes the HTTP/2 capability-cache key used by <see cref="NegotiateHttp2Async" /> (ALPN is
+    ///     deliberately omitted — the capability decision is what chooses ALPN).
+    /// </summary>
+    private string GetHttp2CapabilityCacheKey(SessionEventArgsBase sessionArgs, string remoteHostName,
+        int remotePort, string? connectHost, int? connectPort)
+    {
+        var externalProxy = TcpConnectionFactory.GetEffectiveUpstreamProxy(
+            sessionArgs.CustomUpStreamProxyUsed ?? UpStreamHttpsProxy, remoteHostName, remotePort);
+        var upStreamEndPoint = sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint;
+
+        return TcpConnectionFactory.GetConnectionCacheKey(remoteHostName, remotePort, true,
+            null, upStreamEndPoint, externalProxy, connectHost, connectPort);
     }
 
     /// <summary>

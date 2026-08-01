@@ -26,7 +26,14 @@ public partial class ProxyServer
         if (string.IsNullOrEmpty(altSvc) || altSvc == "clear")
         {
             if (altSvc == "clear")
-                Http3OriginCapabilityCache.Evict($"{args.HttpClient.Request.RequestUri?.Host}:{args.HttpClient.Request.RequestUri?.Port}");
+            {
+                var clearKey =
+                    $"{args.HttpClient.Request.RequestUri?.Host}:{args.HttpClient.Request.RequestUri?.Port}";
+                Http3OriginCapabilityCache.Evict(clearKey);
+                // Prevent a late background SVCB completion from undoing the clear.
+                _svcbDiscoveryCoordinator?.Invalidate(clearKey);
+            }
+
             return;
         }
 
@@ -67,23 +74,38 @@ public partial class ProxyServer
     ///     <see cref="UpstreamHttpProtocol.Auto"/>.
     /// </param>
     /// <param name="allowDnsProbe">
-    ///     When <see langword="true"/>, a capability-cache miss may trigger an HTTPS/SVCB DNS
+    ///     When <see langword="true"/>, a capability-cache miss may queue a background HTTPS/SVCB DNS
     ///     lookup (only when <see cref="EnableHttpsSvcbDnsDiscovery"/> is also
-    ///     <see langword="true"/>). Set to <see langword="false"/> on the hot per-stream path
-    ///     inside a running H2 relay to avoid blocking the frame reader on DNS I/O.
+    ///     <see langword="true"/>). The current call never awaits DNS; it returns
+    ///     <see cref="Http3OriginRoute.None"/> on a miss so CONNECT/request latency is unaffected.
+    ///     Set to <see langword="false"/> on the hot per-stream path inside a running H2 relay.
     /// </param>
-    /// <param name="cancellationToken">Propagates request/connection cancellation.</param>
-    internal async Task<Http3OriginRoute> ResolveHttp3OriginAsync(
+    /// <param name="cancellationToken">Propagates request/connection cancellation (unused for Auto DNS).</param>
+    internal Task<Http3OriginRoute> ResolveHttp3OriginAsync(
         string host, int port,
         UpstreamHttpProtocol? effectiveProtocol,
         bool allowDnsProbe,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(ResolveHttp3Origin(host, port, effectiveProtocol, allowDnsProbe));
+    }
+
+    /// <summary>
+    ///     Synchronous implementation of <see cref="ResolveHttp3OriginAsync" />. Auto-mode SVCB discovery
+    ///     is fire-and-forget through <see cref="SvcbDiscoveryCoordinator" />; forced HTTP/3 never
+    ///     queries DNS.
+    /// </summary>
+    internal Http3OriginRoute ResolveHttp3Origin(
+        string host, int port,
+        UpstreamHttpProtocol? effectiveProtocol,
+        bool allowDnsProbe)
+    {
         if (!EnableHttp3) return Http3OriginRoute.None;
 
         var protocol = effectiveProtocol ?? UpstreamHttpProtocol.Auto;
 
-        // Explicit forced H3 — callers must handle QUIC failure; no TCP fallback.
+        // Explicit forced H3 — callers must handle QUIC failure; no TCP fallback. No DNS.
         if (protocol == UpstreamHttpProtocol.Http3)
             return new Http3OriginRoute
             {
@@ -111,25 +133,11 @@ public partial class ProxyServer
             };
         }
 
-        // Auto + DNS probe (connection-time path only; never inside H2 frame-reading loop).
+        // Auto + discovery: queue background SVCB and return immediately. Never await DNS on the
+        // CONNECT / request critical path — the first connection uses H2/H1; subsequent ones may
+        // upgrade once the capability cache is warm (or Alt-Svc arrives on the first response).
         if (allowDnsProbe && EnableHttpsSvcbDnsDiscovery)
-        {
-            var svcb = await HttpsSvcbResolver.TryGetH3CapabilityAsync(host, port, cancellationToken);
-            if (svcb != null)
-            {
-                // Normalize same-port vs alternative-port for the capability cache.
-                var altPort = svcb.AltPort == port ? int.MinValue : svcb.AltPort;
-                Http3OriginCapabilityCache.Set(hostAndPort, altPort, svcb.Ttl, svcb.TargetName);
-                return new Http3OriginRoute
-                {
-                    UseH3 = true,
-                    QuicPort = svcb.AltPort,
-                    QuicHost = svcb.TargetName, // null when SVCB uses "." (owner name)
-                    Source = Http3RouteSource.HttpsSvcb
-                };
-            }
-            // Negative result already cached internally by UdpSvcbDnsResolver.
-        }
+            SvcbDiscoveryCoordinator.QueueDiscovery(host, port);
 
         return Http3OriginRoute.None;
     }

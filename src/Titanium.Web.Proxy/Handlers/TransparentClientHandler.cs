@@ -93,54 +93,51 @@ public partial class ProxyServer
                     string? http2ConnectHost = null;
                     int? http2ConnectPort = null;
 
-                    if (EnableHttp2)
+                    http2ConnectHost = string.Equals(args.ForwardHttpsHostName, httpsHostName,
+                        StringComparison.OrdinalIgnoreCase)
+                        ? null
+                        : args.ForwardHttpsHostName;
+                    http2ConnectPort = http2ConnectHost != null ? args.ForwardHttpsPort : (int?)null;
+
+                    var clientOffersHttp2 = clientHelloInfo.GetAlpn()?.Contains(SslApplicationProtocol.Http2)
+                                             == true;
+
+                    // H3 route selection is independent of EnableHttp2 so EnableHttp2=false does not
+                    // accidentally suppress forced-H3 / cached-H3 CONNECT routing.
+                    var h3RouteAtConnect = await ResolveHttp3OriginAsync(
+                        httpsHostName, args.ForwardHttpsPort,
+                        args.UpstreamHttpProtocol,
+                        allowDnsProbe: true,
+                        cancellationToken);
+
+                    if (h3RouteAtConnect.UseH3)
                     {
-                        http2ConnectHost = string.Equals(args.ForwardHttpsHostName, httpsHostName,
-                            StringComparison.OrdinalIgnoreCase)
-                            ? null
-                            : args.ForwardHttpsHostName;
-                        http2ConnectPort = http2ConnectHost != null ? args.ForwardHttpsPort : (int?)null;
-
-                        var clientOffersHttp2 = clientHelloInfo.GetAlpn()?.Contains(SslApplicationProtocol.Http2)
-                                                 == true;
-
-                        // Probe for H3 capability (HTTPS/SVCB DNS or forced Http3 policy) before opening
-                        // any H2 origin connection. If H3 is selected, the H2→H3 bridge handles every stream.
-                        var h3RouteAtConnect = await ResolveHttp3OriginAsync(
-                            httpsHostName, args.ForwardHttpsPort,
-                            args.UpstreamHttpProtocol,
-                            allowDnsProbe: true,
-                            cancellationToken);
-
-                        if (h3RouteAtConnect.UseH3)
-                        {
-                            // Offer h2 to the client (the bridge translates h2 streams onto QUIC).
-                            http2Supported = clientOffersHttp2;
-                            requiresH3Bridge = true;
-                        }
-                        else
-                        {
-                            var negotiationSession =
-                                new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
-                            var negotiation = await ResolveHttp2ForClientAsync(negotiationSession, clientOffersHttp2,
-                                httpsHostName, args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
-                                args.UpstreamHttpProtocol, args.AllowHttpProtocolTranslation,
-                                EnableTcpServerConnectionPrefetch, cancellationToken);
-                            requiresHttp11Bridge = negotiation.RequiresHttp11Bridge;
-                            requiresH2OriginBridge = negotiation.RequiresH2OriginBridge;
-                            // The client is offered "h2" both when the origin itself speaks it (and no
-                            // client-facing bridge is needed) and when a translation bridge will stand in for an
-                            // HTTP/1.1-only origin. RequiresH2OriginBridge is the mirror image - the origin
-                            // speaks h2 but the client itself does not, so "h2" must never be offered to it.
-                            http2Supported = (negotiation.OriginSupportsHttp2 && !requiresH2OriginBridge)
-                                             || requiresHttp11Bridge;
-                            // Retained regardless of whether it turns out to be h2- or h1.1-keyed: if this
-                            // connection is not adopted by the h2 relay below, it still flows down to the
-                            // HTTP/1.1 pipeline's own prefetch-adoption/validation logic rather than being
-                            // discarded here. Always null when requiresHttp11Bridge (nothing to adopt/flow down -
-                            // the bridge opens its own per-h2-stream HTTP/1.1 connections instead).
-                            prefetchConnectionTask = negotiation.RetainedConnectionTask;
-                        }
+                        // Offer h2 to the client (the bridge translates h2 streams onto QUIC).
+                        http2Supported = clientOffersHttp2;
+                        requiresH3Bridge = true;
+                    }
+                    else if (EnableHttp2)
+                    {
+                        var negotiationSession =
+                            new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
+                        var negotiation = await ResolveHttp2ForClientAsync(negotiationSession, clientOffersHttp2,
+                            httpsHostName, args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
+                            args.UpstreamHttpProtocol, args.AllowHttpProtocolTranslation,
+                            EnableTcpServerConnectionPrefetch, cancellationToken);
+                        requiresHttp11Bridge = negotiation.RequiresHttp11Bridge;
+                        requiresH2OriginBridge = negotiation.RequiresH2OriginBridge;
+                        // The client is offered "h2" both when the origin itself speaks it (and no
+                        // client-facing bridge is needed) and when a translation bridge will stand in for an
+                        // HTTP/1.1-only origin. RequiresH2OriginBridge is the mirror image - the origin
+                        // speaks h2 but the client itself does not, so "h2" must never be offered to it.
+                        http2Supported = (negotiation.OriginSupportsHttp2 && !requiresH2OriginBridge)
+                                         || requiresHttp11Bridge;
+                        // Retained regardless of whether it turns out to be h2- or h1.1-keyed: if this
+                        // connection is not adopted by the h2 relay below, it still flows down to the
+                        // HTTP/1.1 pipeline's own prefetch-adoption/validation logic rather than being
+                        // discarded here. Always null when requiresHttp11Bridge (nothing to adopt/flow down -
+                        // the bridge opens its own per-h2-stream HTTP/1.1 connections instead).
+                        prefetchConnectionTask = negotiation.RetainedConnectionTask;
                     }
 
                     // do client authentication using certificate
@@ -171,7 +168,7 @@ public partial class ProxyServer
                             CertificateRevocationCheckMode = X509RevocationMode.NoCheck
                         };
 
-                        if (EnableHttp2 && http2Supported)
+                        if (http2Supported)
                         {
                             options.ApplicationProtocols = clientHelloInfo.GetAlpn();
                             if (options.ApplicationProtocols == null || options.ApplicationProtocols.Count == 0)
@@ -221,7 +218,7 @@ public partial class ProxyServer
                         return;
                     }
 
-                    if (EnableHttp2 && http2Supported)
+                    if (http2Supported)
                     {
                         var method = await HttpHelper.GetMethod(clientStream, BufferPool, cancellationToken);
                         if (clientStream.IsClosed)
@@ -309,6 +306,18 @@ public partial class ProxyServer
                                     args.ForwardHttpsPort, HttpHeader.Version20, true, SslExtensions.Http2ProtocolAsList,
                                     true, sessionForCacheKey, UpStreamEndPoint, UpStreamHttpsProxy, true, false,
                                     cancellationToken, http2ConnectHost, http2ConnectPort))!;
+
+                                var capabilityCacheKey = GetHttp2CapabilityCacheKey(sessionForCacheKey, httpsHostName,
+                                    args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort);
+                                connection = await EnsureHttp2OriginConnectionAsync(connection, capabilityCacheKey,
+                                    sessionForCacheKey, args.AllowHttpProtocolTranslation);
+                                if (connection == null)
+                                {
+                                    await SendHttp2ToHttp11Bridge(clientStream, endPoint, null, null, httpsHostName,
+                                        args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
+                                        cancellationTokenSource);
+                                    return;
+                                }
 
                                 try
                                 {

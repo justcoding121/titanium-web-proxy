@@ -236,9 +236,23 @@ only affect you if you've already opted in:
   readers/writers, unidirectional stream handlers) are now tracked and joined on teardown, so a
   connection close no longer leaves orphaned tasks or produces unobserved-exception noise in your
   logs.
+- **Auto-mode SVCB is background-only:** `EnableHttpsSvcbDnsDiscovery` no longer awaits DNS on
+  CONNECT/request paths. A cache miss queues coalesced background discovery and the current
+  connection continues over H2/H1; later connections may upgrade once the capability cache is warm
+  (or after `Alt-Svc`).
+- **`DnsServerEndPoint` default:** previously hard-coded to a public resolver / loopback in docs.
+  Now defaults to the first usable OS-configured plain-UDP DNS server (best-effort; does not honor
+  NRPT/DoH/VPN split-DNS). When none is discoverable, proactive discovery is skipped — there is no
+  silent fallback to a public third-party resolver.
+- **HTTP/2 capability cache TTL:** in-memory origin ALPN capability results now live for 30 minutes
+  (was 5). Stale positives are detected after client ALPN commitment: with
+  `AllowHttpProtocolTranslation` the tunnel repairs via the H2→H1.1 bridge; without it the tunnel
+  fails closed rather than writing HTTP/2 frames to a non-HTTP/2 origin.
 
 **Remedy:** none needed unless you were relying on lenient QPACK blocking behavior, which was never a
-documented or intentional feature.
+documented or intentional feature. If you depended on first-CONNECT H3 via synchronous SVCB, keep
+`EnableHttpsSvcbDnsDiscovery = true` and expect H3 on the second connection (or from `Alt-Svc`), or
+force `UpstreamHttpProtocol.Http3` when fail-closed H3 is required.
 
 ---
 

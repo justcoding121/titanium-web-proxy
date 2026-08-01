@@ -1,3 +1,20 @@
 ﻿#nullable enable
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.BrowserTlsCompletedAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.BrowserTlsDuration.get -> System.TimeSpan?
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.BrowserTlsStartedAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.CertificateDuration.get -> System.TimeSpan?
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.CertificateReadyAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2CapabilityCacheHit.get -> bool?
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2ProbeCompletedAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2ProbeDuration.get -> System.TimeSpan?
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2ProbeStartedAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilityCompletedAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilityDuration.get -> System.TimeSpan?
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilitySource.get -> string?
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilityStartedAt.get -> System.DateTime?
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.StartedAt.get -> System.DateTime
+Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.TotalDuration.get -> System.TimeSpan?
+Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.ConnectTiming.get -> Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming?
 Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCertificateDiskCacheEntries.get -> int?
 Titanium.Web.Proxy.Options.ProxyResourceLimits.WithCertificateCacheBounds(int? maxCertificateCacheEntries, int? maxCertificateDiskCacheEntries) -> Titanium.Web.Proxy.Options.ProxyResourceLimits!
