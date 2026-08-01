@@ -10,6 +10,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
@@ -160,17 +161,86 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             };
             proxyServer.Start();
 
-            proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp, new SystemProxySettings
+            // Screenshot automation (TWP_CAPTURE_PATH) skips system-proxy registration so CI/desktop
+            // capture runs do not alter the machine's proxy settings.
+            var capturePath = Environment.GetEnvironmentVariable("TWP_CAPTURE_PATH");
+            if (string.IsNullOrWhiteSpace(capturePath))
             {
-                // Route localhost/loopback traffic through the proxy for this example.
-                ProxyLoopback = true
-            });
+                proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp, new SystemProxySettings
+                {
+                    // Route localhost/loopback traffic through the proxy for this example.
+                    ProxyLoopback = true
+                });
+            }
 
             InitializeComponent();
 
             // Always clear system proxy when the window closes (graceful or App.Shutdown).
             // Without this, browsers keep pointing at a dead :8000 and hang after exit.
             Closed += (_, _) => ShutdownProxy();
+
+            if (!string.IsNullOrWhiteSpace(capturePath))
+            {
+                Loaded += async (_, _) =>
+                {
+                    ToggleSystemProxy.IsChecked = false;
+                    await CaptureScreenshotAndExitAsync(capturePath);
+                };
+            }
+        }
+
+        /// <summary>
+        ///     Renders this window to JPEG via <see cref="RenderTargetBitmap" /> (works when desktop
+        ///     bit-blit cannot see the WPF surface) then shuts down. Used for wiki screenshot refresh.
+        /// </summary>
+        private async Task CaptureScreenshotAndExitAsync(string capturePath)
+        {
+            WindowState = WindowState.Maximized;
+            var delayMs = 12000;
+            if (int.TryParse(Environment.GetEnvironmentVariable("TWP_CAPTURE_DELAY_MS"), out var parsed) &&
+                parsed > 0)
+                delayMs = parsed;
+
+            // Wait for demo traffic (prefer a completed example.org row with a real upstream id).
+            for (var i = 0; i < delayMs / 200; i++)
+            {
+                await Task.Delay(200);
+                var demo = Sessions.FirstOrDefault(s =>
+                    !s.IsTunnelConnect &&
+                    s.ServerConnectionId != Guid.Empty &&
+                    (s.Host?.Contains("example.org", StringComparison.OrdinalIgnoreCase) == true ||
+                     s.Url?.Contains("example", StringComparison.OrdinalIgnoreCase) == true));
+                if (demo != null)
+                {
+                    SelectedSession = demo;
+                    break;
+                }
+            }
+
+            if (SelectedSession == null)
+            {
+                var any = Sessions.FirstOrDefault(s =>
+                    !s.IsTunnelConnect && s.ServerConnectionId != Guid.Empty);
+                if (any != null) SelectedSession = any;
+            }
+
+            await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+            await Task.Delay(500);
+
+            var dpi = VisualTreeHelper.GetDpi(this);
+            var width = Math.Max(1, (int)Math.Ceiling(ActualWidth * dpi.DpiScaleX));
+            var height = Math.Max(1, (int)Math.Ceiling(ActualHeight * dpi.DpiScaleY));
+            var rtb = new RenderTargetBitmap(width, height, 96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY,
+                PixelFormats.Pbgra32);
+            rtb.Render(this);
+
+            var encoder = new JpegBitmapEncoder { QualityLevel = 90 };
+            encoder.Frames.Add(BitmapFrame.Create(rtb));
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(capturePath))!);
+            await using (var fs = File.Create(capturePath))
+                encoder.Save(fs);
+
+            Application.Current.Shutdown();
         }
 
         /// <summary>
@@ -297,7 +367,13 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             SessionListItem item = null;
             await Dispatcher.InvokeAsync(() =>
             {
-                if (sessionDictionary.TryGetValue(e.HttpClient, out item)) item.Update(e);
+                if (sessionDictionary.TryGetValue(e.HttpClient, out item))
+                {
+                    item.Update(e);
+                    // Prefer showing a real request/response in the detail pane once traffic arrives.
+                    if (SelectedSession == null && item is { IsTunnelConnect: false })
+                        SelectedSession = item;
+                }
             });
 
             //e.HttpClient.Response.Headers.AddHeader("X-Titanium-Header", "HTTP/2 works");

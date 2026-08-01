@@ -60,9 +60,10 @@
             </TabItem>
         </TabControl>
         <StackPanel Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="4,6">
-            <ToggleButton IsChecked="True" Content="System Proxy" Margin="0,0,16,0"
-                          Click="ButtonProxyOnOff_OnClick" ToolTip="Register or restore Windows system proxy settings" />
-            <TextBlock Text="TCP clients:" VerticalAlignment="Center" />
+            <ToggleButton x:Name="ToggleSystemProxy" IsChecked="True" Content="System Proxy" Margin="0,0,24,0"
+                          Padding="10,2" Click="ButtonProxyOnOff_OnClick"
+                          ToolTip="Register or restore Windows system proxy settings" />
+            <TextBlock Text="TCP clients:" Margin="8,0,0,0" VerticalAlignment="Center" />
             <TextBlock Text="{Binding ClientConnectionCount}" Margin="6,0,16,0" VerticalAlignment="Center" />
             <TextBlock Text="Servers (all):" VerticalAlignment="Center" />
             <TextBlock Text="{Binding ServerConnectionCount}" Margin="6,0,16,0" VerticalAlignment="Center" />
