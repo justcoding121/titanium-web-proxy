@@ -1,5 +1,6 @@
 #pragma warning disable TWP001 // Experimental H3 API — intentional in tests
 using System;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -300,6 +301,55 @@ public class Http3RouteResolutionTests
             await Task.Delay(20);
 
         Assert.AreEqual(1, resolver.ProbeCount, "Concurrent misses must share one background discovery.");
+    }
+
+    [TestMethod]
+    public async Task ResolveH3_Auto_RepeatedMissesAfterCompletion_SuppressFurtherProbes()
+    {
+        // Sequential (non-concurrent) misses for the same host must not each spawn a fresh
+        // background discovery once one has just completed negatively.
+        var resolver = new CountingResolver(null);
+        using var server = new ProxyServer(false, false, false) { EnableHttp3 = true };
+        server.EnableHttpsSvcbDnsDiscovery = true;
+        server.HttpsSvcbResolver = resolver;
+
+        server.ResolveHttp3Origin("example.com", 443, UpstreamHttpProtocol.Auto, true);
+        for (var i = 0; i < 50 && resolver.ProbeCount == 0; i++)
+            await Task.Delay(20);
+        Assert.AreEqual(1, resolver.ProbeCount, "First miss must probe once.");
+
+        // Give the background task a moment to record the miss suppression before re-probing.
+        await Task.Delay(50);
+
+        server.ResolveHttp3Origin("example.com", 443, UpstreamHttpProtocol.Auto, true);
+        server.ResolveHttp3Origin("example.com", 443, UpstreamHttpProtocol.Auto, true);
+        await Task.Delay(50);
+
+        Assert.AreEqual(1, resolver.ProbeCount,
+            "A recent miss must suppress further background discovery for the same host:port.");
+    }
+
+    [TestMethod]
+    public void HttpsSvcbResolver_NoUsableDnsServer_DoesNotThrow()
+    {
+        using var server = new ProxyServer(false, false, false) { EnableHttp3 = true };
+        server.DnsServerEndPoint = new IPEndPoint(IPAddress.None, 0);
+
+        var resolver = server.HttpsSvcbResolver;
+
+        Assert.IsInstanceOfType(resolver, typeof(NoOpHttpsSvcbResolver),
+            "No usable DNS server → resolver must be the safe no-op, not an exception.");
+    }
+
+    [TestMethod]
+    public async Task HttpsSvcbResolver_NoUsableDnsServer_AlwaysReportsMiss()
+    {
+        using var server = new ProxyServer(false, false, false) { EnableHttp3 = true };
+        server.DnsServerEndPoint = new IPEndPoint(IPAddress.None, 0);
+
+        var result = await server.HttpsSvcbResolver.TryGetH3CapabilityAsync("example.com", 443, CancellationToken.None);
+
+        Assert.IsNull(result);
     }
 
     [TestMethod]
