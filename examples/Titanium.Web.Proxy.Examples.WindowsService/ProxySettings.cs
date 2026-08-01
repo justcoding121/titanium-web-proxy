@@ -14,7 +14,11 @@ internal sealed class ProxySettings
 
     public X509RevocationMode CheckCertificateRevocation { get; set; } = X509RevocationMode.NoCheck;
 
-    public int ConnectionTimeOutSeconds { get; set; } = 30;
+    /// <summary>
+    ///     Idle pool lifetime for server connections. Matches the library / Basic example default (60).
+    ///     Shorter values force full TCP/TLS reconnects after normal interactive think time.
+    /// </summary>
+    public int ConnectionTimeOutSeconds { get; set; } = 60;
 
     public bool Enable100ContinueBehaviour { get; set; }
 
@@ -24,13 +28,17 @@ internal sealed class ProxySettings
 
     public bool EnableWinAuth { get; set; }
 
-    public bool ForwardToUpstreamGateway { get; set; }
+    /// <summary>
+    ///     Resolve Windows system/PAC upstream gateways when present. Enabled for realistic
+    ///     system-proxy demos (same as the Basic example).
+    /// </summary>
+    public bool ForwardToUpstreamGateway { get; set; } = true;
 
     public int MaxCachedConnections { get; set; } = 2;
 
     public bool ReuseSocket { get; set; } = true;
 
-    public int TcpTimeWaitSeconds { get; set; } = 30;
+    public int TcpTimeWaitSeconds { get; set; } = 10;
 
     public bool SaveFakeCertificates { get; set; } = true;
 
@@ -42,6 +50,13 @@ internal sealed class ProxySettings
     ///     <c>TransparentQuicProxyEndPoint</c> is bound on <see cref="QuicListeningPort" />.
     /// </summary>
     public bool EnableHttp3 { get; set; } = true;
+
+    /// <summary>
+    ///     When true with <see cref="EnableHttp3" />, queues background HTTPS/SVCB DNS discovery.
+    ///     Defaults to false for interactive/system-proxy use: learn H3 from Alt-Svc instead
+    ///     (same as the Basic example). Library default inherits <see cref="EnableHttp3" /> when unset.
+    /// </summary>
+    public bool EnableHttpsSvcbDnsDiscovery { get; set; }
 
     /// <summary>
     ///     UDP port for the transparent HTTP/3 QUIC endpoint. Only used when <see cref="EnableHttp3" /> is true.
