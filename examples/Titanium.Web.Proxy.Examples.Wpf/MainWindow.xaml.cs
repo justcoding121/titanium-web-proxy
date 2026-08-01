@@ -207,7 +207,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 await Task.Delay(200);
                 var demo = Sessions.FirstOrDefault(s =>
                     !s.IsTunnelConnect &&
-                    s.ServerConnectionId != 0 &&
+                    s.ServerConnectionId.HasValue &&
                     (s.Host?.Contains("example.org", StringComparison.OrdinalIgnoreCase) == true ||
                      s.Url?.Contains("example", StringComparison.OrdinalIgnoreCase) == true));
                 if (demo != null)
@@ -220,7 +220,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             if (SelectedSession == null)
             {
                 var any = Sessions.FirstOrDefault(s =>
-                    !s.IsTunnelConnect && s.ServerConnectionId != 0);
+                    !s.IsTunnelConnect && s.ServerConnectionId.HasValue);
                 if (any != null) SelectedSession = any;
             }
 
@@ -414,8 +414,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             var item = new SessionListItem
             {
                 Number = lastSessionNumber,
-                ClientConnectionId = e.ClientConnectionId,
-                ServerConnectionId = e.ServerConnectionId,
                 HttpClient = e.HttpClient,
                 ClientRemoteEndPoint = e.ClientRemoteEndPoint,
                 ClientLocalEndPoint = e.ClientLocalEndPoint,

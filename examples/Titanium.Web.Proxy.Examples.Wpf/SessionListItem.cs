@@ -11,26 +11,26 @@ namespace Titanium.Web.Proxy.Examples.Wpf
     public class SessionListItem : INotifyPropertyChanged
     {
         private long? bodySize;
-        private long clientConnectionId;
+        private long? clientConnectionId;
         private Exception exception;
         private string host;
         private int processId;
         private string protocol;
         private long receivedDataCount;
         private long sentDataCount;
-        private long serverConnectionId;
+        private long? serverConnectionId;
         private string statusCode;
         private string url;
 
         public int Number { get; set; }
 
-        public long ClientConnectionId
+        public long? ClientConnectionId
         {
             get => clientConnectionId;
             set => SetField(ref clientConnectionId, value);
         }
 
-        public long ServerConnectionId
+        public long? ServerConnectionId
         {
             get => serverConnectionId;
             set => SetField(ref serverConnectionId, value);
@@ -143,6 +143,11 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             return "HTTP/" + version.Major + "." + version.Minor;
         }
 
+        /// <summary>
+        ///     0 is the library's "no connection bound" sentinel; show an empty cell for it.
+        /// </summary>
+        private static long? IdOrNull(long id) => id == 0 ? null : id;
+
         protected bool SetField<T>(ref T field, T value, [CallerMemberName] string propertyName = null)
         {
             if (!Equals(field, value))
@@ -169,8 +174,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             StatusCode = statusCode == 0 ? "-" : statusCode.ToString();
             // e.g. "HTTP/2 ↔ HTTP/3" (client↔proxy | proxy↔server).
             Protocol = FormatClientServerProtocol(request.HttpVersion, response?.HttpVersion);
-            ClientConnectionId = args.ClientConnectionId;
-            ServerConnectionId = args.ServerConnectionId;
+            ClientConnectionId = IdOrNull(args.ClientConnectionId);
+            ServerConnectionId = IdOrNull(args.ServerConnectionId);
 
             if (IsTunnelConnect)
             {
