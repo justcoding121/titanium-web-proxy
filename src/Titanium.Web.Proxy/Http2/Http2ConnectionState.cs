@@ -104,6 +104,13 @@ internal sealed class Http2ConnectionState
     /// </summary>
     public volatile bool DownstreamAdvertisedEnableConnect;
 
+    /// <summary>
+    ///     0 until the Chrome-sized connection WINDOW_UPDATE has been written to the origin on the H2↔H2
+    ///     MITM path (after the browser's first non-ACK SETTINGS is relayed). CompareExchange-guarded so
+    ///     only one client→server SETTINGS frame triggers it.
+    /// </summary>
+    public int InitialOriginWindowUpdateSent;
+
     /// <summary>Set once a GOAWAY has been received from the client; no new client-initiated streams above the recorded id should be admitted.</summary>
     public volatile bool ClientGoingAway;
 
