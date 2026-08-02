@@ -504,7 +504,9 @@ internal static class Http3OriginBridge
             // CompressBodyAndUpdateContentLength() assumes the opposite (decompressed Body, to be
             // compressed for the wire) and would double-compress it here, corrupting the payload sent
             // to the TCP-fallback origin. Forward the bytes as-is and only fix up Content-Length.
-            body = request.IsBodyRead ? request.Body : null;
+            // Use BodyAvailable: IsBodyRead is true for GET with an empty body, and Body throws
+            // BodyNotFoundException when HasBody is false.
+            body = request.BodyAvailable ? request.Body : null;
             request.UpdateContentLength();
         }
 
