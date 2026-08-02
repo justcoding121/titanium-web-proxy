@@ -44,6 +44,44 @@ namespace Titanium.Web.Proxy.Http2
         public static readonly byte[] ConnectionPreface = Encoding.ASCII.GetBytes("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
 
         /// <summary>
+        ///     Connection-level WINDOW_UPDATE increment matching Chrome/Edge (0xEF0001). Grows the peer's
+        ///     connection send window from the RFC default 65535 to ~15 MB. Without this, multiplexed large
+        ///     responses (e.g. Instagram CDN JS) share a 64 KiB connection window and crawl until credit is
+        ///     drip-fed back one DATA frame at a time. <see cref="Http2OriginConnection"/> already sends this
+        ///     on the bridge path; the H2↔H2 MITM relay must do the same after writing the client preface.
+        /// </summary>
+        internal const int InitialConnectionWindowIncrement = 15663105;
+
+        /// <summary>
+        ///     Writes the proxy's initial client SETTINGS (ENABLE_PUSH=0) and a Chrome-sized connection
+        ///     WINDOW_UPDATE onto an origin stream that has just received the HTTP/2 connection preface.
+        ///     Call before <see cref="SendHttp2"/> starts relaying frames.
+        /// </summary>
+        internal static async Task SendHttp2ClientConnectionStartupAsync(Stream originStream,
+            CancellationToken cancellationToken)
+        {
+            var frameHeader = new Http2FrameHeader();
+            var frameHeaderBuffer = new byte[9];
+
+            // SETTINGS with ENABLE_PUSH=0 (6-byte payload), same as Http2OriginConnection.
+            frameHeader.StreamId = 0;
+            frameHeader.Type = Http2FrameType.Settings;
+            frameHeader.Flags = 0;
+            frameHeader.Length = 6;
+            frameHeader.CopyToBuffer(frameHeaderBuffer);
+
+            var settingsPayload = new byte[6];
+            BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(0, 2), (ushort)Http2SettingsId.EnablePush);
+            BinaryPrimitives.WriteUInt32BigEndian(settingsPayload.AsSpan(2, 4), 0);
+
+            await originStream.WriteAsync(frameHeaderBuffer, cancellationToken);
+            await originStream.WriteAsync(settingsPayload, cancellationToken);
+            await SendWindowUpdateAsync(frameHeader, frameHeaderBuffer, 0, InitialConnectionWindowIncrement,
+                originStream);
+            await originStream.FlushAsync(cancellationToken);
+        }
+
+        /// <summary>
         ///     The largest frame payload this proxy will accept from either peer. Neither leg is ever told
         ///     (via a proxy-originated SETTINGS frame) that a larger value is acceptable, so this is the
         ///     value a conformant peer will honor; a peer that ignores it and sends a larger frame anyway is
