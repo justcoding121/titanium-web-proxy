@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Examples.Wpf
 {
@@ -79,11 +80,15 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             ////do you want Replace an existing Root certificate file(.pfx) if password is incorrect(RootCertificate=null)?  yes====>true
             //proxyServer.CertificateManager.OverwritePfxFile = true;
 
-            ////save all fake certificates in folder "crts"(will be created in proxy dll directory)
-            ////if create new Root certificate file(.pfx) ====> delete folder "crts"
-            //proxyServer.CertificateManager.SaveFakeCertificates = true;
-
+            // Cache generated leaf certificates on disk (library default is off) so repeat runs against
+            // the same hosts reuse them instead of regenerating a key pair per host on every launch.
+            // Connection pooling and origin-connection prefetch are already on by library default.
+            proxyServer.CertificateManager.SaveFakeCertificates = true;
             proxyServer.ForwardToUpstreamGateway = true;
+            // Bound the in-memory certificate cache a little higher for a browsing-heavy manual test
+            // session; leave the on-disk cache unbounded so it survives across runs.
+            proxyServer.ResourceLimits = ProxyResourceLimits.Default.WithCertificateCacheBounds(
+                maxCertificateCacheEntries: 2048, maxCertificateDiskCacheEntries: null);
 
             //increase the ThreadPool (for server prod)
             //proxyServer.ThreadPoolWorkerThread = Environment.ProcessorCount * 6;

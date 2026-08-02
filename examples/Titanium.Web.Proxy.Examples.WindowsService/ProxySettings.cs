@@ -29,9 +29,10 @@ internal sealed class ProxySettings
     public bool EnableWinAuth { get; set; }
 
     /// <summary>
-    ///     Resolve Windows system/PAC upstream gateways per destination. Off by default: a service
-    ///     usually runs as LocalSystem, whose WinINet/PAC configuration is empty or unrelated to the
-    ///     interactive user's, and PAC resolution adds per-destination latency.
+    ///     Resolve Windows system/PAC upstream gateways per destination. Off by default here (unlike the
+    ///     interactive Basic/Wpf examples): a service usually runs as LocalSystem, whose WinINet/PAC
+    ///     configuration is empty or unrelated to the interactive user's, so the lookup cannot return a
+    ///     useful gateway. Turn it on if the service account does have a PAC/upstream proxy configured.
     /// </summary>
     public bool ForwardToUpstreamGateway { get; set; }
 
