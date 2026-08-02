@@ -114,8 +114,14 @@ internal static class Http3RequestStream
 
                 var request = sessionArgs.HttpClient.Request;
                 request.Method = method;
-                var url = BuildUrl(scheme ?? "https", authority, path ?? "/");
-                request.RequestUri = new Uri(url);
+                // Mirror Http2Helper: keep :authority and :path separate (origin-form RequestUriString8).
+                // Storing an absolute URL here made transparent H3→H1 SendRequest write absolute-form
+                // request targets ("GET https://host/path HTTP/1.1"), which Kestrel rejects with 400.
+                var normalizedPath = path ?? "/";
+                if (!normalizedPath.StartsWith('/'))
+                    normalizedPath = "/" + normalizedPath;
+                request.Authority = (ByteString)authority;
+                request.RequestUriString8 = (ByteString)normalizedPath;
                 request.HttpVersion = HttpHeader.Version30;
                 request.IsHttps = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase);
 
@@ -178,6 +184,10 @@ internal static class Http3RequestStream
                 }
                 else
                 {
+                    // Lock after BeforeRequest so GetResponseBody (TCP fallback) and API contracts
+                    // agree the request has been committed to the origin pipeline.
+                    sessionArgs.HttpClient.Request.Locked = true;
+
                     // 7. Forward to origin using the appropriate protocol bridge (H3→H3, H3→H2, or H3→H1.1).
                     // Pass a relay callback so that 1xx interim responses are forwarded to the client before
                     // the final response arrives.
@@ -442,10 +452,5 @@ internal static class Http3RequestStream
         return (method, scheme, authority, path, regular);
     }
 
-    private static string BuildUrl(string scheme, string authority, string path)
-    {
-        if (!path.StartsWith('/')) path = "/" + path;
-        return $"{scheme}://{authority}{path}";
-    }
 }
 #pragma warning restore CA1416
