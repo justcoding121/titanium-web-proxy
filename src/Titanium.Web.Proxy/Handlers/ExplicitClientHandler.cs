@@ -529,63 +529,33 @@ public partial class ProxyServer
                     // its establishment timing is attributed to the tunnel/CONNECT session rather than any
                     // individual per-stream SessionEventArgs. Streams BindUpstreamConnection only (no
                     // SetConnection) so HasConnection stays false on the multiplexed socket.
+                    if (connectArgs.Timing != null)
+                        connectArgs.Timing.MarkConnectionReady(connection.Id, !connection.ClaimFirstUse());
+                    connectArgs.HttpClient.BindUpstreamConnection(connection);
                     try
                     {
-                        for (var originAttempt = 0; originAttempt < 2; originAttempt++)
-                        {
-                            if (originAttempt > 0)
-                            {
-                                await TcpConnectionFactory.Release(connection, true);
-                                connection = (await TcpConnectionFactory.GetServerConnection(this, connectArgs,
-                                    true, SslExtensions.Http2ProtocolAsList,
-                                    true, false, cancellationToken))!;
-                                connection = await EnsureHttp2OriginConnectionAsync(connection, capabilityCacheKey,
-                                    connectArgs, connectArgs.AllowHttpProtocolTranslation);
-                                if (connection == null)
+                            var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
+                            connection.Http2SessionStarted = true;
+                            await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
+                            await Http2Helper.SendHttp2(clientStream, connection.Stream,
+                                () => new SessionEventArgs(this, endPoint, clientStream, connectArgs?.HttpClient.ConnectRequest, cancellationTokenSource)
                                 {
-                                    await SendHttp2ToHttp11Bridge(clientStream, endPoint,
-                                        connectArgs.HttpClient.ConnectRequest,
-                                        connectArgs.UserData, sessionConnectHost, sessionConnectPort, null, null,
-                                        connectArgs.CancellationTokenSource);
-                                    return;
-                                }
-                            }
-
-                            if (connectArgs.Timing != null)
-                                connectArgs.Timing.MarkConnectionReady(connection.Id, !connection.ClaimFirstUse());
-                            connectArgs.HttpClient.BindUpstreamConnection(connection);
-
-                            try
-                            {
-                                var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
-                                connection.Http2SessionStarted = true;
-                                await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
-                                await Http2Helper.SendHttp2(clientStream, connection.Stream,
-                                    () => new SessionEventArgs(this, endPoint, clientStream, connectArgs?.HttpClient.ConnectRequest, cancellationTokenSource)
-                                    {
-                                        UserData = connectArgs?.UserData,
-                                        // Seed the connection-level protocol policy so per-stream resolution
-                                        // correctly honours forced Http11/Http2 and never attempts H3 when
-                                        // the connection-level policy explicitly prohibits it.
-                                        UpstreamHttpProtocol = connectArgs?.UpstreamHttpProtocol
-                                    },
-                                    // Use the H3-aware delegate so per-stream Alt-Svc cache hits can upgrade
-                                    // individual h2 streams to H3 mid-connection (warm path).
-                                    (args, ctx) => BridgeOnBeforeRequestForH3(args, ctx, sessionConnectHost,
-                                        sessionConnectPort, coldH3Bridge: false),
-                                    async (args, ctx) => { await OnBeforeResponse(args); },
-                                    async args => { await OnAfterResponse(args); },
-                                    headers => PrepareRequestHeaders(headers),
-                                    connectArgs.CancellationTokenSource, clientStream.Connection.Id, logger,
-                                    MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
-                                    originConnection: connection);
-                                break;
-                            }
-                            catch (Http2EarlyOriginGoAwayException) when (originAttempt == 0)
-                            {
-                                // Retry once on a fresh origin; client preface bytes were never consumed.
-                            }
-                        }
+                                    UserData = connectArgs?.UserData,
+                                    // Seed the connection-level protocol policy so per-stream resolution
+                                    // correctly honours forced Http11/Http2 and never attempts H3 when
+                                    // the connection-level policy explicitly prohibits it.
+                                    UpstreamHttpProtocol = connectArgs?.UpstreamHttpProtocol
+                                },
+                                // Use the H3-aware delegate so per-stream Alt-Svc cache hits can upgrade
+                                // individual h2 streams to H3 mid-connection (warm path).
+                                (args, ctx) => BridgeOnBeforeRequestForH3(args, ctx, sessionConnectHost,
+                                    sessionConnectPort, coldH3Bridge: false),
+                                async (args, ctx) => { await OnBeforeResponse(args); },
+                                async args => { await OnAfterResponse(args); },
+                                headers => PrepareRequestHeaders(headers),
+                                connectArgs.CancellationTokenSource, clientStream.Connection.Id, logger,
+                                MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
+                                originConnection: connection);
                     }
                     finally
                     {

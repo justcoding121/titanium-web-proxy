@@ -110,45 +110,23 @@ namespace Titanium.Web.Proxy.Http2
             TcpServerConnection? originConnection = null)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
-            // Linked CTS so an early origin GOAWAY can stop both relay legs without cancelling the
-            // caller's session token — the client connection stays alive for a fresh-origin retry.
-            var relayCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationTokenSource.Token);
-            var connectionState = new Http2ConnectionState(connectionId, relayCts);
+            var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource);
 
             // Now async relay all server=>client & client=>server data
             var sendRelay =
                 CopyHttp2FrameAsync(clientStream, serverStream, connectionState,
                     sessionFactory, onBeforeRequest, onAfterResponse, prepareRequestHeaders, true,
-                    relayCts.Token, logger, maxDecodedHeaderListBytes, enableRfc8441,
+                    cancellationTokenSource.Token, logger, maxDecodedHeaderListBytes, enableRfc8441,
                     resourceLimits, originConnection);
             var receiveRelay =
                 CopyHttp2FrameAsync(serverStream, clientStream, connectionState,
-                    sessionFactory, onBeforeResponse, onAfterResponse, null, false, relayCts.Token,
+                    sessionFactory, onBeforeResponse, onAfterResponse, null, false, cancellationTokenSource.Token,
                     logger, maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, originConnection);
 
             await Task.WhenAny(sendRelay, receiveRelay);
-
-            var earlyOriginFailure = connectionState.EarlyOriginFailure;
-            relayCts.Cancel();
-
-            try
-            {
-                await Task.WhenAll(sendRelay, receiveRelay);
-            }
-            catch when (earlyOriginFailure)
-            {
-                // Relay legs may observe cancellation from the early-origin path; surface that as a
-                // retryable exception instead.
-            }
-
-            if (earlyOriginFailure)
-            {
-                throw new Http2EarlyOriginGoAwayException(
-                    "Origin sent GOAWAY before the HTTP/2 SETTINGS preface completed; client session was not poisoned.");
-            }
-
-            // Session is done for real — cancel the caller token so CONNECT-scoped work stops.
             cancellationTokenSource.Cancel();
+
+            await Task.WhenAll(sendRelay, receiveRelay);
 
             // Both relay directions have stopped (client/server disconnect, cancellation, or an
             // unrecoverable protocol error); any stream that never reached a normal end-stream/RST_STREAM
@@ -857,7 +835,7 @@ namespace Titanium.Web.Proxy.Http2
                                         request, endStreamFlag, output, isPromise));
                                 }
                             }
-                            else if (output is not NullOriginStream)
+                            else
                             {
                                 // Bind shared origin metadata without SetConnection so HasConnection stays
                                 // false (H1 syphon/drain must not touch the multiplexed H2 socket).
@@ -1123,21 +1101,6 @@ namespace Titanium.Web.Proxy.Http2
 
             try
             {
-            // Do not read or forward any client frames to the origin until the origin's initial SETTINGS
-            // have been received and relayed. That keeps the client's preface bytes unread so an early
-            // origin GOAWAY can be retried on a fresh socket without resetting the client session.
-            if (isClient && output is not NullOriginStream)
-            {
-                try
-                {
-                    await connectionState.ServerSettingsRelayed.Task.WaitAsync(cancellationToken);
-                }
-                catch (Exception) when (connectionState.EarlyOriginFailure || cancellationToken.IsCancellationRequested)
-                {
-                    return;
-                }
-            }
-
             // Best-effort graceful shutdown notice sent to `output` (the *other* leg) when this task's own
             // `input` peer disconnects or the connection is otherwise ending on this side - so that peer
             // learns the connection is going away (and which streams were actually seen) via GOAWAY instead
@@ -1821,24 +1784,11 @@ namespace Titanium.Web.Proxy.Http2
                 }
                 else if (type == Http2FrameType.GoAway)
                 {
+                    sendPacket = true; // still let the true endpoint learn the connection is going away.
+
                     if (length >= 8)
                     {
                         int lastStreamId = ((buffer[0] & 0x7f) << 24) + (buffer[1] << 16) + (buffer[2] << 8) + buffer[3];
-
-                        // Origin rejected the session before SETTINGS completed. Do not forward that
-                        // GOAWAY to Chrome (it surfaces as net::ERR_HTTP2_PROTOCOL_ERROR); leave the
-                        // client preface unread so the caller can retry on a fresh origin connection.
-                        if (!isClient && !connectionState.ServerSettingsRelayed.Task.IsCompleted)
-                        {
-                            connectionState.EarlyOriginFailure = true;
-                            connectionState.ServerGoingAway = true;
-                            connectionState.ServerLastStreamId = lastStreamId;
-                            connectionState.ServerSettingsRelayed.TrySetCanceled();
-                            return;
-                        }
-
-                        sendPacket = true; // still let the true endpoint learn the connection is going away.
-
                         if (isClient)
                         {
                             connectionState.ClientGoingAway = true;
@@ -1867,10 +1817,6 @@ namespace Titanium.Web.Proxy.Http2
                                 kvp.Value.Cancellation.Dispose();
                             }
                         }
-                    }
-                    else
-                    {
-                        sendPacket = true;
                     }
                 }
                 else if (type == Http2FrameType.Settings)
@@ -2708,7 +2654,6 @@ namespace Titanium.Web.Proxy.Http2
         internal static async Task SendRstStreamAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             int streamId, Http2ErrorCode errorCode, Stream output)
         {
-
             if (errorCode != Http2ErrorCode.NoError) ProxyMetrics.ParserError("http2");
 
             frameHeader.StreamId = streamId;
@@ -2727,7 +2672,6 @@ namespace Titanium.Web.Proxy.Http2
         internal static async Task SendGoAwayAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             int lastStreamId, Http2ErrorCode errorCode, Stream output)
         {
-
             if (errorCode != Http2ErrorCode.NoError) ProxyMetrics.ParserError("http2");
 
             frameHeader.StreamId = 0;
