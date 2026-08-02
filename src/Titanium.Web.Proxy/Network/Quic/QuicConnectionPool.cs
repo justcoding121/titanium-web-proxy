@@ -11,20 +11,32 @@ using Titanium.Web.Proxy.Models;
 namespace Titanium.Web.Proxy.Network.Quic;
 
 /// <summary>
-///     Pool of live <see cref="QuicServerConnection" /> objects keyed by origin host/port.
-///     HTTP/3 connections are long-lived and multiplex many concurrent streams, so pooling a single
-///     <see cref="System.Net.Quic.QuicConnection" /> per origin avoids repeated QUIC handshakes.
-///     At most <see cref="MaxConnectionsPerOrigin" /> idle connections are kept per cache key.
+///     Holds one shared <see cref="QuicServerConnection" /> per origin cache key.
+///     <para>
+///         Unlike the HTTP/1.1 pool in <see cref="Tcp.TcpConnectionFactory" />, connections here are
+///         <em>not</em> checked out exclusively. A single QUIC connection carries arbitrarily many
+///         concurrent request streams, so concurrent requests to the same origin share one connection
+///         and open a stream each. Handing each request its own connection instead would make every
+///         concurrent request pay a fresh QUIC handshake — which is the cost HTTP/3 exists to avoid,
+///         and which measurably made HTTP/3 origins slower than HTTP/2 ones.
+///     </para>
+///     <para>
+///         Callers obtain a connection with <see cref="GetOrCreateAsync" />, which registers an
+///         in-flight stream, and must pair it with <see cref="ReleaseAsync" />. A connection that
+///         turns out to be unusable is retired via <see cref="InvalidateAsync" /> so that later
+///         requests build a fresh one, while streams still running on it are allowed to finish.
+///     </para>
 /// </summary>
 internal sealed class QuicConnectionPool : IAsyncDisposable
 {
     /// <summary>
-    ///     Also the upper bound on how many stale-pooled-connection retries
-    ///     <see cref="Http3.Http3OriginBridge" /> attempts before creating a guaranteed-fresh connection:
-    ///     that many idle connections can be queued per origin, so that many dequeues may be needed
-    ///     to drain past connections MsQuic has already silently timed out.
+    ///     How many times <see cref="Http3.Http3OriginBridge" /> retries after finding the shared
+    ///     connection unusable before giving up on HTTP/3 for the origin. More than one is worth
+    ///     attempting because two requests can race to discover the same dead connection, so a retry
+    ///     can occasionally pick up another connection that went stale at the same moment.
     /// </summary>
-    internal const int MaxConnectionsPerOrigin = 2;
+    internal const int MaxStaleConnectionRetries = 2;
+
     // MsQuic's negotiated idle timeout is often well under 90s; keeping dead connections that long
     // causes OpenOutboundStreamAsync to fail with "timed out from inactivity" and forces the
     // stale-retry loop on the next request. Align closer to a typical peer idle window.
@@ -35,13 +47,18 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     // still proactively disposed instead of holding its UDP socket/QUIC state open indefinitely.
     private static readonly TimeSpan IdleSweepInterval = TimeSpan.FromSeconds(10);
 
-    private readonly ConcurrentDictionary<string, ConcurrentQueue<QuicServerConnection>> _pool = new();
+    // How long a background warm-up may spend establishing a connection before being abandoned. The
+    // request that triggered it has already been served over TCP, so this only bounds wasted work.
+    private static readonly TimeSpan WarmupTimeout = TimeSpan.FromSeconds(10);
+
+    private readonly ConcurrentDictionary<string, OriginEntry> _pool = new();
+    private readonly ConcurrentDictionary<string, byte> _warmupsInFlight = new();
     private readonly ProxyServer _proxyServer;
     private readonly QuicConnectionFactory _factory;
     private readonly SemaphoreSlim _drainGate = new(1, 1);
     private readonly CancellationTokenSource _cleanupCts = new();
     private readonly Task _cleanupTask;
-    private bool _draining;
+    private volatile bool _draining;
 
     internal QuicConnectionPool(ProxyServer proxyServer)
     {
@@ -53,8 +70,10 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     }
 
     /// <summary>
-    ///     Returns an open <see cref="QuicServerConnection" /> for the given origin, reusing a
-    ///     pooled connection when available or creating a new one.
+    ///     Returns the shared <see cref="QuicServerConnection" /> for the given origin, creating it if
+    ///     there is none, with one in-flight stream already registered on the caller's behalf. The
+    ///     caller must pass the result to <see cref="ReleaseAsync" /> or <see cref="InvalidateAsync" />
+    ///     exactly once.
     /// </summary>
     /// <param name="connectHost">
     ///     The DNS/hostname used for the actual QUIC UDP connection. When an HTTPS/SVCB record
@@ -79,76 +98,108 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
         var effectiveSniHost = sniHost ?? connectHost;
         var cacheKey = QuicConnectionFactory.GetCacheKey(connectHost, port, effectiveSniHost,
             upStreamProxy, upStreamEndPoint);
+        var entry = _pool.GetOrAdd(cacheKey, static _ => new OriginEntry());
 
-        QuicServerConnection? pooled = null;
-        var toDispose = new List<QuicServerConnection>();
+        // Fast path: an established connection is already shared for this origin.
+        if (TryAcquireCurrent(entry, out var shared)) return shared;
 
-        if (_pool.TryGetValue(cacheKey, out var queue))
+        // Slow path. The gate is what turns a cold burst of concurrent requests to one origin into a
+        // single handshake: the first caller connects while the rest wait here and then reuse the
+        // result, instead of every one of them opening its own connection.
+        await entry.CreationGate.WaitAsync(cancellationToken);
+        try
         {
-            // Same per-queue lock as ReturnAsync/ClearIdleConnectionsAsync: dequeueing here must not
-            // race the idle sweep's dequeue-all/re-enqueue-survivors pass, or a connection this call is
-            // about to hand out could simultaneously be judged idle and disposed by the sweep.
-            lock (queue)
-            {
-                while (queue.TryDequeue(out var candidate))
-                {
-                    if (!candidate.IsClosed && DateTime.UtcNow - candidate.LastAccess < IdleConnectionTimeout)
-                    {
-                        candidate.LastAccess = DateTime.UtcNow;
-                        pooled = candidate;
-                        break;
-                    }
-                    toDispose.Add(candidate);
-                }
-            }
+            if (_draining) throw new InvalidOperationException("QuicConnectionPool is draining.");
+            if (TryAcquireCurrent(entry, out shared)) return shared;
+
+            var created = await _factory.CreateAsync(
+                connectHost, effectiveSniHost, port, upStreamEndPoint, upStreamProxy,
+                cacheKey, remoteCertificateValidationCallback, cancellationToken);
+
+            // Nothing else can see `created` yet, so this cannot fail.
+            created.TryAcquireStream();
+            entry.Current = created;
+            _proxyServer.Http3WarmOrigins.Mark(effectiveSniHost, port);
+            return created;
         }
-
-        foreach (var stale in toDispose) await stale.DisposeAsync();
-        if (pooled != null) return pooled;
-
-        return await _factory.CreateAsync(
-            connectHost, effectiveSniHost, port, upStreamEndPoint, upStreamProxy,
-            cacheKey, remoteCertificateValidationCallback, cancellationToken);
+        finally
+        {
+            entry.CreationGate.Release();
+        }
     }
 
     /// <summary>
-    ///     Returns a connection to the pool for reuse. Closed or disposal-scheduled connections
-    ///     are discarded immediately.
+    ///     Releases a stream previously registered by <see cref="GetOrCreateAsync" />. The connection
+    ///     stays shared and available to other requests; only a retired connection whose last stream
+    ///     has now finished is disposed.
     /// </summary>
-    internal async ValueTask ReturnAsync(QuicServerConnection connection)
+    internal async ValueTask ReleaseAsync(QuicServerConnection connection)
     {
-        if (_draining || connection.IsClosed)
-        {
+        var remaining = connection.ReleaseStream();
+        if (connection.IsClosed && remaining <= 0)
             await connection.DisposeAsync();
-            return;
-        }
-
-        var toDispose = new List<QuicServerConnection>();
-
-        while (true)
-        {
-            var queue = _pool.GetOrAdd(connection.CacheKey, static _ => new ConcurrentQueue<QuicServerConnection>());
-
-            lock (queue)
-            {
-                // ClearIdleConnectionsAsync removes a queue from the dictionary, under this same
-                // per-queue lock, only once it has observed it empty. If that happened between the
-                // GetOrAdd above and taking this lock, `queue` is now an orphan nothing will ever look
-                // at again — enqueueing into it would silently leak the connection. Re-resolve against
-                // the dictionary instead of trusting the reference already held.
-                if (!_pool.TryGetValue(connection.CacheKey, out var current) || !ReferenceEquals(current, queue))
-                    continue;
-
-                while (queue.Count >= MaxConnectionsPerOrigin && queue.TryDequeue(out var excess))
-                    toDispose.Add(excess);
-
-                queue.Enqueue(connection);
-                break;
-            }
-        }
-
-        foreach (var old in toDispose) await old.DisposeAsync();
     }
+
+    /// <summary>
+    ///     Retires a connection that has proven unusable and releases the caller's stream. It is
+    ///     removed from the pool immediately so later requests build a fresh one, and disposed once
+    ///     the streams still running on it have finished.
+    /// </summary>
+    internal async ValueTask InvalidateAsync(QuicServerConnection connection)
+    {
+        if (_pool.TryGetValue(connection.CacheKey, out var entry))
+            Interlocked.CompareExchange(ref entry.Current, null, connection);
+
+        Retire(connection);
+        await ReleaseAsync(connection);
+    }
+
+    /// <summary>
+    ///     Starts establishing a connection to an origin in the background, so that a later request
+    ///     can be routed to HTTP/3 without paying the handshake itself. Returns immediately; at most
+    ///     one warm-up per origin runs at a time, and failures are silent because the origin simply
+    ///     keeps being served over TCP.
+    /// </summary>
+    internal void BeginWarmup(string connectHost, int port, string sniHost, IPEndPoint? upStreamEndPoint)
+    {
+        if (_draining) return;
+
+        if (_proxyServer.Http3WarmOrigins.IsWarm(sniHost, port)) return;
+
+        var originKey = OriginKey(sniHost, port);
+        if (!_warmupsInFlight.TryAdd(originKey, 0)) return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var timeout = new CancellationTokenSource(WarmupTimeout);
+                var connection = await GetOrCreateAsync(
+                    connectHost, port, upStreamEndPoint, null, null, timeout.Token, sniHost);
+
+                // The warm-up wanted the connection established, not used; hand the stream straight
+                // back so the connection counts as idle and stays available to real requests.
+                await ReleaseAsync(connection);
+            }
+            catch
+            {
+                // Unreachable over QUIC (UDP blocked, handshake timeout, ...). Staying on TCP is the
+                // correct outcome, and is exactly what not marking the origin warm produces.
+            }
+            finally
+            {
+                _warmupsInFlight.TryRemove(originKey, out _);
+            }
+        });
+    }
+
+    private void Retire(QuicServerConnection connection)
+    {
+        connection.TryScheduleDisposal();
+        _proxyServer.Http3WarmOrigins.Clear(connection.HostName, connection.Port);
+    }
+
+    private static string OriginKey(string sniHost, int port) => $"{sniHost}:{port}";
 
     /// <summary>
     ///     Removes and disposes all pooled connections. Called during proxy stop.
@@ -161,9 +212,13 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
             _draining = true;
             foreach (var key in _pool.Keys)
             {
-                if (_pool.TryRemove(key, out var queue))
-                    while (queue.TryDequeue(out var conn))
-                        try { await conn.DisposeAsync(); } catch { /* best effort */ }
+                if (!_pool.TryRemove(key, out var entry)) continue;
+
+                var connection = Interlocked.Exchange(ref entry.Current, null);
+                if (connection == null) continue;
+
+                Retire(connection);
+                try { await connection.DisposeAsync(); } catch { /* best effort */ }
             }
         }
         finally
@@ -182,11 +237,29 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
         _drainGate.Dispose();
     }
 
+    private static bool TryAcquireCurrent(OriginEntry entry, out QuicServerConnection connection)
+    {
+        var current = Volatile.Read(ref entry.Current);
+        if (current != null && current.TryAcquireStream())
+        {
+            connection = current;
+            return true;
+        }
+
+        // Retired or disposed: clear it so the creation path below replaces it rather than handing
+        // the same dead connection to every subsequent caller.
+        if (current != null)
+            Interlocked.CompareExchange(ref entry.Current, null, current);
+
+        connection = null!;
+        return false;
+    }
+
     /// <summary>
-    ///     Periodically walks every pooled origin's queue, proactively disposing connections that have
-    ///     gone idle or closed (without waiting for a future <see cref="GetOrCreateAsync" /> call against
-    ///     that same origin, which may never come) and removing queues left empty afterward so <see cref="_pool" />
-    ///     does not grow one entry per distinct origin ever contacted for the lifetime of the proxy.
+    ///     Periodically disposes shared connections that have gone idle or closed (without waiting for
+    ///     a future <see cref="GetOrCreateAsync" /> call against that same origin, which may never
+    ///     come) and removes entries left empty afterward so <see cref="_pool" /> does not grow one
+    ///     entry per distinct origin ever contacted for the lifetime of the proxy.
     /// </summary>
     private async Task ClearIdleConnectionsAsync()
     {
@@ -194,27 +267,42 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
         {
             try
             {
-                foreach (var (key, queue) in _pool)
+                foreach (var (key, entry) in _pool)
                 {
-                    // Per-queue lock mirrors GetOrCreateAsync/ReturnAsync's dequeue/enqueue pairs so this
-                    // sweep never races a connection being handed out or returned concurrently.
-                    lock (queue)
+                    var current = Volatile.Read(ref entry.Current);
+
+                    if (current != null)
                     {
-                        var kept = new List<QuicServerConnection>();
-                        while (queue.TryDequeue(out var pooled))
+                        // A connection with streams in flight is busy by definition, however long ago
+                        // it was created.
+                        var expired = current.IsClosed
+                            || (current.InFlightStreams == 0
+                                && DateTime.UtcNow - current.LastAccess >= IdleConnectionTimeout);
+
+                        if (!expired) continue;
+
+                        if (Interlocked.CompareExchange(ref entry.Current, null, current) == current)
                         {
-                            if (!pooled.IsClosed && DateTime.UtcNow - pooled.LastAccess < IdleConnectionTimeout)
-                                kept.Add(pooled);
-                            else
-                                _ = pooled.DisposeAsync().AsTask();
+                            Retire(current);
+                            if (current.InFlightStreams <= 0)
+                                _ = current.DisposeAsync().AsTask();
                         }
 
-                        foreach (var pooled in kept)
-                            queue.Enqueue(pooled);
+                        continue;
+                    }
 
-                        if (queue.IsEmpty)
-                            ((ICollection<KeyValuePair<string, ConcurrentQueue<QuicServerConnection>>>)_pool)
-                                .Remove(new KeyValuePair<string, ConcurrentQueue<QuicServerConnection>>(key, queue));
+                    // Only drop the entry once it is genuinely unused: taking the gate proves no
+                    // caller is mid-creation and about to publish a connection into it.
+                    if (!entry.CreationGate.Wait(0)) continue;
+                    try
+                    {
+                        if (Volatile.Read(ref entry.Current) == null)
+                            ((ICollection<KeyValuePair<string, OriginEntry>>)_pool)
+                                .Remove(new KeyValuePair<string, OriginEntry>(key, entry));
+                    }
+                    finally
+                    {
+                        entry.CreationGate.Release();
                     }
                 }
             }
@@ -232,6 +320,18 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
                 return;
             }
         }
+    }
+
+    /// <summary>
+    ///     The shared connection for one origin, plus the gate that keeps concurrent cold requests
+    ///     from each establishing their own.
+    /// </summary>
+    private sealed class OriginEntry
+    {
+        internal readonly SemaphoreSlim CreationGate = new(1, 1);
+
+        // Field rather than a property so Interlocked/Volatile can operate on it directly.
+        internal QuicServerConnection? Current;
     }
 }
 #pragma warning restore CA1416

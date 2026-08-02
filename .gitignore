@@ -217,5 +217,6 @@ coverage/
 # BenchmarkDotNet run output (benchmarks/Titanium.Web.Proxy.Benchmarks is run manually, not in CI)
 BenchmarkDotNet.Artifacts/
 
-# Cold-start A/B run output (tools/ColdStartProbe is run manually, not in CI)
+# Cold-start A/B run output (these harnesses are run manually, not in CI)
 tools/ColdStartProbe/results/
+tools/ChromeLoadProbe/results/

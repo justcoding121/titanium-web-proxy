@@ -113,6 +113,23 @@ public partial class ProxyServer
         if (Http3OriginCapabilityCache.TryGet(hostAndPort, out var cachedAltPort, out var cachedTarget))
         {
             var quicPort = cachedAltPort == int.MinValue ? port : cachedAltPort;
+
+            // Knowing the origin speaks HTTP/3 is not a reason to route this request over it. The
+            // capability cache is warmed by Alt-Svc on a response, which means a healthy TCP
+            // connection to the origin already exists — switching now would abandon it and put a
+            // full QUIC handshake on this request's critical path, so the request that triggers the
+            // switch pays for it and saves nothing. Establish QUIC in the background instead and
+            // keep serving over TCP until it is ready, which is what browsers do with Alt-Svc.
+            if (!Http3WarmOrigins.IsWarm(host, quicPort))
+            {
+                // QUIC cannot be tunnelled through an upstream proxy (see QuicConnectionFactory),
+                // so warming a connection that could never be used would just burn a handshake.
+                if (UpStreamHttpsProxy == null && GetCustomUpStreamProxyFunc == null)
+                    QuicConnectionPool.BeginWarmup(cachedTarget ?? host, quicPort, host, UpStreamEndPoint);
+
+                return Http3OriginRoute.None;
+            }
+
             return new Http3OriginRoute
             {
                 UseH3 = true,

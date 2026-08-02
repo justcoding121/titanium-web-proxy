@@ -21,6 +21,7 @@ internal sealed class QuicServerConnection : IAsyncDisposable
     private bool _disposed;
     private int _disposalScheduled;
     private int _firstUseClaimed;
+    private int _inFlightStreams;
 
     internal QuicServerConnection(
         ProxyServer proxyServer,
@@ -112,6 +113,45 @@ internal sealed class QuicServerConnection : IAsyncDisposable
     ///     Claims this connection for use by a session (for timing capture; safe to call once per reuse).
     /// </summary>
     internal bool ClaimFirstUse() => System.Threading.Interlocked.Exchange(ref _firstUseClaimed, 1) == 0;
+
+    /// <summary>
+    ///     Number of request streams currently using this connection. A shared connection is only
+    ///     eligible for idle eviction, and a retired one only for disposal, once this reaches zero.
+    /// </summary>
+    internal int InFlightStreams => Volatile.Read(ref _inFlightStreams);
+
+    /// <summary>
+    ///     Registers a request's intent to open a stream on this connection, returning
+    ///     <see langword="false" /> if the connection has been retired or disposed and the caller must
+    ///     obtain a different one. Every successful call must be paired with <see cref="ReleaseStream" />.
+    /// </summary>
+    internal bool TryAcquireStream()
+    {
+        // Increment before testing so that a concurrent retire cannot observe zero in-flight streams
+        // and dispose the connection underneath a caller that is about to use it. The two orderings
+        // are mutually exclusive: whichever of the flag write and the counter increment lands first,
+        // the other side observes it and backs off.
+        System.Threading.Interlocked.Increment(ref _inFlightStreams);
+
+        if (IsClosed)
+        {
+            System.Threading.Interlocked.Decrement(ref _inFlightStreams);
+            return false;
+        }
+
+        LastAccess = DateTime.UtcNow;
+        return true;
+    }
+
+    /// <summary>
+    ///     Releases a stream registered by <see cref="TryAcquireStream" />, returning the number of
+    ///     streams still in flight.
+    /// </summary>
+    internal int ReleaseStream()
+    {
+        LastAccess = DateTime.UtcNow;
+        return System.Threading.Interlocked.Decrement(ref _inFlightStreams);
+    }
 
     /// <summary>
     ///     Schedules this connection for disposal after the current request finishes.
