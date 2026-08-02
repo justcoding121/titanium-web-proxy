@@ -169,9 +169,14 @@ internal static class Http3OriginBridge
         {
         try
         {
+            // Pass the session so ServerCertificateValidationCallback is honoured. The factory's
+            // default path supplies sessionArgs: null, which skips the user callback and rejects
+            // any chain that is not already trusted by the OS (breaking MITM-test and custom-CA
+            // deployments for every H3→H3 origin connect).
             quicConn = await server.QuicConnectionPool.GetOrCreateAsync(
                 connectHost, port, upStreamEndPoint, upstreamProxy,
-                null /* default cert validation */,
+                (sender, certificate, chain, errors) =>
+                    server.ValidateServerCertificate(sender, sessionArgs, certificate, chain, errors),
                 cancellationToken,
                 sniHost: sniHost);
 
