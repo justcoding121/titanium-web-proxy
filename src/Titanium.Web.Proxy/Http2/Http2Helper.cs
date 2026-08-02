@@ -44,6 +44,50 @@ namespace Titanium.Web.Proxy.Http2
         public static readonly byte[] ConnectionPreface = Encoding.ASCII.GetBytes("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
 
         /// <summary>
+        ///     Connection-level WINDOW_UPDATE increment matching Chrome/Edge (0xEF0001). Grows the peer's
+        ///     connection send window from the RFC default 65535 to ~15 MB. Without this, multiplexed large
+        ///     responses (e.g. Instagram CDN JS) share a 64 KiB connection window and crawl until credit is
+        ///     drip-fed back one DATA frame at a time. <see cref="Http2OriginConnection"/> already sends this
+        ///     on the bridge path; the H2↔H2 MITM relay must do the same after writing the client preface.
+        /// </summary>
+        internal const int InitialConnectionWindowIncrement = 15663105;
+
+        /// <summary>
+        ///     Writes initial client SETTINGS (ENABLE_PUSH=0) and a Chrome-sized connection WINDOW_UPDATE onto
+        ///     a proxy-owned origin stream that has just received the HTTP/2 connection preface
+        ///     (<see cref="Http2OriginConnection"/> / protocol bridges). The H2↔H2 MITM path must not call
+        ///     this: it relays the browser's SETTINGS as the first frame after the preface (RFC 7540 §3.5),
+        ///     then appends the same WINDOW_UPDATE from <see cref="SendHttp2"/> so an extra proxy SETTINGS
+        ///     ACK is never forwarded to the client.
+        /// </summary>
+        /// <param name="originStream">Origin HTTP/2 stream (preface already written).</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        internal static async Task SendHttp2ClientConnectionStartupAsync(Stream originStream,
+            CancellationToken cancellationToken)
+        {
+            var frameHeader = new Http2FrameHeader();
+            var frameHeaderBuffer = new byte[9];
+
+            // SETTINGS with ENABLE_PUSH=0 (6-byte payload) for proxy-owned origin connections.
+            frameHeader.StreamId = 0;
+            frameHeader.Type = Http2FrameType.Settings;
+            frameHeader.Flags = 0;
+            frameHeader.Length = 6;
+            frameHeader.CopyToBuffer(frameHeaderBuffer);
+
+            var settingsPayload = new byte[6];
+            BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(0, 2), (ushort)Http2SettingsId.EnablePush);
+            BinaryPrimitives.WriteUInt32BigEndian(settingsPayload.AsSpan(2, 4), 0);
+
+            await originStream.WriteAsync(frameHeaderBuffer, cancellationToken);
+            await originStream.WriteAsync(settingsPayload, cancellationToken);
+
+            await SendWindowUpdateAsync(frameHeader, frameHeaderBuffer, 0, InitialConnectionWindowIncrement,
+                originStream);
+            await originStream.FlushAsync(cancellationToken);
+        }
+
+        /// <summary>
         ///     The largest frame payload this proxy will accept from either peer. Neither leg is ever told
         ///     (via a proxy-originated SETTINGS frame) that a larger value is acceptable, so this is the
         ///     value a conformant peer will honor; a peer that ignores it and sends a larger frame anyway is
@@ -2319,6 +2363,18 @@ namespace Titanium.Web.Proxy.Http2
                     // response on the other relay can safely send HEADERS afterwards.
                     if (!isClient && type == Http2FrameType.Settings && (flags & Http2FrameFlag.Ack) == 0)
                         connectionState.ServerSettingsRelayed.TrySetResult(true);
+
+                    // H2↔H2 MITM: after the browser's first non-ACK SETTINGS reaches the origin (RFC 7540
+                    // §3.5: SETTINGS must immediately follow the preface), enlarge the origin's connection
+                    // send window to match Chrome. Emitting WINDOW_UPDATE before SETTINGS made strict origins
+                    // (e.g. MSN, Wikipedia) close with PROTOCOL_ERROR; emitting a proxy SETTINGS instead
+                    // produced an unexpected SETTINGS ACK when relayed to Chrome.
+                    if (isClient && type == Http2FrameType.Settings && (flags & Http2FrameFlag.Ack) == 0 &&
+                        Interlocked.CompareExchange(ref connectionState.InitialOriginWindowUpdateSent, 1, 0) == 0)
+                    {
+                        await lockedOutputWrite(() => SendWindowUpdateAsync(frameHeader, frameHeaderBuffer, 0,
+                            InitialConnectionWindowIncrement, output));
+                    }
                 }
 
                 if (cancellationToken.IsCancellationRequested)

@@ -16,10 +16,9 @@ using Titanium.Web.Proxy.StreamExtended.Network;
 namespace Titanium.Web.Proxy.EventArguments;
 
 /// <summary>
-/// Holds info related to a single proxy session (single request/response sequence).
-/// A proxy session is bounded to a single connection from client.
-/// A proxy session ends when client terminates connection to proxy
-/// or when server terminates connection from proxy.
+/// Holds info related to a single proxy session (single request/response exchange).
+/// Under HTTP/2 and HTTP/3, many sessions share one client connection (one stream each);
+/// ending a session ends that request/response exchange, not necessarily the connection.
 /// </summary>
 public class SessionEventArgs : SessionEventArgsBase
 {
@@ -755,11 +754,11 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     /// <remarks>
     ///     Framing is chosen from the response headers: if a Content-Length is set on <paramref name="response" />
-    ///     the body is written raw (the delegate must write exactly that many bytes); otherwise the response is sent
-    ///     using chunked transfer-encoding and each write becomes a chunk. The delegate receives a write-only stream;
-    ///     only a single buffer is in flight at a time, so memory stays bounded regardless of the total size.
-    ///     See <see cref="Respond" /> for the server body syphon-vs-close trade-off controlled by
-    ///     <paramref name="closeServerConnection" />.
+    ///     the body is written raw (the delegate must write exactly that many bytes); otherwise HTTP/1.1 uses
+    ///     chunked transfer-encoding and HTTP/2/HTTP/3 emit DATA / stream frames. The delegate receives a
+    ///     write-only stream; only a single buffer is in flight at a time, so memory stays bounded regardless
+    ///     of the total size. See <see cref="Respond" /> for the server body syphon-vs-close trade-off controlled
+    ///     by <paramref name="closeServerConnection" />.
     /// </remarks>
     /// <param name="response">The response object (status and headers).</param>
     /// <param name="writeBody">Delegate that writes the body to the provided stream.</param>
@@ -787,9 +786,10 @@ public class SessionEventArgs : SessionEventArgsBase
     }
 
     /// <summary>
-    ///     Drains (reads and discards) any unread server response body from the backing TCP connection so the
-    ///     connection can be reused. This reads the bytes off the wire without buffering them in memory. It is a
-    ///     no-op if the body was already received or the response has no body.
+    ///     Drains (reads and discards) any unread server response body from the underlying
+    ///     client/server stream or connection so it can be reused. This reads the bytes off the wire
+    ///     without buffering them in memory. It is a no-op if the body was already received or the
+    ///     response has no body.
     /// </summary>
     /// <remarks>
     ///     Warning: for an endless chunked response (one that never sends its terminating zero chunk) this will
@@ -802,9 +802,10 @@ public class SessionEventArgs : SessionEventArgsBase
     }
 
     /// <summary>
-    ///     Drains (reads and discards) any unread client request body from the backing TCP connection so the
-    ///     client's keep-alive connection can be reused. This reads the bytes off the wire without buffering them
-    ///     in memory. It is a no-op if the body was already received or the request has no body.
+    ///     Drains (reads and discards) any unread client request body from the underlying stream or
+    ///     connection so the client's keep-alive / multiplexed connection can be reused. This reads the
+    ///     bytes off the wire without buffering them in memory. It is a no-op if the body was already
+    ///     received or the request has no body.
     /// </summary>
     /// <remarks>
     ///     Useful when short-circuiting a request (e.g. <see cref="Respond" />, <see cref="RespondStreaming" />, or

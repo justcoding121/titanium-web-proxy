@@ -556,8 +556,7 @@ public partial class ProxyServer
 
             var upgrade = upgradeResponseHeaders.GetFirstHeader("Upgrade")?.Value;
             var responseConnection = upgradeResponseHeaders.GetFirstHeader("Connection")?.Value;
-            var expectedAccept = Convert.ToBase64String(SHA1.HashData(
-                Encoding.ASCII.GetBytes(wsKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
+            var expectedAccept = WebSocketHandshake.ComputeAccept(wsKey);
             var actualAccept = upgradeResponseHeaders.GetFirstHeader("Sec-WebSocket-Accept")?.Value;
             if (!string.Equals(actualAccept, expectedAccept, StringComparison.Ordinal) ||
                 !string.Equals(upgrade, "websocket", StringComparison.OrdinalIgnoreCase) ||

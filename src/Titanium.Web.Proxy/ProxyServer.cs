@@ -132,10 +132,9 @@ public partial class ProxyServer : IDisposable
     ///     Initializes a new instance of ProxyServer class with provided parameters.
     /// </summary>
     /// <param name="userTrustRootCertificate">
-    ///     Should fake HTTPS certificate be trusted by this machine's user certificate
-    ///     store?
+    ///     Should the proxy root CA be trusted in the current-user Root store?
     /// </param>
-    /// <param name="machineTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's certificate store?</param>
+    /// <param name="machineTrustRootCertificate">Should the proxy root CA be trusted in the local-machine Root store?</param>
     /// <param name="trustRootCertificateAsAdmin">
     ///     Should we attempt to trust certificates with elevated permissions by
     ///     prompting for UAC if required?
@@ -152,10 +151,9 @@ public partial class ProxyServer : IDisposable
     /// <param name="rootCertificateName">Name of the root certificate.</param>
     /// <param name="rootCertificateIssuerName">Name of the root certificate issuer.</param>
     /// <param name="userTrustRootCertificate">
-    ///     Should fake HTTPS certificate be trusted by this machine's user certificate
-    ///     store?
+    ///     Should the proxy root CA be trusted in the current-user Root store?
     /// </param>
-    /// <param name="machineTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's certificate store?</param>
+    /// <param name="machineTrustRootCertificate">Should the proxy root CA be trusted in the local-machine Root store?</param>
     /// <param name="trustRootCertificateAsAdmin">
     ///     Should we attempt to trust certificates with elevated permissions by
     ///     prompting for UAC if required?
@@ -308,12 +306,29 @@ public partial class ProxyServer : IDisposable
     public bool EnableHttp2 { get; set; } = true;
 
     /// <summary>
-    ///     When <see langword="true"/>, the proxy accepts WebSocket-over-HTTP/2 connections from
-    ///     clients (RFC 8441 extended CONNECT with <c>:protocol = websocket</c>) and advertises
-    ///     <c>SETTINGS_ENABLE_CONNECT_PROTOCOL=1</c> to h2 clients. The proxy independently
-    ///     negotiates with each origin: if the origin supports RFC 8441 the DATA frames are
-    ///     relayed directly; otherwise a new HTTP/1.1 WebSocket upgrade is performed.
-    ///     Default: <see langword="false"/> (must opt-in; demand measurement pending).
+    ///     When <see langword="true"/>, the proxy enables RFC 8441 WebSocket-over-HTTP/2:
+    ///     <list type="bullet">
+    ///       <item>
+    ///         <description>
+    ///           Accepts extended CONNECT (<c>:protocol = websocket</c>) from h2 clients and
+    ///           advertises <c>SETTINGS_ENABLE_CONNECT_PROTOCOL=1</c> to them. Per origin: if the
+    ///           origin is HTTP/2 and advertises RFC 8441 support, DATA frames are relayed directly;
+    ///           if the origin is HTTP/2 and does not, the stream is reset with
+    ///           <c>REFUSED_STREAM</c>; if the origin is HTTP/1.1, the h2→h1 WebSocket upgrade bridge
+    ///           is used.
+    ///         </description>
+    ///       </item>
+    ///       <item>
+    ///         <description>
+    ///           On the HTTP/1.1-client-to-h2-origin translation bridge, translates
+    ///           <c>Upgrade: websocket</c> into extended CONNECT when the origin advertises the
+    ///           setting; otherwise falls back to a dedicated HTTP/1.1 origin connection for that
+    ///           WebSocket. When this property is <see langword="false"/>, that bridge still returns
+    ///           synthetic <c>501 Not Implemented</c> for WebSocket upgrades (historical default).
+    ///         </description>
+    ///       </item>
+    ///     </list>
+    ///     Default: <see langword="false"/> (must opt-in).
     /// </summary>
     public bool EnableRfc8441 { get; set; } = false;
 
@@ -328,9 +343,11 @@ public partial class ProxyServer : IDisposable
     ///       </item>
     ///       <item>
     ///         <description>
-    ///           With <see cref="UpstreamHttpProtocol.Auto" /> (default), the proxy automatically uses HTTP/3
-    ///           for outbound connections to origins whose Alt-Svc or HTTPS/SVCB capability is cached, falling
-    ///           back to HTTP/2 then HTTP/1.1 on failure.
+    ///           With <see cref="UpstreamHttpProtocol.Auto" /> (default), a cached Alt-Svc / HTTPS/SVCB
+    ///           capability only arms background QUIC warm-up. Outbound HTTP/3 is used once that origin
+    ///           is warm; until then the request stays on HTTP/2 or HTTP/1.1. Forced
+    ///           <see cref="UpstreamHttpProtocol.Http3" /> skips warm-up gating and fails closed with no
+    ///           TCP fallback.
     ///         </description>
     ///       </item>
     ///     </list>
@@ -682,8 +699,9 @@ public partial class ProxyServer : IDisposable
     public int ListenerBackLog { get; set; } = 512;
 
     /// <summary>
-    ///     Should we reuse client/server tcp sockets.
-    ///     Default is true (disabled for linux/macOS due to bug in .Net core).
+    ///     When true (default), SO_REUSEADDR is requested where
+    ///     <see cref="Helpers.RunTime.IsSocketReuseAvailable" /> reports support (always on Windows; on
+    ///     non-Windows, .NET Core 3+ / compatible runtimes).
     /// </summary>
     public bool ReuseSocket { get; set; } = true;
 

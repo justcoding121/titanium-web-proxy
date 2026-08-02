@@ -323,6 +323,10 @@ public partial class ProxyServer
                                     var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
                                     connection.Http2SessionStarted = true;
                                     await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
+                                    // MITM: do not emit proxy SETTINGS or WINDOW_UPDATE here. RFC 7540 §3.5 requires
+                                    // SETTINGS immediately after the preface; SendHttp2 relays the browser's SETTINGS
+                                    // first, then appends the Chrome-sized connection WINDOW_UPDATE. A proxy SETTINGS
+                                    // would produce an origin ACK that gets forwarded as an unexpected SETTINGS ACK.
                                     await Http2Helper.SendHttp2(clientStream, connection.Stream,
                                         () => new SessionEventArgs(this, endPoint, clientStream, null,
                                             cancellationTokenSource),

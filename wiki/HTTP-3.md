@@ -74,9 +74,11 @@ proxy.Start();
 When `UpstreamHttpProtocol.Auto` (the default) is in effect, the proxy selects the outbound protocol
 for each request as follows:
 
-1. **HTTP/3** — if `EnableHttp3 == true` **and** the origin's H3 capability is known. Capability is
-   populated from either a previous `Alt-Svc` response header **or** (when `EnableHttpsSvcbDnsDiscovery`
-   is true) a proactive HTTPS/SVCB DNS query before the first connection attempt.
+1. **HTTP/3** — if `EnableHttp3 == true`, the origin is already in `Http3OriginCapabilityCache` (from a
+   prior `Alt-Svc` response and/or a completed background HTTPS/SVCB lookup), **and** that origin has
+   completed QUIC warm-up (`Http3WarmOrigins`). A cache hit alone only arms background warm-up; the
+   current request stays on TCP until the origin is warm. SVCB discovery never blocks the first
+   connection.
 2. **HTTP/2** — if the origin has been probed and supports HTTP/2 (via ALPN).
 3. **HTTP/1.1** — fallback.
 
@@ -92,9 +94,10 @@ automatically caches the capability:
 Alt-Svc: h3=":443"; ma=86400
 ```
 
-Subsequent requests to the same host:port will use HTTP/3 transparently (when `EnableHttp3 == true`).
-The cache entry expires after the advertised `ma` (max-age) duration.  To evict early, call
-`ProxyServer.Http3OriginCapabilityCache.Evict("host:port")`.
+Once the origin is warm, subsequent Auto-mode requests to the same host:port use HTTP/3 transparently
+(when `EnableHttp3 == true`). The cache entry expires after the advertised `ma` (max-age) duration and
+is trimmed periodically. There is no public eviction API; to force a protocol for a given request or
+connection, set `SessionEventArgs.UpstreamHttpProtocol` or `BeforeQuicAuthenticateEventArgs.UpstreamHttpProtocol`.
 
 ## HTTPS/SVCB DNS discovery (opt-in)
 
@@ -127,9 +130,9 @@ First-connection adoption also still comes from `Alt-Svc` on the first response.
   implementation (e.g. for testing with pre-built responses).
 
 > **Note:** Background SVCB discovery no longer adds DNS latency to page loads. Enable it when you
-> want earlier H3 adoption than `Alt-Svc` alone; disable it if you control the
-> DNS infrastructure; leave it disabled if you rely on the OS resolver (`/etc/resolv.conf` / WinDNS)
-> and cannot guarantee HTTPS RR support.
+> want earlier H3 adoption than `Alt-Svc` alone. `DnsServerEndPoint` already defaults to the first
+> usable OS-configured plain-UDP DNS server; set it explicitly only when you need a different resolver.
+> Disable discovery if your DNS path cannot answer HTTPS RRs usefully.
 
 ## Protocol bridges
 
@@ -211,9 +214,10 @@ When enabled, per accepted QUIC connection:
 |----------|---------|-------------|
 | `OriginalDestinationResolver` | `null` (uses `RemoteEndPoint`) | Plug-in for resolving pre-NAT destination. |
 | `MaxInboundBidirectionalStreams` | `100` | Maximum concurrent HTTP/3 request streams per connection. |
-| `MaxInboundUnidirectionalStreams` | `10` | Minimum 3 (control + QPACK encoder/decoder); increase for server push (not implemented). |
-| `HandshakeTimeout` | `10 s` | QUIC TLS handshake deadline. |
+| `MaxInboundUnidirectionalStreams` | `3` | Minimum 3 (control + QPACK encoder/decoder); values below 3 are clamped to 3. |
+| `HandshakeTimeout` | `30 s` | QUIC TLS handshake deadline. |
 | `IdleTimeout` | `60 s` | Connection idle timeout. |
+| `AdvertiseToHttpClients` | `false` | When true, injects `Alt-Svc: h3=...` into H1/H2 responses for origins whose H3 capability is cached. |
 
 ## Limitations
 

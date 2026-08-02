@@ -41,10 +41,17 @@ internal static class LeafKeyPairSource
     internal const int BufferedRsaKeyStrength = 2048;
 
     /// <summary>
-    ///     How many ready-to-use RSA key pairs to keep. Sized to cover the burst of distinct hosts a
-    ///     typical page load contacts, while keeping the idle CPU cost of staying topped up bounded.
+    ///     Default number of ready-to-use RSA key pairs to keep. Sized to cover the burst of distinct
+    ///     hosts a typical page load contacts, while keeping the idle CPU cost of staying topped up
+    ///     bounded.
     /// </summary>
-    private const int RsaBufferCapacity = 8;
+    internal const int DefaultRsaBufferCapacity = 8;
+
+    /// <summary>
+    ///     Upper bound for <see cref="RsaBufferCapacity" /> so a misconfigured value cannot pin
+    ///     unbounded memory and CPU into key generation.
+    /// </summary>
+    internal const int MaxRsaBufferCapacity = 256;
 
     /// <summary>
     ///     Background RSA generators allowed at once. Deliberately well below the core count: refilling
@@ -54,8 +61,28 @@ internal static class LeafKeyPairSource
 
     private static readonly ConcurrentBag<AsymmetricCipherKeyPair> RsaBuffer = new();
 
+    private static int rsaBufferCapacity = DefaultRsaBufferCapacity;
     private static int buffered;
     private static int generatorsRunning;
+
+    /// <summary>
+    ///     How many RSA-2048 key pairs to keep ready. Process-wide. 0 disables buffering.
+    /// </summary>
+    internal static int RsaBufferCapacity
+    {
+        get => Volatile.Read(ref rsaBufferCapacity);
+        set
+        {
+            if (value < 0 || value > MaxRsaBufferCapacity)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value,
+                    $"Leaf RSA key-pair buffer size must be between 0 and {MaxRsaBufferCapacity}.");
+            }
+
+            Volatile.Write(ref rsaBufferCapacity, value);
+            if (value > 0) RequestRefill();
+        }
+    }
 
     /// <summary>
     ///     Produces a key pair for one certificate, from the buffer when a suitable one is ready.
@@ -107,12 +134,15 @@ internal static class LeafKeyPairSource
     {
         while (true)
         {
+            var capacity = RsaBufferCapacity;
+            if (capacity <= 0) return;
+
             var running = Volatile.Read(ref generatorsRunning);
             if (running >= MaxConcurrentGenerators) return;
 
             // Each running generator keeps producing until the buffer is full, so one already in
             // flight is enough to close any gap; count it as covering one slot to avoid piling on.
-            if (Volatile.Read(ref buffered) + running >= RsaBufferCapacity) return;
+            if (Volatile.Read(ref buffered) + running >= capacity) return;
 
             if (Interlocked.CompareExchange(ref generatorsRunning, running + 1, running) == running) break;
         }
@@ -121,8 +151,11 @@ internal static class LeafKeyPairSource
         {
             try
             {
-                while (Volatile.Read(ref buffered) < RsaBufferCapacity)
+                while (true)
                 {
+                    var capacity = RsaBufferCapacity;
+                    if (capacity <= 0 || Volatile.Read(ref buffered) >= capacity) break;
+
                     RsaBuffer.Add(GenerateRsa(BufferedRsaKeyStrength));
                     Interlocked.Increment(ref buffered);
                 }

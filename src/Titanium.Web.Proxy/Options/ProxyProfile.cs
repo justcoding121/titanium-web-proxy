@@ -3,10 +3,9 @@ namespace Titanium.Web.Proxy.Options;
 /// <summary>
 ///     The three shipped profiles, per the plan's "Rollout, profiles and documentation" section.
 ///     Selecting a profile via <see cref="ProxyServer.Profile" /> applies its
-///     <see cref="ProxyProfileSettings" /> to <see cref="ProxyServer.ResourceLimits" />,
-///     <see cref="ProxyServer.PolicyModes" />, <see cref="ProxyServer.SupportedSslProtocols" /> and
-///     <see cref="ProxyServer.BlockPrivateNetworkDestinations" /> as one atomic assignment, so a
-///     caller can never observe a half-applied profile.
+///     <see cref="ProxyProfileSettings" /> atomically to resource limits, policy modes, TLS protocols,
+///     private-network blocking, admission caps, and deadline-second properties, so a caller can never
+///     observe a half-applied profile.
 /// </summary>
 public enum ProxyProfile
 {
@@ -19,8 +18,9 @@ public enum ProxyProfile
     Balanced,
 
     /// <summary>
-    ///     Opt-in for 4.x migrators. Permits legacy TLS (down to SSL 3.0) and relaxes the non-memory
-    ///     families to <see cref="PolicyMode.Observe" />. The memory-bounding families
+    ///     Opt-in for 4.x migrators. Permits legacy TLS 1.0/1.1 in addition to TLS 1.2/1.3 (SSL 3.0 is
+    ///     not offered on modern .NET) and relaxes the non-memory families to
+    ///     <see cref="PolicyMode.Observe" />. The memory-bounding families
     ///     (<see cref="PolicyFamily.BodyBudget" />, <see cref="PolicyFamily.DecompressionRatio" />)
     ///     stay enforced even here, since Observe cannot protect against exhaustion. Framing remains
     ///     enforce-only, as it always is.

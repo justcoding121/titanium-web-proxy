@@ -95,19 +95,17 @@ internal sealed class Http2OriginConnection
     internal bool IsUsable => !faulted && !goingAway && !connection.IsClosed;
 
     /// <summary>
+    ///     Whether the origin advertised <c>SETTINGS_ENABLE_CONNECT_PROTOCOL=1</c> (RFC 8441).
+    ///     Valid only after the initial SETTINGS exchange has completed.
+    /// </summary>
+    internal bool EnableConnectProtocol => originSettings.EnableConnectProtocol;
+
+    /// <summary>
     ///     The underlying TCP connection, exposed so callers can attribute
     ///     <see cref="ProxyServer.EnableRequestTimingCapture" /> timing (connection id, reuse, and
     ///     establishment timing) to each request leased from this shared, persistent origin connection.
     /// </summary>
     internal TcpServerConnection ServerConnection => connection;
-
-    /// <summary>
-    ///     Connection-level WINDOW_UPDATE increment sent immediately after the connection preface,
-    ///     matching Chrome/Edge behaviour (0xEF0001 = 15663105 bytes). This grows the connection
-    ///     flow-control window from the RFC default 65535 to ~15 MB, improving throughput for
-    ///     large responses and aligning the HTTP/2 Akamai fingerprint with real browsers.
-    /// </summary>
-    private const int InitialConnectionWindowIncrement = 15663105;
 
     /// <summary>
     ///     Establishes a new origin h2 connection over an already TLS/ALPN=h2-negotiated <see cref="TcpServerConnection" />:
@@ -126,8 +124,8 @@ internal sealed class Http2OriginConnection
                 var preface = Http2Helper.ConnectionPreface;
                 connection.Http2SessionStarted = true;
                 await instance.stream.WriteAsync(preface, 0, preface.Length, cancellationToken);
-                await instance.SendInitialSettingsAsync(cancellationToken);
-                await instance.SendConnectionWindowUpdateAsync(InitialConnectionWindowIncrement, cancellationToken);
+                // Shared with the H2↔H2 MITM path (SendHttp2ClientConnectionStartupAsync).
+                await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.stream, cancellationToken);
 
                 instance.readLoopTask = instance.ReadLoopAsync(instance.connectionCts.Token);
 
@@ -251,28 +249,217 @@ internal sealed class Http2OriginConnection
         }
     }
 
-    private async Task SendInitialSettingsAsync(CancellationToken cancellationToken)
+    /// <summary>
+    ///     Opens an RFC 8441 extended CONNECT tunnel on a freshly leased stream. The request must already
+    ///     have <c>Method = CONNECT</c> and <see cref="Request.ExtendedConnectProtocol" /> set (and hop-by-hop
+    ///     headers stripped). On a final 2xx response, returns an <see cref="Http2TunnelStream" /> that
+    ///     speaks raw DATA for the life of the tunnel; on any other status, resets the stream and returns
+    ///     the response headers without a stream.
+    /// </summary>
+    internal async Task<Http2OriginTunnelResult> OpenTunnelAsync(Request request,
+        CancellationToken cancellationToken)
     {
-        var frameHeader = new Http2FrameHeader
-        {
-            StreamId = 0, Type = Http2FrameType.Settings, Flags = 0, Length = 6
-        };
-        var frameHeaderBuffer = new byte[9];
-        frameHeader.CopyToBuffer(frameHeaderBuffer);
+        if (!IsUsable) throw new Http2OriginGoAwayException("The origin h2 connection is no longer usable.");
 
-        var payload = new byte[6];
-        BinaryPrimitives.WriteUInt16BigEndian(payload.AsSpan(0, 2), (ushort)Http2SettingsId.EnablePush);
-        BinaryPrimitives.WriteUInt32BigEndian(payload.AsSpan(2, 4), 0);
+        await initialSettingsReceived.Task.WaitAsync(cancellationToken);
+
+        if (!originSettings.EnableConnectProtocol)
+        {
+            throw new InvalidOperationException(
+                "The origin did not advertise SETTINGS_ENABLE_CONNECT_PROTOCOL=1; " +
+                "extended CONNECT cannot be opened on this connection.");
+        }
+
+        var gate = concurrencyGate ?? throw new InvalidOperationException("Origin settings were never processed.");
+        await gate.WaitAsync(cancellationToken);
+
+        var streamId = Interlocked.Add(ref lastStreamId, 2);
+        var pending = PendingStream.CreateTunnel();
+
+        if (goingAway && streamId > goAwayLastStreamId)
+        {
+            gate.Release();
+            pending.Dispose();
+            throw new Http2OriginGoAwayException(
+                $"The origin sent GOAWAY before stream {streamId} could be opened; it was never processed.");
+        }
+
+        streams[streamId] = pending;
+        sendFlow.RegisterStream(streamId);
+
+        try
+        {
+            var frameHeader = new Http2FrameHeader { StreamId = streamId };
+            var frameHeaderBuffer = new byte[9];
+
+            await writeLock.WaitAsync(cancellationToken);
+            try
+            {
+                // Must use SendHeader with endStream=false: SendBody derives END_STREAM from the body
+                // and would half-close a bodiless CONNECT before the first tunnel byte.
+                await Http2Helper.SendHeader(originSettings, frameHeader, frameHeaderBuffer, request,
+                    endStream: false, stream, pushPromise: false);
+            }
+            finally
+            {
+                writeLock.Release();
+            }
+        }
+        catch
+        {
+            streams.TryRemove(streamId, out _);
+            pending.Dispose();
+            sendFlow.RemoveStream(streamId);
+            gate.Release();
+            throw;
+        }
+
+        try
+        {
+            await using var registration = cancellationToken.Register(() =>
+            {
+                pending.HeadersReceived.TrySetCanceled(cancellationToken);
+                pending.TunnelDataChannel?.Writer.TryComplete(new OperationCanceledException(cancellationToken));
+            });
+
+            await pending.HeadersReceived.Task.WaitAsync(cancellationToken);
+
+            var response = pending.Response ??
+                           new Response
+                           {
+                               StatusCode = 502, StatusDescription = string.Empty,
+                               HttpVersion = HttpHeader.Version11
+                           };
+
+            if (response.StatusCode is < 200 or >= 300)
+            {
+                await ResetStreamAsync(streamId, Http2ErrorCode.Cancel, CancellationToken.None);
+                ReleaseTunnelBookkeeping(streamId, pending, gate);
+                return new Http2OriginTunnelResult(response, null);
+            }
+
+            var tunnelStream = new Http2TunnelStream(
+                pending.TunnelDataChannel!.Reader,
+                (payload, endStream, ct) => WriteTunnelDataAsync(streamId, payload, endStream, ct),
+                (errorCode, ct) => ResetStreamAsync(streamId, errorCode, ct),
+                () => ReleaseTunnelBookkeeping(streamId, pending, gate));
+
+            // Ownership of gate/sendFlow/pending transfers to the tunnel stream until Dispose.
+            return new Http2OriginTunnelResult(response, tunnelStream);
+        }
+        catch
+        {
+            try
+            {
+                await ResetStreamAsync(streamId, Http2ErrorCode.Cancel, CancellationToken.None);
+            }
+            catch
+            {
+                // best-effort
+            }
+
+            ReleaseTunnelBookkeeping(streamId, pending, gate);
+            throw;
+        }
+    }
+
+    private async Task WriteTunnelDataAsync(int streamId, ReadOnlyMemory<byte> payload, bool endStream,
+        CancellationToken cancellationToken)
+    {
+        if (!streams.ContainsKey(streamId) && !endStream)
+            throw new IOException($"HTTP/2 tunnel stream {streamId} is no longer open.");
+
+        var frameHeader = new Http2FrameHeader { StreamId = streamId };
+        var frameHeaderBuffer = new byte[9];
+        var offset = 0;
 
         await writeLock.WaitAsync(cancellationToken);
         try
         {
-            await stream.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length, cancellationToken);
-            await stream.WriteAsync(payload, 0, payload.Length, cancellationToken);
+            if (payload.Length == 0)
+            {
+                if (!endStream) return;
+
+                frameHeader.Length = 0;
+                frameHeader.Type = Http2FrameType.Data;
+                frameHeader.Flags = Http2FrameFlag.EndStream;
+                frameHeader.CopyToBuffer(frameHeaderBuffer);
+                await stream.WriteAsync(frameHeaderBuffer, cancellationToken);
+                await stream.FlushAsync(cancellationToken);
+                return;
+            }
+
+            while (offset < payload.Length)
+            {
+                var frameLength = Math.Min(SafeMaxFrameSize, payload.Length - offset);
+                await sendFlow.ReserveAsync(streamId, frameLength, cancellationToken);
+
+                frameHeader.Length = frameLength;
+                frameHeader.Type = Http2FrameType.Data;
+                var isLast = offset + frameLength >= payload.Length;
+                frameHeader.Flags = isLast && endStream ? Http2FrameFlag.EndStream : 0;
+                frameHeader.CopyToBuffer(frameHeaderBuffer);
+
+                await stream.WriteAsync(frameHeaderBuffer, cancellationToken);
+                await stream.WriteAsync(payload.Slice(offset, frameLength), cancellationToken);
+                offset += frameLength;
+            }
+
+            if (endStream && payload.Length == 0)
+            {
+                // handled above
+            }
+
+            await stream.FlushAsync(cancellationToken);
         }
         finally
         {
             writeLock.Release();
+        }
+    }
+
+    private async Task ResetStreamAsync(int streamId, Http2ErrorCode errorCode,
+        CancellationToken cancellationToken)
+    {
+        var frameHeader = new Http2FrameHeader();
+        var frameHeaderBuffer = new byte[9];
+
+        await writeLock.WaitAsync(cancellationToken);
+        try
+        {
+            await Http2Helper.SendRstStreamAsync(frameHeader, frameHeaderBuffer, streamId, errorCode, stream);
+            await stream.FlushAsync(cancellationToken);
+        }
+        finally
+        {
+            writeLock.Release();
+        }
+    }
+
+    private void ReleaseTunnelBookkeeping(int streamId, PendingStream pending, SemaphoreSlim gate)
+    {
+        if (streams.TryRemove(streamId, out var removed))
+        {
+            removed.TunnelDataChannel?.Writer.TryComplete();
+            removed.Dispose();
+        }
+        else
+        {
+            pending.Dispose();
+        }
+
+        sendFlow.RemoveStream(streamId);
+        try
+        {
+            gate.Release();
+        }
+        catch (ObjectDisposedException)
+        {
+            // connection already torn down
+        }
+        catch (SemaphoreFullException)
+        {
+            // already released
         }
     }
 
@@ -289,21 +476,6 @@ internal sealed class Http2OriginConnection
         try
         {
             await stream.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length, cancellationToken);
-        }
-        finally
-        {
-            writeLock.Release();
-        }
-    }
-
-    private async Task SendConnectionWindowUpdateAsync(int increment, CancellationToken cancellationToken)
-    {
-        var frameHeader = new Http2FrameHeader();
-        var frameHeaderBuffer = new byte[9];
-        await writeLock.WaitAsync(cancellationToken);
-        try
-        {
-            await Http2Helper.SendWindowUpdateAsync(frameHeader, frameHeaderBuffer, 0, increment, stream);
         }
         finally
         {
@@ -537,20 +709,40 @@ internal sealed class Http2OriginConnection
                     case Http2FrameType.Data:
                     {
                         var data = StripDataFraming(payload, flags);
-                        if (data.Length > 0 && streams.TryGetValue(streamId, out var pendingData))
+                        if (streams.TryGetValue(streamId, out var pendingData))
                         {
-                            try
+                            if (pendingData.IsTunnel)
                             {
-                                await pendingData.BodyPipe.WriteAsync(data.AsMemory(), cancellationToken);
+                                if (data.Length > 0)
+                                {
+                                    // Bounded channel provides backpressure; drop only if the tunnel is
+                                    // already tearing down (writer completed).
+                                    try
+                                    {
+                                        await pendingData.TunnelDataChannel!.Writer
+                                            .WriteAsync(data, cancellationToken);
+                                    }
+                                    catch (ChannelClosedException)
+                                    {
+                                        // Tunnel already closed; ignore stale DATA.
+                                    }
+                                }
                             }
-                            catch (BodySizeLimitExceededException)
+                            else if (data.Length > 0)
                             {
-                                // WriteAsync already faulted the pipe writer; CopyToAsync in SendAsync will
-                                // propagate the exception. Continue the read loop for other streams.
-                            }
-                            catch (InvalidOperationException)
-                            {
-                                // Writer already completed (cancelled or stream failed); ignore stale frames.
+                                try
+                                {
+                                    await pendingData.BodyPipe.WriteAsync(data.AsMemory(), cancellationToken);
+                                }
+                                catch (BodySizeLimitExceededException)
+                                {
+                                    // WriteAsync already faulted the pipe writer; CopyToAsync in SendAsync will
+                                    // propagate the exception. Continue the read loop for other streams.
+                                }
+                                catch (InvalidOperationException)
+                                {
+                                    // Writer already completed (cancelled or stream failed); ignore stale frames.
+                                }
                             }
                         }
 
@@ -584,10 +776,7 @@ internal sealed class Http2OriginConnection
                                 {
                                     var goAwayEx = new Http2OriginGoAwayException(
                                         $"The origin sent GOAWAY before stream {kvp.Key} was processed; it is safe to retry.");
-                                    kvp.Value.BodyPipe.CompleteWriter(goAwayEx);
-                                    // Also unblock any SendAsync that is awaiting the interim channel,
-                                    // since no response frames (including 1xx) will ever arrive for this stream.
-                                    kvp.Value.InterimChannel.Writer.TryComplete(goAwayEx);
+                                    FailPending(kvp.Value, goAwayEx);
                                 }
                             }
                         }
@@ -653,7 +842,38 @@ internal sealed class Http2OriginConnection
             }
             else if (identifier == (int)Http2SettingsId.MaxConcurrentStreams)
                 originSettings.MaxConcurrentStreams = value;
+            else if (identifier == (int)Http2SettingsId.EnableConnectProtocol)
+                ApplyEnableConnectProtocolSetting(value);
         }
+    }
+
+    /// <summary>RFC 8441 §3: value MUST be 0 or 1; a sender MUST NOT send 0 after previously sending 1.</summary>
+    private void ApplyEnableConnectProtocolSetting(int value)
+    {
+        var error = ValidateEnableConnectProtocolSetting(value, originSettings.EnableConnectProtocolEverSet);
+        if (error != null)
+        {
+            Fail(new IOException(error));
+            return;
+        }
+
+        originSettings.EnableConnectProtocol = value == 1;
+        if (value == 1) originSettings.EnableConnectProtocolEverSet = true;
+    }
+
+    /// <summary>
+    ///     Returns a protocol-error message when <paramref name="value"/> is illegal for
+    ///     <c>SETTINGS_ENABLE_CONNECT_PROTOCOL</c>; otherwise null.
+    /// </summary>
+    internal static string? ValidateEnableConnectProtocolSetting(int value, bool previouslyEnabled)
+    {
+        if (value is not (0 or 1))
+            return $"HTTP/2 protocol error: SETTINGS_ENABLE_CONNECT_PROTOCOL value {value} is not 0 or 1.";
+
+        if (value == 0 && previouslyEnabled)
+            return "HTTP/2 protocol error: SETTINGS_ENABLE_CONNECT_PROTOCOL must not be downgraded from 1 to 0.";
+
+        return null;
     }
 
     /// <summary>Strips the optional PADDED (1 length byte + trailing padding) and PRIORITY (5 bytes) framing from a HEADERS frame payload.</summary>
@@ -736,14 +956,26 @@ internal sealed class Http2OriginConnection
                 pending.Response = response;
                 // Signal that no more interim responses will arrive; unblocks SendAsync's interim drain loop.
                 pending.InterimChannel.Writer.TryComplete();
+                // Unblock OpenTunnelAsync waiting on the final response headers.
+                pending.HeadersReceived.TrySetResult(true);
             }
         }
         else
         {
             // A HEADERS block without a ":status" pseudo-header, following the main response headers, is a
             // trailer block (RFC 7540 §8.1.2.1 / RFC 7230 §4.1.2).
-            pending.TrailingHeaders ??= new HeaderCollection();
-            foreach (var header in collected) pending.TrailingHeaders.AddHeader(header);
+            // RFC 9113 §8.5: trailers on an established extended CONNECT tunnel are a protocol error —
+            // complete the inbound side so the tunnel reader observes EOF rather than hanging.
+            if (pending.IsTunnel)
+            {
+                pending.TunnelDataChannel?.Writer.TryComplete(
+                    new IOException("HTTP/2 protocol error: HEADERS received on an established extended CONNECT tunnel."));
+            }
+            else
+            {
+                pending.TrailingHeaders ??= new HeaderCollection();
+                foreach (var header in collected) pending.TrailingHeaders.AddHeader(header);
+            }
         }
 
         if (endStream) CompleteStream(streamId);
@@ -751,8 +983,17 @@ internal sealed class Http2OriginConnection
 
     private void CompleteStream(int streamId)
     {
+        if (!streams.TryGetValue(streamId, out var pending)) return;
+
+        if (pending.IsTunnel)
+        {
+            // Keep the stream registered so the tunnel can still write outbound DATA; just half-close inbound.
+            pending.TunnelDataChannel?.Writer.TryComplete();
+            return;
+        }
+
         // Use TryRemove so subsequent DATA frames for this stream-id are ignored in the read loop.
-        if (!streams.TryRemove(streamId, out var pending)) return;
+        if (!streams.TryRemove(streamId, out pending)) return;
         pending.BodyPipe.CompleteWriter();
     }
 
@@ -760,11 +1001,15 @@ internal sealed class Http2OriginConnection
     {
         // Use TryRemove so subsequent DATA frames for this stream are ignored in the read loop.
         if (streams.TryRemove(streamId, out var pending))
-        {
-            pending.BodyPipe.CompleteWriter(ex);
-            // Unblock any SendAsync that is awaiting interim responses (e.g. RST_STREAM while draining 1xx).
-            pending.InterimChannel.Writer.TryComplete(ex);
-        }
+            FailPending(pending, ex);
+    }
+
+    private static void FailPending(PendingStream pending, Exception ex)
+    {
+        pending.BodyPipe.CompleteWriter(ex);
+        pending.InterimChannel.Writer.TryComplete(ex);
+        pending.TunnelDataChannel?.Writer.TryComplete(ex);
+        pending.HeadersReceived.TrySetException(ex);
     }
 
     /// <param name="ex">The failure to fault every in-flight/future stream with.</param>
@@ -786,11 +1031,7 @@ internal sealed class Http2OriginConnection
                 new ProxyHttpException("The HTTP/1.1-to-HTTP/2 origin bridge connection failed.", ex, null));
 
         foreach (var kvp in streams)
-        {
-            kvp.Value.BodyPipe.CompleteWriter(ex);
-            // Unblock any SendAsync that is awaiting interim responses; no more frames will ever arrive.
-            kvp.Value.InterimChannel.Writer.TryComplete(ex);
-        }
+            FailPending(kvp.Value, ex);
 
         initialSettingsReceived.TrySetException(ex);
     }
@@ -831,6 +1072,7 @@ internal sealed class Http2OriginConnection
     private sealed class PendingStream : IDisposable
     {
         internal readonly BoundedBodyPipe BodyPipe;
+        internal readonly bool IsTunnel;
 
         /// <summary>
         ///     Queue of 1xx interim responses written by <see cref="ProcessHeaderBlock" /> as they arrive from
@@ -842,16 +1084,51 @@ internal sealed class Http2OriginConnection
             Channel.CreateUnbounded<(int, HeaderCollection)>(
                 new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
 
+        /// <summary>
+        ///     Completed when the final (non-1xx) response HEADERS arrive. Used by
+        ///     <see cref="OpenTunnelAsync" />; ordinary <see cref="SendAsync" /> ignores it.
+        /// </summary>
+        internal readonly TaskCompletionSource<bool> HeadersReceived =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>
+        ///     Inbound DATA payloads for an RFC 8441 tunnel. Null for ordinary request/response streams,
+        ///     which use <see cref="BodyPipe" /> instead (and enforce <c>MaxBufferedBodyBytes</c>).
+        /// </summary>
+        internal readonly Channel<byte[]>? TunnelDataChannel;
+
         internal Response? Response;
         internal HeaderCollection? TrailingHeaders;
 
-        internal PendingStream(long maxBodyBytes = 0) => BodyPipe = new BoundedBodyPipe(maxBodyBytes);
+        internal PendingStream(long maxBodyBytes = 0)
+        {
+            IsTunnel = false;
+            BodyPipe = new BoundedBodyPipe(maxBodyBytes);
+        }
+
+        private PendingStream(bool isTunnel)
+        {
+            IsTunnel = isTunnel;
+            // Tunnel streams never buffer a finite HTTP body; BodyPipe is unused but kept non-null
+            // so FailPending can CompleteWriter unconditionally.
+            BodyPipe = new BoundedBodyPipe(0);
+            TunnelDataChannel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(256)
+            {
+                SingleReader = true,
+                SingleWriter = true,
+                FullMode = BoundedChannelFullMode.Wait
+            });
+        }
+
+        internal static PendingStream CreateTunnel() => new(true);
 
         public void Dispose()
         {
             BodyPipe.Dispose();
             // Release any reader blocking on WaitToReadAsync if Dispose is called without a prior Complete.
             InterimChannel.Writer.TryComplete();
+            TunnelDataChannel?.Writer.TryComplete();
+            HeadersReceived.TrySetCanceled();
         }
     }
 
@@ -886,4 +1163,22 @@ internal sealed class Http2OriginExchange
     internal byte[] Body { get; }
 
     internal HeaderCollection? TrailingHeaders { get; }
+}
+
+/// <summary>
+///     Result of <see cref="Http2OriginConnection.OpenTunnelAsync" />. When the origin accepts the
+///     extended CONNECT (<see cref="IsEstablished" />), <see cref="Stream" /> is the duplex tunnel;
+///     otherwise <see cref="Stream" /> is null and <see cref="Response" /> carries the rejection.
+/// </summary>
+internal sealed class Http2OriginTunnelResult
+{
+    internal Http2OriginTunnelResult(Response response, Http2TunnelStream? stream)
+    {
+        Response = response;
+        Stream = stream;
+    }
+
+    internal Response Response { get; }
+    internal Http2TunnelStream? Stream { get; }
+    internal bool IsEstablished => Stream != null && Response.StatusCode is >= 200 and < 300;
 }

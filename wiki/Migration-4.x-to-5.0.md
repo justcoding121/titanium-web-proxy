@@ -70,8 +70,9 @@ limits below to `Observe`):
 proxyServer.Profile = ProxyProfile.LegacyCompatible;
 ```
 
-SSL 3.0 itself is not offered by any profile; if you genuinely need it, set
-`SupportedSslProtocols` directly as shown above (add `SslProtocols.Ssl3`).
+SSL 3.0 itself is not offered by any profile, and adding `SslProtocols.Ssl3` to
+`SupportedSslProtocols` does not restore it on modern .NET — `SslStream` no longer negotiates
+SSL 2.0/3.0 regardless of the flags requested. Only TLS 1.0/1.1 can be opted back in.
 
 ---
 
@@ -82,10 +83,11 @@ Windows desktop (`Path.GetDirectoryName(Assembly.Location)` / `AppContext.BaseDi
 `%AppData%`/`~/.local/share` (UWP/Linux/Mac) with no dedicated subfolder.
 
 **Now:** both live under a per-user, non-world-writable location in a dedicated
-`Titanium.Web.Proxy` subfolder — `%LocalAppData%\Titanium.Web.Proxy` on Windows,
-`~/.local/share/Titanium.Web.Proxy` (or platform equivalent of
-`Environment.SpecialFolder.ApplicationData`) on Linux/macOS, with permissions tightened to `0700` on
-Unix on a best-effort basis.
+`Titanium.Web.Proxy` subfolder — `%LocalAppData%\Titanium.Web.Proxy` on Windows
+(`Environment.SpecialFolder.LocalApplicationData`); on Linux/macOS,
+`Path.Combine(Environment.GetFolderPath(SpecialFolder.ApplicationData), "Titanium.Web.Proxy")`
+(commonly `~/.config/Titanium.Web.Proxy` on Linux; the macOS Application Support equivalent).
+Permissions are tightened to `0700` on Unix on a best-effort basis.
 
 **Why:** a certificate store living next to the application binary (often world-readable, sometimes
 world-writable depending on install location) lets any other local user or process on the machine
@@ -346,15 +348,18 @@ downgrade needs the whole body in memory.
 
 ---
 
-## New: client header read deadline
+## New: client header read deadline (opt-in)
 
-Reading the client's request line and headers is now subject to a deadline
-(`ProxyServer.ClientHeaderTimeoutSeconds`), attributed as `ProxyTimeoutKind.ClientHeader` when it
-fires. Previously, a client that connected and then sent its request line/headers arbitrarily slowly
-(a "slow-loris" pattern) could hold a connection and its resources open indefinitely.
+**New (opt-in):** `ProxyServer.ClientHeaderTimeoutSeconds` can bound reading the client's request line
+and headers (`ProxyTimeoutKind.ClientHeader` when it fires). Default is `0` (disabled), matching the
+other deadline properties under `ProxyProfile.Balanced` / `LegacyCompatible`.
+`ProxyProfile.PublicFacing` sets it to `30`. Previously, a client that connected and then sent its
+request line/headers arbitrarily slowly (a "slow-loris" pattern) could hold a connection and its
+resources open indefinitely whenever no deadline was configured.
 
-**Remedy:** the default is generous for real clients; if you have an unusual client that legitimately
-drip-feeds headers slowly, raise `ClientHeaderTimeoutSeconds`.
+**Remedy:** set a positive `ClientHeaderTimeoutSeconds` (or use `ProxyProfile.PublicFacing`) to enable
+slowloris protection. Raise the value if you have an unusual client that legitimately drip-feeds
+headers slowly.
 
 ---
 
