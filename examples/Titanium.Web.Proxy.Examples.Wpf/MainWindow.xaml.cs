@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Examples.Wpf
 {
@@ -79,11 +80,22 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             ////do you want Replace an existing Root certificate file(.pfx) if password is incorrect(RootCertificate=null)?  yes====>true
             //proxyServer.CertificateManager.OverwritePfxFile = true;
 
-            ////save all fake certificates in folder "crts"(will be created in proxy dll directory)
-            ////if create new Root certificate file(.pfx) ====> delete folder "crts"
-            //proxyServer.CertificateManager.SaveFakeCertificates = true;
-
+            // Cache generated leaf certificates on disk (library default is off) so repeat runs against
+            // the same hosts reuse them instead of regenerating a key pair per host on every launch.
+            // Connection pooling and origin-connection prefetch are already on by library default.
+            proxyServer.CertificateManager.SaveFakeCertificates = true;
+            // Issue P-256 leaves rather than the default RSA-2048 ones. Generating an RSA key pair costs
+            // a few hundred milliseconds of CPU and one is needed per not-yet-seen host, which is the
+            // largest delay the proxy adds to a first visit; P-256 costs a fraction of that and still
+            // gives every host its own key. Browsers all accept ECDSA server certificates - revert to
+            // Rsa2048 if something older is being intercepted. The root certificate stays RSA.
+            proxyServer.CertificateManager.LeafCertificateKeyAlgorithm =
+                Network.CertificateKeyAlgorithm.EcdsaP256;
             proxyServer.ForwardToUpstreamGateway = true;
+            // Bound the in-memory certificate cache a little higher for a browsing-heavy manual test
+            // session; leave the on-disk cache unbounded so it survives across runs.
+            proxyServer.ResourceLimits = ProxyResourceLimits.Default.WithCertificateCacheBounds(
+                maxCertificateCacheEntries: 2048, maxCertificateDiskCacheEntries: null);
 
             //increase the ThreadPool (for server prod)
             //proxyServer.ThreadPoolWorkerThread = Environment.ProcessorCount * 6;
@@ -207,7 +219,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 await Task.Delay(200);
                 var demo = Sessions.FirstOrDefault(s =>
                     !s.IsTunnelConnect &&
-                    s.ServerConnectionId != Guid.Empty &&
+                    s.ServerConnectionId.HasValue &&
                     (s.Host?.Contains("example.org", StringComparison.OrdinalIgnoreCase) == true ||
                      s.Url?.Contains("example", StringComparison.OrdinalIgnoreCase) == true));
                 if (demo != null)
@@ -220,7 +232,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             if (SelectedSession == null)
             {
                 var any = Sessions.FirstOrDefault(s =>
-                    !s.IsTunnelConnect && s.ServerConnectionId != Guid.Empty);
+                    !s.IsTunnelConnect && s.ServerConnectionId.HasValue);
                 if (any != null) SelectedSession = any;
             }
 
@@ -414,8 +426,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             var item = new SessionListItem
             {
                 Number = lastSessionNumber,
-                ClientConnectionId = e.ClientConnectionId,
-                ServerConnectionId = e.ServerConnectionId,
                 HttpClient = e.HttpClient,
                 ClientRemoteEndPoint = e.ClientRemoteEndPoint,
                 ClientLocalEndPoint = e.ClientLocalEndPoint,

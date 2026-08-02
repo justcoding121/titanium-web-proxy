@@ -87,7 +87,7 @@ public sealed class HttpRequestTiming
     ///     with <see cref="EventArguments.SessionEventArgsBase.UpstreamConnectionTiming" /> to inspect that
     ///     connection's own DNS/TCP/TLS establishment timing.
     /// </summary>
-    public Guid? UpstreamConnectionId { get; internal set; }
+    public long? UpstreamConnectionId { get; internal set; }
 
     /// <summary>
     ///     <see langword="true" /> if the upstream connection for the most recent attempt was reused from the
@@ -138,7 +138,7 @@ public sealed class HttpRequestTiming
         RequestHeadersReceivedAt = DateTime.UtcNow;
     }
 
-    internal void MarkConnectionReady(Guid? upstreamConnectionId, bool reused)
+    internal void MarkConnectionReady(long? upstreamConnectionId, bool reused)
     {
         ConnectionReadyAt = DateTime.UtcNow;
         AttemptCount++;

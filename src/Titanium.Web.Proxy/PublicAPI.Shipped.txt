@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 [TWP001]override Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.GenericCertificateName.get -> string!
 [TWP001]override Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.GenericCertificateName.set -> void
 [TWP001]Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs
@@ -46,7 +46,6 @@ abstract Titanium.Web.Proxy.Http.RequestResponseBase.HasBody.get -> bool
 abstract Titanium.Web.Proxy.Http.RequestResponseBase.HeaderText.get -> string!
 abstract Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.GenericCertificateName.get -> string!
 abstract Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.GenericCertificateName.set -> void
-const Titanium.Web.Proxy.Http2.Hpack.HpackUtil.HuffmanEos = 256 -> int
 const Titanium.Web.Proxy.Models.HttpHeader.HttpHeaderOverhead = 32 -> int
 override Titanium.Web.Proxy.Http.KnownHeader.ToString() -> string!
 override Titanium.Web.Proxy.Http.Request.HasBody.get -> bool
@@ -62,9 +61,6 @@ override Titanium.Web.Proxy.Models.TransparentProxyEndPoint.GenericCertificateNa
 override Titanium.Web.Proxy.Models.TransparentProxyEndPoint.GenericCertificateName.set -> void
 override Titanium.Web.Proxy.StreamExtended.ClientHelloInfo.ToString() -> string!
 override Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.ToString() -> string!
-static readonly Titanium.Web.Proxy.Http2.Hpack.HpackUtil.HuffmanCodeLengths -> byte[]!
-static readonly Titanium.Web.Proxy.Http2.Hpack.HpackUtil.HuffmanCodes -> int[]!
-static readonly Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Instance -> Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder!
 static readonly Titanium.Web.Proxy.ProxyLimits.DefaultMaxAuthRounds -> int
 static readonly Titanium.Web.Proxy.ProxyLimits.DefaultMaxBufferedBodyBytes -> long
 static readonly Titanium.Web.Proxy.ProxyLimits.DefaultMaxChunkSizeBytes -> long
@@ -72,11 +68,6 @@ static readonly Titanium.Web.Proxy.ProxyLimits.DefaultMaxDecodedHeaderListBytes 
 static readonly Titanium.Web.Proxy.ProxyLimits.DefaultMaxWebSocketFramePayloadBytes -> int
 static readonly Titanium.Web.Proxy.ProxyLimits.DefaultMaxWebSocketMessageBytes -> long
 static readonly Titanium.Web.Proxy.ProxyLimits.DefaultViaPseudonym -> string!
-static Titanium.Web.Proxy.Helpers.RunTime.IsLinux.get -> bool
-static Titanium.Web.Proxy.Helpers.RunTime.IsMac.get -> bool
-static Titanium.Web.Proxy.Helpers.RunTime.IsSocketReuseAvailable() -> bool
-static Titanium.Web.Proxy.Helpers.RunTime.IsUwpOnWindows.get -> bool
-static Titanium.Web.Proxy.Helpers.RunTime.IsWindows.get -> bool
 static Titanium.Web.Proxy.Http.KnownHeader.implicit operator Titanium.Web.Proxy.Http.KnownHeader!(string! str) -> Titanium.Web.Proxy.Http.KnownHeader!
 static Titanium.Web.Proxy.Http.KnownHeaders.Accept -> Titanium.Web.Proxy.Http.KnownHeader!
 static Titanium.Web.Proxy.Http.KnownHeaders.AcceptEncoding -> Titanium.Web.Proxy.Http.KnownHeader!
@@ -142,7 +133,7 @@ Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ResponseHeadersReceivedAt.get -
 Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.SessionCreatedAt.get -> System.DateTime
 Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.TimeToFirstByte.get -> System.TimeSpan?
 Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.TotalDuration.get -> System.TimeSpan
-Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.UpstreamConnectionId.get -> System.Guid?
+Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.UpstreamConnectionId.get -> long?
 Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.UpstreamConnectionReused.get -> bool
 Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming
 Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.ConnectStartedAt.get -> System.DateTime
@@ -195,7 +186,6 @@ Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.IsValid.get -> 
 Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.IsValid.set -> void
 Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.Session.get -> Titanium.Web.Proxy.EventArguments.SessionEventArgsBase!
 Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.SslPolicyErrors.get -> System.Net.Security.SslPolicyErrors
-Titanium.Web.Proxy.EventArguments.EmptyProxyEventArgs
 Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs
 Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs.Boundary.get -> string!
 Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs.Headers.get -> Titanium.Web.Proxy.Http.HeaderCollection!
@@ -255,7 +245,7 @@ Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderReceive.get -
 Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderSend.get -> Titanium.Web.Proxy.WebSocketDecoder!
 Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketServerWriter.get -> Titanium.Web.Proxy.WebSocketFrameWriter?
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase
-Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientConnectionId.get -> System.Guid
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientConnectionId.get -> long
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientEndPoint.get -> System.Net.IPEndPoint!
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientLocalEndPoint.get -> System.Net.IPEndPoint!
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ClientRemoteEndPoint.get -> System.Net.IPEndPoint!
@@ -276,7 +266,7 @@ Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsSocks.get -> bool
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.IsTransparent.get -> bool
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.LocalEndPoint.get -> Titanium.Web.Proxy.Models.ProxyEndPoint!
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyEndPoint.get -> Titanium.Web.Proxy.Models.ProxyEndPoint!
-Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ServerConnectionId.get -> System.Guid
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ServerConnectionId.get -> long
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ServerIpAddress.get -> System.Net.IPAddress?
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ServerRemoteEndPoint.get -> System.Net.IPEndPoint?
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.TerminateSession() -> void
@@ -356,13 +346,11 @@ Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind.IdleRead = 2 -> Titanium.Web.Prox
 Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind.IdleWrite = 3 -> Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind
 Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind.Request = 4 -> Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind
 Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind.ResponseHeader = 1 -> Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind
-Titanium.Web.Proxy.Exceptions.RetryableServerConnectionException
 Titanium.Web.Proxy.Exceptions.UpstreamProxyConnectException
 Titanium.Web.Proxy.Exceptions.UpstreamProxyConnectException.BodyPreview.get -> string?
 Titanium.Web.Proxy.Exceptions.UpstreamProxyConnectException.Headers.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
 Titanium.Web.Proxy.Exceptions.UpstreamProxyConnectException.StatusCode.get -> int
 Titanium.Web.Proxy.Exceptions.UpstreamProxyConnectException.StatusDescription.get -> string!
-Titanium.Web.Proxy.Helpers.RunTime
 Titanium.Web.Proxy.Http.ConnectRequest
 Titanium.Web.Proxy.Http.ConnectRequest.ClientHelloInfo.get -> Titanium.Web.Proxy.StreamExtended.ClientHelloInfo?
 Titanium.Web.Proxy.Http.ConnectRequest.ClientHelloInfo.set -> void
@@ -371,12 +359,6 @@ Titanium.Web.Proxy.Http.ConnectResponse
 Titanium.Web.Proxy.Http.ConnectResponse.ConnectResponse() -> void
 Titanium.Web.Proxy.Http.ConnectResponse.ServerHelloInfo.get -> Titanium.Web.Proxy.StreamExtended.ServerHelloInfo?
 Titanium.Web.Proxy.Http.ConnectResponse.ServerHelloInfo.set -> void
-Titanium.Web.Proxy.Http.FramingSource
-Titanium.Web.Proxy.Http.FramingSource.Http1Wire = 0 -> Titanium.Web.Proxy.Http.FramingSource
-Titanium.Web.Proxy.Http.FramingSource.Http1WireSocks = 2 -> Titanium.Web.Proxy.Http.FramingSource
-Titanium.Web.Proxy.Http.FramingSource.Http1WireTransparent = 1 -> Titanium.Web.Proxy.Http.FramingSource
-Titanium.Web.Proxy.Http.FramingSource.SynthesizedFromH2 = 3 -> Titanium.Web.Proxy.Http.FramingSource
-Titanium.Web.Proxy.Http.FramingSource.SynthesizedFromH3 = 4 -> Titanium.Web.Proxy.Http.FramingSource
 Titanium.Web.Proxy.Http.HeaderCollection
 Titanium.Web.Proxy.Http.HeaderCollection.AddHeader(string! name, string! value) -> void
 Titanium.Web.Proxy.Http.HeaderCollection.AddHeader(Titanium.Web.Proxy.Models.HttpHeader! newHeader) -> void
@@ -478,23 +460,6 @@ Titanium.Web.Proxy.Http.TunnelType.Http2 = 3 -> Titanium.Web.Proxy.Http.TunnelTy
 Titanium.Web.Proxy.Http.TunnelType.Https = 1 -> Titanium.Web.Proxy.Http.TunnelType
 Titanium.Web.Proxy.Http.TunnelType.Unknown = 0 -> Titanium.Web.Proxy.Http.TunnelType
 Titanium.Web.Proxy.Http.TunnelType.Websocket = 2 -> Titanium.Web.Proxy.Http.TunnelType
-Titanium.Web.Proxy.Http2.Hpack.DynamicTable
-Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Add(Titanium.Web.Proxy.Models.HttpHeader! header) -> void
-Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Capacity.get -> int
-Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Clear() -> void
-Titanium.Web.Proxy.Http2.Hpack.DynamicTable.DynamicTable(int initialCapacity) -> void
-Titanium.Web.Proxy.Http2.Hpack.DynamicTable.GetEntry(int index) -> Titanium.Web.Proxy.Models.HttpHeader!
-Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Length() -> int
-Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Remove() -> Titanium.Web.Proxy.Models.HttpHeader?
-Titanium.Web.Proxy.Http2.Hpack.DynamicTable.SetCapacity(int capacity) -> void
-Titanium.Web.Proxy.Http2.Hpack.DynamicTable.Size.get -> int
-Titanium.Web.Proxy.Http2.Hpack.HpackUtil
-Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType
-Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.Incremental = 0 -> Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType
-Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.Never = 2 -> Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType
-Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.None = 1 -> Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType
-Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder
-Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.Decode(byte[]! buf) -> System.ReadOnlyMemory<byte>
 Titanium.Web.Proxy.Logging.ProxyLoggingOptions
 Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsole.get -> bool
 Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsole.set -> void
@@ -628,40 +593,6 @@ Titanium.Web.Proxy.Models.WinAuthCredentials.Password.set -> void
 Titanium.Web.Proxy.Models.WinAuthCredentials.UserName.get -> string!
 Titanium.Web.Proxy.Models.WinAuthCredentials.UserName.set -> void
 Titanium.Web.Proxy.Models.WinAuthCredentials.WinAuthCredentials() -> void
-Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
-Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameDirectoryName = 5 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
-Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameDnsName = 3 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
-Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameGuid = 10 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
-Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameIpAddress = 8 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
-Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameOtherName = 1 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
-Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameRegisteredId = 9 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
-Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameRfc822Name = 2 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
-Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameUnknown = 0 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
-Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameUrl = 7 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
-Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.XcnCertAltNameUserPrincipleName = 11 -> Titanium.Web.Proxy.Network.Certificate.AlternativeNameType
-Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringAny = 7 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64 = 1 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Any = 6 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Header = 0 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Requestheader = 3 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64Uri = 13 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBase64X509Crlheader = 9 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringBinary = 2 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringChain = 256 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringEncodemask = 255 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHashdata = 268435456 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHex = 4 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexaddr = 10 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexAny = 8 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexascii = 5 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexasciiaddr = 11 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringHexraw = 12 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringNocr = -2147483648 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringNocrlf = 1073741824 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringPercentescape = 134217728 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringStrict = 536870912 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
-Titanium.Web.Proxy.Network.Certificate.EncodingType.XcnCryptStringText = 512 -> Titanium.Web.Proxy.Network.Certificate.EncodingType
 Titanium.Web.Proxy.Network.CertificateEngine
 Titanium.Web.Proxy.Network.CertificateEngine.BouncyCastle = 0 -> Titanium.Web.Proxy.Network.CertificateEngine
 Titanium.Web.Proxy.Network.CertificateEngine.BouncyCastleFast = 2 -> Titanium.Web.Proxy.Network.CertificateEngine
@@ -986,20 +917,6 @@ Titanium.Web.Proxy.StreamExtended.Network.IPeekStream
 Titanium.Web.Proxy.StreamExtended.Network.IPeekStream.PeekByteAsync(int index, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
 Titanium.Web.Proxy.StreamExtended.Network.IPeekStream.PeekByteFromBuffer(int index) -> byte
 Titanium.Web.Proxy.StreamExtended.Network.IPeekStream.PeekBytesAsync(byte[]! buffer, int offset, int index, int count, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
-Titanium.Web.Proxy.StreamExtended.Network.TaskResult
-Titanium.Web.Proxy.StreamExtended.Network.TaskResult.AsyncState.get -> object?
-Titanium.Web.Proxy.StreamExtended.Network.TaskResult.AsyncWaitHandle.get -> System.Threading.WaitHandle!
-Titanium.Web.Proxy.StreamExtended.Network.TaskResult.CompletedSynchronously.get -> bool
-Titanium.Web.Proxy.StreamExtended.Network.TaskResult.GetResult() -> void
-Titanium.Web.Proxy.StreamExtended.Network.TaskResult.IsCompleted.get -> bool
-Titanium.Web.Proxy.StreamExtended.Network.TaskResult.TaskResult(System.Threading.Tasks.Task! pTask, object? state) -> void
-Titanium.Web.Proxy.StreamExtended.Network.TaskResult<T>
-Titanium.Web.Proxy.StreamExtended.Network.TaskResult<T>.AsyncState.get -> object?
-Titanium.Web.Proxy.StreamExtended.Network.TaskResult<T>.AsyncWaitHandle.get -> System.Threading.WaitHandle!
-Titanium.Web.Proxy.StreamExtended.Network.TaskResult<T>.CompletedSynchronously.get -> bool
-Titanium.Web.Proxy.StreamExtended.Network.TaskResult<T>.IsCompleted.get -> bool
-Titanium.Web.Proxy.StreamExtended.Network.TaskResult<T>.Result.get -> T
-Titanium.Web.Proxy.StreamExtended.Network.TaskResult<T>.TaskResult(System.Threading.Tasks.Task<T>! pTask, object? state) -> void
 Titanium.Web.Proxy.StreamExtended.ServerHelloInfo
 Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.CipherSuite.get -> int
 Titanium.Web.Proxy.StreamExtended.ServerHelloInfo.CompressionMethod.get -> byte

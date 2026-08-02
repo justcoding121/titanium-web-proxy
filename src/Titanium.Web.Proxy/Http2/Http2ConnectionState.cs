@@ -18,13 +18,13 @@ namespace Titanium.Web.Proxy.Http2;
 /// </summary>
 internal sealed class Http2ConnectionState
 {
-    public Http2ConnectionState(Guid connectionId, CancellationTokenSource cancellationTokenSource)
+    public Http2ConnectionState(long connectionId, CancellationTokenSource cancellationTokenSource)
     {
         ConnectionId = connectionId;
         CancellationTokenSource = cancellationTokenSource;
     }
 
-    public Guid ConnectionId { get; }
+    public long ConnectionId { get; }
 
     /// <summary>What the client has told the proxy about itself (client is the "remote" for the server->client leg).</summary>
     public Http2Settings ClientSettings { get; } = new();

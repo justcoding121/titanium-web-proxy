@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
@@ -43,6 +44,29 @@ public enum CertificateEngine
     ///     Note: this engine also reuses a shared private key across generated leaf certificates.
     /// </summary>
     DefaultWindows = 1
+}
+
+/// <summary>
+///     Key algorithm used for the leaf ("fake") certificates the proxy generates per intercepted host.
+/// </summary>
+public enum CertificateKeyAlgorithm
+{
+    /// <summary>
+    ///     RSA 2048. The default, and what every TLS client in existence accepts - including legacy
+    ///     stacks with no elliptic-curve support, which is often exactly what a debugging proxy is
+    ///     pointed at. Generating one costs hundreds of milliseconds of CPU, so the first connection to
+    ///     each new host pays for it unless a previously generated certificate is still cached.
+    /// </summary>
+    Rsa2048 = 0,
+
+    /// <summary>
+    ///     ECDSA over NIST P-256. Roughly fifty times cheaper to generate than
+    ///     <see cref="Rsa2048" /> while still giving every host its own key, which effectively removes
+    ///     certificate generation from first-visit latency. Requires clients that accept ECDSA server
+    ///     certificates - universal among current browsers and TLS libraries, but not in very old ones.
+    ///     The root certificate is unaffected and stays RSA, so it continues to sign these leaves.
+    /// </summary>
+    EcdsaP256 = 1
 }
 
 /// <summary>
@@ -101,6 +125,8 @@ public sealed class CertificateManager : IDisposable
     private bool disposed;
 
     private CertificateEngine engine;
+
+    private CertificateKeyAlgorithm leafKeyAlgorithm = CertificateKeyAlgorithm.Rsa2048;
 
     private string? issuer;
 
@@ -233,10 +259,12 @@ public sealed class CertificateManager : IDisposable
                 switch (engine)
                 {
                     case CertificateEngine.BouncyCastle:
-                        certEngineValue = new BcCertificateMaker(CertificateValidDays, CertificateGraceDays);
+                        certEngineValue = new BcCertificateMaker(CertificateValidDays, CertificateGraceDays,
+                            leafKeyAlgorithm);
                         break;
                     case CertificateEngine.BouncyCastleFast:
-                        certEngineValue = new BcCertificateMakerFast(CertificateValidDays, CertificateGraceDays);
+                        certEngineValue = new BcCertificateMakerFast(CertificateValidDays, CertificateGraceDays,
+                            leafKeyAlgorithm);
                         break;
                     case CertificateEngine.DefaultWindows:
                     default:
@@ -309,6 +337,30 @@ public sealed class CertificateManager : IDisposable
                 certEngineValue = null;
                 engine = value;
             }
+        }
+    }
+
+    /// <summary>
+    ///     Key algorithm for generated leaf certificates. Honoured by the BouncyCastle engines; the
+    ///     Windows engine always issues RSA. Defaults to <see cref="CertificateKeyAlgorithm.Rsa2048" />.
+    ///     <para>
+    ///         Switching to <see cref="CertificateKeyAlgorithm.EcdsaP256" /> makes generating a
+    ///         certificate for a not-yet-seen host roughly fifty times cheaper, which is the single
+    ///         largest cost the proxy adds to a first visit. Only clients that accept ECDSA server
+    ///         certificates can be intercepted afterwards.
+    ///     </para>
+    /// </summary>
+    public CertificateKeyAlgorithm LeafCertificateKeyAlgorithm
+    {
+        get => leafKeyAlgorithm;
+        set
+        {
+            if (value == leafKeyAlgorithm) return;
+
+            // The makers capture the algorithm when constructed (BouncyCastleFast generates its single
+            // shared key pair right there), so the cached instance has to go.
+            certEngineValue = null;
+            leafKeyAlgorithm = value;
         }
     }
 
@@ -891,16 +943,55 @@ public sealed class CertificateManager : IDisposable
     internal System.Net.Security.SslStreamCertificateContext CreateSslCertificateContext(X509Certificate2 leaf)
     {
         var extras = new X509Certificate2Collection();
+        System.Net.Security.SslCertificateTrust? trust = null;
 
         if (rootCertificate != null && !IsSelfSigned(rootCertificate))
+        {
             extras.Add(rootCertificate);
+            // Offline Create has no path to a system trust anchor when the configured signer is
+            // an intermediate CA. Custom trust lets Create assemble leaf → intermediate.
+            trust = System.Net.Security.SslCertificateTrust.CreateForX509Collection(
+                new X509Certificate2Collection(rootCertificate), sendTrustInHandshake: false);
+            // Windows SslStreamCertificateContext's constructor rebuilds the chain without
+            // ExtraStore/custom trust; when that OS build throws (rather than returning false),
+            // its own "add to Intermediate CA store" fallback never runs. Stage the intermediate
+            // first so the constructor's chain build can succeed.
+            StageIntermediateForOsChainBuild(rootCertificate);
+        }
 
         if (IntermediateCertificates != null)
             foreach (X509Certificate2 cert in IntermediateCertificates)
                 extras.Add(cert);
 
-        return System.Net.Security.SslStreamCertificateContext.Create(
-            leaf, extras.Count > 0 ? extras : null, offline: true);
+        try
+        {
+            return System.Net.Security.SslStreamCertificateContext.Create(
+                leaf, extras.Count > 0 ? extras : null, offline: true, trust);
+        }
+        catch (CryptographicException) when (trust != null)
+        {
+            return System.Net.Security.SslStreamCertificateContext.Create(
+                leaf, null, offline: true, trust);
+        }
+    }
+
+    /// <summary>
+    ///     Best-effort staging of an intermediate into the CurrentUser Intermediate CA store so
+    ///     Windows <see cref="System.Net.Security.SslStreamCertificateContext" /> construction can
+    ///     complete its OS chain build. Mirrors the store fallback inside that type's constructor.
+    /// </summary>
+    private static void StageIntermediateForOsChainBuild(X509Certificate2 intermediate)
+    {
+        try
+        {
+            using var store = new X509Store(StoreName.CertificateAuthority, StoreLocation.CurrentUser);
+            store.Open(OpenFlags.ReadWrite);
+            store.Add(intermediate);
+        }
+        catch (CryptographicException)
+        {
+            // Permission or store issues - Create may still succeed via custom trust alone.
+        }
     }
 
     private static bool IsSelfSigned(X509Certificate2 cert) =>

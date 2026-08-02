@@ -378,6 +378,13 @@ public partial class ProxyServer
                         true, null,
                         true, false, cancellationToken))!;
 
+                    // This tunnel owns the connection outright, but the relay drives connection.Stream
+                    // directly instead of the HTTP/1.1 request/response machinery, so bind metadata only
+                    // (no SetConnection) and keep HasConnection false on a raw byte relay.
+                    if (connectArgs.Timing != null)
+                        connectArgs.Timing.MarkConnectionReady(connection.Id, !connection.ClaimFirstUse());
+                    connectArgs.HttpClient.BindUpstreamConnection(connection);
+
                     try
                     {
                         if (isClientHello)
@@ -520,14 +527,15 @@ public partial class ProxyServer
                     // The whole h2 client connection multiplexes every request-carrying stream over this
                     // one shared origin connection, so - unlike HTTP/1.1's per-request pool acquisition -
                     // its establishment timing is attributed to the tunnel/CONNECT session rather than any
-                    // individual per-stream SessionEventArgs. Streams BindUpstreamConnectionId only (no
+                    // individual per-stream SessionEventArgs. Streams BindUpstreamConnection only (no
                     // SetConnection) so HasConnection stays false on the multiplexed socket.
                     if (connectArgs.Timing != null)
                         connectArgs.Timing.MarkConnectionReady(connection.Id, !connection.ClaimFirstUse());
-                    connectArgs.HttpClient.BindUpstreamConnectionId(connection.Id);
+                    connectArgs.HttpClient.BindUpstreamConnection(connection);
                     try
                     {
                             var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
+                            connection.Http2SessionStarted = true;
                             await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
                             await Http2Helper.SendHttp2(clientStream, connection.Stream,
                                 () => new SessionEventArgs(this, endPoint, clientStream, connectArgs?.HttpClient.ConnectRequest, cancellationTokenSource)

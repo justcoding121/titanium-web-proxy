@@ -7,7 +7,7 @@ namespace Titanium.Web.Proxy.Http;
 ///     cannot compile without picking a member of this enum explicitly, which is what makes the
 ///     HTTP/1-wire-only boundary enforceable at compile time rather than by convention alone.
 /// </summary>
-public enum FramingSource
+internal enum FramingSource
 {
     /// <summary>
     ///     Bytes were read directly off the wire via <c>HttpStream</c>/<c>HeaderParser</c> for an

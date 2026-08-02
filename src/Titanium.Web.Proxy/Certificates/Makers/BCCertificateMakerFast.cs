@@ -35,11 +35,14 @@ internal class BcCertificateMakerFast : ICertificateMaker
     private readonly int certificateValidDays;
     private readonly int certificateGraceDays;
 
-    internal BcCertificateMakerFast(int certificateValidDays, int certificateGraceDays)
+    internal BcCertificateMakerFast(int certificateValidDays, int certificateGraceDays,
+        CertificateKeyAlgorithm leafKeyAlgorithm = CertificateKeyAlgorithm.Rsa2048)
     {
         this.certificateValidDays = certificateValidDays;
         this.certificateGraceDays = certificateGraceDays;
-        KeyPair = GenerateKeyPair();
+        KeyPair = leafKeyAlgorithm == CertificateKeyAlgorithm.EcdsaP256
+            ? LeafKeyPairSource.GenerateEcdsaP256()
+            : GenerateKeyPair();
     }
 
     public AsymmetricCipherKeyPair KeyPair { get; set; }
@@ -129,19 +132,24 @@ internal class BcCertificateMakerFast : ICertificateMaker
         var certificate = certificateGenerator.Generate(signatureFactory);
 
         // Corresponding private key
-        var privateKeyInfo = PrivateKeyInfoFactory.CreatePrivateKeyInfo(subjectKeyPair.Private);
+        var privateKey = subjectKeyPair.Private;
 
-        var seq = (Asn1Sequence)Asn1Object.FromByteArray(privateKeyInfo.ParsePrivateKey().GetDerEncoded());
+        if (privateKey is RsaKeyParameters)
+        {
+            var privateKeyInfo = PrivateKeyInfoFactory.CreatePrivateKeyInfo(privateKey);
 
-        if (seq.Count != 9) throw new PemException("Malformed sequence in RSA private key");
+            var seq = (Asn1Sequence)Asn1Object.FromByteArray(privateKeyInfo.ParsePrivateKey().GetDerEncoded());
 
-        var rsa = RsaPrivateKeyStructure.GetInstance(seq);
-        var rsaparams = new RsaPrivateCrtKeyParameters(rsa.Modulus, rsa.PublicExponent, rsa.PrivateExponent,
-            rsa.Prime1, rsa.Prime2, rsa.Exponent1,
-            rsa.Exponent2, rsa.Coefficient);
+            if (seq.Count != 9) throw new PemException("Malformed sequence in RSA private key");
+
+            var rsa = RsaPrivateKeyStructure.GetInstance(seq);
+            privateKey = new RsaPrivateCrtKeyParameters(rsa.Modulus, rsa.PublicExponent, rsa.PrivateExponent,
+                rsa.Prime1, rsa.Prime2, rsa.Exponent1,
+                rsa.Exponent2, rsa.Coefficient);
+        }
 
         // Set private key onto certificate instance
-        var x509Certificate = WithPrivateKey(certificate, rsaparams);
+        var x509Certificate = WithPrivateKey(certificate, privateKey);
 
         if (!_doNotSetFriendlyName && RunTime.IsWindows)
             try
@@ -175,9 +183,18 @@ internal class BcCertificateMakerFast : ICertificateMaker
         if (!RunTime.IsWindows)
         {
             // CopyWithPrivateKey returns a brand-new X509Certificate2 combining the two; both
-            // intermediates below hold unmanaged crypto handles (a native cert context and an RSA key
+            // intermediates below hold unmanaged crypto handles (a native cert context and a key
             // handle respectively) that would otherwise sit unreleased until the next GC/finalizer pass.
             using var publicOnly = CertificateLoader.LoadCertificate(certificate.GetEncoded());
+
+            if (privateKey is ECPrivateKeyParameters)
+            {
+                using var ecdsa = ECDsa.Create();
+                ecdsa.ImportPkcs8PrivateKey(
+                    PrivateKeyInfoFactory.CreatePrivateKeyInfo(privateKey).GetDerEncoded(), out _);
+                return publicOnly.CopyWithPrivateKey(ecdsa);
+            }
+
             using var rsa = RSA.Create();
             rsa.ImportParameters(DotNetUtilities.ToRSAParameters((RsaPrivateCrtKeyParameters)privateKey));
             return publicOnly.CopyWithPrivateKey(rsa);

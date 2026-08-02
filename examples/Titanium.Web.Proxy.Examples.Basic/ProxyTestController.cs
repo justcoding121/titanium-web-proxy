@@ -10,8 +10,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Examples.Basic.Helpers;
-using Titanium.Web.Proxy.Exceptions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Options;
@@ -91,14 +89,45 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // pool lifetime forces full TCP/TLS reconnects after normal interactive think time).
             // Pooling reuses origin TCP/TLS sockets and sharply reduces CONNECT/cert stampede when
             // the example is installed as the system proxy (browser + OS services share the endpoint).
-            proxyServer.EnableConnectionPool = true;
+            //
+            // Overrides for the cold-start A/B matrix in tools/ColdStartProbe (optional env vars;
+            // when unset each knob keeps the example default assigned below):
+            //   TWP_ENABLE_CONNECTION_POOL=1|0
+            //   TWP_FORWARD_UPSTREAM=1|0
+            //   TWP_PREFETCH=1|0
+            //   TWP_ENABLE_HTTP2=1|0
+            //   TWP_SAVE_FAKE_CERTS=1|0
+            //   TWP_LEAF_KEY=ec|rsa
+            //   TWP_CAPTURE_TIMING=1|0
+            //   TWP_SET_SYSTEM_PROXY=1|0  (StartProxy)
+            //   TWP_ENABLE_HTTP3=1|0 / TWP_ENABLE_SVCB_DNS=1|0  (StartProxy)
+            proxyServer.EnableConnectionPool = ReadEnvBool("TWP_ENABLE_CONNECTION_POOL", defaultValue: true);
             // Per-request timing marks are measurement scaffolding; opt in for latency runs.
             proxyServer.EnableRequestTimingCapture =
                 Environment.GetEnvironmentVariable("TWP_CAPTURE_TIMING") is "1" or "true" or "TRUE";
-            // May invoke PAC/WinHTTP upstream resolution per destination when a system/upstream
-            // gateway is configured — leave enabled for realistic system-proxy demos.
-            proxyServer.ForwardToUpstreamGateway = true;
-            proxyServer.CertificateManager.SaveFakeCertificates = true;
+            // Resolves the Windows system/PAC upstream gateway per destination. Left on so the example
+            // still works behind a corporate proxy. On a machine with no PAC/WPAD configured this
+            // resolves to "direct" without any network work, so it is not a cold-start cost there;
+            // set TWP_FORWARD_UPSTREAM=0 to measure its cost where a PAC script is actually deployed.
+            // Direct destinations still get HTTP/3 (Alt-Svc + background QUIC warm); only destinations
+            // that actually resolve to an upstream proxy stay on TCP, since QUIC cannot be tunnelled.
+            proxyServer.ForwardToUpstreamGateway = ReadEnvBool("TWP_FORWARD_UPSTREAM", defaultValue: true);
+            // Prefetch overlaps origin connect with client TLS on cache hits / HTTP/1.1 clients.
+            // Cold HTTP/2 still awaits one origin probe for ALPN (library behavior).
+            proxyServer.EnableTcpServerConnectionPrefetch = ReadEnvBool("TWP_PREFETCH", defaultValue: true);
+            proxyServer.EnableHttp2 = ReadEnvBool("TWP_ENABLE_HTTP2", defaultValue: true);
+            proxyServer.CertificateManager.SaveFakeCertificates =
+                ReadEnvBool("TWP_SAVE_FAKE_CERTS", defaultValue: true);
+
+            // Generating an RSA-2048 leaf costs ~400ms of CPU, and a page pulling resources from a few
+            // dozen not-yet-seen hosts needs one per host - which is the largest latency this proxy adds
+            // to a first visit. A P-256 leaf costs ~7ms and still gives every host its own key. Browsers
+            // all accept ECDSA server certificates; set TWP_LEAF_KEY=rsa when intercepting an older
+            // client that does not. The root certificate stays RSA either way.
+            proxyServer.CertificateManager.LeafCertificateKeyAlgorithm =
+                Environment.GetEnvironmentVariable("TWP_LEAF_KEY") is "rsa" or "RSA"
+                    ? Network.CertificateKeyAlgorithm.Rsa2048
+                    : Network.CertificateKeyAlgorithm.EcdsaP256;
 
             // ProxyResourceLimits.Default already bounds the in-memory certificate cache at 1024
             // entries (see its doc comment for why an unbounded cache was a defect, not a feature).
@@ -255,7 +284,27 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // Only explicit proxies can be set as system proxy!
             //proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
             //proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
-            if (RunTime.IsWindows) proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
+            // tools/ColdStartProbe connects to the endpoint directly and sets TWP_SET_SYSTEM_PROXY=0,
+            // so a measurement run never rewrites the machine's WinINet proxy configuration.
+            if (OperatingSystem.IsWindows() && ReadEnvBool("TWP_SET_SYSTEM_PROXY", defaultValue: true))
+                proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
+
+            Console.WriteLine(
+                $"Knobs: pool={proxyServer.EnableConnectionPool} prefetch={proxyServer.EnableTcpServerConnectionPrefetch} " +
+                $"h2={proxyServer.EnableHttp2} forwardUpstream={proxyServer.ForwardToUpstreamGateway} " +
+                $"saveCerts={proxyServer.CertificateManager.SaveFakeCertificates} " +
+                $"leafKey={proxyServer.CertificateManager.LeafCertificateKeyAlgorithm} " +
+                $"timing={proxyServer.EnableRequestTimingCapture}");
+        }
+
+        private static bool ReadEnvBool(string name, bool defaultValue)
+        {
+            return Environment.GetEnvironmentVariable(name) switch
+            {
+                "1" or "true" or "TRUE" => true,
+                "0" or "false" or "FALSE" => false,
+                _ => defaultValue
+            };
         }
 
         public void Stop()
@@ -620,9 +669,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
                             0)
                             return true;
                         break;
-
-                    case RetryableServerConnectionException:
-                        return true;
                 }
             }
 

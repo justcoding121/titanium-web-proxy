@@ -156,13 +156,15 @@ internal static class Http3OriginBridge
         // If OpenRequestStreamAsync/write fails on a *reused* connection before anything has been
         // sent to the client, retrying with another connection is safe and avoids needlessly evicting
         // the H3 capability (and downgrading the origin to TCP) over a stale pooled connection.
-        // Up to MaxConnectionsPerOrigin retries may be needed: QuicConnectionPool can hand out that
-        // many *different* pooled connections before it is forced to fall through to a guaranteed-fresh
-        // one, and if a whole browsing-idle gap elapsed, all of them may have gone stale together.
+        // Several retries may be needed: QuicConnectionPool can hand out more than one *different*
+        // pooled connection before it is forced to fall through to a guaranteed-fresh one, and if a
+        // whole browsing-idle gap elapsed, all of them may have gone stale together.
         var reused = false;
         var staleConnectionRetries = 0;
         var requestSent = false;
 
+        try
+        {
         while (true)
         {
         try
@@ -175,9 +177,9 @@ internal static class Http3OriginBridge
 
             reused = !quicConn.ClaimFirstUse();
             sessionArgs.Timing?.MarkConnectionReady(quicConn.Id, reused);
-            // Multiplexed QUIC origin: bind identity without SetConnection (TCP-only ownership API).
-            // SetConnection on TCP fallback overwrites this id if QUIC fails later in the loop.
-            sessionArgs.HttpClient.BindUpstreamConnectionId(quicConn.Id);
+            // Multiplexed QUIC origin: bind metadata without SetConnection (TCP-only ownership API).
+            // SetConnection on TCP fallback overwrites it if QUIC fails later in the loop.
+            sessionArgs.HttpClient.BindUpstreamConnection(quicConn);
 
             await using var originStream = await quicConn.OpenRequestStreamAsync(cancellationToken);
 
@@ -383,9 +385,11 @@ internal static class Http3OriginBridge
                 // Any exception while using the request stream makes the connection suspect.
                 // In particular, a peer-closed connection is not reflected by
                 // QuicServerConnection.IsClosed, which only tracks local disposal state.
-                // Returning it to the pool causes every later request to retry the same dead QUIC
+                // Leaving it shared causes every later request to retry the same dead QUIC
                 // connection and produces intermittent 502s after an otherwise healthy H3 run.
-                await quicConn.DisposeAsync();
+                // Invalidate rather than dispose: other requests may still be streaming over this
+                // connection, and they get to finish even though no new request will join them.
+                await server.QuicConnectionPool.InvalidateAsync(quicConn);
                 quicConn = null;
             }
 
@@ -396,12 +400,12 @@ internal static class Http3OriginBridge
             // A single retry with a freshly created connection is safe (no request bytes were sent)
             // and avoids evicting the H3 capability / downgrading the origin to TCP for what is really
             // just a stale pooled connection, not a genuine H3 unreachability.
-            if (reused && !requestSent && staleConnectionRetries < QuicConnectionPool.MaxConnectionsPerOrigin)
+            if (reused && !requestSent && staleConnectionRetries < QuicConnectionPool.MaxStaleConnectionRetries)
             {
                 staleConnectionRetries++;
                 logger.LogDebug(
                     "Pooled QUIC connection to {Host}:{Port} was stale ({ExceptionType}); retrying (attempt {Attempt}/{Max}).",
-                    sniHost, port, ex.GetType().Name, staleConnectionRetries, QuicConnectionPool.MaxConnectionsPerOrigin);
+                    sniHost, port, ex.GetType().Name, staleConnectionRetries, QuicConnectionPool.MaxStaleConnectionRetries);
                 continue;
             }
 
@@ -434,9 +438,16 @@ internal static class Http3OriginBridge
             return;
         }
         } // end retry loop
-
-        if (quicConn != null)
-            await server.QuicConnectionPool.ReturnAsync(quicConn);
+        }
+        finally
+        {
+            // The connection stays shared for other requests; this only gives up this request's
+            // stream. In a finally because the early returns above and an OperationCanceledException
+            // escaping the loop would otherwise leave the stream registered forever, pinning the
+            // connection as permanently busy and blocking idle eviction.
+            if (quicConn != null)
+                await server.QuicConnectionPool.ReleaseAsync(quicConn);
+        }
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────

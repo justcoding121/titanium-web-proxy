@@ -124,6 +124,7 @@ internal sealed class Http2OriginConnection
                     resourceLimits ?? ProxyResourceLimits.Default);
 
                 var preface = Http2Helper.ConnectionPreface;
+                connection.Http2SessionStarted = true;
                 await instance.stream.WriteAsync(preface, 0, preface.Length, cancellationToken);
                 await instance.SendInitialSettingsAsync(cancellationToken);
                 await instance.SendConnectionWindowUpdateAsync(InitialConnectionWindowIncrement, cancellationToken);

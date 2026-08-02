@@ -171,6 +171,7 @@ public partial class ProxyServer : IDisposable
         BufferPool = new DefaultBufferPool();
         ProxyEndPoints = new List<ProxyEndPoint>();
         TcpConnectionFactory = new TcpConnectionFactory(this);
+        Http3WarmOrigins = new Http3.Http3WarmOriginRegistry();
         QuicConnectionPool = new Network.Quic.QuicConnectionPool(this);
         if (RunTime.IsWindows && !RunTime.IsUwpOnWindows) SystemProxySettingsManager = new SystemProxyManager();
 
@@ -190,6 +191,13 @@ public partial class ProxyServer : IDisposable
     ///     Drained on proxy stop and disposed with the proxy.
     /// </summary>
     internal Network.Quic.QuicConnectionPool QuicConnectionPool { get; }
+
+    /// <summary>
+    ///     Origins that currently have an established QUIC connection, maintained by
+    ///     <see cref="QuicConnectionPool" /> and consulted by HTTP/3 route resolution so that no
+    ///     request is switched to HTTP/3 only to pay for the handshake itself.
+    /// </summary>
+    internal Http3.Http3WarmOriginRegistry Http3WarmOrigins { get; }
 
     /// <summary>
     ///     Caches, per upstream host:port, whether the real origin negotiates HTTP/2 via TLS ALPN - so that

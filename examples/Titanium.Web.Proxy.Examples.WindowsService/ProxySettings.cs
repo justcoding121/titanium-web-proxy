@@ -1,4 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.Examples.WindowsService;
 
@@ -29,9 +30,10 @@ internal sealed class ProxySettings
     public bool EnableWinAuth { get; set; }
 
     /// <summary>
-    ///     Resolve Windows system/PAC upstream gateways per destination. Off by default: a service
-    ///     usually runs as LocalSystem, whose WinINet/PAC configuration is empty or unrelated to the
-    ///     interactive user's, and PAC resolution adds per-destination latency.
+    ///     Resolve Windows system/PAC upstream gateways per destination. Off by default here (unlike the
+    ///     interactive Basic/Wpf examples): a service usually runs as LocalSystem, whose WinINet/PAC
+    ///     configuration is empty or unrelated to the interactive user's, so the lookup cannot return a
+    ///     useful gateway. Turn it on if the service account does have a PAC/upstream proxy configured.
     /// </summary>
     public bool ForwardToUpstreamGateway { get; set; }
 
@@ -46,6 +48,16 @@ internal sealed class ProxySettings
     public int TcpTimeWaitSeconds { get; set; }
 
     public bool SaveFakeCertificates { get; set; } = true;
+
+    /// <summary>
+    ///     Key algorithm for the per-host leaf certificates the proxy issues. Generating an RSA-2048 leaf
+    ///     costs a few hundred milliseconds of CPU and is needed once per not-yet-seen host, so it is the
+    ///     largest delay the proxy adds to a first visit; a P-256 leaf costs a fraction of that and still
+    ///     gives every host its own key. Set this to <see cref="CertificateKeyAlgorithm.Rsa2048" /> when
+    ///     clients that cannot handle ECDSA server certificates are being intercepted. The root
+    ///     certificate stays RSA either way.
+    /// </summary>
+    public CertificateKeyAlgorithm LeafCertificateKeyAlgorithm { get; set; } = CertificateKeyAlgorithm.EcdsaP256;
 
     public bool EnableHttp2 { get; set; } = true;
 

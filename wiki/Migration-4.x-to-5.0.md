@@ -37,6 +37,7 @@ the Home page first.
 - [New: outbound private-network destination blocking (opt-in)](#new-outbound-private-network-destination-blocking-opt-in)
 - [Policy profiles and observe/enforce modes (additive)](#policy-profiles-and-observeenforce-modes-additive)
 - [New: Happy Eyeballs (RFC 8305) address racing](#new-happy-eyeballs-rfc-8305-address-racing)
+- [Connection IDs are monotonic `long` counters, not `Guid`](#connection-ids-are-monotonic-long-counters-not-guid)
 - [Internal-only changes (no action needed)](#internal-only-changes-no-action-needed)
 
 ---
@@ -407,6 +408,25 @@ per address (RFC 8305's Connection Attempt Delay) rather than tried one at a tim
 to complete a TCP (or SOCKS) connect wins; every other in-flight attempt is cancelled and its socket
 disposed. This is a pure latency improvement with no configuration surface and no behavior visible
 to callers beyond faster connects on affected networks — nothing to change in your code.
+
+## Connection IDs are monotonic `long` counters, not `Guid`
+
+**Before:** `SessionEventArgsBase.ClientConnectionId`, `SessionEventArgsBase.ServerConnectionId`, and
+`HttpRequestTiming.UpstreamConnectionId` were `Guid` / `Guid?`, allocated with `Guid.NewGuid()` once
+per transport connection. Unbound upstream identity was `Guid.Empty`.
+
+**Now:** those properties are `long` / `long?`. Values are process-wide monotonic counters starting at
+`1` (wrapping back to `1` after `long.MaxValue`). Unbound upstream identity is `0` (and
+`UpstreamConnectionId` remains `null` until a connection is acquired). Multiplexed HTTP/2 and HTTP/3
+streams that share one client or origin connection still expose the same value.
+
+**Why:** connection identity is only used for in-process correlation (equality, UI, timing). A counter
+is cheaper than a UUID, produces readable IDs for logs/UI, and avoids drawing OS entropy on every
+accept/connect.
+
+**Remedy:** change stored field types from `Guid` to `long`, and replace checks like
+`serverConnectionId != Guid.Empty` with `serverConnectionId != 0`. IDs are unique for the lifetime of
+the process only — do not persist them across restarts expecting global uniqueness.
 
 ## Internal-only changes (no action needed)
 

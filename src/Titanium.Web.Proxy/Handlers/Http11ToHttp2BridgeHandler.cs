@@ -360,7 +360,7 @@ public partial class ProxyServer
         // Bind shared h2 origin identity without SetConnection: this bridge owns frame I/O via
         // Http2OriginConnection, and HasConnection must stay false so H1 syphon paths never run.
         var serverConnection = originConnection.ServerConnection;
-        args.HttpClient.BindUpstreamConnectionId(serverConnection.Id);
+        args.HttpClient.BindUpstreamConnection(serverConnection);
         if (args.Timing != null)
             args.Timing.MarkConnectionReady(serverConnection.Id, !serverConnection.ClaimFirstUse());
 
@@ -410,7 +410,7 @@ public partial class ProxyServer
                     connectHost, connectPort, null, cancellationToken);
 
                 var retriedConnection = originConnection.ServerConnection;
-                args.HttpClient.BindUpstreamConnectionId(retriedConnection.Id);
+                args.HttpClient.BindUpstreamConnection(retriedConnection);
                 if (args.Timing != null)
                     args.Timing.MarkConnectionReady(retriedConnection.Id, !retriedConnection.ClaimFirstUse());
 
