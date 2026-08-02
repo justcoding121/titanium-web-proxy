@@ -180,6 +180,155 @@ public class Rfc8441H11ToH2TunnelTests
 
     [TestMethod]
     [Timeout(30_000)]
+    public async Task H11Upgrade_MissingSecWebSocketKey_Returns400()
+    {
+        using var rawOrigin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawOrigin.HandleConnection(async originConn =>
+        {
+            await originConn.SendInitialSettingsWithConnectProtocolAsync();
+            try
+            {
+                while (true) _ = await originConn.ReadFrameAsync();
+            }
+            catch
+            {
+                // closed
+            }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableRfc8441 = true;
+
+        var endpoint = (ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endpoint.BeforeTunnelConnectRequest += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var tunnel = await Http2RawClient.ConnectTunnelWithAlpnAsync(
+            proxy.ProxyEndPoints[0].Port, "localhost", rawOrigin.Port,
+            new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 });
+
+        var request = Ascii.GetBytes(
+            "GET /ws HTTP/1.1\r\n" +
+            $"Host: localhost:{rawOrigin.Port}\r\n" +
+            "Upgrade: websocket\r\n" +
+            "Connection: Upgrade\r\n" +
+            "Sec-WebSocket-Version: 13\r\n\r\n");
+        await tunnel.SslStream.WriteAsync(request);
+
+        var responseText = await ReadHttp11ResponseAsync(tunnel.SslStream);
+        Assert.IsTrue(responseText.StartsWith("HTTP/1.1 400", StringComparison.Ordinal),
+            $"Missing Sec-WebSocket-Key must return 400; got: {FirstLine(responseText)}");
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H11Upgrade_OriginRejectsExtendedConnect_SurfacesStatus()
+    {
+        using var rawOrigin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawOrigin.HandleConnection(async originConn =>
+        {
+            await originConn.SendInitialSettingsWithConnectProtocolAsync();
+            var (reqStreamId, _, _) = await originConn.ReadHeaderBlockAsync();
+            var resp403 = originConn.EncodeHeaders(new[] { (":status", "403") },
+                Array.Empty<(string, string)>());
+            await originConn.WriteHeaderBlockAsync(reqStreamId, resp403, true);
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableRfc8441 = true;
+
+        var endpoint = (ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endpoint.BeforeTunnelConnectRequest += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var tunnel = await Http2RawClient.ConnectTunnelWithAlpnAsync(
+            proxy.ProxyEndPoints[0].Port, "localhost", rawOrigin.Port,
+            new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 });
+
+        await tunnel.SslStream.WriteAsync(BuildHttp11WebSocketUpgradeRequest($"localhost:{rawOrigin.Port}"));
+        var responseText = await ReadHttp11ResponseAsync(tunnel.SslStream);
+        Assert.IsTrue(responseText.StartsWith("HTTP/1.1 403", StringComparison.Ordinal),
+            $"Origin rejection must surface to the H1 client; got: {FirstLine(responseText)}");
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H11Upgrade_BeforeResponseDenial_DoesNotOpenRelay()
+    {
+        using var rawOrigin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        var dataFramesFromClient = 0;
+        rawOrigin.HandleConnection(async originConn =>
+        {
+            await originConn.SendInitialSettingsWithConnectProtocolAsync();
+            var (reqStreamId, _, _) = await originConn.ReadHeaderBlockAsync();
+            var resp200 = originConn.EncodeHeaders(new[] { (":status", "200") },
+                Array.Empty<(string, string)>());
+            await originConn.WriteHeaderBlockAsync(reqStreamId, resp200, false);
+
+            try
+            {
+                while (true)
+                {
+                    var frame = await originConn.ReadFrameAsync();
+                    if (frame.Type == Http2FrameType.Data && frame.StreamId == reqStreamId &&
+                        frame.Payload.Length > 0)
+                        Interlocked.Increment(ref dataFramesFromClient);
+                }
+            }
+            catch
+            {
+                // closed
+            }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableRfc8441 = true;
+        proxy.BeforeResponse += (_, e) =>
+        {
+            if (e.HttpClient.Response.StatusCode == 101)
+                e.GenericResponse("denied", HttpStatusCode.Forbidden);
+            return Task.CompletedTask;
+        };
+
+        var endpoint = (ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endpoint.BeforeTunnelConnectRequest += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var tunnel = await Http2RawClient.ConnectTunnelWithAlpnAsync(
+            proxy.ProxyEndPoints[0].Port, "localhost", rawOrigin.Port,
+            new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 });
+
+        await tunnel.SslStream.WriteAsync(BuildHttp11WebSocketUpgradeRequest($"localhost:{rawOrigin.Port}"));
+        var responseText = await ReadHttp11ResponseAsync(tunnel.SslStream);
+        Assert.IsTrue(responseText.StartsWith("HTTP/1.1 403", StringComparison.Ordinal),
+            $"BeforeResponse denial must replace the 101; got: {FirstLine(responseText)}");
+
+        // Give any mistaken relay a moment; the origin must not see application DATA.
+        await Task.Delay(300);
+        Assert.AreEqual(0, dataFramesFromClient,
+            "Denied upgrades must not start the WebSocket DATA relay.");
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
     public async Task H11Upgrade_Rfc8441Enabled_OriginWithoutSetting_FallsBackToHttp11()
     {
         using var dualOrigin = new DualAlpnWebSocketOrigin(TestCertificateAuthority.ServerCertificate);

@@ -850,22 +850,30 @@ internal sealed class Http2OriginConnection
     /// <summary>RFC 8441 §3: value MUST be 0 or 1; a sender MUST NOT send 0 after previously sending 1.</summary>
     private void ApplyEnableConnectProtocolSetting(int value)
     {
-        if (value is not (0 or 1))
+        var error = ValidateEnableConnectProtocolSetting(value, originSettings.EnableConnectProtocolEverSet);
+        if (error != null)
         {
-            Fail(new IOException(
-                $"HTTP/2 protocol error: SETTINGS_ENABLE_CONNECT_PROTOCOL value {value} is not 0 or 1."));
-            return;
-        }
-
-        if (value == 0 && originSettings.EnableConnectProtocolEverSet)
-        {
-            Fail(new IOException(
-                "HTTP/2 protocol error: SETTINGS_ENABLE_CONNECT_PROTOCOL must not be downgraded from 1 to 0."));
+            Fail(new IOException(error));
             return;
         }
 
         originSettings.EnableConnectProtocol = value == 1;
         if (value == 1) originSettings.EnableConnectProtocolEverSet = true;
+    }
+
+    /// <summary>
+    ///     Returns a protocol-error message when <paramref name="value"/> is illegal for
+    ///     <c>SETTINGS_ENABLE_CONNECT_PROTOCOL</c>; otherwise null.
+    /// </summary>
+    internal static string? ValidateEnableConnectProtocolSetting(int value, bool previouslyEnabled)
+    {
+        if (value is not (0 or 1))
+            return $"HTTP/2 protocol error: SETTINGS_ENABLE_CONNECT_PROTOCOL value {value} is not 0 or 1.";
+
+        if (value == 0 && previouslyEnabled)
+            return "HTTP/2 protocol error: SETTINGS_ENABLE_CONNECT_PROTOCOL must not be downgraded from 1 to 0.";
+
+        return null;
     }
 
     /// <summary>Strips the optional PADDED (1 length byte + trailing padding) and PRIORITY (5 bytes) framing from a HEADERS frame payload.</summary>
