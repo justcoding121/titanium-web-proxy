@@ -323,12 +323,10 @@ public partial class ProxyServer
                                     var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
                                     connection.Http2SessionStarted = true;
                                     await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
-                                    // Enlarge the origin's connection send window to match Chrome; otherwise
-                                    // multiplexed large responses share the RFC-default 64 KiB window.
-                                    // MITM: WINDOW_UPDATE only — do not emit a proxy SETTINGS here (its ACK would
-                                    // be relayed to the client as an unexpected SETTINGS ACK → PROTOCOL_ERROR).
-                                    await Http2Helper.SendHttp2ClientConnectionStartupAsync(connection.Stream,
-                                        cancellationToken, sendInitialSettings: false);
+                                    // MITM: do not emit proxy SETTINGS or WINDOW_UPDATE here. RFC 7540 §3.5 requires
+                                    // SETTINGS immediately after the preface; SendHttp2 relays the browser's SETTINGS
+                                    // first, then appends the Chrome-sized connection WINDOW_UPDATE. A proxy SETTINGS
+                                    // would produce an origin ACK that gets forwarded as an unexpected SETTINGS ACK.
                                     await Http2Helper.SendHttp2(clientStream, connection.Stream,
                                         () => new SessionEventArgs(this, endPoint, clientStream, null,
                                             cancellationTokenSource),

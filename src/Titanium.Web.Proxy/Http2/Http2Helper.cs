@@ -53,42 +53,34 @@ namespace Titanium.Web.Proxy.Http2
         internal const int InitialConnectionWindowIncrement = 15663105;
 
         /// <summary>
-        ///     Writes optional initial client SETTINGS (ENABLE_PUSH=0) and a Chrome-sized connection
-        ///     WINDOW_UPDATE onto an origin stream that has just received the HTTP/2 connection preface.
-        ///     Call before <see cref="SendHttp2"/> starts relaying frames, or after the preface on a
-        ///     proxy-owned origin connection (<see cref="Http2OriginConnection"/>).
+        ///     Writes initial client SETTINGS (ENABLE_PUSH=0) and a Chrome-sized connection WINDOW_UPDATE onto
+        ///     a proxy-owned origin stream that has just received the HTTP/2 connection preface
+        ///     (<see cref="Http2OriginConnection"/> / protocol bridges). The H2↔H2 MITM path must not call
+        ///     this: it relays the browser's SETTINGS as the first frame after the preface (RFC 7540 §3.5),
+        ///     then appends the same WINDOW_UPDATE from <see cref="SendHttp2"/> so an extra proxy SETTINGS
+        ///     ACK is never forwarded to the client.
         /// </summary>
         /// <param name="originStream">Origin HTTP/2 stream (preface already written).</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        /// <param name="sendInitialSettings">
-        ///     When <see langword="true"/> (bridge / <see cref="Http2OriginConnection"/>), emit SETTINGS
-        ///     ENABLE_PUSH=0 before the WINDOW_UPDATE. When <see langword="false"/> (H2↔H2 MITM relay),
-        ///     emit only the WINDOW_UPDATE: the browser's SETTINGS are already relayed, and an extra
-        ///     proxy SETTINGS would produce an origin SETTINGS ACK that <see cref="SendHttp2"/> forwards
-        ///     to the client, which treats an unexpected ACK as PROTOCOL_ERROR.
-        /// </param>
         internal static async Task SendHttp2ClientConnectionStartupAsync(Stream originStream,
-            CancellationToken cancellationToken, bool sendInitialSettings = true)
+            CancellationToken cancellationToken)
         {
             var frameHeader = new Http2FrameHeader();
             var frameHeaderBuffer = new byte[9];
 
-            if (sendInitialSettings)
-            {
-                // SETTINGS with ENABLE_PUSH=0 (6-byte payload) for proxy-owned origin connections.
-                frameHeader.StreamId = 0;
-                frameHeader.Type = Http2FrameType.Settings;
-                frameHeader.Flags = 0;
-                frameHeader.Length = 6;
-                frameHeader.CopyToBuffer(frameHeaderBuffer);
+            // SETTINGS with ENABLE_PUSH=0 (6-byte payload) for proxy-owned origin connections.
+            frameHeader.StreamId = 0;
+            frameHeader.Type = Http2FrameType.Settings;
+            frameHeader.Flags = 0;
+            frameHeader.Length = 6;
+            frameHeader.CopyToBuffer(frameHeaderBuffer);
 
-                var settingsPayload = new byte[6];
-                BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(0, 2), (ushort)Http2SettingsId.EnablePush);
-                BinaryPrimitives.WriteUInt32BigEndian(settingsPayload.AsSpan(2, 4), 0);
+            var settingsPayload = new byte[6];
+            BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(0, 2), (ushort)Http2SettingsId.EnablePush);
+            BinaryPrimitives.WriteUInt32BigEndian(settingsPayload.AsSpan(2, 4), 0);
 
-                await originStream.WriteAsync(frameHeaderBuffer, cancellationToken);
-                await originStream.WriteAsync(settingsPayload, cancellationToken);
-            }
+            await originStream.WriteAsync(frameHeaderBuffer, cancellationToken);
+            await originStream.WriteAsync(settingsPayload, cancellationToken);
 
             await SendWindowUpdateAsync(frameHeader, frameHeaderBuffer, 0, InitialConnectionWindowIncrement,
                 originStream);
@@ -2371,6 +2363,18 @@ namespace Titanium.Web.Proxy.Http2
                     // response on the other relay can safely send HEADERS afterwards.
                     if (!isClient && type == Http2FrameType.Settings && (flags & Http2FrameFlag.Ack) == 0)
                         connectionState.ServerSettingsRelayed.TrySetResult(true);
+
+                    // H2↔H2 MITM: after the browser's first non-ACK SETTINGS reaches the origin (RFC 7540
+                    // §3.5: SETTINGS must immediately follow the preface), enlarge the origin's connection
+                    // send window to match Chrome. Emitting WINDOW_UPDATE before SETTINGS made strict origins
+                    // (e.g. MSN, Wikipedia) close with PROTOCOL_ERROR; emitting a proxy SETTINGS instead
+                    // produced an unexpected SETTINGS ACK when relayed to Chrome.
+                    if (isClient && type == Http2FrameType.Settings && (flags & Http2FrameFlag.Ack) == 0 &&
+                        Interlocked.CompareExchange(ref connectionState.InitialOriginWindowUpdateSent, 1, 0) == 0)
+                    {
+                        await lockedOutputWrite(() => SendWindowUpdateAsync(frameHeader, frameHeaderBuffer, 0,
+                            InitialConnectionWindowIncrement, output));
+                    }
                 }
 
                 if (cancellationToken.IsCancellationRequested)

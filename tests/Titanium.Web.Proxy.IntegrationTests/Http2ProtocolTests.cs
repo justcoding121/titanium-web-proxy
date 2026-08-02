@@ -74,6 +74,62 @@ public class Http2ProtocolTests
 
     [TestMethod]
     [Timeout(30 * 1000)]
+    public async Task Http2_Mitm_Origin_Receives_Settings_Before_Connection_Window_Update()
+    {
+        // Regression for Chrome ERR_HTTP2_PROTOCOL_ERROR on strict origins (MSN/Wikipedia): after the
+        // connection preface, the first frame toward the origin must be SETTINGS (RFC 7540 §3.5). The
+        // Chrome-sized connection WINDOW_UPDATE must follow that SETTINGS — never precede it, and must
+        // not be paired with a proxy-owned SETTINGS whose ACK would be forwarded to the browser.
+        var done = new TaskCompletionSource<Http2RawFrame.Frame[]>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.SendInitialSettingsAsync();
+
+            var firstFrames = new List<Http2RawFrame.Frame>(2);
+            int? requestStreamId = null;
+            while (firstFrames.Count < 2 || requestStreamId == null)
+            {
+                var frame = await connection.ReadFrameAsync();
+                if (firstFrames.Count < 2)
+                    firstFrames.Add(frame);
+
+                if (frame.Type == Http2FrameType.Headers)
+                    requestStreamId = frame.StreamId;
+            }
+
+            var responseHeaders = connection.EncodeHeaders(new[] { (":status", "200") },
+                Array.Empty<(string, string)>());
+            await connection.WriteHeaderBlockAsync(requestStreamId.Value, responseHeaders, true);
+            done.TrySetResult(firstFrames.ToArray());
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        var uri = new Uri(rawServer.Url);
+        using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+        await SendGetRequestAsync(rawClient, uri, 1);
+
+        var completed = await Task.WhenAny(done.Task, Task.Delay(5000));
+        Assert.AreSame(done.Task, completed, "Origin never finished handling the request.");
+        var firstFrames = await done.Task;
+
+        Assert.AreEqual(2, firstFrames.Length, "Origin should see SETTINGS then WINDOW_UPDATE before HEADERS.");
+        Assert.AreEqual(Http2FrameType.Settings, firstFrames[0].Type,
+            "RFC 7540 §3.5: the first frame after the client preface must be SETTINGS.");
+        Assert.AreEqual(Http2FrameType.WindowUpdate, firstFrames[1].Type,
+            "Chrome-sized connection WINDOW_UPDATE must immediately follow the browser SETTINGS.");
+        Assert.AreEqual(0, firstFrames[1].StreamId);
+        Assert.AreEqual(Http2Helper.InitialConnectionWindowIncrement,
+            BinaryPrimitives.ReadInt32BigEndian(firstFrames[1].Payload));
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
     public async Task Http2_RstStream_From_Origin_Is_Relayed_And_Connection_Remains_Usable_For_Further_Streams()
     {
         using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
