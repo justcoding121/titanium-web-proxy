@@ -21,5 +21,7 @@ Titanium.Web.Proxy.Network.CertificateKeyAlgorithm.EcdsaP256 = 1 -> Titanium.Web
 Titanium.Web.Proxy.Network.CertificateKeyAlgorithm.Rsa2048 = 0 -> Titanium.Web.Proxy.Network.CertificateKeyAlgorithm
 Titanium.Web.Proxy.Network.CertificateManager.LeafCertificateKeyAlgorithm.get -> Titanium.Web.Proxy.Network.CertificateKeyAlgorithm
 Titanium.Web.Proxy.Network.CertificateManager.LeafCertificateKeyAlgorithm.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.LeafRsaKeyPairBufferSize.get -> int
+Titanium.Web.Proxy.Network.CertificateManager.LeafRsaKeyPairBufferSize.set -> void
 Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCertificateDiskCacheEntries.get -> int?
 Titanium.Web.Proxy.Options.ProxyResourceLimits.WithCertificateCacheBounds(int? maxCertificateCacheEntries, int? maxCertificateDiskCacheEntries) -> Titanium.Web.Proxy.Options.ProxyResourceLimits!

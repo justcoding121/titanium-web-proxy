@@ -145,6 +145,8 @@ Useful `CertificateManager` members:
 - `CertificateEngine` — `BouncyCastle` or the built-in engine.
 - `LeafCertificateKeyAlgorithm` — key algorithm for generated leaf certificates, `Rsa2048` (default)
   or `EcdsaP256`. See [first-visit latency](#first-visit-latency-and-the-leaf-key-algorithm).
+- `LeafRsaKeyPairBufferSize` — how many RSA-2048 leaf private keys to keep pre-generated (default `8`;
+  `0` disables). Process-wide; unused when leaves are ECDSA P-256.
 
 Only decrypt endpoints where you need to see content; leave `decryptSsl: false` to pass HTTPS through as an opaque tunnel.
 
