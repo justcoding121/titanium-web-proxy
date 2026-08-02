@@ -55,6 +55,15 @@ public class Http3RouteResolutionTests
         return s;
     }
 
+    /// <summary>
+    ///     Pretends a QUIC connection to the origin is already established. Route resolution requires
+    ///     both a capability-cache entry and a live connection before it will send a request over
+    ///     HTTP/3, so tests that care about the resulting route must set this up; tests that omit it
+    ///     are exercising the cold path, which defers to TCP.
+    /// </summary>
+    private static void MarkOriginWarm(ProxyServer server, string host, int port)
+        => server.Http3WarmOrigins.Mark(host, port);
+
     // ─────────────────────────────────────────────────────────────────────────
     // EnableHttpsSvcbDnsDiscovery defaults to EnableHttp3
     // ─────────────────────────────────────────────────────────────────────────
@@ -187,6 +196,7 @@ public class Http3RouteResolutionTests
     {
         using var server = MakeServer();
         server.Http3OriginCapabilityCache.Set("example.com:443"); // same-port
+        MarkOriginWarm(server, "example.com", 443);
 
         var route = server.ResolveHttp3Origin(
             "example.com", 443, UpstreamHttpProtocol.Auto, false);
@@ -202,6 +212,8 @@ public class Http3RouteResolutionTests
     {
         using var server = MakeServer();
         server.Http3OriginCapabilityCache.Set("example.com:443", altPort: 8443);
+        // Warm-tracking is keyed by the port QUIC actually connects on, not the origin port.
+        MarkOriginWarm(server, "example.com", 8443);
 
         var route = server.ResolveHttp3Origin(
             "example.com", 443, UpstreamHttpProtocol.Auto, false);
@@ -216,12 +228,60 @@ public class Http3RouteResolutionTests
         using var server = MakeServer();
         server.Http3OriginCapabilityCache.Set("example.com:443",
             altPort: int.MinValue, targetName: "quic-target.cdn.example.com");
+        MarkOriginWarm(server, "example.com", 443);
 
         var route = server.ResolveHttp3Origin(
             "example.com", 443, UpstreamHttpProtocol.Auto, false);
 
         Assert.IsTrue(route.UseH3);
         Assert.AreEqual("quic-target.cdn.example.com", route.QuicHost);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Auto + capability cache, but no established QUIC connection yet
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void ResolveH3_Auto_CacheHit_ColdOrigin_StaysOnTcp()
+    {
+        using var server = MakeServer();
+        server.Http3OriginCapabilityCache.Set("example.com:443");
+
+        var route = server.ResolveHttp3Origin(
+            "example.com", 443, UpstreamHttpProtocol.Auto, false);
+
+        Assert.IsFalse(route.UseH3,
+            "Knowing the origin speaks H3 is not enough: routing there before a QUIC connection " +
+            "exists would charge this request for the handshake.");
+        Assert.AreEqual(Http3RouteSource.None, route.Source);
+    }
+
+    [TestMethod]
+    public void ResolveH3_Auto_CacheHit_BecomesH3OnceOriginIsWarm()
+    {
+        using var server = MakeServer();
+        server.Http3OriginCapabilityCache.Set("example.com:443");
+
+        Assert.IsFalse(
+            server.ResolveHttp3Origin("example.com", 443, UpstreamHttpProtocol.Auto, false).UseH3);
+
+        MarkOriginWarm(server, "example.com", 443);
+
+        Assert.IsTrue(
+            server.ResolveHttp3Origin("example.com", 443, UpstreamHttpProtocol.Auto, false).UseH3,
+            "Once a connection is established the handshake is already paid for.");
+    }
+
+    [TestMethod]
+    public void ResolveH3_Forced_ColdOrigin_StillUsesH3()
+    {
+        using var server = MakeServer();
+
+        var route = server.ResolveHttp3Origin(
+            "example.com", 443, UpstreamHttpProtocol.Http3, false);
+
+        Assert.IsTrue(route.UseH3, "Forced H3 is an explicit instruction; it does not wait to warm.");
+        Assert.IsTrue(route.ForcedH3);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -262,6 +322,10 @@ public class Http3RouteResolutionTests
         Assert.IsFalse(route.UseH3);
 
         // Background discovery should populate the capability cache for subsequent connections.
+        // Marking the origin warm isolates this test to the SVCB result: without it, resolution
+        // would keep deferring to TCP no matter how good the cache entry is.
+        MarkOriginWarm(server, "example.com", 8443);
+
         Http3OriginRoute cachedRoute = Http3OriginRoute.None;
         for (var i = 0; i < 50; i++)
         {
@@ -378,11 +442,12 @@ public class Http3RouteResolutionTests
     {
         using var server = MakeServer();
         server.Http3OriginCapabilityCache.Set("example.com:443");
+        MarkOriginWarm(server, "example.com", 443);
 
         var route = server.ResolveHttp3Origin(
             "example.com", 443, effectiveProtocol: null, false);
 
-        Assert.IsTrue(route.UseH3, "null protocol → Auto → cache hit → H3.");
+        Assert.IsTrue(route.UseH3, "null protocol → Auto → cache hit → warm origin → H3.");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
