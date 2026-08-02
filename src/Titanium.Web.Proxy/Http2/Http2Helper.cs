@@ -53,29 +53,43 @@ namespace Titanium.Web.Proxy.Http2
         internal const int InitialConnectionWindowIncrement = 15663105;
 
         /// <summary>
-        ///     Writes the proxy's initial client SETTINGS (ENABLE_PUSH=0) and a Chrome-sized connection
+        ///     Writes optional initial client SETTINGS (ENABLE_PUSH=0) and a Chrome-sized connection
         ///     WINDOW_UPDATE onto an origin stream that has just received the HTTP/2 connection preface.
-        ///     Call before <see cref="SendHttp2"/> starts relaying frames.
+        ///     Call before <see cref="SendHttp2"/> starts relaying frames, or after the preface on a
+        ///     proxy-owned origin connection (<see cref="Http2OriginConnection"/>).
         /// </summary>
+        /// <param name="originStream">Origin HTTP/2 stream (preface already written).</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="sendInitialSettings">
+        ///     When <see langword="true"/> (bridge / <see cref="Http2OriginConnection"/>), emit SETTINGS
+        ///     ENABLE_PUSH=0 before the WINDOW_UPDATE. When <see langword="false"/> (H2↔H2 MITM relay),
+        ///     emit only the WINDOW_UPDATE: the browser's SETTINGS are already relayed, and an extra
+        ///     proxy SETTINGS would produce an origin SETTINGS ACK that <see cref="SendHttp2"/> forwards
+        ///     to the client, which treats an unexpected ACK as PROTOCOL_ERROR.
+        /// </param>
         internal static async Task SendHttp2ClientConnectionStartupAsync(Stream originStream,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, bool sendInitialSettings = true)
         {
             var frameHeader = new Http2FrameHeader();
             var frameHeaderBuffer = new byte[9];
 
-            // SETTINGS with ENABLE_PUSH=0 (6-byte payload), same as Http2OriginConnection.
-            frameHeader.StreamId = 0;
-            frameHeader.Type = Http2FrameType.Settings;
-            frameHeader.Flags = 0;
-            frameHeader.Length = 6;
-            frameHeader.CopyToBuffer(frameHeaderBuffer);
+            if (sendInitialSettings)
+            {
+                // SETTINGS with ENABLE_PUSH=0 (6-byte payload) for proxy-owned origin connections.
+                frameHeader.StreamId = 0;
+                frameHeader.Type = Http2FrameType.Settings;
+                frameHeader.Flags = 0;
+                frameHeader.Length = 6;
+                frameHeader.CopyToBuffer(frameHeaderBuffer);
 
-            var settingsPayload = new byte[6];
-            BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(0, 2), (ushort)Http2SettingsId.EnablePush);
-            BinaryPrimitives.WriteUInt32BigEndian(settingsPayload.AsSpan(2, 4), 0);
+                var settingsPayload = new byte[6];
+                BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(0, 2), (ushort)Http2SettingsId.EnablePush);
+                BinaryPrimitives.WriteUInt32BigEndian(settingsPayload.AsSpan(2, 4), 0);
 
-            await originStream.WriteAsync(frameHeaderBuffer, cancellationToken);
-            await originStream.WriteAsync(settingsPayload, cancellationToken);
+                await originStream.WriteAsync(frameHeaderBuffer, cancellationToken);
+                await originStream.WriteAsync(settingsPayload, cancellationToken);
+            }
+
             await SendWindowUpdateAsync(frameHeader, frameHeaderBuffer, 0, InitialConnectionWindowIncrement,
                 originStream);
             await originStream.FlushAsync(cancellationToken);

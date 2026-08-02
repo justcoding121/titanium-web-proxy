@@ -539,8 +539,10 @@ public partial class ProxyServer
                             await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
                             // Enlarge the origin's connection send window to match Chrome; otherwise
                             // multiplexed large responses share the RFC-default 64 KiB window.
+                            // MITM: WINDOW_UPDATE only — do not emit a proxy SETTINGS here (its ACK would
+                            // be relayed to the client as an unexpected SETTINGS ACK → PROTOCOL_ERROR).
                             await Http2Helper.SendHttp2ClientConnectionStartupAsync(connection.Stream,
-                                cancellationToken);
+                                cancellationToken, sendInitialSettings: false);
                             await Http2Helper.SendHttp2(clientStream, connection.Stream,
                                 () => new SessionEventArgs(this, endPoint, clientStream, connectArgs?.HttpClient.ConnectRequest, cancellationTokenSource)
                                 {
