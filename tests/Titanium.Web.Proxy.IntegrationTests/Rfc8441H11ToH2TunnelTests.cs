@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Rfc8441H11ToH2TunnelTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
     private static readonly Encoding Ascii = Encoding.ASCII;
     private const string SampleWsKey = "dGhlIHNhbXBsZSBub25jZQ==";
 
