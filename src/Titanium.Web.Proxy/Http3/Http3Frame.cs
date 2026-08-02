@@ -1,15 +1,14 @@
 using System;
-using System.Net.Quic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Http3;
 
 /// <summary>
-///     HTTP/3 frame as read from or written to a QUIC stream.
+///     HTTP/3 frame as read from or written to a stream (typically a QUIC stream).
 ///     Format: <c>Type (VarInt) | Length (VarInt) | Payload (Length bytes)</c> (RFC 9114 §7.1).
 /// </summary>
-#pragma warning disable CA1416
 internal sealed class Http3Frame
 {
     public ulong Type { get; init; }
@@ -21,7 +20,7 @@ internal sealed class Http3Frame
     /// </summary>
     /// <exception cref="Http3ConnectionException">On malformed frame (e.g., huge payload).</exception>
     public static async ValueTask<Http3Frame?> ReadAsync(
-        QuicStream stream,
+        Stream stream,
         long maxPayloadBytes,
         CancellationToken cancellationToken)
     {
@@ -61,7 +60,7 @@ internal sealed class Http3Frame
     ///     Writes a frame (type + length + payload) to <paramref name="stream" />.
     /// </summary>
     public static async ValueTask WriteAsync(
-        QuicStream stream,
+        Stream stream,
         ulong frameType,
         ReadOnlyMemory<byte> payload,
         CancellationToken cancellationToken)
@@ -83,9 +82,8 @@ internal sealed class Http3Frame
     ///     Writes a zero-payload frame (used for GOAWAY and some SETTINGS without parameters).
     /// </summary>
     public static async ValueTask WriteAsync(
-        QuicStream stream,
+        Stream stream,
         ulong frameType,
         CancellationToken cancellationToken)
         => await WriteAsync(stream, frameType, ReadOnlyMemory<byte>.Empty, cancellationToken);
 }
-#pragma warning restore CA1416

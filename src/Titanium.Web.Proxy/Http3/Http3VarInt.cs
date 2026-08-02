@@ -1,7 +1,5 @@
 using System;
-using System.Buffers;
 using System.IO;
-using System.Net.Quic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,7 +13,6 @@ namespace Titanium.Web.Proxy.Http3;
 ///         <c>10</c> = 4 bytes (30-bit value), <c>11</c> = 8 bytes (62-bit value).
 ///     </para>
 /// </summary>
-#pragma warning disable CA1416
 internal static class Http3VarInt
 {
     public const ulong Max1ByteValue = (1UL << 6) - 1;   // 63
@@ -125,10 +122,10 @@ internal static class Http3VarInt
     }
 
     /// <summary>
-    ///     Reads a variable-length integer from a <see cref="QuicStream" />.
+    ///     Reads a variable-length integer from a <see cref="Stream" /> (including <see cref="QuicStream" />).
     ///     Returns <see langword="null" /> when the stream ends before a complete integer arrives.
     /// </summary>
-    public static async ValueTask<ulong?> ReadAsync(QuicStream stream, CancellationToken cancellationToken)
+    public static async ValueTask<ulong?> ReadAsync(Stream stream, CancellationToken cancellationToken)
     {
         var oneByte = new byte[1];
         if (!await ReadExactAsync(stream, oneByte, cancellationToken)) return null;
@@ -151,7 +148,7 @@ internal static class Http3VarInt
         return value;
     }
 
-    private static async ValueTask<bool> ReadExactAsync(QuicStream stream, Memory<byte> buffer, CancellationToken ct)
+    private static async ValueTask<bool> ReadExactAsync(Stream stream, Memory<byte> buffer, CancellationToken ct)
     {
         var offset = 0;
         while (offset < buffer.Length)
@@ -163,4 +160,3 @@ internal static class Http3VarInt
         return true;
     }
 }
-#pragma warning restore CA1416

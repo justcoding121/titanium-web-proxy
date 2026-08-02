@@ -1,6 +1,5 @@
-#pragma warning disable CA1416
 using System;
-using System.Net.Quic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -17,7 +16,7 @@ internal static class QpackDecoderStreamWriter
     ///     Continuously drains the decoder ack channel and writes instructions to
     ///     <paramref name="stream" /> until the channel is completed or <paramref name="ct" /> is cancelled.
     /// </summary>
-    internal static async Task RunAsync(QuicStream stream, QpackContext context, CancellationToken ct)
+    internal static async Task RunAsync(Stream stream, QpackContext context, CancellationToken ct)
     {
         var reader = context.DecoderAckChannel.Reader;
 
@@ -33,4 +32,3 @@ internal static class QpackDecoderStreamWriter
         catch (Exception) { /* stream closed — stop writing */ }
     }
 }
-#pragma warning restore CA1416
