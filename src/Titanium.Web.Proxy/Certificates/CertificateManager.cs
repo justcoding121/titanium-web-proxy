@@ -365,6 +365,23 @@ public sealed class CertificateManager : IDisposable
     }
 
     /// <summary>
+    ///     How many RSA-2048 leaf private keys to keep ready in a background-refilled buffer so first
+    ///     visits do not pay key-generation cost on the CONNECT that needs the certificate.
+    ///     Defaults to 8. Set to 0 to disable buffering (keys are generated on demand).
+    ///     <para>
+    ///         Only applies when <see cref="LeafCertificateKeyAlgorithm" /> is
+    ///         <see cref="CertificateKeyAlgorithm.Rsa2048" />. ECDSA P-256 keys are cheap enough that
+    ///         they are always generated inline. The buffer is process-wide and shared by every
+    ///         <see cref="CertificateManager" /> instance.
+    ///     </para>
+    /// </summary>
+    public int LeafRsaKeyPairBufferSize
+    {
+        get => LeafKeyPairSource.RsaBufferCapacity;
+        set => LeafKeyPairSource.RsaBufferCapacity = value;
+    }
+
+    /// <summary>
     ///     Password of the Root certificate file.
     ///     <para>Set a password for the .pfx file</para>
     /// </summary>

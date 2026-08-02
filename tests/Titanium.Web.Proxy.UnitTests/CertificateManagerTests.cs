@@ -87,6 +87,41 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         /// <summary>
+        /// The RSA key-pair buffer size is process-wide; setting it through CertificateManager must
+        /// round-trip, reject out-of-range values, and still produce usable certificates when disabled.
+        /// </summary>
+        [TestMethod]
+        public void LeafRsaKeyPairBufferSize_Is_Configurable()
+        {
+            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastle
+            };
+
+            var previous = mgr.LeafRsaKeyPairBufferSize;
+            try
+            {
+                Assert.AreEqual(8, previous);
+
+                mgr.LeafRsaKeyPairBufferSize = 16;
+                Assert.AreEqual(16, mgr.LeafRsaKeyPairBufferSize);
+
+                Assert.ThrowsException<ArgumentOutOfRangeException>(() => mgr.LeafRsaKeyPairBufferSize = -1);
+                Assert.ThrowsException<ArgumentOutOfRangeException>(() => mgr.LeafRsaKeyPairBufferSize = 257);
+
+                mgr.LeafRsaKeyPairBufferSize = 0;
+                var cert = mgr.CreateCertificate("buffer-disabled.example", false);
+                Assert.IsNotNull(cert);
+                Assert.IsTrue(cert.HasPrivateKey);
+                cert.Dispose();
+            }
+            finally
+            {
+                mgr.LeafRsaKeyPairBufferSize = previous;
+            }
+        }
+
+        /// <summary>
         /// P-256 leaves have to survive the round trip through the platform's key store, which is where
         /// they are easiest to get wrong: BouncyCastle will happily encode an EC private key with the
         /// curve spelled out instead of named, and Windows CNG rejects exactly that when the PKCS#12 blob
