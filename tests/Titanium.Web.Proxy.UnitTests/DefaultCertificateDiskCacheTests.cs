@@ -108,4 +108,39 @@ public class DefaultCertificateDiskCacheTests
         }
     }
 
+    [TestMethod]
+    public void LoadRootCertificate_MissingFile_ReturnsNull()
+    {
+        var cache = new DefaultCertificateDiskCache();
+        var missing = Path.Combine(Path.GetTempPath(), $"twp-missing-{Guid.NewGuid():N}.pfx");
+        var loaded = cache.LoadRootCertificate(missing, "unused", X509KeyStorageFlags.Exportable);
+        Assert.IsNull(loaded);
+    }
+
+    [TestMethod]
+    public void LoadCertificate_CorruptPfx_ReturnsNull()
+    {
+        if (!RunTime.IsWindows)
+            Assert.Inconclusive("PKCS#12 disk-cache characterization is Windows-focused.");
+
+        var cache = new DefaultCertificateDiskCache();
+        var certPathField = typeof(DefaultCertificateDiskCache).GetMethod("GetCertificatePath",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.IsNotNull(certPathField);
+        var certDir = (string)certPathField.Invoke(cache, new object[] { true })!;
+        var subject = $"corrupt-{Guid.NewGuid():N}.example";
+        var filePath = Path.Combine(certDir, subject + ".pfx");
+
+        try
+        {
+            File.WriteAllBytes(filePath, new byte[] { 0x00, 0x01, 0x02, 0x03, 0xFF });
+            var loaded = cache.LoadCertificate(subject, X509KeyStorageFlags.Exportable);
+            Assert.IsNull(loaded, "Corrupt PKCS#12 must be treated as a cache miss.");
+        }
+        finally
+        {
+            try { if (File.Exists(filePath)) File.Delete(filePath); } catch { /* best-effort */ }
+        }
+    }
+
 }
