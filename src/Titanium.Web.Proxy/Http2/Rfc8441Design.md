@@ -64,7 +64,25 @@ HTTP/1.1 (`Upgrade: websocket`) requests.
 |---|---|---|
 | HTTP/2 extended CONNECT | HTTP/2 extended CONNECT | Native h2↔h2 DATA relay (no translation) |
 | HTTP/2 extended CONNECT | HTTP/1.1 | h2→h1 bridge: translate 200→WebSocket upgrade, relay DATA as WebSocket frames |
-| HTTP/1.1 Upgrade | HTTP/2 | Not supported — synthetic `501 Not Implemented` (`Http11ToHttp2BridgeHandler`) |
+| HTTP/1.1 Upgrade | HTTP/2 | When `EnableRfc8441=true`: translate to extended CONNECT on the h2 origin (`Http11ToHttp2BridgeHandler` + `Http2TunnelStream`); if the origin does not advertise `SETTINGS_ENABLE_CONNECT_PROTOCOL=1`, fall back to a dedicated HTTP/1.1 origin connection and reuse `HandleWebSocketUpgrade`. When `EnableRfc8441=false` (default): synthetic `501 Not Implemented` |
+
+### HTTP/1.1 Upgrade → HTTP/2 origin lifecycle
+
+1. **Gate**: only reached on the H1→H2 translation bridge (`UpstreamHttpProtocol.Http2` +
+   `AllowHttpProtocolTranslation`) when the client sends `Upgrade: websocket`. With
+   `EnableRfc8441=false`, the historical synthetic `501` is preserved.
+2. **Capability check**: after the origin's initial SETTINGS, if `EnableConnectProtocol` is true,
+   the proxy translates the Upgrade into `CONNECT` + `:protocol=websocket` (stripping
+   `Connection`/`Upgrade`/`Sec-WebSocket-Key`/`Host` per RFC 8441 §5) and opens a tunnel stream via
+   `Http2OriginConnection.OpenTunnelAsync`.
+3. **Client 101**: on origin 2xx, the proxy synthesizes `101 Switching Protocols` with a locally
+   computed `Sec-WebSocket-Accept` and any negotiated `Sec-WebSocket-Protocol` /
+   `Sec-WebSocket-Extensions` from the origin, then runs `BeforeResponse`.
+4. **DATA relay**: the leased h2 stream is exposed as `Http2TunnelStream` so
+   `TcpHelper.SendRaw` / `WebSocketInterceptRelay` treat it as a TCP connection (RFC 8441 §5).
+5. **Fallback**: if the h2 origin does not advertise the setting, the proxy opens a dedicated
+   HTTP/1.1 origin connection for that WebSocket only and reuses `HandleWebSocketUpgrade`
+   (RFC 8441 §7 intermediary behavior).
 
 ### Native h2↔h2 tunnel lifecycle
 
