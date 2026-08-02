@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.Network.Quic;
 ///     Creates outbound <see cref="QuicServerConnection" /> objects to origin HTTP/3 servers.
 ///     Analogous to <see cref="Tcp.TcpConnectionFactory" /> but for QUIC.
 /// </summary>
-internal sealed class QuicConnectionFactory
+internal sealed class QuicConnectionFactory : IQuicConnectionFactory
 {
     private readonly ProxyServer _proxyServer;
 
@@ -43,7 +43,7 @@ internal sealed class QuicConnectionFactory
     ///     expose a mechanism for CONNECT tunnelling or SOCKS5 UDP ASSOCIATE; the caller must catch this
     ///     and fall back to a TCP-based bridge so proxy rules are honoured.
     /// </exception>
-    internal async Task<QuicServerConnection> CreateAsync(
+    public async Task<QuicServerConnection> CreateAsync(
         string connectHost,
         string sniHost,
         int port,
