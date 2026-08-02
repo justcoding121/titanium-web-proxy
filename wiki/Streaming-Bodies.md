@@ -41,8 +41,9 @@ proxyServer.OnResponseBodyWrite += (sender, e) =>
 - **Bytes are exposed as they appear on the wire.** If the message uses `Content-Encoding` (gzip/br/deflate), `BodyBytes` contains the still-compressed bytes. The proxy does not decompress/recompress inside the hook, in order to preserve exact framing and length. Decode yourself if needed.
 - **Fixed-length bodies:** if the response has a `Content-Length` (not chunked), you may modify bytes but should not change the total length, since the header was already sent. For chunked bodies the length may vary freely.
 - **Transport support:**
-  - HTTP/1.x: the per-piece hook runs for plain (non-TLS) connections. (TLS-decrypted HTTP/1.x bodies still stream, but the per-piece hook is not invoked for them.)
-  - HTTP/2: the hook runs per DATA frame, including over TLS. Enable with `proxyServer.EnableHttp2 = true`.
+  - HTTP/1.x: the per-piece hook runs for plain and TLS-decrypted connections (any `NetworkStream` / `SslStream`-backed transport).
+  - HTTP/2: the hook runs per DATA frame, including over TLS (on by default via `ProxyServer.EnableHttp2`; set `false` to force HTTP/1.1 only).
+  - HTTP/3: the hook runs per DATA frame when `EnableHttp3` is on (see [Protocol Support](Protocol-Support)).
 
 ---
 

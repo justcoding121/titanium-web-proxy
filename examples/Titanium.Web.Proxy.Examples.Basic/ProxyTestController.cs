@@ -119,11 +119,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.CertificateManager.SaveFakeCertificates =
                 ReadEnvBool("TWP_SAVE_FAKE_CERTS", defaultValue: true);
 
-            // Generating an RSA-2048 leaf costs ~400ms of CPU, and a page pulling resources from a few
-            // dozen not-yet-seen hosts needs one per host - which is the largest latency this proxy adds
-            // to a first visit. A P-256 leaf costs ~7ms and still gives every host its own key. Browsers
-            // all accept ECDSA server certificates; set TWP_LEAF_KEY=rsa when intercepting an older
-            // client that does not. The root certificate stays RSA either way.
+            // Generating an RSA-2048 leaf is expensive; LeafRsaKeyPairBufferSize (default 8) pre-generates
+            // pairs so many first visits avoid paying that on CONNECT. A P-256 leaf is cheap inline and
+            // still gives every host its own key. Browsers all accept ECDSA server certificates; set
+            // TWP_LEAF_KEY=rsa when intercepting an older client that does not. The root stays RSA.
             proxyServer.CertificateManager.LeafCertificateKeyAlgorithm =
                 Environment.GetEnvironmentVariable("TWP_LEAF_KEY") is "rsa" or "RSA"
                     ? Network.CertificateKeyAlgorithm.Rsa2048
@@ -147,7 +146,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //proxyServer.CustomUpStreamProxyFailureFunc = onCustomUpStreamProxyFailureFunc;
 
             // optionally set the Certificate Engine
-            // Under Mono or Non-Windows runtimes only BouncyCastle will be supported
+            // On non-Windows runtimes only BouncyCastle is supported (other values are coerced)
             //proxyServer.CertificateManager.CertificateEngine = Network.CertificateEngine.BouncyCastle;
 
             // optionally set the Root Certificate

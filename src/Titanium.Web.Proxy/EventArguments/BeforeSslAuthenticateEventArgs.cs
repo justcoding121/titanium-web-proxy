@@ -35,21 +35,18 @@ public class BeforeSslAuthenticateEventArgs : ProxyEventArgsBase
     public bool DecryptSsl { get; set; } = true;
 
     /// <summary>
-    ///     We need to know the server hostname we are forwarding the request to.
-    ///     By default its the SNI hostname indicated in SSL handshake, when SNI is available.
-    ///     When SNI is not available, it will use the GenericCertificateName of TransparentEndPoint.
-    ///     This property is used only when DecryptSsl or when BeforeSslAuthenticateEventArgs.DecryptSsl is false.
-    ///     When DecryptSsl is true, we need to explicitly set the Forwarded host and port by setting
-    ///     e.HttpClient.Request.Url inside BeforeRequest event handler.
+    ///     Hostname used as the TCP/TLS forward target for this transparent connection.
+    ///     Defaults to the SNI hostname from the SSL handshake when available; otherwise the
+    ///     <c>GenericCertificateName</c> of the transparent endpoint. Used whether or not
+    ///     <see cref="DecryptSsl" /> is true. When decrypting, you may still need to adjust the HTTP
+    ///     request identity (for example <c>e.HttpClient.Request.Url</c>) in <c>BeforeRequest</c>.
     /// </summary>
     public string ForwardHttpsHostName { get; set; }
 
     /// <summary>
-    ///     We need to know the server port we are forwarding the request to.
-    ///     By default its the standard https port, 443.
-    ///     This property is used only when DecryptSsl or when BeforeSslAuthenticateEventArgs.DecryptSsl is false.
-    ///     When DecryptSsl is true, we need to explicitly set the Forwarded host and port by setting
-    ///     e.HttpClient.Request.Url inside BeforeRequest event handler.
+    ///     Port used as the TCP/TLS forward target for this transparent connection.
+    ///     Defaults to the standard HTTPS port, 443. Used whether or not <see cref="DecryptSsl" /> is true.
+    ///     When decrypting, you may still need to adjust the HTTP request identity in <c>BeforeRequest</c>.
     /// </summary>
     public int ForwardHttpsPort { get; set; } = 443;
 

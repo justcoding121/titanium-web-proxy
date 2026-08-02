@@ -64,7 +64,7 @@ HTTP/1.1 (`Upgrade: websocket`) requests.
 |---|---|---|
 | HTTP/2 extended CONNECT | HTTP/2 extended CONNECT | Native h2↔h2 DATA relay (no translation) |
 | HTTP/2 extended CONNECT | HTTP/1.1 | h2→h1 bridge: translate 200→WebSocket upgrade, relay DATA as WebSocket frames |
-| HTTP/1.1 Upgrade | HTTP/2 | h1→h2 bridge: translate 101→200, relay WebSocket frames as DATA |
+| HTTP/1.1 Upgrade | HTTP/2 | Not supported — synthetic `501 Not Implemented` (`Http11ToHttp2BridgeHandler`) |
 
 ### Native h2↔h2 tunnel lifecycle
 
@@ -75,7 +75,7 @@ HTTP/1.1 (`Upgrade: websocket`) requests.
 2. **Tunnel establishment**: a final 2xx response from the origin marks `ExtendedConnectEstablished =
    true` on the stream state. Non-2xx responses follow the normal HTTP response body path.
 3. **DATA relay**: once established, DATA frames from either direction are forwarded unchanged (no
-   HTTP body buffering). `OnDataSent`/`OnDataReceived` events fire with the unpadded payload.
+   HTTP body buffering). `DataSent`/`DataReceived` events fire with the unpadded payload.
 4. **Half-close**: `END_STREAM` on a DATA frame marks that direction as half-closed. Subsequent DATA
    from a half-closed direction is rejected with `RST_STREAM(STREAM_CLOSED)`.
 5. **Post-establishment HEADERS**: any HEADERS or CONTINUATION frame on an established tunnel stream
