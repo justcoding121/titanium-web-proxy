@@ -419,14 +419,13 @@ public partial class ProxyServer
         TcpServerConnection? serverConnection, SslApplicationProtocol sslApplicationProtocol,
         CancellationToken cancellationToken, CancellationTokenSource cancellationTokenSource)
     {
-        args.HttpClient.Request.Locked = true;
-
         // do not cache server connections for WebSockets
         var noCache = args.HttpClient.Request.UpgradeToWebSocket;
 
         if (noCache) serverConnection = null;
 
         // H1.1 client → H3 origin bridge: resolve route from cache, warming SVCB in the background.
+        // Body must be buffered before Locked=true — GetRequestBody throws once the request is locked.
         if (!args.HttpClient.Request.UpgradeToWebSocket)
         {
             var reqHost = args.HttpClient.Request.RequestUri?.Host ?? string.Empty;
@@ -438,6 +437,14 @@ public partial class ProxyServer
 
             if (h3Route.UseH3)
             {
+                // Buffer the client request body before leaving the H1 pipeline. Without this, the
+                // body remains unread on the client stream (corrupting keep-alive reuse) and
+                // Http3OriginBridge forwards an empty Body to the H3 origin.
+                if (args.HttpClient.Request.HasBody && !args.HttpClient.Request.IsBodyRead)
+                    await args.GetRequestBody(cancellationToken);
+
+                args.HttpClient.Request.Locked = true;
+
                 await Http3.Http3OriginBridge.ForwardAsync(args, this, h3Route, logger, cancellationToken);
 
                 // Http3OriginBridge only fetches/buffers the origin response into args.HttpClient.Response -
@@ -511,6 +518,8 @@ public partial class ProxyServer
                 return new RetryResult(null, null, h3Response.KeepAlive);
             }
         }
+
+        args.HttpClient.Request.Locked = true;
 
         // a connection generator task with captured parameters via closure.
         var generator = () =>
