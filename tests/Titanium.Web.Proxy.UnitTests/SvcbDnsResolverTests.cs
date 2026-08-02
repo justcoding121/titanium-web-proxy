@@ -480,6 +480,163 @@ public class SvcbDnsResolverTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Coalesce / neg-cache / transient / backoff (no real DNS)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static ConcurrentDictionary<string, DateTime> GetTransientCache(UdpSvcbDnsResolver resolver)
+    {
+        var field = typeof(UdpSvcbDnsResolver).GetField("_transientCache",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.IsNotNull(field);
+        return (ConcurrentDictionary<string, DateTime>)field.GetValue(resolver)!;
+    }
+
+    private static object GetInflight(UdpSvcbDnsResolver resolver)
+    {
+        var field = typeof(UdpSvcbDnsResolver).GetField("_inflight",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.IsNotNull(field);
+        return field.GetValue(resolver)!;
+    }
+
+    private static int GetInflightCount(UdpSvcbDnsResolver resolver) =>
+        (int)GetInflight(resolver).GetType().GetProperty("Count")!.GetValue(GetInflight(resolver))!;
+
+    private static void InflightTryAdd(UdpSvcbDnsResolver resolver, string key, object completedTask)
+    {
+        var dict = GetInflight(resolver);
+        var tryAdd = dict.GetType().GetMethod("TryAdd")!;
+        var added = (bool)tryAdd.Invoke(dict, new[] { key, completedTask })!;
+        Assert.IsTrue(added);
+    }
+
+    private static void SetBackoffState(UdpSvcbDnsResolver resolver, int consecutiveFailures,
+        DateTime backoffUntilUtc, int halfOpenInFlight = 0)
+    {
+        typeof(UdpSvcbDnsResolver).GetField("_consecutiveTransientFailures",
+            BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(resolver, consecutiveFailures);
+        typeof(UdpSvcbDnsResolver).GetField("_resolverBackoffUntilUtc",
+            BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(resolver, backoffUntilUtc);
+        typeof(UdpSvcbDnsResolver).GetField("_halfOpenProbeInFlight",
+            BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(resolver, halfOpenInFlight);
+    }
+
+    [TestMethod]
+    public async System.Threading.Tasks.Task TryGetH3CapabilityAsync_NegativeCacheHit_SkipsDnsAndReturnsNull()
+    {
+        var resolver = new UdpSvcbDnsResolver(new IPEndPoint(IPAddress.Loopback, 1));
+        GetNegativeCache(resolver)["neg.example:443"] = DateTime.UtcNow.AddMinutes(5);
+
+        var result = await resolver.TryGetH3CapabilityAsync("neg.example", 443, default);
+
+        Assert.IsNull(result);
+        Assert.AreEqual(0, GetInflightCount(resolver), "Negative-cache hit must not start a DNS probe.");
+    }
+
+    [TestMethod]
+    public async System.Threading.Tasks.Task TryGetH3CapabilityAsync_TransientCacheHit_ReturnsNullWithoutProbe()
+    {
+        var resolver = new UdpSvcbDnsResolver(new IPEndPoint(IPAddress.Loopback, 1));
+        GetTransientCache(resolver)["tmp.example:443"] = DateTime.UtcNow.AddSeconds(30);
+
+        var result = await resolver.TryGetH3CapabilityAsync("tmp.example", 443, default);
+
+        Assert.IsNull(result);
+        Assert.AreEqual(0, GetInflightCount(resolver));
+    }
+
+    [TestMethod]
+    public async System.Threading.Tasks.Task TryGetH3CapabilityAsync_ConcurrentCallers_ShareSingleInflightTask()
+    {
+        var resolver = new UdpSvcbDnsResolver(new IPEndPoint(IPAddress.Loopback, 1));
+        var key = "coalesce.example:443";
+
+        // SvcbQueryState is a private nested type; build a completed Task<SvcbQueryState> via reflection.
+        var stateType = typeof(UdpSvcbDnsResolver).GetNestedType("SvcbQueryState", BindingFlags.NonPublic);
+        Assert.IsNotNull(stateType);
+        var stateCtor = stateType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)[0];
+        var state = stateCtor.Invoke(new object?[] { null });
+        var completed = typeof(System.Threading.Tasks.Task).GetMethod(nameof(System.Threading.Tasks.Task.FromResult))!
+            .MakeGenericMethod(stateType)
+            .Invoke(null, new[] { state })!;
+
+        InflightTryAdd(resolver, key, completed);
+
+        var a = resolver.TryGetH3CapabilityAsync("coalesce.example", 443, default);
+        var b = resolver.TryGetH3CapabilityAsync("coalesce.example", 443, default);
+        var ra = await a;
+        var rb = await b;
+
+        Assert.IsNull(ra);
+        Assert.IsNull(rb);
+        Assert.AreEqual(1, GetInflightCount(resolver), "Both waiters must share the pre-seeded inflight task.");
+    }
+
+    [TestMethod]
+    public async System.Threading.Tasks.Task TryGetH3CapabilityAsync_DuringBackoff_RejectsAllProbes()
+    {
+        var resolver = new UdpSvcbDnsResolver(new IPEndPoint(IPAddress.Loopback, 1));
+        SetBackoffState(resolver, consecutiveFailures: 2, backoffUntilUtc: DateTime.UtcNow.AddMinutes(1));
+
+        var result = await resolver.TryGetH3CapabilityAsync("backoff.example", 443, default);
+
+        Assert.IsNull(result);
+        Assert.AreEqual(0, GetInflightCount(resolver));
+    }
+
+    [TestMethod]
+    public async System.Threading.Tasks.Task TryGetH3CapabilityAsync_HalfOpenAlreadyInFlight_RejectsSecondCaller()
+    {
+        var resolver = new UdpSvcbDnsResolver(new IPEndPoint(IPAddress.Loopback, 1));
+        // Backoff window elapsed, but a half-open probe is already reserved.
+        SetBackoffState(resolver, consecutiveFailures: 1, backoffUntilUtc: DateTime.UtcNow.AddMinutes(-1),
+            halfOpenInFlight: 1);
+
+        var result = await resolver.TryGetH3CapabilityAsync("halfopen.example", 443, default);
+
+        Assert.IsNull(result);
+        Assert.AreEqual(0, GetInflightCount(resolver));
+    }
+
+    [TestMethod]
+    public void NoteQueryTransientFailure_SetsBackoffWindow_WithExponentialGrowth()
+    {
+        var resolver = new UdpSvcbDnsResolver(new IPEndPoint(IPAddress.Loopback, 1));
+        var note = typeof(UdpSvcbDnsResolver).GetMethod("NoteQueryTransientFailure",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.IsNotNull(note);
+
+        note.Invoke(resolver, null);
+        var firstUntil = (DateTime)typeof(UdpSvcbDnsResolver)
+            .GetField("_resolverBackoffUntilUtc", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(resolver)!;
+        var firstFailures = (int)typeof(UdpSvcbDnsResolver)
+            .GetField("_consecutiveTransientFailures", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(resolver)!;
+
+        Assert.AreEqual(1, firstFailures);
+        Assert.IsTrue(firstUntil > DateTime.UtcNow,
+            "First transient failure must open a future backoff window.");
+
+        // Force the first window into the past so the second Note clearly advances absolute time.
+        typeof(UdpSvcbDnsResolver).GetField("_resolverBackoffUntilUtc",
+            BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(resolver, DateTime.UtcNow.AddSeconds(-1));
+
+        note.Invoke(resolver, null);
+        var secondUntil = (DateTime)typeof(UdpSvcbDnsResolver)
+            .GetField("_resolverBackoffUntilUtc", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(resolver)!;
+        var secondFailures = (int)typeof(UdpSvcbDnsResolver)
+            .GetField("_consecutiveTransientFailures", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(resolver)!;
+
+        Assert.AreEqual(2, secondFailures);
+        Assert.IsTrue(secondUntil > DateTime.UtcNow);
+        Assert.IsTrue(secondUntil <= DateTime.UtcNow.AddMinutes(5).AddSeconds(1),
+            "Backoff must stay within the 5-minute cap.");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Additional packet builder helpers
     // ─────────────────────────────────────────────────────────────────────────
 
