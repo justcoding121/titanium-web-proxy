@@ -57,6 +57,7 @@ jobs:
         /o:"justcoding121"
         /d:sonar.token="$env:SONAR_TOKEN"
         /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml"
+        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**"
 
     - name: Build for SonarCloud analysis
       if: env.SONAR_TOKEN != ''
