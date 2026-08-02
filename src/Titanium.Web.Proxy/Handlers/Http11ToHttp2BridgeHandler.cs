@@ -710,7 +710,9 @@ public partial class ProxyServer
 
         request.Method = "CONNECT";
         request.ExtendedConnectProtocol = "websocket";
-        request.HttpVersion = HttpHeader.Version20;
+        // Keep the client's HTTP/1.1 version on the SessionEventArgs request so synthetic
+        // BeforeResponse replacements (GenericResponse/etc.) still speak HTTP/1.1 to the client.
+        // SendHeader does not require HttpVersion 2.0 on the Request object.
 
         request.Headers.RemoveHeader(KnownHeaders.Connection);
         request.Headers.RemoveHeader("Keep-Alive");
