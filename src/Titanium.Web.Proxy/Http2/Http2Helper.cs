@@ -3236,10 +3236,8 @@ namespace Titanium.Web.Proxy.Http2
             public Uri GetUri()
             {
                 if (Authority.Length == 0)
-                {
-                    // todo
-                    Authority = HttpHeader.Encoding.GetBytes("abc.abc");
-                }
+                    throw new InvalidOperationException(
+                        "HTTP/2 request is missing the :authority pseudo-header.");
 
                 var bytes = new byte[scheme.Length + 3 + Authority.Length + Path.Length];
                 scheme.Span.CopyTo(bytes);
