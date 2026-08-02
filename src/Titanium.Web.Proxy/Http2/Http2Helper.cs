@@ -112,7 +112,7 @@ namespace Titanium.Web.Proxy.Http2
             resourceLimits ??= ProxyResourceLimits.Default;
             // Linked CTS so an early origin GOAWAY can stop both relay legs without cancelling the
             // caller's session token — the client connection stays alive for a fresh-origin retry.
-            using var relayCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationTokenSource.Token);
+            var relayCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationTokenSource.Token);
             var connectionState = new Http2ConnectionState(connectionId, relayCts);
 
             // Now async relay all server=>client & client=>server data
@@ -859,14 +859,6 @@ namespace Titanium.Web.Proxy.Http2
                             }
                             else if (output is not NullOriginStream)
                             {
-                                // RFC 9113 connection preface: as the HTTP/2 client toward the origin, do not
-                                // send request HEADERS until the origin's initial SETTINGS have been received
-                                // (and relayed). Extended CONNECT already waits above; normal requests must
-                                // too — some CDNs close with GOAWAY(InternalError)/lastStreamId=0 otherwise,
-                                // which Chromium surfaces as net::ERR_HTTP2_PROTOCOL_ERROR.
-                                await connectionState.ServerSettingsRelayed.Task.WaitAsync(cancellationToken);
-
-
                                 // Bind shared origin metadata without SetConnection so HasConnection stays
                                 // false (H1 syphon/drain must not touch the multiplexed H2 socket).
                                 if (originConnection != null)

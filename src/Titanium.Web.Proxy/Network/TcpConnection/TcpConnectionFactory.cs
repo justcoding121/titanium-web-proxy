@@ -1279,8 +1279,17 @@ internal class TcpConnectionFactory : IDisposable
         // already scheduled for disposal: never pool it again.
         if (connection.IsDisposalScheduled) return Task.CompletedTask;
 
+        // An ALPN=h2 socket whose HTTP/2 connection preface was never written (a capability probe or an
+        // unadopted prefetch) is not a usable h2 session: the origin applies a preface timeout and tears
+        // it down - unobservably, since the pool's health check only tests writability and its TTL is
+        // refreshed on every release. Pooling one lets it be adopted many seconds later, at which point
+        // the origin answers the belated preface with GOAWAY/INTERNAL_ERROR.
+        var unstartedHttp2Connection =
+            connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2 &&
+            !connection.Http2SessionStarted;
+
         if (close || connection.IsWinAuthenticated || connection.UsedClientCertificate
-            || !Server.EnableConnectionPool || connection.IsClosed)
+            || !Server.EnableConnectionPool || connection.IsClosed || unstartedHttp2Connection)
         {
             if (connection.TryScheduleDisposal()) disposalBag.Add(connection);
             return Task.CompletedTask;
