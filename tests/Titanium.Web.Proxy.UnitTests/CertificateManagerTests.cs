@@ -61,6 +61,62 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         /// <summary>
+        /// RSA leaf keys come from a background-refilled buffer (LeafKeyPairSource) so their cost is not
+        /// paid on the CONNECT that needs the certificate. Buffering must not turn into sharing: the
+        /// default engine's contract is a distinct key per host, and only BouncyCastleFast trades that away.
+        /// </summary>
+        [TestMethod]
+        public void BC_Default_Engine_Issues_A_Distinct_Key_Per_Certificate()
+        {
+            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastle
+            };
+
+            var publicKeys = new List<string>();
+            foreach (var host in hostNames)
+            {
+                var cert = mgr.CreateCertificate(host, false);
+                Assert.IsNotNull(cert, $"No certificate produced for {host}");
+                publicKeys.Add(Convert.ToBase64String(cert.PublicKey.EncodedKeyValue.RawData));
+                cert.Dispose();
+            }
+
+            CollectionAssert.AllItemsAreUnique(publicKeys,
+                "Every leaf certificate from the default engine must carry its own key pair.");
+        }
+
+        /// <summary>
+        /// P-256 leaves have to survive the round trip through the platform's key store, which is where
+        /// they are easiest to get wrong: BouncyCastle will happily encode an EC private key with the
+        /// curve spelled out instead of named, and Windows CNG rejects exactly that when the PKCS#12 blob
+        /// is imported - the certificate is produced, then fails to load. Assert on a usable private key
+        /// rather than merely on a certificate coming back.
+        /// </summary>
+        [TestMethod]
+        public void BC_Engines_Issue_Usable_EcdsaP256_Leaves()
+        {
+            foreach (var engine in new[] { CertificateEngine.BouncyCastle, CertificateEngine.BouncyCastleFast })
+            {
+                using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+                {
+                    CertificateEngine = engine,
+                    LeafCertificateKeyAlgorithm = CertificateKeyAlgorithm.EcdsaP256
+                };
+
+                using var cert = mgr.CreateCertificate(hostNames[0], false);
+
+                Assert.IsNotNull(cert, $"No certificate produced by {engine}");
+                Assert.AreEqual("1.2.840.10045.2.1", cert.PublicKey.Oid.Value,
+                    $"{engine} did not issue an EC leaf.");
+
+                using var ecdsa = cert.GetECDsaPrivateKey();
+                Assert.IsNotNull(ecdsa, $"{engine} produced an EC leaf whose private key cannot be loaded.");
+                Assert.AreEqual(256, ecdsa.KeySize);
+            }
+        }
+
+        /// <summary>
         /// Regression test for issue #765: setting RootCertificate to the same certificate instance
         /// (same thumbprint) must NOT clear the in-memory leaf cache, so cached leaves survive a
         /// simulated restart where the same persisted root is reloaded.

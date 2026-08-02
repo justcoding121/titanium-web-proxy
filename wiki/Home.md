@@ -143,6 +143,8 @@ Useful `CertificateManager` members:
 - `CreateRootCertificate(...)`, `TrustRootCertificate(...)`, `RemoveTrustedRootCertificate(...)`.
 - `SaveFakeCertificates` — cache generated leaf certificates on disk.
 - `CertificateEngine` — `BouncyCastle` or the built-in engine.
+- `LeafCertificateKeyAlgorithm` — key algorithm for generated leaf certificates, `Rsa2048` (default)
+  or `EcdsaP256`. See [first-visit latency](#first-visit-latency-and-the-leaf-key-algorithm).
 
 Only decrypt endpoints where you need to see content; leave `decryptSsl: false` to pass HTTPS through as an opaque tunnel.
 
@@ -344,6 +346,30 @@ proxyServer.ForwardToUpstreamGateway = true;
 - `ConnectionTimeOutSeconds`, `TcpTimeWaitSeconds`, `ReuseSocket` — tune connection lifetime.
 - `BufferPool` / `BufferSize` — reuse I/O buffers.
 - `CertificateManager.SaveFakeCertificates` — cache generated certificates.
+
+### First-visit latency and the leaf key algorithm
+
+Once a host's certificate is cached, the proxy costs little: measured against Chrome loading
+google.com, wikipedia.org, news.google.com, youtube.com and jw.org, going through it adds roughly
+30 ms to main-document TTFB, which is about what the extra TLS leg and hop should cost.
+
+The first visit to a host is different, because a certificate has to be produced before the browser
+handshake can finish. An RSA-2048 key pair costs a few hundred milliseconds of CPU, and a page
+pulling resources from a few dozen not-yet-seen hosts needs one per host — all at once, all
+CPU-bound, so they inflate each other well past their uncontended cost. Two things bound that:
+
+- Leaf RSA key pairs come from a small buffer that a background task keeps topped up, so a key
+  generated while the proxy was idle is handed over immediately and only a burst longer than the
+  buffer waits on generation at all. This is automatic and needs no configuration.
+- Setting `CertificateManager.LeafCertificateKeyAlgorithm` to `CertificateKeyAlgorithm.EcdsaP256`
+  issues P-256 leaves instead, which cost a fraction of an RSA key pair to generate while still
+  giving every host its own key. On a cold certificate cache this takes first-visit TTFB from
+  several times the direct baseline down to roughly parity with it. Only clients that accept ECDSA
+  server certificates can be intercepted afterwards — universal among current browsers, but not in
+  much older TLS stacks, which is why `Rsa2048` remains the default. The root certificate stays RSA
+  either way, so an already-installed and trusted root keeps working.
+
+Honoured by the BouncyCastle engines; the Windows engine always issues RSA.
 
 ## Logging and diagnostics
 

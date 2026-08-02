@@ -84,6 +84,13 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             // the same hosts reuse them instead of regenerating a key pair per host on every launch.
             // Connection pooling and origin-connection prefetch are already on by library default.
             proxyServer.CertificateManager.SaveFakeCertificates = true;
+            // Issue P-256 leaves rather than the default RSA-2048 ones. Generating an RSA key pair costs
+            // a few hundred milliseconds of CPU and one is needed per not-yet-seen host, which is the
+            // largest delay the proxy adds to a first visit; P-256 costs a fraction of that and still
+            // gives every host its own key. Browsers all accept ECDSA server certificates - revert to
+            // Rsa2048 if something older is being intercepted. The root certificate stays RSA.
+            proxyServer.CertificateManager.LeafCertificateKeyAlgorithm =
+                Network.CertificateKeyAlgorithm.EcdsaP256;
             proxyServer.ForwardToUpstreamGateway = true;
             // Bound the in-memory certificate cache a little higher for a browsing-heavy manual test
             // session; leave the on-disk cache unbounded so it survives across runs.

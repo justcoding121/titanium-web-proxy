@@ -97,6 +97,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //   TWP_PREFETCH=1|0
             //   TWP_ENABLE_HTTP2=1|0
             //   TWP_SAVE_FAKE_CERTS=1|0
+            //   TWP_LEAF_KEY=ec|rsa
             //   TWP_CAPTURE_TIMING=1|0
             //   TWP_SET_SYSTEM_PROXY=1|0  (StartProxy)
             //   TWP_ENABLE_HTTP3=1|0 / TWP_ENABLE_SVCB_DNS=1|0  (StartProxy)
@@ -115,6 +116,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.EnableHttp2 = ReadEnvBool("TWP_ENABLE_HTTP2", defaultValue: true);
             proxyServer.CertificateManager.SaveFakeCertificates =
                 ReadEnvBool("TWP_SAVE_FAKE_CERTS", defaultValue: true);
+
+            // Generating an RSA-2048 leaf costs ~400ms of CPU, and a page pulling resources from a few
+            // dozen not-yet-seen hosts needs one per host - which is the largest latency this proxy adds
+            // to a first visit. A P-256 leaf costs ~7ms and still gives every host its own key. Browsers
+            // all accept ECDSA server certificates; set TWP_LEAF_KEY=rsa when intercepting an older
+            // client that does not. The root certificate stays RSA either way.
+            proxyServer.CertificateManager.LeafCertificateKeyAlgorithm =
+                Environment.GetEnvironmentVariable("TWP_LEAF_KEY") is "rsa" or "RSA"
+                    ? Network.CertificateKeyAlgorithm.Rsa2048
+                    : Network.CertificateKeyAlgorithm.EcdsaP256;
 
             // ProxyResourceLimits.Default already bounds the in-memory certificate cache at 1024
             // entries (see its doc comment for why an unbounded cache was a defect, not a feature).
@@ -280,6 +291,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 $"Knobs: pool={proxyServer.EnableConnectionPool} prefetch={proxyServer.EnableTcpServerConnectionPrefetch} " +
                 $"h2={proxyServer.EnableHttp2} forwardUpstream={proxyServer.ForwardToUpstreamGateway} " +
                 $"saveCerts={proxyServer.CertificateManager.SaveFakeCertificates} " +
+                $"leafKey={proxyServer.CertificateManager.LeafCertificateKeyAlgorithm} " +
                 $"timing={proxyServer.EnableRequestTimingCapture}");
         }
 

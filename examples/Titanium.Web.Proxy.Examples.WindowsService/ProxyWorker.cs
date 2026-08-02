@@ -51,6 +51,7 @@ internal sealed class ProxyWorker : BackgroundService
             NoDelay = settings.NoDelay
         };
         proxyServer.CertificateManager.SaveFakeCertificates = settings.SaveFakeCertificates;
+        proxyServer.CertificateManager.LeafCertificateKeyAlgorithm = settings.LeafCertificateKeyAlgorithm;
 
         proxyServer.ThreadPoolWorkerThread = settings.ThreadPoolWorkerThreads < 0
             ? Environment.ProcessorCount

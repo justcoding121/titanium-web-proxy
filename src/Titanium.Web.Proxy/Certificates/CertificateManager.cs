@@ -47,6 +47,29 @@ public enum CertificateEngine
 }
 
 /// <summary>
+///     Key algorithm used for the leaf ("fake") certificates the proxy generates per intercepted host.
+/// </summary>
+public enum CertificateKeyAlgorithm
+{
+    /// <summary>
+    ///     RSA 2048. The default, and what every TLS client in existence accepts - including legacy
+    ///     stacks with no elliptic-curve support, which is often exactly what a debugging proxy is
+    ///     pointed at. Generating one costs hundreds of milliseconds of CPU, so the first connection to
+    ///     each new host pays for it unless a previously generated certificate is still cached.
+    /// </summary>
+    Rsa2048 = 0,
+
+    /// <summary>
+    ///     ECDSA over NIST P-256. Roughly fifty times cheaper to generate than
+    ///     <see cref="Rsa2048" /> while still giving every host its own key, which effectively removes
+    ///     certificate generation from first-visit latency. Requires clients that accept ECDSA server
+    ///     certificates - universal among current browsers and TLS libraries, but not in very old ones.
+    ///     The root certificate is unaffected and stays RSA, so it continues to sign these leaves.
+    /// </summary>
+    EcdsaP256 = 1
+}
+
+/// <summary>
 ///     A class to manage SSL certificates used by this proxy server.
 /// </summary>
 public sealed class CertificateManager : IDisposable
@@ -102,6 +125,8 @@ public sealed class CertificateManager : IDisposable
     private bool disposed;
 
     private CertificateEngine engine;
+
+    private CertificateKeyAlgorithm leafKeyAlgorithm = CertificateKeyAlgorithm.Rsa2048;
 
     private string? issuer;
 
@@ -234,10 +259,12 @@ public sealed class CertificateManager : IDisposable
                 switch (engine)
                 {
                     case CertificateEngine.BouncyCastle:
-                        certEngineValue = new BcCertificateMaker(CertificateValidDays, CertificateGraceDays);
+                        certEngineValue = new BcCertificateMaker(CertificateValidDays, CertificateGraceDays,
+                            leafKeyAlgorithm);
                         break;
                     case CertificateEngine.BouncyCastleFast:
-                        certEngineValue = new BcCertificateMakerFast(CertificateValidDays, CertificateGraceDays);
+                        certEngineValue = new BcCertificateMakerFast(CertificateValidDays, CertificateGraceDays,
+                            leafKeyAlgorithm);
                         break;
                     case CertificateEngine.DefaultWindows:
                     default:
@@ -310,6 +337,30 @@ public sealed class CertificateManager : IDisposable
                 certEngineValue = null;
                 engine = value;
             }
+        }
+    }
+
+    /// <summary>
+    ///     Key algorithm for generated leaf certificates. Honoured by the BouncyCastle engines; the
+    ///     Windows engine always issues RSA. Defaults to <see cref="CertificateKeyAlgorithm.Rsa2048" />.
+    ///     <para>
+    ///         Switching to <see cref="CertificateKeyAlgorithm.EcdsaP256" /> makes generating a
+    ///         certificate for a not-yet-seen host roughly fifty times cheaper, which is the single
+    ///         largest cost the proxy adds to a first visit. Only clients that accept ECDSA server
+    ///         certificates can be intercepted afterwards.
+    ///     </para>
+    /// </summary>
+    public CertificateKeyAlgorithm LeafCertificateKeyAlgorithm
+    {
+        get => leafKeyAlgorithm;
+        set
+        {
+            if (value == leafKeyAlgorithm) return;
+
+            // The makers capture the algorithm when constructed (BouncyCastleFast generates its single
+            // shared key pair right there), so the cached instance has to go.
+            certEngineValue = null;
+            leafKeyAlgorithm = value;
         }
     }
 
