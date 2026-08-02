@@ -34,18 +34,6 @@ internal sealed class Http2OriginGoAwayException : IOException
 }
 
 /// <summary>
-///     The origin closed the HTTP/2 session with GOAWAY before the connection-preface SETTINGS exchange
-///     completed. No frames from that origin were forwarded to the client, so the caller may open a
-///     fresh origin connection and retry without resetting the client session.
-/// </summary>
-internal sealed class Http2EarlyOriginGoAwayException : IOException
-{
-    internal Http2EarlyOriginGoAwayException(string message) : base(message)
-    {
-    }
-}
-
-/// <summary>
 ///     One real, persistent HTTP/2 connection to one origin server, used as the target of the
 ///     HTTP/1.1-client-to-h2-origin translation bridge (<c>Http11ToHttp2BridgeHandler</c>). Leases an odd,
 ///     strictly increasing stream id (RFC 7540 §5.1.1) for each translated request rather than dequeuing the
