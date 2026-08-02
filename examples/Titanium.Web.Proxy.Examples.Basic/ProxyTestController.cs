@@ -109,6 +109,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // still works behind a corporate proxy. On a machine with no PAC/WPAD configured this
             // resolves to "direct" without any network work, so it is not a cold-start cost there;
             // set TWP_FORWARD_UPSTREAM=0 to measure its cost where a PAC script is actually deployed.
+            // Direct destinations still get HTTP/3 (Alt-Svc + background QUIC warm); only destinations
+            // that actually resolve to an upstream proxy stay on TCP, since QUIC cannot be tunnelled.
             proxyServer.ForwardToUpstreamGateway = ReadEnvBool("TWP_FORWARD_UPSTREAM", defaultValue: true);
             // Prefetch overlaps origin connect with client TLS on cache hits / HTTP/1.1 clients.
             // Cold HTTP/2 still awaits one origin probe for ALPN (library behavior).

@@ -122,9 +122,12 @@ public partial class ProxyServer
             // keep serving over TCP until it is ready, which is what browsers do with Alt-Svc.
             if (!Http3WarmOrigins.IsWarm(host, quicPort))
             {
-                // QUIC cannot be tunnelled through an upstream proxy (see QuicConnectionFactory),
-                // so warming a connection that could never be used would just burn a handshake.
-                if (UpStreamHttpsProxy == null && GetCustomUpStreamProxyFunc == null)
+                // QUIC cannot be tunnelled through a static upstream HTTPS proxy
+                // (see QuicConnectionFactory). GetCustomUpStreamProxyFunc - including the one
+                // ForwardToUpstreamGateway installs - often returns null/"direct" per destination,
+                // so its mere presence must not suppress warming: real requests that do get an
+                // upstream proxy fail QUIC in Http3OriginBridge and stay on TCP.
+                if (UpStreamHttpsProxy == null)
                     QuicConnectionPool.BeginWarmup(cachedTarget ?? host, quicPort, host, UpStreamEndPoint);
 
                 return Http3OriginRoute.None;
