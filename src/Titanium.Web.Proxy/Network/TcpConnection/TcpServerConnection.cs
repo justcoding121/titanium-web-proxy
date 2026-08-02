@@ -99,6 +99,15 @@ internal class TcpServerConnection : IDisposable
     internal DateTime LastAccess { get; set; }
 
     /// <summary>
+    ///     True once the HTTP/2 connection preface has been written on this connection, i.e. it carries a
+    ///     real h2 session rather than being an ALPN-negotiated-but-never-started socket. An h2 connection
+    ///     opened only for capability probing/prefetching never starts its session, and origins terminate
+    ///     such a connection (typically with GOAWAY/INTERNAL_ERROR) once their preface timeout elapses -
+    ///     so it must never be pooled and resurrected later. See <see cref="Tcp.TcpConnectionFactory.Release" />.
+    /// </summary>
+    internal bool Http2SessionStarted { get; set; }
+
+    /// <summary>
     ///     The cache key used to uniquely identify this connection properties
     /// </summary>
     internal string CacheKey { get; set; }

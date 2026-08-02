@@ -346,6 +346,7 @@ public partial class ProxyServer
                                         {
                                             var connectionPreface =
                                                 new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
+                                            connection.Http2SessionStarted = true;
                                             await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
                                             await Http2Helper.SendHttp2(clientStream, connection.Stream,
                                                 () => new SessionEventArgs(this, endPoint, clientStream, null,

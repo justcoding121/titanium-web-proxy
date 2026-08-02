@@ -533,9 +533,9 @@ public partial class ProxyServer
                     {
                         for (var originAttempt = 0; originAttempt < 2; originAttempt++)
                         {
-                        if (originAttempt > 0)
-                        {
-                            await TcpConnectionFactory.Release(connection, true);
+                            if (originAttempt > 0)
+                            {
+                                await TcpConnectionFactory.Release(connection, true);
                                 connection = (await TcpConnectionFactory.GetServerConnection(this, connectArgs,
                                     true, SslExtensions.Http2ProtocolAsList,
                                     true, false, cancellationToken))!;
@@ -558,6 +558,7 @@ public partial class ProxyServer
                             try
                             {
                                 var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
+                                connection.Http2SessionStarted = true;
                                 await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
                                 await Http2Helper.SendHttp2(clientStream, connection.Stream,
                                     () => new SessionEventArgs(this, endPoint, clientStream, connectArgs?.HttpClient.ConnectRequest, cancellationTokenSource)
