@@ -117,6 +117,12 @@ internal sealed class Http2ConnectionState
     public int ServerLastStreamId = int.MaxValue;
 
     /// <summary>
+    ///     Origin sent GOAWAY before its initial SETTINGS were relayed. The client has not yet been told
+    ///     about the failure, so the session may reconnect to a fresh origin and retry the preface.
+    /// </summary>
+    public volatile bool EarlyOriginFailure;
+
+    /// <summary>
     ///     Count of RST_STREAM frames received directly from the client for a stream that had not yet
     ///     completed normally (still tracked in <see cref="Streams" /> at the moment the reset
     ///     arrived) - the abuse signal for a Rapid Reset (CVE-2023-44487) style attack, where a client

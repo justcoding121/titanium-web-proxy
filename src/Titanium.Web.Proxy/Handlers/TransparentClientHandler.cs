@@ -320,21 +320,53 @@ public partial class ProxyServer
 
                                 try
                                 {
-                                    var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
-                                    await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
-                                    await Http2Helper.SendHttp2(clientStream, connection.Stream,
-                                        () => new SessionEventArgs(this, endPoint, clientStream, null,
-                                            cancellationTokenSource),
-                                        // Use the H3-aware delegate so Alt-Svc cache hits can upgrade
-                                        // individual h2 streams to H3 mid-connection (warm path).
-                                        (sessionArgs, ctx) => BridgeOnBeforeRequestForH3(sessionArgs, ctx,
-                                            httpsHostName, args.ForwardHttpsPort, coldH3Bridge: false),
-                                        async (sessionArgs, ctx) => { await OnBeforeResponse(sessionArgs); },
-                                        async sessionArgs => { await OnAfterResponse(sessionArgs); },
-                                        headers => PrepareRequestHeaders(headers),
-                                        cancellationTokenSource, clientStream.Connection.Id, logger,
-                                        MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
-                                        originConnection: connection);
+                                    for (var originAttempt = 0; originAttempt < 2; originAttempt++)
+                                    {
+                                        if (originAttempt > 0)
+                                        {
+                                            await TcpConnectionFactory.Release(connection, true);
+                                            connection = (await TcpConnectionFactory.GetServerConnection(this,
+                                                httpsHostName, args.ForwardHttpsPort, HttpHeader.Version20, true,
+                                                SslExtensions.Http2ProtocolAsList, true, sessionForCacheKey,
+                                                UpStreamEndPoint, UpStreamHttpsProxy, true, false, cancellationToken,
+                                                http2ConnectHost, http2ConnectPort))!;
+                                            connection = await EnsureHttp2OriginConnectionAsync(connection,
+                                                capabilityCacheKey, sessionForCacheKey,
+                                                args.AllowHttpProtocolTranslation);
+                                            if (connection == null)
+                                            {
+                                                await SendHttp2ToHttp11Bridge(clientStream, endPoint, null, null,
+                                                    httpsHostName, args.ForwardHttpsPort, http2ConnectHost,
+                                                    http2ConnectPort, cancellationTokenSource);
+                                                return;
+                                            }
+                                        }
+
+                                        try
+                                        {
+                                            var connectionPreface =
+                                                new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
+                                            await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
+                                            await Http2Helper.SendHttp2(clientStream, connection.Stream,
+                                                () => new SessionEventArgs(this, endPoint, clientStream, null,
+                                                    cancellationTokenSource),
+                                                // Use the H3-aware delegate so Alt-Svc cache hits can upgrade
+                                                // individual h2 streams to H3 mid-connection (warm path).
+                                                (sessionArgs, ctx) => BridgeOnBeforeRequestForH3(sessionArgs, ctx,
+                                                    httpsHostName, args.ForwardHttpsPort, coldH3Bridge: false),
+                                                async (sessionArgs, ctx) => { await OnBeforeResponse(sessionArgs); },
+                                                async sessionArgs => { await OnAfterResponse(sessionArgs); },
+                                                headers => PrepareRequestHeaders(headers),
+                                                cancellationTokenSource, clientStream.Connection.Id, logger,
+                                                MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
+                                                originConnection: connection);
+                                            break;
+                                        }
+                                        catch (Http2EarlyOriginGoAwayException) when (originAttempt == 0)
+                                        {
+                                            // Retry once on a fresh origin; client preface bytes were never consumed.
+                                        }
+                                    }
                                 }
                                 finally
                                 {
