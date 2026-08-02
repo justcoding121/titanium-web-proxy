@@ -270,8 +270,10 @@ proxyServer.EnableHttp2 = false;
 
 Header/body modification in `BeforeRequest`/`BeforeResponse`, chunked trailers, interim (1xx) responses, and
 the synthetic-response APIs (`Ok`/`Respond`/`Redirect`/`GenericResponse`/`RespondStreaming`) all work over
-HTTP/2 the same as over HTTP/1.x — see [Streaming Bodies](Streaming-Bodies). Not supported: HTTP/2 server
-push and cleartext h2c upgrade. See [Protocol Feature Support](Protocol-Support) for the full breakdown.
+HTTP/2 the same as over HTTP/1.x — see [Streaming Bodies](Streaming-Bodies). WebSocket over HTTP/2
+(RFC 8441), including HTTP/1.1 Upgrade → h2 origin on the translation bridge, is opt-in via
+`EnableRfc8441`. Not supported: HTTP/2 server push and cleartext h2c upgrade. See
+[Protocol Feature Support](Protocol-Support) for the full breakdown.
 
 ## HTTP/3
 
