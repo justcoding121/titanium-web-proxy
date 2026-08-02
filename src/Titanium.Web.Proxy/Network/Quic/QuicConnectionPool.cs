@@ -54,16 +54,25 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     private readonly ConcurrentDictionary<string, OriginEntry> _pool = new();
     private readonly ConcurrentDictionary<string, byte> _warmupsInFlight = new();
     private readonly ProxyServer _proxyServer;
-    private readonly QuicConnectionFactory _factory;
+    private readonly IQuicConnectionFactory _factory;
     private readonly SemaphoreSlim _drainGate = new(1, 1);
     private readonly CancellationTokenSource _cleanupCts = new();
     private readonly Task _cleanupTask;
     private volatile bool _draining;
 
     internal QuicConnectionPool(ProxyServer proxyServer)
+        : this(proxyServer, new QuicConnectionFactory(proxyServer))
+    {
+    }
+
+    /// <summary>
+    ///     Test seam: inject a fake factory so pool share/invalidate/warmup policy can be exercised
+    ///     without MsQuic.
+    /// </summary>
+    internal QuicConnectionPool(ProxyServer proxyServer, IQuicConnectionFactory factory)
     {
         _proxyServer = proxyServer;
-        _factory = new QuicConnectionFactory(proxyServer);
+        _factory = factory;
         // Run on the thread pool so the first sweep (which may complete synchronously if the pool
         // starts empty) cannot block construction.
         _cleanupTask = Task.Run(ClearIdleConnectionsAsync);

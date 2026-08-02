@@ -45,11 +45,37 @@ internal sealed class QuicServerConnection : IAsyncDisposable
         NegotiatedApplicationProtocol = SslApplicationProtocol.Http3;
     }
 
+    /// <summary>
+    ///     Detached instance for pool unit tests — no live <see cref="QuicConnection" />.
+    /// </summary>
+    internal static QuicServerConnection CreateDetachedForTests(
+        ProxyServer proxyServer, string hostName, int port, string cacheKey)
+    {
+        return new QuicServerConnection(proxyServer, hostName, port, cacheKey);
+    }
+
+    private QuicServerConnection(ProxyServer proxyServer, string hostName, int port, string cacheKey)
+    {
+        Connection = null;
+        LastAccess = DateTime.UtcNow;
+        ProxyServer = proxyServer;
+        ProxyServer.UpdateServerConnectionCount(true);
+        ProxyServer.UpdateHttp3ServerConnectionCount(true);
+        HostName = hostName;
+        Port = port;
+        CacheKey = cacheKey;
+        NegotiatedApplicationProtocol = SslApplicationProtocol.Http3;
+    }
+
     public long Id { get; } = ConnectionId.Next();
 
     private ProxyServer ProxyServer { get; }
 
-    internal QuicConnection Connection { get; }
+    /// <summary>
+    ///     Underlying MsQuic connection. <see langword="null" /> only for
+    ///     <see cref="CreateDetachedForTests" /> instances used by pool unit tests.
+    /// </summary>
+    internal QuicConnection? Connection { get; }
 
     internal string HostName { get; set; }
 
@@ -82,6 +108,7 @@ internal sealed class QuicServerConnection : IAsyncDisposable
     {
         get
         {
+            if (Connection is null) return null;
             try
             {
                 return Connection.RemoteEndPoint;
@@ -105,6 +132,8 @@ internal sealed class QuicServerConnection : IAsyncDisposable
     internal System.Threading.Tasks.ValueTask<QuicStream> OpenRequestStreamAsync(
         System.Threading.CancellationToken cancellationToken)
     {
+        if (Connection is null)
+            throw new InvalidOperationException("Detached QuicServerConnection cannot open streams.");
         LastAccess = DateTime.UtcNow;
         return Connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancellationToken);
     }
@@ -167,6 +196,7 @@ internal sealed class QuicServerConnection : IAsyncDisposable
         _disposed = true;
         ProxyServer.UpdateServerConnectionCount(false);
         ProxyServer.UpdateHttp3ServerConnectionCount(false);
+        if (Connection is null) return;
         try
         {
             await Connection.CloseAsync((long)Http3.Http3ErrorCode.NoError).AsTask()
