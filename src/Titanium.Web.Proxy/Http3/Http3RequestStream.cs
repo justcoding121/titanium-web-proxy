@@ -99,17 +99,10 @@ internal static class Http3RequestStream
                     (System.Net.IPEndPoint)connection.LocalEndPoint,
                     (System.Net.IPEndPoint)connection.RemoteEndPoint);
 
-                var request = new Request();
-                request.Method = method;
-                var url = BuildUrl(scheme ?? "https", authority, path ?? "/");
-                request.RequestUri = new Uri(url);
-                request.HttpVersion = HttpHeader.Version30;
-                request.IsHttps = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase);
-
-                foreach (var (name, value) in regularHeaders)
-                    request.Headers.AddHeader(new HttpHeader(name, value));
-
-                // 4. Create SessionEventArgs using a null-backed HttpClientStream.
+                // 4. Create SessionEventArgs using a null-backed HttpClientStream, then populate
+                // the session's Request. SessionEventArgs always constructs its own Request; a
+                // discarded local Request previously left Host/URI empty so H3→origin forwarding
+                // failed with Invalid URI: 'http://'.
                 cts = new CancellationTokenSource();
                 linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
 
@@ -118,6 +111,16 @@ internal static class Http3RequestStream
                     server.BufferPool, linkedCts.Token);
 
                 sessionArgs = new SessionEventArgs(server, endPoint, nullHttpClientStream, null, cts);
+
+                var request = sessionArgs.HttpClient.Request;
+                request.Method = method;
+                var url = BuildUrl(scheme ?? "https", authority, path ?? "/");
+                request.RequestUri = new Uri(url);
+                request.HttpVersion = HttpHeader.Version30;
+                request.IsHttps = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase);
+
+                foreach (var (name, value) in regularHeaders)
+                    request.Headers.AddHeader(new HttpHeader(name, value));
 
                 // Seed per-connection overrides from the auth event.
                 // CustomUpStreamProxy is the typed proxy field read by the bridge; UserData is
@@ -402,8 +405,9 @@ internal static class Http3RequestStream
         var qpackHeaders = QpackEncoder.Encode(headers, qpackContext);
         await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
 
-        // Send body if present.
-        var body = response.IsBodyRead ? response.Body : null;
+        // Send body if present. Ok()/Respond assign Body without setting IsBodyRead (H1 uses
+        // BodyAvailable); requiring IsBodyRead alone dropped every synthetic H3 response body.
+        var body = response.BodyAvailable || response.IsBodyRead ? response.Body : null;
         if (body is { Length: > 0 })
             await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct);
 
