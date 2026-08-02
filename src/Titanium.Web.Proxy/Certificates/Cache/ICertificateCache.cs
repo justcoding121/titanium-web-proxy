@@ -15,7 +15,7 @@ public interface ICertificateCache
     void SaveRootCertificate(string pathOrName, string password, X509Certificate2 certificate);
 
     /// <summary>
-    ///     Loads certificate from the storage. Returns true if certificate does not exist.
+    ///     Loads a leaf certificate by subject name. Returns null if the certificate is missing or cannot be loaded.
     /// </summary>
     X509Certificate2? LoadCertificate(string subjectName, X509KeyStorageFlags storageFlags);
 

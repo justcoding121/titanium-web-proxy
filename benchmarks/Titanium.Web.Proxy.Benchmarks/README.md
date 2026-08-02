@@ -23,7 +23,7 @@ after it has silently rotted for several releases.
 | Plan scenario | Benchmark class | Notes |
 |---|---|---|
 | Header parse cost | `HeaderParseBenchmarks` | Real internal `HeaderParser.ReadHeaders`, 5/25/100 headers. |
-| Chunk parse cost | `ChunkSizeLineParseBenchmarks` | Real line reader + today's `LimitedStream` hex-parse baseline. Update alongside the Phase B grammar-conformant chunk parser so the before/after comparison stays valid. |
+| Chunk parse cost | `ChunkSizeLineParseBenchmarks` | Real line reader plus a legacy `int.TryParse` hex baseline. Production parsing uses `ChunkSizeParser` with `ProxyLimits.DefaultMaxChunkSizeBytes`; keep this benchmark as a historical comparison unless it is updated to call that API. |
 | HTTP/1 throughput, with/without body interception | `Http1ProxyThroughputBenchmarks` | Real `ProxyServer` against a plain-HTTP loopback origin; `InterceptBody` toggles `GetRequestBody()`/`GetResponseBody()`. |
 | HTTP/2 multiplexed streams at varying concurrency | `Http2ProxyThroughputBenchmarks` | Real `ProxyServer` MITM-decrypting to a Kestrel HTTP/2 origin; `ConcurrentStreams` = 1/10/50 over one connection. |
 | Allocation / LOH growth per request | All of the above | `[MemoryDiagnoser]` on every benchmark class reports Gen0/1/2 collections and allocated bytes per operation. |

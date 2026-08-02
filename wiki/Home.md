@@ -142,11 +142,12 @@ Useful `CertificateManager` members:
 - `RootCertificate` / `RootCertificateName` / `PfxFilePath` — the CA used for signing.
 - `CreateRootCertificate(...)`, `TrustRootCertificate(...)`, `RemoveTrustedRootCertificate(...)`.
 - `SaveFakeCertificates` — cache generated leaf certificates on disk.
-- `CertificateEngine` — `BouncyCastle` or the built-in engine.
+- `CertificateEngine` — `BouncyCastle` (default; distinct key per host), `BouncyCastleFast` (faster;
+  **one shared key for all leaves**), or `DefaultWindows` (Windows only; also shared key).
 - `LeafCertificateKeyAlgorithm` — key algorithm for generated leaf certificates, `Rsa2048` (default)
   or `EcdsaP256`. See [first-visit latency](#first-visit-latency-and-the-leaf-key-algorithm).
 - `LeafRsaKeyPairBufferSize` — how many RSA-2048 leaf private keys to keep pre-generated (default `8`;
-  `0` disables). Process-wide; unused when leaves are ECDSA P-256.
+  `0` disables; max `256`). Process-wide; unused when leaves are ECDSA P-256.
 
 Only decrypt endpoints where you need to see content; leave `decryptSsl: false` to pass HTTPS through as an opaque tunnel.
 
@@ -285,8 +286,9 @@ proxy.Start();
 ```
 
 All existing `BeforeRequest`/`BeforeResponse`/`AfterResponse` event handlers work unchanged for HTTP/3
-streams.  The proxy auto-discovers HTTP/3 capability via `Alt-Svc` response headers and will transparently
-use HTTP/3 for subsequent requests to the same origin when capability is cached.
+streams. The proxy auto-discovers HTTP/3 capability via `Alt-Svc` (and optional background HTTPS/SVCB
+DNS) and uses HTTP/3 for subsequent Auto-mode requests once that origin is warm — a cache hit alone
+only starts background QUIC warm-up.
 
 ## Tunnel (CONNECT) interception
 
@@ -360,9 +362,10 @@ handshake can finish. An RSA-2048 key pair costs a few hundred milliseconds of C
 pulling resources from a few dozen not-yet-seen hosts needs one per host — all at once, all
 CPU-bound, so they inflate each other well past their uncontended cost. Two things bound that:
 
-- Leaf RSA key pairs come from a small buffer that a background task keeps topped up, so a key
-  generated while the proxy was idle is handed over immediately and only a burst longer than the
-  buffer waits on generation at all. This is automatic and needs no configuration.
+- Leaf RSA key pairs come from a small buffer that a background task keeps topped up (default size
+  `8` via `LeafRsaKeyPairBufferSize`; `0` disables; max `256`), so a key generated while the proxy
+  was idle is handed over immediately and only a burst longer than the buffer waits on generation
+  at all.
 - Setting `CertificateManager.LeafCertificateKeyAlgorithm` to `CertificateKeyAlgorithm.EcdsaP256`
   issues P-256 leaves instead, which cost a fraction of an RSA key pair to generate while still
   giving every host its own key. On a cold certificate cache this takes first-visit TTFB from
@@ -394,7 +397,7 @@ proxyServer.Logging.MinimumLevel = LogLevel.Information;
 proxyServer.Logging.EnableConsole = true;          // default on
 proxyServer.Logging.EnableConsoleColors = true;    // default on; colors each line by level
 proxyServer.Logging.EnableFile = true;             // default off
-proxyServer.Logging.FilePath = "logs/proxy.log";   // size-based rolling file
+proxyServer.Logging.FilePath = "logs/titanium-proxy.log"; // default path; size-based rolling file
 proxyServer.Logging.MaxFileSizeBytes = 10 * 1024 * 1024;
 proxyServer.Logging.MaxRolledFiles = 5;
 
@@ -458,6 +461,9 @@ proxyServer.AfterResponse += (sender, e) =>
 - **`TunnelConnectSessionEventArgs.ClientTlsTiming`** (`ClientTlsTiming`) — duration of the client-facing
   (browser-to-proxy) TLS handshake performed while decrypting an HTTPS `CONNECT` tunnel on an explicit
   endpoint.
+- **`TunnelConnectSessionEventArgs.ConnectTiming`** (`TunnelConnectTiming`) — CONNECT-phase milestones
+  (certificate readiness, HTTP/3 capability source, HTTP/2 probe, browser TLS). Allocated only when
+  `EnableRequestTimingCapture` is true and the tunnel is being decrypted.
 
 ## Supported frameworks
 

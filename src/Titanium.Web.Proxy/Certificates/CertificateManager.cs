@@ -24,24 +24,28 @@ namespace Titanium.Web.Proxy.Network;
 public enum CertificateEngine
 {
     /// <summary>
-    ///     Uses BouncyCastle 3rd party library.
-    ///     Default. Generates a fresh RSA key pair for every leaf certificate.
+    ///     Uses BouncyCastle 3rd party library. Default. Issues a distinct key pair per leaf
+    ///     (RSA-2048 or ECDSA P-256 per <see cref="CertificateKeyAlgorithm" /> /
+    ///     <see cref="CertificateManager.LeafCertificateKeyAlgorithm" />). RSA-2048 keys are normally
+    ///     taken from a process-wide background buffer (see
+    ///     <see cref="CertificateManager.LeafRsaKeyPairBufferSize" />).
     /// </summary>
     BouncyCastle = 0,
 
     /// <summary>
     ///     Faster BouncyCastle variant.
-    ///     Note: for performance it reuses a single pre-generated RSA key pair across ALL generated
-    ///     leaf certificates. This means every intercepted host's certificate shares the same public key.
+    ///     Note: for performance it reuses a single pre-generated key pair (RSA or ECDSA, matching
+    ///     <see cref="CertificateManager.LeafCertificateKeyAlgorithm" />) across ALL generated leaf
+    ///     certificates. This means every intercepted host's certificate shares the same public key.
     ///     Prefer <see cref="BouncyCastle" /> if per-host key isolation matters for your threat model.
     /// </summary>
     BouncyCastleFast = 2,
 
     /// <summary>
-    ///     Uses Windows Certification Generation API and only valid in Windows OS.
+    ///     Uses Windows Certification Generation API and is only valid on Windows.
     ///     Observed to be faster than BouncyCastle.
-    ///     Bug #468 Reported.
-    ///     Note: this engine also reuses a shared private key across generated leaf certificates.
+    ///     Note: this engine also reuses a shared private key across generated leaf certificates
+    ///     (Windows-only; non-Windows runtimes coerce the engine to <see cref="BouncyCastle" />).
     /// </summary>
     DefaultWindows = 1
 }
@@ -54,8 +58,10 @@ public enum CertificateKeyAlgorithm
     /// <summary>
     ///     RSA 2048. The default, and what every TLS client in existence accepts - including legacy
     ///     stacks with no elliptic-curve support, which is often exactly what a debugging proxy is
-    ///     pointed at. Generating one costs hundreds of milliseconds of CPU, so the first connection to
-    ///     each new host pays for it unless a previously generated certificate is still cached.
+    ///     pointed at. Key generation is expensive, but
+    ///     <see cref="CertificateManager.LeafRsaKeyPairBufferSize" /> (default 8) pre-generates RSA-2048
+    ///     pairs so many first visits avoid paying that cost on the CONNECT path. Certificate caching
+    ///     can also avoid regeneration entirely.
     /// </summary>
     Rsa2048 = 0,
 
@@ -140,10 +146,9 @@ public sealed class CertificateManager : IDisposable
     /// <param name="rootCertificateName"></param>
     /// <param name="rootCertificateIssuerName"></param>
     /// <param name="userTrustRootCertificate">
-    ///     Should fake HTTPS certificate be trusted by this machine's user certificate
-    ///     store?
+    ///     Should the proxy root CA be trusted in the current-user Root store?
     /// </param>
-    /// <param name="machineTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's certificate store?</param>
+    /// <param name="machineTrustRootCertificate">Should the proxy root CA be trusted in the local-machine Root store?</param>
     /// <param name="trustRootCertificateAsAdmin">
     ///     Should we attempt to trust certificates with elevated permissions by
     ///     prompting for UAC if required?
@@ -320,16 +325,16 @@ public sealed class CertificateManager : IDisposable
     private ILogger loggerField = NullLogger.Instance;
 
     /// <summary>
-    ///     Select Certificate Engine.
-    ///     Optionally set to BouncyCastle.
-    ///     Mono only support BouncyCastle and it is the default.
+    ///     Selects the certificate generation engine. Default is <see cref="CertificateEngine.BouncyCastle" />
+    ///     on all platforms. On non-Windows runtimes, only BouncyCastle is supported; other values are
+    ///     coerced to BouncyCastle.
     /// </summary>
     public CertificateEngine CertificateEngine
     {
         get => engine;
         set
         {
-            // For Mono (or Non-Windows) only Bouncy Castle is supported
+            // Non-Windows runtimes only support BouncyCastle.
             if (!RunTime.IsWindows) value = CertificateEngine.BouncyCastle;
 
             if (value != engine)
@@ -390,8 +395,9 @@ public sealed class CertificateManager : IDisposable
     /// <summary>
     ///     Name(path) of the Root certificate file.
     ///     <para>
-    ///         Set the name(path) of the .pfx file. If it is string.Empty Root certificate file will be named as
-    ///         "rootCert.pfx" (and will be saved in proxy dll directory)
+    ///         Set the name or path of the .pfx file. When empty, the file is named <c>rootCert.pfx</c>.
+    ///         Relative or empty values are resolved under the per-user Titanium.Web.Proxy directory
+    ///         (%LocalAppData% on Windows, ApplicationData on Linux/macOS). Absolute paths are honored as-is.
     ///     </para>
     /// </summary>
     public string PfxFilePath { get; set; } = string.Empty;
@@ -431,11 +437,11 @@ public sealed class CertificateManager : IDisposable
     }
 
     /// <summary>
-    ///     Name of the root certificate.
-    ///     (This is valid only when RootCertificate property is not set.)
-    ///     If no certificate is provided then a default Root Certificate will be created and used.
-    ///     The provided root certificate will be stored in proxy exe directory with the private key.
-    ///     Root certificate file will be named as "rootCert.pfx".
+    ///     Subject/CN name used when generating a root certificate.
+    ///     (This is valid only when <see cref="RootCertificate" /> property is not set.)
+    ///     If no certificate is provided then a default root certificate will be created and used.
+    ///     Persistence uses <see cref="PfxFilePath" /> / <see cref="CertificateStorage" /> under the
+    ///     per-user Titanium.Web.Proxy directory (not the process executable directory).
     /// </summary>
     public string RootCertificateName
     {
@@ -481,16 +487,16 @@ public sealed class CertificateManager : IDisposable
     public X509Certificate2Collection? IntermediateCertificates { get; set; }
 
     /// <summary>
-    ///     Save all fake certificates using <seealso cref="CertificateStorage" />.
-    ///     <para>for can load the certificate and not make new certificate every time. </para>
+    ///     When true, persist generated leaf certificates via <see cref="CertificateStorage" /> so
+    ///     subsequent runs can reload them instead of regenerating.
     /// </summary>
     public bool SaveFakeCertificates { get; set; } = false;
 
     /// <summary>
     ///     The fake certificate cache storage.
-    ///     The default cache storage implementation saves certificates in folder "crts" (will be created in proxy dll
-    ///     directory).
-    ///     Implement ICertificateCache interface and assign concrete class here to customize.
+    ///     The default implementation stores leaf certificates in a <c>crts</c> subdirectory of the
+    ///     per-user Titanium.Web.Proxy directory (%LocalAppData% on Windows, ApplicationData on
+    ///     Linux/macOS). Implement <see cref="ICertificateCache" /> and assign a concrete class here to customize.
     /// </summary>
     public ICertificateCache CertificateStorage
     {
@@ -515,7 +521,8 @@ public sealed class CertificateManager : IDisposable
     public X509KeyStorageFlags StorageFlag { get; set; } = X509KeyStorageFlags.Exportable;
 
     /// <summary>
-    ///     Disable wild card certificates. Disabled by default.
+    ///     When true, issue per-host certificates instead of <c>*.parent.tld</c> wildcards.
+    ///     Default false (wildcards enabled where applicable).
     /// </summary>
     public bool DisableWildCardCertificates { get; set; } = false;
 
@@ -1087,7 +1094,8 @@ public sealed class CertificateManager : IDisposable
     }
 
     /// <summary>
-    ///     Loads root certificate from current executing assembly location with expected name rootCert.pfx.
+    ///     Loads the root certificate via <see cref="CertificateStorage" /> (default: per-user
+    ///     Titanium.Web.Proxy directory, file name from <see cref="PfxFilePath" /> or <c>rootCert.pfx</c>).
     /// </summary>
     /// <returns></returns>
     public X509Certificate2? LoadRootCertificate()
@@ -1117,8 +1125,8 @@ public sealed class CertificateManager : IDisposable
     ///     Manually load a Root certificate file from give path (.pfx file).
     /// </summary>
     /// <param name="pfxFilePath">
-    ///     Set the name(path) of the .pfx file. If it is string.Empty Root certificate file will be
-    ///     named as "rootCert.pfx" (and will be saved in proxy dll directory).
+    ///     Set the name or path of the .pfx file. When empty, the file is named <c>rootCert.pfx</c>
+    ///     under the per-user Titanium.Web.Proxy directory. Absolute paths are honored as-is.
     /// </param>
     /// <param name="password">Set a password for the .pfx file.</param>
     /// <param name="overwritePfXFile">
@@ -1253,10 +1261,9 @@ public sealed class CertificateManager : IDisposable
     ///     Note:setting machineTrustRootCertificate to true will force userTrustRootCertificate to true.
     /// </summary>
     /// <param name="userTrustRootCertificate">
-    ///     Should fake HTTPS certificate be trusted by this machine's user certificate
-    ///     store?
+    ///     Should the proxy root CA be trusted in the current-user Root store?
     /// </param>
-    /// <param name="machineTrustRootCertificate">Should fake HTTPS certificate be trusted by this machine's certificate store?</param>
+    /// <param name="machineTrustRootCertificate">Should the proxy root CA be trusted in the local-machine Root store?</param>
     /// <param name="trustRootCertificateAsAdmin">
     ///     Should we attempt to trust certificates with elevated permissions by
     ///     prompting for UAC if required?

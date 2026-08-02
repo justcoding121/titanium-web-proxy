@@ -14,10 +14,9 @@ using Titanium.Web.Proxy.StreamExtended.Network;
 namespace Titanium.Web.Proxy.EventArguments;
 
 /// <summary>
-///     Holds info related to a single proxy session (single request/response sequence).
-///     A proxy session is bounded to a single connection from client.
-///     A proxy session ends when client terminates connection to proxy
-///     or when server terminates connection from proxy.
+///     Holds info related to a single proxy session (single request/response exchange).
+///     Under HTTP/2 and HTTP/3, many sessions share one client connection (one stream each);
+///     ending a session ends that request/response exchange, not necessarily the connection.
 /// </summary>
 public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 {

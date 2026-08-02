@@ -87,9 +87,10 @@ public abstract class RequestResponseBase
     public HeaderCollection Headers { get; } = new();
 
     /// <summary>
-    ///     Trailing headers ("trailers") carried after a chunked body, per RFC 9110 §6.5 / RFC 7230 §4.1.2.
-    ///     Empty by default (lazily allocated on first access). Only meaningful for chunked bodies -
-    ///     trailers are not defined for, and are always ignored on, fixed <c>Content-Length</c> bodies.
+    ///     Trailing headers ("trailers") carried after the body, per RFC 9110 §6.5 / RFC 7230 §4.1.2
+    ///     (HTTP/1.1 chunked) and as a second HEADERS block after DATA on HTTP/2/HTTP/3.
+    ///     Empty by default (lazily allocated on first access). Trailers are not defined for, and are
+    ///     always ignored on, fixed <c>Content-Length</c> bodies.
     ///     <para>
     ///         On the read side, this is populated once the body has actually been consumed (streamed,
     ///         buffered, or drained) - it is <b>not</b> guaranteed to be populated yet during
@@ -99,10 +100,10 @@ public abstract class RequestResponseBase
     ///     </para>
     ///     <para>
     ///         On the write side, entries added here before the body finishes writing are emitted as the
-    ///         trailer block following the terminating zero-length chunk. A small set of framing/routing
-    ///         header fields (e.g. <c>Transfer-Encoding</c>, <c>Content-Length</c>, <c>Trailer</c>,
-    ///         <c>Host</c>) are forbidden in a trailer and will fail with a clear exception rather than
-    ///         being silently dropped.
+    ///         HTTP/1.1 trailer block after the terminating zero-length chunk, or as trailer HEADERS on
+    ///         HTTP/2/HTTP/3. A small set of framing/routing header fields (e.g. <c>Transfer-Encoding</c>,
+    ///         <c>Content-Length</c>, <c>Trailer</c>, <c>Host</c>) are forbidden in a trailer and will fail
+    ///         with a clear exception rather than being silently dropped.
     ///     </para>
     /// </summary>
     public HeaderCollection TrailingHeaders => trailingHeaders ??= new HeaderCollection();
