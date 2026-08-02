@@ -73,43 +73,56 @@ internal sealed class Http2TunnelStream : Stream
 
         while (true)
         {
-            if (pending != null && pending.Length > pendingOffset)
-            {
-                var available = pending.Length - pendingOffset;
-                var toCopy = Math.Min(count, available);
-                Buffer.BlockCopy(pending, pendingOffset, buffer, offset, toCopy);
-                pendingOffset += toCopy;
-                if (pendingOffset >= pending.Length)
-                {
-                    pending = null;
-                    pendingOffset = 0;
-                }
-
-                return toCopy;
-            }
-
+            var copied = TryCopyPending(buffer, offset, count);
+            if (copied > 0) return copied;
             if (inboundCompleted) return 0;
 
-            if (!await inbound.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
-            {
-                inboundCompleted = true;
+            if (!await FillPendingAsync(cancellationToken).ConfigureAwait(false))
                 return 0;
-            }
-
-            while (inbound.TryRead(out var chunk))
-            {
-                if (chunk.Length == 0) continue;
-                pending = chunk;
-                pendingOffset = 0;
-                break;
-            }
-
-            if (pending == null && inbound.Completion.IsCompleted)
-            {
-                inboundCompleted = true;
-                return 0;
-            }
         }
+    }
+
+    private int TryCopyPending(byte[] buffer, int offset, int count)
+    {
+        if (pending == null || pending.Length <= pendingOffset) return 0;
+
+        var available = pending.Length - pendingOffset;
+        var toCopy = Math.Min(count, available);
+        Buffer.BlockCopy(pending, pendingOffset, buffer, offset, toCopy);
+        pendingOffset += toCopy;
+        if (pendingOffset >= pending.Length)
+        {
+            pending = null;
+            pendingOffset = 0;
+        }
+
+        return toCopy;
+    }
+
+    /// <returns><see langword="false"/> when the inbound side is exhausted (EOF).</returns>
+    private async Task<bool> FillPendingAsync(CancellationToken cancellationToken)
+    {
+        if (!await inbound.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            inboundCompleted = true;
+            return false;
+        }
+
+        while (inbound.TryRead(out var chunk))
+        {
+            if (chunk.Length == 0) continue;
+            pending = chunk;
+            pendingOffset = 0;
+            return true;
+        }
+
+        if (inbound.Completion.IsCompleted)
+        {
+            inboundCompleted = true;
+            return false;
+        }
+
+        return true;
     }
 
     public override async Task WriteAsync(byte[] buffer, int offset, int count,
