@@ -843,26 +843,29 @@ internal sealed class Http2OriginConnection
             else if (identifier == (int)Http2SettingsId.MaxConcurrentStreams)
                 originSettings.MaxConcurrentStreams = value;
             else if (identifier == (int)Http2SettingsId.EnableConnectProtocol)
-            {
-                // RFC 8441 §3: value MUST be 0 or 1; a sender MUST NOT send 0 after previously sending 1.
-                if (value is not (0 or 1))
-                {
-                    Fail(new IOException(
-                        $"HTTP/2 protocol error: SETTINGS_ENABLE_CONNECT_PROTOCOL value {value} is not 0 or 1."));
-                    return;
-                }
-
-                if (value == 0 && originSettings.EnableConnectProtocolEverSet)
-                {
-                    Fail(new IOException(
-                        "HTTP/2 protocol error: SETTINGS_ENABLE_CONNECT_PROTOCOL must not be downgraded from 1 to 0."));
-                    return;
-                }
-
-                originSettings.EnableConnectProtocol = value == 1;
-                if (value == 1) originSettings.EnableConnectProtocolEverSet = true;
-            }
+                ApplyEnableConnectProtocolSetting(value);
         }
+    }
+
+    /// <summary>RFC 8441 §3: value MUST be 0 or 1; a sender MUST NOT send 0 after previously sending 1.</summary>
+    private void ApplyEnableConnectProtocolSetting(int value)
+    {
+        if (value is not (0 or 1))
+        {
+            Fail(new IOException(
+                $"HTTP/2 protocol error: SETTINGS_ENABLE_CONNECT_PROTOCOL value {value} is not 0 or 1."));
+            return;
+        }
+
+        if (value == 0 && originSettings.EnableConnectProtocolEverSet)
+        {
+            Fail(new IOException(
+                "HTTP/2 protocol error: SETTINGS_ENABLE_CONNECT_PROTOCOL must not be downgraded from 1 to 0."));
+            return;
+        }
+
+        originSettings.EnableConnectProtocol = value == 1;
+        if (value == 1) originSettings.EnableConnectProtocolEverSet = true;
     }
 
     /// <summary>Strips the optional PADDED (1 length byte + trailing padding) and PRIORITY (5 bytes) framing from a HEADERS frame payload.</summary>

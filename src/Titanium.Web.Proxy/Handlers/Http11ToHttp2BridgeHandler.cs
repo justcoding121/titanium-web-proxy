@@ -2,8 +2,6 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Diagnostics;
@@ -200,8 +198,8 @@ public partial class ProxyServer
                         }
                         else if (keepGoing && request.UpgradeToWebSocket)
                         {
-                            // RFC 8441 H1 Upgrade → h2 origin (or H1 fallback). Opt-in via EnableRfc8441;
-                            // default keeps the historical synthetic 501 so existing callers see no change.
+                            // Opt-in RFC 8441 bridge for HTTP/1.1 Upgrade onto an h2 origin.
+                            // With EnableRfc8441 off, keep the historical synthetic 501.
                             if (!EnableRfc8441)
                             {
                                 args.GenericResponse(
@@ -220,8 +218,17 @@ public partial class ProxyServer
                                     retainedConnectionTask = null;
                                 }
 
-                                await HandleHttp11WebSocketOnHttp2OriginAsync(args, originConnection, remoteHostName,
-                                    remotePort, connectHost, connectPort, cancellationTokenSource, cancellationToken);
+                                if (originConnection.EnableConnectProtocol)
+                                {
+                                    await RunHttp11ToHttp2WebSocketTunnelAsync(args, originConnection,
+                                        cancellationTokenSource, cancellationToken);
+                                }
+                                else
+                                {
+                                    // h2 origin without ENABLE_CONNECT_PROTOCOL: dedicated HTTP/1.1 fallback.
+                                    await RunHttp11WebSocketHttp11FallbackAsync(args, remoteHostName, remotePort,
+                                        connectHost, connectPort, cancellationTokenSource, cancellationToken);
+                                }
                             }
 
                             closeConnection = true;
@@ -542,30 +549,6 @@ public partial class ProxyServer
         response.IsBodySent = true;
     }
 
-    /// <summary>
-    ///     Bridges an HTTP/1.1 WebSocket Upgrade onto an h2 origin: prefer RFC 8441 extended CONNECT when the
-    ///     origin advertises <c>SETTINGS_ENABLE_CONNECT_PROTOCOL</c>; otherwise open a dedicated HTTP/1.1
-    ///     origin connection and reuse <see cref="HandleWebSocketUpgrade" />. Always ends the client connection
-    ///     (WebSocket is connection-scoped).
-    /// </summary>
-    private async Task HandleHttp11WebSocketOnHttp2OriginAsync(SessionEventArgs args,
-        Http2OriginConnection originConnection, string remoteHostName, int remotePort, string? connectHost,
-        int? connectPort, CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken)
-    {
-        if (originConnection.EnableConnectProtocol)
-        {
-            await RunHttp11ToHttp2WebSocketTunnelAsync(args, originConnection, cancellationTokenSource,
-                cancellationToken);
-            return;
-        }
-
-        // Origin is h2 but does not speak RFC 8441 — fall back to a dedicated HTTP/1.1 connection for
-        // this WebSocket only (RFC 8441 §7 intermediary behavior). Ordinary requests on this bridge
-        // continue to use the h2 origin connection; this client connection ends after the upgrade.
-        await RunHttp11WebSocketHttp11FallbackAsync(args, remoteHostName, remotePort, connectHost, connectPort,
-            cancellationTokenSource, cancellationToken);
-    }
-
     private async Task RunHttp11ToHttp2WebSocketTunnelAsync(SessionEventArgs args,
         Http2OriginConnection originConnection, CancellationTokenSource cancellationTokenSource,
         CancellationToken cancellationToken)
@@ -593,59 +576,21 @@ public partial class ProxyServer
             args.Timing.MarkConnectionReady(serverConnection.Id, !serverConnection.ClaimFirstUse());
 
         PrepareWebSocketUpgradeForHttp2Origin(request);
-
         args.Timing?.MarkRequestSent();
 
-        Http2OriginTunnelResult tunnelResult;
-        try
-        {
-            tunnelResult = await originConnection.OpenTunnelAsync(request, cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            if (!args.HttpClient.Response.Locked)
-            {
-                args.GenericResponse($"Bad Gateway. {ex.Message}", HttpStatusCode.BadGateway);
-                await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
-            }
-
-            return;
-        }
+        var tunnelResult = await OpenWebSocketTunnelOrBadGatewayAsync(args, originConnection, cancellationToken);
+        if (tunnelResult == null) return;
 
         args.Timing?.MarkResponseHeadersReceived();
 
         if (!tunnelResult.IsEstablished || tunnelResult.Stream == null)
         {
-            // Origin rejected the extended CONNECT — surface its status as an HTTP/1.1 response.
-            var rejected = tunnelResult.Response;
-            rejected.HttpVersion = HttpHeader.Version11;
-            args.HttpClient.Response = rejected;
-            if (!rejected.Locked) await OnBeforeResponse(args);
-            await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+            await WriteRejectedTunnelResponseAsync(args, tunnelResult.Response, cancellationToken);
             return;
         }
 
         using var tunnelStream = tunnelResult.Stream;
-
-        var expectedAccept = Convert.ToBase64String(SHA1.HashData(
-            Encoding.ASCII.GetBytes(wsKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
-
-        var response101 = new Response
-        {
-            HttpVersion = HttpHeader.Version11,
-            StatusCode = 101,
-            StatusDescription = "Switching Protocols"
-        };
-        response101.Headers.AddHeader(KnownHeaders.Upgrade, KnownHeaders.UpgradeWebsocket);
-        response101.Headers.AddHeader(KnownHeaders.Connection, "Upgrade");
-        response101.Headers.AddHeader("Sec-WebSocket-Accept", expectedAccept);
-
-        foreach (var name in new[] { "sec-websocket-protocol", "sec-websocket-extensions" })
-        {
-            foreach (var header in tunnelResult.Response.Headers.GetHeaders(name) ?? Enumerable.Empty<HttpHeader>())
-                response101.Headers.AddHeader(header.Name, header.Value);
-        }
-
+        var response101 = BuildSwitchingProtocolsResponse(wsKey, tunnelResult.Response);
         args.HttpClient.Response = response101;
         if (!args.HttpClient.Response.Locked) await OnBeforeResponse(args);
 
@@ -669,6 +614,55 @@ public partial class ProxyServer
             await TcpHelper.SendRaw(clientStream, tunnelStream, BufferPool, args.OnDataSent, args.OnDataReceived,
                 cancellationTokenSource, logger);
         }
+    }
+
+    private async Task<Http2OriginTunnelResult?> OpenWebSocketTunnelOrBadGatewayAsync(SessionEventArgs args,
+        Http2OriginConnection originConnection, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await originConnection.OpenTunnelAsync(args.HttpClient.Request, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            if (!args.HttpClient.Response.Locked)
+            {
+                args.GenericResponse($"Bad Gateway. {ex.Message}", HttpStatusCode.BadGateway);
+                await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+            }
+
+            return null;
+        }
+    }
+
+    private async Task WriteRejectedTunnelResponseAsync(SessionEventArgs args, Response rejected,
+        CancellationToken cancellationToken)
+    {
+        rejected.HttpVersion = HttpHeader.Version11;
+        args.HttpClient.Response = rejected;
+        if (!rejected.Locked) await OnBeforeResponse(args);
+        await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+    }
+
+    private static Response BuildSwitchingProtocolsResponse(string wsKey, Response originResponse)
+    {
+        var response101 = new Response
+        {
+            HttpVersion = HttpHeader.Version11,
+            StatusCode = 101,
+            StatusDescription = "Switching Protocols"
+        };
+        response101.Headers.AddHeader(KnownHeaders.Upgrade, KnownHeaders.UpgradeWebsocket);
+        response101.Headers.AddHeader(KnownHeaders.Connection, "Upgrade");
+        response101.Headers.AddHeader("Sec-WebSocket-Accept", WebSocketHandshake.ComputeAccept(wsKey));
+
+        foreach (var name in new[] { "sec-websocket-protocol", "sec-websocket-extensions" })
+        {
+            foreach (var header in originResponse.Headers.GetHeaders(name) ?? Enumerable.Empty<HttpHeader>())
+                response101.Headers.AddHeader(header.Name, header.Value);
+        }
+
+        return response101;
     }
 
     private async Task RunHttp11WebSocketHttp11FallbackAsync(SessionEventArgs args, string remoteHostName,
