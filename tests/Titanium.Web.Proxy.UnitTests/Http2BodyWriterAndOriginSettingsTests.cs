@@ -42,36 +42,29 @@ public class Http2BodyWriterAndOriginSettingsTests
         Assert.IsFalse((bool)writerType.GetProperty("CanRead")!.GetValue(writer)!);
         Assert.IsFalse((bool)writerType.GetProperty("CanSeek")!.GetValue(writer)!);
         Assert.IsTrue((bool)writerType.GetProperty("CanWrite")!.GetValue(writer)!);
-        Assert.IsInstanceOfType(
+        Assert.IsInstanceOfType<NotSupportedException>(
             Assert.ThrowsExactly<TargetInvocationException>(() =>
-                _ = writerType.GetProperty("Length")!.GetValue(writer)).InnerException,
-            typeof(NotSupportedException));
-        Assert.IsInstanceOfType(
+                _ = writerType.GetProperty("Length")!.GetValue(writer)).InnerException);
+        Assert.IsInstanceOfType<NotSupportedException>(
             Assert.ThrowsExactly<TargetInvocationException>(() =>
-                _ = writerType.GetProperty("Position")!.GetValue(writer)).InnerException,
-            typeof(NotSupportedException));
-        Assert.IsInstanceOfType(
+                _ = writerType.GetProperty("Position")!.GetValue(writer)).InnerException);
+        Assert.IsInstanceOfType<NotSupportedException>(
             Assert.ThrowsExactly<TargetInvocationException>(() =>
-                writerType.GetProperty("Position")!.SetValue(writer, 0L)).InnerException,
-            typeof(NotSupportedException));
-        Assert.IsInstanceOfType(
+                writerType.GetProperty("Position")!.SetValue(writer, 0L)).InnerException);
+        Assert.IsInstanceOfType<NotSupportedException>(
             Assert.ThrowsExactly<TargetInvocationException>(() =>
                 writerType.GetMethod("Read", [typeof(byte[]), typeof(int), typeof(int)])!
-                    .Invoke(writer, [new byte[1], 0, 1])).InnerException,
-            typeof(NotSupportedException));
-        Assert.IsInstanceOfType(
+                    .Invoke(writer, [new byte[1], 0, 1])).InnerException);
+        Assert.IsInstanceOfType<NotSupportedException>(
             Assert.ThrowsExactly<TargetInvocationException>(() =>
-                writerType.GetMethod("Seek")!.Invoke(writer, [0L, SeekOrigin.Begin])).InnerException,
-            typeof(NotSupportedException));
-        Assert.IsInstanceOfType(
+                writerType.GetMethod("Seek")!.Invoke(writer, [0L, SeekOrigin.Begin])).InnerException);
+        Assert.IsInstanceOfType<NotSupportedException>(
             Assert.ThrowsExactly<TargetInvocationException>(() =>
-                writerType.GetMethod("SetLength")!.Invoke(writer, [0L])).InnerException,
-            typeof(NotSupportedException));
-        Assert.IsInstanceOfType(
+                writerType.GetMethod("SetLength")!.Invoke(writer, [0L])).InnerException);
+        Assert.IsInstanceOfType<NotSupportedException>(
             Assert.ThrowsExactly<TargetInvocationException>(() =>
                 writerType.GetMethod("Write", [typeof(byte[]), typeof(int), typeof(int)])!
-                    .Invoke(writer, [new byte[1], 0, 1])).InnerException,
-            typeof(NotSupportedException));
+                    .Invoke(writer, [new byte[1], 0, 1])).InnerException);
 
         writerType.GetMethod("Flush")!.Invoke(writer, null);
         await (Task)writerType.GetMethod("FlushAsync", [typeof(CancellationToken)])!

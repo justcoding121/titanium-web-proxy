@@ -127,7 +127,7 @@ public class ProxyServerAdmissionCoverageTests
         using var proxy = new ProxyServer(false, false, false);
         var ex = Assert.ThrowsExactly<TargetInvocationException>(() =>
             ValidateEndPointAsSystemProxy(proxy, null!));
-        Assert.IsInstanceOfType(ex.InnerException, typeof(ArgumentNullException));
+        Assert.IsInstanceOfType<ArgumentNullException>(ex.InnerException);
     }
 
     [TestMethod]
@@ -137,7 +137,7 @@ public class ProxyServerAdmissionCoverageTests
         var ep = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false);
         var ex = Assert.ThrowsExactly<TargetInvocationException>(() =>
             ValidateEndPointAsSystemProxy(proxy, ep));
-        Assert.IsInstanceOfType(ex.InnerException, typeof(InvalidOperationException));
+        Assert.IsInstanceOfType<InvalidOperationException>(ex.InnerException);
         StringAssert.Contains(ex.InnerException!.Message, "not added");
     }
 
@@ -149,7 +149,7 @@ public class ProxyServerAdmissionCoverageTests
         proxy.AddEndPoint(ep);
         var ex = Assert.ThrowsExactly<TargetInvocationException>(() =>
             ValidateEndPointAsSystemProxy(proxy, ep));
-        Assert.IsInstanceOfType(ex.InnerException, typeof(InvalidOperationException));
+        Assert.IsInstanceOfType<InvalidOperationException>(ex.InnerException);
         StringAssert.Contains(ex.InnerException!.Message, "before proxy has been started");
     }
 
