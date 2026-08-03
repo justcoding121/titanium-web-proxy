@@ -125,7 +125,7 @@ internal static class HttpHelper
     {
         const int lengthToCheck = 20;
         if (bufferPool.BufferSize < lengthToCheck)
-            throw new Exception($"Buffer is too small. Minimum size is {lengthToCheck} bytes");
+            throw new ArgumentException($"Buffer is too small. Minimum size is {lengthToCheck} bytes");
 
         var buffer = bufferPool.GetBuffer(bufferPool.BufferSize);
         try

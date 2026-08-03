@@ -75,7 +75,7 @@ public partial class ProxyServer
                     var sslProtocol = clientHelloInfo.SslProtocol & SupportedSslProtocols;
                     if (sslProtocol == SslProtocols.None)
                     {
-                        throw new Exception("Unsupported client SSL version.");
+                        throw new NotSupportedException("Unsupported client SSL version.");
                     }
 
                     clientStream.Connection.SslProtocol = sslProtocol;
@@ -236,7 +236,7 @@ public partial class ProxyServer
                                 if (clientStream.Connection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
                                 {
                                     await TcpConnectionFactory.Release(prefetchConnectionTask, true);
-                                    throw new Exception(
+                                    throw new InvalidDataException(
                                         "HTTP/2 Protocol violation. Received the HTTP/2 connection preface on a " +
                                         $"connection that negotiated '{clientStream.Connection.NegotiatedApplicationProtocol}' " +
                                         "via ALPN instead of 'h2'.");
@@ -247,7 +247,7 @@ public partial class ProxyServer
                                 if (line != string.Empty)
                                 {
                                     await TcpConnectionFactory.Release(prefetchConnectionTask, true);
-                                    throw new Exception(
+                                    throw new InvalidDataException(
                                         $"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
                                 }
 
@@ -255,14 +255,14 @@ public partial class ProxyServer
                                 if (line != "SM")
                                 {
                                     await TcpConnectionFactory.Release(prefetchConnectionTask, true);
-                                    throw new Exception($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
+                                    throw new InvalidDataException($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
                                 }
 
                                 line = await clientStream.ReadLineAsync(cancellationToken);
                                 if (line != string.Empty)
                                 {
                                     await TcpConnectionFactory.Release(prefetchConnectionTask, true);
-                                    throw new Exception(
+                                    throw new InvalidDataException(
                                         $"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
                                 }
 

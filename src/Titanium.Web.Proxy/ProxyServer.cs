@@ -1154,7 +1154,7 @@ public partial class ProxyServer : IDisposable
     {
         if (ProxyEndPoints.Any(x =>
                 x.IpAddress.Equals(endPoint.IpAddress) && endPoint.Port != 0 && x.Port == endPoint.Port))
-            throw new Exception("Cannot add another endpoint to same port & ip address");
+            throw new InvalidOperationException("Cannot add another endpoint to same port & ip address");
 
         ProxyEndPoints.Add(endPoint);
 
@@ -1177,7 +1177,7 @@ public partial class ProxyServer : IDisposable
     public void RemoveEndPoint(ProxyEndPoint endPoint)
     {
         if (ProxyEndPoints.Contains(endPoint) == false)
-            throw new Exception("Cannot remove endPoints not added to proxy");
+            throw new InvalidOperationException("Cannot remove endPoints not added to proxy");
 
         ProxyEndPoints.Remove(endPoint);
 
@@ -1412,7 +1412,7 @@ public partial class ProxyServer : IDisposable
     /// </param>
     public void Start(bool changeSystemProxySettings = true)
     {
-        if (ProxyRunning) throw new Exception("Proxy is already running.");
+        if (ProxyRunning) throw new InvalidOperationException("Proxy is already running.");
 
         // Freeze the active logging configuration for the duration of this run.
         ApplyLoggingConfiguration();
@@ -1570,7 +1570,7 @@ public partial class ProxyServer : IDisposable
     /// </param>
     public async Task StopAsync(TimeSpan? drainTimeout = null)
     {
-        if (!ProxyRunning) throw new Exception("Proxy is not running.");
+        if (!ProxyRunning) throw new InvalidOperationException("Proxy is not running.");
 
         StopCore(cancelSessions: true, clearPools: false);
 
@@ -1589,7 +1589,7 @@ public partial class ProxyServer : IDisposable
 
     private void StopCore(bool cancelSessions, bool clearPools)
     {
-        if (!ProxyRunning) throw new Exception("Proxy is not running.");
+        if (!ProxyRunning) throw new InvalidOperationException("Proxy is not running.");
 
         if (RunTime.IsWindows && SystemProxySettingsManager != null)
         {
@@ -1707,9 +1707,9 @@ public partial class ProxyServer : IDisposable
         if (endPoint == null) throw new ArgumentNullException(nameof(endPoint));
 
         if (!ProxyEndPoints.Contains(endPoint))
-            throw new Exception("Cannot set endPoints not added to proxy as system proxy");
+            throw new InvalidOperationException("Cannot set endPoints not added to proxy as system proxy");
 
-        if (!ProxyRunning) throw new Exception("Cannot set system proxy settings before proxy has been started.");
+        if (!ProxyRunning) throw new InvalidOperationException("Cannot set system proxy settings before proxy has been started.");
     }
 
     /// <summary>

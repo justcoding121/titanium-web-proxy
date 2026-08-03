@@ -339,7 +339,7 @@ internal class WinAuthEndPoint
                    (state!.AuthState == State.WinAuthState.FinalToken ||
                     state.AuthState == State.WinAuthState.Authorized);
 
-        throw new Exception("Unsupported validation of WinAuthState");
+        throw new NotSupportedException("Unsupported validation of WinAuthState");
     }
 
     /// <summary>

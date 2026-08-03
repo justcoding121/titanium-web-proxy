@@ -22,7 +22,7 @@ internal class DecompressionFactory
             // that wrapped stream is a LimitedStream (async-only by design - see LimitedStream.Read),
             // this throws NotSupportedException instead of decompressing.
             HttpCompression.Brotli => new BrotliStream(stream, CompressionMode.Decompress, leaveOpen),
-            _ => throw new Exception($"Unsupported decompression mode: {type}")
+            _ => throw new NotSupportedException($"Unsupported decompression mode: {type}")
         };
     }
 }

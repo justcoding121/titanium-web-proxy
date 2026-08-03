@@ -51,7 +51,7 @@ public class Request : RequestResponseBase
             }
             catch (Exception ex)
             {
-                throw new Exception($"Invalid URI: '{url}'", ex);
+                throw new ArgumentException($"Invalid URI: '{url}'", ex);
             }
         }
         set => Url = value.OriginalString;
@@ -225,10 +225,10 @@ public class Request : RequestResponseBase
 
         if (!IsBodyRead)
         {
-            if (Locked) throw new Exception("You cannot get the request body after request is made to server.");
+            if (Locked) throw new InvalidOperationException("You cannot get the request body after request is made to server.");
 
             if (throwWhenNotReadYet)
-                throw new Exception("Request body is not read yet. " +
+                throw new InvalidOperationException("Request body is not read yet. " +
                                     "Use SessionEventArgs.GetRequestBody() or SessionEventArgs.GetRequestBodyAsString() " +
                                     "method to read the request body.");
         }
@@ -240,7 +240,7 @@ public class Request : RequestResponseBase
         var firstSpace = httpCmd.IndexOf(' ');
         if (firstSpace == -1)
             // does not contain at least 2 parts
-            throw new Exception("Invalid HTTP request line: " + httpCmd);
+            throw new FormatException("Invalid HTTP request line: " + httpCmd);
 
         var lastSpace = httpCmd.LastIndexOf(' ');
 

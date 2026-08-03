@@ -304,7 +304,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
         foreach (var header in newHeaders)
         {
             if (header.Key != header.Value.Name)
-                throw new Exception(
+                throw new ArgumentException(
                     "Header name mismatch. Key and the name of the HttpHeader object should be the same.");
 
             AddHeader(header.Value);

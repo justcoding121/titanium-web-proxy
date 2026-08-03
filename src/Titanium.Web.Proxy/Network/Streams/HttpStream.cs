@@ -370,7 +370,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     {
         // When index is greater than the buffer size
         if (streamBuffer.Length <= index)
-            throw new Exception("Requested Peek index exceeds the buffer size. Consider increasing the buffer size.");
+            throw new ArgumentOutOfRangeException("Requested Peek index exceeds the buffer size. Consider increasing the buffer size.");
 
         while (Available <= index)
         {
@@ -396,7 +396,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     {
         // When index is greater than the buffer size
         if (streamBuffer.Length <= index + count)
-            throw new Exception(
+            throw new ArgumentOutOfRangeException(
                 "Requested Peek index and size exceeds the buffer size. Consider increasing the buffer size.");
 
         while (Available <= index)
@@ -419,7 +419,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// <exception cref="Exception">Index is out of buffer size</exception>
     public byte PeekByteFromBuffer(int index)
     {
-        if (Available <= index) throw new Exception("Index is out of buffer size");
+        if (Available <= index) throw new ArgumentOutOfRangeException("Index is out of buffer size");
 
         return streamBuffer[bufferPos + index];
     }
@@ -431,7 +431,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// <exception cref="Exception">Buffer is empty</exception>
     public byte ReadByteFromBuffer()
     {
-        if (Available == 0) throw new Exception("Buffer is empty");
+        if (Available == 0) throw new ArgumentOutOfRangeException("Buffer is empty");
 
         Available--;
         return streamBuffer[bufferPos++];

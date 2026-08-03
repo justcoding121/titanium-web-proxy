@@ -386,7 +386,7 @@ internal class Decoder
                     break;
 
                 default:
-                    throw new Exception("should not reach here");
+                    throw new InvalidOperationException("should not reach here");
             }
     }
 
@@ -483,7 +483,7 @@ internal class Decoder
                 break;
 
             default:
-                throw new Exception("should not reach here");
+                throw new InvalidOperationException("should not reach here");
         }
     }
 

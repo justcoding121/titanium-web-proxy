@@ -61,7 +61,7 @@ public partial class ProxyServer
         }
         catch (Exception ex)
         {
-            throw new Exception(
+            throw new InvalidOperationException(
                 $"QUIC endpoint {endPoint.IpAddress}:{endPoint.Port} failed to start. " +
                 "Check inner exception for details.", ex);
         }

@@ -35,7 +35,7 @@ internal class HttpSystemProxyValue
                 protocol = ProxyServer.UriSchemeHttps;
                 break;
             default:
-                throw new Exception("Unsupported protocol type");
+                throw new NotSupportedException("Unsupported protocol type");
         }
 
         return $"{protocol}={HostName}:{Port}";

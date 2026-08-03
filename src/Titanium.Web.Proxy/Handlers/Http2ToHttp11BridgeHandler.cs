@@ -269,7 +269,7 @@ public partial class ProxyServer
                 sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint,
                 customUpStreamProxy ?? UpStreamHttpsProxy, false, false, cancellationToken, connectHost,
                 connectPort)
-                ?? throw new Exception($"Failed to establish an HTTP/1.1 origin connection to '{remoteHostName}:{remotePort}'.");
+                ?? throw new InvalidOperationException($"Failed to establish an HTTP/1.1 origin connection to '{remoteHostName}:{remotePort}'.");
             connection = newConnection;
 
             sessionArgs.HttpClient.SetConnection(newConnection);
@@ -485,7 +485,7 @@ public partial class ProxyServer
                 sessionArgs, sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint,
                 customUpStreamProxy ?? UpStreamHttpsProxy, false, false, cancellationToken,
                 connectHost, connectPort)
-                ?? throw new Exception(
+                ?? throw new InvalidOperationException(
                     $"Failed to establish an HTTP/1.1 connection to '{remoteHostName}:{remotePort}' for RFC 8441 tunnel.");
 
             // Build and send the WebSocket upgrade request toward the h1 origin.

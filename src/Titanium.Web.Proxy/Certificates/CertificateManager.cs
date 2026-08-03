@@ -545,7 +545,7 @@ public sealed class CertificateManager : IDisposable
     private bool RootCertificateInstalled(StoreLocation storeLocation)
     {
         var certificate = RootCertificate;
-        if (certificate == null) throw new Exception("Root certificate is null.");
+        if (certificate == null) throw new InvalidOperationException("Root certificate is null.");
 
         var thumbprint = certificate.Thumbprint;
         return FindCertificates(StoreName.Root, storeLocation, thumbprint).Count > 0
@@ -576,7 +576,7 @@ public sealed class CertificateManager : IDisposable
     private void InstallCertificate(StoreName storeName, StoreLocation storeLocation)
     {
         var certificate = RootCertificate;
-        if (certificate == null) throw new Exception("Could not install certificate as it is null or empty.");
+        if (certificate == null) throw new InvalidOperationException("Could not install certificate as it is null or empty.");
 
         if (FindCertificates(storeName, storeLocation, certificate.Thumbprint).Count > 0) return;
 

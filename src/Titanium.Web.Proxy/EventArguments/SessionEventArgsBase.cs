@@ -139,7 +139,7 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
         set
         {
             if (value && !IsWindowsAuthenticationSupported)
-                throw new Exception("Windows Authentication is not supported");
+                throw new NotSupportedException("Windows Authentication is not supported");
 
             enableWinAuth = value;
         }

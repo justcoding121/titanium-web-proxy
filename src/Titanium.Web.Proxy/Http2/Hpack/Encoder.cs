@@ -264,7 +264,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                     break;
 
                 default:
-                    throw new Exception("should not reach here");
+                    throw new InvalidOperationException("should not reach here");
             }
 
             EncodeInteger(output, mask, prefixBits, nameIndex == -1 ? 0 : nameIndex);

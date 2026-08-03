@@ -54,7 +54,7 @@ public class HttpWebClient
     {
         get
         {
-            if (connection == null) throw new Exception("Connection is null");
+            if (connection == null) throw new InvalidOperationException("Connection is null");
 
             return connection;
         }

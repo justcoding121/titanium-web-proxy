@@ -90,7 +90,7 @@ public class TunnelConnectSessionEventArgs : SessionEventArgsBase
     public bool IsHttpsConnect
     {
         get => isHttpsConnect ??
-               throw new Exception("The value of this property is known in the BeforeTunnelConnectResponse event");
+               throw new InvalidOperationException("The value of this property is known in the BeforeTunnelConnectResponse event");
 
         internal set => isHttpsConnect = value;
     }

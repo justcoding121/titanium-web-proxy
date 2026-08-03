@@ -180,7 +180,7 @@ public partial class ProxyServer
                     var sslProtocol = clientHelloInfo.SslProtocol & SupportedSslProtocols;
                     if (sslProtocol == SslProtocols.None)
                     {
-                        throw new Exception("Unsupported client SSL version.");
+                        throw new NotSupportedException("Unsupported client SSL version.");
                     }
 
                     clientStream.Connection.SslProtocol = sslProtocol;
@@ -399,7 +399,7 @@ public partial class ProxyServer
                                 {
                                     // clientStream.Available should be at most BufferSize because it is using the same buffer size
                                     var read = await clientStream.ReadAsync(data.AsMemory(0, available), cancellationToken);
-                                    if (read != available) throw new Exception("Internal error.");
+                                    if (read != available) throw new InvalidOperationException("Internal error.");
 
                                     await connection.Stream.WriteAsync(data, 0, available, true, cancellationToken);
                                 }
@@ -446,7 +446,7 @@ public partial class ProxyServer
                     // enforces that decision on the wire rather than merely hoping the client respects it.
                     if (clientStream.Connection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
                     {
-                        throw new Exception("HTTP/2 Protocol violation. Received the HTTP/2 connection preface " +
+                        throw new InvalidDataException("HTTP/2 Protocol violation. Received the HTTP/2 connection preface " +
                             $"on a connection that negotiated '{clientStream.Connection.NegotiatedApplicationProtocol}' " +
                             "via ALPN instead of 'h2'.");
                     }
@@ -456,15 +456,15 @@ public partial class ProxyServer
                     // HTTP/2 Connection Preface
                     var line = await clientStream.ReadLineAsync(cancellationToken);
                     if (line != string.Empty)
-                        throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
+                        throw new InvalidDataException($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
 
                     line = await clientStream.ReadLineAsync(cancellationToken);
                     if (line != "SM")
-                        throw new Exception($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
+                        throw new InvalidDataException($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
 
                     line = await clientStream.ReadLineAsync(cancellationToken);
                     if (line != string.Empty)
-                        throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
+                        throw new InvalidDataException($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
 
                     if (requiresH3Bridge)
                     {

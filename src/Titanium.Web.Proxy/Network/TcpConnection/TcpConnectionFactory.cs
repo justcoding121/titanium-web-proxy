@@ -519,13 +519,13 @@ internal class TcpConnectionFactory : IDisposable
         // deny connection to proxy end points to avoid infinite connection loop.
         if (Server.ProxyEndPoints.Any(x => x.Port == connectPortNumber)
             && NetworkHelper.IsLocalIpAddress(connectHostName))
-            throw new Exception(
+            throw new InvalidOperationException(
                 $"A client is making HTTP request to one of the listening ports of this proxy {connectHostName}:{connectPortNumber}");
 
         if (externalProxy != null)
             if (Server.ProxyEndPoints.Any(x => x.Port == externalProxy.Port)
                 && NetworkHelper.IsLocalIpAddress(externalProxy.HostName))
-                throw new Exception(
+                throw new InvalidOperationException(
                     $"A client is making HTTP request via external proxy to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
 
         if (proxyServer.SupportedServerSslProtocols != SslProtocols.None) sslProtocol = proxyServer.SupportedServerSslProtocols;
@@ -585,7 +585,7 @@ internal class TcpConnectionFactory : IDisposable
             {
                 if (prefetch) return null;
 
-                throw new Exception($"Could not resolve the hostname {hostname}");
+                throw new IOException($"Could not resolve the hostname {hostname}");
             }
 
             timing?.MarkDnsResolved();
@@ -612,7 +612,7 @@ internal class TcpConnectionFactory : IDisposable
             {
                 socksRemoteIpAddresses = await Dns.GetHostAddressesAsync(connectHostName, cancellationToken);
                 if (socksRemoteIpAddresses == null || socksRemoteIpAddresses.Length == 0)
-                    throw new Exception($"Could not resolve the SOCKS remote hostname {connectHostName}");
+                    throw new IOException($"Could not resolve the SOCKS remote hostname {connectHostName}");
 
                 // Prefer IPv4 when both families are returned so SOCKS ATYP selection is
                 // predictable on dual-stack hosts (e.g. localhost → 127.0.0.1 before ::1).
@@ -868,7 +868,7 @@ internal class TcpConnectionFactory : IDisposable
                 if (lastException is OutboundDestinationBlockedException blockedException)
                     throw blockedException;
 
-                throw new Exception($"Could not establish connection to {hostname}", lastException);
+                throw new IOException($"Could not establish connection to {hostname}", lastException);
             }
 
             timing?.MarkTcpConnected();
@@ -1130,7 +1130,7 @@ internal class TcpConnectionFactory : IDisposable
             var token = proxyServer.GenerateUpstreamProxyWinAuthToken(proxy, scheme!, challenge,
                 authenticationData);
             if (string.IsNullOrEmpty(token))
-                throw new Exception("Failed to generate an upstream proxy authentication token");
+                throw new InvalidOperationException("Failed to generate an upstream proxy authentication token");
 
             connectRequest.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyAuthorization,
                 string.Concat(scheme, token));

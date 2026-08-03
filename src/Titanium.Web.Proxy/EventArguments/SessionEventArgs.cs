@@ -122,7 +122,7 @@ public class SessionEventArgs : SessionEventArgsBase
         get => reRequest;
         set
         {
-            if (HttpClient.Response.StatusCode == 0) throw new Exception("Response status code is empty. Cannot request again a request " + "which was never send to server.");
+            if (HttpClient.Response.StatusCode == 0) throw new InvalidOperationException("Response status code is empty. Cannot request again a request " + "which was never send to server.");
 
             reRequest = value;
         }
@@ -195,7 +195,7 @@ public class SessionEventArgs : SessionEventArgsBase
         // If not already read (not cached yet)
         if (!request.IsBodyRead)
         {
-            if (request.IsBodyReceived) throw new Exception("Request body was already received.");
+            if (request.IsBodyReceived) throw new InvalidOperationException("Request body was already received.");
 
             if (request.HttpVersion == HttpHeader.Version20)
             {
@@ -257,7 +257,7 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     private async Task ReadResponseBodyAsync(CancellationToken cancellationToken)
     {
-        if (!HttpClient.Request.Locked) throw new Exception("You cannot read the response body before request is made to server.");
+        if (!HttpClient.Request.Locked) throw new InvalidOperationException("You cannot read the response body before request is made to server.");
 
         // RFC 8441: a 2xx response to an extended CONNECT request establishes a tunnel; subsequent
         // DATA frames are raw tunnel bytes, not an HTTP response body. Accumulating them would deadlock.
@@ -273,7 +273,7 @@ public class SessionEventArgs : SessionEventArgsBase
         // If not already read (not cached yet)
         if (!response.IsBodyRead)
         {
-            if (response.IsBodyReceived) throw new Exception("Response body was already received.");
+            if (response.IsBodyReceived) throw new InvalidOperationException("Response body was already received.");
 
             if (response.HttpVersion == HttpHeader.Version20)
             {
@@ -488,7 +488,7 @@ public class SessionEventArgs : SessionEventArgsBase
     public void SetRequestBody(byte[] body)
     {
         var request = HttpClient.Request;
-        if (request.Locked) throw new Exception("You cannot call this function after request is made to server.");
+        if (request.Locked) throw new InvalidOperationException("You cannot call this function after request is made to server.");
 
         request.Body = body;
     }
@@ -499,7 +499,7 @@ public class SessionEventArgs : SessionEventArgsBase
     /// <param name="body">The request body string to set.</param>
     public void SetRequestBodyString(string body)
     {
-        if (HttpClient.Request.Locked) throw new Exception("You cannot call this function after request is made to server.");
+        if (HttpClient.Request.Locked) throw new InvalidOperationException("You cannot call this function after request is made to server.");
 
         SetRequestBody(HttpClient.Request.Encoding.GetBytes(body));
     }
@@ -535,7 +535,7 @@ public class SessionEventArgs : SessionEventArgsBase
     /// <param name="body">The body bytes to set.</param>
     public void SetResponseBody(byte[] body)
     {
-        if (!HttpClient.Request.Locked) throw new Exception("You cannot call this function before request is made to server.");
+        if (!HttpClient.Request.Locked) throw new InvalidOperationException("You cannot call this function before request is made to server.");
 
         var response = HttpClient.Response;
         response.Body = body;
@@ -547,7 +547,7 @@ public class SessionEventArgs : SessionEventArgsBase
     /// <param name="body">The body string to set.</param>
     public void SetResponseBodyString(string body)
     {
-        if (!HttpClient.Request.Locked) throw new Exception("You cannot call this function before request is made to server.");
+        if (!HttpClient.Request.Locked) throw new InvalidOperationException("You cannot call this function before request is made to server.");
 
         var bodyBytes = HttpClient.Response.Encoding.GetBytes(body);
 
@@ -718,7 +718,7 @@ public class SessionEventArgs : SessionEventArgsBase
         if (HttpClient.Request.Locked)
         {
             // response already received from server and ready to be sent to client.
-            if (HttpClient.Response.Locked) throw new Exception("You cannot call this function after response is sent to the client.");
+            if (HttpClient.Response.Locked) throw new InvalidOperationException("You cannot call this function after response is sent to the client.");
 
             // cleanup original response.
             if (closeServerConnection)
