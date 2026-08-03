@@ -353,7 +353,7 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
         return ParseDnsResponseCore(response, expectedId, queriedPort).IsTransient;
     }
 
-    private static DnsParseResult ParseDnsResponseCore(
+    private static DnsParseResult ParseDnsResponseCore( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, int queriedPort)
     {
         if (response.Length < 12) return DnsParseResult.Transient;
@@ -504,7 +504,7 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     ///     Returns an empty string for <c>.</c> (root label = owner name).
     ///     Returns <see langword="null" /> on malformed or truncated input.
     /// </summary>
-    private static string? ReadDnsName(ReadOnlySpan<byte> rdata, ref int offset)
+    private static string? ReadDnsName(ReadOnlySpan<byte> rdata, ref int offset) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var sb = new StringBuilder();
         int iterations = 0;

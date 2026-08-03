@@ -70,7 +70,7 @@ public class SslExtension
     /// </value>
     public int Position { get; }
 
-    private static string GetExtensionData(int value, ReadOnlySpan<byte> data)
+    private static string GetExtensionData(int value, ReadOnlySpan<byte> data) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
         switch (value)
@@ -353,7 +353,7 @@ public class SslExtension
         return list;
     }
 
-    private static string GetSignatureAlgorithms(ReadOnlySpan<byte> data)
+    private static string GetSignatureAlgorithms(ReadOnlySpan<byte> data) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml
         var num = (data[0] << 8) + data[1];

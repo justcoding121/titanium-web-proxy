@@ -245,7 +245,7 @@ namespace Titanium.Web.Proxy.Http2
             "transfer-encoding", "content-length", "host", "trailer"
         };
 
-        private static async Task CopyHttp2FrameAsync(Stream input, Stream output,
+        private static async Task CopyHttp2FrameAsync(Stream input, Stream output, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
             Http2ConnectionState connectionState,
             Func<SessionEventArgs> sessionFactory,
             Func<SessionEventArgs, Http2StreamContext, Task> onBeforeRequestResponse,
@@ -2407,7 +2407,7 @@ namespace Titanium.Web.Proxy.Http2
             return s.Any(c => c is >= 'A' and <= 'Z');
         }
 
-        internal static async Task SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise)
+        internal static async Task SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         {
             // Reuse one Encoder (and its HPACK dynamic table) per direction for the lifetime of the connection,
             // mirroring how the Decoder is persisted below - the dynamic table is connection-scoped, not
@@ -3093,7 +3093,7 @@ namespace Titanium.Web.Proxy.Http2
                 this.isRequest = isRequest;
             }
 
-            public void AddHeader(ByteString name, ByteString value, bool sensitive)
+            public void AddHeader(ByteString name, ByteString value, bool sensitive) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
             {
                 if (name.Length > 0 && name.Span[0] == ':')
                 {

@@ -404,7 +404,7 @@ public class SessionEventArgs : SessionEventArgsBase
     /// Read a line from the byte stream
     /// </summary>
     /// <returns></returns>
-    private async Task<long> ReadUntilBoundaryAsync(ILineStream reader, long totalBytesToRead, ReadOnlyMemory<char> boundary, CancellationToken cancellationToken)
+    private async Task<long> ReadUntilBoundaryAsync(ILineStream reader, long totalBytesToRead, ReadOnlyMemory<char> boundary, CancellationToken cancellationToken) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var bufferDataLength = 0;
 

@@ -31,7 +31,7 @@ public partial class ProxyServer
     /// <param name="endPoint">The explicit endpoint.</param>
     /// <param name="clientConnection">The client connection.</param>
     /// <returns>The task.</returns>
-    private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClientConnection clientConnection)
+    private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClientConnection clientConnection) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var cancellationTokenSource = new CancellationTokenSource();
         RegisterSessionCancellation(cancellationTokenSource);

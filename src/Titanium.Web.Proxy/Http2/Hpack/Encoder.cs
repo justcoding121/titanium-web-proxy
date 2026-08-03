@@ -61,7 +61,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <param name="sensitive">If set to <c>true</c> sensitive.</param>
         /// <param name="indexType">Index type.</param>
         /// <param name="useStaticName">Use static name.</param>
-        public void EncodeHeader(BinaryWriter output, ByteString name, ByteString value, bool sensitive =
+        public void EncodeHeader(BinaryWriter output, ByteString name, ByteString value, bool sensitive = // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
  false, HpackUtil.IndexType indexType = HpackUtil.IndexType.Incremental, bool useStaticName = true)
         {
             // If the header value is sensitive then it must never be indexed

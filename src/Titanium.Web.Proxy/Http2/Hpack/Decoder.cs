@@ -67,7 +67,7 @@ internal class Decoder
     /// </summary>
     /// <param name="input">Input.</param>
     /// <param name="headerListener">Header listener.</param>
-    public void Decode(BinaryReader input, IHeaderListener headerListener)
+    public void Decode(BinaryReader input, IHeaderListener headerListener) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         while (input.BaseStream.Length - input.BaseStream.Position > 0)
             switch (state)

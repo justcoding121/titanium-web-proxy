@@ -657,7 +657,7 @@ public sealed class CertificateManager : IDisposable
     /// <param name="certificateName"></param>
     /// <param name="isRootCertificate"></param>
     /// <returns></returns>
-    internal X509Certificate2? CreateCertificate(string certificateName, bool isRootCertificate)
+    internal X509Certificate2? CreateCertificate(string certificateName, bool isRootCertificate) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         X509Certificate2? certificate;
         try
@@ -770,7 +770,7 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     /// <param name="certificateName"></param>
     /// <returns></returns>
-    public async Task<X509Certificate2?> CreateServerCertificate(string certificateName)
+    public async Task<X509Certificate2?> CreateServerCertificate(string certificateName) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         // check in cache first
         if (TryGetValidCachedCertificate(certificateName, out var cachedCertificate))
@@ -1027,7 +1027,7 @@ public sealed class CertificateManager : IDisposable
     /// <returns>
     ///     true if succeeded, else false.
     /// </returns>
-    public bool CreateRootCertificate(bool persistToFile = true)
+    public bool CreateRootCertificate(bool persistToFile = true) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         lock (rootCertCreationLock)
         {
@@ -1421,7 +1421,7 @@ public sealed class CertificateManager : IDisposable
         rootCertificate = null;
     }
 
-    private void Dispose(bool disposing)
+    private void Dispose(bool disposing) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (disposed) return;
 

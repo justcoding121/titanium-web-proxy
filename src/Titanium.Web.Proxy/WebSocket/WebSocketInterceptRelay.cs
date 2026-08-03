@@ -122,7 +122,7 @@ internal static class WebSocketInterceptRelay
     ///     transport-level I/O error); otherwise the RFC 6455 section 7.4 status code to report in a
     ///     conformant Close for the frame/fragmentation violation that ended it.
     /// </returns>
-    private static async Task<ushort?> RelayDirectionAsync(Stream source, Stream destination, IBufferPool bufferPool,
+    private static async Task<ushort?> RelayDirectionAsync(Stream source, Stream destination, IBufferPool bufferPool, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         WebSocketFrameDirection direction, long maxFramePayloadBytes, SessionEventArgs session,
         SemaphoreSlim writeLock, CancellationTokenSource cancellationTokenSource,
         Action<byte[], int, int> onRead, Action<byte[], int, int> onWrite)

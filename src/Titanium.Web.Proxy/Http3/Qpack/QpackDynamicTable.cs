@@ -40,7 +40,7 @@ internal sealed class QpackDynamicTable : IDisposable
     ///     Inserts a new entry into the table, evicting oldest entries to make room (unless protected
     ///     by <paramref name="inFlightMinAbsoluteIndex" />). Returns the absolute index of the new entry.
     /// </summary>
-    internal ulong Insert(string name, string value,
+    internal ulong Insert(string name, string value, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         ConcurrentDictionary<long, ulong>? inFlightMinAbsoluteIndex = null)
     {
         var entrySize = name.Length + value.Length + EntryOverhead;

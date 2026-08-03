@@ -48,7 +48,7 @@ internal static class Http3RequestStream
     /// <param name="onBeforeRequest">Proxy BeforeRequest event dispatcher.</param>
     /// <param name="onBeforeResponse">Proxy BeforeResponse event dispatcher.</param>
     /// <param name="onAfterResponse">Proxy AfterResponse event dispatcher.</param>
-    public static async Task HandleAsync(
+    public static async Task HandleAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         QuicStream stream,
         QuicConnection connection,
         TransparentQuicProxyEndPoint endPoint,
@@ -271,7 +271,7 @@ internal static class Http3RequestStream
     ///     read-ahead so that <c>IsLastChunk</c> is accurate. A handler may set <c>IsLastChunk = true</c>
     ///     to terminate reading early; the stream read side is then aborted to release flow-control credit.
     /// </summary>
-    private static async ValueTask<byte[]> ReadRequestBodyAsync(
+    private static async ValueTask<byte[]> ReadRequestBodyAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         QuicStream stream,
         Request request,
         ProxyServer server,

@@ -147,28 +147,30 @@ internal static class LeafKeyPairSource
             if (Interlocked.CompareExchange(ref generatorsRunning, running + 1, running) == running) break;
         }
 
-        _ = Task.Run(static () =>
-        {
-            try
-            {
-                while (true)
-                {
-                    var capacity = RsaBufferCapacity;
-                    if (capacity <= 0 || Volatile.Read(ref buffered) >= capacity) break;
+        _ = Task.Run(RunRefill);
+    }
 
-                    RsaBuffer.Add(GenerateRsa(BufferedRsaKeyStrength));
-                    Interlocked.Increment(ref buffered);
-                }
-            }
-            catch (Exception)
+    private static void RunRefill()
+    {
+        try
+        {
+            while (true)
             {
-                // A failed refill must not surface on this thread - the next Rent falls back to
-                // generating inline, which reports failure on a path that can handle it.
+                var capacity = RsaBufferCapacity;
+                if (capacity <= 0 || Volatile.Read(ref buffered) >= capacity) break;
+
+                RsaBuffer.Add(GenerateRsa(BufferedRsaKeyStrength));
+                Interlocked.Increment(ref buffered);
             }
-            finally
-            {
-                Interlocked.Decrement(ref generatorsRunning);
-            }
-        });
+        }
+        catch (Exception)
+        {
+            // A failed refill must not surface on this thread - the next Rent falls back to
+            // generating inline, which reports failure on a path that can handle it.
+        }
+        finally
+        {
+            Interlocked.Decrement(ref generatorsRunning);
+        }
     }
 }

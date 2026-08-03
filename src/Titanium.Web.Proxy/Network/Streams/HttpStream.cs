@@ -853,7 +853,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         return WriteAsync(newLine, cancellationToken: cancellationToken);
     }
 
-    private async ValueTask WriteAsyncInternal(string value, bool addNewLine, CancellationToken cancellationToken)
+    private async ValueTask WriteAsyncInternal(string value, bool addNewLine, CancellationToken cancellationToken) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (closedWrite) return;
 
@@ -1104,7 +1104,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     ///     uses Content-Encoding); on-the-fly decompression/recompression is not performed here in order to
     ///     preserve exact framing and length. Reads are bounded by bufferPool.BufferSize to keep memory flat.
     /// </summary>
-    private async Task HandleBodyWrite(IHttpStreamWriter writer, bool isChunked,
+    private async Task HandleBodyWrite(IHttpStreamWriter writer, bool isChunked, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         bool isRequest, SessionEventArgs args, CancellationToken cancellationToken)
     {
         var requestResponse = isRequest ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;

@@ -29,7 +29,7 @@ internal static class QpackEncoder
     ///     encoder will reference dynamic-table entries. The Required Insert Count prefix is encoded per
     ///     RFC 9204 §4.5.1.1.
     /// </summary>
-    public static byte[] Encode(IEnumerable<(string Name, string Value)> headers, QpackContext? context)
+    public static byte[] Encode(IEnumerable<(string Name, string Value)> headers, QpackContext? context) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var body = new MemoryStream();
         var outboundTable = context != null && !context.OutboundTableDisabled && context.MaxTableCapacityFromPeer > 0

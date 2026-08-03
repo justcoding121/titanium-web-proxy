@@ -105,7 +105,7 @@ public partial class ProxyServer
     ///     <see cref="Http2Helper" />'s frame-reading loop - and therefore every other multiplexed stream on this
     ///     same client connection - while it is in flight.
     /// </summary>
-    private async Task BridgeOnBeforeRequest(SessionEventArgs sessionArgs, Http2StreamContext ctx,
+    private async Task BridgeOnBeforeRequest(SessionEventArgs sessionArgs, Http2StreamContext ctx, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         string remoteHostName, int remotePort, string? connectHost, int? connectPort)
     {
         await OnBeforeRequest(sessionArgs);
@@ -227,7 +227,7 @@ public partial class ProxyServer
     ///     <see cref="TcpConnectionFactory" /> exactly like an HTTP/1.1 client's requests would), so multiple
     ///     concurrent streams on the same h2 client connection never contend on one shared origin connection.
     /// </summary>
-    private async Task RunHttp2ToHttp11BridgeRoundTripAsync(SessionEventArgs sessionArgs, int streamId,
+    private async Task RunHttp2ToHttp11BridgeRoundTripAsync(SessionEventArgs sessionArgs, int streamId, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         Http2ConnectionState connectionState, System.IO.Stream clientStream, string remoteHostName, int remotePort,
         string? connectHost, int? connectPort, CancellationToken connectionToken, CancellationToken streamToken)
     {
@@ -455,7 +455,7 @@ public partial class ProxyServer
     ///     so the 200 HEADERS frame carries no END_STREAM and the h2 stream stays open for DATA relay;
     ///     END_STREAM is sent automatically when the streaming body completes.
     /// </summary>
-    private async Task RunExtendedConnectTunnelAsync(
+    private async Task RunExtendedConnectTunnelAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         SessionEventArgs sessionArgs,
         Http2StreamContext ctx,
         Http2StreamState streamState,

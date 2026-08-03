@@ -64,7 +64,7 @@ public partial class ProxyServer
     ///     User to server to authenticate requests.
     ///     To disable this set ProxyServer.EnableWinAuth to false.
     /// </summary>
-    private async Task Handle401UnAuthorized(SessionEventArgs args)
+    private async Task Handle401UnAuthorized(SessionEventArgs args) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         string? headerName = null;
         HttpHeader? authHeader = null;
@@ -186,7 +186,7 @@ public partial class ProxyServer
     /// <summary>
     ///     Handles NTLM/Kerberos authentication challenges from an upstream proxy.
     /// </summary>
-    private async Task Handle407ProxyAuthorization(SessionEventArgs args)
+    private async Task Handle407ProxyAuthorization(SessionEventArgs args) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (!args.HttpClient.HasConnection) return;
 

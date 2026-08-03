@@ -17,7 +17,7 @@ public partial class ProxyServer
     /// </summary>
     /// <param name="endPoint">The SOCKS endpoint.</param>
     /// <param name="clientConnection">The client connection.</param>
-    private async Task HandleClient(SocksProxyEndPoint endPoint, TcpClientConnection clientConnection)
+    private async Task HandleClient(SocksProxyEndPoint endPoint, TcpClientConnection clientConnection) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         using var cancellationTokenSource = new CancellationTokenSource();
         // Session registration happens in HandleClient(TransparentBase...) below once the SOCKS

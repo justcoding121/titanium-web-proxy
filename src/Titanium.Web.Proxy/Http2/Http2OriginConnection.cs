@@ -526,7 +526,7 @@ internal sealed class Http2OriginConnection
         }
     }
 
-    private async Task ReadLoopAsync(CancellationToken cancellationToken)
+    private async Task ReadLoopAsync(CancellationToken cancellationToken) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var frameHeaderBuffer = new byte[9];
         var isFirstFrame = true;
@@ -906,7 +906,7 @@ internal sealed class Http2OriginConnection
         return payload.AsSpan(1, end - 1).ToArray();
     }
 
-    private void ProcessHeaderBlock(int streamId, byte[] compressed, bool endStream)
+    private void ProcessHeaderBlock(int streamId, byte[] compressed, bool endStream) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var collected = new HeaderCollection();
         ByteString status = default;

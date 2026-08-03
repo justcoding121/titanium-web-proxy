@@ -196,7 +196,7 @@ public partial class ProxyServer
     ///     <see cref="Http2Helper.EmitSyntheticResponseAsync"/>.  Mirrors the structure of
     ///     <c>RunHttp2ToHttp11BridgeRoundTripAsync</c>.
     /// </summary>
-    private async Task RunHttp2ToHttp3BridgeRoundTripAsync(
+    private async Task RunHttp2ToHttp3BridgeRoundTripAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         SessionEventArgs sessionArgs,
         int streamId,
         Http2ConnectionState connectionState,

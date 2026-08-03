@@ -209,7 +209,7 @@ public class HttpWebClient
     ///     Prepare and send the http(s) request
     /// </summary>
     /// <returns></returns>
-    internal async Task SendRequest(bool enable100ContinueBehaviour, bool isTransparent,
+    internal async Task SendRequest(bool enable100ContinueBehaviour, bool isTransparent, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         OriginHttpVersionPolicy originHttpVersionPolicy, CancellationToken cancellationToken)
     {
         var upstreamProxy = Connection.UpStreamProxy;

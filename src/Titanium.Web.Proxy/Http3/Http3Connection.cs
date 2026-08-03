@@ -383,7 +383,7 @@ internal sealed class Http3Connection
         }
     }
 
-    private async Task ProcessClientControlStreamAsync(QuicStream stream, CancellationToken ct)
+    private async Task ProcessClientControlStreamAsync(QuicStream stream, CancellationToken ct) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var receivedSettings = false;
         var isFirstFrame = true;

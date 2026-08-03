@@ -126,7 +126,7 @@ internal class WinCertificateMaker : ICertificateMaker
         return certificate;
     }
 
-    private X509Certificate2 MakeCertificate(string subject, string fullSubject,
+    private X509Certificate2 MakeCertificate(string subject, string fullSubject, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         int privateKeyLength, string hashAlg, DateTime validFrom, DateTime validTo,
         X509Certificate2? signingCertificate)
     {

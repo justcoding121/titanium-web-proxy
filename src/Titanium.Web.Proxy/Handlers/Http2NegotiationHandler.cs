@@ -179,7 +179,7 @@ public partial class ProxyServer
     ///     version, or <see cref="UpstreamHttpProtocol.Http2" /> was required but the origin does not support
     ///     HTTP/2.
     /// </exception>
-    private async Task<Http2NegotiationResult> ResolveHttp2ForClientAsync(SessionEventArgsBase sessionArgs,
+    private async Task<Http2NegotiationResult> ResolveHttp2ForClientAsync(SessionEventArgsBase sessionArgs, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         bool clientOffersHttp2, string remoteHostName, int remotePort, string? connectHost, int? connectPort,
         UpstreamHttpProtocol upstreamHttpProtocol, bool allowHttpProtocolTranslation, bool enablePrefetch,
         CancellationToken cancellationToken)

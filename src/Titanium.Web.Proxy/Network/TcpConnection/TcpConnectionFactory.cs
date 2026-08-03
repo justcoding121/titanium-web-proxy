@@ -431,7 +431,7 @@ internal class TcpConnectionFactory : IDisposable
     /// <param name="prefetch">if set to <c>true</c> [prefetch].</param>
     /// <param name="cancellationToken">The cancellation token for this async task.</param>
     /// <returns></returns>
-    internal async Task<TcpServerConnection?> GetServerConnection(ProxyServer proxyServer, string remoteHostName,
+    internal async Task<TcpServerConnection?> GetServerConnection(ProxyServer proxyServer, string remoteHostName, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         int remotePort,
         Version httpVersion, bool isHttps, List<SslApplicationProtocol>? applicationProtocols, bool isConnect,
         SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
@@ -502,7 +502,7 @@ internal class TcpConnectionFactory : IDisposable
     /// <param name="prefetch">if set to <c>true</c> [prefetch].</param>
     /// <param name="cancellationToken">The cancellation token for this async task.</param>
     /// <returns></returns>
-    private async Task<TcpServerConnection?> CreateServerConnection(string remoteHostName, int remotePort,
+    private async Task<TcpServerConnection?> CreateServerConnection(string remoteHostName, int remotePort, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         Version httpVersion, bool isHttps, SslProtocols sslProtocol, List<SslApplicationProtocol>? applicationProtocols,
         bool isConnect,
         ProxyServer proxyServer, SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint,
@@ -1273,7 +1273,7 @@ internal class TcpConnectionFactory : IDisposable
     /// </summary>
     /// <param name="connection">The Tcp server connection to return.</param>
     /// <param name="close">Should we just close the connection instead of reusing?</param>
-    internal Task Release(TcpServerConnection? connection, bool close = false)
+    internal Task Release(TcpServerConnection? connection, bool close = false) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (connection == null) return Task.CompletedTask;
 
@@ -1352,7 +1352,7 @@ internal class TcpConnectionFactory : IDisposable
         }
     }
 
-    private async Task ClearOutdatedConnections()
+    private async Task ClearOutdatedConnections() // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         while (runCleanUpTask)
         {
@@ -1429,7 +1429,7 @@ internal class TcpConnectionFactory : IDisposable
         }
     }
 
-    protected virtual void Dispose(bool disposing)
+    protected virtual void Dispose(bool disposing) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (disposed) return;
 

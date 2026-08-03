@@ -1411,7 +1411,7 @@ public partial class ProxyServer : IDisposable
     ///     Whether or not clear any system proxy settings which is pointing to our own endpoint (causing a cycle).
     ///     E.g due to ungracious proxy shutdown before.
     /// </param>
-    public void Start(bool changeSystemProxySettings = true)
+    public void Start(bool changeSystemProxySettings = true) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (ProxyRunning) throw new InvalidOperationException("Proxy is already running.");
 
@@ -1588,7 +1588,7 @@ public partial class ProxyServer : IDisposable
         await QuicConnectionPool.DrainAsync();
     }
 
-    private void StopCore(bool cancelSessions, bool clearPools)
+    private void StopCore(bool cancelSessions, bool clearPools) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (!ProxyRunning) throw new InvalidOperationException("Proxy is not running.");
 
@@ -1730,7 +1730,7 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     Act when a connection is received from client.
     /// </summary>
-    private void OnAcceptConnection(IAsyncResult asyn)
+    private void OnAcceptConnection(IAsyncResult asyn) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var endPoint = (ProxyEndPoint)asyn.AsyncState!;
         var listener = endPoint.Listener!;

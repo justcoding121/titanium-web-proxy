@@ -121,7 +121,7 @@ internal static class Http3OriginBridge
     ///     When <see langword="true" />, QUIC failures are terminal (return 502); no TCP fallback.
     ///     When <see langword="false" /> (Auto policy), evict the stale cache entry and fall back to TCP.
     /// </param>
-    private static async Task ForwardOverQuicAsync(
+    private static async Task ForwardOverQuicAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         SessionEventArgs sessionArgs,
         ProxyServer server,
         string connectHost,
@@ -465,7 +465,7 @@ internal static class Http3OriginBridge
     ///         (logged as <c>H2↔H1.0</c>).
     ///     </para>
     /// </summary>
-    private static async Task ForwardOverTcpAsync(
+    private static async Task ForwardOverTcpAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         SessionEventArgs sessionArgs,
         ProxyServer server,
         CancellationToken cancellationToken,

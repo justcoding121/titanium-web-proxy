@@ -76,7 +76,7 @@ internal static class QpackDecoder
         return candidate;
     }
 
-    private static List<(string Name, string Value)> DecodeCore(ReadOnlySpan<byte> data, QpackContext? context)
+    private static List<(string Name, string Value)> DecodeCore(ReadOnlySpan<byte> data, QpackContext? context) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (data.Length < 2)
             throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed,

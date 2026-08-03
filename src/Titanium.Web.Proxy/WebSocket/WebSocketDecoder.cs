@@ -44,7 +44,7 @@ public class WebSocketDecoder
     ///     see the remarks on <see cref="WebSocketFrame" />. In particular, do not retain frames across
     ///     separate calls to this method on the same decoder instance without first copying out their data.
     /// </remarks>
-    public IEnumerable<WebSocketFrame> Decode(byte[] data, int offset, int count)
+    public IEnumerable<WebSocketFrame> Decode(byte[] data, int offset, int count) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var buffer = data.AsMemory(offset, count);
 

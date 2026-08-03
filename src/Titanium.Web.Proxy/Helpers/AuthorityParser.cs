@@ -52,8 +52,7 @@ internal static class AuthorityParser
             if (literal.Length == 0) return false;
 
             // IPvFuture ("v" ...) literals are not supported; only IPv6 is relevant to this proxy.
-            if (!IPAddress.TryParse(literal, out var addr) || addr.AddressFamily != AddressFamily.InterNetworkV6)
-                return false;
+            if (!IsIpv6Literal(literal)) return false;
 
             host = literal;
 
@@ -81,6 +80,12 @@ internal static class AuthorityParser
 
         host = candidateHost;
         return TryParsePort(authority.Substring(firstColon + 1), out port);
+    }
+
+    private static bool IsIpv6Literal(string literal)
+    {
+        return IPAddress.TryParse(literal, out var address) &&
+               address.AddressFamily == AddressFamily.InterNetworkV6;
     }
 
     /// <summary>

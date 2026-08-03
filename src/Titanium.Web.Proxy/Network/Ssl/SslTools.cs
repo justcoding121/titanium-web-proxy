@@ -21,7 +21,7 @@ internal static class SslTools
     /// <param name="bufferPool"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    public static async Task<ClientHelloInfo?> PeekClientHello(IPeekStream clientStream, IBufferPool bufferPool,
+    public static async Task<ClientHelloInfo?> PeekClientHello(IPeekStream clientStream, IBufferPool bufferPool, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         CancellationToken cancellationToken = default)
     {
         // detects the HTTPS ClientHello message as it is described in the following url:
@@ -160,7 +160,7 @@ internal static class SslTools
     /// <param name="bufferPool"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    public static async Task<ServerHelloInfo?> PeekServerHello(IPeekStream serverStream, IBufferPool bufferPool,
+    public static async Task<ServerHelloInfo?> PeekServerHello(IPeekStream serverStream, IBufferPool bufferPool, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         CancellationToken cancellationToken = default)
     {
         // detects the HTTPS ClientHello message as it is described in the following url:

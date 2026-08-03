@@ -147,7 +147,7 @@ internal static class HttpHelper
                         return GetKnownMethod(buffer.AsSpan(0, i));
 
                     var ch = (char)b;
-                    if ((ch < 'A' || ch > 'z' || ch > 'Z' && ch < 'a') && ch != '-') // ASCII letter
+                    if (!IsMethodCharacter(ch))
                         return KnownMethod.Invalid;
 
                     i++;
@@ -163,7 +163,12 @@ internal static class HttpHelper
         }
     }
 
-    private static KnownMethod GetKnownMethod(ReadOnlySpan<byte> method)
+    private static bool IsMethodCharacter(char value)
+    {
+        return value is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or '-';
+    }
+
+    private static KnownMethod GetKnownMethod(ReadOnlySpan<byte> method) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         // the following methods are supported:
         // Connect

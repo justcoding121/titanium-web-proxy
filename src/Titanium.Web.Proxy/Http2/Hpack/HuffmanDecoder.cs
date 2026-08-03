@@ -66,33 +66,45 @@ internal class HuffmanDecoder
             int b = buf[i];
             current = (current << 8) | b;
             bits += 8;
-            while (bits >= 8)
-            {
-                var c = (current >> (bits - 8)) & 0xFF;
-                var children = node.Children ??
-                               throw new IOException("Invalid Huffman code: terminal node has trailing bits.");
-                node = children[c] ?? throw new IOException("Invalid Huffman code.");
-                bits -= node.Bits;
-                if (node.IsTerminal)
-                {
-                    if (node.Symbol == HpackUtil.HuffmanEos) throw new IOException("EOS Decoded");
-
-                    resultBuf[resultSize++] = (byte)node.Symbol;
-                    node = root;
-                }
-            }
+            DecodeCompleteBytes(current, ref bits, ref node, resultBuf, ref resultSize);
         }
 
+        DecodeTrailingBits(current, ref bits, ref node, resultBuf, ref resultSize);
+
+        var mask = (1 << bits) - 1;
+        if ((current & mask) != mask) throw new IOException("Invalid Padding");
+
+        return resultBuf.AsMemory(0, resultSize);
+    }
+
+    private void DecodeCompleteBytes(int current, ref int bits, ref Node node, byte[] result,
+        ref int resultSize)
+    {
+        while (bits >= 8)
+        {
+            var c = (current >> (bits - 8)) & 0xFF;
+            node = GetChild(node, c);
+            bits -= node.Bits;
+            if (!node.IsTerminal) continue;
+
+            if (node.Symbol == HpackUtil.HuffmanEos) throw new IOException("EOS Decoded");
+
+            result[resultSize++] = (byte)node.Symbol;
+            node = root;
+        }
+    }
+
+    private void DecodeTrailingBits(int current, ref int bits, ref Node node, byte[] result,
+        ref int resultSize)
+    {
         while (bits > 0)
         {
             var c = (current << (8 - bits)) & 0xFF;
-            var children = node.Children ??
-                           throw new IOException("Invalid Huffman code: terminal node has trailing bits.");
-            node = children[c] ?? throw new IOException("Invalid Huffman code.");
+            node = GetChild(node, c);
             if (node.IsTerminal && node.Bits <= bits)
             {
                 bits -= node.Bits;
-                resultBuf[resultSize++] = (byte)node.Symbol;
+                result[resultSize++] = (byte)node.Symbol;
                 node = root;
             }
             else
@@ -100,14 +112,13 @@ internal class HuffmanDecoder
                 break;
             }
         }
+    }
 
-        // Section 5.2. String Literal Representation
-        // Padding not corresponding to the most significant bits of the code
-        // for the EOS symbol (0xFF) MUST be treated as a decoding error.
-        var mask = (1 << bits) - 1;
-        if ((current & mask) != mask) throw new IOException("Invalid Padding");
-
-        return resultBuf.AsMemory(0, resultSize);
+    private static Node GetChild(Node node, int index)
+    {
+        var children = node.Children ??
+                       throw new IOException("Invalid Huffman code: terminal node has trailing bits.");
+        return children[index] ?? throw new IOException("Invalid Huffman code.");
     }
 
     private static Node BuildTree(int[] codes, byte[] lengths)

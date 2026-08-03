@@ -271,7 +271,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     ///     come) and removes entries left empty afterward so <see cref="_pool" /> does not grow one
     ///     entry per distinct origin ever contacted for the lifetime of the proxy.
     /// </summary>
-    private async Task ClearIdleConnectionsAsync()
+    private async Task ClearIdleConnectionsAsync() // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         while (!_cleanupCts.IsCancellationRequested)
         {

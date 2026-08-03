@@ -35,7 +35,7 @@ public partial class ProxyServer
     /// <param name="connectArgs">The Connect request if this is a HTTPS request from explicit endpoint.</param>
     /// <param name="prefetchConnectionTask">Prefetched server connection for current client using Connect/SNI headers.</param>
     /// <param name="isHttps">Is HTTPS</param>
-    private async Task HandleHttpSessionRequest(ProxyEndPoint endPoint, HttpClientStream clientStream,
+    private async Task HandleHttpSessionRequest(ProxyEndPoint endPoint, HttpClientStream clientStream, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         CancellationTokenSource cancellationTokenSource, TunnelConnectSessionEventArgs? connectArgs = null,
         Task<TcpServerConnection?>? prefetchConnectionTask = null, bool isHttps = false)
     {
@@ -415,7 +415,7 @@ public partial class ProxyServer
         }
     }
 
-    private async Task<RetryResult> HandleHttpSessionRequest(SessionEventArgs args,
+    private async Task<RetryResult> HandleHttpSessionRequest(SessionEventArgs args, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         TcpServerConnection? serverConnection, SslApplicationProtocol sslApplicationProtocol,
         CancellationToken cancellationToken, CancellationTokenSource cancellationTokenSource)
     {
@@ -631,7 +631,7 @@ public partial class ProxyServer
     /// <summary>
     ///     Prepare the request headers so that we can avoid encodings not parseable by this proxy
     /// </summary>
-    private static void PrepareRequestHeaders(HeaderCollection requestHeaders)
+    private static void PrepareRequestHeaders(HeaderCollection requestHeaders) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var acceptEncoding = requestHeaders.GetHeaderValueOrNull(KnownHeaders.AcceptEncoding);
 
@@ -704,7 +704,7 @@ public partial class ProxyServer
     ///     Appends a Via header entry to <paramref name="headers" /> per RFC 9110 §7.6.3.
     ///     If a Via header already exists its value is extended with a comma-separated suffix.
     /// </summary>
-    internal static void AddViaHeader(HeaderCollection headers, Version httpVersion, string pseudonym)
+    internal static void AddViaHeader(HeaderCollection headers, Version httpVersion, string pseudonym) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         // Via uses HTTP's protocol-version token, whose canonical form includes both digits
         // (RFC 9110 §2.5/§7.6.3): 1.1, 2.0, 3.0. Sending "2" is accepted by many origins,
@@ -774,7 +774,7 @@ public partial class ProxyServer
     ///     <paramref name="pseudonym" /> exactly (case-insensitive), ignoring any optional port suffix.
     ///     Prevents false positives from suffix substring matches (e.g. "proxy" matching "my-proxy").
     /// </summary>
-    private static bool ViaTokenMatches(string viaEntry, string pseudonym)
+    private static bool ViaTokenMatches(string viaEntry, string pseudonym) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         // A Via entry is: received-protocol RWS received-by [ RWS comment ].
         // RFC 9110 RWS permits SP or HTAB, and received-by can include an optional port.

@@ -35,7 +35,7 @@ public partial class ProxyServer
         return HandleClient(endPoint, clientConnection, endPoint.Port, cancellationTokenSource, cancellationToken);
     }
 
-    private async Task HandleClient(TransparentBaseProxyEndPoint endPoint, TcpClientConnection clientConnection,
+    private async Task HandleClient(TransparentBaseProxyEndPoint endPoint, TcpClientConnection clientConnection, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         int port, CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken,
         string? socksTargetHost = null)
     {

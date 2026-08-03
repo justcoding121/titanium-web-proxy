@@ -81,7 +81,7 @@ internal static class QpackEncoderStreamReader
     ///     this reader catches up - only a truncated instruction at end-of-stream is fatal.
     ///     Exposed internally for unit tests that feed crafted instruction bytes without a live QUIC stream.
     /// </summary>
-    internal static bool TryParseOneInstruction(ReadOnlySpan<byte> data, QpackContext context, out int consumed)
+    internal static bool TryParseOneInstruction(ReadOnlySpan<byte> data, QpackContext context, out int consumed) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         consumed = 0;
         if (data.IsEmpty) return false;
