@@ -132,7 +132,8 @@ internal static class ProxyDiagnostics
     /// <summary>
     ///     True when <paramref name="exception" /> (or a nested inner exception) is a normal part of
     ///     proxy operation: cancellation (including user <c>TerminateSession</c>), client/server
-    ///     disconnects, retries after a stale pooled connection, and configured timeouts.
+    ///     disconnects, aborted TLS handshakes, retries after a stale pooled connection, and
+    ///     configured timeouts.
     /// </summary>
     internal static bool IsExpected(Exception exception)
     {
@@ -142,6 +143,12 @@ internal static class ProxyDiagnostics
             ObjectDisposedException => true,
             System.IO.IOException => true,
             System.Net.Sockets.SocketException => true,
+            // Browser/OS clients routinely abort MITM handshakes (speculative CONNECT, idle tab
+            // teardown, cert cache races). SslStream surfaces those as AuthenticationException,
+            // often with no IOException inner — so they must be matched here, not only via
+            // recursive IOException checks. Caught as ProxyConnectException in Explicit/Transparent
+            // handlers and previously logged as red Error after a browsing pause.
+            System.Security.Authentication.AuthenticationException => true,
             Exceptions.ProxyTimeoutException => true,
             Exceptions.RetryableServerConnectionException => true,
             _ => exception.InnerException != null && IsExpected(exception.InnerException)

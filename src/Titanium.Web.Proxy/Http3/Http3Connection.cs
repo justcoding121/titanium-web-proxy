@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http3.Qpack;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 namespace Titanium.Web.Proxy.Http3;
@@ -179,16 +180,13 @@ internal sealed class Http3Connection
             await acceptTask;
         }
         catch (OperationCanceledException) { /* shutdown */ }
-        catch (QuicException qex) when (
-            qex.QuicError == QuicError.ConnectionAborted ||
-            qex.QuicError == QuicError.ConnectionIdle)
-        {
-            if (_logger.IsEnabled(LogLevel.Debug))
-                _logger.LogDebug(qex, "HTTP/3 client connection closed: {QuicError}", qex.QuicError);
-        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "HTTP/3 connection error from {Remote}", _connection.RemoteEndPoint);
+            // Idle/abort/timeout teardowns are normal (especially after a browsing pause); only
+            // unexpected failures should surface at Error. QuicException derives from IOException so
+            // ProxyDiagnostics.IsExpected already treats it as benign.
+            ProxyDiagnostics.ReportException(_logger,
+                $"HTTP/3 connection error from {_connection.RemoteEndPoint}", ex);
         }
         finally
         {
@@ -316,8 +314,9 @@ internal sealed class Http3Connection
                 stream = await _connection.AcceptInboundStreamAsync(ct);
             }
             catch (OperationCanceledException) { return; }
-            catch (QuicException qex) when (qex.QuicError == QuicError.ConnectionAborted ||
-                                            qex.QuicError == QuicError.ConnectionIdle)
+            catch (QuicException qex) when (qex.QuicError is QuicError.ConnectionAborted
+                                           or QuicError.ConnectionIdle
+                                           or QuicError.ConnectionTimeout)
             {
                 return;
             }

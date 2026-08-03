@@ -176,11 +176,11 @@ public partial class ProxyServer
                 .ContinueWith(t =>
                 {
                     if (t.IsFaulted)
-                        ProxyDiagnostics.ReportUnexpected(logger,
+                        ProxyDiagnostics.ReportException(logger,
                             $"RFC 8441 WebSocket tunnel failed for stream {ctx.StreamId}",
                             new ProxyHttpException(
                                 $"RFC 8441 WebSocket tunnel failed for stream {ctx.StreamId}",
-                                t.Exception.GetBaseException(), sessionArgs));
+                                t.Exception!.GetBaseException(), sessionArgs));
                 }, TaskScheduler.Default);
             tunnelStreamState.SyntheticTask = tunnelTask;
             ctx.ConnectionState.PendingSynthetics.Add(tunnelTask);
@@ -209,11 +209,11 @@ public partial class ProxyServer
             .ContinueWith(t =>
             {
                 if (t.IsFaulted)
-                    ProxyDiagnostics.ReportUnexpected(logger,
+                    ProxyDiagnostics.ReportException(logger,
                         $"HTTP/2-to-HTTP/1.1 bridge round trip failed for stream {ctx.StreamId}",
                         new ProxyHttpException(
                             $"HTTP/2-to-HTTP/1.1 bridge round trip failed for stream {ctx.StreamId}",
-                            t.Exception.GetBaseException(), sessionArgs));
+                            t.Exception!.GetBaseException(), sessionArgs));
             }, TaskScheduler.Default);
         streamState.SyntheticTask = bridgeTask;
         ctx.ConnectionState.PendingSynthetics.Add(bridgeTask);
@@ -381,10 +381,11 @@ public partial class ProxyServer
 
             // A stream/connection cancellation (RST_STREAM, GOAWAY, or the client connection itself ending)
             // is an expected teardown path, not a bug - and the client is not waiting for an error response
-            // in that case either. Only report and attempt to answer genuine origin-round-trip failures.
+            // in that case either. Classify via ReportException so idle peer closes (IOException) stay
+            // Debug while unexpected failures remain Error.
             if (!cancellationToken.IsCancellationRequested)
             {
-                ProxyDiagnostics.ReportUnexpected(logger,
+                ProxyDiagnostics.ReportException(logger,
                     $"HTTP/2-to-HTTP/1.1 bridge origin round trip failed for stream {streamId}",
                     new ProxyHttpException(
                         $"HTTP/2-to-HTTP/1.1 bridge origin round trip failed for stream {streamId}", ex,
@@ -659,7 +660,7 @@ public partial class ProxyServer
         {
             if (!cancellationToken.IsCancellationRequested)
             {
-                ProxyDiagnostics.ReportUnexpected(logger,
+                ProxyDiagnostics.ReportException(logger,
                     $"RFC 8441 WebSocket tunnel error for stream {ctx.StreamId}",
                     new ProxyHttpException(
                         $"RFC 8441 WebSocket tunnel error for stream {ctx.StreamId}", ex, sessionArgs));

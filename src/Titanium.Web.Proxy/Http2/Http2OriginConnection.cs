@@ -1030,13 +1030,37 @@ internal sealed class Http2OriginConnection : IDisposable
         faulted = true;
 
         if (report)
-            ProxyDiagnostics.ReportUnexpected(logger, "The HTTP/1.1-to-HTTP/2 origin bridge connection failed.", 
-                new ProxyHttpException("The HTTP/1.1-to-HTTP/2 origin bridge connection failed.", ex, null));
+        {
+            // Peer idle/GOAWAY/EOF arrives as a plain IOException and is expected under normal browsing.
+            // This class also encodes HTTP/2 protocol violations as IOException("HTTP/2 protocol error:…")
+            // — those must stay Error. Explicit ProxyHttpException / other unexpected types likewise.
+            var wrapped = ex is ProxyHttpException proxyEx
+                ? proxyEx
+                : new ProxyHttpException("The HTTP/1.1-to-HTTP/2 origin bridge connection failed.", ex, null);
+
+            if (IsHttp2ProtocolViolation(ex))
+                ProxyDiagnostics.ReportUnexpected(logger,
+                    "The HTTP/1.1-to-HTTP/2 origin bridge connection failed.", wrapped);
+            else
+                ProxyDiagnostics.ReportException(logger,
+                    "The HTTP/1.1-to-HTTP/2 origin bridge connection failed.", wrapped);
+        }
 
         foreach (var kvp in streams)
             FailPending(kvp.Value, ex);
 
         initialSettingsReceived.TrySetException(ex);
+    }
+
+    private static bool IsHttp2ProtocolViolation(Exception ex)
+    {
+        for (var current = ex; current != null; current = current.InnerException)
+        {
+            if (current.Message.StartsWith("HTTP/2 protocol error", StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

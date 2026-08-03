@@ -175,11 +175,11 @@ public partial class ProxyServer
             .ContinueWith(t =>
             {
                 if (t.IsFaulted)
-                    ProxyDiagnostics.ReportUnexpected(logger,
+                    ProxyDiagnostics.ReportException(logger,
                         $"H2→H3 bridge round trip failed for stream {ctx.StreamId}",
                         new ProxyHttpException(
                             $"H2→H3 bridge round trip failed for stream {ctx.StreamId}",
-                            t.Exception.GetBaseException(), sessionArgs));
+                            t.Exception!.GetBaseException(), sessionArgs));
             }, TaskScheduler.Default);
 
         // Register ownership BEFORE returning from this delegate so Http2Helper sees the state
@@ -265,9 +265,11 @@ public partial class ProxyServer
             sessionArgs.Exception = ex;
 
             // Cancellation (RST_STREAM, GOAWAY, connection close) is expected teardown, not an error.
+            // Idle QUIC/TCP peer closes also surface here as IOException/QuicException — classify via
+            // ReportException so they stay Debug rather than red Error noise after a browsing pause.
             if (!cancellationToken.IsCancellationRequested)
             {
-                ProxyDiagnostics.ReportUnexpected(logger,
+                ProxyDiagnostics.ReportException(logger,
                     $"H2→H3 bridge origin round trip failed for stream {streamId}",
                     new ProxyHttpException(
                         $"H2→H3 bridge origin round trip failed for stream {streamId}", ex, sessionArgs));
