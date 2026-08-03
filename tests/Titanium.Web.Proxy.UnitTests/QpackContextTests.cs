@@ -58,7 +58,7 @@ public class QpackContextTests
 
         using var cts = new CancellationTokenSource(100); // 100 ms timeout
 
-        await Assert.ThrowsExceptionAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(async () =>
         {
             await ctx.AwaitInsertCountAsync(5, cts.Token);
         });
@@ -71,7 +71,7 @@ public class QpackContextTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsExceptionAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(async () =>
         {
             await ctx.AwaitInsertCountAsync(1, cts.Token);
         });

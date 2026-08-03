@@ -60,7 +60,7 @@ public class Http3FrameTests
         await Http3Frame.WriteAsync(ms, Http3FrameType.Data, payload, CancellationToken.None);
         ms.Position = 0;
 
-        var ex = await Assert.ThrowsExceptionAsync<Http3ConnectionException>(
+        var ex = await Assert.ThrowsExactlyAsync<Http3ConnectionException>(
             () => Http3Frame.ReadAsync(ms, maxPayloadBytes: 16, CancellationToken.None).AsTask());
 
         Assert.AreEqual(Http3ErrorCode.ExcessiveLoad, ex.ErrorCode);
@@ -76,7 +76,7 @@ public class Http3FrameTests
         ms.Write(new byte[] { 1, 2, 3 });
         ms.Position = 0;
 
-        var ex = await Assert.ThrowsExceptionAsync<Http3ConnectionException>(
+        var ex = await Assert.ThrowsExactlyAsync<Http3ConnectionException>(
             () => Http3Frame.ReadAsync(ms, maxPayloadBytes: 0, CancellationToken.None).AsTask());
 
         Assert.AreEqual(Http3ErrorCode.FrameError, ex.ErrorCode);
@@ -89,7 +89,7 @@ public class Http3FrameTests
         ms.WriteByte(0x00); // type only — length missing
         ms.Position = 0;
 
-        var ex = await Assert.ThrowsExceptionAsync<Http3ConnectionException>(
+        var ex = await Assert.ThrowsExactlyAsync<Http3ConnectionException>(
             () => Http3Frame.ReadAsync(ms, maxPayloadBytes: 0, CancellationToken.None).AsTask());
 
         Assert.AreEqual(Http3ErrorCode.FrameError, ex.ErrorCode);

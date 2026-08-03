@@ -51,6 +51,6 @@ public class Http2HelperStartupAndNullOriginTests
         var blocked = stream.ReadAsync(buf, 0, buf.Length);
         Assert.IsFalse(blocked.IsCompleted);
         cts.Cancel();
-        await Assert.ThrowsExceptionAsync<TaskCanceledException>(async () => await blocked);
+        await Assert.ThrowsExactlyAsync<TaskCanceledException>(async () => await blocked);
     }
 }

@@ -38,7 +38,7 @@ public class Rfc8441H11ToH2TunnelTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();

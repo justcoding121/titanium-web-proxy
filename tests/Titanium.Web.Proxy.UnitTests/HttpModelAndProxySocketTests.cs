@@ -32,7 +32,7 @@ namespace Titanium.Web.Proxy.UnitTests
                 socket.ProxyEndPoint = new IPEndPoint(IPAddress.Loopback, 1);
                 socket.ProxyType = (ProxyTypes)int.MaxValue;
 
-                var exception = Assert.ThrowsException<InvalidOperationException>(() =>
+                var exception = Assert.ThrowsExactly<InvalidOperationException>(() =>
                     socket.BeginConnect(new IPEndPoint(IPAddress.Loopback, 80), null, null));
 
                 StringAssert.Contains(exception.Message, "Unsupported proxy type");

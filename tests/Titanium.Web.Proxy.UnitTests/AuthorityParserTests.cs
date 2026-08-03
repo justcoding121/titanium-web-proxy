@@ -93,6 +93,6 @@ public class AuthorityParserTests
     [TestMethod]
     public void Parse_MalformedAuthority_ThrowsFormatException()
     {
-        Assert.ThrowsException<FormatException>(() => AuthorityParser.Parse("::1:8080", 443));
+        Assert.ThrowsExactly<FormatException>(() => AuthorityParser.Parse("::1:8080", 443));
     }
 }

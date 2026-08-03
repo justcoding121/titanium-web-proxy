@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Security.Authentication;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -179,7 +179,7 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var proxy = new ProxyServer();
 
-            Assert.ThrowsException<ArgumentNullException>(() => proxy.PolicyModes = null!);
+            Assert.ThrowsExactly<ArgumentNullException>(() => proxy.PolicyModes = null!);
         }
     }
 }

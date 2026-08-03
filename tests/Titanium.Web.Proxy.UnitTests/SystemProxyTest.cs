@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
@@ -168,7 +168,7 @@ namespace Titanium.Web.Proxy.UnitTests
             var settings = new SystemProxySettings();
             settings.BypassRules.Add("*.example.com;*.other.com");
 
-            Assert.ThrowsException<ArgumentException>(() => settings.Validate());
+            Assert.ThrowsExactly<ArgumentException>(() => settings.Validate());
         }
     }
 }

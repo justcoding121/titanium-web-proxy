@@ -76,7 +76,7 @@ namespace Titanium.Web.Proxy.UnitTests
             var decoder = new Decoder(8192, 4096);
             using var stream = new MemoryStream(new byte[] { 0x80 }); // indexed, index 0
             using var reader = new BinaryReader(stream);
-            Assert.ThrowsException<IOException>(() => decoder.Decode(reader, new RecordingHeaderListener()));
+            Assert.ThrowsExactly<IOException>(() => decoder.Decode(reader, new RecordingHeaderListener()));
         }
 
         [TestMethod]
@@ -109,7 +109,7 @@ namespace Titanium.Web.Proxy.UnitTests
             decoder.SetMaxHeaderTableSize(100);
             using var stream = new MemoryStream(new byte[] { 0x82 });
             using var reader = new BinaryReader(stream);
-            Assert.ThrowsException<IOException>(() => decoder.Decode(reader, new RecordingHeaderListener()));
+            Assert.ThrowsExactly<IOException>(() => decoder.Decode(reader, new RecordingHeaderListener()));
         }
 
         private sealed class RecordingHeaderListener : IHeaderListener

@@ -42,7 +42,7 @@ public class Http1FramingValidatorIsolationTests
             request.Headers.AddHeader("Content-Length", "42");
             request.Headers.AddHeader("Content-Length", "43");
 
-            Assert.ThrowsException<Http1FramingException>(() => Http1FramingValidator.Validate(request, source),
+            Assert.ThrowsExactly<Http1FramingException>(() => Http1FramingValidator.Validate(request, source),
                 $"source={source}");
         }
     }
@@ -71,7 +71,7 @@ public class Http1FramingValidatorIsolationTests
             var request = MakeRequest();
             request.Headers.AddHeader("Content-Length", "42, 43");
 
-            Assert.ThrowsException<Http1FramingException>(() => Http1FramingValidator.Validate(request, source),
+            Assert.ThrowsExactly<Http1FramingException>(() => Http1FramingValidator.Validate(request, source),
                 $"source={source}");
         }
     }
@@ -98,7 +98,7 @@ public class Http1FramingValidatorIsolationTests
             var request = MakeRequest();
             request.Headers.AddHeader("Transfer-Encoding", "chunked, gzip");
 
-            Assert.ThrowsException<Http1FramingException>(() => Http1FramingValidator.Validate(request, source),
+            Assert.ThrowsExactly<Http1FramingException>(() => Http1FramingValidator.Validate(request, source),
                 $"source={source}");
         }
     }
@@ -111,7 +111,7 @@ public class Http1FramingValidatorIsolationTests
             var request = MakeRequest();
             request.Headers.AddHeader("Transfer-Encoding", "gzip");
 
-            var ex = Assert.ThrowsException<Http1FramingException>(
+            var ex = Assert.ThrowsExactly<Http1FramingException>(
                 () => Http1FramingValidator.Validate(request, source), $"source={source}");
             Assert.AreEqual(System.Net.HttpStatusCode.NotImplemented, ex.StatusCode, $"source={source}");
         }
@@ -127,7 +127,7 @@ public class Http1FramingValidatorIsolationTests
             var request = MakeRequest();
             request.Headers.AddHeader("Content-Length", "-1");
 
-            Assert.ThrowsException<Http1FramingException>(() => Http1FramingValidator.Validate(request, source),
+            Assert.ThrowsExactly<Http1FramingException>(() => Http1FramingValidator.Validate(request, source),
                 $"source={source}");
         }
     }
@@ -140,7 +140,7 @@ public class Http1FramingValidatorIsolationTests
             var request = MakeRequest();
             request.Headers.AddHeader("Content-Length", "+42");
 
-            Assert.ThrowsException<Http1FramingException>(() => Http1FramingValidator.Validate(request, source),
+            Assert.ThrowsExactly<Http1FramingException>(() => Http1FramingValidator.Validate(request, source),
                 $"source={source}");
         }
     }
@@ -172,7 +172,7 @@ public class Http1FramingValidatorIsolationTests
         response.Headers.AddHeader("Content-Length", "1");
         response.Headers.AddHeader("Content-Length", "2");
 
-        Assert.ThrowsException<Http1FramingException>(
+        Assert.ThrowsExactly<Http1FramingException>(
             () => Http1FramingValidator.Validate(response, FramingSource.Http1Wire));
     }
 

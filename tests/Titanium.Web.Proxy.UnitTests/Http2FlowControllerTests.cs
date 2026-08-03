@@ -185,7 +185,7 @@ public class Http2FlowControllerTests
 
         cts.Cancel();
 
-        await Assert.ThrowsExceptionAsync<TaskCanceledException>(async () => await cancelledTask);
+        await Assert.ThrowsExactlyAsync<TaskCanceledException>(async () => await cancelledTask);
 
         // stream 2, whose window was untouched, must be unaffected by the other waiter's cancellation once
         // the connection window is replenished.

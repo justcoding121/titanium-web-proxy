@@ -242,7 +242,7 @@ public class WebSocketDecoderTests
             0x80, 0, 0, 0, 0, 0, 0, 1 // reserved high bit set; low bits declare length=1
         };
 
-        var ex = Assert.ThrowsException<WebSocketProtocolException>(
+        var ex = Assert.ThrowsExactly<WebSocketProtocolException>(
             () => decoder.Decode(header, 0, header.Length).ToList());
         Assert.AreEqual((ushort)1002, ex.CloseCode);
     }
@@ -261,7 +261,7 @@ public class WebSocketDecoderTests
             0, 0, 0, 1, 0, 0, 0, 0 // (long)1 << 32 = 4,294,967,296, well over int.MaxValue
         };
 
-        var ex = Assert.ThrowsException<WebSocketProtocolException>(
+        var ex = Assert.ThrowsExactly<WebSocketProtocolException>(
             () => decoder.Decode(header, 0, header.Length).ToList());
         Assert.AreEqual((ushort)1002, ex.CloseCode);
     }
@@ -281,7 +281,7 @@ public class WebSocketDecoderTests
             0, 0, 0, 0, 0, 0, 0x27, 0x10 // 10_000
         };
 
-        var ex = Assert.ThrowsException<WebSocketProtocolException>(
+        var ex = Assert.ThrowsExactly<WebSocketProtocolException>(
             () => decoder.Decode(header, 0, header.Length).ToList());
         Assert.AreEqual((ushort)1009, ex.CloseCode);
     }
@@ -294,7 +294,7 @@ public class WebSocketDecoderTests
 
         // Deliver only the 4-byte header (opcode/flags + 126-marker + 16-bit length) - the limit check
         // must fire without any of the 500-byte payload having arrived.
-        var ex = Assert.ThrowsException<WebSocketProtocolException>(
+        var ex = Assert.ThrowsExactly<WebSocketProtocolException>(
             () => decoder.Decode(raw, 0, 4).ToList());
         Assert.AreEqual((ushort)1009, ex.CloseCode);
     }

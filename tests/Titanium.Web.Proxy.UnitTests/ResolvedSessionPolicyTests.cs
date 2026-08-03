@@ -38,14 +38,14 @@ public class ResolvedSessionPolicyTests
     [TestMethod]
     public void Create_NullResourceLimits_Throws()
     {
-        Assert.ThrowsException<ArgumentNullException>(() =>
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
             ResolvedSessionPolicy.Create(null!, ProxyTimeoutOptions.Default));
     }
 
     [TestMethod]
     public void Create_NullTimeouts_Throws()
     {
-        Assert.ThrowsException<ArgumentNullException>(() =>
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
             ResolvedSessionPolicy.Create(ProxyResourceLimits.Default, null!));
     }
 
@@ -81,7 +81,7 @@ public class ResolvedSessionPolicyTests
     [TestMethod]
     public void WithResourceLimits_Null_Throws()
     {
-        Assert.ThrowsException<ArgumentNullException>(() =>
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
             ResolvedSessionPolicy.Default.WithResourceLimits(null!));
     }
 }

@@ -77,7 +77,7 @@ public class HttpStreamCoverageTests
     {
         using var stream = MakeReader(Encoding.ASCII.GetBytes("a"));
         // DefaultBufferPool buffer is 8192; any index >= that size must throw.
-        await Assert.ThrowsExceptionAsync<Exception>(async () => await stream.PeekByteAsync(8192));
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(async () => await stream.PeekByteAsync(8192));
     }
 
     [TestMethod]
@@ -98,7 +98,7 @@ public class HttpStreamCoverageTests
     public void PeekByteFromBuffer_Empty_Throws()
     {
         using var stream = MakeReader(Array.Empty<byte>());
-        Assert.ThrowsException<Exception>(() => stream.PeekByteFromBuffer(0));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => stream.PeekByteFromBuffer(0));
     }
 
     [TestMethod]
@@ -108,7 +108,7 @@ public class HttpStreamCoverageTests
         using var stream = new HttpStream(new ProxyServer(false, false, false), throwing, new DefaultBufferPool(),
             CancellationToken.None, true);
 
-        await Assert.ThrowsExceptionAsync<IOException>(async () =>
+        await Assert.ThrowsExactlyAsync<IOException>(async () =>
             await stream.WriteAsync(new byte[] { 1, 2, 3 }, CancellationToken.None));
 
         // Poisoned: further writes should no-op rather than throw again.
@@ -188,7 +188,7 @@ public class HttpStreamCoverageTests
         using var session = MakeSession(proxy);
         using (writer)
         {
-            await Assert.ThrowsExceptionAsync<ProxyHttpException>(async () =>
+            await Assert.ThrowsExactlyAsync<ProxyHttpException>(async () =>
                 await reader.CopyBodyAsync(writer, isChunked: true, contentLength: -1, isRequest: false, session,
                     CancellationToken.None));
         }

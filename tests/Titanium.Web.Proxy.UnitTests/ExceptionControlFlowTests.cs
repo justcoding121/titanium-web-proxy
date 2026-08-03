@@ -86,7 +86,7 @@ public class ExceptionControlFlowTests
     public async Task ReadResponseStatus_MalformedStatusLine_StillThrows()
     {
         using var stream = CreateServerStream(Encoding.ASCII.GetBytes("NOT-A-STATUS\r\n"));
-        await Assert.ThrowsExceptionAsync<Exception>(async () =>
+        await Assert.ThrowsExactlyAsync<FormatException>(async () =>
             await stream.ReadResponseStatus(CancellationToken.None));
     }
 

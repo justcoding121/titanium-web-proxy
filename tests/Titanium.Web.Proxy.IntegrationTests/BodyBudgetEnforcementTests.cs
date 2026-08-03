@@ -26,7 +26,7 @@ public class BodyBudgetEnforcementTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -107,7 +107,7 @@ public class BodyBudgetEnforcementTests
         // A response-side breach has already committed nothing to the client, so the only RFC-safe
         // outcome is closing the connection - never handing back a body that is silently truncated
         // to (and mistakeable for) a complete, valid response.
-        await Assert.ThrowsExceptionAsync<HttpRequestException>(
+        await Assert.ThrowsExactlyAsync<HttpRequestException>(
             () => client.GetStringAsync(server.ListeningHttpUrl));
     }
 }

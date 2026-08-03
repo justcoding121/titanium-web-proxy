@@ -194,7 +194,7 @@ public class SocksHandshakeAndHpackCoverageTests
         })
         {
             var ar = sock.BeginConnect(IPAddress.Parse("1.1.1.1"), 80, null, null);
-            var ex = Assert.ThrowsException<ProxyException>(() => sock.EndConnect(ar));
+            var ex = Assert.ThrowsExactly<ProxyException>(() => sock.EndConnect(ar));
             StringAssert.Contains(ex.Message, "Negotiation failed");
         }
 
@@ -205,15 +205,15 @@ public class SocksHandshakeAndHpackCoverageTests
     public void ProxySocket_BeginConnect_ValidationAndDirectPath()
     {
         using var sock = new ProxySock(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        Assert.ThrowsException<ArgumentNullException>(() => sock.BeginConnect((string)null!, 80, null, null));
-        Assert.ThrowsException<ArgumentException>(() => sock.BeginConnect("h", 0, null, null));
-        Assert.ThrowsException<ArgumentException>(() => sock.BeginConnect("h", 65536, null, null));
-        Assert.ThrowsException<ArgumentNullException>(() => sock.EndConnect(null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() => sock.BeginConnect((string)null!, 80, null, null));
+        Assert.ThrowsExactly<ArgumentException>(() => sock.BeginConnect("h", 0, null, null));
+        Assert.ThrowsExactly<ArgumentException>(() => sock.BeginConnect("h", 65536, null, null));
+        Assert.ThrowsExactly<ArgumentNullException>(() => sock.EndConnect(null!));
 
         sock.ProxyUser = "u";
         sock.ProxyPass = "p";
-        Assert.ThrowsException<ArgumentNullException>(() => sock.ProxyUser = null!);
-        Assert.ThrowsException<ArgumentNullException>(() => sock.ProxyPass = null!);
+        Assert.ThrowsExactly<ArgumentNullException>(() => sock.ProxyUser = null!);
+        Assert.ThrowsExactly<ArgumentNullException>(() => sock.ProxyPass = null!);
     }
 
     [TestMethod]
@@ -258,7 +258,7 @@ public class SocksHandshakeAndHpackCoverageTests
         using (var stream = new MemoryStream(new byte[] { 0xC0 })) // indexed 64
         using (var reader = new BinaryReader(stream))
         {
-            Assert.ThrowsException<IOException>(() => bad.Decode(reader, new RecordingHeaderListener()));
+            Assert.ThrowsExactly<IOException>(() => bad.Decode(reader, new RecordingHeaderListener()));
         }
     }
 
@@ -304,7 +304,7 @@ public class SocksHandshakeAndHpackCoverageTests
         using (var stream = new MemoryStream(new byte[] { 0x3F, 0x60 }))
         using (var reader = new BinaryReader(stream))
         {
-            Assert.ThrowsException<IOException>(() => capped.Decode(reader, new RecordingHeaderListener()));
+            Assert.ThrowsExactly<IOException>(() => capped.Decode(reader, new RecordingHeaderListener()));
         }
     }
 

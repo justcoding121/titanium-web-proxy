@@ -61,7 +61,7 @@ public class Http2HeaderListenerAndSessionRespondTests
         listener.AddHeader(Bs(":method"), Bs("GET"), false);
         listener.AddHeader(Bs(":scheme"), Bs("http"), false);
         listener.AddHeader(Bs(":path"), Bs("/"), false);
-        Assert.ThrowsException<InvalidOperationException>(() => listener.GetUri());
+        Assert.ThrowsExactly<InvalidOperationException>(() => listener.GetUri());
     }
 
     [TestMethod]
@@ -164,6 +164,6 @@ public class Http2HeaderListenerAndSessionRespondTests
         using var session = MakeSession();
         session.HttpClient.Request.Locked = true;
         session.HttpClient.Response.Locked = true;
-        Assert.ThrowsException<Exception>(() => session.Respond(new Response { StatusCode = 200 }));
+        Assert.ThrowsExactly<InvalidOperationException>(() => session.Respond(new Response { StatusCode = 200 }));
     }
 }

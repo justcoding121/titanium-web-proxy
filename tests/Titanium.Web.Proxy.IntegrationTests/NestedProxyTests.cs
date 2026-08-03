@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -22,7 +22,7 @@ public class NestedProxyTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();

@@ -32,7 +32,7 @@ public class BoundedWriteStreamTests
 
         // Individually each write is small, but their sum exceeds the limit - this is exactly the
         // per-frame-vs-cumulative gap the hardening plan calls out.
-        Assert.ThrowsException<BodySizeLimitExceededException>(
+        Assert.ThrowsExactly<BodySizeLimitExceededException>(
             () => bounded.Write(new byte[] { 4, 5, 6 }, 0, 3));
     }
 
@@ -42,7 +42,7 @@ public class BoundedWriteStreamTests
         var inner = new MemoryStream();
         var bounded = new BoundedWriteStream(inner, maxBytes: 4);
 
-        await Assert.ThrowsExceptionAsync<BodySizeLimitExceededException>(
+        await Assert.ThrowsExactlyAsync<BodySizeLimitExceededException>(
             () => bounded.WriteAsync(new byte[] { 1, 2, 3, 4, 5 }, 0, 5, CancellationToken.None));
 
         // The whole over-limit write must be rejected atomically: none of it should have reached the
@@ -56,7 +56,7 @@ public class BoundedWriteStreamTests
         var inner = new MemoryStream();
         var bounded = new BoundedWriteStream(inner, maxBytes: 4);
 
-        await Assert.ThrowsExceptionAsync<BodySizeLimitExceededException>(
+        await Assert.ThrowsExactlyAsync<BodySizeLimitExceededException>(
             async () => await bounded.WriteAsync(new byte[] { 1, 2, 3, 4, 5 }, CancellationToken.None));
     }
 

@@ -45,7 +45,7 @@ public class QuicConnectionPoolTests
         var factory = new QuicConnectionFactory(proxy);
         var upstream = new ExternalProxy("proxy.example", 8080);
 
-        await Assert.ThrowsExceptionAsync<QuicProxyNotSupportedException>(() =>
+        await Assert.ThrowsExactlyAsync<QuicProxyNotSupportedException>(() =>
             factory.CreateAsync("origin.example", "origin.example", 443, null, upstream,
                 "key", null, CancellationToken.None));
     }
@@ -107,7 +107,7 @@ public class QuicConnectionPoolTests
         await pool.ReleaseAsync(conn);
         await pool.DrainAsync();
 
-        await Assert.ThrowsExceptionAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
             pool.GetOrCreateAsync("origin.example", 443, null, null, null, CancellationToken.None).AsTask());
     }
 

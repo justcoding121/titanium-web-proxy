@@ -140,7 +140,7 @@ public class QpackEncoderDecoderTests
     [TestMethod]
     public void Decode_TooShort_ThrowsDecompressionFailed()
     {
-        var ex = Assert.ThrowsException<Http3ConnectionException>(() => QpackDecoder.Decode(new byte[] { 0x00 }));
+        var ex = Assert.ThrowsExactly<Http3ConnectionException>(() => QpackDecoder.Decode(new byte[] { 0x00 }));
         Assert.AreEqual(Http3ErrorCode.QpackDecompressionFailed, ex.ErrorCode);
     }
 
@@ -148,7 +148,7 @@ public class QpackEncoderDecoderTests
     public void Decode_NonZeroRicWithoutContext_Throws()
     {
         // Prefixed RIC=1 (byte 0x01) + Delta Base=0 (byte 0x00)
-        var ex = Assert.ThrowsException<Http3ConnectionException>(
+        var ex = Assert.ThrowsExactly<Http3ConnectionException>(
             () => QpackDecoder.Decode(new byte[] { 0x01, 0x00 }));
         Assert.AreEqual(Http3ErrorCode.QpackDecompressionFailed, ex.ErrorCode);
         StringAssert.Contains(ex.Message, "Required Insert Count");
@@ -159,7 +159,7 @@ public class QpackEncoderDecoderTests
     {
         // RIC=0, DeltaBase=0, then indexed static with absurd index (0xFF with 6-bit prefix overflow)
         // Static indexed pattern: 11xxxxxx — use index far beyond table via 0xFF 0xFF
-        var ex = Assert.ThrowsException<Http3ConnectionException>(
+        var ex = Assert.ThrowsExactly<Http3ConnectionException>(
             () => QpackDecoder.Decode(new byte[] { 0x00, 0x00, 0xFF, 0xFF }));
         Assert.AreEqual(Http3ErrorCode.QpackDecompressionFailed, ex.ErrorCode);
     }
@@ -169,7 +169,7 @@ public class QpackEncoderDecoderTests
     {
         using var cts = new System.Threading.CancellationTokenSource();
         cts.Cancel();
-        await Assert.ThrowsExceptionAsync<System.OperationCanceledException>(
+        await Assert.ThrowsExactlyAsync<System.OperationCanceledException>(
             () => QpackDecoder.DecodeAsync(new byte[] { 0x00, 0x00 }, null, cts.Token));
     }
 }

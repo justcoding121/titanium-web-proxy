@@ -27,7 +27,7 @@ public class RequestTimingTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();

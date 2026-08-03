@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -51,7 +51,7 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.AreEqual(validDays + graceDays, (int)Math.Round(totalDays), 1,
                 $"Total lifetime should be {validDays + graceDays} days, got {totalDays:F1}");
 
-            // NotBefore must be close to now - graceDays (allow ±1 minute for test execution lag)
+            // NotBefore must be close to now - graceDays (allow �1 minute for test execution lag)
             var expectedNotBefore = DateTime.UtcNow.AddDays(-graceDays);
             Assert.IsTrue(
                 Math.Abs((cert.NotBefore.ToUniversalTime() - expectedNotBefore).TotalMinutes) < 2,
@@ -106,8 +106,8 @@ namespace Titanium.Web.Proxy.UnitTests
                 mgr.LeafRsaKeyPairBufferSize = 16;
                 Assert.AreEqual(16, mgr.LeafRsaKeyPairBufferSize);
 
-                Assert.ThrowsException<ArgumentOutOfRangeException>(() => mgr.LeafRsaKeyPairBufferSize = -1);
-                Assert.ThrowsException<ArgumentOutOfRangeException>(() => mgr.LeafRsaKeyPairBufferSize = 257);
+                Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => mgr.LeafRsaKeyPairBufferSize = -1);
+                Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => mgr.LeafRsaKeyPairBufferSize = 257);
 
                 mgr.LeafRsaKeyPairBufferSize = 0;
                 var cert = mgr.CreateCertificate("buffer-disabled.example", false);
@@ -363,7 +363,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public void BC_IntermediateCA_SslContext_IncludesIntermediateInChain()
         {
-            // Build root CA → intermediate CA → leaf chain
+            // Build root CA ? intermediate CA ? leaf chain
             X509Certificate2 rootCa;
             using (var rsa = RSA.Create(2048))
             {
@@ -403,7 +403,7 @@ namespace Titanium.Web.Proxy.UnitTests
             chain.ChainPolicy.ExtraStore.Add(intermediateCa);
             chain.ChainPolicy.ExtraStore.Add(rootCa);
             chain.Build(leaf);
-            // Chain should contain: leaf → intermediate → root (3 elements)
+            // Chain should contain: leaf ? intermediate ? root (3 elements)
             Assert.IsTrue(chain.ChainElements.Count >= 2,
                 "Certificate chain should contain at least leaf and intermediate");
 

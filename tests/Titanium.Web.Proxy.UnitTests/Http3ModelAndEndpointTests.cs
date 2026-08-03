@@ -121,7 +121,7 @@ public class Http3ModelAndEndpointTests
         args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
         Assert.AreEqual(UpstreamHttpProtocol.Http3, args.UpstreamHttpProtocol);
 
-        Assert.ThrowsException<ArgumentOutOfRangeException>(
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
             () => args.UpstreamHttpProtocol = (UpstreamHttpProtocol)999);
 
         args.Reject();

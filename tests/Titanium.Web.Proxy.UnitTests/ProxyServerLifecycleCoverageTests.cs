@@ -122,7 +122,7 @@ public class ProxyServerLifecycleCoverageTests
         proxy.RemoveEndPoint(ep);
         Assert.AreEqual(0, proxy.ProxyEndPoints.Count);
 
-        Assert.ThrowsException<Exception>(() =>
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
             proxy.RemoveEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 1, false)));
     }
 
@@ -132,8 +132,8 @@ public class ProxyServerLifecycleCoverageTests
         using var proxy = new ProxyServer(false, false, false);
         proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false));
         proxy.Start(changeSystemProxySettings: false);
-        Assert.ThrowsException<Exception>(() => proxy.Start(changeSystemProxySettings: false));
+        Assert.ThrowsExactly<InvalidOperationException>(() => proxy.Start(changeSystemProxySettings: false));
         proxy.Stop();
-        Assert.ThrowsException<Exception>(() => proxy.Stop());
+        Assert.ThrowsExactly<InvalidOperationException>(() => proxy.Stop());
     }
 }

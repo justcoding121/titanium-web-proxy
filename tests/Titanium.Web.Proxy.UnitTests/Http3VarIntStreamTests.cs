@@ -52,7 +52,7 @@ public class Http3VarIntStreamTests
     [TestMethod]
     public void GetByteCount_OverMax_Throws()
     {
-        Assert.ThrowsException<ArgumentOutOfRangeException>(
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
             () => Http3VarInt.GetByteCount(Http3VarInt.Max8ByteValue + 1));
     }
 }

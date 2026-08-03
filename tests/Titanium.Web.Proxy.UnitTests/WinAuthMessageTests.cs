@@ -10,20 +10,20 @@ public class WinAuthMessageTests
     [TestMethod]
     public void Message_Null_Throws()
     {
-        Assert.ThrowsException<ArgumentNullException>(() => new Message(null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() => new Message(null!));
     }
 
     [TestMethod]
     public void Message_TooShort_Throws()
     {
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => new Message(new byte[8]));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new Message(new byte[8]));
     }
 
     [TestMethod]
     public void Message_InvalidHeader_Throws()
     {
         var bytes = new byte[64];
-        Assert.ThrowsException<ArgumentException>(() => new Message(bytes));
+        Assert.ThrowsExactly<ArgumentException>(() => new Message(bytes));
     }
 
     [TestMethod]

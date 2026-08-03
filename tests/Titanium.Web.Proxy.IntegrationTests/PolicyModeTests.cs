@@ -27,7 +27,7 @@ public class PolicyModeTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -146,7 +146,7 @@ public class PolicyModeTests
 
         var client = testSuite.GetClient(proxy);
 
-        await Assert.ThrowsExceptionAsync<HttpRequestException>(
+        await Assert.ThrowsExactlyAsync<HttpRequestException>(
             () => client.GetStringAsync(new Uri(server.ListeningHttpUrl)),
             "PublicFacing must block a private-network (loopback) destination without any extra opt-in");
     }

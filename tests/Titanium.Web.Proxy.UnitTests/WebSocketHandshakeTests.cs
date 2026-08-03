@@ -17,7 +17,7 @@ public class WebSocketHandshakeTests
     [TestMethod]
     public void ComputeAccept_NullOrEmpty_Throws()
     {
-        Assert.ThrowsException<ArgumentNullException>(() => WebSocketHandshake.ComputeAccept(null!));
-        Assert.ThrowsException<ArgumentException>(() => WebSocketHandshake.ComputeAccept(""));
+        Assert.ThrowsExactly<ArgumentNullException>(() => WebSocketHandshake.ComputeAccept(null!));
+        Assert.ThrowsExactly<ArgumentException>(() => WebSocketHandshake.ComputeAccept(""));
     }
 }

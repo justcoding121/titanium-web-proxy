@@ -108,7 +108,7 @@ public class QpackEncoderStreamReaderTests
         await using var ctx = new QpackContext(4096);
         await using var ms = new MemoryStream([0x20, 0x05]); // incomplete insert-literal
 
-        var ex = await Assert.ThrowsExceptionAsync<Http3ConnectionException>(
+        var ex = await Assert.ThrowsExactlyAsync<Http3ConnectionException>(
             () => QpackEncoderStreamReader.ProcessAsync(ms, ctx, CancellationToken.None));
 
         Assert.AreEqual(Http3ErrorCode.QpackEncoderStreamError, ex.ErrorCode);

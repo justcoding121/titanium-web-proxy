@@ -33,8 +33,8 @@ public class CompressionUtilChainTests
     public void CompressionFactory_Unsupported_Throws()
     {
         using var ms = new MemoryStream();
-        Assert.ThrowsException<Exception>(() => CompressionFactory.Create(HttpCompression.Unsupported, ms));
-        Assert.ThrowsException<Exception>(() => DecompressionFactory.Create(HttpCompression.Unsupported, ms));
+        Assert.ThrowsExactly<NotSupportedException>(() => CompressionFactory.Create(HttpCompression.Unsupported, ms));
+        Assert.ThrowsExactly<NotSupportedException>(() => DecompressionFactory.Create(HttpCompression.Unsupported, ms));
     }
 
     [TestMethod]

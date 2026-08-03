@@ -97,7 +97,7 @@ public class ChunkedTrailerTests
         using var reader = MakeReader("this-is-not-a-valid-header-line\r\n\r\n");
         var trailers = new HeaderCollection();
 
-        await Assert.ThrowsExceptionAsync<ProxyHttpException>(
+        await Assert.ThrowsExactlyAsync<ProxyHttpException>(
             async () => await ChunkedTrailerHelper.ReadTrailingHeaders(reader, trailers, null));
     }
 
@@ -112,7 +112,7 @@ public class ChunkedTrailerTests
         using var reader = MakeReader(sb.ToString());
         var trailers = new HeaderCollection();
 
-        await Assert.ThrowsExceptionAsync<ProxyHttpException>(
+        await Assert.ThrowsExactlyAsync<ProxyHttpException>(
             async () => await ChunkedTrailerHelper.ReadTrailingHeaders(reader, trailers, null));
     }
 
@@ -123,7 +123,7 @@ public class ChunkedTrailerTests
         using var reader = MakeReader($"X-Trailer: {hugeValue}\r\n\r\n");
         var trailers = new HeaderCollection();
 
-        await Assert.ThrowsExceptionAsync<ProxyHttpException>(
+        await Assert.ThrowsExactlyAsync<ProxyHttpException>(
             async () => await ChunkedTrailerHelper.ReadTrailingHeaders(reader, trailers, null));
     }
 
@@ -156,7 +156,7 @@ public class ChunkedTrailerTests
         var trailers = new HeaderCollection();
         trailers.AddHeader(KnownHeaders.ContentLength.String, "5");
 
-        await Assert.ThrowsExceptionAsync<ProxyHttpException>(
+        await Assert.ThrowsExactlyAsync<ProxyHttpException>(
             async () => await ChunkedTrailerHelper.WriteTrailingHeadersAsync(writer, trailers));
     }
 
