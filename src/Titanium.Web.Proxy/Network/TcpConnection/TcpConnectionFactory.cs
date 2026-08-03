@@ -1459,8 +1459,8 @@ internal class TcpConnectionFactory : IDisposable
                     connection?.Dispose();
 
             // Join the cleanup loop before disposing its CTS so Token access cannot race Dispose.
-            try { _cleanupTask.Wait(TimeSpan.FromSeconds(5)); }
-            catch { /* best effort */ }
+            try { _cleanupTask.Wait(TimeSpan.FromSeconds(5), _cleanupCts.Token); }
+            catch { /* best effort / already cancelled */ }
             _cleanupCts.Dispose();
             // poolLock is left for GC: disposing it while a late reader enters can throw.
         }

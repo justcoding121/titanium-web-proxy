@@ -103,7 +103,8 @@ internal class WinCertificateMaker : ICertificateMaker
     {
         if (switchToMtaIfNeeded && Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
         {
-            var task = Task.Run(() => MakeCertificate(sSubjectCn, false, signingCertificate),
+            var task = Task.Run(
+                () => MakeCertificate(sSubjectCn, false, signingCertificate, cancellationToken),
                 cancellationToken);
             task.Wait(cancellationToken);
             return task.Result;
