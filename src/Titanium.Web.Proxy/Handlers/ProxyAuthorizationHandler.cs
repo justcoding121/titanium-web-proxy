@@ -24,7 +24,7 @@ public partial class ProxyServer
         var schemeAuthenticate = ProxySchemeAuthenticateFunc;
 
         // If we are not authorizing clients return true
-        if (basicAuthenticate == null && schemeAuthenticate == null) return true;
+        if (basicAuthenticate is null && schemeAuthenticate is null) return true;
 
         var httpHeaders = session.HttpClient.Request.Headers;
 
@@ -51,15 +51,13 @@ public partial class ProxyServer
             var authenticationType = header.AsMemory(0, firstSpace);
             var credentials = header.AsMemory(firstSpace + 1);
 
-            if (basicAuthenticate != null)
+            // Prefer basic when configured; otherwise use scheme auth (guaranteed non-null here).
+            if (basicAuthenticate is not null)
                 return await AuthenticateUserBasic(session, authenticationType, credentials,
                     basicAuthenticate);
 
-            // Both-null returned above; basic path returned above — remaining path is scheme-only.
-            var schemeAuth = schemeAuthenticate
-                ?? throw new InvalidOperationException("No proxy authentication callback is configured.");
-            var result =
-                await schemeAuth(session, authenticationType.ToString(), credentials.ToString());
+            var result = await schemeAuthenticate!(session, authenticationType.ToString(),
+                credentials.ToString()); // NOSONAR S8969 -- flow proves non-null after dual-null early return
 
             if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
             {
