@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Namespace Titanium.Web.Proxy.Diagnostics | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Namespace Titanium.Web.Proxy.Diagnostics | Titanium Web Proxy ">
+    
+    
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+
+        <div id="search-results">
+          <div class="search-list">Search Results for <span></span></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Diagnostics">
+
+  <h1 id="Titanium_Web_Proxy_Diagnostics" data-uid="Titanium.Web.Proxy.Diagnostics" class="text-break">Namespace Titanium.Web.Proxy.Diagnostics</h1>
+  <div class="markdown level0 summary"></div>
+  <div class="markdown level0 conceptual"></div>
+  <div class="markdown level0 remarks"></div>
+    <h3 id="classes">
+Classes
+</h3>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Diagnostics.ClientTlsTiming.html">ClientTlsTiming</a></h4>
+      <section><p>Captures the timing of the client-facing (browser-to-proxy) TLS handshake performed while decrypting
+an HTTPS tunnel. Only populated when <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableRequestTimingCapture">EnableRequestTimingCapture</a> is
+enabled; otherwise no instance is ever allocated.</p>
+</section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.html">HttpRequestTiming</a></h4>
+      <section><p>Captures the timing of a single HTTP request/response exchange handled by the proxy. Only populated
+(non-null on <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Timing">Timing</a>) when
+<a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableRequestTimingCapture">EnableRequestTimingCapture</a> is enabled; otherwise no instance is ever
+allocated and this class has zero impact on request handling.</p>
+<p>
+    All timestamps are UTC wall-clock instants captured with <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime.utcnow">UtcNow</a>, in the
+    order the proxy reaches each stage. The derived <code>Duration</code>/<code>TimeToFirstByte</code> properties
+    are simple differences between two such instants and are <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> until both of
+    their endpoints have been recorded - a session that never reaches a given stage (e.g. one
+    answered synthetically during <code>BeforeRequest</code>, before any upstream connection is ever
+    attempted, or one that fails before a response is received) simply leaves the later timestamps
+    <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a>; nothing throws.
+</p>
+<p>
+    A request that is retried (a new upstream connection after <code>RetryableServerConnectionException</code>,
+    or a re-request after a 401/407 challenge) overwrites the connection/send/receive timestamps with
+    those of the latest attempt - <a class="xref" href="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.html#Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_AttemptCount">AttemptCount</a> tracks how many attempts were made in
+    total. <a class="xref" href="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.html#Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_TotalDuration">TotalDuration</a> and <a class="xref" href="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.html#Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ClientRequestReadDuration">ClientRequestReadDuration</a> are unaffected by
+    retries since they only depend on <a class="xref" href="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.html#Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_SessionCreatedAt">SessionCreatedAt</a>.
+</p>
+</section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.html">TunnelConnectTiming</a></h4>
+      <section><p>Captures CONNECT-phase milestones that dominate cold HTTPS page-load latency: certificate
+readiness, origin capability discovery (SVCB / HTTP/2 probe), and browser TLS completion.
+Only allocated when <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableRequestTimingCapture">EnableRequestTimingCapture</a> is enabled.</p>
+</section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.html">UpstreamConnectionTiming</a></h4>
+      <section><p>Captures the timing of establishing a single upstream (server-facing) TCP/TLS connection. Only
+populated when <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableRequestTimingCapture">EnableRequestTimingCapture</a> is enabled; otherwise no
+instance is ever allocated.</p>
+<p>
+    One instance is created per upstream connection, at the moment that connection is first
+    established, and is never mutated afterwards. It is shared by every session that later reuses
+    that same connection from the pool - reachable from any of them via
+    <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_UpstreamConnectionTiming">UpstreamConnectionTiming</a>.
+</p>
+<p>
+    Address resolution can return more than one IP address for a hostname; the proxy tries them in
+    order until one connects. The duration properties below reflect only the phases of the address
+    that ultimately succeeded - <a class="xref" href="Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.html#Titanium_Web_Proxy_Diagnostics_UpstreamConnectionTiming_FailedAddressAttempts">FailedAddressAttempts</a> tells you how many earlier
+    addresses were tried and failed first.
+</p>
+</section>
+
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

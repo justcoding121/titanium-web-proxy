@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Class HttpRequestTiming | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Class HttpRequestTiming | Titanium Web Proxy ">
+    
+    <meta name="description" content="Captures the timing of a single HTTP request/response exchange handled by the proxy. Only populated (non-null on ) when  is enabled; otherwise no instance is ever allocated and this class has zero impact on request handling.      All timestamps are UTC wall-clock instants captured with , in the     order the proxy reaches each stage. The derived Duration/TimeToFirstByte properties     are simple differences between two such instants and are null until both of     their endpoints have been recorded - a session that never reaches a given stage (e.g. one     answered synthetically during BeforeRequest, before any upstream connection is ever     attempted, or one that fails before a response is received) simply leaves the later timestamps     null; nothing throws.       A request that is retried (a new upstream connection after RetryableServerConnectionException,     or a re-request after a 401/407 challenge) overwrites the connection/send/receive timestamps with     those of the latest attempt -  tracks how many attempts were made in     total.  and  are unaffected by     retries since they only depend on .">
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+
+        <div id="search-results">
+          <div class="search-list">Search Results for <span></span></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming">
+
+
+
+  <h1 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming" class="text-break">Class HttpRequestTiming</h1>
+  <div class="markdown level0 summary"><p>Captures the timing of a single HTTP request/response exchange handled by the proxy. Only populated
+(non-null on <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Timing">Timing</a>) when
+<a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableRequestTimingCapture">EnableRequestTimingCapture</a> is enabled; otherwise no instance is ever
+allocated and this class has zero impact on request handling.</p>
+<p>
+    All timestamps are UTC wall-clock instants captured with <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime.utcnow">UtcNow</a>, in the
+    order the proxy reaches each stage. The derived <code>Duration</code>/<code>TimeToFirstByte</code> properties
+    are simple differences between two such instants and are <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> until both of
+    their endpoints have been recorded - a session that never reaches a given stage (e.g. one
+    answered synthetically during <code>BeforeRequest</code>, before any upstream connection is ever
+    attempted, or one that fails before a response is received) simply leaves the later timestamps
+    <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a>; nothing throws.
+</p>
+<p>
+    A request that is retried (a new upstream connection after <code>RetryableServerConnectionException</code>,
+    or a re-request after a 401/407 challenge) overwrites the connection/send/receive timestamps with
+    those of the latest attempt - <a class="xref" href="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.html#Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_AttemptCount">AttemptCount</a> tracks how many attempts were made in
+    total. <a class="xref" href="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.html#Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_TotalDuration">TotalDuration</a> and <a class="xref" href="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.html#Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ClientRequestReadDuration">ClientRequestReadDuration</a> are unaffected by
+    retries since they only depend on <a class="xref" href="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.html#Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_SessionCreatedAt">SessionCreatedAt</a>.
+</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <div class="inheritance">
+    <h5>Inheritance</h5>
+    <div class="level0"><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object">object</a></div>
+    <div class="level1"><span class="xref">HttpRequestTiming</span></div>
+  </div>
+  <div class="inheritedMembers">
+    <h5>Inherited Members</h5>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object)">object.Equals(object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object-system-object)">object.Equals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gethashcode">object.GetHashCode()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gettype">object.GetType()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.referenceequals">object.ReferenceEquals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.tostring">object.ToString()</a>
+    </div>
+  </div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.html">Titanium</a>.<a class="xref" href="Titanium.Web.html">Web</a>.<a class="xref" href="Titanium.Web.Proxy.html">Proxy</a>.<a class="xref" href="Titanium.Web.Proxy.Diagnostics.html">Diagnostics</a></h6>
+  <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
+  <h5 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public sealed class HttpRequestTiming</code></pre>
+  </div>
+  <h3 id="properties">Properties
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_AttemptCount.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.AttemptCount%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L82">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_AttemptCount_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.AttemptCount*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_AttemptCount" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.AttemptCount">AttemptCount</h4>
+  <div class="markdown level1 summary"><p>Number of upstream-connection attempts made for this session so far. Starts at 0 and is
+incremented every time a connection becomes ready (see <a class="xref" href="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.html#Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ConnectionReadyAt">ConnectionReadyAt</a>) -
+normally 1, higher only when a <code>RetryableServerConnectionException</code> forced a fresh
+connection, or a 401/407 challenge triggered a re-request.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int AttemptCount { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ClientRequestReadDuration.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ClientRequestReadDuration%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L102">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ClientRequestReadDuration_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ClientRequestReadDuration*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ClientRequestReadDuration" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ClientRequestReadDuration">ClientRequestReadDuration</h4>
+  <div class="markdown level1 summary"><p>How long it took to read the request headers from the client, starting from when the request
+line first arrived.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan? ClientRequestReadDuration { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_CompletedAt.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.CompletedAt%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L69">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_CompletedAt_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.CompletedAt*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_CompletedAt" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.CompletedAt">CompletedAt</h4>
+  <div class="markdown level1 summary"><p>When this session finished completely - after the response (headers and body, if any) was
+delivered to the client and the <code>AfterResponse</code> event handler, if any, has returned. Also
+marked for sessions that end via an unhandled exception or an early return (e.g. a denied/failed
+request), so it always reflects when the session actually stopped, not just the success path.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DateTime? CompletedAt { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime">DateTime</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ConnectionReadyAt.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ConnectionReadyAt%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L50">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ConnectionReadyAt_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ConnectionReadyAt*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ConnectionReadyAt" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ConnectionReadyAt">ConnectionReadyAt</h4>
+  <div class="markdown level1 summary"><p>When an upstream connection became ready to use for the most recent attempt - either freshly
+established or retrieved from the connection pool. See <a class="xref" href="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.html#Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_UpstreamConnectionReused">UpstreamConnectionReused</a>.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DateTime? ConnectionReadyAt { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime">DateTime</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ConnectionWaitDuration.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ConnectionWaitDuration%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L109">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ConnectionWaitDuration_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ConnectionWaitDuration*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ConnectionWaitDuration" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ConnectionWaitDuration">ConnectionWaitDuration</h4>
+  <div class="markdown level1 summary"><p>How long the proxy spent (running any <code>BeforeRequest</code> handler and) acquiring an upstream
+connection for the most recent attempt, whether that meant establishing a fresh one or retrieving
+one from the pool.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan? ConnectionWaitDuration { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_IsComplete.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.IsComplete%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L74">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_IsComplete_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.IsComplete*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_IsComplete" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.IsComplete">IsComplete</h4>
+  <div class="markdown level1 summary"><p><a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a> once <a class="xref" href="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.html#Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_CompletedAt">CompletedAt</a> has been recorded.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool IsComplete { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_RequestHeadersReceivedAt.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.RequestHeadersReceivedAt%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L44">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_RequestHeadersReceivedAt_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.RequestHeadersReceivedAt*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_RequestHeadersReceivedAt" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.RequestHeadersReceivedAt">RequestHeadersReceivedAt</h4>
+  <div class="markdown level1 summary"><p>When the client's request headers were fully read, immediately before <code>BeforeRequest</code> is
+invoked. <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> if the client disconnected while sending headers.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DateTime? RequestHeadersReceivedAt { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime">DateTime</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_RequestSendDuration.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.RequestSendDuration%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L114">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_RequestSendDuration_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.RequestSendDuration*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_RequestSendDuration" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.RequestSendDuration">RequestSendDuration</h4>
+  <div class="markdown level1 summary"><p>How long it took to write the request (headers and body, if any) to the upstream connection.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan? RequestSendDuration { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_RequestSentAt.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.RequestSentAt%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L55">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_RequestSentAt_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.RequestSentAt*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_RequestSentAt" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.RequestSentAt">RequestSentAt</h4>
+  <div class="markdown level1 summary"><p>When the request (headers and, if any, body) finished being written to the upstream connection.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DateTime? RequestSentAt { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime">DateTime</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ResponseDeliveryDuration.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ResponseDeliveryDuration%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L128">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ResponseDeliveryDuration_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ResponseDeliveryDuration*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ResponseDeliveryDuration" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ResponseDeliveryDuration">ResponseDeliveryDuration</h4>
+  <div class="markdown level1 summary"><p>How long it took to deliver the response to the client after its headers were received from
+upstream - this covers any <code>BeforeResponse</code> handler, writing the response headers/body
+(which, for a streamed body, overlaps with still receiving that same body from the upstream
+server - the two are not tracked separately), and any <code>AfterResponse</code> handler.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan? ResponseDeliveryDuration { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ResponseHeadersReceivedAt.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ResponseHeadersReceivedAt%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L61">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ResponseHeadersReceivedAt_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ResponseHeadersReceivedAt*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_ResponseHeadersReceivedAt" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.ResponseHeadersReceivedAt">ResponseHeadersReceivedAt</h4>
+  <div class="markdown level1 summary"><p>When the response status line and headers were fully read from the upstream connection (i.e.
+time-to-first-byte of the final, non-interim response).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DateTime? ResponseHeadersReceivedAt { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime">DateTime</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_SessionCreatedAt.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.SessionCreatedAt%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L38">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_SessionCreatedAt_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.SessionCreatedAt*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_SessionCreatedAt" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.SessionCreatedAt">SessionCreatedAt</h4>
+  <div class="markdown level1 summary"><p>When the proxy created this session, immediately after accepting the request line from the
+client (before its headers are read).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DateTime SessionCreatedAt { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime">DateTime</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_TimeToFirstByte.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.TimeToFirstByte%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L120">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_TimeToFirstByte_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.TimeToFirstByte*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_TimeToFirstByte" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.TimeToFirstByte">TimeToFirstByte</h4>
+  <div class="markdown level1 summary"><p>Time-to-first-byte: how long the upstream server took to return response headers after the
+request was fully sent.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan? TimeToFirstByte { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_TotalDuration.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.TotalDuration%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L134">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_TotalDuration_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.TotalDuration*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_TotalDuration" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.TotalDuration">TotalDuration</h4>
+  <div class="markdown level1 summary"><p>Total wall-clock duration of this session so far: from session creation through to
+<a class="xref" href="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.html#Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_CompletedAt">CompletedAt</a> once known, or through to now if the session is still in flight.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan TotalDuration { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_UpstreamConnectionId.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.UpstreamConnectionId%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L90">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_UpstreamConnectionId_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.UpstreamConnectionId*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_UpstreamConnectionId" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.UpstreamConnectionId">UpstreamConnectionId</h4>
+  <div class="markdown level1 summary"><p>The <code>Id</code> of the upstream connection used for the most recent attempt, or <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a>
+if no connection has been acquired yet (e.g. the request was answered synthetically). Use together
+with <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_UpstreamConnectionTiming">UpstreamConnectionTiming</a> to inspect that
+connection's own DNS/TCP/TLS establishment timing.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public long? UpstreamConnectionId { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_UpstreamConnectionReused.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.UpstreamConnectionReused%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L96">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_UpstreamConnectionReused_" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.UpstreamConnectionReused*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_HttpRequestTiming_UpstreamConnectionReused" data-uid="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.UpstreamConnectionReused">UpstreamConnectionReused</h4>
+  <div class="markdown level1 summary"><p><a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a> if the upstream connection for the most recent attempt was reused from the
+connection pool rather than freshly established.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool UpstreamConnectionReused { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_HttpRequestTiming.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.HttpRequestTiming%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/HttpRequestTiming.cs/#L27" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

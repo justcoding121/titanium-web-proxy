@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Enum UpstreamHttpProtocol | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Enum UpstreamHttpProtocol | Titanium Web Proxy ">
+    
+    <meta name="description" content="Controls which HTTP version the proxy uses on its own connection to the origin server, independent of which HTTP version the client used to talk to the proxy. Set a connection-level default on  (during BeforeTunnelConnectRequest),  (during BeforeSslAuthenticate), or  (during BeforeQuicAuthenticate). Per-request overrides are available via  in BeforeRequest.">
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+
+        <div id="search-results">
+          <div class="search-list">Search Results for <span></span></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Models.UpstreamHttpProtocol">
+
+
+
+
+  <h1 id="Titanium_Web_Proxy_Models_UpstreamHttpProtocol" data-uid="Titanium.Web.Proxy.Models.UpstreamHttpProtocol" class="text-break">Enum UpstreamHttpProtocol</h1>
+  <div class="markdown level0 summary"><p>Controls which HTTP version the proxy uses on its own connection to the origin server, independent
+of which HTTP version the client used to talk to the proxy. Set a connection-level default on
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectSessionEventArgs_UpstreamHttpProtocol">UpstreamHttpProtocol</a> (during
+<code>BeforeTunnelConnectRequest</code>), <a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_UpstreamHttpProtocol">UpstreamHttpProtocol</a>
+(during <code>BeforeSslAuthenticate</code>), or
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeQuicAuthenticateEventArgs_UpstreamHttpProtocol">UpstreamHttpProtocol</a> (during
+<code>BeforeQuicAuthenticate</code>). Per-request overrides are available via
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_UpstreamHttpProtocol">UpstreamHttpProtocol</a> in <code>BeforeRequest</code>.</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.html">Titanium</a>.<a class="xref" href="Titanium.Web.html">Web</a>.<a class="xref" href="Titanium.Web.Proxy.html">Proxy</a>.<a class="xref" href="Titanium.Web.Proxy.Models.html">Models</a></h6>
+  <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
+  <h5 id="Titanium_Web_Proxy_Models_UpstreamHttpProtocol_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public enum UpstreamHttpProtocol</code></pre>
+  </div>
+  <h3 id="fields">Fields
+</h3>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    <thead>
+    </thead></thead><tbody>
+      <tr>
+        <td id="Titanium_Web_Proxy_Models_UpstreamHttpProtocol_Auto">Auto</td>
+        <td><p>Couple the origin protocol to the client protocol: HTTP/2 is only ever offered to the client when
+the origin has also been confirmed (via a fresh probe or a cached prior result) to support HTTP/2,
+and the origin connection then uses whatever protocol the client ends up negotiating. When
+<a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableHttp3">EnableHttp3</a> is <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a>, a cached Alt-Svc / HTTPS/SVCB
+result in <span class="xref">Titanium.Web.Proxy.Http3.Http3OriginCapabilityCache</span> only arms background QUIC warm-up;
+outbound HTTP/3 is used once that origin is warm, otherwise the request stays on HTTP/2 or
+HTTP/1.1. This is the default.</p>
+</td>
+      </tr>
+      <tr>
+        <td id="Titanium_Web_Proxy_Models_UpstreamHttpProtocol_Http11">Http11</td>
+        <td><p>Always use HTTP/1.1 on the connection to the origin, regardless of what the client negotiates with
+the proxy. When <a class="xref" href="Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectSessionEventArgs_AllowHttpProtocolTranslation">AllowHttpProtocolTranslation</a>/
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_AllowHttpProtocolTranslation">AllowHttpProtocolTranslation</a> is left
+at its default of <code>false</code>, the client is simply never offered &quot;h2&quot; via ALPN either, so it
+transparently negotiates HTTP/1.1 too and no translation is ever required. Setting it to
+<code>true</code> instead allows the client to negotiate HTTP/2 while the origin connection stays
+HTTP/1.1, which requires bridging client h2 streams onto HTTP/1.1 origin requests.</p>
+</td>
+      </tr>
+      <tr>
+        <td id="Titanium_Web_Proxy_Models_UpstreamHttpProtocol_Http2">Http2</td>
+        <td><p>Always use HTTP/2 on the connection to the origin, failing the connection outright if the origin
+does not negotiate &quot;h2&quot; via ALPN - a translation bridge cannot fabricate HTTP/2 support at an
+origin that genuinely lacks it. When the client itself does not negotiate HTTP/2, reconciling that
+with a confirmed HTTP/2 origin connection requires
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectSessionEventArgs_AllowHttpProtocolTranslation">AllowHttpProtocolTranslation</a>/
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_AllowHttpProtocolTranslation">AllowHttpProtocolTranslation</a> to bridge
+HTTP/1.1 client requests onto the HTTP/2 origin connection.</p>
+</td>
+      </tr>
+      <tr>
+        <td id="Titanium_Web_Proxy_Models_UpstreamHttpProtocol_Http3">Http3</td>
+        <td><p>Always use HTTP/3 (QUIC) on the connection to the origin. Fails the stream with
+<a class="xref" href="Titanium.Web.Proxy.Exceptions.ProxyConnectException.html">ProxyConnectException</a> if HTTP/3 cannot be established — no fallback to
+HTTP/2 or HTTP/1.1. Symmetric with <a class="xref" href="Titanium.Web.Proxy.Models.UpstreamHttpProtocol.html#Titanium_Web_Proxy_Models_UpstreamHttpProtocol_Http2">Http2</a>: origin must support QUIC/h3 or the
+request fails. When <code>AllowHttpProtocolTranslation</code> is <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a>, a non-H3
+inbound client connection may still be bridged onto the H3 origin stream.</p>
+<p>
+    Honored from connection-level events and from
+    <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_UpstreamHttpProtocol">UpstreamHttpProtocol</a> in <code>BeforeRequest</code>.
+    Forced <a class="xref" href="Titanium.Web.Proxy.Models.UpstreamHttpProtocol.html#Titanium_Web_Proxy_Models_UpstreamHttpProtocol_Http3">Http3</a> skips Auto-mode warm-up gating and fails closed with no TCP fallback.
+</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_UpstreamHttpProtocol.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.UpstreamHttpProtocol%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/UpstreamHttpProtocol.cs/#L13" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

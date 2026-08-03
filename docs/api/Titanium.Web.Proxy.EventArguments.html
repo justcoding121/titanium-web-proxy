@@ -1,23 +1,21 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <!--[if IE]><![endif]-->
 <html>
-  
+
   <head>
     <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-    <title>Namespace Titanium.Web.Proxy.EventArguments
-   | Titanium Web Proxy </title>
-    <meta name="viewport" content="width=device-width">
-    <meta name="title" content="Namespace Titanium.Web.Proxy.EventArguments
-   | Titanium Web Proxy ">
-    <meta name="generator" content="docfx 2.59.4.0">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Namespace Titanium.Web.Proxy.EventArguments | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Namespace Titanium.Web.Proxy.EventArguments | Titanium Web Proxy ">
     
-    <link rel="shortcut icon" href="../favicon.ico">
-    <link rel="stylesheet" href="../styles/docfx.vendor.css">
-    <link rel="stylesheet" href="../styles/docfx.css">
-    <link rel="stylesheet" href="../styles/main.css">
-    <meta property="docfx:navrel" content="">
-    <meta property="docfx:tocrel" content="toc.html">
+    
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
     
     <meta property="docfx:rel" content="../">
     
@@ -25,7 +23,7 @@
   <body data-spy="scroll" data-target="#affix" data-offset="120">
     <div id="wrapper">
       <header>
-        
+
         <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
           <div class="container">
             <div class="navbar-header">
@@ -35,7 +33,7 @@
                 <span class="icon-bar"></span>
                 <span class="icon-bar"></span>
               </button>
-              
+
               <a class="navbar-brand" href="../index.html">
                 <img id="logo" class="svg" src="../logo.svg" alt="">
               </a>
@@ -49,7 +47,7 @@
             </div>
           </div>
         </nav>
-        
+
         <div class="subnav navbar navbar-default">
           <div class="container hide-when-search" id="breadcrumb">
             <ul class="breadcrumb">
@@ -59,17 +57,17 @@
         </div>
       </header>
       <div class="container body-content">
-        
+
         <div id="search-results">
           <div class="search-list">Search Results for <span></span></div>
           <div class="sr-items">
             <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
           </div>
-          <ul id="pagination" data-first="First" data-prev="Previous" data-next="Next" data-last="Last"></ul>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
         </div>
       </div>
       <div role="main" class="container body-content hide-when-search">
-        
+
         <div class="sidenav hide-when-search">
           <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
           <div class="sidetoggle collapse" id="sidetoggle">
@@ -79,14 +77,33 @@
         <div class="article row grid-right">
           <div class="col-md-10">
             <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.EventArguments">
-  
-  <h1 id="Titanium_Web_Proxy_EventArguments" data-uid="Titanium.Web.Proxy.EventArguments" class="text-break">Namespace Titanium.Web.Proxy.EventArguments
-  </h1>
+
+  <h1 id="Titanium_Web_Proxy_EventArguments" data-uid="Titanium.Web.Proxy.EventArguments" class="text-break">Namespace Titanium.Web.Proxy.EventArguments</h1>
   <div class="markdown level0 summary"></div>
   <div class="markdown level0 conceptual"></div>
   <div class="markdown level0 remarks"></div>
-    <h3 id="classes">Classes
-  </h3>
+    <h3 id="classes">
+Classes
+</h3>
+      <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeBodyWriteEventArgs.html">BeforeBodyWriteEventArgs</a></h4>
+      <section></section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.html">BeforeQuicAuthenticateEventArgs</a></h4>
+      <section><p>Event arguments raised on a <code>TransparentQuicProxyEndPoint</code> before the QUIC TLS handshake
+completes, analogous to <a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html">BeforeSslAuthenticateEventArgs</a> for transparent TCP endpoints.</p>
+<p>
+    Unlike its TCP counterpart, this event does <b>not</b> expose a <code>DecryptSsl</code> property:
+    QUIC always terminates TLS 1.3 at the proxy — there is no pass-through mode. Calling
+    <a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeQuicAuthenticateEventArgs_Reject">Reject()</a> is the only way to refuse the connection before the handshake finishes.
+</p>
+<p>
+    Thread-safety: each inbound QUIC connection fires a dedicated instance of this event on its own
+    accept task. Handlers that mutate shared state must synchronize themselves.
+</p>
+<p>
+    <b>Experimental:</b> HTTP/3 support has not yet completed the full interop/soak/fuzz gate
+    process. Suppress <code>TWP001</code> to opt in.
+</p>
+</section>
       <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html">BeforeSslAuthenticateEventArgs</a></h4>
       <section><p>This is used in transparent endpoint before authenticating client.</p>
 </section>
@@ -97,8 +114,6 @@
       <section><p>An argument passed on to the user for validating the server certificate
 during SSL authentication.</p>
 </section>
-      <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.EmptyProxyEventArgs.html">EmptyProxyEventArgs</a></h4>
-      <section></section>
       <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs.html">MultipartRequestPartSentEventArgs</a></h4>
       <section><p>Class that wraps the multipart sent request arguments.</p>
 </section>
@@ -106,28 +121,51 @@ during SSL authentication.</p>
       <section><p>The base event arguments</p>
 </section>
       <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html">SessionEventArgs</a></h4>
-      <section><p>Holds info related to a single proxy session (single request/response sequence).
-A proxy session is bounded to a single connection from client.
-A proxy session ends when client terminates connection to proxy
-or when server terminates connection from proxy.</p>
+      <section><p>Holds info related to a single proxy session (single request/response exchange).
+Under HTTP/2 and HTTP/3, many sessions share one client connection (one stream each);
+ending a session ends that request/response exchange, not necessarily the connection.</p>
 </section>
       <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">SessionEventArgsBase</a></h4>
-      <section><p>Holds info related to a single proxy session (single request/response sequence).
-A proxy session is bounded to a single connection from client.
-A proxy session ends when client terminates connection to proxy
-or when server terminates connection from proxy.</p>
+      <section><p>Holds info related to a single proxy session (single request/response exchange).
+Under HTTP/2 and HTTP/3, many sessions share one client connection (one stream each);
+ending a session ends that request/response exchange, not necessarily the connection.</p>
+</section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.SocksAuthenticateEventArgs.html">SocksAuthenticateEventArgs</a></h4>
+      <section><p>Context for SOCKS5 username/password authentication on a
+<a class="xref" href="Titanium.Web.Proxy.Models.SocksProxyEndPoint.html">SocksProxyEndPoint</a>.</p>
+</section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.TunnelConnectFailureEventArgs.html">TunnelConnectFailureEventArgs</a></h4>
+      <section><p>Raised when optional pre-200 upstream connectivity verification fails for a CONNECT
+tunnel (<a class="xref" href="Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectSessionEventArgs_EstablishServerConnectionBeforeResponse">EstablishServerConnectionBeforeResponse</a>).
+Handlers may replace <a class="xref" href="Titanium.Web.Proxy.EventArguments.TunnelConnectFailureEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectFailureEventArgs_Response">Response</a> with a custom HTTP error before it is written
+to the client (no TLS has been started yet).</p>
 </section>
       <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html">TunnelConnectSessionEventArgs</a></h4>
       <section><p>A class that wraps the state when a tunnel connect event happen for Explicit endpoints.</p>
 </section>
-    <h3 id="delegates">Delegates
-  </h3>
+      <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.html">WebSocketFrameInterceptEventArgs</a></h4>
+      <section><p>Frame-level interception context for an active WebSocket session.</p>
+</section>
+    <h3 id="enums">
+Enums
+</h3>
+      <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.WebSocketFrameDirection.html">WebSocketFrameDirection</a></h4>
+      <section><p>Direction of a WebSocket frame relative to the proxy.</p>
+</section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptAction.html">WebSocketFrameInterceptAction</a></h4>
+      <section><p>Action taken by a <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_BeforeWebSocketFrame">BeforeWebSocketFrame</a> handler.</p>
+</section>
+    <h3 id="delegates">
+Delegates
+</h3>
       <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html">AsyncEventHandler&lt;TEventArgs&gt;</a></h4>
       <section><p>A generic asynchronous event handler used by the proxy.</p>
 </section>
+
+
 </article>
           </div>
-          
+
           <div class="hidden-sm col-md-2" role="complementary">
             <div class="sideaffix">
               <div class="contribution">
@@ -135,14 +173,14 @@ or when server terminates connection from proxy.</p>
                 </ul>
               </div>
               <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
-                <h5>In This Article</h5>
+                <h5>In this article</h5>
                 <div></div>
               </nav>
             </div>
           </div>
         </div>
       </div>
-      
+
       <footer>
         <div class="grad-bottom"></div>
         <div class="footer">
@@ -150,14 +188,14 @@ or when server terminates connection from proxy.</p>
             <span class="pull-right">
               <a href="#top">Back to top</a>
             </span>
-            
-            <span>Generated by <strong>DocFX</strong></span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
           </div>
         </div>
       </footer>
     </div>
-    
-    <script type="text/javascript" src="../styles/docfx.vendor.js"></script>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
     <script type="text/javascript" src="../styles/docfx.js"></script>
     <script type="text/javascript" src="../styles/main.js"></script>
   </body>

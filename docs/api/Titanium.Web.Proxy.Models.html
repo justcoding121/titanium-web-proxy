@@ -1,23 +1,21 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <!--[if IE]><![endif]-->
 <html>
-  
+
   <head>
     <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-    <title>Namespace Titanium.Web.Proxy.Models
-   | Titanium Web Proxy </title>
-    <meta name="viewport" content="width=device-width">
-    <meta name="title" content="Namespace Titanium.Web.Proxy.Models
-   | Titanium Web Proxy ">
-    <meta name="generator" content="docfx 2.59.4.0">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Namespace Titanium.Web.Proxy.Models | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Namespace Titanium.Web.Proxy.Models | Titanium Web Proxy ">
     
-    <link rel="shortcut icon" href="../favicon.ico">
-    <link rel="stylesheet" href="../styles/docfx.vendor.css">
-    <link rel="stylesheet" href="../styles/docfx.css">
-    <link rel="stylesheet" href="../styles/main.css">
-    <meta property="docfx:navrel" content="">
-    <meta property="docfx:tocrel" content="toc.html">
+    
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
     
     <meta property="docfx:rel" content="../">
     
@@ -25,7 +23,7 @@
   <body data-spy="scroll" data-target="#affix" data-offset="120">
     <div id="wrapper">
       <header>
-        
+
         <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
           <div class="container">
             <div class="navbar-header">
@@ -35,7 +33,7 @@
                 <span class="icon-bar"></span>
                 <span class="icon-bar"></span>
               </button>
-              
+
               <a class="navbar-brand" href="../index.html">
                 <img id="logo" class="svg" src="../logo.svg" alt="">
               </a>
@@ -49,7 +47,7 @@
             </div>
           </div>
         </nav>
-        
+
         <div class="subnav navbar navbar-default">
           <div class="container hide-when-search" id="breadcrumb">
             <ul class="breadcrumb">
@@ -59,17 +57,17 @@
         </div>
       </header>
       <div class="container body-content">
-        
+
         <div id="search-results">
           <div class="search-list">Search Results for <span></span></div>
           <div class="sr-items">
             <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
           </div>
-          <ul id="pagination" data-first="First" data-prev="Previous" data-next="Next" data-last="Last"></ul>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
         </div>
       </div>
       <div role="main" class="container body-content hide-when-search">
-        
+
         <div class="sidenav hide-when-search">
           <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
           <div class="sidetoggle collapse" id="sidetoggle">
@@ -79,14 +77,14 @@
         <div class="article row grid-right">
           <div class="col-md-10">
             <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Models">
-  
-  <h1 id="Titanium_Web_Proxy_Models" data-uid="Titanium.Web.Proxy.Models" class="text-break">Namespace Titanium.Web.Proxy.Models
-  </h1>
+
+  <h1 id="Titanium_Web_Proxy_Models" data-uid="Titanium.Web.Proxy.Models" class="text-break">Namespace Titanium.Web.Proxy.Models</h1>
   <div class="markdown level0 summary"></div>
   <div class="markdown level0 conceptual"></div>
   <div class="markdown level0 remarks"></div>
-    <h3 id="classes">Classes
-  </h3>
+    <h3 id="classes">
+Classes
+</h3>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html">ExplicitProxyEndPoint</a></h4>
       <section><p>A proxy endpoint that the client is aware of.
 So client application know that it is communicating with a proxy server.</p>
@@ -113,21 +111,77 @@ Useful when requests are redirected to this proxy end point through port forward
       <section><p>A proxy end point client is not aware of.
 Useful when requests are redirected to this proxy end point through port forwarding via router.</p>
 </section>
-    <h3 id="interfaces">Interfaces
-  </h3>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.html">TransparentQuicProxyEndPoint</a></h4>
+      <section><p>A transparent proxy endpoint that listens on UDP/QUIC and intercepts HTTP/3 traffic.
+Clients are not aware of the proxy; traffic must be directed here via firewall/NAT redirection.</p>
+<p>
+    QUIC always terminates TLS 1.3 at the proxy — there is no pass-through mode. An
+    <a class="xref" href="Titanium.Web.Proxy.Network.Quic.IOriginalDestinationResolver.html">IOriginalDestinationResolver</a> must be configured (or a fixed
+    <a class="xref" href="Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardHost">ForwardHost</a> /
+    <a class="xref" href="Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardPort">ForwardPort</a> fallback) so the proxy knows which
+    origin server each connection is intended for.
+</p>
+<p>
+    <b>Platform requirement:</b> <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.net.quic.quiclistener.issupported">IsSupported</a> must be
+    <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a> (MsQuic native library present, OS version supported). If it is
+    <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">false</a>, <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_Start_System_Boolean_">Start(bool)</a> will throw
+    <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.platformnotsupportedexception">PlatformNotSupportedException</a>.
+</p>
+<p>
+    <b>ECH constraint:</b> when managed DNS advertises ECH for intercepted names, the hidden SNI
+    is encrypted and cannot be extracted here. Either disable ECH for intercepted names in your
+    managed DNS, or configure managed clients to disable ECH.
+</p>
+<p>
+    <b>Experimental:</b> HTTP/3 support has not yet completed the full interop/soak/fuzz gate
+    process. Suppress <code>TWP001</code> to opt in.
+</p>
+</section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Models.WinAuthCredentials.html">WinAuthCredentials</a></h4>
+      <section><p>Windows authentication credentials for NTLM/Negotiate/Kerberos (issue #461).
+Prefer supplying these through <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_WinAuthCredentialsProvider">WinAuthCredentialsProvider</a>
+rather than storing plaintext on session event args.</p>
+</section>
+    <h3 id="interfaces">
+Interfaces
+</h3>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.IExternalProxy.html">IExternalProxy</a></h4>
       <section></section>
-    <h3 id="enums">Enums
-  </h3>
+    <h3 id="enums">
+Enums
+</h3>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.ExternalProxyType.html">ExternalProxyType</a></h4>
       <section></section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Models.OriginHttpVersionPolicy.html">OriginHttpVersionPolicy</a></h4>
+      <section><p>Controls which HTTP version the proxy declares to the origin server on the request line, independently of
+the version the client itself declared on its own connection to the proxy.</p>
+<p>
+    HTTP/1.0 and HTTP/1.1 share the same start-line/header/body wire format, so switching between them
+    needs no message translation - only the declared version and the resulting default persistence
+    (<a class="xref" href="Titanium.Web.Proxy.Http.Response.html#Titanium_Web_Proxy_Http_Response_KeepAlive">KeepAlive</a>) change. The response is always written
+    back to the client using the client's own originally declared version and its own persistence rules,
+    regardless of this policy.
+</p>
+</section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.ProxyAuthenticationResult.html">ProxyAuthenticationResult</a></h4>
       <section></section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.ProxyProtocolType.html">ProxyProtocolType</a></h4>
       <section></section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Models.UpstreamHttpProtocol.html">UpstreamHttpProtocol</a></h4>
+      <section><p>Controls which HTTP version the proxy uses on its own connection to the origin server, independent
+of which HTTP version the client used to talk to the proxy. Set a connection-level default on
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectSessionEventArgs_UpstreamHttpProtocol">UpstreamHttpProtocol</a> (during
+<code>BeforeTunnelConnectRequest</code>), <a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_UpstreamHttpProtocol">UpstreamHttpProtocol</a>
+(during <code>BeforeSslAuthenticate</code>), or
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeQuicAuthenticateEventArgs_UpstreamHttpProtocol">UpstreamHttpProtocol</a> (during
+<code>BeforeQuicAuthenticate</code>). Per-request overrides are available via
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_UpstreamHttpProtocol">UpstreamHttpProtocol</a> in <code>BeforeRequest</code>.</p>
+</section>
+
+
 </article>
           </div>
-          
+
           <div class="hidden-sm col-md-2" role="complementary">
             <div class="sideaffix">
               <div class="contribution">
@@ -135,14 +189,14 @@ Useful when requests are redirected to this proxy end point through port forward
                 </ul>
               </div>
               <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
-                <h5>In This Article</h5>
+                <h5>In this article</h5>
                 <div></div>
               </nav>
             </div>
           </div>
         </div>
       </div>
-      
+
       <footer>
         <div class="grad-bottom"></div>
         <div class="footer">
@@ -150,14 +204,14 @@ Useful when requests are redirected to this proxy end point through port forward
             <span class="pull-right">
               <a href="#top">Back to top</a>
             </span>
-            
-            <span>Generated by <strong>DocFX</strong></span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
           </div>
         </div>
       </footer>
     </div>
-    
-    <script type="text/javascript" src="../styles/docfx.vendor.js"></script>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
     <script type="text/javascript" src="../styles/docfx.js"></script>
     <script type="text/javascript" src="../styles/main.js"></script>
   </body>

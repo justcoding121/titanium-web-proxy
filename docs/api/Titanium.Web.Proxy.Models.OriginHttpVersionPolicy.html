@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Enum OriginHttpVersionPolicy | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Enum OriginHttpVersionPolicy | Titanium Web Proxy ">
+    
+    <meta name="description" content="Controls which HTTP version the proxy declares to the origin server on the request line, independently of the version the client itself declared on its own connection to the proxy.      HTTP/1.0 and HTTP/1.1 share the same start-line/header/body wire format, so switching between them     needs no message translation - only the declared version and the resulting default persistence     () change. The response is always written     back to the client using the client&#39;s own originally declared version and its own persistence rules,     regardless of this policy.">
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+
+        <div id="search-results">
+          <div class="search-list">Search Results for <span></span></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Models.OriginHttpVersionPolicy">
+
+
+
+
+  <h1 id="Titanium_Web_Proxy_Models_OriginHttpVersionPolicy" data-uid="Titanium.Web.Proxy.Models.OriginHttpVersionPolicy" class="text-break">Enum OriginHttpVersionPolicy</h1>
+  <div class="markdown level0 summary"><p>Controls which HTTP version the proxy declares to the origin server on the request line, independently of
+the version the client itself declared on its own connection to the proxy.</p>
+<p>
+    HTTP/1.0 and HTTP/1.1 share the same start-line/header/body wire format, so switching between them
+    needs no message translation - only the declared version and the resulting default persistence
+    (<a class="xref" href="Titanium.Web.Proxy.Http.Response.html#Titanium_Web_Proxy_Http_Response_KeepAlive">KeepAlive</a>) change. The response is always written
+    back to the client using the client's own originally declared version and its own persistence rules,
+    regardless of this policy.
+</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.html">Titanium</a>.<a class="xref" href="Titanium.Web.html">Web</a>.<a class="xref" href="Titanium.Web.Proxy.html">Proxy</a>.<a class="xref" href="Titanium.Web.Proxy.Models.html">Models</a></h6>
+  <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
+  <h5 id="Titanium_Web_Proxy_Models_OriginHttpVersionPolicy_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public enum OriginHttpVersionPolicy</code></pre>
+  </div>
+  <h3 id="fields">Fields
+</h3>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    <thead>
+    </thead></thead><tbody>
+      <tr>
+        <td id="Titanium_Web_Proxy_Models_OriginHttpVersionPolicy_NormalizeToHttp11">NormalizeToHttp11</td>
+        <td><p>Always declare HTTP/1.1 to the origin, regardless of what version the client declared. A compliant
+origin can then be treated as persistent by default and its connection pooled/reused across requests</p>
+<ul>
+<li>including requests from HTTP/1.0 clients that would otherwise never be able to share a pooled origin
+connection with HTTP/1.1 clients of the same origin.</li>
+</ul>
+</td>
+      </tr>
+      <tr>
+        <td id="Titanium_Web_Proxy_Models_OriginHttpVersionPolicy_PreserveClientVersion">PreserveClientVersion</td>
+        <td><p>Declare the same HTTP version to the origin that the client declared to the proxy (default; matches
+the proxy's historical pass-through behavior). An HTTP/1.0 client therefore also causes an HTTP/1.0
+declaration to the origin, and - per RFC 2616 §8.1 - a compliant origin's default-non-persistent
+HTTP/1.0 response then prevents that origin connection from being pooled/reused.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_OriginHttpVersionPolicy.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.OriginHttpVersionPolicy%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/OriginHttpVersionPolicy.cs/#L14" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>
