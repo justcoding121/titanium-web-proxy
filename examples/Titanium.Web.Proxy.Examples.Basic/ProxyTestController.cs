@@ -348,7 +348,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             }
         }
 
-        private Task OnBeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
+        private static Task OnBeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
         {
             e.GetState().AppendPipeline(
                 nameof(OnBeforeTunnelConnectResponse) + ":" + e.HttpClient.Request.RequestUri);
@@ -399,7 +399,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             foreach (var header in e.Headers) WriteToConsole(header.ToString());
         }
 
-        private Task OnResponse(object sender, SessionEventArgs e)
+        private static Task OnResponse(object sender, SessionEventArgs e)
         {
             e.GetState().AppendPipeline(nameof(OnResponse));
             return Task.CompletedTask;
@@ -409,6 +409,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         // Replace e.BodyBytes to modify the body on the fly.
         private Task OnResponseBodyWrite(object sender, BeforeBodyWriteEventArgs e)
         {
+            _ = sender; // Required by the event-handler signature.
             WriteToConsole($"Response body chunk: {e.BodyBytes.Length} bytes (last: {e.IsLastChunk})");
             return Task.CompletedTask;
         }
@@ -585,7 +586,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        public Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
+        public static Task OnCertificateValidation(object sender, CertificateValidationEventArgs e)
         {
             e.GetState().AppendPipeline(nameof(OnCertificateValidation));
 
@@ -600,7 +601,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        public Task OnCertificateSelection(object sender, CertificateSelectionEventArgs e)
+        public static Task OnCertificateSelection(object sender, CertificateSelectionEventArgs e)
         {
             e.GetState().AppendPipeline(nameof(OnCertificateSelection));
 

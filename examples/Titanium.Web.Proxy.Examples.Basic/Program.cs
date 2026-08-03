@@ -3,7 +3,7 @@ using Titanium.Web.Proxy.Examples.Basic.Helpers;
 
 namespace Titanium.Web.Proxy.Examples.Basic
 {
-    public class Program
+    public static class Program
     {
         private static readonly ProxyTestController controller = new ProxyTestController();
         private static readonly object exitLock = new object();

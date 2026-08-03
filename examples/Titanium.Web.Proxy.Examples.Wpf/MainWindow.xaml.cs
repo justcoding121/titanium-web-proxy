@@ -413,7 +413,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             return item;
         }
 
-        private string TunnelTypeToString(TunnelType tunnelType)
+        private static string TunnelTypeToString(TunnelType tunnelType)
         {
             switch (tunnelType)
             {
