@@ -212,6 +212,51 @@ public class HttpStreamCoverageTests
         StringAssert.Contains(text, "0\r\n");
     }
 
+    [TestMethod]
+    public void SyncReadWriteFlush_AndUnsupportedSeek()
+    {
+        var payload = Encoding.ASCII.GetBytes("sync-io");
+        using var stream = MakeReader(payload);
+        var buf = new byte[16];
+        Assert.IsTrue(stream.FillBuffer());
+        var n = stream.Read(buf, 0, buf.Length);
+        Assert.AreEqual(7, n);
+        Assert.AreEqual("sync-io", Encoding.ASCII.GetString(buf, 0, n));
+        Assert.AreEqual(-1, stream.ReadByte()); // EOF after drain
+        // Exercise Seek/SetLength wrappers against the MemoryStream base.
+        Assert.AreEqual(0, stream.Seek(0, SeekOrigin.Begin));
+        stream.SetLength(payload.Length);
+
+        var (writer, destination) = MakeWriter();
+        using (writer)
+        {
+            writer.Write(payload, 0, payload.Length);
+            writer.Flush();
+        }
+
+        CollectionAssert.AreEqual(payload, destination.ToArray());
+    }
+
+    [TestMethod]
+    public async Task BeginEndReadWrite_RoundTrip()
+    {
+        using var reader = MakeReader(Encoding.ASCII.GetBytes("apm"));
+        var buf = new byte[3];
+        Assert.IsTrue(await reader.FillBufferAsync());
+        var readAr = reader.BeginRead(buf, 0, 3, null, null);
+        Assert.AreEqual(3, reader.EndRead(readAr));
+        Assert.AreEqual("apm", Encoding.ASCII.GetString(buf));
+
+        var (writer, destination) = MakeWriter();
+        using (writer)
+        {
+            var writeAr = writer.BeginWrite(buf, 0, 3, null, null);
+            writer.EndWrite(writeAr);
+        }
+
+        CollectionAssert.AreEqual(buf, destination.ToArray());
+    }
+
     private sealed class ThrowingWriteStream : Stream
     {
         public int WriteCount { get; private set; }
