@@ -40,7 +40,12 @@ jobs:
 
     - name: Install DocFX
       if: github.ref == 'refs/heads/develop'
-      run: choco install docfx -y
+      shell: pwsh
+      run: |
+        # Prefer the .NET tool over Chocolatey: choco's docfx package downloads an old
+        # GitHub release zip that intermittently 500s and blocks Sonar/coverage on develop.
+        dotnet tool install --global docfx
+        Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.dotnet\tools"
 
     - name: Restore
       run: dotnet restore src/Titanium.Web.Proxy.sln --warnaserror

@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.UnitTests
     {
         private static TcpConnectionFactory CreateFactory()
         {
-            return new TcpConnectionFactory(new ProxyServer());
+            return new TcpConnectionFactory(new ProxyServer(false, false, false));
         }
 
         private static ExternalProxy HttpProxy(string user, string password)
@@ -159,6 +159,77 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.AreNotEqual(
                 TcpConnectionFactory.GetCredentialFingerprint("ab", "c"),
                 TcpConnectionFactory.GetCredentialFingerprint("a", "bc"));
+        }
+
+        [TestMethod]
+        public void CredentialFingerprint_NullAndEmptyComponentsHaveDefinedIdentity()
+        {
+            Assert.AreEqual(
+                TcpConnectionFactory.GetCredentialFingerprint(null, "pass"),
+                TcpConnectionFactory.GetCredentialFingerprint(string.Empty, "pass"));
+            Assert.AreEqual(
+                TcpConnectionFactory.GetCredentialFingerprint("user", null),
+                TcpConnectionFactory.GetCredentialFingerprint("user", string.Empty));
+            Assert.AreNotEqual(
+                TcpConnectionFactory.GetCredentialFingerprint(null, "pass"),
+                TcpConnectionFactory.GetCredentialFingerprint("pass", null));
+        }
+
+        [TestMethod]
+        public void CacheKey_ApplicationProtocolChangesConnectionIdentity()
+        {
+            var http11 = TcpConnectionFactory.GetConnectionCacheKey(
+                "example.com", 443, true,
+                new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 }, null, null);
+            var http2 = TcpConnectionFactory.GetConnectionCacheKey(
+                "example.com", 443, true,
+                new List<SslApplicationProtocol> { SslApplicationProtocol.Http2 }, null, null);
+
+            Assert.AreNotEqual(http11, http2);
+            StringAssert.Contains(http11, SslApplicationProtocol.Http11.ToString());
+            StringAssert.Contains(http2, SslApplicationProtocol.Http2.ToString());
+        }
+
+        [TestMethod]
+        public void CacheKey_NextProxyHopChangesConnectionIdentity()
+        {
+            var singleHop = new ExternalProxy("proxy.example", 8080);
+            var chained = new ExternalProxy("proxy.example", 8080)
+            {
+                NextHop = new ExternalProxy("second.example", 8081)
+            };
+
+            var first = TcpConnectionFactory.GetConnectionCacheKey(
+                "example.com", 443, true, null, null, singleHop);
+            var second = TcpConnectionFactory.GetConnectionCacheKey(
+                "example.com", 443, true, null, null, chained);
+
+            Assert.AreNotEqual(first, second);
+            StringAssert.Contains(second, "-next-");
+        }
+
+        [TestMethod]
+        public void EffectiveUpstreamProxy_NullAndNonBypassedProxyArePreserved()
+        {
+            Assert.IsNull(TcpConnectionFactory.GetEffectiveUpstreamProxy(null, "example.com", 443));
+
+            var proxy = new ExternalProxy("proxy.example", 8080) { BypassLocalhost = false };
+            Assert.AreSame(proxy,
+                TcpConnectionFactory.GetEffectiveUpstreamProxy(proxy, "127.0.0.1", 443));
+        }
+
+        [TestMethod]
+        public void Factory_ClearPoolsAndDispose_AreIdempotentWhenEmpty()
+        {
+            var factory = CreateFactory();
+            var server = factory.Server;
+
+            factory.ClearPools();
+            factory.ClearPools();
+            factory.Dispose();
+            factory.Dispose();
+
+            Assert.AreSame(server, factory.Server);
         }
 
         // --- ForwardHost / connectHost tests (Bug 1 fix) ---

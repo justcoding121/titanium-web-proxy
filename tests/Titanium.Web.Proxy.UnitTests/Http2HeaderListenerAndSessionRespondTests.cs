@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading;
@@ -165,5 +166,146 @@ public class Http2HeaderListenerAndSessionRespondTests
         session.HttpClient.Request.Locked = true;
         session.HttpClient.Response.Locked = true;
         Assert.ThrowsExactly<InvalidOperationException>(() => session.Respond(new Response { StatusCode = 200 }));
+    }
+
+    [TestMethod]
+    public void Session_ReRequest_RequiresAResponseStatus()
+    {
+        using var session = MakeSession();
+
+        var exception = Assert.ThrowsExactly<InvalidOperationException>(() => session.ReRequest = true);
+
+        StringAssert.Contains(exception.Message, "status code is empty");
+        Assert.IsFalse(session.ReRequest);
+    }
+
+    [TestMethod]
+    public void Session_ReRequest_CanBeSetAfterResponse()
+    {
+        using var session = MakeSession();
+        session.HttpClient.Response.StatusCode = 503;
+
+        session.ReRequest = true;
+
+        Assert.IsTrue(session.ReRequest);
+    }
+
+    [TestMethod]
+    public void Session_RequestBodySetters_EncodeAndRejectLockedRequests()
+    {
+        using var session = MakeSession();
+        session.HttpClient.Request.ContentType = "text/plain; charset=utf-8";
+        session.SetRequestBodyString("héllo");
+        CollectionAssert.AreEqual(Encoding.UTF8.GetBytes("héllo"), session.HttpClient.Request.Body);
+
+        session.HttpClient.Request.Locked = true;
+        Assert.ThrowsExactly<InvalidOperationException>(() => session.SetRequestBody(new byte[] { 1 }));
+        Assert.ThrowsExactly<InvalidOperationException>(() => session.SetRequestBodyString("late"));
+    }
+
+    [TestMethod]
+    public void Session_ResponseBodySetters_RequireSentRequestAndEncode()
+    {
+        using var session = MakeSession();
+        Assert.ThrowsExactly<InvalidOperationException>(() => session.SetResponseBody(new byte[] { 1 }));
+        Assert.ThrowsExactly<InvalidOperationException>(() => session.SetResponseBodyString("early"));
+
+        session.HttpClient.Request.Locked = true;
+        session.HttpClient.Response.ContentType = "text/plain; charset=utf-16";
+        session.SetResponseBodyString("done");
+        CollectionAssert.AreEqual(Encoding.Unicode.GetBytes("done"), session.HttpClient.Response.Body);
+    }
+
+    [TestMethod]
+    public void Session_GenericResponse_ByteOverloadsPreserveStatusHeadersAndBody()
+    {
+        using var session = MakeSession();
+        var body = Encoding.ASCII.GetBytes("denied");
+        var headers = new Dictionary<string, HttpHeader>
+        {
+            ["X-Reason"] = new("X-Reason", "policy")
+        };
+
+        session.GenericResponse(body, HttpStatusCode.Unauthorized, headers);
+
+        Assert.AreEqual(401, session.HttpClient.Response.StatusCode);
+        Assert.AreEqual("policy", session.HttpClient.Response.Headers.GetFirstHeader("X-Reason")?.Value);
+        CollectionAssert.AreEqual(body, session.HttpClient.Response.Body);
+    }
+
+    [TestMethod]
+    public void Session_RespondStreaming_ValidatesArgumentsAndKeepsFixedLengthFraming()
+    {
+        using var session = MakeSession();
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
+            session.RespondStreaming(null!, (_, _) => Task.CompletedTask));
+        Assert.ThrowsExactly<ArgumentNullException>(() =>
+            session.RespondStreaming(new Response(), null!));
+
+        var response = new Response { StatusCode = 200, ContentLength = 3 };
+        Func<Stream, CancellationToken, Task> writer = (stream, token) =>
+            stream.WriteAsync(Encoding.ASCII.GetBytes("abc"), token).AsTask();
+        session.RespondStreaming(response, writer);
+
+        Assert.AreSame(writer, session.HttpClient.Response.StreamBodyWriter);
+        Assert.IsFalse(session.HttpClient.Response.IsChunked);
+        Assert.AreEqual(3, session.HttpClient.Response.ContentLength);
+    }
+
+    [TestMethod]
+    public void Session_Respond_AfterRequestSent_ReplacesResponseAndCanCloseServerConnection()
+    {
+        using var session = MakeSession();
+        session.HttpClient.Request.Locked = true;
+        session.HttpClient.Response.StatusCode = 502;
+        session.HttpClient.Response.Headers.AddHeader("X-Origin", "old");
+
+        var replacement = new Response { StatusCode = 201 };
+        session.Respond(replacement, closeServerConnection: true);
+
+        Assert.AreSame(replacement, session.HttpClient.Response);
+        Assert.IsTrue(replacement.Locked);
+        Assert.IsTrue(session.HttpClient.CloseServerConnection);
+    }
+
+    [TestMethod]
+    public void Session_WebSocketDecoders_AreDirectionSpecificCachedAndUseSessionLimit()
+    {
+        using var session = MakeSession();
+        session.MaxWebSocketFramePayloadBytes = 2;
+
+        Assert.AreSame(session.WebSocketDecoderSend, session.WebSocketDecoderSend);
+        Assert.AreSame(session.WebSocketDecoderReceive, session.WebSocketDecoderReceive);
+        Assert.AreNotSame(session.WebSocketDecoderSend, session.WebSocketDecoderReceive);
+
+        var threeByteFrame = new byte[] { 0x82, 0x03, 1, 2, 3 };
+        var exception = Assert.ThrowsExactly<WebSocketProtocolException>(
+            () => session.WebSocketDecoderReceive.Decode(threeByteFrame, 0, threeByteFrame.Length).ToList());
+        Assert.AreEqual((ushort)1009, exception.CloseCode);
+    }
+
+    [TestMethod]
+    public async Task Session_WebSocketFrameEvent_ReportsSubscriptionAndInvokesHandler()
+    {
+        using var session = MakeSession();
+        var calls = 0;
+        session.BeforeWebSocketFrame += (_, args) =>
+        {
+            calls++;
+            Assert.AreEqual(WebSocketFrameDirection.ClientToServer, args.Direction);
+            return Task.CompletedTask;
+        };
+        var frame = new WebSocketFrame
+        {
+            IsFinal = true,
+            OpCode = WebsocketOpCode.Text,
+            Data = Encoding.ASCII.GetBytes("x")
+        };
+        var eventArgs = new WebSocketFrameInterceptEventArgs(session.Server, session.ClientConnection,
+            session, WebSocketFrameDirection.ClientToServer, frame);
+
+        Assert.IsTrue(session.HasWebSocketFrameInterceptHandler);
+        await session.InvokeBeforeWebSocketFrame(eventArgs);
+        Assert.AreEqual(1, calls);
     }
 }
