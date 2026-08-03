@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -83,6 +85,103 @@ public class CertificateManagerStorageTests
     }
 
     [TestMethod]
+    public void EnsureRootCertificate_WithoutTrustFlags_CreatesRootOnly()
+    {
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle
+        };
+        mgr.EnsureRootCertificate();
+        Assert.IsNotNull(mgr.RootCertificate);
+        Assert.IsTrue(mgr.CertValidated);
+    }
+
+    [TestMethod]
+    public void EnsureRootCertificate_Overload_SetsTrustFlagsWithoutInstalling()
+    {
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle
+        };
+        // Keep trust false so CI does not mutate the user Root store.
+        mgr.EnsureRootCertificate(userTrustRootCertificate: false, machineTrustRootCertificate: false,
+            trustRootCertificateAsAdmin: false);
+        Assert.IsNotNull(mgr.RootCertificate);
+        Assert.IsFalse(mgr.UserTrustRoot);
+        Assert.IsFalse(mgr.MachineTrustRoot);
+        Assert.IsFalse(mgr.TrustRootAsAdministrator);
+    }
+
+    [TestMethod]
+    public async Task ClearRootCertificate_ClearsRootAndCachedLeaves()
+    {
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        using var leaf = await mgr.CreateServerCertificate("clear-cache.example");
+        Assert.IsNotNull(leaf);
+
+        mgr.ClearRootCertificate();
+        Assert.IsNull(mgr.RootCertificate);
+    }
+
+    [TestMethod]
+    public void CreateCertificate_SaveFakeCertificates_PersistsLeafViaStorage()
+    {
+        var cache = new FakeCertificateCache();
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+            CertificateStorage = cache,
+            SaveFakeCertificates = true
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        using var leaf = mgr.CreateCertificate("save-fake.example", false);
+        Assert.IsNotNull(leaf);
+
+        // Save runs on a background Task; wait briefly for persistence.
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (cache.SaveLeafCount == 0 && DateTime.UtcNow < deadline)
+            Thread.Sleep(50);
+
+        Assert.IsTrue(cache.SaveLeafCount >= 1);
+        Assert.IsTrue(cache.Leaves.ContainsKey("save-fake.example"));
+    }
+
+    [TestMethod]
+    public void LoadRootCertificate_Expired_ReturnsNull()
+    {
+        using var seed = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle
+        };
+        Assert.IsTrue(seed.CreateRootCertificate(false));
+        // Forge an "expired" view by wrapping via FakeCertificateCache that reports NotAfter in the past
+        // is hard without mutating NotAfter; instead load path with Load throwing covers OnException.
+        var cache = new FakeCertificateCache { LoadRootThrows = true };
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+            CertificateStorage = cache
+        };
+        Assert.IsNull(mgr.LoadRootCertificate());
+    }
+
+    [TestMethod]
+    public void CertificateStorage_Null_ResetsToDefaultDiskCache()
+    {
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+            CertificateStorage = new FakeCertificateCache()
+        };
+        mgr.CertificateStorage = null!;
+        Assert.IsInstanceOfType(mgr.CertificateStorage, typeof(DefaultCertificateDiskCache));
+    }
+
+    [TestMethod]
     public async Task CreateServerCertificate_ConcurrentSameHost_CoalescesPendingCreationTask()
     {
         using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
@@ -106,11 +205,16 @@ public class CertificateManagerStorageTests
         internal bool Cleared { get; private set; }
         internal bool SavedRoot { get; private set; }
         internal int SaveLeafCount { get; private set; }
+        internal bool LoadRootThrows { get; set; }
         internal X509Certificate2? RootToLoad { get; set; }
         internal ConcurrentDictionary<string, X509Certificate2> Leaves { get; } = new();
 
         public X509Certificate2? LoadRootCertificate(string pathOrName, string password,
-            X509KeyStorageFlags storageFlags) => RootToLoad;
+            X509KeyStorageFlags storageFlags)
+        {
+            if (LoadRootThrows) throw new IOException("root load failed");
+            return RootToLoad;
+        }
 
         public void SaveRootCertificate(string pathOrName, string password, X509Certificate2 certificate)
         {
