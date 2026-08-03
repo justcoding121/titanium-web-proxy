@@ -17,6 +17,7 @@ using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 using HpackDecoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
+using HpackEncoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
@@ -236,6 +237,90 @@ public class Http2BodyWriterAndOriginSettingsTests
         Assert.AreEqual("100", headers[0].Value);
         Assert.AreEqual("x-a", headers[1].Name);
         Assert.AreEqual("x-b", headers[2].Name);
+    }
+
+    [TestMethod]
+    public async Task ProcessHeaderBlock_Status100Then200_WritesInterimAndFinal()
+    {
+        using var origin = await CreateOriginConnectionShellAsync();
+        var pendingType = typeof(Http2OriginConnection).GetNestedType("PendingStream", BindingFlags.NonPublic)!;
+        var pending = Activator.CreateInstance(pendingType, BindingFlags.Instance | BindingFlags.NonPublic,
+            null, [1024L], null)!;
+        var streams = typeof(Http2OriginConnection).GetField("streams", PrivateInstance)!.GetValue(origin)!;
+        Assert.IsTrue((bool)streams.GetType().GetMethod("TryAdd")!.Invoke(streams, [1, pending])!);
+
+        var process = typeof(Http2OriginConnection).GetMethod("ProcessHeaderBlock", PrivateInstance)!;
+        process.Invoke(origin, [1, EncodeStatusBlock(100, ("x-hint", "1")), false]);
+
+        var interimProp = pendingType.GetField("InterimChannel", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!;
+        var interim = interimProp.GetValue(pending)!;
+        var reader = interim.GetType().GetProperty("Reader")!.GetValue(interim)!;
+        var tryRead = reader.GetType().GetMethod("TryRead")!;
+        var readArgs = new object?[] { null };
+        Assert.IsTrue((bool)tryRead.Invoke(reader, readArgs)!);
+        var interimValue = readArgs[0]!;
+        Assert.AreEqual(100, (int)interimValue.GetType().GetField("Item1")!.GetValue(interimValue)!);
+
+        process.Invoke(origin, [1, EncodeStatusBlock(200, ("content-type", "text/plain")), false]);
+        var response = (Response?)pendingType.GetField("Response", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
+            .GetValue(pending);
+        Assert.IsNotNull(response);
+        Assert.AreEqual(200, response!.StatusCode);
+        Assert.AreEqual("text/plain", response.Headers.GetFirstHeader("content-type")?.Value);
+    }
+
+    [TestMethod]
+    public async Task ProcessHeaderBlock_TrailersWithoutStatus_Accumulate()
+    {
+        using var origin = await CreateOriginConnectionShellAsync();
+        var pendingType = typeof(Http2OriginConnection).GetNestedType("PendingStream", BindingFlags.NonPublic)!;
+        var pending = Activator.CreateInstance(pendingType, BindingFlags.Instance | BindingFlags.NonPublic,
+            null, [1024L], null)!;
+        var streamsField = typeof(Http2OriginConnection).GetField("streams", PrivateInstance)!;
+        var streams = streamsField.GetValue(origin)!;
+        Assert.IsTrue((bool)streams.GetType().GetMethod("TryAdd")!.Invoke(streams, [3, pending])!);
+
+        var process = typeof(Http2OriginConnection).GetMethod("ProcessHeaderBlock", PrivateInstance)!;
+        process.Invoke(origin, [3, EncodeStatusBlock(200), false]);
+        process.Invoke(origin, [3, EncodeLiteralBlock(("x-trailer", "t1")), true]);
+
+        var trailers = (HeaderCollection?)pendingType.GetField("TrailingHeaders",
+            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!.GetValue(pending);
+        Assert.IsNotNull(trailers);
+        Assert.AreEqual("t1", trailers!.GetFirstHeader("x-trailer")?.Value);
+    }
+
+    [TestMethod]
+    public async Task ProcessHeaderBlock_BadHpack_FaultsConnection()
+    {
+        using var origin = await CreateOriginConnectionShellAsync();
+        var process = typeof(Http2OriginConnection).GetMethod("ProcessHeaderBlock", PrivateInstance)!;
+        process.Invoke(origin, [1, new byte[] { 0x80 }, false]); // illegal indexed 0
+        Assert.IsFalse(origin.IsUsable);
+    }
+
+    private static byte[] EncodeStatusBlock(int status, params (string Name, string Value)[] headers)
+    {
+        using var ms = new MemoryStream();
+        using var writer = new BinaryWriter(ms);
+        var encoder = new HpackEncoder(4096);
+        encoder.EncodeHeader(writer, Bs(":status"), Bs(status.ToString()), sensitive: false,
+            HpackUtil.IndexType.None, useStaticName: true);
+        foreach (var (name, value) in headers)
+            encoder.EncodeHeader(writer, Bs(name), Bs(value), sensitive: false, HpackUtil.IndexType.None,
+                useStaticName: true);
+        return ms.ToArray();
+    }
+
+    private static byte[] EncodeLiteralBlock(params (string Name, string Value)[] headers)
+    {
+        using var ms = new MemoryStream();
+        using var writer = new BinaryWriter(ms);
+        var encoder = new HpackEncoder(4096);
+        foreach (var (name, value) in headers)
+            encoder.EncodeHeader(writer, Bs(name), Bs(value), sensitive: false, HpackUtil.IndexType.None,
+                useStaticName: true);
+        return ms.ToArray();
     }
 
     [TestMethod]

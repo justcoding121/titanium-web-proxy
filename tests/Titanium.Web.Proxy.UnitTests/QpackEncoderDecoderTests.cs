@@ -138,6 +138,47 @@ public class QpackEncoderDecoderTests
     }
 
     [TestMethod]
+    public void Decode_HuffmanEncodedLiteralNameAndValue_Succeeds()
+    {
+        // RIC=0, DeltaBase=0, then literal with literal name (001xxxxx) with Huffman bits set on name+value.
+        using var nameMs = new System.IO.MemoryStream();
+        using (var w = new System.IO.BinaryWriter(nameMs, System.Text.Encoding.ASCII, leaveOpen: true))
+            Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Instance.Encode(w,
+                new Titanium.Web.Proxy.Models.ByteString(System.Text.Encoding.ASCII.GetBytes("x-h")));
+        var nameHuff = nameMs.ToArray();
+        using var valueMs = new System.IO.MemoryStream();
+        using (var w = new System.IO.BinaryWriter(valueMs, System.Text.Encoding.ASCII, leaveOpen: true))
+            Titanium.Web.Proxy.Http2.Hpack.HuffmanEncoder.Instance.Encode(w,
+                new Titanium.Web.Proxy.Models.ByteString(System.Text.Encoding.ASCII.GetBytes("v1")));
+        var valueHuff = valueMs.ToArray();
+
+        Assert.IsTrue(nameHuff.Length < 7);
+        Assert.IsTrue(valueHuff.Length < 127);
+
+        var encoded = new List<byte> { 0x00, 0x00 };
+        // 001 N=0 H=1 + 3-bit name length
+        encoded.Add((byte)(0x20 | 0x08 | nameHuff.Length));
+        encoded.AddRange(nameHuff);
+        // value: H=1 + 7-bit length
+        encoded.Add((byte)(0x80 | valueHuff.Length));
+        encoded.AddRange(valueHuff);
+
+        var decoded = QpackDecoder.Decode(encoded.ToArray());
+        Assert.AreEqual(1, decoded.Count);
+        Assert.AreEqual("x-h", decoded[0].Name);
+        Assert.AreEqual("v1", decoded[0].Value);
+    }
+
+    [TestMethod]
+    public void Decode_PostBaseIndexedWithoutContext_Throws()
+    {
+        // RIC=0 DeltaBase=0, then post-base indexed (0001xxxx) index 0
+        var ex = Assert.ThrowsExactly<Http3ConnectionException>(
+            () => QpackDecoder.Decode(new byte[] { 0x00, 0x00, 0x10 }));
+        Assert.AreEqual(Http3ErrorCode.QpackDecompressionFailed, ex.ErrorCode);
+    }
+
+    [TestMethod]
     public void Decode_TooShort_ThrowsDecompressionFailed()
     {
         var ex = Assert.ThrowsExactly<Http3ConnectionException>(() => QpackDecoder.Decode(new byte[] { 0x00 }));
