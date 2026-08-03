@@ -36,7 +36,7 @@ public class CertificateManagerStorageTests
             CertificateEngine = CertificateEngine.BouncyCastle
         };
         Assert.IsTrue(seed.CreateRootCertificate(false));
-        var root = new X509Certificate2(seed.RootCertificate!.Export(X509ContentType.Pfx), (string?)null,
+        var root = X509CertificateLoader.LoadPkcs12(seed.RootCertificate!.Export(X509ContentType.Pfx), null,
             X509KeyStorageFlags.Exportable);
 
         var cache = new FakeCertificateCache { RootToLoad = root };
@@ -62,7 +62,7 @@ public class CertificateManagerStorageTests
         Assert.IsTrue(seed.CreateRootCertificate(false));
         using var leaf = await seed.CreateServerCertificate("disk-hit.example");
         Assert.IsNotNull(leaf);
-        var exported = new X509Certificate2(leaf!.Export(X509ContentType.Pfx), (string?)null,
+        var exported = X509CertificateLoader.LoadPkcs12(leaf!.Export(X509ContentType.Pfx), null,
             X509KeyStorageFlags.Exportable);
 
         var cache = new FakeCertificateCache();
