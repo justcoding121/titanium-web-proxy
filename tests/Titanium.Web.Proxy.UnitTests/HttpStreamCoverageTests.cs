@@ -479,6 +479,78 @@ public class HttpStreamCoverageTests
         }
     }
 
+    [TestMethod]
+    public void ReadByteFromBuffer_ConsumesBufferedBytes_AndThrowsWhenEmpty()
+    {
+        using var stream = MakeReader(Encoding.ASCII.GetBytes("ab"));
+        Assert.IsTrue(stream.FillBuffer());
+        Assert.IsTrue(stream.DataAvailable);
+        Assert.AreEqual((byte)'a', stream.ReadByteFromBuffer());
+        Assert.AreEqual((byte)'b', stream.ReadByteFromBuffer());
+        Assert.IsFalse(stream.DataAvailable);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => stream.ReadByteFromBuffer());
+    }
+
+    [TestMethod]
+    public async Task PeekBytesAsync_AtEof_ReturnsZero_AndOversizedWindowThrows()
+    {
+        using var stream = MakeReader(Array.Empty<byte>(), new TinyBufferPool(8));
+        var destination = new byte[4];
+
+        Assert.AreEqual(0, await stream.PeekBytesAsync(destination, 0, 0, 1));
+        var exception = await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(async () =>
+            await stream.PeekBytesAsync(destination, 0, 4, 4));
+        Assert.AreEqual("count", exception.ParamName);
+    }
+
+    [DataTestMethod]
+    [DataRow("line\r\nrest", "line")]
+    [DataRow("line\nrest", "line")]
+    [DataRow("unterminated", "unterminated")]
+    [DataRow("", null)]
+    public async Task ReadLineAsync_HandlesCrLfLfAndEof(string input, string? expected)
+    {
+        using var stream = MakeReader(Encoding.ASCII.GetBytes(input), new TinyBufferPool(4));
+
+        Assert.AreEqual(expected, await stream.ReadLineAsync());
+    }
+
+    [TestMethod]
+    public async Task ReadLineAsync_LongLine_GrowsPastPooledBuffer()
+    {
+        var expected = new string('x', 40);
+        using var stream = MakeReader(Encoding.ASCII.GetBytes(expected + "\r\n"), new TinyBufferPool(8));
+
+        Assert.AreEqual(expected, await stream.ReadLineAsync());
+    }
+
+    [TestMethod]
+    public async Task WriteLineAsync_WithoutValue_WritesCrLf()
+    {
+        var (writer, destination) = MakeWriter();
+        using (writer)
+        {
+            await writer.WriteLineAsync(CancellationToken.None);
+        }
+
+        CollectionAssert.AreEqual(Encoding.ASCII.GetBytes("\r\n"), destination.ToArray());
+    }
+
+    [TestMethod]
+    public void Flush_WhenBaseThrows_PoisonsWriterAndRethrowsOnce()
+    {
+        var throwing = new ThrowingFlushStream();
+        using var stream = new HttpStream(new ProxyServer(false, false, false), throwing, new DefaultBufferPool(),
+            CancellationToken.None, true);
+
+        var exception = Assert.ThrowsExactly<IOException>(() => stream.Flush());
+        Assert.AreEqual("flush failed", exception.Message);
+
+        stream.Flush();
+        Assert.AreEqual(1, throwing.FlushCount);
+    }
+
     private static async Task<(HttpStream reader, HttpStream writer, NetworkStream sink)>
         CreateNetworkCopyPairAsync(ProxyServer proxy, byte[] payload, CancellationToken cancellationToken)
     {
@@ -564,6 +636,25 @@ public class HttpStreamCoverageTests
             WriteCount++;
             return ValueTask.FromException(new IOException("write failed"));
         }
+    }
+
+    private sealed class ThrowingFlushStream : Stream
+    {
+        public int FlushCount { get; private set; }
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => 0;
+        public override long Position { get; set; }
+        public override void Flush()
+        {
+            FlushCount++;
+            throw new IOException("flush failed");
+        }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) { }
     }
 
     private sealed class TinyBufferPool : IBufferPool

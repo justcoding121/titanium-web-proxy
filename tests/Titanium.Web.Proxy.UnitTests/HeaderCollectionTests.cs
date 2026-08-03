@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -269,6 +270,94 @@ namespace Titanium.Web.Proxy.UnitTests
             var viaGetAllHeaders = headers.GetAllHeaders().Select(h => h.Value).ToList();
 
             CollectionAssert.AreEqual(viaForeach, viaGetAllHeaders);
+        }
+
+        [TestMethod]
+        public void AddHeaders_HttpHeaderSequence_AddsAllAndAcceptsNull()
+        {
+            var headers = new HeaderCollection();
+            headers.AddHeaders((IEnumerable<HttpHeader>?)null);
+            headers.AddHeaders(new[]
+            {
+                new HttpHeader("X-One", "1"),
+                new HttpHeader("X-Two", "2")
+            });
+
+            Assert.AreEqual("1", headers.GetFirstHeader("X-One")!.Value);
+            Assert.AreEqual("2", headers.GetFirstHeader("X-Two")!.Value);
+            Assert.AreEqual(2, headers.GetAllHeaders().Count);
+        }
+
+        [TestMethod]
+        public void AddHeaders_StringPairs_AddsDuplicateValues()
+        {
+            var headers = new HeaderCollection();
+            headers.AddHeaders(new[]
+            {
+                new KeyValuePair<string, string>("X-Test", "one"),
+                new KeyValuePair<string, string>("X-Test", "two")
+            });
+
+            var values = headers.GetHeaders("X-Test")!.Select(x => x.Value).ToArray();
+            CollectionAssert.AreEqual(new[] { "one", "two" }, values);
+        }
+
+        [TestMethod]
+        public void AddHeaders_KeyedHttpHeaders_RejectsMismatchedKey()
+        {
+            var headers = new HeaderCollection();
+            var input = new[]
+            {
+                new KeyValuePair<string, HttpHeader>("X-Key", new HttpHeader("X-Other", "value"))
+            };
+
+            var exception = Assert.ThrowsExactly<ArgumentException>(() => headers.AddHeaders(input));
+
+            StringAssert.Contains(exception.Message, "Header name mismatch");
+            Assert.AreEqual(0, headers.GetAllHeaders().Count);
+        }
+
+        [TestMethod]
+        public void RemoveHeader_Object_RequiresEqualValueForUniqueHeader()
+        {
+            var headers = new HeaderCollection();
+            var stored = new HttpHeader("X-Test", "stored");
+            headers.AddHeader(stored);
+
+            Assert.IsFalse(headers.RemoveHeader(new HttpHeader("X-Test", "different")));
+            Assert.IsTrue(headers.HeaderExists("X-Test"));
+            Assert.IsTrue(headers.RemoveHeader(stored));
+            Assert.IsFalse(headers.HeaderExists("X-Test"));
+        }
+
+        [TestMethod]
+        public void RemoveHeader_Object_RemovesMatchingDuplicatesOnly()
+        {
+            var headers = new HeaderCollection();
+            var first = new HttpHeader("Set-Cookie", "a=1");
+            var second = new HttpHeader("Set-Cookie", "b=2");
+            var third = new HttpHeader("Set-Cookie", "a=1");
+            headers.AddHeader(first);
+            headers.AddHeader(second);
+            headers.AddHeader(third);
+
+            Assert.IsTrue(headers.RemoveHeader(first));
+
+            var remaining = headers.GetHeaders("Set-Cookie");
+            Assert.IsNotNull(remaining);
+            Assert.AreEqual(2, remaining.Count);
+            CollectionAssert.AreEqual(new[] { "b=2", "a=1" }, remaining.Select(x => x.Value).ToArray());
+        }
+
+        [TestMethod]
+        public void Enumerator_Reset_ThrowsNotSupportedException()
+        {
+            var headers = new HeaderCollection();
+            headers.AddHeader("X-Test", "value");
+            IEnumerator<HttpHeader> enumerator = headers.GetEnumerator();
+
+            Assert.ThrowsExactly<NotSupportedException>(() => enumerator.Reset());
+            enumerator.Dispose();
         }
     }
 }

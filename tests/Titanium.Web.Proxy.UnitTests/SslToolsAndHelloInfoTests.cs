@@ -123,6 +123,86 @@ public class SslToolsAndHelloInfoTests
         Assert.AreEqual(0x1301, hello!.CipherSuite);
     }
 
+    [TestMethod]
+    public async Task PeekClientHello_Ssl2_ParsesCipherSessionAndRandom()
+    {
+        var bytes = BuildSsl2ClientHello();
+
+        var hello = await SslTools.PeekClientHello(new PeekStream(bytes), new ArrayPoolBufferPool());
+
+        Assert.IsNotNull(hello);
+        Assert.AreEqual(2, hello.HandshakeVersion);
+        Assert.AreEqual(2, hello.MajorVersion);
+        Assert.AreEqual(0x010080, hello.Ciphers[0]);
+        CollectionAssert.AreEqual(new byte[] { 0x44 }, hello.SessionId);
+        CollectionAssert.AreEqual(new byte[] { 0xaa, 0xbb }, hello.Random);
+    }
+
+    [TestMethod]
+    public async Task PeekServerHello_Ssl2_ParsesFixedFields()
+    {
+        var bytes = BuildSsl2ServerHello();
+
+        var hello = await SslTools.PeekServerHello(new PeekStream(bytes), new ArrayPoolBufferPool());
+
+        Assert.IsNotNull(hello);
+        Assert.AreEqual(2, hello.HandshakeVersion);
+        Assert.AreEqual(3, hello.MajorVersion);
+        Assert.AreEqual(1, hello.MinorVersion);
+        Assert.AreEqual(0x002f, hello.CipherSuite);
+        Assert.AreEqual(32, hello.Random.Length);
+        CollectionAssert.AreEqual(new byte[] { 0x7f }, hello.SessionId);
+    }
+
+    [TestMethod]
+    public async Task PeekClientHello_Ssl2WrongMessageType_ReturnsNull()
+    {
+        var bytes = BuildSsl2ClientHello();
+        bytes[2] = 0x02;
+
+        var hello = await SslTools.PeekClientHello(new PeekStream(bytes), new ArrayPoolBufferPool());
+
+        Assert.IsNull(hello);
+    }
+
+    [TestMethod]
+    public async Task PeekServerHello_Ssl2ShortRecord_ReturnsNull()
+    {
+        var bytes = BuildSsl2ServerHello();
+        bytes[0] = 0x80;
+        bytes[1] = 37;
+
+        var hello = await SslTools.PeekServerHello(new PeekStream(bytes), new ArrayPoolBufferPool());
+
+        Assert.IsNull(hello);
+    }
+
+    [TestMethod]
+    public async Task PeekTlsHello_WrongHandshakeTypes_ReturnNull()
+    {
+        var actualClientHello = BuildMinimalTls12ClientHello();
+        var clientBytes = BuildMinimalTls12ClientHello();
+        clientBytes[5] = 0x02;
+        var serverBytes = BuildMinimalTls12ServerHello();
+        serverBytes[5] = 0x01;
+
+        Assert.IsNull(await SslTools.PeekClientHello(new PeekStream(clientBytes), new ArrayPoolBufferPool()));
+        Assert.IsNull(await SslTools.PeekServerHello(new PeekStream(serverBytes), new ArrayPoolBufferPool()));
+        Assert.IsFalse(await SslTools.IsServerHello(new PeekStream(actualClientHello), new ArrayPoolBufferPool(),
+            CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task PeekClientHello_TruncatedTlsRecord_ReturnsNull()
+    {
+        var bytes = BuildMinimalTls12ClientHello();
+        Array.Resize(ref bytes, 20);
+
+        var hello = await SslTools.PeekClientHello(new PeekStream(bytes), new ArrayPoolBufferPool());
+
+        Assert.IsNull(hello);
+    }
+
     private static byte[] BuildSni(string host)
     {
         var hostBytes = Encoding.ASCII.GetBytes(host);
@@ -136,6 +216,38 @@ public class SslToolsAndHelloInfoTests
         payload[1] = (byte)entry.Length;
         Buffer.BlockCopy(entry, 0, payload, 2, entry.Length);
         return payload;
+    }
+
+    private static byte[] BuildSsl2ClientHello()
+    {
+        // Two-byte record header followed by CLIENT-HELLO, version, lengths, and payload.
+        return new byte[]
+        {
+            0x80, 14,
+            0x01,
+            0x02, 0x00,
+            0x00, 0x03,
+            0x00, 0x01,
+            0x00, 0x02,
+            0x01, 0x00, 0x80,
+            0x44,
+            0xaa, 0xbb
+        };
+    }
+
+    private static byte[] BuildSsl2ServerHello()
+    {
+        var bytes = new byte[40];
+        bytes[0] = 0x80;
+        bytes[1] = 38;
+        bytes[2] = 0x04;
+        bytes[3] = 0x03;
+        bytes[4] = 0x01;
+        for (var i = 0; i < 32; i++) bytes[5 + i] = (byte)i;
+        bytes[37] = 0x7f;
+        bytes[38] = 0x00;
+        bytes[39] = 0x2f;
+        return bytes;
     }
 
     private static byte[] BuildAlpn(string proto)

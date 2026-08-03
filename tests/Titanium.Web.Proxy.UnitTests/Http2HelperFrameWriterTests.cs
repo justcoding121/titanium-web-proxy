@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -315,5 +316,92 @@ public class Http2HelperFrameWriterTests
 
         // Single frame (20 < 16384 fallback)
         Assert.AreEqual(29, ms.Length);
+    }
+
+    [TestMethod]
+    public async Task SendWindowUpdateAsync_NegativeIncrement_IsNoOp()
+    {
+        using var ms = new MemoryStream();
+        var (header, buf) = NewFrameScratch(1);
+
+        await Http2Helper.SendWindowUpdateAsync(header, buf, 1, increment: -1, ms);
+
+        Assert.AreEqual(0, ms.Length);
+    }
+
+    [TestMethod]
+    public async Task SendWindowUpdateAsync_MaximumIncrement_WritesAllValueBits()
+    {
+        using var ms = new MemoryStream();
+        var (header, buf) = NewFrameScratch(5);
+
+        await Http2Helper.SendWindowUpdateAsync(header, buf, 5, int.MaxValue, ms);
+
+        var wire = ms.ToArray();
+        Assert.AreEqual(13, wire.Length);
+        Assert.AreEqual(int.MaxValue,
+            (wire[9] << 24) | (wire[10] << 16) | (wire[11] << 8) | wire[12]);
+    }
+
+    [TestMethod]
+    public async Task SendBody_WithoutBody_EndsStreamOnHeaders()
+    {
+        using var ms = new MemoryStream();
+        var (header, buf) = NewFrameScratch(3);
+        var response = new Response
+        {
+            HttpVersion = HttpHeader.Version20,
+            StatusCode = 204,
+            StatusDescription = "No Content"
+        };
+        var flow = new Http2FlowController();
+        flow.RegisterStream(3);
+
+        await Http2Helper.SendBody(new Http2Settings(), response, header, buf, new byte[4], flow, ms,
+            CancellationToken.None);
+
+        var wire = ms.ToArray();
+        Assert.AreEqual((byte)Http2FrameType.Headers, wire[3]);
+        Assert.AreEqual((byte)(Http2FrameFlag.EndHeaders | Http2FrameFlag.EndStream), wire[4]);
+        Assert.AreEqual(9 + ((wire[0] << 16) | (wire[1] << 8) | wire[2]), wire.Length,
+            "A bodyless response should consist of exactly one HEADERS frame.");
+    }
+
+    [TestMethod]
+    public async Task SendBody_BufferSmallerThanBody_WritesMultipleDataFrames()
+    {
+        using var ms = new MemoryStream();
+        var (header, buf) = NewFrameScratch(7);
+        var response = new Response
+        {
+            HttpVersion = HttpHeader.Version20,
+            StatusCode = 200,
+            Body = Encoding.ASCII.GetBytes("abcdefghij"),
+            IsBodyRead = true
+        };
+        var flow = new Http2FlowController();
+        flow.RegisterStream(7);
+
+        await Http2Helper.SendBody(new Http2Settings(), response, header, buf, new byte[4], flow, ms,
+            CancellationToken.None);
+
+        var wire = ms.ToArray();
+        var offset = 9 + ((wire[0] << 16) | (wire[1] << 8) | wire[2]);
+        var dataFrameCount = 0;
+        var payloadLength = 0;
+        byte finalFlags = 0;
+        while (offset < wire.Length)
+        {
+            var length = (wire[offset] << 16) | (wire[offset + 1] << 8) | wire[offset + 2];
+            Assert.AreEqual((byte)Http2FrameType.Data, wire[offset + 3]);
+            dataFrameCount++;
+            payloadLength += length;
+            finalFlags = wire[offset + 4];
+            offset += 9 + length;
+        }
+
+        Assert.AreEqual(3, dataFrameCount);
+        Assert.AreEqual(10, payloadLength);
+        Assert.AreEqual((byte)Http2FrameFlag.EndStream, finalFlags);
     }
 }
