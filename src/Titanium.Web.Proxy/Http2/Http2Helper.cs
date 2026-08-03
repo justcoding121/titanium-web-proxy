@@ -128,10 +128,14 @@ namespace Titanium.Web.Proxy.Http2
         ///     Reports an HTTP/2 protocol/relay failure through the centralized logging gateway. Every
         ///     <c>ProxyHttpException</c> raised anywhere in this class goes through here (the previous
         ///     behavior invoked <c>ExceptionFunc</c> directly at each of the ~30 call sites below).
+        ///     Uses <see cref="ProxyDiagnostics.ReportException"/> so peer disconnect / idle teardown
+        ///     wrapped as <see cref="IOException"/> (including <c>QuicException</c>) stays Debug-level,
+        ///     while genuine protocol violations (typically null-inner <see cref="ProxyHttpException"/>)
+        ///     remain Error.
         /// </summary>
         private static void ReportException(ILogger logger, ProxyHttpException ex)
         {
-            ProxyDiagnostics.ReportUnexpected(logger, ex.Message, ex);
+            ProxyDiagnostics.ReportException(logger, ex.Message, ex);
         }
 
         private static bool IsAsciiDigit(byte b) => b is >= (byte)'0' and <= (byte)'9';

@@ -449,7 +449,7 @@ public partial class ProxyServer
         {
             if (!cancellationToken.IsCancellationRequested)
             {
-                ProxyDiagnostics.ReportUnexpected(logger, "HTTP/1.1-to-HTTP/2 bridge origin exchange failed",
+                ProxyDiagnostics.ReportException(logger, "HTTP/1.1-to-HTTP/2 bridge origin exchange failed",
                     new ProxyHttpException("HTTP/1.1-to-HTTP/2 bridge origin exchange failed", ex, args));
             }
 

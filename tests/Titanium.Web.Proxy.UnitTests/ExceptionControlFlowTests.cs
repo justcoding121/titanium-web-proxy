@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Authentication;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -46,6 +47,77 @@ public class ExceptionControlFlowTests
         var wrapped = new ProxyHttpException("wrapped", ex, null);
         Assert.IsTrue(ProxyDiagnostics.IsExpected(wrapped),
             "typed retryable failures must stay expected when nested");
+    }
+
+    [TestMethod]
+    public void ProxyDiagnostics_IoExceptionWrappedAsProxyHttpException_IsExpected_NotError()
+    {
+        // H2→H3 / H2→H1 bridge idle teardown after a browsing pause: QuicException derives from
+        // IOException and used to be forced through ReportUnexpected (red Error). Classification
+        // must keep nested transport failures at Debug.
+        var capturing = new CapturingLogger();
+        var wrapped = new ProxyHttpException(
+            "H2→H3 bridge origin round trip failed for stream 1",
+            new IOException("The connection timed out from inactivity."),
+            null);
+
+        Assert.IsTrue(ProxyDiagnostics.IsExpected(wrapped));
+        ProxyDiagnostics.ReportException(capturing, wrapped.Message, wrapped);
+
+        Assert.AreEqual(0, capturing.ErrorCount,
+            "idle/peer-close transport failures must not be logged at Error");
+        Assert.IsTrue(capturing.DebugCount >= 1);
+    }
+
+    [TestMethod]
+    public void ProxyDiagnostics_ProtocolProxyHttpException_RemainsUnexpected()
+    {
+        var capturing = new CapturingLogger();
+        var ex = new ProxyHttpException(
+            "HTTP/2 protocol error: expected a SETTINGS frame immediately after the connection preface, got Data.",
+            null, null);
+
+        Assert.IsFalse(ProxyDiagnostics.IsExpected(ex));
+        ProxyDiagnostics.ReportException(capturing, ex.Message, ex);
+
+        Assert.AreEqual(1, capturing.ErrorCount,
+            "genuine protocol violations must still surface at Error");
+    }
+
+    [TestMethod]
+    public void ProxyDiagnostics_ProxyConnectException_FromAbortedTls_IsExpected_NotError()
+    {
+        // 12-minute idle repro: Edge/OS background CONNECT + MITM handshake abort surfaces as
+        // ProxyConnectException("Couldn't authenticate host…", AuthenticationException) and was
+        // logged red via catch (ProxyException) → OnException → ReportException.
+        var capturing = new CapturingLogger();
+        var auth = new AuthenticationException("Authentication failed, see inner exception.");
+        var connect = new ProxyConnectException(
+            "Couldn't authenticate host 'login.live.com' with certificate 'login.live.com'.", auth,
+            session: null!);
+
+        Assert.IsTrue(ProxyDiagnostics.IsExpected(connect));
+        ProxyDiagnostics.ReportException(capturing, "Unhandled exception in proxy", connect);
+
+        Assert.AreEqual(0, capturing.ErrorCount,
+            "aborted client TLS during CONNECT must not be logged at Error");
+        Assert.IsTrue(capturing.DebugCount >= 1);
+    }
+
+    [TestMethod]
+    public void ProxyDiagnostics_ProxyConnectException_PolicyFailure_RemainsUnexpected()
+    {
+        var capturing = new CapturingLogger();
+        var connect = new ProxyConnectException(
+            "UpstreamHttpProtocol.Http2 was required but the origin did not negotiate HTTP/2.",
+            new NotSupportedException("Origin does not support HTTP/2."),
+            session: null!);
+
+        Assert.IsFalse(ProxyDiagnostics.IsExpected(connect));
+        ProxyDiagnostics.ReportException(capturing, "Unhandled exception in proxy", connect);
+
+        Assert.AreEqual(1, capturing.ErrorCount,
+            "unsatisfiable upstream protocol policy must still surface at Error");
     }
 
     [TestMethod]
