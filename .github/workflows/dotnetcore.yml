@@ -57,7 +57,7 @@ jobs:
         /o:"justcoding121"
         /d:sonar.token="$env:SONAR_TOKEN"
         /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml"
-        /d:sonar.exclusions="**/docs/**"
+        /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**"
         /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/Certificates/Makers/WinCertificateMaker.cs,**/Network/WinAuth/**,**/Handlers/WinAuthHandler.cs"
 
     - name: Build for SonarCloud analysis
