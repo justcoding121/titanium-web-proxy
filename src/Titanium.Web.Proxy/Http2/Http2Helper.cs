@@ -3050,7 +3050,8 @@ namespace Titanium.Web.Proxy.Http2
             }
         }
 
-        class MyHeaderListener : IHeaderListener
+        // internal for unit tests that assert RFC 7540/8441 header-block validation contracts
+        internal class MyHeaderListener : IHeaderListener
         {
             private readonly Action<ByteString, ByteString> addHeaderFunc;
 

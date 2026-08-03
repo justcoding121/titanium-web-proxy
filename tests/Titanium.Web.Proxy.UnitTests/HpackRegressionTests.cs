@@ -52,6 +52,66 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.AreEqual("2", table.GetEntry(2).Value);
         }
 
+        [TestMethod]
+        public void Decode_StaticIndexedMethodGet_EmitsHeader()
+        {
+            // 0x82 = indexed header field index 2 (:method GET)
+            var listener = new RecordingHeaderListener();
+            var decoder = new Decoder(8192, 4096);
+            using (var stream = new MemoryStream(new byte[] { 0x82 }))
+            using (var reader = new BinaryReader(stream))
+            {
+                decoder.Decode(reader, listener);
+                decoder.EndHeaderBlock();
+            }
+
+            Assert.AreEqual(1, listener.Headers.Count);
+            Assert.AreEqual(":method", listener.Headers[0].Item1);
+            Assert.AreEqual("GET", listener.Headers[0].Item2);
+        }
+
+        [TestMethod]
+        public void Decode_IndexedZero_Throws()
+        {
+            var decoder = new Decoder(8192, 4096);
+            using var stream = new MemoryStream(new byte[] { 0x80 }); // indexed, index 0
+            using var reader = new BinaryReader(stream);
+            Assert.ThrowsException<IOException>(() => decoder.Decode(reader, new RecordingHeaderListener()));
+        }
+
+        [TestMethod]
+        public void Decode_DynamicTableSizeUpdate_ThenHeader()
+        {
+            var listener = new RecordingHeaderListener();
+            var decoder = new Decoder(8192, 4096);
+            // 0x20 = DTSU with size 0, then literal foo/bar
+            var bytes = new byte[]
+            {
+                0x20,
+                0x00, 0x03, (byte)'f', (byte)'o', (byte)'o',
+                0x03, (byte)'b', (byte)'a', (byte)'r'
+            };
+            using (var stream = new MemoryStream(bytes))
+            using (var reader = new BinaryReader(stream))
+            {
+                decoder.Decode(reader, listener);
+                decoder.EndHeaderBlock();
+            }
+
+            Assert.AreEqual(0, decoder.GetMaxHeaderTableSize());
+            Assert.AreEqual(1, listener.Headers.Count);
+        }
+
+        [TestMethod]
+        public void SetMaxHeaderTableSize_RequiresDtsuBeforeOtherInstructions()
+        {
+            var decoder = new Decoder(8192, 4096);
+            decoder.SetMaxHeaderTableSize(100);
+            using var stream = new MemoryStream(new byte[] { 0x82 });
+            using var reader = new BinaryReader(stream);
+            Assert.ThrowsException<IOException>(() => decoder.Decode(reader, new RecordingHeaderListener()));
+        }
+
         private sealed class RecordingHeaderListener : IHeaderListener
         {
             internal List<Tuple<string, string>> Headers { get; } = new List<Tuple<string, string>>();

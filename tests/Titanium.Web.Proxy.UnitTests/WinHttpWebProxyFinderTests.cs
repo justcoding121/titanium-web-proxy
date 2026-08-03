@@ -1,7 +1,10 @@
+using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers.WinHttp;
+using WinHttpNative = Titanium.Web.Proxy.Helpers.WinHttp.NativeMethods;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
@@ -76,5 +79,38 @@ public class WinHttpWebProxyFinderTests
         var ok = WinHttpWebProxyFinder.TryPickFirstUsableProxy(new List<string>(), out _, out _);
 
         Assert.IsFalse(ok);
+    }
+
+    [TestMethod]
+    public void RemoveWhitespaces_StripsSpacesAndTabs()
+    {
+        var method = typeof(WinHttpWebProxyFinder).GetMethod("RemoveWhitespaces",
+            BindingFlags.Static | BindingFlags.NonPublic)!;
+        Assert.AreEqual("a:b:c", method.Invoke(null, [" a :\tb : c "]));
+    }
+
+    [TestMethod]
+    public void AutoProxyErrorHelpers_ClassifyRecoverableFatalAndState()
+    {
+        var recoverable = typeof(WinHttpWebProxyFinder).GetMethod("IsRecoverableAutoProxyError",
+            BindingFlags.Static | BindingFlags.NonPublic)!;
+        var fatal = typeof(WinHttpWebProxyFinder).GetMethod("IsErrorFatalForAutoDetect",
+            BindingFlags.Static | BindingFlags.NonPublic)!;
+        var state = typeof(WinHttpWebProxyFinder).GetMethod("GetStateFromErrorCode",
+            BindingFlags.Static | BindingFlags.NonPublic)!;
+
+        var timeout = WinHttpNative.WinHttp.ErrorCodes.Timeout;
+        Assert.IsTrue((bool)recoverable.Invoke(null, [timeout])!);
+        Assert.IsTrue((bool)fatal.Invoke(null, [timeout])!);
+
+        var badScript = WinHttpNative.WinHttp.ErrorCodes.BadAutoProxyScript;
+        Assert.IsTrue((bool)recoverable.Invoke(null, [badScript])!);
+        Assert.IsFalse((bool)fatal.Invoke(null, [badScript])!);
+
+        Assert.AreEqual("DiscoveryFailure",
+            state.Invoke(null, [WinHttpNative.WinHttp.ErrorCodes.AudodetectionFailed])!.ToString());
+        Assert.AreEqual("DownloadFailure",
+            state.Invoke(null, [WinHttpNative.WinHttp.ErrorCodes.UnableToDownloadScript])!.ToString());
+        Assert.AreEqual("Completed", state.Invoke(null, [WinHttpNative.WinHttp.ErrorCodes.Success])!.ToString());
     }
 }
