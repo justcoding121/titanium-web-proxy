@@ -12,6 +12,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
@@ -210,6 +211,116 @@ public class HttpStreamCoverageTests
         var text = Encoding.ASCII.GetString(destination.ToArray());
         StringAssert.Contains(text, "hello");
         StringAssert.Contains(text, "0\r\n");
+    }
+
+    [TestMethod]
+    public async Task CopyBodyAsync_TransformationNone_UsesLiveContentLength()
+    {
+        var body = Encoding.ASCII.GetBytes("plain-body");
+        using var reader = MakeReader(body);
+        var (writer, destination) = MakeWriter();
+        using var proxy = new ProxyServer(false, false, false);
+        using var session = MakeSession(proxy);
+        var response = new Response
+        {
+            HttpVersion = new Version(1, 1),
+            StatusCode = 200,
+            ContentLength = body.Length
+        };
+
+        using (writer)
+        {
+            await reader.CopyBodyAsync(response, useOriginalHeaderValues: false, writer,
+                TransformationMode.None, isRequest: false, session, CancellationToken.None);
+        }
+
+        CollectionAssert.AreEqual(body, destination.ToArray());
+    }
+
+    [TestMethod]
+    public async Task CopyBodyAsync_ContentLengthMinusOne_CopiesUntilEof()
+    {
+        var body = Encoding.ASCII.GetBytes("until-eof");
+        using var reader = MakeReader(body);
+        var (writer, destination) = MakeWriter();
+        using var proxy = new ProxyServer(false, false, false);
+        using var session = MakeSession(proxy);
+
+        using (writer)
+        {
+            await reader.CopyBodyAsync(writer, isChunked: false, contentLength: -1, isRequest: false, session,
+                CancellationToken.None);
+        }
+
+        CollectionAssert.AreEqual(body, destination.ToArray());
+    }
+
+    [TestMethod]
+    public async Task WriteHeadersAsync_WritesAsciiHeaders()
+    {
+        var (writer, destination) = MakeWriter();
+        var headers = new HeaderBuilder();
+        headers.WriteRequestLine("GET", "/", new Version(1, 1));
+        headers.WriteHeader(new HttpHeader("Host", "example.com"));
+        headers.WriteHeader(new HttpHeader("Connection", "close"));
+        headers.WriteLine();
+
+        using (writer)
+        {
+            await writer.WriteHeadersAsync(headers, CancellationToken.None);
+        }
+
+        var text = Encoding.ASCII.GetString(destination.ToArray());
+        StringAssert.StartsWith(text, "GET / HTTP/1.1\r\n");
+        StringAssert.Contains(text, "Host: example.com\r\n");
+        StringAssert.EndsWith(text, "\r\n\r\n");
+    }
+
+    [TestMethod]
+    public async Task CopyToAsync_DrainsPrefetchedBufferThenBase()
+    {
+        using var reader = MakeReader(Encoding.ASCII.GetBytes("prefetched-rest"));
+        Assert.IsTrue(await reader.FillBufferAsync());
+        var one = new byte[1];
+        Assert.AreEqual(1, await reader.ReadAsync(one, 0, 1));
+        Assert.AreEqual((byte)'p', one[0]);
+
+        using var dest = new MemoryStream();
+        await reader.CopyToAsync(dest);
+        Assert.AreEqual("refetched-rest", Encoding.ASCII.GetString(dest.ToArray()));
+    }
+
+    [TestMethod]
+    public async Task DataReadAndDataWrite_EventsFireWithByteCounts()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var payload = Encoding.ASCII.GetBytes("evt");
+        using var reader = new HttpStream(proxy, new MemoryStream(payload), new DefaultBufferPool(),
+            CancellationToken.None, false);
+        var readBytes = 0L;
+        reader.DataRead += (_, e) => readBytes += e.Count;
+        Assert.IsTrue(await reader.FillBufferAsync());
+        var buf = new byte[3];
+        Assert.AreEqual(3, await reader.ReadAsync(buf));
+        Assert.AreEqual(3, readBytes);
+
+        var dest = new MemoryStream();
+        using var writer = new HttpStream(proxy, dest, new DefaultBufferPool(), CancellationToken.None, true);
+        var writeBytes = 0L;
+        writer.DataWrite += (_, e) => writeBytes += e.Count;
+        await writer.WriteAsync(payload, 0, payload.Length);
+        Assert.AreEqual(3, writeBytes);
+    }
+
+    [TestMethod]
+    public void Dispose_LeaveOpenTrue_LeavesBaseStreamUsable()
+    {
+        var ms = new MemoryStream(Encoding.ASCII.GetBytes("x"));
+        var stream = new HttpStream(new ProxyServer(false, false, false), ms, new DefaultBufferPool(),
+            CancellationToken.None, leaveOpen: true);
+        stream.Dispose();
+        Assert.IsTrue(ms.CanRead);
+        ms.Dispose();
     }
 
     [TestMethod]
