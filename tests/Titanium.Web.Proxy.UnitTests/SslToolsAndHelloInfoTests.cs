@@ -39,13 +39,15 @@ public class SslToolsAndHelloInfoTests
             new ClientHelloInfo(3, 9, 9, random, session, ciphers, 0).SslProtocol);
     }
 
+    private static readonly int[] ciphers = new[] { 0x1301 };
+
     [TestMethod]
     public void ClientHelloInfo_TimeAndToString_IncludeExtensions()
     {
         var random = new byte[32];
         // little-endian unix seconds in first 4 bytes (Time property)
         random[0] = 0; random[1] = 0; random[2] = 0; random[3] = 1;
-        var hello = new ClientHelloInfo(3, 3, 3, random, new byte[] { 1, 2 }, new[] { 0x1301 }, 40)
+        var hello = new ClientHelloInfo(3, 3, 3, random, new byte[] { 1, 2 }, ciphers, 40)
         {
             CompressionData = new byte[] { 0 },
             Extensions = new System.Collections.Generic.Dictionary<string, SslExtension>

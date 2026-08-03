@@ -66,8 +66,8 @@ public class QuicConnectionPoolTests
         Assert.AreEqual(1, factory.CreateCount);
         Assert.AreEqual(2, c1.InFlightStreams);
 
-        await pool.ReleaseAsync(c1);
-        await pool.ReleaseAsync(c2);
+        await QuicConnectionPool.ReleaseAsync(c1);
+        await QuicConnectionPool.ReleaseAsync(c2);
         Assert.AreEqual(0, c1.InFlightStreams);
         Assert.IsTrue(proxy.Http3WarmOrigins.IsWarm("origin.example", 443));
     }
@@ -93,7 +93,7 @@ public class QuicConnectionPoolTests
         Assert.IsTrue(proxy.Http3WarmOrigins.IsWarm("origin.example", 443),
             "A successful replacement connection must remake the warm-origin mark.");
 
-        await pool.ReleaseAsync(second);
+        await QuicConnectionPool.ReleaseAsync(second);
     }
 
     [TestMethod]
@@ -104,7 +104,7 @@ public class QuicConnectionPoolTests
         await using var pool = new QuicConnectionPool(proxy, factory);
 
         var conn = await pool.GetOrCreateAsync("origin.example", 443, null, null, null, CancellationToken.None);
-        await pool.ReleaseAsync(conn);
+        await QuicConnectionPool.ReleaseAsync(conn);
         await pool.DrainAsync();
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>

@@ -401,7 +401,7 @@ public class Http3RouteResolutionTests
 
         var resolver = server.HttpsSvcbResolver;
 
-        Assert.IsInstanceOfType(resolver, typeof(NoOpHttpsSvcbResolver),
+        Assert.IsInstanceOfType<NoOpHttpsSvcbResolver>(resolver,
             "No usable DNS server → resolver must be the safe no-op, not an exception.");
     }
 

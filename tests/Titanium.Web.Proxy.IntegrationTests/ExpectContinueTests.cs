@@ -47,7 +47,7 @@ public class ExpectContinueTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
 
         Assert.IsNotNull(response, "No response to 'expect: 100-continue' request");
         Assert.AreEqual((int)HttpStatusCode.OK, response.StatusCode);
@@ -71,7 +71,7 @@ public class ExpectContinueTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
 
         Assert.IsNotNull(response, "No response to 'expect: 100-continue' request");
         Assert.AreEqual((int)HttpStatusCode.ExpectationFailed, response.StatusCode);
@@ -94,7 +94,7 @@ public class ExpectContinueTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
 
         Assert.IsNotNull(response, "No response to 'expect: 100-continue' request");
         Assert.AreEqual((int)HttpStatusCode.NotFound, response.StatusCode);
@@ -136,7 +136,7 @@ public class ExpectContinueTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
 
         Assert.IsNotNull(response, "No response to 'expect: 100-continue' request");
         Assert.AreEqual(response.StatusCode, (int)HttpStatusCode.InternalServerError);

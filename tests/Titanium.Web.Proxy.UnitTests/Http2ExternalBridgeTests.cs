@@ -119,7 +119,7 @@ public class Http2ExternalBridgeTests
     public void Http3RouteSource_HasAllExpectedValues()
     {
         // Verify all expected enum members exist so the switch in consumers doesn't miss a case.
-        var values = System.Enum.GetNames(typeof(Http3RouteSource));
+        var values = System.Enum.GetNames<Http3RouteSource>();
         CollectionAssert.Contains(values, "None");
         CollectionAssert.Contains(values, "Forced");
         CollectionAssert.Contains(values, "AltSvcCache");

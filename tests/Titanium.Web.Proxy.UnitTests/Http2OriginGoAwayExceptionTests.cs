@@ -11,7 +11,7 @@ public class Http2OriginGoAwayExceptionTests
     public void Http2OriginGoAwayException_IsIOException_WithMessage()
     {
         var ex = new Http2OriginGoAwayException("GOAWAY before stream processed");
-        Assert.IsInstanceOfType(ex, typeof(IOException));
+        Assert.IsInstanceOfType<IOException>(ex);
         Assert.AreEqual("GOAWAY before stream processed", ex.Message);
     }
 }

@@ -19,6 +19,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 public class ConnectFailureResponseTests
 {
     private static TestServer sharedServer = null!;
+    private static readonly string[] separator = new[] { "\r\n" };
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -181,7 +182,7 @@ public class ConnectFailureResponseTests
             if (headerEnd < 0) continue;
 
             var contentLength = 0;
-            foreach (var line in text.Substring(0, headerEnd).Split(new[] { "\r\n" }, StringSplitOptions.None))
+            foreach (var line in text.Substring(0, headerEnd).Split(separator, StringSplitOptions.None))
             {
                 if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase) &&
                     int.TryParse(line.Substring("Content-Length:".Length).Trim(), out var parsed))

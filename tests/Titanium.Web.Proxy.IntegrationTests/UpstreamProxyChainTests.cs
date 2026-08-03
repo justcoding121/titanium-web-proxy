@@ -89,8 +89,8 @@ public class UpstreamProxyChainTests
                 NextHop = new ExternalProxy("proxy2.example", 8080, "u2", "p2")
             };
 
-            var key1 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, single);
-            var key2 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, chained);
+            var key1 = Network.Tcp.TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, single);
+            var key2 = Network.Tcp.TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, chained);
 
             Assert.AreNotEqual(key1, key2);
         }

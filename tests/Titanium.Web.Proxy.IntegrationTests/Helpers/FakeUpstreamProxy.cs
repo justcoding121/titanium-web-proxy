@@ -32,6 +32,8 @@ internal sealed class FakeUpstreamProxy : IDisposable
 
     internal ConcurrentQueue<string> ProxyAuthorizationValues { get; } = new();
 
+    internal static readonly string[] separator = new[] { "\r\n" };
+
     public void Dispose()
     {
         cancellationTokenSource.Cancel();
@@ -82,7 +84,7 @@ internal sealed class FakeUpstreamProxy : IDisposable
                 var requestHeaders = await ReadHeadersAsync(stream, cancellationToken);
                 if (requestHeaders == null) return;
 
-                var requestLine = requestHeaders.Split(new[] { "\r\n" }, StringSplitOptions.None)[0];
+                var requestLine = requestHeaders.Split(separator, StringSplitOptions.None)[0];
                 var proxyAuthorization = GetHeaderValue(requestHeaders, "Proxy-Authorization") ?? string.Empty;
                 ProxyAuthorizationValues.Enqueue(proxyAuthorization);
 
@@ -169,7 +171,7 @@ internal sealed class FakeUpstreamProxy : IDisposable
     private static string? GetHeaderValue(string headers, string name)
     {
         var prefix = name + ":";
-        return headers.Split(new[] { "\r\n" }, StringSplitOptions.None)
+        return headers.Split(separator, StringSplitOptions.None)
             .FirstOrDefault(x => x.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             ?.Substring(prefix.Length).Trim();
     }

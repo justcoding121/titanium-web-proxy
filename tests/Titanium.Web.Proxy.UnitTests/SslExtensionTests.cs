@@ -157,6 +157,8 @@ public class SslExtensionTests
         Assert.IsTrue(data.Length > 0);
     }
 
+    private static readonly string[] expected = new[] { "Tls1.3" };
+
     [TestMethod]
     public void Data_SupportedVersions_ClientList_AndServerSingle()
     {
@@ -169,7 +171,7 @@ public class SslExtensionTests
         // server hello: exactly 2 bytes
         var server = new byte[] { 0x03, 0x04 };
         Assert.AreEqual("Tls1.3", new SslExtension(43, server, 0).Data);
-        CollectionAssert.AreEqual(new[] { "Tls1.3" }, new SslExtension(43, server, 0).Protocols.ToArray());
+        CollectionAssert.AreEqual(expected, new SslExtension(43, server, 0).Protocols.ToArray());
     }
 
     [TestMethod]

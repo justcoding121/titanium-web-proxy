@@ -304,7 +304,7 @@ public class Http1FramingValidatorIsolationTests
         // Adding a new FramingSource member without deciding which side of the wire/synthesized
         // boundary it belongs on must fail this test, converting a future silent bypass into a build
         // failure rather than an unnoticed gap.
-        var allValues = Enum.GetValues(typeof(FramingSource)).Cast<FramingSource>().ToList();
+        var allValues = Enum.GetValues<FramingSource>().ToList();
 
         CollectionAssert.AreEquivalent(WireSources.Concat(SynthesizedSources).ToList(), allValues,
             "A new FramingSource member was added without updating this test's Wire/Synthesized " +

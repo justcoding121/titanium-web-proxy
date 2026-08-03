@@ -64,7 +64,7 @@ public class Phase0CharacterizationTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "body text");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "body text");
 
         Assert.IsNull(response,
             "Strict Expect:100-continue client must time out when proxy does not forward 100 Continue " +
@@ -249,7 +249,7 @@ public class Phase0CharacterizationTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "hello");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "hello");
 
         Assert.IsNotNull(response, "Enable100ContinueBehaviour=true must relay 100 Continue and return a final response.");
         Assert.AreEqual((int)HttpStatusCode.OK, response.StatusCode);
@@ -280,7 +280,7 @@ public class Phase0CharacterizationTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "hello");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "hello");
 
         Assert.IsNull(response,
             "Origin silence + strict client must time out when Enable100ContinueBehaviour=false.");

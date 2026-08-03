@@ -137,6 +137,6 @@ public class Http3TimingAndProxyChainTests
     public void QuicProxyNotSupportedException_DerivesFromException()
     {
         var ex = new QuicProxyNotSupportedException("test");
-        Assert.IsInstanceOfType(ex, typeof(Exception));
+        Assert.IsInstanceOfType<Exception>(ex);
     }
 }

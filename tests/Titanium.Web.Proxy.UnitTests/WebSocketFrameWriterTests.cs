@@ -30,6 +30,8 @@ public class WebSocketFrameWriterTests
         Assert.AreEqual("hello-ws", Encoding.UTF8.GetString(frame.Data.ToArray()));
     }
 
+    private static readonly string[] expected = new[] { "one", "two", "three" };
+
     [TestMethod]
     public async Task WriteAsync_SerializesConcurrentWriters()
     {
@@ -47,7 +49,7 @@ public class WebSocketFrameWriterTests
         var frames = decoder.Decode(wire, 0, wire.Length).ToList();
         Assert.AreEqual(3, frames.Count);
         CollectionAssert.AreEquivalent(
-            new[] { "one", "two", "three" },
+            expected,
             frames.Select(f => Encoding.UTF8.GetString(f.Data.ToArray())).ToArray());
     }
 

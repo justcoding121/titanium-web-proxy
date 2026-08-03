@@ -41,6 +41,7 @@ public class Rfc8441TunnelTests
     }
 
     private static readonly Encoding Ascii = Encoding.ASCII;
+    private static readonly string[] separator = new[] { "\r\n" };
 
     /// <summary>
     ///     When RFC 8441 is disabled (default), the proxy MUST reject any extended CONNECT request —
@@ -126,7 +127,7 @@ public class Rfc8441TunnelTests
         {
             // Drain the HTTP upgrade request headers sent by the proxy.
             var upgradeRequest = await ReadRequestHeadersAsync(context);
-            var keyLine = upgradeRequest.Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries)
+            var keyLine = upgradeRequest.Split(separator, StringSplitOptions.RemoveEmptyEntries)
                 .Single(line => line.StartsWith("Sec-WebSocket-Key:", StringComparison.OrdinalIgnoreCase));
             var wsKey = keyLine.Substring(keyLine.IndexOf(':') + 1).Trim();
             var wsAccept = Convert.ToBase64String(SHA1.HashData(

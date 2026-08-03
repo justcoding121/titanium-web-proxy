@@ -98,18 +98,18 @@ namespace Titanium.Web.Proxy.UnitTests
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
 
-            var previous = mgr.LeafRsaKeyPairBufferSize;
+            var previous = CertificateManager.LeafRsaKeyPairBufferSize;
             try
             {
                 Assert.AreEqual(8, previous);
 
-                mgr.LeafRsaKeyPairBufferSize = 16;
-                Assert.AreEqual(16, mgr.LeafRsaKeyPairBufferSize);
+                CertificateManager.LeafRsaKeyPairBufferSize = 16;
+                Assert.AreEqual(16, CertificateManager.LeafRsaKeyPairBufferSize);
 
-                Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => mgr.LeafRsaKeyPairBufferSize = -1);
-                Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => mgr.LeafRsaKeyPairBufferSize = 257);
+                Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => CertificateManager.LeafRsaKeyPairBufferSize = -1);
+                Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => CertificateManager.LeafRsaKeyPairBufferSize = 257);
 
-                mgr.LeafRsaKeyPairBufferSize = 0;
+                CertificateManager.LeafRsaKeyPairBufferSize = 0;
                 var cert = mgr.CreateCertificate("buffer-disabled.example", false);
                 Assert.IsNotNull(cert);
                 Assert.IsTrue(cert.HasPrivateKey);
@@ -117,7 +117,7 @@ namespace Titanium.Web.Proxy.UnitTests
             }
             finally
             {
-                mgr.LeafRsaKeyPairBufferSize = previous;
+                CertificateManager.LeafRsaKeyPairBufferSize = previous;
             }
         }
 
@@ -269,7 +269,7 @@ namespace Titanium.Web.Proxy.UnitTests
 
         // uncomment this to compare WinCert maker performance with BC (BC takes more time for same test above)
         //[TestMethod]
-        public async Task Simple_Create_Win_Certificate_Test()
+        public static async Task Simple_Create_Win_Certificate_Test()
         {
             var tasks = new List<Task>();
 

@@ -15,6 +15,8 @@ namespace Titanium.Web.Proxy.UnitTests
     [TestClass]
     public class HeaderCollectionTests
     {
+        private static readonly string[] expected = new[] { "1", "2" };
+
         [TestMethod]
         public void AddHeader_SameNameTwice_MovesBothValuesToNonUniqueCollection()
         {
@@ -28,7 +30,7 @@ namespace Titanium.Web.Proxy.UnitTests
             var all = headers.GetHeaders("X-Test");
             Assert.IsNotNull(all);
             Assert.AreEqual(2, all.Count);
-            CollectionAssert.AreEquivalent(new[] { "1", "2" }, all.ConvertAll(h => h.Value));
+            CollectionAssert.AreEquivalent(expected, all.ConvertAll(h => h.Value));
         }
 
         [TestMethod]
@@ -150,6 +152,8 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.AreEqual("keep-alive", headers.GetHeaderValueOrNull(KnownHeaders.Connection));
         }
 
+        private static readonly string[] expectedUniqueHeaderNames = new[] { "X-Unique-1", "X-Unique-2" };
+
         /// <summary>
         ///     Phase F.18 allocation reduction: <see cref="HeaderCollection.GetEnumerator" /> was
         ///     rewritten from a LINQ <c>Concat(...SelectMany(...))</c> expression to a hand-written
@@ -172,7 +176,7 @@ namespace Titanium.Web.Proxy.UnitTests
 
             Assert.AreEqual(4, seen.Count);
             CollectionAssert.AreEquivalent(
-                new[] { "X-Unique-1", "X-Unique-2" },
+                expectedUniqueHeaderNames,
                 seen.Take(2).Select(h => h.Name).ToArray());
             CollectionAssert.AreEqual(
                 new[] { ("X-Multi", "m1"), ("X-Multi", "m2") },
@@ -190,6 +194,8 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.AreEqual(0, count);
         }
 
+        private static readonly string[] expectedForeachValues = new[] { "a=1", "b=2", "x=1", "x=2" };
+
         [TestMethod]
         public void Foreach_OnlyNonUniqueHeaders_YieldsAllValuesAcrossAllNames()
         {
@@ -201,7 +207,7 @@ namespace Titanium.Web.Proxy.UnitTests
 
             var values = headers.Select(h => h.Value).ToList();
 
-            CollectionAssert.AreEquivalent(new[] { "a=1", "b=2", "x=1", "x=2" }, values);
+            CollectionAssert.AreEquivalent(expectedForeachValues, values);
         }
 
         [TestMethod]

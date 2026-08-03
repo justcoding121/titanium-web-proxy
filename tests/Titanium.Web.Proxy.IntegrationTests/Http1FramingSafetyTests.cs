@@ -50,7 +50,7 @@ public class Http1FramingSafetyTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "hello");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "hello");
 
         // With compatibility mode, the strict client gets a 100 and can send its body.
         Assert.IsNotNull(response, "Compatibility mode must resolve the strict-client deadlock.");
@@ -81,7 +81,7 @@ public class Http1FramingSafetyTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "hello");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "hello");
 
         Assert.IsNull(response, "Default mode with strict client must still time out (deadlock baseline).");
     }

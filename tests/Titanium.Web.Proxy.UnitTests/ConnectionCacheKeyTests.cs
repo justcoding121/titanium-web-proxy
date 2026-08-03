@@ -30,8 +30,8 @@ namespace Titanium.Web.Proxy.UnitTests
             var factory = CreateFactory();
             try
             {
-                var key1 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, HttpProxy("alice", "pw1"));
-                var key2 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, HttpProxy("bob", "pw2"));
+                var key1 = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, HttpProxy("alice", "pw1"));
+                var key2 = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, HttpProxy("bob", "pw2"));
 
                 Assert.AreNotEqual(key1, key2);
             }
@@ -48,11 +48,11 @@ namespace Titanium.Web.Proxy.UnitTests
             try
             {
                 // explicit credentials (setting UserName/Password forces UseDefaultCredentials = false)
-                var explicitCreds = factory.GetConnectionCacheKey("example.com", 443, true, null, null,
+                var explicitCreds = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null,
                     HttpProxy("alice", "pw1"));
 
                 // default (Windows) credentials mode
-                var defaultCreds = factory.GetConnectionCacheKey("example.com", 443, true, null, null,
+                var defaultCreds = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null,
                     new ExternalProxy("proxy.example", 8080)
                         { ProxyType = ExternalProxyType.Http, UseDefaultCredentials = true });
 
@@ -70,8 +70,8 @@ namespace Titanium.Web.Proxy.UnitTests
             var factory = CreateFactory();
             try
             {
-                var direct = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null);
-                var viaProxy = factory.GetConnectionCacheKey("example.com", 443, true, null, null,
+                var direct = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, null);
+                var viaProxy = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null,
                     HttpProxy("alice", "pw1"));
 
                 Assert.AreNotEqual(direct, viaProxy);
@@ -93,8 +93,8 @@ namespace Titanium.Web.Proxy.UnitTests
                 var socksRemote = new ExternalProxy("proxy.example", 1080)
                     { ProxyType = ExternalProxyType.Socks5, ProxyDnsRequests = true };
 
-                var key1 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, socksLocal);
-                var key2 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, socksRemote);
+                var key1 = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, socksLocal);
+                var key2 = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, socksRemote);
 
                 Assert.AreNotEqual(key1, key2);
             }
@@ -174,8 +174,8 @@ namespace Titanium.Web.Proxy.UnitTests
             var factory = CreateFactory();
             try
             {
-                var direct    = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null);
-                var forwarded = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+                var direct    = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, null);
+                var forwarded = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
                     connectHost: "forward.example.com", connectPort: 443);
 
                 Assert.AreNotEqual(direct, forwarded,
@@ -193,9 +193,9 @@ namespace Titanium.Web.Proxy.UnitTests
             var factory = CreateFactory();
             try
             {
-                var key1 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+                var key1 = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
                     connectHost: "forward.example.com", connectPort: 443);
-                var key2 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+                var key2 = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
                     connectHost: "forward.example.com", connectPort: 443);
 
                 Assert.AreEqual(key1, key2, "Identical connectHost/Port must produce identical keys.");
@@ -212,9 +212,9 @@ namespace Titanium.Web.Proxy.UnitTests
             var factory = CreateFactory();
             try
             {
-                var key1 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+                var key1 = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
                     connectHost: "forward1.example.com", connectPort: 443);
-                var key2 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+                var key2 = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
                     connectHost: "forward2.example.com", connectPort: 443);
 
                 Assert.AreNotEqual(key1, key2, "Different connectHost values must produce different keys.");
@@ -231,9 +231,9 @@ namespace Titanium.Web.Proxy.UnitTests
             var factory = CreateFactory();
             try
             {
-                var key1 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+                var key1 = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
                     connectHost: "forward.example.com", connectPort: 8443);
-                var key2 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+                var key2 = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
                     connectHost: "forward.example.com", connectPort: 9443);
 
                 Assert.AreNotEqual(key1, key2, "Different connectPort values must produce different keys.");

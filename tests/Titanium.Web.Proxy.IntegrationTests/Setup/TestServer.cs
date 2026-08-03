@@ -131,7 +131,7 @@ public class TestServer : IDisposable
             });
         }
 
-        public void ConfigureServices(IServiceCollection services)
+        public static void ConfigureServices(IServiceCollection services)
         {
         }
     }

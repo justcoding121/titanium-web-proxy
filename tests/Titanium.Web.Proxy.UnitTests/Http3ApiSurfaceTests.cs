@@ -32,7 +32,7 @@ public class SessionEventArgsOverridePropertyTests
     public void UpstreamHttpProtocol_Http3EnumValue_IsDefinedAndGreaterThanHttp2()
     {
         // Http3 should be a defined enum member.
-        Assert.IsTrue(System.Enum.IsDefined(typeof(UpstreamHttpProtocol), UpstreamHttpProtocol.Http3));
+        Assert.IsTrue(System.Enum.IsDefined(UpstreamHttpProtocol.Http3));
 
         // It must be distinct from Http2 and Http11.
         Assert.AreNotEqual(UpstreamHttpProtocol.Http2, UpstreamHttpProtocol.Http3);

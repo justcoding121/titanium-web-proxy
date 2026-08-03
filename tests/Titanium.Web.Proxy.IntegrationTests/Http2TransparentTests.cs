@@ -27,6 +27,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 public class Http2TransparentTests
 {
     private static TestServer sharedServer = null!;
+    private static readonly string[] writeBody = new[] { "chunk1", "chunk2", "chunk3" };
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -334,7 +335,7 @@ public class Http2TransparentTests
 
             e.RespondStreaming(response, async (stream, ct) =>
             {
-                foreach (var part in new[] { "chunk1", "chunk2", "chunk3" })
+                foreach (var part in writeBody)
                 {
                     var bytes = Encoding.ASCII.GetBytes(part);
                     await stream.WriteAsync(bytes, 0, bytes.Length, ct);

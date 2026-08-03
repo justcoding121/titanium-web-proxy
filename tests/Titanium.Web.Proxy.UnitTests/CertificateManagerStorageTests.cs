@@ -178,7 +178,7 @@ public class CertificateManagerStorageTests
             CertificateStorage = new FakeCertificateCache()
         };
         mgr.CertificateStorage = null!;
-        Assert.IsInstanceOfType(mgr.CertificateStorage, typeof(DefaultCertificateDiskCache));
+        Assert.IsInstanceOfType<DefaultCertificateDiskCache>(mgr.CertificateStorage);
     }
 
     [TestMethod]
