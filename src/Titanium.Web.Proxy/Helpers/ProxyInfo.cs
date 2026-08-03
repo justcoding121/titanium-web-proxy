@@ -60,7 +60,8 @@ internal class ProxyInfo
     {
         var match =
             new Regex("^(?<scheme>.*://)?(?<host>[^:]*)(?<port>:[0-9]{1,5})?$",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Match(rawString);
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+                TimeSpan.FromSeconds(1)).Match(rawString);
         string empty1;
         string rawString1;
         string empty2;
@@ -150,7 +151,7 @@ internal class ProxyInfo
     /// <returns></returns>
     private static IEnumerable<HttpSystemProxyValue> ParseProxyValue(string value)
     {
-        var tmp = Regex.Replace(value, @"\s+", " ").Trim();
+        var tmp = Regex.Replace(value, @"\s+", " ", RegexOptions.None, TimeSpan.FromSeconds(1)).Trim();
         if (tmp.Length == 0) yield break;
 
         var equalsIndex = tmp.IndexOf("=", StringComparison.InvariantCulture);

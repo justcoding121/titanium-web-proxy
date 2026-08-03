@@ -944,7 +944,7 @@ internal class TcpConnectionFactory : IDisposable
         }
 #pragma warning disable SYSLIB0039 // TLS 1.0/1.1 are intentionally retained for legacy upstream compatibility fallback.
         catch (IOException ex) when (ex.HResult == unchecked((int)0x80131620) && retry &&
-                                     enabledSslProtocols >= SslProtocols.Tls11)
+                                     enabledSslProtocols >= SslProtocols.Tls11) // NOSONAR S4423 - legacy fallback gate
         {
             stream?.Dispose();
             tcpServerSocket?.Close();
@@ -960,7 +960,7 @@ internal class TcpConnectionFactory : IDisposable
             goto retry;
         }
         catch (AuthenticationException ex) when (ex.HResult == unchecked((int)0x80131501) && retry &&
-                                                 enabledSslProtocols >= SslProtocols.Tls11)
+                                                 enabledSslProtocols >= SslProtocols.Tls11) // NOSONAR S4423 - legacy fallback gate
         {
             stream?.Dispose();
             tcpServerSocket?.Close();

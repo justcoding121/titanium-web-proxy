@@ -141,6 +141,12 @@ public sealed class CertificateManager : IDisposable
     private string? rootCertificateName;
 
     /// <summary>
+    ///     Absolute path to certutil.exe under <see cref="Environment.SystemDirectory" /> (S4036).
+    /// </summary>
+    private static string CertUtilExecutablePath =>
+        Path.Combine(Environment.SystemDirectory, "certutil.exe");
+
+    /// <summary>
     ///     Initializes a new instance of the <see cref="CertificateManager" /> class.
     /// </summary>
     /// <param name="rootCertificateName"></param>
@@ -1198,7 +1204,7 @@ public sealed class CertificateManager : IDisposable
         // consume for the few moments before it's deleted below, so export it under a throwaway,
         // single-use empty password instead of reusing the real secret on the command line.
         const string transientPfxPassword = "";
-        var pfxFileName = Path.GetTempFileName();
+        var pfxFileName = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".pfx");
         try
         {
             File.WriteAllBytes(pfxFileName, certificate.Export(X509ContentType.Pkcs12, transientPfxPassword));
@@ -1206,7 +1212,7 @@ public sealed class CertificateManager : IDisposable
             // currentUser\Root, currentMachine\Personal &  currentMachine\Root
             var info = new ProcessStartInfo
             {
-                FileName = "certutil.exe",
+                FileName = CertUtilExecutablePath,
                 CreateNoWindow = true,
                 UseShellExecute = true,
                 Verb = "runas",
@@ -1334,7 +1340,7 @@ public sealed class CertificateManager : IDisposable
         if (!machineTrusted)
             infos.Add(new ProcessStartInfo
             {
-                FileName = "certutil.exe",
+                FileName = CertUtilExecutablePath,
                 Arguments = "-delstore -user Root \"" + RootCertificateName + "\"",
                 CreateNoWindow = true,
                 UseShellExecute = true,
@@ -1349,7 +1355,7 @@ public sealed class CertificateManager : IDisposable
                     // currentMachine\Personal
                     new()
                     {
-                        FileName = "certutil.exe",
+                        FileName = CertUtilExecutablePath,
                         Arguments = "-delstore My \"" + RootCertificateName + "\"",
                         CreateNoWindow = true,
                         UseShellExecute = true,
@@ -1361,7 +1367,7 @@ public sealed class CertificateManager : IDisposable
                     // currentUser\Personal & currentMachine\Personal
                     new()
                     {
-                        FileName = "certutil.exe",
+                        FileName = CertUtilExecutablePath,
                         Arguments = "-delstore Root \"" + RootCertificateName + "\"",
                         CreateNoWindow = true,
                         UseShellExecute = true,

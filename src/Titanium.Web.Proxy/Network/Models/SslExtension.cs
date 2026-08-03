@@ -70,7 +70,7 @@ public class SslExtension
     /// </value>
     public int Position { get; }
 
-    private static unsafe string GetExtensionData(int value, ReadOnlySpan<byte> data)
+    private static string GetExtensionData(int value, ReadOnlySpan<byte> data)
     {
         // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
         switch (value)

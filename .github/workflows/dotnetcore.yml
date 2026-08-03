@@ -99,7 +99,7 @@ jobs:
 
     - name: Publish Documentation
       if: github.ref == 'refs/heads/develop'
-      uses: EndBug/add-and-commit@v9
+      uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5 # v9
       with:
         default_author: github_actions
         message: Update documentation
@@ -136,7 +136,7 @@ jobs:
       run: dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release
 
     - name: Log in to NuGet
-      uses: NuGet/login@v1
+      uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
       id: login
       with:
         user: ${{ secrets.NUGET_USER }}

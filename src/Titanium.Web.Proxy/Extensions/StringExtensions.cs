@@ -31,7 +31,7 @@ internal static class StringExtensions
         return str.IndexOf(value, StringComparison.OrdinalIgnoreCase);
     }
 
-    internal static unsafe string ByteArrayToHexString(this ReadOnlySpan<byte> data)
+    internal static string ByteArrayToHexString(this ReadOnlySpan<byte> data)
     {
         if (data.Length == 0)
         {

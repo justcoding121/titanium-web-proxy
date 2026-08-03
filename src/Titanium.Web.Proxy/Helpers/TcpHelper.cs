@@ -16,7 +16,7 @@ internal class TcpHelper
     ///     Gets the process id by local port number.
     /// </summary>
     /// <returns>Process id.</returns>
-    internal static unsafe int GetProcessIdByLocalPort(AddressFamily addressFamily, int localPort)
+    internal static unsafe int GetProcessIdByLocalPort(AddressFamily addressFamily, int localPort) // NOSONAR S6640
     {
         var tcpTable = IntPtr.Zero;
         var tcpTableLength = 0;

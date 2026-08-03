@@ -104,6 +104,7 @@ public sealed class ProxyProfileSettings
             admissionControl: PolicyMode.Observe,
             http2AbuseBudget: PolicyMode.Observe),
 #pragma warning disable SYSLIB0039 // Deliberate legacy-TLS opt-in for 4.x migrators, per this profile's purpose.
+        // NOSONAR S4423 - Compatible profile intentionally enables TLS 1.0/1.1 for migration.
         SupportedSslProtocols = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Tls13,
 #pragma warning restore SYSLIB0039
         BlockPrivateNetworkDestinations = false,

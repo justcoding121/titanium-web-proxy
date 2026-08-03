@@ -341,7 +341,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 BypassLocalhost = false,
                 HostName = "127.0.0.9",
                 Port = 9090,
-                Password = "fake",
+                Password = "fake", // NOSONAR S2068 - demo ExternalProxy sample credentials
                 UserName = "fake",
                 UseDefaultCredentials = false
             };
@@ -357,7 +357,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 BypassLocalhost = false,
                 HostName = "127.0.0.10",
                 Port = 9191,
-                Password = "fake2",
+                Password = "fake2", // NOSONAR S2068 - demo ExternalProxy sample credentials
                 UserName = "fake2",
                 UseDefaultCredentials = false
             };

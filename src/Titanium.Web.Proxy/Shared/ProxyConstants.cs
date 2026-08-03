@@ -29,5 +29,5 @@ internal class ProxyConstants
         };
 
     internal static readonly Regex CnRemoverRegex =
-        new(@"^CN\s*=\s*", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        new(@"^CN\s*=\s*", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(1));
 }
