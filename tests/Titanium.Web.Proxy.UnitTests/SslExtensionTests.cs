@@ -102,6 +102,13 @@ public class SslExtensionTests
     }
 
     [TestMethod]
+    public void Data_EcPointFormats_UnknownFormat_ReportsHex()
+    {
+        var payload = new byte[] { 1, 0xFF };
+        StringAssert.Contains(new SslExtension(11, payload, 0).Data, "unknown [0xFF]");
+    }
+
+    [TestMethod]
     public void Data_SignatureAlgorithms_NamedPairs()
     {
         var algs = Concat(Be16(0x0401), Be16(0x0804), Be16(0x0201));
@@ -172,6 +179,12 @@ public class SslExtensionTests
         var server = new byte[] { 0x03, 0x04 };
         Assert.AreEqual("Tls1.3", new SslExtension(43, server, 0).Data);
         CollectionAssert.AreEqual(expected, new SslExtension(43, server, 0).Protocols.ToArray());
+    }
+
+    [TestMethod]
+    public void Data_SupportedVersions_TooShort_ReturnsEmpty()
+    {
+        Assert.AreEqual(string.Empty, new SslExtension(43, new byte[] { 0 }, 0).Data);
     }
 
     [TestMethod]

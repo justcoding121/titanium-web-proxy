@@ -1,11 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
+using System.Net.Security;
+using System.Security.Authentication;
 using System.Text.RegularExpressions;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Logging;
+using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
@@ -316,6 +321,174 @@ public partial class LoggingTests
     public void ConsoleLoggerProvider_ShouldColorize_Allows_Color_When_NO_COLOR_Is_Unset_Or_Empty(string? noColorValue)
     {
         Assert.IsTrue(ConsoleLoggerProvider.ShouldColorize(true, streamIsRedirected: false, noColorValue));
+    }
+
+    [TestMethod]
+    [DataRow(LogLevel.Trace, "TRACE")]
+    [DataRow(LogLevel.Debug, "DEBUG")]
+    [DataRow(LogLevel.Information, "INFO")]
+    [DataRow(LogLevel.Warning, "WARN")]
+    [DataRow(LogLevel.Error, "ERROR")]
+    [DataRow(LogLevel.Critical, "CRIT")]
+    public void ProxyLog_FormatLine_MapsBuiltInLevels(LogLevel level, string expectedToken)
+    {
+        var entry = new LogEntry(new DateTime(2026, 1, 2, 3, 4, 5, 123), level, "test.category", default,
+            "hello", null);
+        var line = ProxyLog.FormatLine(entry);
+
+        StringAssert.Contains(line, $"[{expectedToken.PadRight(5)}]");
+        StringAssert.Contains(line, "test.category: hello");
+    }
+
+    [TestMethod]
+    public void ProxyLog_FormatLine_UnknownLevel_UsesUppercaseEnumName()
+    {
+        var entry = new LogEntry(DateTime.UtcNow, (LogLevel)99, "cat", default, "msg", null);
+        StringAssert.Contains(ProxyLog.FormatLine(entry), "[99   ]");
+    }
+
+    [TestMethod]
+    public void ProxyLog_FormatLine_AppendsExceptionDetails()
+    {
+        var ex = new InvalidOperationException("boom");
+        var entry = new LogEntry(DateTime.UtcNow, LogLevel.Error, "cat", default, "failed", ex);
+        var line = ProxyLog.FormatLine(entry);
+
+        StringAssert.Contains(line, "failed");
+        StringAssert.Contains(line, "InvalidOperationException");
+        StringAssert.Contains(line, "boom");
+    }
+
+    [TestMethod]
+    public void ProxyLog_BrowserHandshakeFailed_LogsExceptionChainAtTrace()
+    {
+        var capturing = CreateTraceCapturingLogger();
+        var inner = new IOException("socket reset");
+        var outer = new AuthenticationException("handshake failed", inner);
+
+        ProxyLog.BrowserHandshakeFailed(capturing, "example.com:443", outer);
+
+        Assert.AreEqual(1, capturing.Entries.Count);
+        Assert.AreEqual(LogLevel.Trace, capturing.Entries[0].Level);
+        StringAssert.Contains(capturing.Entries[0].Message, "FAILED for 'example.com:443'");
+        StringAssert.Contains(capturing.Entries[0].Message, "AuthenticationException");
+        StringAssert.Contains(capturing.Entries[0].Message, "IOException");
+    }
+
+    [TestMethod]
+    public void ProxyLog_ClientConnectionAdmissionRejected_LogsEndpointAndReason()
+    {
+        var capturing = CreateWarningCapturingLogger();
+        var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 8080, false);
+
+        ProxyLog.ClientConnectionAdmissionRejected(capturing, endPoint, "global limit");
+
+        Assert.AreEqual(1, capturing.Entries.Count);
+        Assert.AreEqual(LogLevel.Warning, capturing.Entries[0].Level);
+        StringAssert.Contains(capturing.Entries[0].Message, "127.0.0.1:8080");
+        StringAssert.Contains(capturing.Entries[0].Message, "global limit");
+    }
+
+    [TestMethod]
+    public void ProxyLog_EffectiveProfileAtStartup_LogsProfileAndPolicyModes()
+    {
+        var capturing = CreateInformationCapturingLogger();
+        var modes = ProxyPolicyModes.Create(
+            PolicyMode.Enforce,
+            PolicyMode.Observe,
+            PolicyMode.Disabled,
+            PolicyMode.Enforce,
+            PolicyMode.Observe);
+
+        ProxyLog.EffectiveProfileAtStartup(capturing, ProxyProfile.PublicFacing, modes);
+
+        Assert.AreEqual(1, capturing.Entries.Count);
+        StringAssert.Contains(capturing.Entries[0].Message, "PublicFacing");
+        StringAssert.Contains(capturing.Entries[0].Message, "body=Enforce");
+        StringAssert.Contains(capturing.Entries[0].Message, "decompressionRatio=Observe");
+    }
+
+    [TestMethod]
+    public void ProxyLog_PolicyBreach_Enforce_LogsWarning_Observe_LogsDebug()
+    {
+        var capturing = CreateTraceCapturingLogger();
+
+        ProxyLog.PolicyBreach(capturing, PolicyFamily.BodyBudget, PolicyMode.Enforce, "body exceeded");
+        ProxyLog.PolicyBreach(capturing, PolicyFamily.HeaderLimits, PolicyMode.Observe, "header exceeded");
+
+        Assert.AreEqual(2, capturing.Entries.Count);
+        Assert.AreEqual(LogLevel.Warning, capturing.Entries[0].Level);
+        Assert.AreEqual(LogLevel.Debug, capturing.Entries[1].Level);
+        StringAssert.Contains(capturing.Entries[0].Message, "BodyBudget");
+        StringAssert.Contains(capturing.Entries[1].Message, "HeaderLimits");
+    }
+
+    [TestMethod]
+    public void ProxyLog_Http2ProbeResult_Failure_LogsChainAtTrace()
+    {
+        var capturing = CreateTraceCapturingLogger();
+        var failure = new IOException("probe reset");
+
+        ProxyLog.Http2ProbeResult(capturing, "origin.test:443", fromCache: false, supported: false, failure);
+
+        Assert.AreEqual(1, capturing.Entries.Count);
+        StringAssert.Contains(capturing.Entries[0].Message, "failed, treating as unsupported");
+        StringAssert.Contains(capturing.Entries[0].Message, "IOException");
+    }
+
+    [TestMethod]
+    public void ProxyLog_SvcbDnsUnavailable_LogsWarning()
+    {
+        var capturing = CreateWarningCapturingLogger();
+
+        ProxyLog.SvcbDnsUnavailable(capturing, "SVCB lookup timed out");
+
+        Assert.AreEqual(1, capturing.Entries.Count);
+        Assert.AreEqual(LogLevel.Warning, capturing.Entries[0].Level);
+        StringAssert.Contains(capturing.Entries[0].Message, "SVCB lookup timed out");
+    }
+
+    [TestMethod]
+    public void ProxyLog_FormatProtocol_NonH2OrH11_UsesCustomRepresentation()
+    {
+        var capturing = CreateTraceCapturingLogger();
+        var custom = new SslApplicationProtocol("custom-proto"u8.ToArray());
+
+        ProxyLog.BrowserHandshakeSucceeded(capturing, "host.test", SslApplicationProtocol.Http3);
+        ProxyLog.BrowserHandshakeSucceeded(capturing, "host.test", custom);
+        ProxyLog.BrowserHandshakeSucceeded(capturing, "host.test", default);
+
+        Assert.AreEqual(3, capturing.Entries.Count);
+        StringAssert.Contains(capturing.Entries[0].Message, "negotiated=h3");
+        StringAssert.Contains(capturing.Entries[1].Message, "negotiated=custom-proto");
+        StringAssert.Contains(capturing.Entries[2].Message, "negotiated=(none)");
+    }
+
+    private static CapturingTraceLogger CreateTraceCapturingLogger() => new(LogLevel.Trace);
+
+    private static CapturingTraceLogger CreateWarningCapturingLogger() => new(LogLevel.Warning);
+
+    private static CapturingTraceLogger CreateInformationCapturingLogger() => new(LogLevel.Information);
+
+    private sealed class CapturingTraceLogger : ILogger
+    {
+        public readonly List<(LogLevel Level, string Message)> Entries = new();
+        private readonly LogLevel minimumLevel;
+
+        public CapturingTraceLogger(LogLevel minimumLevel)
+        {
+            this.minimumLevel = minimumLevel;
+        }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= minimumLevel;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Entries.Add((logLevel, formatter(state, exception)));
+        }
     }
 
     private sealed class CapturingProvider : ILoggerProvider

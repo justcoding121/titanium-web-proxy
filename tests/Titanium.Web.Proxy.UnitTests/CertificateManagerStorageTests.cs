@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
@@ -153,13 +154,131 @@ public class CertificateManagerStorageTests
     [TestMethod]
     public void LoadRootCertificate_Expired_ReturnsNull()
     {
-        using var seed = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        var cache = new FakeCertificateCache { RootToLoad = CreateExpiredCertificate("expired-root") };
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
         {
-            CertificateEngine = CertificateEngine.BouncyCastle
+            CertificateEngine = CertificateEngine.BouncyCastle,
+            CertificateStorage = cache
         };
-        Assert.IsTrue(seed.CreateRootCertificate(false));
-        // Forge an "expired" view by wrapping via FakeCertificateCache that reports NotAfter in the past
-        // is hard without mutating NotAfter; instead load path with Load throwing covers OnException.
+        Assert.IsNull(mgr.LoadRootCertificate());
+    }
+
+    [TestMethod]
+    public void CreateRootCertificate_OverwriteFalse_ExpiredRootOnDisk_ReturnsFalse()
+    {
+        var cache = new FakeCertificateCache { RootToLoad = CreateExpiredCertificate("expired-on-disk") };
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+            CertificateStorage = cache,
+            OverwritePfxFile = false
+        };
+        Assert.IsFalse(mgr.CreateRootCertificate(persistToFile: false));
+        Assert.IsNull(mgr.RootCertificate);
+    }
+
+    [TestMethod]
+    public void CreateRootCertificate_LoadFailure_FallsBackToGeneratingRoot()
+    {
+        var cache = new FakeCertificateCache { LoadRootThrows = true };
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+            CertificateStorage = cache,
+            OverwritePfxFile = false
+        };
+        // Load throws are logged; CreateRootCertificate still mints a fresh root.
+        Assert.IsTrue(mgr.CreateRootCertificate(persistToFile: false));
+        Assert.IsNotNull(mgr.RootCertificate);
+    }
+
+    [TestMethod]
+    public void CreateRootCertificate_ClearThrows_StillPersistsRoot()
+    {
+        var cache = new FakeCertificateCache { ClearThrows = true };
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+            CertificateStorage = cache
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(persistToFile: true));
+        Assert.IsNotNull(mgr.RootCertificate);
+        Assert.IsTrue(cache.SavedRoot);
+    }
+
+    [TestMethod]
+    public async Task CreateServerCertificate_ExpiredDiskLeaf_RegeneratesFreshCertificate()
+    {
+        var expired = CreateExpiredCertificate("expired-leaf.example");
+        var cache = new FakeCertificateCache();
+        cache.Leaves["expired-leaf.example"] = expired;
+
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+            CertificateStorage = cache,
+            SaveFakeCertificates = true
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+
+        var expiredThumbprint = expired.Thumbprint;
+        using var loaded = await mgr.CreateServerCertificate("expired-leaf.example");
+        Assert.IsNotNull(loaded);
+        Assert.AreNotEqual(expiredThumbprint, loaded!.Thumbprint);
+        Assert.IsTrue(loaded.NotAfter > DateTime.Now);
+    }
+
+    [TestMethod]
+    public async Task CreateServerCertificate_DiskLoadFailure_FallsBackToGeneration()
+    {
+        var cache = new FakeCertificateCache { LoadLeafThrows = true };
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+            CertificateStorage = cache,
+            SaveFakeCertificates = true
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+
+        using var loaded = await mgr.CreateServerCertificate("disk-fail.example");
+        Assert.IsNotNull(loaded);
+        Assert.IsTrue(loaded!.HasPrivateKey);
+    }
+
+    [TestMethod]
+    public void CreateCertificate_ExpiredDiskLeaf_RegeneratesViaCreateCertificate()
+    {
+        var cache = new FakeCertificateCache();
+        cache.Leaves["sync-expired.example"] = CreateExpiredCertificate("sync-expired.example");
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+            CertificateStorage = cache,
+            SaveFakeCertificates = true
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+
+        using var leaf = mgr.CreateCertificate("sync-expired.example", false);
+        Assert.IsNotNull(leaf);
+        Assert.IsTrue(leaf!.NotAfter > DateTime.Now);
+    }
+
+    [TestMethod]
+    public void ClearRootCertificate_WhenStorageClearThrows_PropagatesException()
+    {
+        var cache = new FakeCertificateCache { ClearThrows = true };
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+            CertificateStorage = cache
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        Assert.ThrowsExactly<IOException>(() => mgr.ClearRootCertificate());
+    }
+
+    [TestMethod]
+    public void LoadRootCertificate_IOException_ReturnsNull()
+    {
         var cache = new FakeCertificateCache { LoadRootThrows = true };
         using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
         {
@@ -206,6 +325,8 @@ public class CertificateManagerStorageTests
         internal bool SavedRoot { get; private set; }
         internal int SaveLeafCount { get; private set; }
         internal bool LoadRootThrows { get; set; }
+        internal bool LoadLeafThrows { get; set; }
+        internal bool ClearThrows { get; set; }
         internal X509Certificate2? RootToLoad { get; set; }
         internal ConcurrentDictionary<string, X509Certificate2> Leaves { get; } = new();
 
@@ -224,6 +345,7 @@ public class CertificateManagerStorageTests
 
         public X509Certificate2? LoadCertificate(string subjectName, X509KeyStorageFlags storageFlags)
         {
+            if (LoadLeafThrows) throw new IOException("leaf load failed");
             return Leaves.TryGetValue(subjectName, out var cert) ? cert : null;
         }
 
@@ -233,6 +355,18 @@ public class CertificateManagerStorageTests
             Leaves[subjectName] = certificate;
         }
 
-        public void Clear() => Cleared = true;
+        public void Clear()
+        {
+            if (ClearThrows) throw new IOException("clear failed");
+            Cleared = true;
+        }
+    }
+
+    private static X509Certificate2 CreateExpiredCertificate(string commonName)
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest($"CN={commonName}", rsa, HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+        return request.CreateSelfSigned(DateTimeOffset.Now.AddDays(-10), DateTimeOffset.Now.AddDays(-1));
     }
 }

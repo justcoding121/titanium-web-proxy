@@ -51,7 +51,7 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.AreEqual(validDays + graceDays, (int)Math.Round(totalDays), 1,
                 $"Total lifetime should be {validDays + graceDays} days, got {totalDays:F1}");
 
-            // NotBefore must be close to now - graceDays (allow ù1 minute for test execution lag)
+            // NotBefore must be close to now - graceDays (allow ?1 minute for test execution lag)
             var expectedNotBefore = DateTime.UtcNow.AddDays(-graceDays);
             Assert.IsTrue(
                 Math.Abs((cert.NotBefore.ToUniversalTime() - expectedNotBefore).TotalMinutes) < 2,
@@ -595,6 +595,128 @@ namespace Titanium.Web.Proxy.UnitTests
 
             // Double-dispose must be idempotent.
             mgr.Dispose();
+        }
+
+        [TestMethod]
+        public async Task ClearIdleCertificates_FirstSweep_EvictsStaleEntries()
+        {
+            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastleFast,
+                CertificateCacheTimeOutMinutes = 60
+            };
+            Assert.IsTrue(mgr.CreateRootCertificate(false));
+
+            var cert = await mgr.CreateServerCertificate("idle-evict.example");
+            Assert.IsNotNull(cert);
+
+            var cacheField = typeof(CertificateManager).GetField("cachedCertificates",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.IsNotNull(cacheField);
+            var cache = (ConcurrentDictionary<string, CachedCertificate>)cacheField.GetValue(mgr)!;
+            Assert.IsTrue(cache.TryGetValue("idle-evict.example", out var cached));
+            cached!.LastAccess = DateTime.UtcNow.AddHours(-2);
+
+            var sweep = mgr.ClearIdleCertificates();
+            await Task.Delay(250);
+            mgr.StopClearIdleCertificates();
+            await sweep;
+
+            Assert.IsFalse(cache.ContainsKey("idle-evict.example"),
+                "idle sweep should evict entries older than the timeout");
+        }
+
+        [TestMethod]
+        public async Task ClearIdleCertificates_FirstSweep_DisposesPendingEvictionsAfterGrace()
+        {
+            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance,
+                () => 1)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastleFast
+            };
+            Assert.IsTrue(mgr.CreateRootCertificate(false));
+
+            await mgr.CreateServerCertificate("pending-a.example");
+            await mgr.CreateServerCertificate("pending-b.example");
+
+            var pendingField = typeof(CertificateManager).GetField("pendingDisposals",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.IsNotNull(pendingField);
+            var queue = pendingField.GetValue(mgr)!;
+            var queueType = queue.GetType();
+            var tryDequeue = queueType.GetMethod("TryDequeue")!;
+            var enqueue = queueType.GetMethod("Enqueue")!;
+            var itemType = queueType.GetGenericArguments()[0];
+            var evictedAtProp = itemType.GetProperty("EvictedAtUtc")
+                ?? itemType.GetField("EvictedAtUtc") as MemberInfo;
+            Assert.IsNotNull(evictedAtProp, "PendingCertificateDisposal should expose EvictedAtUtc");
+            var initialCount = (int)queueType.GetProperty("Count")!.GetValue(queue)!;
+            Assert.IsTrue(initialCount > 0, "pre-condition: bound enforcement should queue pending disposals");
+
+            var requeued = new List<object>();
+            while (true)
+            {
+                var args = new object?[] { null };
+                if (!(bool)tryDequeue.Invoke(queue, args)!) break;
+                var item = args[0]!;
+                // record struct: boxed copy; rewrite EvictedAtUtc then re-enqueue
+                var past = DateTime.UtcNow.AddMinutes(-2);
+                if (evictedAtProp is PropertyInfo pi)
+                {
+                    var boxed = item;
+                    pi.SetValue(boxed, past);
+                    item = boxed;
+                }
+                else
+                    ((FieldInfo)evictedAtProp!).SetValue(item, past);
+                requeued.Add(item);
+            }
+
+            foreach (var item in requeued)
+                enqueue.Invoke(queue, new[] { item });
+
+            var sweep = mgr.ClearIdleCertificates();
+            await Task.Delay(250);
+            mgr.StopClearIdleCertificates();
+            await sweep;
+
+            Assert.AreEqual(0, (int)queueType.GetProperty("Count")!.GetValue(queue)!,
+                "sweep should dispose pending evictions past the grace window");
+        }
+
+        [TestMethod]
+        public async Task ClearRootCertificate_DisposesPendingEvictionsImmediately()
+        {
+            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance,
+                () => 1)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastleFast
+            };
+            Assert.IsTrue(mgr.CreateRootCertificate(false));
+            await mgr.CreateServerCertificate("clear-pending-a.example");
+            await mgr.CreateServerCertificate("clear-pending-b.example");
+
+            var pendingField = typeof(CertificateManager).GetField("pendingDisposals",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.IsNotNull(pendingField);
+            var queue = pendingField.GetValue(mgr)!;
+            Assert.IsTrue((int)queue.GetType().GetProperty("Count")!.GetValue(queue)! > 0);
+
+            mgr.ClearRootCertificate();
+
+            Assert.AreEqual(0, (int)queue.GetType().GetProperty("Count")!.GetValue(queue)!,
+                "ClearRootCertificate should drain pending evictions immediately");
+            Assert.IsNull(mgr.RootCertificate);
+        }
+
+        [TestMethod]
+        public void RemoveTrustedRootCertificate_NullRoot_LogsWithoutThrowing()
+        {
+            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastleFast
+            };
+            mgr.RemoveTrustedRootCertificate(machineTrusted: false);
         }
     }
 }

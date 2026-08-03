@@ -13,6 +13,7 @@ using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 using Titanium.Web.Proxy.StreamExtended.Network;
+using System.Net.Sockets;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
@@ -342,10 +343,24 @@ public class HttpStreamCoverageTests
         using (writer)
         {
             writer.Write(payload, 0, payload.Length);
+            writer.WriteByte((byte)'!');
             writer.Flush();
         }
 
-        CollectionAssert.AreEqual(payload, destination.ToArray());
+        CollectionAssert.AreEqual(Encoding.ASCII.GetBytes("sync-io!"), destination.ToArray());
+    }
+
+    [TestMethod]
+    public async Task FlushAsync_OnMemoryStreamBackedWriter_FlushesBase()
+    {
+        var (writer, destination) = MakeWriter();
+        using (writer)
+        {
+            await writer.WriteAsync(Encoding.ASCII.GetBytes("flush-me").AsMemory());
+            await writer.FlushAsync(CancellationToken.None);
+        }
+
+        CollectionAssert.AreEqual(Encoding.ASCII.GetBytes("flush-me"), destination.ToArray());
     }
 
     [TestMethod]
@@ -366,6 +381,155 @@ public class HttpStreamCoverageTests
         }
 
         CollectionAssert.AreEqual(buf, destination.ToArray());
+    }
+
+    [TestMethod]
+    public void TaskResult_ExposesAsyncStateAndCompletes()
+    {
+        var readTcs = new TaskCompletionSource<int>();
+        readTcs.SetResult(7);
+        var readResult = new TaskResult<int>(readTcs.Task, "read-state");
+        Assert.AreEqual("read-state", readResult.AsyncState);
+        Assert.IsTrue(readResult.IsCompleted);
+        Assert.AreEqual(7, readResult.Result);
+
+        var writeTcs = new TaskCompletionSource();
+        writeTcs.SetResult();
+        var writeResult = new TaskResult(writeTcs.Task, "write-state");
+        Assert.AreEqual("write-state", writeResult.AsyncState);
+        Assert.IsTrue(writeResult.IsCompleted);
+        writeResult.GetResult();
+    }
+
+    [TestMethod]
+    public async Task HandleBodyWrite_ChunkedEarlyStop_DrainsRemainingChunks()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var hookCalls = 0;
+        proxy.OnResponseBodyWrite += (_, e) =>
+        {
+            hookCalls++;
+            if (hookCalls == 1) e.IsLastChunk = true;
+            return Task.CompletedTask;
+        };
+
+        var payload = Encoding.ASCII.GetBytes("5\r\nhello\r\n8\r\nworld!!!\r\n0\r\n\r\n");
+        var (reader, writer, sinkStream) =
+            await CreateNetworkCopyPairAsync(proxy, payload, CancellationToken.None);
+
+        using (reader)
+        using (writer)
+        {
+            using (var session = MakeSession(proxy))
+            {
+                session.HttpClient.Response.OriginalHasBody = true;
+                session.HttpClient.Response.OriginalIsChunked = true;
+                session.HttpClient.Response.IsBodyRead = false;
+
+                await reader.CopyBodyAsync(writer, isChunked: true, contentLength: -1, isRequest: false, session,
+                    CancellationToken.None);
+                var output = await ReadAvailableAsync(sinkStream, TimeSpan.FromSeconds(5));
+
+                var text = Encoding.ASCII.GetString(output);
+                StringAssert.Contains(text, "5\r\nhello\r\n");
+                StringAssert.Contains(text, "0\r\n");
+                Assert.AreEqual(1, hookCalls);
+                Assert.IsFalse(text.Contains("world", StringComparison.Ordinal));
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task HandleBodyWrite_ContentLengthEarlyStop_WritesOnlyFirstPiece()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var hookCalls = 0;
+        proxy.OnResponseBodyWrite += (_, e) =>
+        {
+            hookCalls++;
+            e.IsLastChunk = true;
+            return Task.CompletedTask;
+        };
+
+        var payload = new byte[9000];
+        for (var i = 0; i < payload.Length; i++) payload[i] = (byte)('a' + (i % 26));
+
+        var (reader, writer, sinkStream) =
+            await CreateNetworkCopyPairAsync(proxy, payload, CancellationToken.None);
+
+        using (reader)
+        using (writer)
+        {
+            using (var session = MakeSession(proxy))
+            {
+                session.HttpClient.Response.OriginalHasBody = true;
+                session.HttpClient.Response.OriginalIsChunked = false;
+                session.HttpClient.Response.OriginalContentLength = payload.Length;
+                session.HttpClient.Response.IsBodyRead = false;
+
+                await reader.CopyBodyAsync(writer, isChunked: false, contentLength: payload.Length, isRequest: false,
+                    session, CancellationToken.None);
+                var output = await ReadAvailableAsync(sinkStream, TimeSpan.FromSeconds(5));
+
+                Assert.AreEqual(1, hookCalls);
+                Assert.IsTrue(output.Length > 0);
+                Assert.IsTrue(output.Length < payload.Length,
+                    "Early stop should emit only the first buffer-sized piece, not the full body.");
+            }
+        }
+    }
+
+    private static async Task<(HttpStream reader, HttpStream writer, NetworkStream sink)>
+        CreateNetworkCopyPairAsync(ProxyServer proxy, byte[] payload, CancellationToken cancellationToken)
+    {
+        using var sourceListener = new TcpListener(IPAddress.Loopback, 0);
+        using var sinkListener = new TcpListener(IPAddress.Loopback, 0);
+        sourceListener.Start();
+        sinkListener.Start();
+
+        var sourceAccept = sourceListener.AcceptTcpClientAsync();
+        var sinkAccept = sinkListener.AcceptTcpClientAsync();
+
+        var readerTcp = new TcpClient();
+        var writerTcp = new TcpClient();
+        await readerTcp.ConnectAsync(IPAddress.Loopback, ((IPEndPoint)sourceListener.LocalEndpoint).Port,
+            cancellationToken);
+        await writerTcp.ConnectAsync(IPAddress.Loopback, ((IPEndPoint)sinkListener.LocalEndpoint).Port,
+            cancellationToken);
+
+        var sourceClient = await sourceAccept;
+        var sinkClient = await sinkAccept;
+
+        await sourceClient.GetStream().WriteAsync(payload, cancellationToken);
+        sourceClient.Dispose();
+
+        var reader = new HttpStream(proxy, readerTcp.GetStream(), proxy.BufferPool, cancellationToken);
+        var writer = new HttpStream(proxy, writerTcp.GetStream(), proxy.BufferPool, cancellationToken);
+        return (reader, writer, sinkClient.GetStream());
+    }
+
+    private static async Task<byte[]> ReadAvailableAsync(NetworkStream stream, TimeSpan timeout)
+    {
+        using var ms = new MemoryStream();
+        var deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (stream.DataAvailable)
+            {
+                var buffer = new byte[4096];
+                var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length));
+                if (read == 0) break;
+                ms.Write(buffer, 0, read);
+            }
+            else if (ms.Length > 0)
+            {
+                break;
+            }
+
+            await Task.Delay(10);
+        }
+
+        return ms.ToArray();
     }
 
     private sealed class ThrowingWriteStream : Stream
