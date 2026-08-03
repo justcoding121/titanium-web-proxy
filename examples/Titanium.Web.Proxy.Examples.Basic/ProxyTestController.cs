@@ -44,7 +44,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public ProxyTestController()
         {
-            Task.Run(() => ListenToConsole());
+            Task.Run(() => ListenToConsole(), cancellationTokenSource.Token);
 
             proxyServer = new ProxyServer();
             var certificateDirectory = Path.Combine(
@@ -795,7 +795,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 }
 
                 //reduce CPU usage
-                await Task.Delay(50);
+                await Task.Delay(50, cancellationTokenSource.Token);
             }
         }
 

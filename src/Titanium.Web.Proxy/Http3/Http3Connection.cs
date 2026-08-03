@@ -260,7 +260,9 @@ internal sealed class Http3Connection
         try
         {
             var allDone = Task.WhenAll(_backgroundTasks);
-            var completed = await Task.WhenAny(allDone, Task.Delay(BackgroundTaskDrainTimeout));
+            // Drain timeout must not share the connection CTS (already cancelled at this point).
+            var completed = await Task.WhenAny(allDone,
+                Task.Delay(BackgroundTaskDrainTimeout, CancellationToken.None));
             if (completed != allDone)
             {
                 _logger.LogWarning(

@@ -50,23 +50,19 @@ public partial class ProxyServer
                 return await AuthenticateUserBasic(session, authenticationType, credentials,
                     ProxyBasicAuthenticateFunc);
 
-            if (ProxySchemeAuthenticateFunc != null)
+            // Both funcs null already returned above; Basic path returned; Scheme is therefore required.
+            var result =
+                await ProxySchemeAuthenticateFunc!(session, authenticationType.ToString(), credentials.ToString());
+
+            if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
             {
-                var result =
-                    await ProxySchemeAuthenticateFunc(session, authenticationType.ToString(), credentials.ToString());
+                session.HttpClient.Response =
+                    CreateAuthentication407Response("Proxy Authentication Invalid", result.Continuation);
 
-                if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
-                {
-                    session.HttpClient.Response =
-                        CreateAuthentication407Response("Proxy Authentication Invalid", result.Continuation);
-
-                    return false;
-                }
-
-                return result.Result == ProxyAuthenticationResult.Success;
+                return false;
             }
 
-            return false;
+            return result.Result == ProxyAuthenticationResult.Success;
         }
         catch (Exception e)
         {

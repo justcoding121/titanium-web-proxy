@@ -56,7 +56,7 @@ public partial class ProxyServer
 
         try
         {
-            endPoint.QuicListener = QuicListener.ListenAsync(listenerOptions).GetAwaiter().GetResult();
+            endPoint.QuicListener = QuicListener.ListenAsync(listenerOptions, cts.Token).GetAwaiter().GetResult();
             endPoint.Port = endPoint.QuicListener.LocalEndPoint.Port;
         }
         catch (Exception ex)
@@ -223,7 +223,7 @@ public partial class ProxyServer
             if (!endPoint.PendingQuicAuthArgs.TryGetValue(connection, out var authArgs))
             {
                 // No auth args means the options callback failed or was skipped — reject this connection.
-                _ = connection.CloseAsync(0x100).AsTask();
+                _ = connection.CloseAsync(0x100, cancellationToken).AsTask();
                 continue;
             }
             endPoint.PendingQuicAuthArgs.Remove(connection);
@@ -257,7 +257,7 @@ public partial class ProxyServer
             }
             finally
             {
-                await connection.CloseAsync(0x100 /* H3_NO_ERROR */);
+                await connection.CloseAsync(0x100 /* H3_NO_ERROR */, cancellationToken);
             }
         }
     }

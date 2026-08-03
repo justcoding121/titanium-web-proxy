@@ -1820,8 +1820,9 @@ namespace Titanium.Web.Proxy.Http2
                             };
                             var pingFrameHeaderBuffer = new byte[9];
                             pingFrameHeader.CopyToBuffer(pingFrameHeaderBuffer);
-                            await input.WriteAsync(pingFrameHeaderBuffer, 0, pingFrameHeaderBuffer.Length);
-                            await input.WriteAsync(ackPayload, 0, 8);
+                            await input.WriteAsync(pingFrameHeaderBuffer, 0, pingFrameHeaderBuffer.Length,
+                                cancellationToken);
+                            await input.WriteAsync(ackPayload, 0, 8, cancellationToken);
                         });
                     }
                     // an ACK for a PING this proxy never sends today - nothing to do.
@@ -2351,10 +2352,12 @@ namespace Titanium.Web.Proxy.Http2
 
                     async Task writeFrame()
                     {
-                        // do not cancel the write operation
+                        // Frame integrity: opt out of cancellation explicitly so a cancelled session
+                        // token cannot leave a half-written frame on the wire.
                         frameHeader.CopyToBuffer(frameHeaderBuffer);
-                        await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length);
-                        await output.WriteAsync(buffer, 0, frameLength);
+                        await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length,
+                            CancellationToken.None);
+                        await output.WriteAsync(buffer, 0, frameLength, CancellationToken.None);
                     }
 
                     await lockedOutputWrite(writeFrame);
@@ -2658,8 +2661,8 @@ namespace Titanium.Web.Proxy.Http2
                     frameHeader.Flags = pos < body.Length ? (Http2FrameFlag)0 : Http2FrameFlag.EndStream;
 
                     frameHeader.CopyToBuffer(frameHeaderBuffer);
-                    await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length/*, cancellationToken*/);
-                    await output.WriteAsync(buffer, 0, bodyFrameLength /*, cancellationToken*/);
+                    await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length, cancellationToken);
+                    await output.WriteAsync(buffer, 0, bodyFrameLength, cancellationToken);
                 }
             }
         }
@@ -2684,7 +2687,7 @@ namespace Titanium.Web.Proxy.Http2
                 frameHeader.Length = 0;
                 frameHeader.Flags = endStream ? Http2FrameFlag.EndStream : (Http2FrameFlag)0;
                 frameHeader.CopyToBuffer(frameHeaderBuffer);
-                await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length);
+                await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length, cancellationToken);
                 return;
             }
 
@@ -2699,8 +2702,8 @@ namespace Titanium.Web.Proxy.Http2
                 frameHeader.Length = frameLength;
                 frameHeader.Flags = isLastFrame && endStream ? Http2FrameFlag.EndStream : (Http2FrameFlag)0;
                 frameHeader.CopyToBuffer(frameHeaderBuffer);
-                await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length);
-                await output.WriteAsync(data, pos, frameLength);
+                await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length, cancellationToken);
+                await output.WriteAsync(data, pos, frameLength, cancellationToken);
 
                 pos += frameLength;
             }

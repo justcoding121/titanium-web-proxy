@@ -279,8 +279,8 @@ public sealed class CertificateManager : IDisposable
                         break;
                 }
 
-            return certEngineValue
-                   ?? throw new InvalidOperationException("The certificate engine could not be initialized.");
+            // Every switch arm assigns certEngineValue or throws.
+            return certEngineValue!;
         }
     }
 
@@ -641,7 +641,8 @@ public sealed class CertificateManager : IDisposable
         var certificate = CertEngine.MakeCertificate(certificateName, isRootCertificate ? null : RootCertificate);
 
         if (CertificateEngine == CertificateEngine.DefaultWindows)
-            Task.Run(() => UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, certificate));
+            Task.Run(() => UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, certificate),
+                clearCertificatesTokenSource.Token);
 
         return certificate;
     }
@@ -725,7 +726,7 @@ public sealed class CertificateManager : IDisposable
                         {
                             OnException(new Exception("Failed to save fake certificate.", e));
                         }
-                    });
+                    }, clearCertificatesTokenSource.Token);
                 }
             }
             else
@@ -797,7 +798,7 @@ public sealed class CertificateManager : IDisposable
 
         var createdTask = false;
         Task<X509Certificate2?> createCertificateTask;
-        await pendingCertificateCreationTaskLock.WaitAsync();
+        await pendingCertificateCreationTaskLock.WaitAsync(clearCertificatesTokenSource.Token);
         try
         {
             // check in cache first
@@ -812,7 +813,7 @@ public sealed class CertificateManager : IDisposable
                 // run certificate creation task & add it to pending tasks
                 createCertificateTask = Task.Run(() =>
                 {
-                    certificateCreationThrottle.Wait();
+                    certificateCreationThrottle.Wait(clearCertificatesTokenSource.Token);
                     try
                     {
                         var result = CreateCertificate(certificateName, false);
@@ -829,7 +830,7 @@ public sealed class CertificateManager : IDisposable
                     {
                         certificateCreationThrottle.Release();
                     }
-                });
+                }, clearCertificatesTokenSource.Token);
 
                 pendingCertificateCreationTasks[certificateName] = createCertificateTask;
                 createdTask = true;
@@ -849,7 +850,7 @@ public sealed class CertificateManager : IDisposable
         if (createdTask)
         {
             // cleanup pending task
-            await pendingCertificateCreationTaskLock.WaitAsync();
+            await pendingCertificateCreationTaskLock.WaitAsync(clearCertificatesTokenSource.Token);
             try
             {
                 pendingCertificateCreationTasks.Remove(certificateName);
@@ -897,13 +898,12 @@ public sealed class CertificateManager : IDisposable
     /// <summary>
     ///     A method to clear outdated certificates
     /// </summary>
-    internal async void ClearIdleCertificates()
+    internal async Task ClearIdleCertificates()
     {
         var cancellationToken = clearCertificatesTokenSource.Token;
         while (!cancellationToken.IsCancellationRequested)
         {
-            // this runs on a fire-and-forget (async void) task, so any exception here would go
-            // unobserved and could crash the process; keep the sweep resilient.
+            // Fire-and-forget from ProxyServer.Start; keep the sweep resilient to transient failures.
             try
             {
                 var cutOff = DateTime.UtcNow.AddMinutes(-CertificateCacheTimeOutMinutes);

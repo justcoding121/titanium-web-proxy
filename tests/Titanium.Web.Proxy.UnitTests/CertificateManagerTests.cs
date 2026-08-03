@@ -253,7 +253,7 @@ namespace Titanium.Web.Proxy.UnitTests
             {
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
-            mgr.ClearIdleCertificates();
+            _ = mgr.ClearIdleCertificates();
             for (var i = 0; i < 5; i++)
                 tasks.AddRange(hostNames.Select(host => Task.Run(() =>
                 {
@@ -278,7 +278,7 @@ namespace Titanium.Web.Proxy.UnitTests
 
             mgr.CreateRootCertificate();
             mgr.TrustRootCertificate(true);
-            mgr.ClearIdleCertificates();
+            _ = mgr.ClearIdleCertificates();
 
             for (var i = 0; i < 5; i++)
                 tasks.AddRange(hostNames.Select(host => Task.Run(() =>

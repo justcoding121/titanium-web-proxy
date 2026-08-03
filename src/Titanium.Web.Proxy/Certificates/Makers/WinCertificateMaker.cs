@@ -102,8 +102,12 @@ internal class WinCertificateMaker : ICertificateMaker
         CancellationToken cancellationToken = default)
     {
         if (switchToMtaIfNeeded && Thread.CurrentThread.GetApartmentState() != ApartmentState.MTA)
-            return Task.Run(() => MakeCertificate(sSubjectCn, false, signingCertificate),
-                cancellationToken).Result;
+        {
+            var task = Task.Run(() => MakeCertificate(sSubjectCn, false, signingCertificate),
+                cancellationToken);
+            task.Wait(cancellationToken);
+            return task.Result;
+        }
 
         // Subject
         var fullSubject = $"CN={sSubjectCn}";

@@ -375,31 +375,26 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private async Task ProxyServer_BeforeResponse(object sender, SessionEventArgs e)
         {
-            SessionListItem item = null;
-            await Dispatcher.InvokeAsync(() =>
+            var item = await Dispatcher.InvokeAsync(() =>
             {
-                if (sessionDictionary.TryGetValue(e.HttpClient, out item))
-                {
-                    item.Update(e);
-                    // Prefer showing a real request/response in the detail pane once traffic arrives.
-                    if (SelectedSession == null && item is { IsTunnelConnect: false })
-                        SelectedSession = item;
-                }
+                if (!sessionDictionary.TryGetValue(e.HttpClient, out var found))
+                    return null;
+
+                found.Update(e);
+                // Prefer showing a real request/response in the detail pane once traffic arrives.
+                if (SelectedSession == null && found is { IsTunnelConnect: false })
+                    SelectedSession = found;
+                return found;
             });
 
-            //e.HttpClient.Response.Headers.AddHeader("X-Titanium-Header", "HTTP/2 works");
+            if (item != null && e.HttpClient.Response.HasBody)
+            {
+                e.HttpClient.Response.KeepBody = true;
+                await e.GetResponseBody();
 
-            //e.SetResponseBody(Encoding.ASCII.GetBytes("TITANIUMMMM!!!!"));
-
-            if (item != null)
-                if (e.HttpClient.Response.HasBody)
-                {
-                    e.HttpClient.Response.KeepBody = true;
-                    await e.GetResponseBody();
-
-                    await Dispatcher.InvokeAsync(() => { item.Update(e); });
-                    if (item == SelectedSession) await Dispatcher.InvokeAsync(SelectedSessionChanged);
-                }
+                await Dispatcher.InvokeAsync(() => { item.Update(e); });
+                if (item == SelectedSession) await Dispatcher.InvokeAsync(SelectedSessionChanged);
+            }
         }
 
         private async Task ProxyServer_AfterResponse(object sender, SessionEventArgs e)

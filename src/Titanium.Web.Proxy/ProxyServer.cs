@@ -1464,7 +1464,7 @@ public partial class ProxyServer : IDisposable
         // Name only, per the plan's rollout section - never hosts, URLs or secrets.
         ProxyLog.EffectiveProfileAtStartup(logger, profile, policyModes);
 
-        CertificateManager.ClearIdleCertificates();
+        _ = CertificateManager.ClearIdleCertificates();
 
         var startedTcpEndPoints = new List<ProxyEndPoint>();
         var startedQuicEndPoints = new List<TransparentQuicProxyEndPoint>();
@@ -1580,7 +1580,8 @@ public partial class ProxyServer : IDisposable
         // ClientConnectionCount (TCP-based H1/H2); draining only the former would let this
         // return, and the pools below get cleared, while HTTP/3 streams are still in flight.
         while ((ClientConnectionCount > 0 || Http3ClientConnectionCount > 0) && DateTime.UtcNow < deadline)
-            await Task.Delay(50).ConfigureAwait(false);
+            // StopCore already cancelled quicListenerCts; drain polling must not share that token.
+            await Task.Delay(50, CancellationToken.None).ConfigureAwait(false);
 
         TcpConnectionFactory.ClearPools();
         await QuicConnectionPool.DrainAsync();
@@ -1780,6 +1781,7 @@ public partial class ProxyServer : IDisposable
                     }
 
                     var acceptedClient = tcpClient;
+                    // Session lifetime is tracked separately; opt out of a process-wide token here.
                     Task.Run(async () =>
                     {
                         // HandleClient runs detached (fire-and-forget); an unobserved exception here would
@@ -1800,7 +1802,7 @@ public partial class ProxyServer : IDisposable
                             // connections cannot starve admission for a following burst.
                             ReleaseClientConnection(endPoint);
                         }
-                    });
+                    }, CancellationToken.None);
                 }
             }
             else
@@ -1907,9 +1909,9 @@ public partial class ProxyServer : IDisposable
             // Retry shortly instead of permanently abandoning the accept loop.
             _ = Task.Run(async () =>
             {
-                await Task.Delay(100).ConfigureAwait(false);
+                await Task.Delay(100, CancellationToken.None).ConfigureAwait(false);
                 BeginAcceptConnection(endPoint, listener);
-            });
+            }, CancellationToken.None);
         }
     }
 

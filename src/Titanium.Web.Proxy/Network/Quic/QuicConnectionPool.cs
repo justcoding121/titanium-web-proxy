@@ -75,7 +75,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
         _factory = factory;
         // Run on the thread pool so the first sweep (which may complete synchronously if the pool
         // starts empty) cannot block construction.
-        _cleanupTask = Task.Run(ClearIdleConnectionsAsync);
+        _cleanupTask = Task.Run(ClearIdleConnectionsAsync, _cleanupCts.Token);
     }
 
     /// <summary>
@@ -199,7 +199,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
             {
                 _warmupsInFlight.TryRemove(originKey, out _);
             }
-        });
+        }, _cleanupCts.Token);
     }
 
     private void Retire(QuicServerConnection connection)
@@ -215,7 +215,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     /// </summary>
     public async ValueTask DrainAsync()
     {
-        await _drainGate.WaitAsync();
+        await _drainGate.WaitAsync(_cleanupCts.Token);
         try
         {
             _draining = true;
@@ -240,9 +240,10 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     {
         _cleanupCts.Cancel();
         try { await _cleanupTask; } catch { /* best effort */ }
-        _cleanupCts.Dispose();
 
-        await DrainAsync();
+        // Drain while the CTS is still alive so WaitAsync can observe the token; dispose after.
+        try { await DrainAsync(); } catch (OperationCanceledException) { /* shutting down */ }
+        _cleanupCts.Dispose();
         _drainGate.Dispose();
     }
 
@@ -302,7 +303,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
 
                     // Only drop the entry once it is genuinely unused: taking the gate proves no
                     // caller is mid-creation and about to publish a connection into it.
-                    if (!entry.CreationGate.Wait(0)) continue;
+                    if (!entry.CreationGate.Wait(0, _cleanupCts.Token)) continue;
                     try
                     {
                         if (Volatile.Read(ref entry.Current) == null)

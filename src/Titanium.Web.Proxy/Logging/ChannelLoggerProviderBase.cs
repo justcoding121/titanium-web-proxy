@@ -59,7 +59,7 @@ internal abstract class ChannelLoggerProviderBase : ILoggerProvider
             FullMode = BoundedChannelFullMode.Wait
         });
 
-        writerTask = Task.Run(ProcessQueueAsync);
+        writerTask = Task.Run(ProcessQueueAsync, stopTokenSource.Token);
     }
 
     public ILogger CreateLogger(string categoryName)
@@ -173,7 +173,7 @@ internal abstract class ChannelLoggerProviderBase : ILoggerProvider
         {
             // Bounded drain: give the writer a short window to flush what is already queued, but
             // never block shutdown indefinitely on a stuck sink.
-            writerCompletedInTime = writerTask.Wait(TimeSpan.FromSeconds(3));
+            writerCompletedInTime = writerTask.Wait(TimeSpan.FromSeconds(3), stopTokenSource.Token);
         }
         catch
         {

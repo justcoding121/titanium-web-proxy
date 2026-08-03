@@ -86,13 +86,14 @@ internal class TcpConnectionFactory : IDisposable
     ///     for the full 3-second interval before checking <see cref="runCleanUpTask" />.
     /// </summary>
     private readonly CancellationTokenSource _cleanupCts = new();
+    private readonly Task _cleanupTask;
 
     internal TcpConnectionFactory(ProxyServer server)
     {
         Server = server ?? throw new ArgumentNullException(nameof(server));
         // Run on the thread pool so the first cleanup iteration (which may complete
         // WaitAsync synchronously) cannot block ProxyServer's constructor.
-        _ = Task.Run(ClearOutdatedConnections);
+        _cleanupTask = Task.Run(ClearOutdatedConnections, _cleanupCts.Token);
     }
 
     internal ProxyServer Server { get; }
@@ -579,7 +580,7 @@ internal class TcpConnectionFactory : IDisposable
                 port = externalProxy.Port;
             }
 
-            var ipAddresses = await Dns.GetHostAddressesAsync(hostname);
+            var ipAddresses = await Dns.GetHostAddressesAsync(hostname, cancellationToken);
             if (ipAddresses == null || ipAddresses.Length == 0)
             {
                 if (prefetch) return null;
@@ -609,7 +610,7 @@ internal class TcpConnectionFactory : IDisposable
             IPAddress[]? socksRemoteIpAddresses = null;
             if (socks && !externalProxy!.ProxyDnsRequests)
             {
-                socksRemoteIpAddresses = await Dns.GetHostAddressesAsync(connectHostName);
+                socksRemoteIpAddresses = await Dns.GetHostAddressesAsync(connectHostName, cancellationToken);
                 if (socksRemoteIpAddresses == null || socksRemoteIpAddresses.Length == 0)
                     throw new Exception($"Could not resolve the SOCKS remote hostname {connectHostName}");
 
@@ -784,7 +785,7 @@ internal class TcpConnectionFactory : IDisposable
 
                     var stagger = i == ipAddresses.Length - 1
                         ? null // nothing left to race the last address against
-                        : Task.Delay(HappyEyeballsAttemptDelayMs);
+                        : Task.Delay(HappyEyeballsAttemptDelayMs, raceCts.Token);
 
                     while (inFlight.Count > 0)
                     {
@@ -1457,11 +1458,11 @@ internal class TcpConnectionFactory : IDisposable
                 if (disposalBag.TryTake(out var connection))
                     connection?.Dispose();
 
-            // Do not dispose _cleanupCts or poolLock: the cleanup task may still be accessing
-            // _cleanupCts.Token (throwing ObjectDisposedException on the Token property even after
-            // Cancel()) and poolLock.EnterReadLock() (throwing ObjectDisposedException if disposed
-            // while the task is entering the lock). Neither holds unmanaged resources that need
-            // explicit release — the GC finalizer path is sufficient.
+            // Join the cleanup loop before disposing its CTS so Token access cannot race Dispose.
+            try { _cleanupTask.Wait(TimeSpan.FromSeconds(5)); }
+            catch { /* best effort */ }
+            _cleanupCts.Dispose();
+            // poolLock is left for GC: disposing it while a late reader enters can throw.
         }
 
         disposed = true;
