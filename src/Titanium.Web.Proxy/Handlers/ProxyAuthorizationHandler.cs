@@ -52,26 +52,27 @@ public partial class ProxyServer
             var credentials = header.AsMemory(firstSpace + 1);
 
             // Prefer basic when configured; otherwise use scheme auth.
-            // Nesting the scheme path under `basicAuthenticate is null` narrows schemeAuthenticate
-            // for the compiler without `!` (S8969) or a redundant null check (S2583).
-            if (basicAuthenticate is null)
+            if (basicAuthenticate is not null)
+                return await AuthenticateUserBasic(session, authenticationType, credentials,
+                    basicAuthenticate);
+
+            // Dual-null returned above and basic path returned above ⇒ schemeAuthenticate is set.
+            // Nullable flow does not carry that proof across the early return, so silence CS8602
+            // rather than using `!` (S8969) or a dead null check (S2583).
+#pragma warning disable CS8602
+            var result = await schemeAuthenticate(session, authenticationType.ToString(),
+                credentials.ToString());
+#pragma warning restore CS8602
+
+            if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
             {
-                var result = await schemeAuthenticate(session, authenticationType.ToString(),
-                    credentials.ToString());
+                session.HttpClient.Response =
+                    CreateAuthentication407Response(ProxyAuthenticationInvalid, result.Continuation);
 
-                if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
-                {
-                    session.HttpClient.Response =
-                        CreateAuthentication407Response(ProxyAuthenticationInvalid, result.Continuation);
-
-                    return false;
-                }
-
-                return result.Result == ProxyAuthenticationResult.Success;
+                return false;
             }
 
-            return await AuthenticateUserBasic(session, authenticationType, credentials,
-                basicAuthenticate);
+            return result.Result == ProxyAuthenticationResult.Success;
         }
         catch (Exception e)
         {
