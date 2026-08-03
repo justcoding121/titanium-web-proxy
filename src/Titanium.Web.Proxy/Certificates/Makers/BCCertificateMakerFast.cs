@@ -53,7 +53,7 @@ internal class BcCertificateMakerFast : ICertificateMaker
     /// <param name="sSubjectCn">The s subject cn.</param>
     /// <param name="signingCert">The signing cert.</param>
     /// <returns>X509Certificate2 instance.</returns>
-    public X509Certificate2 MakeCertificate(string sSubjectCn, X509Certificate2? signingCert = null)
+    public X509Certificate2 MakeCertificate(string sSubjectCn, X509Certificate2? signingCert)
     {
         return MakeCertificateInternal(sSubjectCn, signingCert);
     }

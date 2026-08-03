@@ -102,7 +102,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             var headerField = GetEntry(name, value);
             if (headerField != null)
             {
-                int index = GetIndex(headerField.Index) + StaticTable.Length;
+                int index = GetIndex(headerField.EntryIndex) + StaticTable.Length;
 
                 // Section 6.1. Indexed Header Field Representation
                 EncodeInteger(output, 0x80, 7, index);
@@ -315,7 +315,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// </summary>
         private int Length()
         {
-            return size == 0 ? 0 : head.After.Index - head.Before.Index + 1;
+            return size == 0 ? 0 : head.After.EntryIndex - head.Before.EntryIndex + 1;
         }
 
         /// <summary>
@@ -336,7 +336,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             int i = Index(h);
             for (var e = headerFields[i]; e != null; e = e.Next)
             {
-                if (e.Hash == h && name.Equals(e.NameData) && Equals(value, e.ValueData))
+                if (e.EntryHash == h && name.Equals(e.NameData) && Equals(value, e.ValueData))
                 {
                     return e;
                 }
@@ -363,9 +363,9 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             int index = -1;
             for (HeaderEntry? e = headerFields[i]; e != null; e = e.Next)
             {
-                if (e.Hash == h && name.Equals(e.NameData))
+                if (e.EntryHash == h && name.Equals(e.NameData))
                 {
-                    index = e.Index;
+                    index = e.EntryIndex;
                     break;
                 }
             }
@@ -385,7 +385,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
                 return index;
             }
 
-            return index - head.Before.Index + 1;
+            return index - head.Before.EntryIndex + 1;
         }
 
         /// <summary>
@@ -417,7 +417,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             int h = Hash(name);
             int i = Index(h);
             var old = headerFields[i];
-            var e = new HeaderEntry(h, name, value, head.Before.Index - 1, old);
+            var e = new HeaderEntry(h, name, value, head.Before.EntryIndex - 1, old);
             headerFields[i] = e;
             e.AddBefore(head);
             size += headerSize;
@@ -434,7 +434,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             }
 
             var eldest = head.After;
-            int h = eldest.Hash;
+            int h = eldest.EntryHash;
             int i = Index(h);
             var prev = headerFields[i];
             var e = prev;
@@ -528,9 +528,9 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             // These fields comprise the chained list for header fields with the same hash.
             public HeaderEntry? Next { get; set; }
 
-            public int Hash { get; }
+            public int EntryHash { get; }
 
-            public int Index { get; }
+            public int EntryIndex { get; }
 
             /// <summary>
             /// Creates new entry.
@@ -542,8 +542,8 @@ namespace Titanium.Web.Proxy.Http2.Hpack
             /// <param name="next">Next.</param>
             public HeaderEntry(int hash, ByteString name, ByteString value, int index, HeaderEntry? next) : base(name, value, true)
             {
-                Index = index;
-                Hash = hash;
+                EntryIndex = index;
+                EntryHash = hash;
                 Next = next;
                 Before = this;
                 After = this;

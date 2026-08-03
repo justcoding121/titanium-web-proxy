@@ -88,7 +88,7 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
 
         if (!string.IsNullOrEmpty(proxyListString))
         {
-            proxyListString = RemoveWhitespaces(proxyListString!);
+            proxyListString = RemoveWhitespaces(proxyListString);
             proxyList = proxyListString.Split(';');
         }
 
@@ -124,7 +124,7 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
             HttpSystemProxyValue? value = null;
             if (ProxyInfo?.Proxies?.TryGetValue(protocolType.Value, out value) == true)
             {
-                var systemProxy = new ExternalProxy(value!.HostName, value.Port);
+                var systemProxy = new ExternalProxy(value.HostName, value.Port);
                 return systemProxy;
             }
         }

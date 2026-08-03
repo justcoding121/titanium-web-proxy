@@ -473,7 +473,7 @@ public partial class ProxyServer
                         await TcpConnectionFactory.Release(prefetchConnectionTask, true);
                         prefetchConnectionTask = null;
                         var (h3BridgeHost, h3BridgePort) =
-                            ParseHostAndPort(connectArgs.HttpClient.ConnectRequest!.Authority.GetString(), 443);
+                            ParseHostAndPort(connectArgs.HttpClient.ConnectRequest.Authority.GetString(), 443);
                         await SendHttp2ToHttp3Bridge(clientStream, endPoint, connectArgs.HttpClient.ConnectRequest,
                             connectArgs.UserData, h3BridgeHost, h3BridgePort,
                             connectArgs.CancellationTokenSource, connectArgs.UpstreamHttpProtocol);
@@ -487,7 +487,7 @@ public partial class ProxyServer
                         // and RetainedConnectionTask is null) - every h2 stream on this connection instead gets
                         // its own independently managed HTTP/1.1 origin connection from SendHttp2ToHttp11Bridge.
                         var (bridgeHost, bridgePort) =
-                            ParseHostAndPort(connectArgs.HttpClient.ConnectRequest!.Authority.GetString(), 443);
+                            ParseHostAndPort(connectArgs.HttpClient.ConnectRequest.Authority.GetString(), 443);
                         await SendHttp2ToHttp11Bridge(clientStream, endPoint, connectArgs.HttpClient.ConnectRequest,
                             connectArgs.UserData, bridgeHost, bridgePort, null, null,
                             connectArgs.CancellationTokenSource);
@@ -499,7 +499,7 @@ public partial class ProxyServer
                     // is still a valid, healthy, correctly keyed h2 connection. This is what collapses the
                     // previous up-to-three-connections cold h2 flow (probe + prefetch + session) into one.
                     var (sessionConnectHost, sessionConnectPort) =
-                        ParseHostAndPort(connectArgs.HttpClient.ConnectRequest!.Authority.GetString(), 443);
+                        ParseHostAndPort(connectArgs.HttpClient.ConnectRequest.Authority.GetString(), 443);
                     var expectedCacheKey = GetHttp2ConnectionCacheKey(connectArgs, sessionConnectHost,
                         sessionConnectPort, null, null);
                     var connection = await AdoptRetainedConnectionAsync(prefetchConnectionTask, expectedCacheKey,
@@ -579,6 +579,11 @@ public partial class ProxyServer
 
             if (requiresH2OriginBridge)
             {
+                var bridgeArgs = connectArgs ??
+                    throw new InvalidOperationException("HTTP/2 origin bridging requires CONNECT session state.");
+                var connectRequest = bridgeArgs.HttpClient.ConnectRequest ??
+                    throw new InvalidOperationException("HTTP/2 origin bridging requires a CONNECT request.");
+
                 // UpstreamHttpProtocol.Http2 + AllowHttpProtocolTranslation: the client never offered "h2"
                 // (see the http2Supported computation above), so it stays on the normal HTTP/1.1 wire format,
                 // but every request must be translated onto the already-established h2 origin connection
@@ -586,10 +591,10 @@ public partial class ProxyServer
                 // Http2NegotiationResult) via the HTTP/1.1-client-to-h2-origin bridge instead of the normal
                 // protocol-symmetric HandleHttpSessionRequest pipeline.
                 var (bridgeHost, bridgePort) =
-                    ParseHostAndPort(connectArgs!.HttpClient.ConnectRequest!.Authority.GetString(), 443);
-                await SendHttp11ToHttp2Bridge(clientStream, endPoint, connectArgs.HttpClient.ConnectRequest,
-                    connectArgs.UserData, bridgeHost, bridgePort, null, null, prefetchTask,
-                    connectArgs.CancellationTokenSource);
+                    ParseHostAndPort(connectRequest.Authority.GetString(), 443);
+                await SendHttp11ToHttp2Bridge(clientStream, endPoint, connectRequest,
+                    bridgeArgs.UserData, bridgeHost, bridgePort, null, null, prefetchTask,
+                    bridgeArgs.CancellationTokenSource);
                 return;
             }
 

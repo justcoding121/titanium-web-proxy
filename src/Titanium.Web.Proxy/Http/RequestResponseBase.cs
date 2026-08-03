@@ -293,7 +293,7 @@ public abstract class RequestResponseBase
             else if (BodyInternal != null && !isChunked && ContentLength < 0)
             {
                 // Buffered body with no Content-Length (e.g. H2/H3 origin) — publish the length.
-                ContentLength = body!.Length;
+                ContentLength = body.Length;
             }
 
             return body;

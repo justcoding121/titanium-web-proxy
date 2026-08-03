@@ -56,7 +56,7 @@ public class Http2OriginStripFramingAndSystemProxyTests
             new HttpSystemProxyValue("proxy", 8080, ProxyProtocolType.Http).ToString());
         Assert.AreEqual("https=proxy:8443",
             new HttpSystemProxyValue("proxy", 8443, ProxyProtocolType.Https).ToString());
-        Assert.ThrowsExactly<NotSupportedException>(() =>
-            new HttpSystemProxyValue("proxy", 1, (ProxyProtocolType)999).ToString());
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            new HttpSystemProxyValue("proxy", 1, (ProxyProtocolType)999));
     }
 }

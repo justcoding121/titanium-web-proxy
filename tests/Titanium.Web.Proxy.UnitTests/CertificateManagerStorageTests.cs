@@ -128,7 +128,7 @@ public class CertificateManagerStorageTests
     }
 
     [TestMethod]
-    public void CreateCertificate_SaveFakeCertificates_PersistsLeafViaStorage()
+    public async Task CreateCertificate_SaveFakeCertificates_PersistsLeafViaStorage()
     {
         var cache = new FakeCertificateCache();
         using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
@@ -144,7 +144,7 @@ public class CertificateManagerStorageTests
         // Save runs on a background Task; wait briefly for persistence.
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (cache.SaveLeafCount == 0 && DateTime.UtcNow < deadline)
-            Thread.Sleep(50);
+            await Task.Delay(50);
 
         Assert.IsTrue(cache.SaveLeafCount >= 1);
         Assert.IsTrue(cache.Leaves.ContainsKey("save-fake.example"));

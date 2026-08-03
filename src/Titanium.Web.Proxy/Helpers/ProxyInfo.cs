@@ -135,7 +135,7 @@ internal class ProxyInfo
 
         if (string.IsNullOrWhiteSpace(proxyServerValues)) return result;
 
-        foreach (var str in proxyServerValues!.Split(';'))
+        foreach (var str in proxyServerValues.Split(';'))
             result.AddRange(ParseProxyValue(str));
 
         return result;

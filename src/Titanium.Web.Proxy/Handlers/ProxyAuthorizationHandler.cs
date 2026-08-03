@@ -18,8 +18,11 @@ public partial class ProxyServer
     /// <returns>True if authorized.</returns>
     private async Task<bool> CheckAuthorization(SessionEventArgsBase session)
     {
+        var basicAuthenticate = ProxyBasicAuthenticateFunc;
+        var schemeAuthenticate = ProxySchemeAuthenticateFunc;
+
         // If we are not authorizing clients return true
-        if (ProxyBasicAuthenticateFunc == null && ProxySchemeAuthenticateFunc == null) return true;
+        if (basicAuthenticate == null && schemeAuthenticate == null) return true;
 
         var httpHeaders = session.HttpClient.Request.Headers;
 
@@ -46,13 +49,16 @@ public partial class ProxyServer
             var authenticationType = header.AsMemory(0, firstSpace);
             var credentials = header.AsMemory(firstSpace + 1);
 
-            if (ProxyBasicAuthenticateFunc != null)
+            if (basicAuthenticate != null)
                 return await AuthenticateUserBasic(session, authenticationType, credentials,
-                    ProxyBasicAuthenticateFunc);
+                    basicAuthenticate);
 
             // Both funcs null already returned above; Basic path returned; Scheme is therefore required.
+            if (schemeAuthenticate == null)
+                throw new InvalidOperationException(
+                    "A scheme authentication callback is required when basic authentication is unavailable.");
             var result =
-                await ProxySchemeAuthenticateFunc!(session, authenticationType.ToString(), credentials.ToString());
+                await schemeAuthenticate(session, authenticationType.ToString(), credentials.ToString());
 
             if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
             {
@@ -119,7 +125,7 @@ public partial class ProxyServer
             StatusDescription = description
         };
 
-        if (!string.IsNullOrWhiteSpace(continuation)) return CreateContinuationResponse(response, continuation!);
+        if (!string.IsNullOrWhiteSpace(continuation)) return CreateContinuationResponse(response, continuation);
 
         if (ProxyBasicAuthenticateFunc != null)
             response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, $"Basic realm=\"{ProxyAuthenticationRealm}\"");

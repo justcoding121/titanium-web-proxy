@@ -10,11 +10,20 @@ namespace Titanium.Web.Proxy.Helpers;
 
 internal class HttpSystemProxyValue
 {
+    private readonly string protocol;
+
     public HttpSystemProxyValue(string hostName, int port, ProxyProtocolType protocolType)
     {
         HostName = hostName;
         Port = port;
         ProtocolType = protocolType;
+        protocol = protocolType switch
+        {
+            ProxyProtocolType.Http => ProxyServer.UriSchemeHttp,
+            ProxyProtocolType.Https => ProxyServer.UriSchemeHttps,
+            _ => throw new ArgumentOutOfRangeException(nameof(protocolType), protocolType,
+                "Only HTTP and HTTPS proxy values are supported.")
+        };
     }
 
     internal string HostName { get; }
@@ -25,19 +34,6 @@ internal class HttpSystemProxyValue
 
     public override string ToString()
     {
-        string protocol;
-        switch (ProtocolType)
-        {
-            case ProxyProtocolType.Http:
-                protocol = ProxyServer.UriSchemeHttp;
-                break;
-            case ProxyProtocolType.Https:
-                protocol = ProxyServer.UriSchemeHttps;
-                break;
-            default:
-                throw new NotSupportedException("Unsupported protocol type");
-        }
-
         return $"{protocol}={HostName}:{Port}";
     }
 }

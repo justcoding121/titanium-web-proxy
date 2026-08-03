@@ -13,7 +13,7 @@ internal static class HeaderParser
         string? tmpLine;
         while (!string.IsNullOrEmpty(tmpLine = await reader.ReadLineAsync(cancellationToken)))
         {
-            var colonIndex = tmpLine!.IndexOf(':');
+            var colonIndex = tmpLine.IndexOf(':');
             if (colonIndex == -1) throw new FormatException("Header line should contain a colon character.");
 
             var headerName = tmpLine.AsSpan(0, colonIndex).ToString();

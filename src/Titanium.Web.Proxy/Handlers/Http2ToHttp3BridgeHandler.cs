@@ -179,7 +179,7 @@ public partial class ProxyServer
                         $"H2→H3 bridge round trip failed for stream {ctx.StreamId}",
                         new ProxyHttpException(
                             $"H2→H3 bridge round trip failed for stream {ctx.StreamId}",
-                            t.Exception!.GetBaseException(), sessionArgs));
+                            t.Exception.GetBaseException(), sessionArgs));
             }, TaskScheduler.Default);
 
         // Register ownership BEFORE returning from this delegate so Http2Helper sees the state

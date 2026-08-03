@@ -95,7 +95,7 @@ public partial class ProxyServer
                     }
                 }
 
-                var request = args!.HttpClient.Request;
+                var request = args.HttpClient.Request;
                 if (isHttps) request.IsHttps = true;
 
                 try
@@ -292,7 +292,7 @@ public partial class ProxyServer
                                 var socket = connection.TcpSocket;
                                 var part1 = socket.Poll(1000, SelectMode.SelectRead);
                                 var part2 = socket.Available == 0;
-                                if (part1 & part2)
+                                if (part1 && part2)
                                 {
                                     //connection is closed
                                     await TcpConnectionFactory.Release(connection, true);
@@ -548,7 +548,7 @@ public partial class ProxyServer
             {
                 // connectRequest can be null for SOCKS connection
                 if (args.HttpClient.ConnectRequest != null)
-                    args.HttpClient.ConnectRequest!.TunnelType = TunnelType.Websocket;
+                    args.HttpClient.ConnectRequest.TunnelType = TunnelType.Websocket;
 
                 // if upgrading to websocket then relay the request without reading the contents
                 await HandleWebSocketUpgrade(args, args.ClientStream, connection, cancellationTokenSource,

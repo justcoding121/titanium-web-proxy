@@ -52,7 +52,7 @@ internal sealed class Http2OriginGoAwayException : IOException
 ///         to the HTTP/1.1 client is a future phase).
 ///     </para>
 /// </summary>
-internal sealed class Http2OriginConnection
+internal sealed class Http2OriginConnection : IDisposable
 {
     /// <summary>Every HTTP/2 endpoint must accept frames up to this size (RFC 7540 §4.2), so it is always safe to send.</summary>
     private const int SafeMaxFrameSize = 16384;
@@ -79,7 +79,7 @@ internal sealed class Http2OriginConnection
     private volatile bool faulted;
     private volatile bool goingAway;
     private int goAwayLastStreamId = int.MaxValue;
-    private Task? readLoopTask;
+    private int disposed;
 
     private Http2OriginConnection(TcpServerConnection connection, ILogger logger, long maxBufferedBodyBytes,
         ProxyResourceLimits resourceLimits)
@@ -127,7 +127,7 @@ internal sealed class Http2OriginConnection
                 // Shared with the H2↔H2 MITM path (SendHttp2ClientConnectionStartupAsync).
                 await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.stream, cancellationToken);
 
-                instance.readLoopTask = instance.ReadLoopAsync(instance.connectionCts.Token);
+                _ = instance.ReadLoopAsync(instance.connectionCts.Token);
 
                 try
                 {
@@ -715,11 +715,14 @@ internal sealed class Http2OriginConnection
                             {
                                 if (data.Length > 0)
                                 {
+                                    var tunnelDataChannel = pendingData.TunnelDataChannel ??
+                                        throw new InvalidOperationException("A tunnel stream has no data channel.");
+
                                     // Bounded channel provides backpressure; drop only if the tunnel is
                                     // already tearing down (writer completed).
                                     try
                                     {
-                                        await pendingData.TunnelDataChannel!.Writer
+                                        await tunnelDataChannel.Writer
                                             .WriteAsync(data, cancellationToken);
                                     }
                                     catch (ChannelClosedException)
@@ -1043,8 +1046,10 @@ internal sealed class Http2OriginConnection
     ///     <c>CloseServerConnection</c>) and must not, by itself, be reported through the logging gateway
     ///     - see <see cref="Fail" />.
     /// </summary>
-    internal void Dispose()
+    public void Dispose()
     {
+        if (Interlocked.Exchange(ref disposed, 1) != 0) return;
+
         Fail(new ObjectDisposedException(nameof(Http2OriginConnection)), false);
         connectionCts.Cancel();
         connectionCts.Dispose();

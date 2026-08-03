@@ -782,7 +782,7 @@ namespace Titanium.Web.Proxy.Http2
                                     if (t.IsFaulted)
                                     {
                                         ReportException(logger, new ProxyHttpException(
-                                            "HTTP/2 synthetic response failed", t.Exception!.GetBaseException(),
+                                            "HTTP/2 synthetic response failed", t.Exception.GetBaseException(),
                                             sessionArgs));
                                     }
                                 }, TaskScheduler.Default);
@@ -847,7 +847,7 @@ namespace Titanium.Web.Proxy.Http2
                                             if (t.IsFaulted)
                                                 ReportException(logger, new ProxyHttpException(
                                                     "HTTP/2 synthetic response failed",
-                                                    t.Exception!.GetBaseException(), sessionArgs));
+                                                    t.Exception.GetBaseException(), sessionArgs));
                                         }, TaskScheduler.Default);
                                     if (unknProtoState != null) unknProtoState.SyntheticTask = synthTask501;
                                     pendingSynthetics.Add(synthTask501);
@@ -999,7 +999,7 @@ namespace Titanium.Web.Proxy.Http2
                                         if (t.IsFaulted)
                                         {
                                             ReportException(logger, new ProxyHttpException(
-                                                "HTTP/2 synthetic response failed", t.Exception!.GetBaseException(),
+                                                "HTTP/2 synthetic response failed", t.Exception.GetBaseException(),
                                                 sessionArgs));
                                         }
                                     }, TaskScheduler.Default);
@@ -1436,7 +1436,7 @@ namespace Titanium.Web.Proxy.Http2
                     {
                         var completeBlock = pendingHeaderBlock.ToArray();
                         var pStreamId = pendingHeaderStreamId;
-                        var pArgs = pendingHeaderArgs!;
+                        var pArgs = pendingHeaderArgs;
                         var pRr = pendingHeaderRr!;
                         var pEndStream = pendingHeaderEndStream;
                         var pIsPromise = pendingHeaderIsPromise;
@@ -2960,7 +2960,7 @@ namespace Titanium.Web.Proxy.Http2
             {
             }
 
-            public override Task FlushAsync(CancellationToken ct)
+            public override Task FlushAsync(CancellationToken cancellationToken)
             {
                 return Task.CompletedTask;
             }
@@ -2985,13 +2985,13 @@ namespace Titanium.Web.Proxy.Http2
                 throw new NotSupportedException("Use WriteAsync.");
             }
 
-            public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct)
+            public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
             {
-                return WriteAsync(buffer.AsMemory(offset, count), ct).AsTask();
+                return WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
             }
 
             public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
-                CancellationToken ct = default)
+                CancellationToken cancellationToken = default)
             {
                 if (buffer.IsEmpty) return;
 

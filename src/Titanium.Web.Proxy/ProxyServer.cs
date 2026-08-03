@@ -1284,7 +1284,7 @@ public partial class ProxyServer : IDisposable
         }
 
         SystemProxySettingsManager.SetProxy(
-            Equals(endPoint.IpAddress, IPAddress.Any) |
+            Equals(endPoint.IpAddress, IPAddress.Any) ||
             Equals(endPoint.IpAddress, IPAddress.Loopback)
                 ? "localhost"
                 : endPoint.IpAddress.ToString(),

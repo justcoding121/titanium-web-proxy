@@ -286,7 +286,7 @@ public sealed class CertificateManager : IDisposable
                 }
 
             // Every switch arm assigns certEngineValue or throws.
-            return certEngineValue!;
+            return certEngineValue;
         }
     }
 

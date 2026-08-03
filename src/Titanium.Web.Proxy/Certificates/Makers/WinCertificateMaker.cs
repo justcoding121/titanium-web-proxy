@@ -92,7 +92,7 @@ internal class WinCertificateMaker : ICertificateMaker
     /// <summary>
     ///     Make certificate.
     /// </summary>
-    public X509Certificate2 MakeCertificate(string sSubjectCn, X509Certificate2? signingCert = null)
+    public X509Certificate2 MakeCertificate(string sSubjectCn, X509Certificate2? signingCert)
     {
         return MakeCertificate(sSubjectCn, true, signingCert);
     }

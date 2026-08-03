@@ -238,7 +238,7 @@ public class SslExtension
                     list.Add("x448 [0x1E]");
                     break;
                 case 256:
-                    list.Add("ffdhe2048	[0x0100]");
+                    list.Add("ffdhe2048\t[0x0100]");
                     break;
                 case 257:
                     list.Add("ffdhe3072 [0x0101]");

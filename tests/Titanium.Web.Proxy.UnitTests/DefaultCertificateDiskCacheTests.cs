@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
@@ -65,7 +66,7 @@ public class DefaultCertificateDiskCacheTests
     ///     accumulating forever.
     /// </summary>
     [TestMethod]
-    public void PruneToMaxEntries_DeletesOldestFilesFirst_KeepingOnlyTheBound()
+    public async Task PruneToMaxEntries_DeletesOldestFilesFirst_KeepingOnlyTheBound()
     {
         if (!RunTime.IsWindows)
             Assert.Inconclusive("PKCS#12 Exportable disk-cache characterization is Windows-focused.");
@@ -90,7 +91,7 @@ public class DefaultCertificateDiskCacheTests
                 using var cert = mgr.CreateCertificate(name, false);
                 cache.SaveCertificate(name, cert!);
                 // Ensure distinct LastWriteTimeUtc ordering between files created back-to-back.
-                Thread.Sleep(20);
+                await Task.Delay(20);
             }
 
             cache.PruneToMaxEntries(2);

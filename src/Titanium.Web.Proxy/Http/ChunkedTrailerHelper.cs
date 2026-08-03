@@ -69,7 +69,7 @@ internal static class ChunkedTrailerHelper
                 throw new ProxyHttpException(
                     $"Chunked trailer has too many header lines (> {MaxTrailerHeaderCount}).", null, null);
 
-            totalSize += line!.Length;
+            totalSize += line.Length;
             if (totalSize > MaxTrailerHeaderBlockSize)
                 throw new ProxyHttpException(
                     $"Chunked trailer exceeds the maximum allowed size of {MaxTrailerHeaderBlockSize} bytes.",

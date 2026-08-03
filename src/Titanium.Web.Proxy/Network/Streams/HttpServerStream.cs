@@ -8,6 +8,8 @@ namespace Titanium.Web.Proxy.Helpers;
 
 internal sealed class HttpServerStream : HttpStream
 {
+    protected override bool IsRetryableHeaderWriteFailure => true;
+
     internal HttpServerStream(ProxyServer server, Stream stream, IBufferPool bufferPool,
         CancellationToken cancellationToken)
         : base(server, stream, bufferPool, cancellationToken)

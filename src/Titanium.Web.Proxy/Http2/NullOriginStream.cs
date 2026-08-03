@@ -67,7 +67,7 @@ internal sealed class NullOriginStream : Stream
     {
     }
 
-    public override Task FlushAsync(CancellationToken flushCancellationToken)
+    public override Task FlushAsync(CancellationToken cancellationToken)
     {
         return Task.CompletedTask;
     }
@@ -88,7 +88,7 @@ internal sealed class NullOriginStream : Stream
     }
 
     public override async Task<int> ReadAsync(byte[] buffer, int offset, int count,
-        CancellationToken readCancellationToken)
+        CancellationToken cancellationToken)
     {
         if (settingsBytesServed < EmptySettingsFrame.Length)
         {
@@ -103,7 +103,7 @@ internal sealed class NullOriginStream : Stream
         // independently by the bridge. Block until the connection is torn down rather than returning 0
         // (EOF), which the generic relay loop would otherwise treat as an unexpected server disconnect and
         // use as a reason to tear down every other multiplexed stream on the client-facing leg too.
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, readCancellationToken);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(this.cancellationToken, cancellationToken);
         await Task.Delay(Timeout.Infinite, linked.Token);
         return 0; // unreachable: Task.Delay(Timeout.Infinite, ...) only ever completes by throwing.
     }
@@ -113,7 +113,7 @@ internal sealed class NullOriginStream : Stream
         // discarded - see class remarks.
     }
 
-    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken writeCancellationToken)
+    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
         // discarded - see class remarks.
         return Task.CompletedTask;

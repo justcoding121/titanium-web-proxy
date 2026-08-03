@@ -36,10 +36,10 @@ internal sealed class RollingFileLoggerProvider : ChannelLoggerProviderBase
 
         try
         {
-            EnsureWriter();
+            var currentWriter = EnsureWriter();
 
             var line = ProxyLog.FormatLine(entry);
-            await writer!.WriteLineAsync(line).ConfigureAwait(false);
+            await currentWriter.WriteLineAsync(line).ConfigureAwait(false);
             currentSize += Encoding.UTF8.GetByteCount(line) + Environment.NewLine.Length;
 
             if (currentSize >= maxFileSizeBytes) Roll();
@@ -56,9 +56,9 @@ internal sealed class RollingFileLoggerProvider : ChannelLoggerProviderBase
         }
     }
 
-    private void EnsureWriter()
+    private StreamWriter EnsureWriter()
     {
-        if (writer != null) return;
+        if (writer != null) return writer;
 
         var directory = Path.GetDirectoryName(filePath);
         if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
@@ -67,6 +67,7 @@ internal sealed class RollingFileLoggerProvider : ChannelLoggerProviderBase
         var stream = new FileStream(filePath, FileMode.Append, FileAccess.Write, FileShare.Read);
         currentSize = stream.Length;
         writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
+        return writer;
     }
 
     private void Roll()

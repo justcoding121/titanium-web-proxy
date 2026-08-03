@@ -52,6 +52,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// </summary>
     public bool SupportsBodyWriteHook { get; }
 
+    /// <summary>
+    ///     Whether a header write failure should be translated into a retryable server-connection failure.
+    /// </summary>
+    protected virtual bool IsRetryableHeaderWriteFailure => false;
+
     public event EventHandler<DataEventArgs>? DataRead;
 
     public event EventHandler<DataEventArgs>? DataWrite;
@@ -370,7 +375,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     {
         // When index is greater than the buffer size
         if (streamBuffer.Length <= index)
-            throw new ArgumentOutOfRangeException("Requested Peek index exceeds the buffer size. Consider increasing the buffer size.");
+            throw new ArgumentOutOfRangeException(nameof(index), index,
+                "Requested peek index exceeds the buffer size. Consider increasing the buffer size.");
 
         while (Available <= index)
         {
@@ -397,7 +403,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         // When index is greater than the buffer size
         if (streamBuffer.Length <= index + count)
             throw new ArgumentOutOfRangeException(
-                "Requested Peek index and size exceeds the buffer size. Consider increasing the buffer size.");
+                nameof(count), count,
+                "Requested peek index and size exceed the buffer size. Consider increasing the buffer size.");
 
         while (Available <= index)
         {
@@ -419,7 +426,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// <exception cref="Exception">Index is out of buffer size</exception>
     public byte PeekByteFromBuffer(int index)
     {
-        if (Available <= index) throw new ArgumentOutOfRangeException("Index is out of buffer size");
+        if (Available <= index)
+            throw new ArgumentOutOfRangeException(nameof(index), index, "Index is outside the buffered data.");
 
         return streamBuffer[bufferPos + index];
     }
@@ -431,7 +439,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// <exception cref="Exception">Buffer is empty</exception>
     public byte ReadByteFromBuffer()
     {
-        if (Available == 0) throw new ArgumentOutOfRangeException("Buffer is empty");
+        if (Available == 0) throw new InvalidOperationException("Buffer is empty.");
 
         Available--;
         return streamBuffer[bufferPos++];
@@ -933,7 +941,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         catch (IOException e)
         {
             //throw this as ServerConnectionException so that RetryPolicy can retry with a new server connection.
-            if (this is HttpServerStream)
+            if (IsRetryableHeaderWriteFailure)
                 throw new RetryableServerConnectionException(
                     "Server connection was closed. Exception while sending request line and headers.", e);
 
@@ -1076,8 +1084,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         // ITransportCapableStream marker rather than the public IHttpStreamWriter/IHttpStreamReader interfaces,
         // so external implementers of those public interfaces are not source-broken; one that doesn't also
         // implement the marker is simply treated as not supporting the hook (today's behavior, preserved).
-        var readerSupportsHook = this is ITransportCapableStream { SupportsBodyWriteHook: true };
-        var writerSupportsHook = writer is ITransportCapableStream { SupportsBodyWriteHook: true };
+        var readerSupportsHook = SupportsBodyWriteHook;
+        var writerSupportsHook = writer is ITransportCapableStream { SupportsBodyWriteHook: true }; // NOSONAR S3060 -- preserves external interface compatibility.
 
         if (readerSupportsHook && writerSupportsHook &&
             ((isRequest && args.HttpClient.Request.OriginalHasBody && !args.HttpClient.Request.IsBodyRead && server.ShouldCallBeforeRequestBodyWrite()) ||

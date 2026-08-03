@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http3;
 
@@ -63,14 +64,14 @@ public class Http3OriginCapabilityCacheTests
     }
 
     [TestMethod]
-    public void TryGet_AfterExpiry_ReturnsFalse()
+    public async Task TryGet_AfterExpiry_ReturnsFalse()
     {
         var cache = new Http3OriginCapabilityCache();
 
         cache.Set("example.com:443", ttl: TimeSpan.FromMilliseconds(50));
         Assert.IsTrue(cache.TryGet("example.com:443", out _), "Entry should be fresh immediately.");
 
-        Thread.Sleep(200);
+        await Task.Delay(200);
 
         var found = cache.TryGet("example.com:443", out _);
 
@@ -251,13 +252,13 @@ public class AltSvcParserTests
 public class Http3OriginCapabilityCacheTrimTests
 {
     [TestMethod]
-    public void TrimExpired_RemovesExpiredEntries()
+    public async Task TrimExpired_RemovesExpiredEntries()
     {
         var cache = new Http3OriginCapabilityCache();
         cache.Set("a.example.com:443", ttl: TimeSpan.FromMilliseconds(50));
         cache.Set("b.example.com:443", altPort: 8443, ttl: TimeSpan.FromMilliseconds(50));
 
-        Thread.Sleep(200);
+        await Task.Delay(200);
 
         cache.TrimExpired();
 

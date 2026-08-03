@@ -36,7 +36,7 @@ namespace Titanium.Web.Proxy.ProxySocket;
 ///     The exception that is thrown when a proxy error occurs.
 /// </summary>
 [Serializable]
-internal class ProxyException : Exception
+internal class ProxyException : Exception // NOSONAR S3871 -- legacy SOCKS implementation detail is not supported public API.
 {
     /// <summary>
     ///     Initializes a new instance of the ProxyException class.

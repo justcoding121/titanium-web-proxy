@@ -109,21 +109,23 @@ internal static class Http1FramingValidator
         long? normalized = null;
 
         foreach (var entry in entries)
-        foreach (var rawToken in entry.Value.Split(','))
         {
-            var token = rawToken.Trim();
+            foreach (var rawToken in entry.Value.Split(','))
+            {
+                var token = rawToken.Trim();
 
-            if (!TryParseStrictDigits(token, out var value))
-                throw new Http1FramingException(
-                    $"Ambiguous framing: Content-Length value '{token}' is not a valid 1*DIGIT.",
-                    HttpStatusCode.BadRequest);
+                if (!TryParseStrictDigits(token, out var value))
+                    throw new Http1FramingException(
+                        $"Ambiguous framing: Content-Length value '{token}' is not a valid 1*DIGIT.",
+                        HttpStatusCode.BadRequest);
 
-            if (normalized is { } existing && existing != value)
-                throw new Http1FramingException(
-                    "Ambiguous framing: conflicting Content-Length values were received.",
-                    HttpStatusCode.BadRequest);
+                if (normalized is { } existing && existing != value)
+                    throw new Http1FramingException(
+                        "Ambiguous framing: conflicting Content-Length values were received.",
+                        HttpStatusCode.BadRequest);
 
-            normalized = value;
+                normalized = value;
+            }
         }
 
         if (normalized is not { } finalValue) return;
@@ -158,10 +160,12 @@ internal static class Http1FramingValidator
 
         var codings = new List<string>();
         foreach (var entry in entries)
-        foreach (var rawToken in entry.Value.Split(','))
         {
-            var token = rawToken.Trim();
-            if (token.Length > 0) codings.Add(token);
+            foreach (var rawToken in entry.Value.Split(','))
+            {
+                var token = rawToken.Trim();
+                if (token.Length > 0) codings.Add(token);
+            }
         }
 
         if (codings.Count == 0)

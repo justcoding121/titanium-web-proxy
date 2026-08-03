@@ -214,8 +214,10 @@ public class HeaderCollection : IEnumerable<HttpHeader>
         foreach (var header in headers.Values) result.Add(header);
 
         foreach (var list in nonUniqueHeaders.Values)
-        foreach (var header in list)
-            result.Add(header);
+        {
+            foreach (var header in list)
+                result.Add(header);
+        }
 
         return result;
     }

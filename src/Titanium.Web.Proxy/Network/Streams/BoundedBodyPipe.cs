@@ -10,9 +10,7 @@ namespace Titanium.Web.Proxy.Network.Streams;
 ///     A bounded, cancellation-aware pipe wrapping <see cref="System.IO.Pipelines.Pipe"/>
 ///     for streaming HTTP body bytes between producer and consumer tasks. Enforces a
 ///     configurable maximum total byte count; once exceeded the writer is faulted with
-///     <see cref="BodySizeLimitExceededException"/>. Supports optional body replay by
-///     buffering all bytes written until <see cref="MarkReplayable"/> is called or the
-///     body is small enough to fit in memory.
+///     <see cref="BodySizeLimitExceededException"/>.
 /// </summary>
 internal sealed class BoundedBodyPipe : IDisposable
 {
@@ -96,13 +94,6 @@ internal sealed class BoundedBodyPipe : IDisposable
         await pipe.Reader.CopyToAsync(destination, cancellationToken);
         await pipe.Reader.CompleteAsync();
     }
-
-    /// <summary>
-    ///     Marks this pipe as replayable. Once called, bytes already in the pipe's buffer
-    ///     are retained so a second consumer can re-read them from the beginning.
-    ///     (Placeholder — full replay support wired in a subsequent phase.)
-    /// </summary>
-    internal static void MarkReplayable() { }
 
     public void Dispose()
     {

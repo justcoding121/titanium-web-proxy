@@ -514,7 +514,7 @@ internal class TcpConnectionFactory : IDisposable
         // The actual destination we open the TCP connection to. When a fixed forward target
         // is configured, this differs from remoteHostName/remotePort which are kept for
         // TLS SNI/certificate validation, the HTTP Host header and connection identity.
-        var connectHostName = string.IsNullOrEmpty(connectHost) ? remoteHostName : connectHost!;
+        var connectHostName = string.IsNullOrEmpty(connectHost) ? remoteHostName : connectHost;
         var connectPortNumber = connectPort ?? remotePort;
 
         // deny connection to proxy end points to avoid infinite connection loop.
@@ -633,7 +633,7 @@ internal class TcpConnectionFactory : IDisposable
             var connectTimeoutMs = (int)(sessionArgs?.ConnectTimeout?.TotalMilliseconds
                 ?? proxyServer.ConnectTimeOutSeconds * 1000.0);
             var effectiveTimeoutSecs = sessionArgs?.ConnectTimeout.HasValue == true
-                ? $"{sessionArgs.ConnectTimeout!.Value.TotalSeconds:0.#}s"
+                ? $"{sessionArgs.ConnectTimeout.Value.TotalSeconds:0.#}s"
                 : $"{proxyServer.ConnectTimeOutSeconds}s";
 
             // Attempts one resolved address end to end (socket creation through connect) and either

@@ -15,7 +15,7 @@ namespace Titanium.Web.Proxy.Exceptions;
 ///         connection must be closed rather than kept alive or returned to a pool.
 ///     </para>
 /// </summary>
-internal sealed class Http1FramingException : Exception
+internal sealed class Http1FramingException : Exception // NOSONAR S3871 -- internal wire-framing detail is not supported public API.
 {
     public Http1FramingException(string message, HttpStatusCode statusCode) : base(message)
     {
