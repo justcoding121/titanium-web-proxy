@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -31,7 +31,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class InterimResponseTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)

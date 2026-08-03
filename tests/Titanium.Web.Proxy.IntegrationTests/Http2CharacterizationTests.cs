@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -30,7 +30,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Http2CharacterizationTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -56,7 +56,7 @@ public class Http2CharacterizationTests
     ///     always offers exactly "h2".
     /// </summary>
     private static async Task<(TcpClient TcpClient, SslStream SslStream)> ConnectAndAuthenticateAsync(
-        int proxyPort, string targetHost, int targetPort, System.Collections.Generic.List<SslApplicationProtocol> applicationProtocols)
+        int proxyPort, string targetHost, int targetPort, System.Collections.Generic.List<SslApplicationProtocol>? applicationProtocols)
     {
         var tcpClient = new TcpClient();
         await tcpClient.ConnectAsync("localhost", proxyPort);

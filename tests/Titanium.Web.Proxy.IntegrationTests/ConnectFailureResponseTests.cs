@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -18,7 +18,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class ConnectFailureResponseTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -107,7 +107,7 @@ public class ConnectFailureResponseTests
         };
 
         var endPoint = (ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
-        UpstreamProxyConnectException typed = null;
+        UpstreamProxyConnectException? typed = null;
 
         endPoint.BeforeTunnelConnectRequest += async (_, e) =>
         {

@@ -88,7 +88,7 @@ public class DefaultCertificateDiskCacheTests
             foreach (var name in names)
             {
                 using var cert = mgr.CreateCertificate(name, false);
-                cache.SaveCertificate(name, cert);
+                cache.SaveCertificate(name, cert!);
                 // Ensure distinct LastWriteTimeUtc ordering between files created back-to-back.
                 Thread.Sleep(20);
             }
@@ -127,7 +127,7 @@ public class DefaultCertificateDiskCacheTests
         Assert.IsTrue(mgr.CreateRootCertificate(false));
         using var cert = mgr.CreateCertificate("loader.example", false);
 
-        var raw = cert.Export(X509ContentType.Cert);
+        var raw = cert!.Export(X509ContentType.Cert);
         using var loaded = Titanium.Web.Proxy.Network.Certificate.CertificateLoader.LoadCertificate(raw);
         Assert.AreEqual(cert.Thumbprint, loaded.Thumbprint);
 

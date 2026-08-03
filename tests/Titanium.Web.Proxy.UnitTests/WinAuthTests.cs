@@ -27,7 +27,7 @@ namespace Titanium.Web.Proxy.UnitTests
             proxy.WinAuthCredentialsProvider = _ =>
             {
                 called = true;
-                return Task.FromResult<WinAuthCredentials>(null);
+                return Task.FromResult<WinAuthCredentials?>(null);
             };
 
             Assert.IsNotNull(proxy.WinAuthCredentialsProvider);

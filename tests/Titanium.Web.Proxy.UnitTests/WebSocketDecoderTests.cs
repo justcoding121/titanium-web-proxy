@@ -338,7 +338,7 @@ public class WebSocketDecoderTests
             for (var i = 7; i >= 0; i--) bytes.Add((byte)((long)length >> (i * 8)));
         }
 
-        byte[] maskKeyBytes = null;
+        byte[]? maskKeyBytes = null;
         if (mask)
         {
             maskKeyBytes = new[]
@@ -351,7 +351,7 @@ public class WebSocketDecoderTests
         var payloadBytes = (byte[])payload.Clone();
         if (mask)
             for (var i = 0; i < payloadBytes.Length; i++)
-                payloadBytes[i] ^= maskKeyBytes[i % 4];
+                payloadBytes[i] ^= maskKeyBytes![i % 4];
 
         bytes.AddRange(payloadBytes);
         return bytes.ToArray();

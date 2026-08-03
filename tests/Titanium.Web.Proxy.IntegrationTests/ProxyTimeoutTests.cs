@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class ProxyTimeoutTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -59,7 +59,7 @@ public class ProxyTimeoutTests
         proxy.ApplyLoggingConfiguration();
         proxy.ResponseHeaderTimeoutSeconds = 1;
 
-        ProxyTimeoutException observedTimeout = null;
+        ProxyTimeoutException? observedTimeout = null;
         proxy.AfterResponse += (_, args) =>
         {
             observedTimeout = FindTimeout(args.Exception);
@@ -153,7 +153,7 @@ public class ProxyTimeoutTests
         proxy.ResponseHeaderTimeoutSeconds = 0;
         proxy.RequestTimeoutSeconds = 1;
 
-        ProxyTimeoutException observedTimeout = null;
+        ProxyTimeoutException? observedTimeout = null;
         proxy.AfterResponse += (_, args) =>
         {
             observedTimeout = FindTimeout(args.Exception);
@@ -178,7 +178,7 @@ public class ProxyTimeoutTests
         Assert.AreEqual(ProxyTimeoutKind.Request, observedTimeout.Kind);
     }
 
-    private static ProxyTimeoutException FindTimeout(Exception exception)
+    private static ProxyTimeoutException? FindTimeout(Exception? exception)
     {
         while (exception != null)
         {

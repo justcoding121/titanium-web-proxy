@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Http2TransparentTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -49,7 +49,7 @@ public class Http2TransparentTests
     {
         var handler = new SocketsHttpHandler
         {
-            // Direct to the transparent endpoint — must not ride the machine system proxy
+            // Direct to the transparent endpoint � must not ride the machine system proxy
             // (Basic example on :8000) which would MITM with the product root instead.
             UseProxy = false,
             SslOptions =

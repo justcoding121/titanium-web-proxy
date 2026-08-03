@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class UpstreamProxyChainTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -35,7 +35,7 @@ public class UpstreamProxyChainTests
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("chained-ok"));
 
-        // Intermediate hops must not decrypt — they only forward CONNECT tunnels.
+        // Intermediate hops must not decrypt � they only forward CONNECT tunnels.
         using var hop2 = CreateTunnelOnlyProxy();
         using var hop1 = CreateTunnelOnlyProxy();
 

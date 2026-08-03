@@ -59,7 +59,7 @@ internal sealed class Http11OnlyOriginServer : IDisposable
                     });
 
                     using var reader = new System.IO.StreamReader(sslStream, Encoding.ASCII, false, 4096, true);
-                    string line;
+                    string? line;
                     while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
                     {
                         // drain request headers

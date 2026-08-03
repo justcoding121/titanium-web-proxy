@@ -13,7 +13,7 @@ internal class HttpContinueClient
 
     private static readonly Encoding _msgEncoding = HttpHelper.GetEncodingFromContentType(null);
 
-    public async Task<Response> Post(string server, int port, string content)
+    public async Task<Response?> Post(string server, int port, string content)
     {
         var message = _msgEncoding.GetBytes(content);
         var client = new TcpClient(server, port);
@@ -29,7 +29,7 @@ internal class HttpContinueClient
 
         var buffer = new byte[1024];
         var responseMsg = string.Empty;
-        Response response;
+        Response? response;
 
         while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)
         {

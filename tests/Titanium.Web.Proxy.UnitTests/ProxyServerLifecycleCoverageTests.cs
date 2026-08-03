@@ -89,6 +89,8 @@ public class ProxyServerLifecycleCoverageTests
     {
         using var proxy = new ProxyServer(false, false, false);
         proxy.TrimOriginCapabilityCaches();
+        Assert.IsNotNull(proxy.Http2OriginCapabilityCache);
+        Assert.IsNotNull(proxy.Http3OriginCapabilityCache);
     }
 
     [TestMethod]

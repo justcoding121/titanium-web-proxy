@@ -1,4 +1,4 @@
-ï»¿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
@@ -13,9 +13,9 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
 ///     Integration tests for HTTP/2 behavior that cannot be driven through a real HttpClient on both ends
-///     of the proxy at once: response and request trailers (RFC 7540 Â§8.1.2.1), interim (1xx) informational
-///     responses relayed over h2 (RFC 9110 Â§15.2), and HEADERS/CONTINUATION reassembly + re-splitting (RFC
-///     7540 Â§4.3/Â§6.10). HttpClient has no public API to send request trailers or to deliberately fragment
+///     of the proxy at once: response and request trailers (RFC 7540 §8.1.2.1), interim (1xx) informational
+///     responses relayed over h2 (RFC 9110 §15.2), and HEADERS/CONTINUATION reassembly + re-splitting (RFC
+///     7540 §4.3/§6.10). HttpClient has no public API to send request trailers or to deliberately fragment
 ///     a header block across CONTINUATION frames, and does not reliably surface informational responses to
 ///     test code - so these tests use <see cref="Http2RawClient" /> and <see cref="Http2RawOriginServer" />
 ///     (hand-rolled but protocol-accurate h2 endpoints built on the proxy's own internal frame/HPACK types)
@@ -27,7 +27,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Http2TrailerInterimContinuationTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -104,7 +104,7 @@ public class Http2TrailerInterimContinuationTests
     {
         using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
 
-        List<(string Name, string Value)> receivedTrailers = null;
+        List<(string Name, string Value)>? receivedTrailers = null;
         var trailersReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         rawServer.HandleConnection(async connection =>

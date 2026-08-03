@@ -113,7 +113,7 @@ namespace Titanium.Web.Proxy.UnitTests
             headers.SetOrAddHeaderValue(KnownHeaders.ContentType, "application/json");
 
             Assert.AreEqual("application/json", headers.GetHeaderValueOrNull(KnownHeaders.ContentType));
-            Assert.AreEqual(1, headers.GetHeaders("Content-Type").Count);
+            Assert.AreEqual(1, headers.GetHeaders("Content-Type")!.Count);
         }
 
         [TestMethod]
@@ -122,7 +122,7 @@ namespace Titanium.Web.Proxy.UnitTests
             var headers = new HeaderCollection();
             headers.AddHeader(KnownHeaders.ContentType, "text/plain");
 
-            headers.SetOrAddHeaderValue(KnownHeaders.ContentType, (string)null);
+            headers.SetOrAddHeaderValue(KnownHeaders.ContentType, null);
 
             Assert.IsFalse(headers.HeaderExists("Content-Type"));
         }

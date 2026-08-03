@@ -523,7 +523,7 @@ namespace Titanium.Web.Proxy.UnitTests
             var cacheField = typeof(CertificateManager).GetField("cachedCertificates",
                 BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.IsNotNull(cacheField);
-            var cache = (ConcurrentDictionary<string, CachedCertificate>)cacheField.GetValue(mgr);
+            var cache = (ConcurrentDictionary<string, CachedCertificate>)cacheField!.GetValue(mgr)!;
             cache[host] = new CachedCertificate(expiredCert) { LastAccess = DateTime.UtcNow };
 
             // capture before the call: the expired cert is evicted and disposed by the fix

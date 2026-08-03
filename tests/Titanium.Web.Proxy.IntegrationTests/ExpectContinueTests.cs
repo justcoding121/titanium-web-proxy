@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class ExpectContinueTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)

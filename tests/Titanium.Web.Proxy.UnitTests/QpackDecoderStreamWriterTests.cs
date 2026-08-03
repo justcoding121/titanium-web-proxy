@@ -38,5 +38,6 @@ public class QpackDecoderStreamWriterTests
         cts.Cancel();
 
         await QpackDecoderStreamWriter.RunAsync(ms, ctx, cts.Token);
+        Assert.AreEqual(0, ms.Length, "Cancelled run must not write decoder-stream bytes.");
     }
 }

@@ -13,11 +13,15 @@ internal class HttpContinueServer
 {
     private static readonly Encoding _msgEncoding = HttpHelper.GetEncodingFromContentType(null);
     public HttpStatusCode ExpectationResponse;
-    public string ResponseBody;
+    public string ResponseBody = string.Empty;
 
     public async Task HandleRequest(ConnectionContext context)
     {
-        var request = await ReadHeaders(context.Transport.Input);
+        var         request = await ReadHeaders(context.Transport.Input);
+        if (request == null)
+        {
+            return;
+        }
 
         if (request.ExpectContinue)
         {
@@ -36,6 +40,10 @@ internal class HttpContinueServer
         }
 
         request = await ReadBody(request, context.Transport.Input);
+        if (request == null)
+        {
+            return;
+        }
 
         var responseMsg = _msgEncoding.GetBytes(ResponseBody);
         var respondOk = new Response(responseMsg)
@@ -49,9 +57,9 @@ internal class HttpContinueServer
         context.Transport.Output.Complete();
     }
 
-    private async Task<Request> ReadHeaders(PipeReader input)
+    private async Task<Request?> ReadHeaders(PipeReader input)
     {
-        Request request = null;
+        Request? request = null;
         try
         {
             var requestMsg = string.Empty;
@@ -74,9 +82,9 @@ internal class HttpContinueServer
         return request;
     }
 
-    private async Task<Request> ReadBody(Request request, PipeReader input)
+    private async Task<Request?> ReadBody(Request? request, PipeReader input)
     {
-        var msg = request.HeaderText;
+        var msg = request!.HeaderText;
         try
         {
             while ((request = HttpMessageParsing.ParseRequest(msg, true)) == null)

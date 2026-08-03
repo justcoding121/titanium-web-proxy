@@ -1,4 +1,4 @@
-ï»¿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -16,7 +16,7 @@ using Titanium.Web.Proxy.Models;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
-///     Integration tests for the RFC 8441 h2-client â†’ HTTP/1.1-origin WebSocket tunnel
+///     Integration tests for the RFC 8441 h2-client ? HTTP/1.1-origin WebSocket tunnel
 ///     (<see cref="ProxyServer.RunExtendedConnectTunnelAsync" />).
 ///     These tests use <see cref="Http2RawClient" /> to send raw HTTP/2 frames through the proxy
 ///     (via the h2-to-h1 translation bridge) so the full extended-CONNECT path is exercised
@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Rfc8441TunnelTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -43,7 +43,7 @@ public class Rfc8441TunnelTests
     private static readonly Encoding Ascii = Encoding.ASCII;
 
     /// <summary>
-    ///     When RFC 8441 is disabled (default), the proxy MUST reject any extended CONNECT request â€”
+    ///     When RFC 8441 is disabled (default), the proxy MUST reject any extended CONNECT request —
     ///     either with an RST_STREAM (if SETTINGS don't even advertise support) or with a non-200
     ///     synthetic response (e.g. 501). Either way the client must not receive 200.
     /// </summary>
@@ -100,7 +100,7 @@ public class Rfc8441TunnelTests
             }
         }
 
-        // The proxy must NOT have accepted the tunnel â€” either it sent RST_STREAM or a non-200 response.
+        // The proxy must NOT have accepted the tunnel — either it sent RST_STREAM or a non-200 response.
         if (receivedRst)
             return; // RST_STREAM is a correct rejection
 
@@ -186,9 +186,9 @@ public class Rfc8441TunnelTests
         Assert.AreEqual("200", responseHeaders.Single(h => h.Name == ":status").Value,
             "RFC 8441 tunnel must respond 200 OK, not 501 Not Implemented.");
         Assert.IsFalse(endStream,
-            "200 HEADERS must NOT carry END_STREAM â€” the tunnel stream must stay open for DATA relay.");
+            "200 HEADERS must NOT carry END_STREAM — the tunnel stream must stay open for DATA relay.");
 
-        // Send a raw WebSocket frame (masked text frame, as required clientâ†’server per RFC 6455 Â§5.3)
+        // Send a raw WebSocket frame (masked text frame, as required client?server per RFC 6455 §5.3)
         // as h2 DATA. The origin is a raw echo server so we can verify the relay by checking that
         // the exact same bytes arrive back through the tunnel.
         var payload = Ascii.GetBytes("hello-rfc8441");
@@ -280,13 +280,13 @@ public class Rfc8441TunnelTests
     }
 
     /// <summary>
-    ///     Builds a minimal, single-frame, masked WebSocket text frame (RFC 6455 Â§5.2) around
+    ///     Builds a minimal, single-frame, masked WebSocket text frame (RFC 6455 §5.2) around
     ///     <paramref name="payload"/>, using a fixed masking key <c>0x37fa213d</c> for
     ///     deterministic test output. Masking is required for client-to-server frames.
     /// </summary>
     private static byte[] BuildMaskedTextFrame(byte[] payload)
     {
-        // FIN=1, opcode=1 (text), MASK=1, payload length (â‰¤125 for these test payloads)
+        // FIN=1, opcode=1 (text), MASK=1, payload length (=125 for these test payloads)
         var maskKey = new byte[] { 0x37, 0xfa, 0x21, 0x3d };
         var frame = new List<byte> { 0x81, (byte)(0x80 | payload.Length) };
         frame.AddRange(maskKey);

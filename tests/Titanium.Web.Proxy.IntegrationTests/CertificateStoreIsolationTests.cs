@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class CertificateStoreIsolationTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)

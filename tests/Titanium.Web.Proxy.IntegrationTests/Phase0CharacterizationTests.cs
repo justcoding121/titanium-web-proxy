@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Phase0CharacterizationTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -123,7 +123,7 @@ public class Phase0CharacterizationTests
         {
             var encoding = Encoding.ASCII;
             var requestMsg = string.Empty;
-            Request request = null;
+            Request? request = null;
             while ((request = HttpMessageParsing.ParseRequest(requestMsg, false)) == null)
             {
                 var result = await context.Transport.Input.ReadAsync();
@@ -135,7 +135,7 @@ public class Phase0CharacterizationTests
             string responseText;
             if (request.Method == "HEAD")
             {
-                // Advertise a 1000-byte body but send no bytes - HEAD semantics per RFC 7231 §4.3.2.
+                // Advertise a 1000-byte body but send no bytes - HEAD semantics per RFC 7231 �4.3.2.
                 responseText = "HTTP/1.1 200 OK\r\nContent-Length: 1000\r\nConnection: close\r\n\r\n";
             }
             else
@@ -170,7 +170,7 @@ public class Phase0CharacterizationTests
 
             var received = new List<byte>();
             var buf = new byte[1024];
-            string headersSection = null;
+            string? headersSection = null;
 
             while (headersSection == null)
             {

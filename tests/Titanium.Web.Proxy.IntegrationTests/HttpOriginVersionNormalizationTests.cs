@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
@@ -21,7 +21,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class HttpOriginVersionNormalizationTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -150,7 +150,7 @@ public class HttpOriginVersionNormalizationTests
         server.HandleTcpRequest(async context =>
         {
             var requestMsg = string.Empty;
-            Request request;
+            Request? request;
             while ((request = HttpMessageParsing.ParseRequest(requestMsg, false)) == null)
             {
                 var result = await context.Transport.Input.ReadAsync();
@@ -214,8 +214,8 @@ public class HttpOriginVersionNormalizationTests
     ///     response. <paramref name="connectionHeaderValue" /> is included as an explicit "Connection" request
     ///     header when non-null.
     /// </summary>
-    private static async Task<Response> SendRawRequestAsync(int proxyPort, Version version,
-        string connectionHeaderValue)
+    private static async Task<Response?> SendRawRequestAsync(int proxyPort, Version version,
+        string? connectionHeaderValue)
     {
         using var client = new TcpClient("localhost", proxyPort)
         {
@@ -235,7 +235,7 @@ public class HttpOriginVersionNormalizationTests
 
         var buffer = new byte[4096];
         var responseMsg = string.Empty;
-        Response response;
+        Response? response;
         var deadline = DateTime.UtcNow.AddMilliseconds(SendReceiveTimeoutMs * 5);
 
         while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)

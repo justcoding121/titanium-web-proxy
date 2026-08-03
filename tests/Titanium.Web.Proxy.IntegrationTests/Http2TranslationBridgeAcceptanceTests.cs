@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -24,7 +24,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Http2TranslationBridgeAcceptanceTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)

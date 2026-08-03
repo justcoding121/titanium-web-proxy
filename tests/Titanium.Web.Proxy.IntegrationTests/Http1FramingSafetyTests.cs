@@ -1,4 +1,4 @@
-ï»¿using System.Net;
+using System.Net;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http;
@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Http1FramingSafetyTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -89,13 +89,13 @@ public class Http1FramingSafetyTests
     [TestMethod]
     public void NormalizeMessageFraming_Strips_ContentLength_When_TransferEncoding_Present()
     {
-        // Existing behaviour: CL+TE â†’ CL is stripped (RFC 9112 Â§6.3).
+        // Existing behaviour: CL+TE ? CL is stripped (RFC 9112 §6.3).
         var headers = new HeaderCollection();
         headers.AddHeader("Transfer-Encoding", "chunked");
         headers.AddHeader("Content-Length", "100");
         headers.NormalizeMessageFraming();
         Assert.IsFalse(headers.HeaderExists("Content-Length"),
-            "Content-Length must be stripped when Transfer-Encoding is present (RFC 9112 Â§6.3).");
+            "Content-Length must be stripped when Transfer-Encoding is present (RFC 9112 §6.3).");
         Assert.IsTrue(headers.HeaderExists("Transfer-Encoding"),
             "Transfer-Encoding must be preserved.");
     }
@@ -113,7 +113,7 @@ public class Http1FramingSafetyTests
     [TestMethod]
     public void NormalizeMessageFraming_ChunkedInNonFinalPosition_IsNormalized()
     {
-        // "chunked, gzip" is invalid â€” chunked must be last; proxy normalizes to just "chunked".
+        // "chunked, gzip" is invalid — chunked must be last; proxy normalizes to just "chunked".
         var headers = new HeaderCollection();
         headers.AddHeader("Transfer-Encoding", "chunked, gzip");
         headers.NormalizeMessageFraming();
@@ -124,7 +124,7 @@ public class Http1FramingSafetyTests
     [TestMethod]
     public void NormalizeMessageFraming_ValidChain_GzipThenChunked_IsUnchanged()
     {
-        // "gzip, chunked" is valid â€” chunked is in final position; no rewrite needed.
+        // "gzip, chunked" is valid — chunked is in final position; no rewrite needed.
         var headers = new HeaderCollection();
         headers.AddHeader("Transfer-Encoding", "gzip, chunked");
         headers.NormalizeMessageFraming();

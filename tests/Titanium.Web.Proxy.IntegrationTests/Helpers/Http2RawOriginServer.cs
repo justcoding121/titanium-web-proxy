@@ -33,7 +33,7 @@ internal sealed class Http2RawOriginServer : IDisposable
 {
     private readonly TcpListener listener;
     private readonly X509Certificate2 certificate;
-    private Func<Http2RawFrame.Connection, Task> handler;
+    private Func<Http2RawFrame.Connection, Task> handler = null!;
     private bool disposed;
 
     public Http2RawOriginServer(X509Certificate2 certificate)

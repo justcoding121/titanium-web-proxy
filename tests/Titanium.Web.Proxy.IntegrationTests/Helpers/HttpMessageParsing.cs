@@ -15,7 +15,7 @@ internal static class HttpMessageParsing
     /// <param name="messageText">The request message</param>
     /// <param name="requireBody"></param>
     /// <returns>Request object if message complete, null otherwise</returns>
-    internal static Request ParseRequest(string messageText, bool requireBody)
+    internal static Request? ParseRequest(string messageText, bool requireBody)
     {
         var reader = new StringReader(messageText);
         var line = reader.ReadLine();
@@ -65,7 +65,7 @@ internal static class HttpMessageParsing
     /// </summary>
     /// <param name="messageText">The response message</param>
     /// <returns>Response object if message complete, null otherwise</returns>
-    internal static Response ParseResponse(string messageText)
+    internal static Response? ParseResponse(string messageText)
     {
         var reader = new StringReader(messageText);
         var line = reader.ReadLine();

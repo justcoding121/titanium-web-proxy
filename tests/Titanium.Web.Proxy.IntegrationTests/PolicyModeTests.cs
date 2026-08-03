@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class PolicyModeTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)

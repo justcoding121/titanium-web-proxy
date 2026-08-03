@@ -232,7 +232,7 @@ internal static class Http2RawFrame
         public async Task<(int StreamId, List<(string Name, string Value)> Headers, byte[] Body)> ReadRequestAsync()
         {
             int streamId = -1;
-            List<(string Name, string Value)> requestHeaders = null;
+            List<(string Name, string Value)>? requestHeaders = null;
             var body = new MemoryStream();
 
             while (true)
@@ -261,7 +261,7 @@ internal static class Http2RawFrame
                 }
             }
 
-            return (streamId, requestHeaders, body.ToArray());
+            return (streamId, requestHeaders!, body.ToArray());
         }
 
         /// <summary>

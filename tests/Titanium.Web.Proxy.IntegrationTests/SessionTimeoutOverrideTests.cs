@@ -70,7 +70,7 @@ public class SessionTimeoutOverrideTests
         var proxy = testSuite.GetReverseProxy();
         proxy.ResponseHeaderTimeoutSeconds = 0;
 
-        ProxyTimeoutException observedTimeout = null;
+        ProxyTimeoutException? observedTimeout = null;
         proxy.AfterResponse += (_, args) =>
         {
             observedTimeout = FindTimeout(args.Exception);
@@ -96,7 +96,7 @@ public class SessionTimeoutOverrideTests
         Assert.AreEqual(ProxyTimeoutKind.Request, observedTimeout.Kind);
     }
 
-    private static ProxyTimeoutException FindTimeout(Exception exception)
+    private static ProxyTimeoutException? FindTimeout(Exception? exception)
     {
         while (exception != null)
         {

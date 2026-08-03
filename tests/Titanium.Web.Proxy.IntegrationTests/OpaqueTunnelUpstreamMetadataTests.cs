@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class OpaqueTunnelUpstreamMetadataTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -42,7 +42,7 @@ public class OpaqueTunnelUpstreamMetadataTests
         var proxy = testSuite.GetProxy();
         proxy.EnableRequestTimingCapture = true;
 
-        TunnelConnectSessionEventArgs tunnelArgs = null;
+        TunnelConnectSessionEventArgs? tunnelArgs = null;
         var endPoint = proxy.ProxyEndPoints.OfType<ExplicitProxyEndPoint>().First();
         endPoint.BeforeTunnelConnectRequest += (_, e) =>
         {

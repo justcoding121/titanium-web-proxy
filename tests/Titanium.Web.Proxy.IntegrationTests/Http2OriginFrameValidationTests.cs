@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -21,7 +21,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Http2OriginFrameValidationTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -73,9 +73,9 @@ public class Http2OriginFrameValidationTests
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Bug 3 – RFC 7540 §6.9.1: zero-increment WINDOW_UPDATE is PROTOCOL_ERROR
-    // ─────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
+    // Bug 3 � RFC 7540 �6.9.1: zero-increment WINDOW_UPDATE is PROTOCOL_ERROR
+    // -------------------------------------------------------------------------
 
     [TestMethod]
     [Timeout(15_000)]
@@ -89,7 +89,7 @@ public class Http2OriginFrameValidationTests
         {
             await connection.SendInitialSettingsAsync();
             // Immediately send a zero-increment WINDOW_UPDATE (connection level).
-            var payload = new byte[4]; // all-zero ⇒ increment = 0
+            var payload = new byte[4]; // all-zero ? increment = 0
             await connection.WriteFrameAsync(Http2FrameType.WindowUpdate, 0, 0, payload);
             // Stay alive so the proxy has time to read and reject the frame.
             try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
@@ -106,9 +106,9 @@ public class Http2OriginFrameValidationTests
             "The proxy must reject a zero-increment WINDOW_UPDATE with a connection error, failing the request.");
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Bug 1 – RFC 7540 §4.2: frame declaring payload > 16 KiB is PROTOCOL_ERROR
-    // ─────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
+    // Bug 1 � RFC 7540 �4.2: frame declaring payload > 16 KiB is PROTOCOL_ERROR
+    // -------------------------------------------------------------------------
 
     [TestMethod]
     [Timeout(15_000)]
@@ -124,7 +124,7 @@ public class Http2OriginFrameValidationTests
             // Allow a moment for the proxy to process SETTINGS and open the stream.
             await Task.Delay(100);
 
-            // Write a raw 9-byte frame header declaring length = 1,048,576 (1 MiB) — way above the 16 KiB
+            // Write a raw 9-byte frame header declaring length = 1,048,576 (1 MiB) � way above the 16 KiB
             // default maximum. Use DATA type on stream 1. Do NOT write the payload bytes.
             const int oversizedLength = 1 << 20; // 1 MiB
             var header = new byte[9];
@@ -157,9 +157,9 @@ public class Http2OriginFrameValidationTests
             "The proxy must reject an oversized frame (declared length > 16 KiB) before allocating memory.");
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Bug 5 – RFC 7540 §6.5: SETTINGS must have stream ID 0
-    // ─────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
+    // Bug 5 � RFC 7540 �6.5: SETTINGS must have stream ID 0
+    // -------------------------------------------------------------------------
 
     [TestMethod]
     [Timeout(15_000)]
@@ -196,9 +196,9 @@ public class Http2OriginFrameValidationTests
             "The proxy must treat SETTINGS on a non-zero stream as a connection-level error.");
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Bug 4 – RFC 7540 §6.10: CONTINUATION outside a header block is PROTOCOL_ERROR
-    // ─────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
+    // Bug 4 � RFC 7540 �6.10: CONTINUATION outside a header block is PROTOCOL_ERROR
+    // -------------------------------------------------------------------------
 
     [TestMethod]
     [Timeout(15_000)]
@@ -219,7 +219,7 @@ public class Http2OriginFrameValidationTests
             await connection.WriteHeaderBlockAsync(streamId, responseHeaders, true);
 
             // Now send a stray CONTINUATION on the same stream.
-            // There is no open header block at this point → connection error (RFC 7540 §6.10).
+            // There is no open header block at this point ? connection error (RFC 7540 �6.10).
             var contHeader = new byte[9];
             contHeader[3] = 0x09; // CONTINUATION
             contHeader[4] = (byte)Http2FrameFlag.EndHeaders;
@@ -241,15 +241,16 @@ public class Http2OriginFrameValidationTests
 
         // The request may have already completed by the time the proxy processes the
         // stray CONTINUATION (the 200 response is sent first). What matters is that
-        // the test finishes within the timeout — no deadlock.
+        // the test finishes within the timeout � no deadlock.
         _ = await TrySendRequestAsync(proxy.ProxyEndPoints[0].Port, new Uri(rawServer.Url));
         cts.Cancel(); // unblock the server handler immediately if still waiting
-        // No assertion on success/failure; [Timeout] catches deadlocks.
+        Assert.IsTrue(cts.IsCancellationRequested,
+            "Server keep-alive handler must be cancelled so the test finishes without hanging.");
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Bug 6 – RFC 7540 §6.8: GOAWAY must have stream ID 0
-    // ─────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
+    // Bug 6 � RFC 7540 �6.8: GOAWAY must have stream ID 0
+    // -------------------------------------------------------------------------
 
     [TestMethod]
     [Timeout(15_000)]

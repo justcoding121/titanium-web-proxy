@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class InterimResponseBridgeTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -40,7 +40,7 @@ public class InterimResponseBridgeTests
     private static readonly Encoding Ascii = Encoding.ASCII;
 
     /// <summary>
-    ///     Baseline: the h1→h2 bridge completes a plain round trip and returns the correct body.
+    ///     Baseline: the h1?h2 bridge completes a plain round trip and returns the correct body.
     /// </summary>
     [TestMethod]
     [Timeout(30_000)]
@@ -83,7 +83,7 @@ public class InterimResponseBridgeTests
     }
 
     /// <summary>
-    ///     Multiple sequential keep-alive requests on the same h1→h2 bridge tunnel all complete with
+    ///     Multiple sequential keep-alive requests on the same h1?h2 bridge tunnel all complete with
     ///     correct status codes, exercising the persistent <see cref="Http2OriginConnection" /> stream reuse.
     /// </summary>
     [TestMethod]

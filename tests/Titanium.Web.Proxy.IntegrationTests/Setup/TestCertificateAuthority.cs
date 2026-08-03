@@ -42,7 +42,7 @@ internal static class TestCertificateAuthority
         X509CertificateLoader.LoadPkcs12(serverCertificateBytes.Value, null,
             X509KeyStorageFlags.Exportable);
 
-    public static bool Validate(X509Certificate certificate, SslPolicyErrors sslPolicyErrors)
+    public static bool Validate(X509Certificate? certificate, SslPolicyErrors sslPolicyErrors)
     {
         const SslPolicyErrors fatalErrors =
             SslPolicyErrors.RemoteCertificateNameMismatch | SslPolicyErrors.RemoteCertificateNotAvailable;

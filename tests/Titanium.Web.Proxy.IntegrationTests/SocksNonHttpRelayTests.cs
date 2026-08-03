@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -22,7 +22,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class SocksNonHttpRelayTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -78,9 +78,9 @@ public class SocksNonHttpRelayTests
 
         await stream.WriteAsync(BinaryPayload);
 
-        // Do not shut down send side here — let the server-close trigger relay teardown.
+        // Do not shut down send side here � let the server-close trigger relay teardown.
         // The echo server reads, echoes and closes its write side; the proxy relay's
-        // server→client direction completes first, cancels client→server, and the
+        // server?client direction completes first, cancels client?server, and the
         // client can then read the full echo before getting EOF.
         var echoed = await ReadAllAsync(stream, TimeSpan.FromSeconds(10));
         CollectionAssert.AreEqual(BinaryPayload, echoed,

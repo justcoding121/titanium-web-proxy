@@ -91,7 +91,7 @@ public class Http2HeaderTableSizeBridgeTests
         const int serverDeclaredHeaderTableSize = 65536;
 
         using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
-        System.Collections.Generic.List<(string Name, string Value)> receivedRequestHeaders = null;
+        System.Collections.Generic.List<(string Name, string Value)>? receivedRequestHeaders = null;
         var requestReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         rawServer.HandleConnection(async connection =>
