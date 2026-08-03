@@ -8,7 +8,7 @@ namespace Titanium.Web.Proxy.Shared;
 /// <summary>
 ///     Literals shared by Proxy Server
 /// </summary>
-internal class ProxyConstants
+internal static class ProxyConstants
 {
     internal static readonly char DotSplit = '.';
 

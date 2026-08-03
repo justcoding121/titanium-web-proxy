@@ -12,9 +12,9 @@ internal partial class NativeMethods
     /// <summary>
     ///     <see href="http://msdn2.microsoft.com/en-us/library/aa365928.aspx" />
     /// </summary>
-    [DllImport("iphlpapi.dll", SetLastError = true)]
-    internal static extern uint GetExtendedTcpTable(IntPtr tcpTable, ref int size, bool sort, int ipVersion,
-        int tableClass, int reserved);
+    [LibraryImport("iphlpapi.dll", SetLastError = true)]
+    internal static partial uint GetExtendedTcpTable(IntPtr tcpTable, ref int size,
+        [MarshalAs(UnmanagedType.Bool)] bool sort, int ipVersion, int tableClass, int reserved);
 
     internal enum TcpTableType
     {

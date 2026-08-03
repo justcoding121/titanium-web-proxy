@@ -162,39 +162,50 @@ internal abstract class ChannelLoggerProviderBase : ILoggerProvider
 
     public void Dispose()
     {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
         if (disposed) return;
+
+        if (disposing)
+        {
+            channel.Writer.TryComplete();
+            priorityChannel.Writer.TryComplete();
+
+            var writerCompletedInTime = false;
+            try
+            {
+                // Bounded drain: give the writer a short window to flush what is already queued, but
+                // never block shutdown indefinitely on a stuck sink.
+                writerCompletedInTime = writerTask.Wait(TimeSpan.FromSeconds(3), stopTokenSource.Token);
+            }
+            catch
+            {
+                // writerTask faulted rather than timed out; either way it is no longer running, which
+                // is what writerCompletedInTime distinguishes below.
+                writerCompletedInTime = writerTask.IsCompleted;
+            }
+
+            if (!writerCompletedInTime)
+            {
+                // The writer task may still be mid-write inside WriteEntryAsync. Calling DisposeSink()
+                // now would race that in-progress write against handle teardown. Ask the loop to stop
+                // at its next cancellation check and deliberately leak the sink handle rather than risk
+                // disposing underneath an active write; the OS reclaims it at process exit.
+                stopTokenSource.Cancel();
+                OnSinkDisposalLeaked();
+                disposed = true;
+                return;
+            }
+
+            stopTokenSource.Dispose();
+            DisposeSink();
+        }
+
         disposed = true;
-
-        channel.Writer.TryComplete();
-        priorityChannel.Writer.TryComplete();
-
-        var writerCompletedInTime = false;
-        try
-        {
-            // Bounded drain: give the writer a short window to flush what is already queued, but
-            // never block shutdown indefinitely on a stuck sink.
-            writerCompletedInTime = writerTask.Wait(TimeSpan.FromSeconds(3), stopTokenSource.Token);
-        }
-        catch
-        {
-            // writerTask faulted rather than timed out; either way it is no longer running, which
-            // is what writerCompletedInTime distinguishes below.
-            writerCompletedInTime = writerTask.IsCompleted;
-        }
-
-        if (!writerCompletedInTime)
-        {
-            // The writer task may still be mid-write inside WriteEntryAsync. Calling DisposeSink()
-            // now would race that in-progress write against handle teardown. Ask the loop to stop
-            // at its next cancellation check and deliberately leak the sink handle rather than risk
-            // disposing underneath an active write; the OS reclaims it at process exit.
-            stopTokenSource.Cancel();
-            OnSinkDisposalLeaked();
-            return;
-        }
-
-        stopTokenSource.Dispose();
-        DisposeSink();
     }
 
     /// <summary>

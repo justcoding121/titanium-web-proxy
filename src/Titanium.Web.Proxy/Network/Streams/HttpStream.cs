@@ -529,6 +529,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 bufferPool.ReturnBuffer(streamBuffer);
             }
         }
+
+        base.Dispose(disposing);
     }
 
     /// <summary>
@@ -1081,7 +1083,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             ((isRequest && args.HttpClient.Request.OriginalHasBody && !args.HttpClient.Request.IsBodyRead && server.ShouldCallBeforeRequestBodyWrite()) ||
              (isResponse && args.HttpClient.Response.OriginalHasBody && !args.HttpClient.Response.IsBodyRead && server.ShouldCallBeforeResponseBodyWrite())))
         {
-            return HandleBodyWrite(writer, isChunked, contentLength, isRequest, args, cancellationToken);
+            return HandleBodyWrite(writer, isChunked, isRequest, args, cancellationToken);
         }
 
         // For chunked request we need to read data as they arrive, until we reach a chunk end symbol
@@ -1102,7 +1104,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     ///     uses Content-Encoding); on-the-fly decompression/recompression is not performed here in order to
     ///     preserve exact framing and length. Reads are bounded by bufferPool.BufferSize to keep memory flat.
     /// </summary>
-    private async Task HandleBodyWrite(IHttpStreamWriter writer, bool isChunked, long contentLength,
+    private async Task HandleBodyWrite(IHttpStreamWriter writer, bool isChunked,
         bool isRequest, SessionEventArgs args, CancellationToken cancellationToken)
     {
         var requestResponse = isRequest ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;

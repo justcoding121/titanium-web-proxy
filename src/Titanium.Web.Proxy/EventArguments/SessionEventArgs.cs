@@ -763,8 +763,8 @@ public class SessionEventArgs : SessionEventArgsBase
     public void RespondStreaming(Response response, Func<Stream, CancellationToken, Task> writeBody,
         bool closeServerConnection = false)
     {
-        if (response == null) throw new ArgumentNullException(nameof(response));
-        if (writeBody == null) throw new ArgumentNullException(nameof(writeBody));
+        ArgumentNullException.ThrowIfNull(response);
+        ArgumentNullException.ThrowIfNull(writeBody);
 
         // Choose framing: fixed-length when the caller declared a Content-Length, otherwise chunked.
         if (response.ContentLength < 0 && !response.IsChunked) response.IsChunked = true;

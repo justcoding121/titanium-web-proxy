@@ -67,11 +67,10 @@ internal sealed class Socks4Handler : SocksHandler
     /// <exception cref="ArgumentException"><c>port</c> is invalid.</exception>
     private int GetHostPortBytes(string host, int port, Memory<byte> buffer)
     {
-        if (host == null)
-            throw new ArgumentNullException(nameof(host));
+        ArgumentNullException.ThrowIfNull(host);
 
         if (port <= 0 || port > 65535)
-            throw new ArgumentException(nameof(port));
+            throw new ArgumentException("Port must be between 1 and 65535.", nameof(port));
 
         var length = 10 + Username.Length + host.Length;
         Debug.Assert(buffer.Length >= length);
@@ -99,8 +98,7 @@ internal sealed class Socks4Handler : SocksHandler
     /// <exception cref="ArgumentNullException"><c>remoteEP</c> is null.</exception>
     private int GetEndPointBytes(IPEndPoint remoteEp, Memory<byte> buffer)
     {
-        if (remoteEp == null)
-            throw new ArgumentNullException(nameof(remoteEp));
+        ArgumentNullException.ThrowIfNull(remoteEp);
 
         var length = 9 + Username.Length;
         Debug.Assert(buffer.Length >= length);

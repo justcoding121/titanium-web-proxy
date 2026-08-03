@@ -96,8 +96,8 @@ internal static class Http3RequestStream
                 // streams share one ClientConnectionId (caller owns dispose).
                 clientConnection ??= new QuicClientConnection(
                     server,
-                    (System.Net.IPEndPoint)connection.LocalEndPoint,
-                    (System.Net.IPEndPoint)connection.RemoteEndPoint);
+                    connection.LocalEndPoint,
+                    connection.RemoteEndPoint);
 
                 // 4. Create SessionEventArgs using a null-backed HttpClientStream, then populate
                 // the session's Request. SessionEventArgs always constructs its own Request; a

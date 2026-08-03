@@ -353,17 +353,21 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     /// <param name="header">Returns true if header exists and was removed </param>
     public bool RemoveHeader(HttpHeader header)
     {
+        if (headers.ContainsKey(header.Name) && headers[header.Name].Equals(header))
+        {
+            headers.Remove(header.Name);
+            return true;
+        }
+
         if (headers.ContainsKey(header.Name))
         {
-            if (headers[header.Name].Equals(header))
-            {
-                headers.Remove(header.Name);
-                return true;
-            }
+            return false;
         }
-        else if (nonUniqueHeaders.ContainsKey(header.Name))
+
+        if (nonUniqueHeaders.ContainsKey(header.Name) &&
+            nonUniqueHeaders[header.Name].RemoveAll(x => x.Equals(header)) > 0)
         {
-            if (nonUniqueHeaders[header.Name].RemoveAll(x => x.Equals(header)) > 0) return true;
+            return true;
         }
 
         return false;

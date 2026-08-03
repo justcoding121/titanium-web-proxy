@@ -6,7 +6,7 @@ using Titanium.Web.Proxy.Logging;
 
 namespace Titanium.Web.Proxy.Helpers;
 
-internal class NetworkHelper
+internal static class NetworkHelper
 {
     private static readonly string localhostName = Dns.GetHostName();
     private static readonly IPHostEntry localhostEntry = Dns.GetHostEntry(string.Empty);

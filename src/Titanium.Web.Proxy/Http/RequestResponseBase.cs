@@ -255,7 +255,7 @@ public abstract class RequestResponseBase
     /// <param name="encodingType"></param>
     /// <param name="body"></param>
     /// <returns></returns>
-    internal byte[] GetCompressedBody(HttpCompression encodingType, byte[] body)
+    internal static byte[] GetCompressedBody(HttpCompression encodingType, byte[] body)
     {
         using (var ms = new MemoryStream())
         {

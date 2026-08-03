@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -172,7 +173,7 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
         Proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal);
     }
 
-    private ProxyInfo GetProxyInfo()
+    private static ProxyInfo GetProxyInfo()
     {
         var proxyConfig = new NativeMethods.WinHttp.WinhttpCurrentUserIeProxyConfig();
         try
@@ -317,12 +318,7 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
 
     private static string RemoveWhitespaces(string value)
     {
-        var stringBuilder = new StringBuilder();
-        foreach (var c in value)
-            if (!char.IsWhiteSpace(c))
-                stringBuilder.Append(c);
-
-        return stringBuilder.ToString();
+        return string.Concat(value.Where(c => !char.IsWhiteSpace(c)));
     }
 
     private static bool IsErrorFatalForAutoDetect(NativeMethods.WinHttp.ErrorCodes errorCode)

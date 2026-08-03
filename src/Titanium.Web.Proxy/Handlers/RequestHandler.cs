@@ -631,7 +631,7 @@ public partial class ProxyServer
     /// <summary>
     ///     Prepare the request headers so that we can avoid encodings not parseable by this proxy
     /// </summary>
-    private void PrepareRequestHeaders(HeaderCollection requestHeaders)
+    private static void PrepareRequestHeaders(HeaderCollection requestHeaders)
     {
         var acceptEncoding = requestHeaders.GetHeaderValueOrNull(KnownHeaders.AcceptEncoding);
 

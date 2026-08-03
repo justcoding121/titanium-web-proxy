@@ -65,7 +65,7 @@ internal abstract class AuthMethod
     protected Socket Server
     {
         get => server;
-        set => server = value ?? throw new ArgumentNullException();
+        set => server = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     /// <summary>

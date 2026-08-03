@@ -74,7 +74,7 @@ public partial class ProxyServer
     ///     Stops the <see cref="QuicListener" /> for the given endpoint and waits for the accept loop
     ///     to exit. Called from <see cref="StopCore" />.
     /// </summary>
-    private void QuitListenQuic(TransparentQuicProxyEndPoint endPoint)
+    private static void QuitListenQuic(TransparentQuicProxyEndPoint endPoint)
     {
         var listener = endPoint.QuicListener;
         endPoint.QuicListener = null;

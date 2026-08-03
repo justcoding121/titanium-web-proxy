@@ -139,7 +139,7 @@ internal class ProxySocket : Socket
     public string ProxyUser
     {
         get => proxyUser;
-        set => proxyUser = value ?? throw new ArgumentNullException();
+        set => proxyUser = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     /// <summary>
@@ -150,7 +150,7 @@ internal class ProxySocket : Socket
     public string ProxyPass
     {
         get => proxyPass;
-        set => proxyPass = value ?? throw new ArgumentNullException();
+        set => proxyPass = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     /// <summary>
@@ -182,8 +182,7 @@ internal class ProxySocket : Socket
     /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
     public new IAsyncResult BeginConnect(EndPoint remoteEp, AsyncCallback? callback, object? state)
     {
-        if (remoteEp == null)
-            throw new ArgumentNullException();
+        ArgumentNullException.ThrowIfNull(remoteEp);
 
         if (ProtocolType != ProtocolType.Tcp || ProxyType == ProxyTypes.None || ProxyEndPoint == null)
             return base.BeginConnect(remoteEp, callback, state);
@@ -219,10 +218,9 @@ internal class ProxySocket : Socket
     /// <exception cref="ObjectDisposedException">The Socket has been closed.</exception>
     public new IAsyncResult BeginConnect(string host, int port, AsyncCallback? callback, object? state)
     {
-        if (host == null)
-            throw new ArgumentNullException();
+        ArgumentNullException.ThrowIfNull(host);
         if (port <= 0 || port > 65535)
-            throw new ArgumentException();
+            throw new ArgumentException("Port must be between 1 and 65535.", nameof(port));
         var result = new AsyncProxyResult(state);
         HandShakeComplete protocolComplete = error => OnHandShakeComplete(result, callback, error);
         if (ProtocolType != ProtocolType.Tcp || ProxyType == ProxyTypes.None || ProxyEndPoint == null)
@@ -258,8 +256,7 @@ internal class ProxySocket : Socket
     /// <exception cref="ProxyException">The proxy server refused the connection.</exception>
     public new void EndConnect(IAsyncResult asyncResult)
     {
-        if (asyncResult == null)
-            throw new ArgumentNullException();
+        ArgumentNullException.ThrowIfNull(asyncResult);
         // In case we called Socket.BeginConnect() directly
         if (!(asyncResult is AsyncProxyResult proxyResult))
         {

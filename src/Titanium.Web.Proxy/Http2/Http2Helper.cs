@@ -484,17 +484,15 @@ namespace Titanium.Web.Proxy.Http2
                     return false;
                 }
 
-                foreach (var header in collected)
+                foreach (var header in collected.Where(header =>
+                             ForbiddenConnectionSpecificHeaders.Contains(header.Name)))
                 {
-                    if (ForbiddenConnectionSpecificHeaders.Contains(header.Name))
-                    {
-                        ReportException(logger, new ProxyHttpException(
-                            "HTTP/2 protocol error: connection-specific header field '" + header.Name +
-                            "' is forbidden.", null, sessionArgs));
-                        await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
-                            Http2ErrorCode.ProtocolError, input));
-                        return false;
-                    }
+                    ReportException(logger, new ProxyHttpException(
+                        "HTTP/2 protocol error: connection-specific header field '" + header.Name +
+                        "' is forbidden.", null, sessionArgs));
+                    await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
+                        Http2ErrorCode.ProtocolError, input));
+                    return false;
                 }
 
                 // RFC 9113 §8.5: once an extended CONNECT tunnel is established, no HEADERS or CONTINUATION
@@ -674,17 +672,15 @@ namespace Titanium.Web.Proxy.Http2
                         }
 
                         // RFC 9110 §6.5.1: certain fields are forbidden in trailers.
-                        foreach (var header in collected)
+                        foreach (var header in collected.Where(header =>
+                                     ForbiddenTrailerHeaders.Contains(header.Name)))
                         {
-                            if (ForbiddenTrailerHeaders.Contains(header.Name))
-                            {
-                                ReportException(logger, new ProxyHttpException(
-                                    "HTTP/2 protocol error: request trailer HEADERS contains forbidden field '" +
-                                    header.Name + "'.", null, sessionArgs));
-                                await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
-                                    hbStreamId, Http2ErrorCode.ProtocolError, input));
-                                return false;
-                            }
+                            ReportException(logger, new ProxyHttpException(
+                                "HTTP/2 protocol error: request trailer HEADERS contains forbidden field '" +
+                                header.Name + "'.", null, sessionArgs));
+                            await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                hbStreamId, Http2ErrorCode.ProtocolError, input));
+                            return false;
                         }
 
                         foreach (var header in collected)
@@ -975,7 +971,7 @@ namespace Titanium.Web.Proxy.Http2
                             // HttpClient.Response is no longer the same object `response` above was captured
                             // from *before* the handler ran. Dispatching the stale `response` here would
                             // silently drop the replacement and send the original object instead.
-                            var finalResponse = (Response)sessionArgs.HttpClient.Response;
+                            var finalResponse = sessionArgs.HttpClient.Response;
 
                             if (!ReferenceEquals(finalResponse, response))
                             {
@@ -1089,17 +1085,15 @@ namespace Titanium.Web.Proxy.Http2
                     }
 
                     // RFC 9110 §6.5.1: certain fields are forbidden in trailers.
-                    foreach (var header in collected)
+                    foreach (var header in collected.Where(header =>
+                                 ForbiddenTrailerHeaders.Contains(header.Name)))
                     {
-                        if (ForbiddenTrailerHeaders.Contains(header.Name))
-                        {
-                            ReportException(logger, new ProxyHttpException(
-                                "HTTP/2 protocol error: response trailer HEADERS contains forbidden field '" +
-                                header.Name + "'.", null, sessionArgs));
-                            await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
-                                hbStreamId, Http2ErrorCode.ProtocolError, input));
-                            return false;
-                        }
+                        ReportException(logger, new ProxyHttpException(
+                            "HTTP/2 protocol error: response trailer HEADERS contains forbidden field '" +
+                            header.Name + "'.", null, sessionArgs));
+                        await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                            hbStreamId, Http2ErrorCode.ProtocolError, input));
+                        return false;
                     }
 
                     foreach (var header in collected)
@@ -1267,12 +1261,10 @@ namespace Titanium.Web.Proxy.Http2
 
                 SessionEventArgs? args = null;
                 RequestResponseBase? rr = null;
-                if (type == Http2FrameType.Data || type == Http2FrameType.Headers)
+                if ((type == Http2FrameType.Data || type == Http2FrameType.Headers) &&
+                    connectionState.Streams.TryGetValue(streamId, out var existingStreamState))
                 {
-                    if (connectionState.Streams.TryGetValue(streamId, out var existingStreamState))
-                    {
-                        args = existingStreamState.SessionArgs;
-                    }
+                    args = existingStreamState.SessionArgs;
                 }
 
                 if (type == Http2FrameType.Data && args == null)
@@ -2412,10 +2404,7 @@ namespace Titanium.Web.Proxy.Http2
         /// <summary>Cheap check avoiding a ToLowerInvariant() allocation for the common already-lowercase case.</summary>
         private static bool HasUpperCaseAscii(string s)
         {
-            foreach (var c in s)
-                if (c is >= 'A' and <= 'Z')
-                    return true;
-            return false;
+            return s.Any(c => c is >= 'A' and <= 'Z');
         }
 
         internal static async Task SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise)

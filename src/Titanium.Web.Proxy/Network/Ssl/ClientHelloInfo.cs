@@ -75,12 +75,9 @@ public class ClientHelloInfo
             if (major == 3 && minor == 3)
             {
                 var protocols = this.GetSslProtocols();
-                if (protocols != null)
+                if (protocols != null && protocols.Contains("Tls1.3"))
                 {
-                    if (protocols.Contains("Tls1.3"))
-                    {
-                        return SslProtocols.Tls12 | SslProtocols.Tls13;
-                    }
+                    return SslProtocols.Tls12 | SslProtocols.Tls13;
                 }
 
                 return SslProtocols.Tls12;

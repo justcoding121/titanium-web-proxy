@@ -272,7 +272,7 @@ public partial class ProxyServer
     /// </summary>
     /// <param name="args"></param>
     /// <returns></returns>
-    private async Task RewriteUnauthorizedResponse(SessionEventArgs args)
+    private static async Task RewriteUnauthorizedResponse(SessionEventArgs args)
     {
         var response = args.HttpClient.Response;
 

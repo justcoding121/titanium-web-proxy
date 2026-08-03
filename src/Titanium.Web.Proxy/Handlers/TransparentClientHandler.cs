@@ -426,7 +426,6 @@ public partial class ProxyServer
                 if (method == KnownMethod.Invalid)
                 {
                     await TcpConnectionFactory.Release(prefetchTask, true);
-                    prefetchTask = null;
                     var session = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
                     var connection = (await TcpConnectionFactory.GetServerConnection(this, socksTargetHost, port,
                         HttpHeader.VersionUnknown, false, null,

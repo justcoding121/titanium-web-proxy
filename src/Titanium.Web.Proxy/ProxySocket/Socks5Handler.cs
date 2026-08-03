@@ -91,7 +91,7 @@ internal sealed class Socks5Handler : SocksHandler
     private string Password
     {
         get => password;
-        set => password = value ?? throw new ArgumentNullException();
+        set => password = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     /// <summary>
@@ -105,15 +105,14 @@ internal sealed class Socks5Handler : SocksHandler
     /// <exception cref="ArgumentException"><c>port</c> or <c>host</c> is invalid.</exception>
     private int GetHostPortBytes(string host, int port, Memory<byte> buffer)
     {
-        if (host == null)
-            throw new ArgumentNullException();
+        ArgumentNullException.ThrowIfNull(host);
 
         if (port <= 0 || port > 65535 || host.Length > 255)
-            throw new ArgumentException();
+            throw new ArgumentException("Port must be between 1 and 65535 and host length must not exceed 255.", nameof(host));
 
         var length = 7 + host.Length;
         if (buffer.Length < length)
-            throw new ArgumentException(nameof(buffer));
+            throw new ArgumentException("Buffer is too small.", nameof(buffer));
 
         var connect = buffer.Span;
         connect[0] = 5;
@@ -135,8 +134,7 @@ internal sealed class Socks5Handler : SocksHandler
     /// <exception cref="ArgumentNullException"><c>remoteEP</c> is null.</exception>
     private int GetEndPointBytes(IPEndPoint remoteEp, Memory<byte> buffer)
     {
-        if (remoteEp == null)
-            throw new ArgumentNullException();
+        ArgumentNullException.ThrowIfNull(remoteEp);
 
         var connect = buffer.Span;
         connect[0] = 5;
@@ -148,7 +146,7 @@ internal sealed class Socks5Handler : SocksHandler
         {
             // ATYP = IPv4
             if (buffer.Length < 10)
-                throw new ArgumentException(nameof(buffer));
+                throw new ArgumentException("Buffer is too small.", nameof(buffer));
 
             connect[3] = 1;
             addressBytes.CopyTo(connect.Slice(4));
@@ -161,7 +159,7 @@ internal sealed class Socks5Handler : SocksHandler
             // ATYP = IPv6 — previously this path incorrectly used ATYP=IPv4 with a 10-byte
             // request, which truncated ::1 to 0.0.0.0 and broke HTTPS-via-SOCKS to localhost.
             if (buffer.Length < 22)
-                throw new ArgumentException(nameof(buffer));
+                throw new ArgumentException("Buffer is too small.", nameof(buffer));
 
             connect[3] = 4;
             addressBytes.CopyTo(connect.Slice(4));

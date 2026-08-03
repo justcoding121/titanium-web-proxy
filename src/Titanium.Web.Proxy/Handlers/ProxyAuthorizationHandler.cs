@@ -134,7 +134,7 @@ public partial class ProxyServer
         return response;
     }
 
-    private Response CreateContinuationResponse(Response response, string continuation)
+    private static Response CreateContinuationResponse(Response response, string continuation)
     {
         response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, continuation);
 

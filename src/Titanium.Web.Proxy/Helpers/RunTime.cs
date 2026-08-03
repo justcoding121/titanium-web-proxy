@@ -101,7 +101,7 @@ internal static class RunTime
     }
 
     // https://github.com/qmatteoq/DesktopBridgeHelpers/blob/master/DesktopBridge.Helpers/Helpers.cs
-    private class UwpHelper
+    private static class UwpHelper
     {
         private const long AppmodelErrorNoPackage = 15700L;
 
@@ -129,10 +129,10 @@ internal static class RunTime
 
             var length = 0;
             var sb = new StringBuilder(0);
-            var result = GetCurrentPackageFullName(ref length, sb);
+            _ = GetCurrentPackageFullName(ref length, sb);
 
             sb = new StringBuilder(length);
-            result = GetCurrentPackageFullName(ref length, sb);
+            var result = GetCurrentPackageFullName(ref length, sb);
 
             return result != AppmodelErrorNoPackage;
         }

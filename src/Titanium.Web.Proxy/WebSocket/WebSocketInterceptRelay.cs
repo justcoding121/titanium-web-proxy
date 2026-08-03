@@ -51,6 +51,7 @@ internal static class WebSocketInterceptRelay
         }
         catch (OperationCanceledException)
         {
+            // Expected when either relay direction completes and cancels its peer.
         }
         finally
         {
@@ -144,7 +145,7 @@ internal static class WebSocketInterceptRelay
                 {
                     foreach (var frame in decoder.Decode(buffer, 0, read))
                     {
-                        if (!ValidateWebSocketFrame(frame, direction, out var closeCode))
+                        if (!ValidateWebSocketFrame(frame, out var closeCode))
                         {
                             // RFC 6455 §7.2: a protocol error requires closing the connection.
                             messageTracker.Reset();
@@ -206,9 +207,11 @@ internal static class WebSocketInterceptRelay
         }
         catch (OperationCanceledException)
         {
+            // Expected during coordinated relay shutdown.
         }
         catch (IOException)
         {
+            // The peer closed the transport while the relay was shutting down.
         }
         finally
         {
@@ -234,7 +237,6 @@ internal static class WebSocketInterceptRelay
     /// </remarks>
     private static bool ValidateWebSocketFrame(
         WebSocketFrame frame,
-        WebSocketFrameDirection direction,
         out ushort closeCode)
     {
         closeCode = 1002; // Protocol Error (default)

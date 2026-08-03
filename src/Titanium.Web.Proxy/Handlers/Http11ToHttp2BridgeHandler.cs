@@ -616,7 +616,7 @@ public partial class ProxyServer
         }
     }
 
-    private async Task<Http2OriginTunnelResult?> OpenWebSocketTunnelOrBadGatewayAsync(SessionEventArgs args,
+    private static async Task<Http2OriginTunnelResult?> OpenWebSocketTunnelOrBadGatewayAsync(SessionEventArgs args,
         Http2OriginConnection originConnection, CancellationToken cancellationToken)
     {
         try

@@ -49,7 +49,7 @@ internal class HuffmanEncoder
     /// </exception>
     public void Encode(BinaryWriter output, ByteString data)
     {
-        if (output == null) throw new ArgumentNullException(nameof(output));
+        ArgumentNullException.ThrowIfNull(output);
 
         if (data.Length == 0) return;
 

@@ -386,7 +386,7 @@ public sealed class CertificateManager : IDisposable
     ///         <see cref="CertificateManager" /> instance.
     ///     </para>
     /// </summary>
-    public int LeafRsaKeyPairBufferSize
+    public static int LeafRsaKeyPairBufferSize
     {
         get => LeafKeyPairSource.RsaBufferCapacity;
         set => LeafKeyPairSource.RsaBufferCapacity = value;
@@ -1401,12 +1401,20 @@ public sealed class CertificateManager : IDisposable
         // are released promptly rather than waiting for GC finalization.
         foreach (var pair in cachedCertificates)
             if (cachedCertificates.TryRemove(pair.Key, out var entry))
-                try { entry.Certificate.Dispose(); } catch { }
+                try { entry.Certificate.Dispose(); }
+                catch
+                {
+                    // Best-effort cleanup; continue disposing the remaining cached certificates.
+                }
 
         // Also dispose anything already evicted but still waiting out its grace period: the root is
         // changing, so leaves signed by the old root are not worth holding onto even briefly.
         while (pendingDisposals.TryDequeue(out var pending))
-            try { pending.Certificate.Dispose(); } catch { }
+            try { pending.Certificate.Dispose(); }
+            catch
+            {
+                // Best-effort cleanup; continue disposing the remaining pending certificates.
+            }
 
         // Do not dispose rootCertificate: it may have been supplied by the caller and still
         // referenced outside this manager (e.g. shared test CA / persisted root reload).
@@ -1426,11 +1434,19 @@ public sealed class CertificateManager : IDisposable
             // Release native CAPI/OpenSSL handles on all cached leaf certificates (manager-owned).
             foreach (var pair in cachedCertificates)
                 if (cachedCertificates.TryRemove(pair.Key, out var entry))
-                    try { entry.Certificate.Dispose(); } catch { }
+                    try { entry.Certificate.Dispose(); }
+                    catch
+                    {
+                        // Best-effort cleanup; continue disposing the remaining cached certificates.
+                    }
 
             // Also dispose anything already evicted but still waiting out its grace period.
             while (pendingDisposals.TryDequeue(out var pending))
-                try { pending.Certificate.Dispose(); } catch { }
+                try { pending.Certificate.Dispose(); }
+                catch
+                {
+                    // Best-effort cleanup; continue disposing the remaining pending certificates.
+                }
 
             // Do not dispose rootCertificate: ownership may belong to the caller.
             rootCertificate = null;

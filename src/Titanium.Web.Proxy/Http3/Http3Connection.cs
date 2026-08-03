@@ -144,8 +144,8 @@ internal sealed class Http3Connection
         {
             _clientConnection = new QuicClientConnection(
                 _server,
-                (IPEndPoint)_connection.LocalEndPoint,
-                (IPEndPoint)_connection.RemoteEndPoint);
+                _connection.LocalEndPoint,
+                _connection.RemoteEndPoint);
 
             // Instantiate QPACK context when dynamic table is enabled.
             if (_server.EnableQpackDynamicTable)

@@ -199,7 +199,7 @@ internal class Common
                 {
                     // SecurityBuffer layout in memory: cbBuffer, BufferType, pvBuffer.
                     // Sum cbBuffer across all entries to size the destination array.
-                    var currentOffset = index * Marshal.SizeOf(typeof(SecurityBuffer));
+                    var currentOffset = index * Marshal.SizeOf<SecurityBuffer>();
                     bytesToAllocate += Marshal.ReadInt32(pBuffers, currentOffset);
                 }
 
@@ -209,10 +209,10 @@ internal class Common
                 {
                     // SecurityBuffer layout in memory: cbBuffer, BufferType, pvBuffer.
                     // Copy each native buffer into the combined byte array.
-                    var currentOffset = index * Marshal.SizeOf(typeof(SecurityBuffer));
+                    var currentOffset = index * Marshal.SizeOf<SecurityBuffer>();
                     var bytesToCopy = Marshal.ReadInt32(pBuffers, currentOffset);
                     var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers,
-                        currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
+                        currentOffset + Marshal.SizeOf<int>() + Marshal.SizeOf<int>());
                     Marshal.Copy(secBufferpvBuffer, buffer, bufferIndex, bytesToCopy);
                     bufferIndex += bytesToCopy;
                 }

@@ -122,6 +122,7 @@ internal sealed class RollingFileLoggerProvider : ChannelLoggerProviderBase
         }
         catch (IOException)
         {
+            // Logging teardown is best-effort; ignore sink I/O failures.
         }
         finally
         {

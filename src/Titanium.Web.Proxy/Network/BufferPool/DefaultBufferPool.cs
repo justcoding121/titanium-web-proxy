@@ -1,4 +1,5 @@
-﻿using System.Buffers;
+﻿using System;
+using System.Buffers;
 
 namespace Titanium.Web.Proxy.StreamExtended.BufferPool;
 
@@ -8,7 +9,7 @@ namespace Titanium.Web.Proxy.StreamExtended.BufferPool;
 ///     Note: rented buffers may be larger than the requested size (ArrayPool bucketing) and are not
 ///     cleared on return, so callers must not assume the buffer length equals the requested size.
 /// </summary>
-internal class DefaultBufferPool : IBufferPool
+internal sealed class DefaultBufferPool : IBufferPool
 {
     /// <summary>
     ///     Buffer size in bytes used throughout this proxy.
@@ -46,6 +47,12 @@ internal class DefaultBufferPool : IBufferPool
 
     public void Dispose()
     {
-        //Nothing to dispose. But need for the interface
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    private void Dispose(bool disposing)
+    {
+        // Nothing to dispose; required for IBufferPool.
     }
 }

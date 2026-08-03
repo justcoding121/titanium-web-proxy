@@ -136,7 +136,7 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
         }
     }
 
-    private X509Certificate2? LoadCertificate(string path, string password, X509KeyStorageFlags storageFlags)
+    private static X509Certificate2? LoadCertificate(string path, string password, X509KeyStorageFlags storageFlags)
     {
         byte[] exported;
 

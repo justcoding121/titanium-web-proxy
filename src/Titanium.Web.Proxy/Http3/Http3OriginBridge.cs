@@ -72,11 +72,7 @@ internal static class Http3OriginBridge
         }
 
         // Route resolved to non-H3 (forced Http2/Http11 override, or no H3 capability known).
-        var preferredProtocol = sessionArgs.UpstreamHttpProtocol ?? UpstreamHttpProtocol.Auto;
-        var sslProtocol = preferredProtocol == UpstreamHttpProtocol.Http2
-            ? SslApplicationProtocol.Http2
-            : default;
-        await ForwardOverTcpAsync(sessionArgs, server, sslProtocol, cancellationToken, onInterimResponse);
+        await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
     }
 
     /// <summary>
@@ -368,7 +364,7 @@ internal static class Http3OriginBridge
             {
                 try
                 {
-                    await ForwardOverTcpAsync(sessionArgs, server, default, cancellationToken, onInterimResponse);
+                    await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
                 }
                 catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
                 {
@@ -425,7 +421,7 @@ internal static class Http3OriginBridge
                 logger.LogDebug("Evicted stale H3 capability for {HostAndPort}; falling back to TCP.", hostAndPort);
                 try
                 {
-                    await ForwardOverTcpAsync(sessionArgs, server, default, cancellationToken, onInterimResponse);
+                    await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
                 }
                 catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
                 {
@@ -451,7 +447,7 @@ internal static class Http3OriginBridge
             // escaping the loop would otherwise leave the stream registered forever, pinning the
             // connection as permanently busy and blocking idle eviction.
             if (quicConn != null)
-                await server.QuicConnectionPool.ReleaseAsync(quicConn);
+                await QuicConnectionPool.ReleaseAsync(quicConn);
         }
     }
 
@@ -472,7 +468,6 @@ internal static class Http3OriginBridge
     private static async Task ForwardOverTcpAsync(
         SessionEventArgs sessionArgs,
         ProxyServer server,
-        SslApplicationProtocol preferredProtocol,
         CancellationToken cancellationToken,
         Func<Response, CancellationToken, Task>? onInterimResponse = null)
     {

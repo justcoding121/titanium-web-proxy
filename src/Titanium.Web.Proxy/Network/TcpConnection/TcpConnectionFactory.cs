@@ -101,6 +101,7 @@ internal class TcpConnectionFactory : IDisposable
     public void Dispose()
     {
         Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -133,7 +134,7 @@ internal class TcpConnectionFactory : IDisposable
                 connection?.Dispose();
     }
 
-    internal string GetConnectionCacheKey(string remoteHostName, int remotePort,
+    internal static string GetConnectionCacheKey(string remoteHostName, int remotePort,
         bool isHttps, List<SslApplicationProtocol>? applicationProtocols,
         IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
         string? connectHost = null, int? connectPort = null,
@@ -1067,7 +1068,7 @@ internal class TcpConnectionFactory : IDisposable
     ///     <paramref name="proxy" />, handling Basic and WinAuth 407 challenges. Returns whether WinAuth
     ///     was used successfully.
     /// </summary>
-    private async Task<bool> EstablishHttpUpstreamConnectAsync(ProxyServer proxyServer, HttpServerStream stream,
+    private static async Task<bool> EstablishHttpUpstreamConnectAsync(ProxyServer proxyServer, HttpServerStream stream,
         IExternalProxy proxy, string authority, bool isHttps, Version httpVersion,
         CancellationToken cancellationToken)
     {
@@ -1170,10 +1171,9 @@ internal class TcpConnectionFactory : IDisposable
         ResponseStatusInfo httpStatus, HeaderCollection headers, string? bodyPreview, string? message = null)
     {
         var headerSnapshot = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var header in headers)
+        foreach (var header in headers.Where(header => !headerSnapshot.ContainsKey(header.Name)))
         {
-            if (!headerSnapshot.ContainsKey(header.Name))
-                headerSnapshot[header.Name] = header.Value;
+            headerSnapshot[header.Name] = header.Value;
         }
 
         var effectiveMessage = message ??
@@ -1228,6 +1228,7 @@ internal class TcpConnectionFactory : IDisposable
                 // consume the optional trailer headers until the terminating blank line
                 while (!string.IsNullOrEmpty(await stream.ReadLineAsync(cancellationToken)))
                 {
+                    // Trailer fields are intentionally discarded after authentication.
                 }
 
                 return;

@@ -277,7 +277,7 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
         var responseBuffer = new byte[4096];
         var received = await socket.ReceiveAsync(responseBuffer.AsMemory(), SocketFlags.None, ct);
 
-        var parsed = ParseDnsResponseCore(responseBuffer.AsSpan(0, received), queryId, host, port);
+        var parsed = ParseDnsResponseCore(responseBuffer.AsSpan(0, received), queryId, port);
 
         if (parsed.IsTransient) return (null, isTransient: true);
         if (parsed.BestRecord != null) return (parsed.BestRecord, isTransient: false);
@@ -338,17 +338,23 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     /// </summary>
     internal static SvcbResult? ParseDnsResponseInternal(
         ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, string host, int queriedPort)
-        => ParseDnsResponseCore(response, expectedId, host, queriedPort).BestRecord;
+    {
+        _ = host; // Retained for compatibility with the test-hook contract.
+        return ParseDnsResponseCore(response, expectedId, queriedPort).BestRecord;
+    }
 
     /// <summary>
     ///     Public test hook — returns whether a raw DNS response is classified as transient.
     /// </summary>
     internal static bool ParseDnsResponseIsTransientInternal(
         ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, string host, int queriedPort)
-        => ParseDnsResponseCore(response, expectedId, host, queriedPort).IsTransient;
+    {
+        _ = host; // Retained for compatibility with the test-hook contract.
+        return ParseDnsResponseCore(response, expectedId, queriedPort).IsTransient;
+    }
 
     private static DnsParseResult ParseDnsResponseCore(
-        ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, string host, int queriedPort)
+        ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, int queriedPort)
     {
         if (response.Length < 12) return DnsParseResult.Transient;
 

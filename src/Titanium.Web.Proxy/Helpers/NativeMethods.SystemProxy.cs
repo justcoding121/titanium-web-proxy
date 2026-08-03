@@ -5,22 +5,27 @@ namespace Titanium.Web.Proxy.Helpers;
 
 internal partial class NativeMethods
 {
-    [DllImport("wininet.dll")]
-    internal static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer,
+    // WinINet exports A/W variants only; DllImport used to append the suffix automatically.
+    [LibraryImport("wininet.dll", EntryPoint = "InternetSetOptionW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer,
         int dwBufferLength);
 
-    [DllImport("kernel32.dll")]
-    internal static extern IntPtr GetConsoleWindow();
+    [LibraryImport("kernel32.dll")]
+    internal static partial IntPtr GetConsoleWindow();
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    internal static extern bool SetConsoleCtrlHandler(ConsoleEventDelegate callback, bool add);
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool SetConsoleCtrlHandler(ConsoleEventDelegate callback,
+        [MarshalAs(UnmanagedType.Bool)] bool add);
 
     /// <summary>
     ///     <see href="https://docs.microsoft.com/en-us/windows/desktop/api/winuser/nf-winuser-getsystemmetrics" />
     /// </summary>
-    [DllImport("user32.dll")]
-    internal static extern int GetSystemMetrics(int nIndex);
+    [LibraryImport("user32.dll")]
+    internal static partial int GetSystemMetrics(int nIndex);
 
     // Pinvoke
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     internal delegate bool ConsoleEventDelegate(int eventType);
 }

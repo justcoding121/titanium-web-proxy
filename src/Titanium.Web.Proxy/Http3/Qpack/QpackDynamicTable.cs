@@ -75,15 +75,13 @@ internal sealed class QpackDynamicTable : IDisposable
 
             var absoluteIndex = InsertCount++;
 
-            if (entrySize <= (int)Capacity)
+            if (entrySize <= (int)Capacity &&
+                (Size + entrySize <= (int)Capacity || _entries.Count == 0))
             {
                 // If still not enough room after eviction (because of in-flight pins), skip storage but
                 // still bump InsertCount so the RequiredInsertCount prefix stays consistent.
-                if (Size + entrySize <= (int)Capacity || _entries.Count == 0)
-                {
-                    _entries.Add((name, value));
-                    Size += entrySize;
-                }
+                _entries.Add((name, value));
+                Size += entrySize;
             }
 
             return absoluteIndex;

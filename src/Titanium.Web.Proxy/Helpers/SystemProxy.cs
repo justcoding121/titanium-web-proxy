@@ -101,16 +101,26 @@ internal class SystemProxyManager : IDisposable
     /// </summary>
     public void Dispose()
     {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
         if (disposed) return;
-        disposed = true;
 
-        AppDomain.CurrentDomain.ProcessExit -= processExitHandler;
-        AppDomain.CurrentDomain.UnhandledException -= unhandledExceptionHandler;
-
-        if (consoleEventHandler != null)
+        if (disposing)
         {
-            NativeMethods.SetConsoleCtrlHandler(consoleEventHandler, false);
+            AppDomain.CurrentDomain.ProcessExit -= processExitHandler;
+            AppDomain.CurrentDomain.UnhandledException -= unhandledExceptionHandler;
+
+            if (consoleEventHandler != null)
+            {
+                NativeMethods.SetConsoleCtrlHandler(consoleEventHandler, false);
+            }
         }
+
+        disposed = true;
     }
 
     /// <summary>
@@ -284,7 +294,7 @@ internal class SystemProxyManager : IDisposable
         }
     }
 
-    internal ProxyInfo? GetProxyInfoFromRegistry()
+    internal static ProxyInfo? GetProxyInfoFromRegistry()
     {
         using (var reg = OpenInternetSettingsKey())
         {
@@ -294,7 +304,7 @@ internal class SystemProxyManager : IDisposable
         }
     }
 
-    private ProxyInfo GetProxyInfoFromRegistry(RegistryKey reg)
+    private static ProxyInfo GetProxyInfoFromRegistry(RegistryKey reg)
     {
         var proxyEnableValue = reg.GetValue(RegProxyEnable);
         var pi = new ProxyInfo(null,

@@ -641,7 +641,11 @@ public partial class ProxyServer
                 // Close the origin socket to unblock any pending socket ReadAsync in
                 // toClientTask immediately rather than relying on the cancellation-token
                 // callback chain, which HttpStream can be slow to propagate.
-                try { originStreamForRelay.Close(); } catch { }
+                try { originStreamForRelay.Close(); }
+                catch
+                {
+                    // Best-effort close used only to unblock the pending relay read.
+                }
 
                 await Task.WhenAll(
                     toOriginTask.ContinueWith(_ => { }, TaskScheduler.Default),
@@ -796,12 +800,14 @@ public partial class ProxyServer
         }
     }
 
+    private static readonly char[] separator = new[] { ' ' };
+
     private static bool TryParseHttp11StatusLine(string? line, out int statusCode)
     {
         statusCode = 0;
         if (line == null) return false;
 
-        var parts = line.Split(new[] { ' ' }, 3, StringSplitOptions.RemoveEmptyEntries);
+        var parts = line.Split(separator, 3, StringSplitOptions.RemoveEmptyEntries);
         return parts.Length >= 2 &&
                string.Equals(parts[0], "HTTP/1.1", StringComparison.OrdinalIgnoreCase) &&
                parts[1].Length == 3 &&

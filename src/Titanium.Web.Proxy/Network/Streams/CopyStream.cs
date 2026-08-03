@@ -35,11 +35,21 @@ internal class CopyStream : ILineStream, IDisposable
 
     public void Dispose()
     {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
         if (disposed) return;
 
         // Only return pooled buffers on the explicit Dispose path. There is no finalizer:
         // ArrayPool.Return from a finalizer would touch managed objects after an undefined GC order.
-        bufferPool.ReturnBuffer(buffer);
+        if (disposing)
+        {
+            bufferPool.ReturnBuffer(buffer);
+        }
+
         disposed = true;
     }
 

@@ -277,16 +277,16 @@ internal class WinAuthEndPoint
                 {
                     // SecurityBuffer layout in memory: cbBuffer, BufferType, pvBuffer.
                     // Release each native pvBuffer allocated by the individual SecBuffer entries.
-                    var currentOffset = index * Marshal.SizeOf(typeof(SecurityBuffer));
+                    var currentOffset = index * Marshal.SizeOf<SecurityBuffer>();
                     var cbBuffer = Marshal.ReadInt32(clientToken.pBuffers, currentOffset);
                     var secBufferpvBuffer = Marshal.ReadIntPtr(clientToken.pBuffers,
-                        currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
+                        currentOffset + Marshal.SizeOf<int>() + Marshal.SizeOf<int>());
                     ZeroBuffer(secBufferpvBuffer, cbBuffer);
                     Marshal.FreeHGlobal(secBufferpvBuffer);
                 }
             }
 
-            ZeroBuffer(clientToken.pBuffers, clientToken.cBuffers * Marshal.SizeOf(typeof(SecurityBuffer)));
+            ZeroBuffer(clientToken.pBuffers, clientToken.cBuffers * Marshal.SizeOf<SecurityBuffer>());
             Marshal.FreeHGlobal(clientToken.pBuffers);
             clientToken.pBuffers = IntPtr.Zero;
         }

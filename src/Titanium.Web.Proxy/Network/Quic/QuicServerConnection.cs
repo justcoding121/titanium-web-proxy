@@ -81,7 +81,7 @@ internal sealed class QuicServerConnection : IAsyncDisposable
 
     internal int Port { get; set; }
 
-    internal bool IsHttps => true; // QUIC always uses TLS
+    internal static bool IsHttps => true; // QUIC always uses TLS
 
     internal SslApplicationProtocol NegotiatedApplicationProtocol { get; }
 

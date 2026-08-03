@@ -7,7 +7,7 @@ namespace Titanium.Web.Proxy.Compression;
 /// <summary>
 ///     A factory to generate the de-compression methods based on the type of compression
 /// </summary>
-internal class DecompressionFactory
+internal static class DecompressionFactory
 {
     internal static Stream Create(HttpCompression type, Stream stream, bool leaveOpen = true)
     {

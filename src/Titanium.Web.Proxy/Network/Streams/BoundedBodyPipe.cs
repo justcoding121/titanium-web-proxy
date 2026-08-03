@@ -102,7 +102,7 @@ internal sealed class BoundedBodyPipe : IDisposable
     ///     are retained so a second consumer can re-read them from the beginning.
     ///     (Placeholder — full replay support wired in a subsequent phase.)
     /// </summary>
-    internal void MarkReplayable() { }
+    internal static void MarkReplayable() { }
 
     public void Dispose()
     {

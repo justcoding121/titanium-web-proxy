@@ -48,7 +48,7 @@ internal class Message
     {
         type = 3;
 
-        if (message == null) throw new ArgumentNullException(nameof(message));
+        ArgumentNullException.ThrowIfNull(message);
 
         if (message.Length < 12)
         {

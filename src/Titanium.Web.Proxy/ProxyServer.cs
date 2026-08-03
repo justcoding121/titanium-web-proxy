@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -1278,7 +1279,7 @@ public partial class ProxyServer : IDisposable
         string? proxyOverride = null;
         if (settings != null)
         {
-            var currentProxyOverride = SystemProxySettingsManager.GetProxyInfoFromRegistry()?.ProxyOverride;
+            var currentProxyOverride = SystemProxyManager.GetProxyInfoFromRegistry()?.ProxyOverride;
             proxyOverride = settings.BuildProxyOverride(currentProxyOverride);
         }
 
@@ -1429,14 +1430,14 @@ public partial class ProxyServer : IDisposable
         if (changeSystemProxySettings && SystemProxySettingsManager != null && RunTime.IsWindows &&
             !RunTime.IsUwpOnWindows)
         {
-            var proxyInfo = SystemProxySettingsManager.GetProxyInfoFromRegistry();
+            var proxyInfo = SystemProxyManager.GetProxyInfoFromRegistry();
             if (proxyInfo?.Proxies != null)
             {
                 var protocolToRemove = ProxyProtocolType.None;
-                foreach (var proxy in proxyInfo.Proxies.Values)
-                    if (NetworkHelper.IsLocalIpAddress(proxy.HostName)
-                        && ProxyEndPoints.Any(x => x.Port == proxy.Port))
-                        protocolToRemove |= proxy.ProtocolType;
+                foreach (var proxy in proxyInfo.Proxies.Values.Where(proxy =>
+                             NetworkHelper.IsLocalIpAddress(proxy.HostName) &&
+                             ProxyEndPoints.Any(x => x.Port == proxy.Port)))
+                    protocolToRemove |= proxy.ProtocolType;
 
                 if (protocolToRemove != ProxyProtocolType.None)
                     SystemProxySettingsManager.RemoveProxy(protocolToRemove, false);
@@ -1704,7 +1705,7 @@ public partial class ProxyServer : IDisposable
     /// <param name="endPoint">The end point to validate.</param>
     private void ValidateEndPointAsSystemProxy(ExplicitProxyEndPoint endPoint)
     {
-        if (endPoint == null) throw new ArgumentNullException(nameof(endPoint));
+        ArgumentNullException.ThrowIfNull(endPoint);
 
         if (!ProxyEndPoints.Contains(endPoint))
             throw new InvalidOperationException("Cannot set endPoints not added to proxy as system proxy");
@@ -1920,7 +1921,7 @@ public partial class ProxyServer : IDisposable
     ///     Change the ThreadPool.WorkerThread minThread
     /// </summary>
     /// <param name="workerThreads">minimum Threads allocated in the ThreadPool</param>
-    private void SetThreadPoolMinThread(int workerThreads)
+    private static void SetThreadPoolMinThread(int workerThreads)
     {
         ThreadPool.GetMinThreads(out var minWorkerThreads, out var minCompletionPortThreads);
         ThreadPool.GetMaxThreads(out var maxWorkerThreads, out _);
@@ -1966,13 +1967,14 @@ public partial class ProxyServer : IDisposable
     /// <param name="exception">The exception.</param>
     private void OnException(HttpClientStream? clientStream, Exception exception)
     {
+        _ = clientStream; // Reserved for attaching connection context to future diagnostics.
         ProxyDiagnostics.ReportException(logger, "Unhandled exception in proxy", exception);
     }
 
     /// <summary>
     ///     Quit listening on the given end point.
     /// </summary>
-    private void QuitListen(ProxyEndPoint endPoint)
+    private static void QuitListen(ProxyEndPoint endPoint)
     {
         var listener = endPoint.Listener;
         if (listener == null) return;
@@ -2111,57 +2113,68 @@ public partial class ProxyServer : IDisposable
 
     public void Dispose()
     {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    [SuppressMessage("ApiDesign", "RS0016:Add public types and members to the declared API",
+        Justification = "Protected Dispose(bool) is required by the standard IDisposable pattern but is not public API.")]
+    protected virtual void Dispose(bool disposing)
+    {
         if (disposed) return;
 
-        disposed = true;
+        if (disposing)
+        {
+            // No finalizer: Stop()/certificate/buffer disposal must only run on the explicit
+            // Dispose path. Callers that omit Dispose leave OS sockets to safe-handle cleanup.
+            if (ProxyRunning)
+                try
+                {
+                    Stop();
+                }
+                catch
+                {
+                    // ignore
+                }
 
-        // No finalizer: Stop()/certificate/buffer disposal must only run on the explicit
-        // Dispose path. Callers that omit Dispose leave OS sockets to safe-handle cleanup.
-        if (ProxyRunning)
             try
             {
-                Stop();
+                TcpConnectionFactory.Dispose();
             }
             catch
             {
                 // ignore
             }
 
-        try
-        {
-            TcpConnectionFactory.Dispose();
-        }
-        catch
-        {
-            // ignore
-        }
-
-        try
-        {
-            QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
-        }
-        catch
-        {
-            // ignore
-        }
-
-        CertificateManager?.Dispose();
-        BufferPool?.Dispose();
-        _svcbDiscoveryCoordinator?.Dispose();
-
-        // SystemProxyManager is [SupportedOSPlatform("windows")]; the platform analyzer cannot
-        // prove that from a null-conditional access alone, so guard explicitly (mirrors the
-        // Start() rollback path below).
-        if (RunTime.IsWindows) SystemProxySettingsManager?.Dispose();
-
-        if (ownsActiveLoggerFactory)
             try
             {
-                activeLoggerFactory.Dispose();
+                QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
             }
             catch
             {
-                // A misbehaving sink must never prevent proxy disposal from completing.
+                // ignore
             }
+
+            CertificateManager?.Dispose();
+            BufferPool?.Dispose();
+            _svcbDiscoveryCoordinator?.Dispose();
+
+            // SystemProxyManager is [SupportedOSPlatform("windows")]; the platform analyzer cannot
+            // prove that from a null-conditional access alone, so guard explicitly (mirrors the
+            // Start() rollback path below).
+            if (RunTime.IsWindows) SystemProxySettingsManager?.Dispose();
+
+            if (ownsActiveLoggerFactory)
+                try
+                {
+                    activeLoggerFactory.Dispose();
+                }
+                catch
+                {
+                    // A misbehaving sink must never prevent proxy disposal from completing.
+                }
+        }
+
+        disposed = true;
     }
 }

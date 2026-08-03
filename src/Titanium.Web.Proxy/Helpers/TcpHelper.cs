@@ -10,7 +10,7 @@ using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.Helpers;
 
-internal class TcpHelper
+internal static class TcpHelper
 {
     /// <summary>
     ///     Gets the process id by local port number.

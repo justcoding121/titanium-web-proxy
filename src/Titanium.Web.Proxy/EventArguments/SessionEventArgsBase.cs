@@ -238,6 +238,7 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     public void Dispose()
     {
         Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
     protected void OnException(Exception exception)

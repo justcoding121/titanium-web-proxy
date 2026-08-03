@@ -218,7 +218,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// </summary>
         /// <param name="output">Output.</param>
         /// <param name="stringData">String data.</param>
-        private void EncodeStringLiteral(BinaryWriter output, ByteString stringData)
+        private static void EncodeStringLiteral(BinaryWriter output, ByteString stringData)
         {
             int huffmanLength = HuffmanEncoder.Instance.GetEncodedLength(stringData);
             if (huffmanLength < stringData.Length)

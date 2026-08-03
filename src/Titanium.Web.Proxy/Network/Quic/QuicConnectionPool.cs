@@ -142,7 +142,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     ///     stays shared and available to other requests; only a retired connection whose last stream
     ///     has now finished is disposed.
     /// </summary>
-    internal async ValueTask ReleaseAsync(QuicServerConnection connection)
+    internal static async ValueTask ReleaseAsync(QuicServerConnection connection)
     {
         var remaining = connection.ReleaseStream();
         if (connection.IsClosed && remaining <= 0)
