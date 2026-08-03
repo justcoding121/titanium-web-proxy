@@ -41,8 +41,8 @@ public partial class ProxyServer : IDisposable
 
     internal static readonly string UriSchemeHttps = Uri.UriSchemeHttps;
 
-    internal static ByteString UriSchemeHttp8 = (ByteString)UriSchemeHttp;
-    internal static ByteString UriSchemeHttps8 = (ByteString)UriSchemeHttps;
+    internal static readonly ByteString UriSchemeHttp8 = (ByteString)UriSchemeHttp;
+    internal static readonly ByteString UriSchemeHttps8 = (ByteString)UriSchemeHttps;
 
     /// <summary>
     ///     Backing field for exposed public property.

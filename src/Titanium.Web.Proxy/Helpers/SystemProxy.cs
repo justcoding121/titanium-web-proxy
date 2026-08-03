@@ -87,8 +87,6 @@ internal class SystemProxyManager : IDisposable
 
                 return false;
             };
-            NativeMethods.Handler = consoleEventHandler;
-
             // On console control events, restore system proxy before the process exits.
             NativeMethods.SetConsoleCtrlHandler(consoleEventHandler, true);
         }
@@ -112,8 +110,6 @@ internal class SystemProxyManager : IDisposable
         if (consoleEventHandler != null)
         {
             NativeMethods.SetConsoleCtrlHandler(consoleEventHandler, false);
-            if (ReferenceEquals(NativeMethods.Handler, consoleEventHandler))
-                NativeMethods.Handler = null;
         }
     }
 

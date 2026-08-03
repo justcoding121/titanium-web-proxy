@@ -43,6 +43,8 @@ internal class WinAuthEndPoint
             if (credentials != null)
                 authIdentity = MarshaledAuthIdentity.Create(credentials);
 
+            var lifetime = new SecurityInteger(0);
+
             var result = AcquireCredentialsHandle(
                 credentials == null ? WindowsIdentity.GetCurrent().Name : null!,
                 authScheme,
@@ -52,7 +54,7 @@ internal class WinAuthEndPoint
                 0,
                 IntPtr.Zero,
                 ref state.Credentials.RawHandle,
-                ref NewLifeTime);
+                ref lifetime);
 
             if (result != SuccessfulResult) return null;
 
@@ -66,8 +68,8 @@ internal class WinAuthEndPoint
                 0,
                 out state.Context.RawHandle,
                 out clientToken,
-                out NewContextAttributes,
-                out NewLifeTime);
+                out _,
+                out lifetime);
 
             if (result != IntermediateResult && result != SuccessfulResult) return null;
 
@@ -228,8 +230,8 @@ internal class WinAuthEndPoint
                 0,
                 out state.Context.RawHandle,
                 out clientToken,
-                out NewContextAttributes,
-                out NewLifeTime);
+                out _,
+                out _);
 
             // SuccessfulResult => authentication complete.
             // IntermediateResult => another leg is required (multi-round Negotiate).

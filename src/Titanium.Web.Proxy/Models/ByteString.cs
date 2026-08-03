@@ -6,7 +6,7 @@ namespace Titanium.Web.Proxy.Models;
 
 internal struct ByteString : IEquatable<ByteString>
 {
-    public static ByteString Empty = new(ReadOnlyMemory<byte>.Empty);
+    internal static readonly ByteString Empty = new(ReadOnlyMemory<byte>.Empty);
 
     public ReadOnlyMemory<byte> Data { get; }
 

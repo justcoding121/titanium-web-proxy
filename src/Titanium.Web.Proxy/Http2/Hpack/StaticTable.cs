@@ -30,18 +30,18 @@ internal static class StaticTable
 
     private static readonly Dictionary<ByteString, int> staticIndexByName;
 
-    public static ByteString KnownHeaderAuhtority = (ByteString)":authority";
+    internal static readonly ByteString KnownHeaderAuhtority = (ByteString)":authority";
 
-    public static ByteString KnownHeaderMethod = (ByteString)":method";
+    internal static readonly ByteString KnownHeaderMethod = (ByteString)":method";
 
-    public static ByteString KnownHeaderPath = (ByteString)":path";
+    internal static readonly ByteString KnownHeaderPath = (ByteString)":path";
 
-    public static ByteString KnownHeaderScheme = (ByteString)":scheme";
+    internal static readonly ByteString KnownHeaderScheme = (ByteString)":scheme";
 
-    public static ByteString KnownHeaderStatus = (ByteString)":status";
+    internal static readonly ByteString KnownHeaderStatus = (ByteString)":status";
 
     /// <summary>RFC 8441 §5: the :protocol pseudo-header for extended CONNECT requests.</summary>
-    public static ByteString KnownHeaderProtocol = (ByteString)":protocol";
+    internal static readonly ByteString KnownHeaderProtocol = (ByteString)":protocol";
 
     static StaticTable()
     {

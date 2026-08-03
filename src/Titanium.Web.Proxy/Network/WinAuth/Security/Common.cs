@@ -5,9 +5,6 @@ namespace Titanium.Web.Proxy.Network.WinAuth.Security;
 
 internal class Common
 {
-    internal static uint NewContextAttributes = 0;
-    internal static SecurityInteger NewLifeTime = new(0);
-
     #region internal constants
 
     internal const int IscReqReplayDetect = 0x00000004;
