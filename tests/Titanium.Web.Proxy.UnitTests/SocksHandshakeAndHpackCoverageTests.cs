@@ -202,6 +202,86 @@ public class SocksHandshakeAndHpackCoverageTests
     }
 
     [TestMethod]
+    public async Task ProxySocket_Socks5_IPv6Connect_SucceedsThroughFakePeer()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var proxyEp = (IPEndPoint)listener.LocalEndpoint;
+
+        var peer = Task.Run(async () =>
+        {
+            using var client = await listener.AcceptTcpClientAsync();
+            using var stream = client.GetStream();
+            var buf = new byte[64];
+            Assert.IsTrue(await ReadExactAsync(stream, buf, 0, 4));
+            await stream.WriteAsync(new byte[] { 0x05, 0x00 });
+            // CONNECT with ATYP=4 (IPv6), 22-byte request
+            Assert.IsTrue(await ReadExactAsync(stream, buf, 0, 22));
+            Assert.AreEqual(5, buf[0]);
+            Assert.AreEqual(1, buf[1]);
+            Assert.AreEqual(4, buf[3]); // IPv6 ATYP
+            await stream.WriteAsync(new byte[]
+            {
+                0x05, 0x00, 0x00, 0x04,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                0, 0
+            });
+        });
+
+        using var sock = new ProxySock(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+        {
+            ProxyType = ProxyTypes.Socks5,
+            ProxyEndPoint = proxyEp
+        };
+        var ar = sock.BeginConnect(IPAddress.Parse("::1"), 443, null, null);
+        sock.EndConnect(ar);
+        await peer;
+    }
+
+    [TestMethod]
+    public async Task ProxySocket_Socks5_InvalidAtypReply_ThrowsProtocolViolation()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var proxyEp = (IPEndPoint)listener.LocalEndpoint;
+
+        var peer = Task.Run(async () =>
+        {
+            using var client = await listener.AcceptTcpClientAsync();
+            using var stream = client.GetStream();
+            var buf = new byte[16];
+            await ReadExactAsync(stream, buf, 0, 4);
+            await stream.WriteAsync(new byte[] { 0x05, 0x00 });
+            await ReadExactAsync(stream, buf, 0, 10);
+            // Success REP but unsupported ATYP in bound address
+            await stream.WriteAsync(new byte[] { 0x05, 0x00, 0x00, 0x99, 0, 0, 0, 0, 0, 0 });
+        });
+
+        using var sock = new ProxySock(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+        {
+            ProxyType = ProxyTypes.Socks5,
+            ProxyEndPoint = proxyEp
+        };
+        var ar = sock.BeginConnect(IPAddress.Parse("10.0.0.1"), 80, null, null);
+        var ex = Assert.ThrowsExactly<ProtocolViolationException>(() => sock.EndConnect(ar));
+        Assert.IsNotNull(ex);
+        await peer;
+    }
+
+    [TestMethod]
+    public async Task ProxySocket_Socks4_InvalidPort_ThrowsBeforeConnect()
+    {
+        using var sock = new ProxySock(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+        {
+            ProxyType = ProxyTypes.Socks4,
+            ProxyEndPoint = new IPEndPoint(IPAddress.Loopback, 1080),
+            ProxyUser = "user"
+        };
+        Assert.ThrowsExactly<ArgumentException>(() => sock.BeginConnect("host.test", 0, null, null));
+        await Task.CompletedTask;
+    }
+
+    [TestMethod]
     public void ProxySocket_BeginConnect_ValidationAndDirectPath()
     {
         using var sock = new ProxySock(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);

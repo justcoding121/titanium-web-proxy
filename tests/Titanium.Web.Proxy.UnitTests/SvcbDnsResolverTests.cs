@@ -310,6 +310,43 @@ public class SvcbDnsResolverTests
                 response.AsSpan(), ValidId.AsSpan(), "example.com", 443));
     }
 
+    [TestMethod]
+    [DataRow((byte)1)]
+    [DataRow((byte)4)]
+    [DataRow((byte)5)]
+    [DataRow((byte)15)]
+    public void ParseDnsResponse_ErrorRcodes_AreTransient(byte rcode)
+    {
+        var response = BuildNxDomainResponseWithRcode(ValidId, rcode);
+
+        Assert.IsNull(UdpSvcbDnsResolver.ParseDnsResponseInternal(
+            response, ValidId, "example.com", 443));
+        Assert.IsTrue(UdpSvcbDnsResolver.ParseDnsResponseIsTransientInternal(
+            response, ValidId, "example.com", 443));
+    }
+
+    [TestMethod]
+    public void ParseDnsResponse_NoAnswers_IsDefinitiveNegative()
+    {
+        var response = BuildNxDomainResponseWithRcode(ValidId, rcode: 0);
+
+        Assert.IsNull(UdpSvcbDnsResolver.ParseDnsResponseInternal(
+            response, ValidId, "example.com", 443));
+        Assert.IsFalse(UdpSvcbDnsResolver.ParseDnsResponseIsTransientInternal(
+            response, ValidId, "example.com", 443));
+    }
+
+    [TestMethod]
+    public void ParseDnsResponse_MalformedQuestionName_IsTransient()
+    {
+        var response = BuildNxDomainResponseWithRcode(ValidId, rcode: 0);
+        response[12] = 0x80; // reserved DNS label prefix
+        response[7] = 1; // force answer parsing past the question
+
+        Assert.IsTrue(UdpSvcbDnsResolver.ParseDnsResponseIsTransientInternal(
+            response, ValidId, "example.com", 443));
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // SvcPriority selection
     // ─────────────────────────────────────────────────────────────────────────

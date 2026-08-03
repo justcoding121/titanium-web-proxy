@@ -127,6 +127,39 @@ public class ProxyServerLifecycleCoverageTests
     }
 
     [TestMethod]
+    public void AddEndPoint_DuplicateFixedAddressAndPort_Throws_ButEphemeralPortsAreAllowed()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 18080, false));
+
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 18080, false)));
+
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false));
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false));
+        Assert.AreEqual(3, proxy.ProxyEndPoints.Count);
+    }
+
+    [TestMethod]
+    public async Task Server_CanRestartSameEphemeralEndpoint_WithoutCertificateStore()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false);
+        proxy.AddEndPoint(endPoint);
+
+        proxy.Start(changeSystemProxySettings: false);
+        Assert.IsTrue(proxy.ProxyRunning);
+        await proxy.StopAsync(TimeSpan.Zero);
+        Assert.IsFalse(proxy.ProxyRunning);
+        Assert.AreSame(endPoint, proxy.ProxyEndPoints[0]);
+
+        proxy.Start(changeSystemProxySettings: false);
+        Assert.IsTrue(proxy.ProxyRunning);
+        proxy.Stop();
+        Assert.IsFalse(proxy.ProxyRunning);
+    }
+
+    [TestMethod]
     public void DoubleStart_AndStopWhenNotRunning_Throw()
     {
         using var proxy = new ProxyServer(false, false, false);

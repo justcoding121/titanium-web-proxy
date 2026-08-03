@@ -50,6 +50,41 @@ public class Http2OriginStripFramingAndSystemProxyTests
     }
 
     [TestMethod]
+    public void StripHeadersFraming_EmptyOrEntirelyPadding_ReturnsEmpty()
+    {
+        CollectionAssert.AreEqual(Array.Empty<byte>(),
+            InvokeStrip("StripHeadersFraming", Array.Empty<byte>(),
+                Http2FrameFlag.Padded | Http2FrameFlag.Priority));
+        CollectionAssert.AreEqual(Array.Empty<byte>(),
+            InvokeStrip("StripHeadersFraming", new byte[] { 10, 1, 2 }, Http2FrameFlag.Padded));
+    }
+
+    [TestMethod]
+    public void StripHeadersFraming_InsufficientPriorityPrefix_KeepsAvailablePayload()
+    {
+        var payload = new byte[] { 0xAA, 0xBB, 0xCC };
+
+        var stripped = InvokeStrip("StripHeadersFraming", payload, Http2FrameFlag.Priority);
+
+        CollectionAssert.AreEqual(payload, stripped);
+        Assert.AreNotSame(payload, stripped, "HEADERS framing returns an isolated header block.");
+    }
+
+    [TestMethod]
+    public void StripDataFraming_EmptyPaddedPayload_ReturnsSameInstance()
+    {
+        var payload = Array.Empty<byte>();
+        Assert.AreSame(payload, InvokeStrip("StripDataFraming", payload, Http2FrameFlag.Padded));
+    }
+
+    [TestMethod]
+    public void StripDataFraming_PaddingLargerThanPayload_ReturnsEmpty()
+    {
+        CollectionAssert.AreEqual(Array.Empty<byte>(),
+            InvokeStrip("StripDataFraming", new byte[] { 20, 1, 2 }, Http2FrameFlag.Padded));
+    }
+
+    [TestMethod]
     public void HttpSystemProxyValue_ToString_FormatsHttpAndHttps()
     {
         Assert.AreEqual("http=proxy:8080",

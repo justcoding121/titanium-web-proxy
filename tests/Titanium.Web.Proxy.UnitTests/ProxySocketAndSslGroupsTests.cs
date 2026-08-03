@@ -68,6 +68,121 @@ public class ProxySocketAndSslGroupsTests
     }
 
     [TestMethod]
+    public void Socks5Handler_GetHostPortBytes_ValidationErrors()
+    {
+        var hostMethod = typeof(Socks5Handler).GetMethod("GetHostPortBytes",
+            BindingFlags.Static | BindingFlags.NonPublic)!;
+        var buf = new byte[16];
+
+        Assert.ThrowsExactly<TargetInvocationException>(() =>
+            hostMethod.Invoke(null, [null!, 80, buf.AsMemory()]));
+        Assert.ThrowsExactly<TargetInvocationException>(() =>
+            hostMethod.Invoke(null, ["host", 0, buf.AsMemory()]));
+        Assert.ThrowsExactly<TargetInvocationException>(() =>
+            hostMethod.Invoke(null, ["host", 65536, buf.AsMemory()]));
+        Assert.ThrowsExactly<TargetInvocationException>(() =>
+            hostMethod.Invoke(null, [new string('x', 256), 80, buf.AsMemory()]));
+        Assert.ThrowsExactly<TargetInvocationException>(() =>
+            hostMethod.Invoke(null, ["host", 80, new byte[4].AsMemory()]));
+    }
+
+    [TestMethod]
+    public void Socks5Handler_GetEndPointBytes_RejectsUndersizedBuffer_ForIPv6()
+    {
+        var epMethod = typeof(Socks5Handler).GetMethod("GetEndPointBytes",
+            BindingFlags.Static | BindingFlags.NonPublic)!;
+        Assert.ThrowsExactly<TargetInvocationException>(() =>
+            epMethod.Invoke(null, [new IPEndPoint(IPAddress.Parse("::1"), 443), new byte[16].AsMemory()]));
+    }
+
+    [TestMethod]
+    public void Socks5Handler_ProcessReply_SetsTrailingReadLength_ForAtypVariants()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var proxyEp = (IPEndPoint)listener.LocalEndpoint!;
+
+        var processReply = typeof(Socks5Handler).GetMethod("ProcessReply",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var bufferCountProp = typeof(SocksHandler).GetProperty("BufferCount",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var bufferProp = typeof(SocksHandler).GetProperty("Buffer",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var protocolCompleteProp = typeof(SocksHandler).GetProperty("ProtocolComplete",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        HandShakeComplete noop = _ => { };
+
+        void AssertLengthAfterReply(byte atyp, byte[] replyPrefix, int expectedLength)
+        {
+            using var sock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            sock.Connect(proxyEp);
+            using var accepted = listener.AcceptSocket();
+            var handler = new Socks5Handler(sock, "", "");
+            bufferProp.SetValue(handler, new byte[256]);
+            protocolCompleteProp.SetValue(handler, noop);
+            var reply = new byte[replyPrefix.Length];
+            Buffer.BlockCopy(replyPrefix, 0, reply, 0, replyPrefix.Length);
+            reply[3] = atyp;
+            processReply.Invoke(handler, new object[] { reply });
+            Assert.AreEqual(expectedLength, bufferCountProp.GetValue(handler));
+            sock.Close();
+            accepted.Close();
+        }
+
+        AssertLengthAfterReply(1, new byte[] { 5, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 5);
+        AssertLengthAfterReply(3, new byte[] { 5, 0, 0, 0, 5, (byte)'h', (byte)'o', (byte)'s', (byte)'t', (byte)'s' }, 7);
+        AssertLengthAfterReply(4, new byte[] { 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 17);
+    }
+
+    [TestMethod]
+    public void Socks5Handler_ProcessReply_InvalidAtyp_ThrowsProtocolViolation()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        using var client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        client.Connect((IPEndPoint)listener.LocalEndpoint!);
+        using var server = listener.AcceptSocket();
+
+        var handler = new Socks5Handler(client, "", "");
+        handler.GetType().GetProperty("Buffer", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(handler, new byte[32]);
+        var processReply = typeof(Socks5Handler).GetMethod("ProcessReply",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var reply = new byte[] { 5, 0, 0, 99, 0, 0, 0, 0, 0, 0 };
+
+        var ex = Assert.ThrowsExactly<TargetInvocationException>(() => processReply.Invoke(handler, [reply]));
+        Assert.IsInstanceOfType(ex.InnerException, typeof(ProtocolViolationException));
+    }
+
+    [TestMethod]
+    public void Socks4Handler_GetHostPortBytes_ValidationErrors()
+    {
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        var handler = new Socks4Handler(socket, "user");
+        var hostMethod = typeof(Socks4Handler).GetMethod("GetHostPortBytes",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var buf = new byte[64];
+
+        Assert.ThrowsExactly<TargetInvocationException>(() =>
+            hostMethod.Invoke(handler, [null!, 80, buf.AsMemory()]));
+        Assert.ThrowsExactly<TargetInvocationException>(() =>
+            hostMethod.Invoke(handler, ["host", 0, buf.AsMemory()]));
+        Assert.ThrowsExactly<TargetInvocationException>(() =>
+            hostMethod.Invoke(handler, ["host", 70000, buf.AsMemory()]));
+    }
+
+    [TestMethod]
+    public void Socks4Handler_GetEndPointBytes_NullRemoteEp_Throws()
+    {
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        var handler = new Socks4Handler(socket, "user");
+        var epMethod = typeof(Socks4Handler).GetMethod("GetEndPointBytes",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Assert.ThrowsExactly<TargetInvocationException>(() =>
+            epMethod.Invoke(handler, [null!, new byte[32].AsMemory()]));
+    }
+
+    [TestMethod]
     public void Socks4Handler_GetHostPortBytes_And_GetEndPointBytes()
     {
         using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);

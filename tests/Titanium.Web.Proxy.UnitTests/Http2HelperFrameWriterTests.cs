@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Models;
@@ -59,6 +60,21 @@ public class Http2HelperFrameWriterTests
     }
 
     [TestMethod]
+    public async Task SendGoAwayAsync_MasksReservedBit_AndWritesErrorCode()
+    {
+        using var ms = new MemoryStream();
+        var (header, buf) = NewFrameScratch();
+
+        await Http2Helper.SendGoAwayAsync(header, buf, unchecked((int)0x80000005),
+            Http2ErrorCode.EnhanceYourCalm, ms);
+
+        var wire = ms.ToArray();
+        Assert.AreEqual(5, (wire[9] << 24) | (wire[10] << 16) | (wire[11] << 8) | wire[12]);
+        Assert.AreEqual((int)Http2ErrorCode.EnhanceYourCalm,
+            (wire[13] << 24) | (wire[14] << 16) | (wire[15] << 8) | wire[16]);
+    }
+
+    [TestMethod]
     public async Task SendWindowUpdateAsync_ZeroIncrement_IsNoOp()
     {
         using var ms = new MemoryStream();
@@ -95,6 +111,23 @@ public class Http2HelperFrameWriterTests
         Assert.AreEqual(9, wire.Length);
         Assert.AreEqual((byte)Http2FrameType.Data, wire[3]);
         Assert.AreEqual((byte)Http2FrameFlag.EndStream, wire[4]);
+    }
+
+    [TestMethod]
+    public async Task SendData_EmptyWithoutEndStream_WritesUnflaggedFrame()
+    {
+        using var ms = new MemoryStream();
+        var (header, buf) = NewFrameScratch(9);
+        var flow = new Http2FlowController();
+        flow.RegisterStream(9);
+
+        await Http2Helper.SendData(header, buf, 9, Array.Empty<byte>(), endStream: false,
+            maxFrameSize: 16384, flow, ms, CancellationToken.None);
+
+        var wire = ms.ToArray();
+        Assert.AreEqual(9, wire.Length);
+        Assert.AreEqual(0, wire[4]);
+        Assert.AreEqual(9, (wire[5] << 24) | (wire[6] << 16) | (wire[7] << 8) | wire[8]);
     }
 
     [TestMethod]
@@ -221,6 +254,51 @@ public class Http2HelperFrameWriterTests
         Assert.IsTrue(wire.Length > 9);
         Assert.AreEqual((byte)Http2FrameType.Headers, wire[3]);
         Assert.AreEqual((byte)(Http2FrameFlag.EndHeaders | Http2FrameFlag.EndStream), wire[4]);
+    }
+
+    [TestMethod]
+    public async Task SendTrailer_MixedCaseAndTableSizeChanges_EmitsContinuationFrames()
+    {
+        using var ms = new MemoryStream();
+        var (header, buf) = NewFrameScratch(11);
+        var settings = new Http2Settings { MaxFrameSize = 12 };
+        settings.UpdateHeaderTableSize(0);
+        settings.UpdateHeaderTableSize(8192);
+        var trailers = new HeaderCollection();
+        trailers.AddHeader("X-Long-Trailer", new string('z', 100));
+
+        await Http2Helper.SendTrailer(settings, header, buf, 11, trailers, endStream: false, ms);
+
+        var wire = ms.ToArray();
+        Assert.AreEqual((byte)Http2FrameType.Headers, wire[3]);
+        Assert.AreEqual(0, wire[4] & (byte)Http2FrameFlag.EndHeaders);
+        Assert.IsTrue(Array.IndexOf(wire, (byte)Http2FrameType.Continuation) >= 0,
+            "A small frame size must split the encoded trailer block.");
+        Assert.IsNotNull(settings.Encoder);
+    }
+
+    [TestMethod]
+    public async Task SendHeader_ExtendedConnect_UsesAuthorityAndProtocolPseudoHeader()
+    {
+        using var ms = new MemoryStream();
+        var (header, buf) = NewFrameScratch(13);
+        var request = new Request
+        {
+            Method = "CONNECT",
+            IsHttps = true,
+            HttpVersion = HttpHeader.Version20,
+            RequestUriString = "https://ignored.example/socket",
+            Authority = "origin.example:443".GetByteString(),
+            ExtendedConnectProtocol = "websocket"
+        };
+
+        await Http2Helper.SendHeader(new Http2Settings(), header, buf, request, endStream: false,
+            ms, pushPromise: true);
+
+        var wire = ms.ToArray();
+        Assert.AreEqual((byte)Http2FrameType.PushPromise, wire[3]);
+        Assert.AreEqual((byte)Http2FrameFlag.EndHeaders, wire[4]);
+        Assert.IsTrue(wire.Length > 9, "Extended CONNECT pseudo-headers must produce a header block.");
     }
 
     [TestMethod]
