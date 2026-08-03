@@ -148,7 +148,7 @@ public class SessionEventArgs : SessionEventArgsBase
     ///     <see cref="SessionEventArgsBase.DataSent" /> / <see cref="SessionEventArgsBase.DataReceived" />
     ///     still fire for bytes actually written to the peer.
     /// </summary>
-    public event AsyncEventHandler<WebSocketFrameInterceptEventArgs>? BeforeWebSocketFrame;
+    public event AsyncEventHandler<WebSocketFrameInterceptEventArgs>? BeforeWebSocketFrame; // NOSONAR S3264 -- Public extension event invoked by the WebSocket relay.
 
     /// <summary>
     ///     Inject frames toward the remote server (client→server direction, masked).

@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Network.Quic;
 /// </summary>
 internal interface IQuicConnectionFactory
 {
-    Task<QuicServerConnection> CreateAsync(
+    Task<QuicServerConnection> CreateAsync( // NOSONAR S107 -- Factory contract keeps connection identity and transport policy explicit.
         string connectHost,
         string sniHost,
         int port,

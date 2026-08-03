@@ -143,7 +143,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     Task-based Asynchronous Pattern
         /// </summary>
         /// <returns></returns>
-        internal static async Task SendHttp2(Stream clientStream, Stream serverStream,
+        internal static async Task SendHttp2(Stream clientStream, Stream serverStream, // NOSONAR S107 -- Relay collaborators are explicit to preserve the established internal protocol boundary.
             Func<SessionEventArgs> sessionFactory,
             Func<SessionEventArgs, Http2StreamContext, Task> onBeforeRequest,
             Func<SessionEventArgs, Http2StreamContext, Task> onBeforeResponse,
@@ -1898,8 +1898,9 @@ namespace Titanium.Web.Proxy.Http2
                         if (identifier == (int)Http2SettingsId.HeaderTableSize)
                         {
                             localSettings.UpdateHeaderTableSize((int)value);
-                            logger.LogTrace("[h2 settings] SETTINGS_HEADER_TABLE_SIZE={Value} from {Direction}",
-                                value, isClient ? "browser" : "origin");
+                            if (logger.IsEnabled(LogLevel.Trace))
+                                logger.LogTrace("[h2 settings] SETTINGS_HEADER_TABLE_SIZE={Value} from {Direction}",
+                                    value, isClient ? "browser" : "origin");
                         }
                         else if (identifier == (int)Http2SettingsId.MaxFrameSize)
                         {
@@ -2575,7 +2576,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     on the first, matching the semantics of the frame types they belong to. HEADERS/CONTINUATION
         ///     frames are not subject to flow control (RFC 7540 ?6.9), so no reservation is made here.
         /// </summary>
-        private static async Task WriteHeaderBlockAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
+        private static async Task WriteHeaderBlockAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, // NOSONAR S107 -- Frame fields are kept explicit in this low-level encoder helper.
             int streamId, Http2FrameType type, bool endStream, bool hasPriority, byte[] data, int maxFrameSize,
             Stream output)
         {
@@ -2616,7 +2617,7 @@ namespace Titanium.Web.Proxy.Http2
             } while (pos < data.Length);
         }
 
-        internal static async Task SendBody(Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader,
+        internal static async Task SendBody(Http2Settings settings, RequestResponseBase rr, Http2FrameHeader frameHeader, // NOSONAR S107 -- Frame-writing state is kept explicit for this low-level helper.
             byte[] frameHeaderBuffer, byte[] buffer, Http2FlowController flow, Stream output,
             CancellationToken cancellationToken)
         {
@@ -2655,7 +2656,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     Each frame's payload is reserved against <paramref name="flow" /> before being written, so
         ///     this never exceeds the destination's flow-control window (RFC 7540 ?6.9).
         /// </summary>
-        internal static async Task SendData(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, int streamId,
+        internal static async Task SendData(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, int streamId, // NOSONAR S107 -- Frame-writing state is kept explicit for this low-level helper.
             byte[] data, bool endStream, int maxFrameSize, Http2FlowController flow, Stream output,
             CancellationToken cancellationToken)
         {

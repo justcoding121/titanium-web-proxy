@@ -9,24 +9,24 @@ internal static class NativeMethods
     internal static class WinHttp
     {
         [DllImport("winhttp.dll", SetLastError = true)]
-        internal static extern bool WinHttpGetIEProxyConfigForCurrentUser(
+        internal static extern bool WinHttpGetIEProxyConfigForCurrentUser( // NOSONAR SYSLIB1054 -- Legacy marshalling is required by this existing interop signature.
             ref WinhttpCurrentUserIeProxyConfig proxyConfig);
 
         [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        internal static extern WinHttpHandle WinHttpOpen(string? userAgent, AccessType accessType, string? proxyName,
+        internal static extern WinHttpHandle WinHttpOpen(string? userAgent, AccessType accessType, string? proxyName, // NOSONAR SYSLIB1054 -- Legacy marshalling is required by this existing interop signature.
             string? proxyBypass, int dwFlags);
 
         [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        internal static extern bool WinHttpSetTimeouts(WinHttpHandle session, int resolveTimeout,
+        internal static extern bool WinHttpSetTimeouts(WinHttpHandle session, int resolveTimeout, // NOSONAR SYSLIB1054 -- Legacy marshalling is required by this existing interop signature.
             int connectTimeout, int sendTimeout, int receiveTimeout);
 
         [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        internal static extern bool WinHttpGetProxyForUrl(WinHttpHandle session, string url,
+        internal static extern bool WinHttpGetProxyForUrl(WinHttpHandle session, string url, // NOSONAR SYSLIB1054 -- Legacy marshalling is required by this existing interop signature.
             [In] ref WinhttpAutoproxyOptions autoProxyOptions,
             out WinhttpProxyInfo proxyInfo);
 
         [DllImport("winhttp.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        internal static extern bool WinHttpCloseHandle(IntPtr httpSession);
+        internal static extern bool WinHttpCloseHandle(IntPtr httpSession); // NOSONAR SYSLIB1054 -- Legacy marshalling is required by this existing interop signature.
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         internal struct WinhttpCurrentUserIeProxyConfig

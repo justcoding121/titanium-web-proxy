@@ -11,6 +11,8 @@ namespace Titanium.Web.Proxy;
 
 public partial class ProxyServer
 {
+    private const string ProxyAuthenticationInvalid = "Proxy Authentication Invalid";
+
     /// <summary>
     ///     Callback to authorize clients of this proxy instance.
     /// </summary>
@@ -42,7 +44,7 @@ public partial class ProxyServer
             if (firstSpace == -1 || header.IndexOf(' ', firstSpace + 1) != -1)
             {
                 // Return not authorized
-                session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
+                session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid);
                 return false;
             }
 
@@ -63,7 +65,7 @@ public partial class ProxyServer
             if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
             {
                 session.HttpClient.Response =
-                    CreateAuthentication407Response("Proxy Authentication Invalid", result.Continuation);
+                    CreateAuthentication407Response(ProxyAuthenticationInvalid, result.Continuation);
 
                 return false;
             }
@@ -76,7 +78,7 @@ public partial class ProxyServer
                 httpHeaders));
 
             // Return not authorized
-            session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
+            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid);
             return false;
         }
     }
@@ -88,7 +90,7 @@ public partial class ProxyServer
         if (!KnownHeaders.ProxyAuthorizationBasic.Equals(authenticationType.Span))
         {
             // Return not authorized
-            session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
+            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid);
             return false;
         }
 
@@ -97,7 +99,7 @@ public partial class ProxyServer
         if (colonIndex == -1)
         {
             // Return not authorized
-            session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
+            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid);
             return false;
         }
 
@@ -105,7 +107,7 @@ public partial class ProxyServer
         var password = decoded.Substring(colonIndex + 1);
         var authenticated = await proxyBasicAuthenticateFunc(session, username, password);
         if (!authenticated)
-            session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
+            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid);
 
         return authenticated;
     }

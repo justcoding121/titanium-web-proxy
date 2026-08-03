@@ -23,6 +23,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack;
 
 internal class Decoder
 {
+    private const string DecompressionFailure = "decompression failure";
     private readonly DynamicTable dynamicTable;
 
     private readonly int maxHeaderSize;
@@ -151,7 +152,7 @@ internal class Decoder
                     if (maxSize == -1) return;
 
                     // Check for numerical overflow
-                    if (maxSize > int.MaxValue - index) throw new IOException("decompression failure");
+                    if (maxSize > int.MaxValue - index) throw new IOException(DecompressionFailure);
 
                     SetDynamicTableSize(index + maxSize);
                     state = State.ReadHeaderRepresentation;
@@ -162,7 +163,7 @@ internal class Decoder
                     if (headerIndex == -1) return;
 
                     // Check for numerical overflow
-                    if (headerIndex > int.MaxValue - index) throw new IOException("decompression failure");
+                    if (headerIndex > int.MaxValue - index) throw new IOException(DecompressionFailure);
 
                     IndexHeader(index + headerIndex, headerListener);
                     state = State.ReadHeaderRepresentation;
@@ -174,7 +175,7 @@ internal class Decoder
                     if (nameIndex == -1) return;
 
                     // Check for numerical overflow
-                    if (nameIndex > int.MaxValue - index) throw new IOException("decompression failure");
+                    if (nameIndex > int.MaxValue - index) throw new IOException(DecompressionFailure);
 
                     ReadName(index + nameIndex);
                     state = State.ReadLiteralHeaderValueLengthPrefix;
@@ -193,7 +194,7 @@ internal class Decoder
                         nameLength = index;
 
                         // Disallow empty names -- they cannot be represented in HTTP/1.x
-                        if (nameLength == 0) throw new IOException("decompression failure");
+                        if (nameLength == 0) throw new IOException(DecompressionFailure);
 
                         // Check name length against max header size
                         if (ExceedsMaxHeaderSize(nameLength))
@@ -229,7 +230,7 @@ internal class Decoder
                     if (nameLength == -1) return;
 
                     // Check for numerical overflow
-                    if (nameLength > int.MaxValue - index) throw new IOException("decompression failure");
+                    if (nameLength > int.MaxValue - index) throw new IOException(DecompressionFailure);
 
                     nameLength += index;
 
@@ -338,7 +339,7 @@ internal class Decoder
                     if (valueLength == -1) return;
 
                     // Check for numerical overflow
-                    if (valueLength > int.MaxValue - index) throw new IOException("decompression failure");
+                    if (valueLength > int.MaxValue - index) throw new IOException(DecompressionFailure);
 
                     valueLength += index;
 
@@ -521,7 +522,7 @@ internal class Decoder
         while (totalRead < length)
         {
             var read = input.Read(buf, totalRead, length - totalRead);
-            if (read == 0) throw new IOException("decompression failure");
+            if (read == 0) throw new IOException(DecompressionFailure);
 
             totalRead += read;
         }
@@ -556,7 +557,7 @@ internal class Decoder
 
         // Value exceeds Integer.MAX_VALUE
         input.BaseStream.Position = markedPosition;
-        throw new IOException("decompression failure");
+        throw new IOException(DecompressionFailure);
     }
 
     private enum State

@@ -80,6 +80,7 @@ public enum CertificateKeyAlgorithm
 /// </summary>
 public sealed class CertificateManager : IDisposable
 {
+    private const string RunAsAdministrator = "runas";
     private const string DefaultRootCertificateIssuer = "Titanium";
 
     private const string DefaultRootRootCertificateName = "Titanium Root Certificate Authority";
@@ -170,7 +171,7 @@ public sealed class CertificateManager : IDisposable
     ///     Read live on every disk save, independently of <paramref name="maxCacheEntriesProvider" />.
     ///     <see langword="null" /> return value means unbounded.
     /// </param>
-    internal CertificateManager(string? rootCertificateName, string? rootCertificateIssuerName,
+    internal CertificateManager(string? rootCertificateName, string? rootCertificateIssuerName, // NOSONAR S107 -- Constructor preserves established configuration wiring.
         bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin,
         ILogger logger, Func<int?>? maxCacheEntriesProvider = null, Func<int?>? maxDiskCacheEntriesProvider = null)
     {
@@ -1208,7 +1209,7 @@ public sealed class CertificateManager : IDisposable
                 FileName = CertUtilExecutablePath,
                 CreateNoWindow = true,
                 UseShellExecute = true,
-                Verb = "runas",
+                Verb = RunAsAdministrator,
                 ErrorDialog = false,
                 WindowStyle = ProcessWindowStyle.Hidden
             };
@@ -1337,7 +1338,7 @@ public sealed class CertificateManager : IDisposable
                 Arguments = "-delstore -user Root \"" + RootCertificateName + "\"",
                 CreateNoWindow = true,
                 UseShellExecute = true,
-                Verb = "runas",
+                Verb = RunAsAdministrator,
                 ErrorDialog = false,
                 WindowStyle = ProcessWindowStyle.Hidden
             });
@@ -1352,7 +1353,7 @@ public sealed class CertificateManager : IDisposable
                         Arguments = "-delstore My \"" + RootCertificateName + "\"",
                         CreateNoWindow = true,
                         UseShellExecute = true,
-                        Verb = "runas",
+                        Verb = RunAsAdministrator,
                         ErrorDialog = false,
                         WindowStyle = ProcessWindowStyle.Hidden
                     },
@@ -1364,7 +1365,7 @@ public sealed class CertificateManager : IDisposable
                         Arguments = "-delstore Root \"" + RootCertificateName + "\"",
                         CreateNoWindow = true,
                         UseShellExecute = true,
-                        Verb = "runas",
+                        Verb = RunAsAdministrator,
                         ErrorDialog = false,
                         WindowStyle = ProcessWindowStyle.Hidden
                     }

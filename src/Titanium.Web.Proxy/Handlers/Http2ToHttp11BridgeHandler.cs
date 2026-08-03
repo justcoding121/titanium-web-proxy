@@ -72,7 +72,7 @@ public partial class ProxyServer
     /// <param name="connectHost">The actual TCP connect destination override, if a fixed forward target applies.</param>
     /// <param name="connectPort">The actual TCP connect destination override port.</param>
     /// <param name="cancellationTokenSource">Cancellation for the whole client connection.</param>
-    internal async Task SendHttp2ToHttp11Bridge(HttpClientStream clientStream, ProxyEndPoint endPoint,
+    internal async Task SendHttp2ToHttp11Bridge(HttpClientStream clientStream, ProxyEndPoint endPoint, // NOSONAR S107 -- Bridge parameters mirror connection context and remain explicit for safe protocol routing.
         ConnectRequest? connectRequest, object? userData, string remoteHostName, int remotePort,
         string? connectHost, int? connectPort, CancellationTokenSource cancellationTokenSource)
     {

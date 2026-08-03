@@ -84,7 +84,7 @@ public sealed class ProxyTimeoutOptions
     ///     duration - including a nullable one, when present - must be strictly positive.
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">A supplied duration is zero or negative.</exception>
-    public static ProxyTimeoutOptions Create(
+    public static ProxyTimeoutOptions Create( // NOSONAR S107 -- Public factory retains named parameters for source compatibility and discoverability.
         TimeSpan clientHeaderTimeout,
         TimeSpan connectTimeout,
         TimeSpan responseHeaderTimeout,

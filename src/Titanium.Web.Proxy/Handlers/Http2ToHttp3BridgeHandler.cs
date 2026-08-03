@@ -43,7 +43,7 @@ public partial class ProxyServer
     ///     <see cref="NullOriginStream"/> so every eligible H2 stream is forwarded to the QUIC origin
     ///     independently by <see cref="BridgeOnBeforeRequestForH3"/>.
     /// </summary>
-    internal async Task SendHttp2ToHttp3Bridge(
+    internal async Task SendHttp2ToHttp3Bridge( // NOSONAR S107 -- Bridge parameters mirror connection context and remain explicit for safe protocol routing.
         HttpClientStream clientStream,
         ProxyEndPoint endPoint,
         ConnectRequest? connectRequest,

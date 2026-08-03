@@ -16,6 +16,7 @@ namespace Titanium.Web.Proxy.Network.Certificate;
 [SupportedOSPlatform("windows")]
 internal class WinCertificateMaker : ICertificateMaker
 {
+    private const string InitializeEncode = "InitializeEncode";
     private readonly string sProviderName = "Microsoft Enhanced Cryptographic Provider v1.0";
 
     private readonly Type typeAltNamesCollection;
@@ -183,7 +184,7 @@ internal class WinCertificateMaker : ICertificateMaker
 
         var ekuExt = CreateComObject(typeEkuExt);
         typeValue[0] = oids;
-        typeEkuExt.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, ekuExt, typeValue);
+        typeEkuExt.InvokeMember(InitializeEncode, BindingFlags.InvokeMethod, null, ekuExt, typeValue);
 
         var requestCert = CreateComObject(typeRequestCert);
 
@@ -202,7 +203,7 @@ internal class WinCertificateMaker : ICertificateMaker
         var kuExt = CreateComObject(typeKuExt);
 
         typeValue[0] = 176;
-        typeKuExt.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, kuExt, typeValue);
+        typeKuExt.InvokeMember(InitializeEncode, BindingFlags.InvokeMethod, null, kuExt, typeValue);
 
         var certificate =
             typeRequestCert.InvokeMember("X509Extensions", BindingFlags.GetProperty, null, requestCert, null)
@@ -248,7 +249,7 @@ internal class WinCertificateMaker : ICertificateMaker
 
 
             typeValue = new object?[] { altNameCollection };
-            typeExtNames.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, extNames, typeValue);
+            typeExtNames.InvokeMember(InitializeEncode, BindingFlags.InvokeMethod, null, extNames, typeValue);
 
             typeValue[0] = extNames;
             typeX509Extensions.InvokeMember("Add", BindingFlags.InvokeMethod, null, certificate, typeValue);
@@ -270,7 +271,7 @@ internal class WinCertificateMaker : ICertificateMaker
             var basicConstraints = CreateComObject(typeBasicConstraints);
 
             typeValue = new object?[] { "true", "0" };
-            typeBasicConstraints.InvokeMember("InitializeEncode", BindingFlags.InvokeMethod, null, basicConstraints,
+            typeBasicConstraints.InvokeMember(InitializeEncode, BindingFlags.InvokeMethod, null, basicConstraints,
                 typeValue);
             typeValue = new object?[] { basicConstraints };
             typeX509Extensions.InvokeMember("Add", BindingFlags.InvokeMethod, null, certificate, typeValue);

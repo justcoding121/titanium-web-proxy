@@ -174,7 +174,7 @@ public sealed class ProxyResourceLimits
     ///     positive (use <see langword="null" /> to disable rather than a sentinel number).
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">A supplied value is zero or negative.</exception>
-    public static ProxyResourceLimits Create(
+    public static ProxyResourceLimits Create( // NOSONAR S107 -- Public factory retains named parameters for source compatibility and discoverability.
         long maxHeaderLineBytes,
         int maxHeaderCount,
         long maxHeaderAggregateBytes,

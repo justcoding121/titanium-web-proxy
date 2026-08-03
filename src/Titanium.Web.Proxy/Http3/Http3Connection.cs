@@ -95,7 +95,7 @@ internal sealed class Http3Connection
     /// </summary>
     private QuicClientConnection? _clientConnection;
 
-    private Http3Connection(
+    private Http3Connection( // NOSONAR S107 -- Connection-scoped collaborators are passed once and retained for the lifetime of the protocol handler.
         QuicConnection connection,
         TransparentQuicProxyEndPoint endPoint,
         BeforeQuicAuthenticateEventArgs authArgs,
@@ -121,7 +121,7 @@ internal sealed class Http3Connection
     ///     Entry point: runs the entire lifecycle of one HTTP/3 client connection until the connection is
     ///     closed or <paramref name="shutdownToken" /> is cancelled.
     /// </summary>
-    public static async Task RunAsync(
+    public static async Task RunAsync( // NOSONAR S107 -- Signature mirrors the connection constructor and is retained for stable call-site wiring.
         QuicConnection connection,
         TransparentQuicProxyEndPoint endPoint,
         BeforeQuicAuthenticateEventArgs authArgs,
@@ -183,7 +183,8 @@ internal sealed class Http3Connection
             qex.QuicError == QuicError.ConnectionAborted ||
             qex.QuicError == QuicError.ConnectionIdle)
         {
-            _logger.LogDebug("HTTP/3 client connection closed: {QuicError}", qex.QuicError);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug("HTTP/3 client connection closed: {QuicError}", qex.QuicError);
         }
         catch (Exception ex)
         {
@@ -231,7 +232,8 @@ internal sealed class Http3Connection
         }
         catch (Exception closeEx)
         {
-            _logger.LogDebug(closeEx, "Error while closing HTTP/3 connection after {ErrorCode}", errorCode);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug(closeEx, "Error while closing HTTP/3 connection after {ErrorCode}", errorCode);
         }
     }
 
@@ -378,7 +380,8 @@ internal sealed class Http3Connection
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _logger.LogDebug(ex, "Error on HTTP/3 unidirectional stream {StreamId}", stream.Id);
+                if (_logger.IsEnabled(LogLevel.Debug))
+                    _logger.LogDebug(ex, "Error on HTTP/3 unidirectional stream {StreamId}", stream.Id);
             }
         }
     }
@@ -472,7 +475,8 @@ internal sealed class Http3Connection
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogDebug(ex, "HTTP/3 request stream {StreamId} error", streamId);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug(ex, "HTTP/3 request stream {StreamId} error", streamId);
         }
         finally
         {

@@ -32,6 +32,7 @@ namespace Titanium.Web.Proxy.Diagnostics;
 /// </summary>
 internal static class ProxyMetrics
 {
+    private const string OutcomeTag = "outcome";
     internal const string MeterName = "Titanium.Web.Proxy";
 
     private static readonly Meter Meter = new(MeterName, "1.0.0");
@@ -177,13 +178,13 @@ internal static class ProxyMetrics
         DecompressedBodyBytes.Record(bytes, new KeyValuePair<string, object?>("direction", direction));
 
     public static void PoolReused() =>
-        PoolOutcomes.Add(1, new KeyValuePair<string, object?>("outcome", "reuse"));
+        PoolOutcomes.Add(1, new KeyValuePair<string, object?>(OutcomeTag, "reuse"));
 
     public static void PoolRetried() =>
-        PoolOutcomes.Add(1, new KeyValuePair<string, object?>("outcome", "retry"));
+        PoolOutcomes.Add(1, new KeyValuePair<string, object?>(OutcomeTag, "retry"));
 
     public static void PoolDowngraded() =>
-        PoolOutcomes.Add(1, new KeyValuePair<string, object?>("outcome", "downgrade"));
+        PoolOutcomes.Add(1, new KeyValuePair<string, object?>(OutcomeTag, "downgrade"));
 
     public static void ParserError(string parser) =>
         ParserErrors.Add(1, new KeyValuePair<string, object?>("parser", parser));
@@ -201,7 +202,7 @@ internal static class ProxyMetrics
 
     public static void Http2CapabilityLookup(bool cacheHit) =>
         Http2CapabilityLookups.Add(1,
-            new KeyValuePair<string, object?>("outcome", cacheHit ? "hit" : "miss"));
+            new KeyValuePair<string, object?>(OutcomeTag, cacheHit ? "hit" : "miss"));
 
     public static void Http2ProbeCompleted(double durationMs) =>
         Http2ProbeDurationMs.Record(durationMs);

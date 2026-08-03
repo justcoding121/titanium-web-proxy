@@ -74,7 +74,7 @@ internal class BcCertificateMakerFast : ICertificateMaker
     /// <param name="hostName">The host name</param>
     /// <returns>X509Certificate2 instance.</returns>
     /// <exception cref="PemException">Malformed sequence in RSA private key</exception>
-    private static X509Certificate2 GenerateCertificate(string? hostName,
+    private static X509Certificate2 GenerateCertificate(string? hostName, // NOSONAR S107 -- Certificate fields map directly to the generated X.509 structure.
         string subjectName,
         X509Name issuerDn, DateTime validFrom,
         DateTime validTo, AsymmetricCipherKeyPair subjectKeyPair,

@@ -134,7 +134,7 @@ internal class TcpConnectionFactory : IDisposable
                 connection?.Dispose();
     }
 
-    internal static string GetConnectionCacheKey(string remoteHostName, int remotePort,
+    internal static string GetConnectionCacheKey(string remoteHostName, int remotePort, // NOSONAR S107 -- Parameters define the connection identity and are kept explicit to avoid risky call-site churn.
         bool isHttps, List<SslApplicationProtocol>? applicationProtocols,
         IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
         string? connectHost = null, int? connectPort = null,

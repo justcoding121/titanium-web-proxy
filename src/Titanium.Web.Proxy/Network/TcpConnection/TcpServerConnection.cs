@@ -21,7 +21,7 @@ internal class TcpServerConnection : IDisposable
 
     private int firstUseClaimed;
 
-    internal TcpServerConnection(ProxyServer proxyServer, Socket tcpSocket, HttpServerStream stream,
+    internal TcpServerConnection(ProxyServer proxyServer, Socket tcpSocket, HttpServerStream stream, // NOSONAR S107 -- Constructor captures the established connection state without changing internal wiring.
         string hostName, int port, bool isHttps, SslApplicationProtocol negotiatedApplicationProtocol,
         Version version, IExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint, string cacheKey)
     {

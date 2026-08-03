@@ -358,7 +358,7 @@ internal class WinAuthEndPoint
     #region Native calls to secur32.dll
 
     [DllImport("secur32.dll", SetLastError = true)]
-    private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, // PCredHandle
+    private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, // NOSONAR SYSLIB1054 -- Legacy SSPI marshalling is required by this existing interop signature.
         IntPtr phContext, // PCtxtHandle
         string pszTargetName,
         int fContextReq,
@@ -372,7 +372,7 @@ internal class WinAuthEndPoint
         out SecurityInteger ptsExpiry); // PTimeStamp
 
     [DllImport("secur32", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, // PCredHandle
+    private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, // NOSONAR SYSLIB1054 -- Legacy SSPI marshalling is required by this existing interop signature.
         ref SecurityHandle phContext, // PCtxtHandle
         string pszTargetName,
         int fContextReq,
@@ -386,7 +386,7 @@ internal class WinAuthEndPoint
         out SecurityInteger ptsExpiry); // PTimeStamp
 
     [DllImport("secur32.dll", CharSet = CharSet.Auto, SetLastError = false)]
-    private static extern int AcquireCredentialsHandle(
+    private static extern int AcquireCredentialsHandle( // NOSONAR SYSLIB1054 -- Legacy SSPI marshalling is required by this existing interop signature.
         string? pszPrincipal, // SEC_CHAR*
         string pszPackage, // SEC_CHAR* // "Kerberos","NTLM","Negotiative"
         int fCredentialUse,

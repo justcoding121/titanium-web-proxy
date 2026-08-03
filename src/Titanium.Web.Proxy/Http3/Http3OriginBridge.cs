@@ -353,10 +353,11 @@ internal static class Http3OriginBridge
             // System.Net.Quic cannot route via a proxy.
             // For Auto policy: fall back to TCP so proxy rules are honoured.
             // For forced H3:   a proxy was explicitly configured but cannot carry QUIC — return 502.
-            logger.LogDebug(
-                "QUIC cannot route via proxy; {Behavior} for {Host}:{Port}",
-                isForcedH3 ? "returning 502 (forced H3)" : "falling back to TCP",
-                sniHost, port);
+            if (logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug(
+                    "QUIC cannot route via proxy; {Behavior} for {Host}:{Port}",
+                    isForcedH3 ? "returning 502 (forced H3)" : "falling back to TCP",
+                    sniHost, port);
 
             quicConn = null; // GetOrCreateAsync threw before creating a connection
 
@@ -379,7 +380,8 @@ internal static class Http3OriginBridge
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogDebug(ex, "H3→H3 origin forwarding failed for {Host}:{Port}", sniHost, port);
+            if (logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug(ex, "H3→H3 origin forwarding failed for {Host}:{Port}", sniHost, port);
 
             if (quicConn != null)
             {
@@ -404,9 +406,10 @@ internal static class Http3OriginBridge
             if (reused && !requestSent && staleConnectionRetries < QuicConnectionPool.MaxStaleConnectionRetries)
             {
                 staleConnectionRetries++;
-                logger.LogDebug(
-                    "Pooled QUIC connection to {Host}:{Port} was stale ({ExceptionType}); retrying (attempt {Attempt}/{Max}).",
-                    sniHost, port, ex.GetType().Name, staleConnectionRetries, QuicConnectionPool.MaxStaleConnectionRetries);
+                if (logger.IsEnabled(LogLevel.Debug))
+                    logger.LogDebug(
+                        "Pooled QUIC connection to {Host}:{Port} was stale ({ExceptionType}); retrying (attempt {Attempt}/{Max}).",
+                        sniHost, port, ex.GetType().Name, staleConnectionRetries, QuicConnectionPool.MaxStaleConnectionRetries);
                 continue;
             }
 
@@ -418,15 +421,17 @@ internal static class Http3OriginBridge
                 var originPort = request.RequestUri?.Port ?? port;
                 var hostAndPort = $"{sniHost}:{originPort}";
                 server.Http3OriginCapabilityCache.Evict(hostAndPort);
-                logger.LogDebug("Evicted stale H3 capability for {HostAndPort}; falling back to TCP.", hostAndPort);
+                if (logger.IsEnabled(LogLevel.Debug))
+                    logger.LogDebug("Evicted stale H3 capability for {HostAndPort}; falling back to TCP.", hostAndPort);
                 try
                 {
                     await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
                 }
                 catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
                 {
-                    logger.LogDebug(tcpEx, "TCP fallback after H3 failure also failed for {Host}:{Port}",
-                        sniHost, originPort);
+                    if (logger.IsEnabled(LogLevel.Debug))
+                        logger.LogDebug(tcpEx, "TCP fallback after H3 failure also failed for {Host}:{Port}",
+                            sniHost, originPort);
                     sessionArgs.HttpClient.Response = MakeBadGatewayResponse(
                         $"QUIC failed: {ex.Message}; TCP fallback failed: {tcpEx.Message}");
                 }

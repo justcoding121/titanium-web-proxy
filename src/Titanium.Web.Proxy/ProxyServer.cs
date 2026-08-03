@@ -1082,17 +1082,17 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     Event to override the default verification logic of remote SSL certificate received during authentication.
     /// </summary>
-    public event AsyncEventHandler<CertificateValidationEventArgs>? ServerCertificateValidationCallback;
+    public event AsyncEventHandler<CertificateValidationEventArgs>? ServerCertificateValidationCallback; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Event to override client certificate selection during mutual SSL authentication.
     /// </summary>
-    public event AsyncEventHandler<CertificateSelectionEventArgs>? ClientCertificateSelectionCallback;
+    public event AsyncEventHandler<CertificateSelectionEventArgs>? ClientCertificateSelectionCallback; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Intercept request event to server.
     /// </summary>
-    public event AsyncEventHandler<SessionEventArgs>? BeforeRequest;
+    public event AsyncEventHandler<SessionEventArgs>? BeforeRequest; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Intercept request body send event to server.
@@ -1104,7 +1104,7 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     Intercept response event from server.
     /// </summary>
-    public event AsyncEventHandler<SessionEventArgs>? BeforeResponse;
+    public event AsyncEventHandler<SessionEventArgs>? BeforeResponse; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Intercept response body send event to client.
@@ -1125,22 +1125,22 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     Intercept after response event from server.
     /// </summary>
-    public event AsyncEventHandler<SessionEventArgs>? AfterResponse;
+    public event AsyncEventHandler<SessionEventArgs>? AfterResponse; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Customize TcpClient used for client connection upon create.
     /// </summary>
-    public event AsyncEventHandler<Socket>? OnClientConnectionCreate;
+    public event AsyncEventHandler<Socket>? OnClientConnectionCreate; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Customize TcpClient used for server connection upon create.
     /// </summary>
-    public event AsyncEventHandler<Socket>? OnServerConnectionCreate;
+    public event AsyncEventHandler<Socket>? OnServerConnectionCreate; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Intercept connect request sent to upstream proxy.
     /// </summary>
-    public event AsyncEventHandler<ConnectRequest>? BeforeUpStreamConnectRequest;
+    public event AsyncEventHandler<ConnectRequest>? BeforeUpStreamConnectRequest; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Customize the minimum ThreadPool size (increase it on a server)

@@ -35,13 +35,13 @@ public class ExplicitProxyEndPoint : ProxyEndPoint
     ///     Set the <see cref="TunnelConnectSessionEventArgs.DecryptSsl" /> property to false if this HTTP connect request
     ///     shouldn't be decrypted and instead be relayed.
     /// </summary>
-    public event AsyncEventHandler<TunnelConnectSessionEventArgs>? BeforeTunnelConnectRequest;
+    public event AsyncEventHandler<TunnelConnectSessionEventArgs>? BeforeTunnelConnectRequest; // NOSONAR S3264 -- Public extension event invoked by the proxy pipeline.
 
     /// <summary>
     ///     Intercept tunnel connect response.
     ///     Valid only for explicit endpoints.
     /// </summary>
-    public event AsyncEventHandler<TunnelConnectSessionEventArgs>? BeforeTunnelConnectResponse;
+    public event AsyncEventHandler<TunnelConnectSessionEventArgs>? BeforeTunnelConnectResponse; // NOSONAR S3264 -- Public extension event invoked by the proxy pipeline.
 
     /// <summary>
     ///     Fired when <see cref="TunnelConnectSessionEventArgs.EstablishServerConnectionBeforeResponse" />
@@ -49,7 +49,7 @@ public class ExplicitProxyEndPoint : ProxyEndPoint
     ///     CONNECT rejection). Replace <see cref="TunnelConnectFailureEventArgs.Response" /> to customize
     ///     the HTTP error sent to the client before any TLS.
     /// </summary>
-    public event AsyncEventHandler<TunnelConnectFailureEventArgs>? BeforeTunnelConnectFailure;
+    public event AsyncEventHandler<TunnelConnectFailureEventArgs>? BeforeTunnelConnectFailure; // NOSONAR S3264 -- Public extension event invoked by the proxy pipeline.
 
     internal async Task InvokeBeforeTunnelConnectRequest(ProxyServer proxyServer,
         TunnelConnectSessionEventArgs connectArgs, ILogger logger)
