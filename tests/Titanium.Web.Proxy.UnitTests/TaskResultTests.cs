@@ -56,6 +56,6 @@ public class TaskResultTests
         var result = new TaskResult<int>(task, null);
 
         var ex = Assert.ThrowsExactly<AggregateException>(() => _ = result.Result);
-        Assert.IsInstanceOfType(ex.InnerException, typeof(InvalidOperationException));
+        Assert.IsInstanceOfType<InvalidOperationException>(ex.InnerException);
     }
 }

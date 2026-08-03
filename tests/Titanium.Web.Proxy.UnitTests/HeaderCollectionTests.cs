@@ -17,6 +17,8 @@ namespace Titanium.Web.Proxy.UnitTests
     public class HeaderCollectionTests
     {
         private static readonly string[] expected = new[] { "1", "2" };
+        private static readonly string[] OneTwoValues = { "one", "two" };
+        private static readonly string[] CookieValuesBa = { "b=2", "a=1" };
 
         [TestMethod]
         public void AddHeader_SameNameTwice_MovesBothValuesToNonUniqueCollection()
@@ -299,7 +301,7 @@ namespace Titanium.Web.Proxy.UnitTests
             });
 
             var values = headers.GetHeaders("X-Test")!.Select(x => x.Value).ToArray();
-            CollectionAssert.AreEqual(new[] { "one", "two" }, values);
+            CollectionAssert.AreEqual(OneTwoValues, values);
         }
 
         [TestMethod]
@@ -346,7 +348,7 @@ namespace Titanium.Web.Proxy.UnitTests
             var remaining = headers.GetHeaders("Set-Cookie");
             Assert.IsNotNull(remaining);
             Assert.AreEqual(2, remaining.Count);
-            CollectionAssert.AreEqual(new[] { "b=2", "a=1" }, remaining.Select(x => x.Value).ToArray());
+            CollectionAssert.AreEqual(CookieValuesBa, remaining.Select(x => x.Value).ToArray());
         }
 
         [TestMethod]
@@ -354,10 +356,9 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var headers = new HeaderCollection();
             headers.AddHeader("X-Test", "value");
-            IEnumerator<HttpHeader> enumerator = headers.GetEnumerator();
+            using var enumerator = headers.GetEnumerator();
 
             Assert.ThrowsExactly<NotSupportedException>(() => enumerator.Reset());
-            enumerator.Dispose();
         }
     }
 }

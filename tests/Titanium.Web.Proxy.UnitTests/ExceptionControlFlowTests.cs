@@ -87,7 +87,7 @@ public class ExceptionControlFlowTests
 
         Assert.AreEqual(2, capturing.CriticalCount);
         Assert.IsNull(capturing.Entries[0].Exception);
-        Assert.IsInstanceOfType(capturing.Entries[1].Exception, typeof(InvalidOperationException));
+        Assert.IsInstanceOfType<InvalidOperationException>(capturing.Entries[1].Exception);
     }
 
     [TestMethod]

@@ -54,7 +54,8 @@ public class Http11ToHttp2BridgeCoverageTests
                  })
             Assert.IsNull(request.Headers.GetHeaderValueOrNull(forbidden), $"{forbidden} must be removed.");
         Assert.AreEqual("kept", request.Headers.GetHeaderValueOrNull("x-mixed-case"));
-        Assert.IsTrue(request.Headers.All(h => h.Name == h.Name.ToLowerInvariant()));
+        Assert.IsTrue(request.Headers.All(h =>
+            string.Equals(h.Name, h.Name.ToLowerInvariant(), StringComparison.Ordinal)));
     }
 
     [TestMethod]

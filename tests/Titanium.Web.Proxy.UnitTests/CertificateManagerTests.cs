@@ -717,6 +717,7 @@ namespace Titanium.Web.Proxy.UnitTests
                 CertificateEngine = CertificateEngine.BouncyCastleFast
             };
             mgr.RemoveTrustedRootCertificate(machineTrusted: false);
+            Assert.IsNull(mgr.RootCertificate);
         }
     }
 }

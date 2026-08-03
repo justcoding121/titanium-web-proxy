@@ -20,6 +20,10 @@ namespace Titanium.Web.Proxy.UnitTests;
 [TestClass]
 public class ProxyAuthorizationHandlerTests
 {
+    private static readonly string[] CustomOtherSchemes = { "Custom", "Other" };
+    private static readonly string[] CustomOnlySchemes = { "Custom" };
+    private static readonly string[] NegotiateNtlmSchemes = { "Negotiate", "NTLM" };
+
     [TestMethod]
     public async Task Missing_ProxyAuthorization_Returns_407_Required()
     {
@@ -100,7 +104,7 @@ public class ProxyAuthorizationHandlerTests
                 Task.FromResult(scheme == "Custom" && creds == "token"
                     ? ProxyAuthenticationContext.Succeeded()
                     : ProxyAuthenticationContext.Failed());
-            p.ProxyAuthenticationSchemes = new[] { "Custom", "Other" };
+            p.ProxyAuthenticationSchemes = CustomOtherSchemes;
         });
 
         var response = await SendConnectAsync(proxy.ProxyEndPoints[0].Port, "Custom token");
@@ -118,7 +122,7 @@ public class ProxyAuthorizationHandlerTests
                 Result = ProxyAuthenticationResult.ContinuationNeeded,
                 Continuation = "Custom challenge=round2"
             });
-            p.ProxyAuthenticationSchemes = new[] { "Custom" };
+            p.ProxyAuthenticationSchemes = CustomOnlySchemes;
         });
 
         var response = await SendConnectAsync(proxy.ProxyEndPoints[0].Port, "Custom stale");
@@ -134,7 +138,7 @@ public class ProxyAuthorizationHandlerTests
         using var proxy = StartProxy(p =>
         {
             p.ProxySchemeAuthenticateFunc = (_, _, _) => Task.FromResult(ProxyAuthenticationContext.Failed());
-            p.ProxyAuthenticationSchemes = new[] { "Negotiate", "NTLM" };
+            p.ProxyAuthenticationSchemes = NegotiateNtlmSchemes;
         });
 
         var response = await SendConnectAsync(proxy.ProxyEndPoints[0].Port);

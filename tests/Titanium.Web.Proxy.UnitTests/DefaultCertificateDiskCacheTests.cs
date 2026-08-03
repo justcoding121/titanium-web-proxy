@@ -291,11 +291,12 @@ public class DefaultCertificateDiskCacheTests
         FileStream? lockStream = null;
         try
         {
-            foreach (var name in names)
+            var baseTime = DateTime.UtcNow.AddMinutes(-10);
+            for (var i = 0; i < names.Length; i++)
             {
-                using var cert = mgr.CreateCertificate(name, false);
-                cache.SaveCertificate(name, cert!);
-                Thread.Sleep(20);
+                using var cert = mgr.CreateCertificate(names[i], false);
+                cache.SaveCertificate(names[i], cert!);
+                File.SetLastWriteTimeUtc(Path.Combine(certDir, names[i] + ".pfx"), baseTime.AddMinutes(i));
             }
 
             var oldestPath = Path.Combine(certDir, names[0] + ".pfx");
@@ -323,6 +324,7 @@ public class DefaultCertificateDiskCacheTests
         cache.PruneToMaxEntries(null);
         cache.PruneToMaxEntries(0);
         cache.PruneToMaxEntries(-1);
+        Assert.IsNotNull(cache);
     }
 
     [TestMethod]

@@ -171,7 +171,6 @@ namespace Titanium.Web.Proxy.UnitTests
             var state = new State { AuthState = State.WinAuthState.FinalToken };
             data["AuthState"] = state;
             var before = state.LastSeen;
-            Thread.Sleep(5);
 
             WinAuthEndPoint.AuthenticatedResponse(data);
 
@@ -184,6 +183,7 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var data = new InternalDataStore();
             WinAuthEndPoint.AuthenticatedResponse(data);
+            Assert.AreEqual(0, data.Count);
         }
 
         [TestMethod]
@@ -193,7 +193,6 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.AreEqual(State.WinAuthState.Unauthorized, state.AuthState);
 
             var before = state.LastSeen;
-            Thread.Sleep(5);
             state.UpdatePresence();
             Assert.IsTrue(state.LastSeen >= before);
 

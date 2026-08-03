@@ -151,7 +151,7 @@ public class ProxySocketAndSslGroupsTests
         var reply = new byte[] { 5, 0, 0, 99, 0, 0, 0, 0, 0, 0 };
 
         var ex = Assert.ThrowsExactly<TargetInvocationException>(() => processReply.Invoke(handler, [reply]));
-        Assert.IsInstanceOfType(ex.InnerException, typeof(ProtocolViolationException));
+        Assert.IsInstanceOfType<ProtocolViolationException>(ex.InnerException);
     }
 
     [TestMethod]

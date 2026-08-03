@@ -664,8 +664,8 @@ public class HttpStreamCoverageTests
         sourceListener.Start();
         sinkListener.Start();
 
-        var sourceAccept = sourceListener.AcceptTcpClientAsync();
-        var sinkAccept = sinkListener.AcceptTcpClientAsync();
+        var sourceAccept = sourceListener.AcceptTcpClientAsync(cancellationToken);
+        var sinkAccept = sinkListener.AcceptTcpClientAsync(cancellationToken);
 
         var readerTcp = new TcpClient();
         var writerTcp = new TcpClient();
