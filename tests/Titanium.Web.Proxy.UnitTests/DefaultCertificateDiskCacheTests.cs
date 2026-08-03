@@ -118,6 +118,27 @@ public class DefaultCertificateDiskCacheTests
     }
 
     [TestMethod]
+    public void CertificateLoader_LoadCertificate_AndLoadPkcs12_RoundTrip()
+    {
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastleFast
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        using var cert = mgr.CreateCertificate("loader.example", false);
+
+        var raw = cert.Export(X509ContentType.Cert);
+        using var loaded = Titanium.Web.Proxy.Network.Certificate.CertificateLoader.LoadCertificate(raw);
+        Assert.AreEqual(cert.Thumbprint, loaded.Thumbprint);
+
+        var pfx = cert.Export(X509ContentType.Pkcs12, "pw");
+        using var loadedPfx = Titanium.Web.Proxy.Network.Certificate.CertificateLoader.LoadPkcs12(
+            pfx, "pw", X509KeyStorageFlags.Exportable);
+        Assert.AreEqual(cert.Thumbprint, loadedPfx.Thumbprint);
+        Assert.IsTrue(loadedPfx.HasPrivateKey);
+    }
+
+    [TestMethod]
     public void LoadCertificate_CorruptPfx_ReturnsNull()
     {
         if (!RunTime.IsWindows)

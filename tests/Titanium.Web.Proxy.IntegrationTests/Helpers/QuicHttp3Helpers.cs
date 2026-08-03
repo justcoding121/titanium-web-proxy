@@ -158,11 +158,14 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
                 }
 
                 var response = await handler(new QuicHttp3Request(method, path, authority, body.ToArray()));
-                var responseHeaders = QpackEncoder.Encode(new List<(string, string)>
+                var headerList = new List<(string, string)>
                 {
                     (":status", response.StatusCode.ToString()),
-                    ("content-type", "text/plain")
-                });
+                    ("content-type", response.ContentType ?? "text/plain")
+                };
+                if (response.ExtraHeaders != null)
+                    headerList.AddRange(response.ExtraHeaders);
+                var responseHeaders = QpackEncoder.Encode(headerList);
                 await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, responseHeaders, cts.Token);
                 if (response.Body is { Length: > 0 })
                     await Http3Frame.WriteAsync(stream, Http3FrameType.Data, response.Body, cts.Token);
@@ -337,16 +340,21 @@ internal sealed class QuicHttp3Response
     {
     }
 
-    public QuicHttp3Response(int statusCode, string textBody, byte[] body)
+    public QuicHttp3Response(int statusCode, string textBody, byte[] body,
+        IReadOnlyList<(string Name, string Value)>? extraHeaders = null, string? contentType = null)
     {
         StatusCode = statusCode;
         TextBody = textBody;
         Body = body;
+        ExtraHeaders = extraHeaders;
+        ContentType = contentType;
     }
 
     public int StatusCode { get; }
     public string TextBody { get; }
     public byte[] Body { get; }
+    public IReadOnlyList<(string Name, string Value)>? ExtraHeaders { get; }
+    public string? ContentType { get; }
 }
 
 #pragma warning restore TWP001

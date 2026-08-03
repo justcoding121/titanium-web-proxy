@@ -1,14 +1,42 @@
+using System;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Compression;
+using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
 [TestClass]
 public class CompressionUtilChainTests
 {
+    [TestMethod]
+    public void CompressionFactory_Create_KnownKinds_RoundTripThroughDecompressionFactory()
+    {
+        var plain = Encoding.UTF8.GetBytes("factory-bytes");
+        foreach (var kind in new[] { HttpCompression.Gzip, HttpCompression.Deflate, HttpCompression.Brotli })
+        {
+            using var compressed = new MemoryStream();
+            using (var encoder = CompressionFactory.Create(kind, compressed, leaveOpen: true))
+                encoder.Write(plain);
+
+            compressed.Position = 0;
+            using var decoder = DecompressionFactory.Create(kind, compressed, leaveOpen: true);
+            using var decoded = new MemoryStream();
+            decoder.CopyTo(decoded);
+            CollectionAssert.AreEqual(plain, decoded.ToArray(), $"Failed for {kind}");
+        }
+    }
+
+    [TestMethod]
+    public void CompressionFactory_Unsupported_Throws()
+    {
+        using var ms = new MemoryStream();
+        Assert.ThrowsException<Exception>(() => CompressionFactory.Create(HttpCompression.Unsupported, ms));
+        Assert.ThrowsException<Exception>(() => DecompressionFactory.Create(HttpCompression.Unsupported, ms));
+    }
+
     [TestMethod]
     public void CreateDecompressionChain_EmptyOrWhitespace_Passthrough()
     {
