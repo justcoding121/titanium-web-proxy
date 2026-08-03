@@ -58,7 +58,7 @@ jobs:
         /d:sonar.token="$env:SONAR_TOKEN"
         /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml"
         /d:sonar.exclusions="**/docs/**"
-        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**"
+        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/Certificates/Makers/WinCertificateMaker.cs"
 
     - name: Build for SonarCloud analysis
       if: env.SONAR_TOKEN != ''
