@@ -32,6 +32,7 @@ public class HandlerAndProtocolHelperCoverageTests
         BindingFlags.Static | BindingFlags.NonPublic;
     private static readonly BindingFlags PrivateInstance =
         BindingFlags.Instance | BindingFlags.NonPublic;
+    private static readonly string[] DnsLabelsExampleCom = { "example", "com" };
 
     private static SessionEventArgs MakeSession(ProxyServer proxy, ProxyEndPoint? endPoint = null)
     {
@@ -490,7 +491,7 @@ public class HandlerAndProtocolHelperCoverageTests
         buf.Write(new byte[] { 0x00, 0x00, 0x00, 0x00 });
 
         // question
-        foreach (var label in new[] { "example", "com" })
+        foreach (var label in DnsLabelsExampleCom)
         {
             var bytes = Encoding.ASCII.GetBytes(label);
             buf.WriteByte((byte)bytes.Length);
