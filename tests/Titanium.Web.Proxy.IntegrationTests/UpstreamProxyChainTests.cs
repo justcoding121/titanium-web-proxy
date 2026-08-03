@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class UpstreamProxyChainTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -21,7 +21,7 @@ public class UpstreamProxyChainTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -35,7 +35,7 @@ public class UpstreamProxyChainTests
         var server = testSuite.GetServer();
         server.HandleRequest(context => context.Response.WriteAsync("chained-ok"));
 
-        // Intermediate hops must not decrypt — they only forward CONNECT tunnels.
+        // Intermediate hops must not decrypt � they only forward CONNECT tunnels.
         using var hop2 = CreateTunnelOnlyProxy();
         using var hop1 = CreateTunnelOnlyProxy();
 
@@ -89,8 +89,8 @@ public class UpstreamProxyChainTests
                 NextHop = new ExternalProxy("proxy2.example", 8080, "u2", "p2")
             };
 
-            var key1 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, single);
-            var key2 = factory.GetConnectionCacheKey("example.com", 443, true, null, null, chained);
+            var key1 = Network.Tcp.TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, single);
+            var key2 = Network.Tcp.TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, chained);
 
             Assert.AreNotEqual(key1, key2);
         }

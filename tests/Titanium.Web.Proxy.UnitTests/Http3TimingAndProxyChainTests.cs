@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Exceptions;
@@ -35,33 +36,33 @@ public class Http3TimingAndProxyChainTests
     }
 
     [TestMethod]
-    public void Timing_MarkComplete_IsIdempotent()
+    public async Task Timing_MarkComplete_IsIdempotent()
     {
         var t = new HttpRequestTiming(DateTime.UtcNow);
         t.MarkComplete();
         var first = t.CompletedAt;
 
         // A second call must not overwrite CompletedAt.
-        Thread.Sleep(5);
+        await Task.Delay(5);
         t.MarkComplete();
 
         Assert.AreEqual(first, t.CompletedAt, "Second MarkComplete must not change CompletedAt.");
     }
 
     [TestMethod]
-    public void Timing_MilestoneOrdering_IsChronological()
+    public async Task Timing_MilestoneOrdering_IsChronological()
     {
         var t = new HttpRequestTiming(DateTime.UtcNow);
 
-        Thread.Sleep(1);
+        await Task.Delay(1);
         t.MarkRequestHeadersReceived();
-        Thread.Sleep(1);
+        await Task.Delay(1);
         t.MarkConnectionReady(1, reused: false);
-        Thread.Sleep(1);
+        await Task.Delay(1);
         t.MarkRequestSent();
-        Thread.Sleep(1);
+        await Task.Delay(1);
         t.MarkResponseHeadersReceived();
-        Thread.Sleep(1);
+        await Task.Delay(1);
         t.MarkComplete();
 
         // Each milestone must be >= the previous one.
@@ -137,6 +138,6 @@ public class Http3TimingAndProxyChainTests
     public void QuicProxyNotSupportedException_DerivesFromException()
     {
         var ex = new QuicProxyNotSupportedException("test");
-        Assert.IsInstanceOfType(ex, typeof(Exception));
+        Assert.IsInstanceOfType<Exception>(ex);
     }
 }

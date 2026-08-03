@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -26,7 +26,8 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Http2TransparentTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
+    private static readonly string[] writeBody = new[] { "chunk1", "chunk2", "chunk3" };
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -34,7 +35,7 @@ public class Http2TransparentTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -49,7 +50,7 @@ public class Http2TransparentTests
     {
         var handler = new SocketsHttpHandler
         {
-            // Direct to the transparent endpoint — must not ride the machine system proxy
+            // Direct to the transparent endpoint � must not ride the machine system proxy
             // (Basic example on :8000) which would MITM with the product root instead.
             UseProxy = false,
             SslOptions =
@@ -184,7 +185,7 @@ public class Http2TransparentTests
             "The origin does not support h2, so the proxy must not have negotiated h2 with the client either.");
 
         var requestBytes = Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-        await sslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+        await sslStream.WriteAsync(requestBytes);
 
         using var reader = new System.IO.StreamReader(sslStream, Encoding.ASCII, false, 4096, true);
         var statusLine = await reader.ReadLineAsync();
@@ -334,10 +335,10 @@ public class Http2TransparentTests
 
             e.RespondStreaming(response, async (stream, ct) =>
             {
-                foreach (var part in new[] { "chunk1", "chunk2", "chunk3" })
+                foreach (var part in writeBody)
                 {
                     var bytes = Encoding.ASCII.GetBytes(part);
-                    await stream.WriteAsync(bytes, 0, bytes.Length, ct);
+                    await stream.WriteAsync(bytes, ct);
                 }
             }, closeServerConnection: true);
 
@@ -418,7 +419,7 @@ public class Http2TransparentTests
             "cached capability result.");
 
         var requestBytes = Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-        await sslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+        await sslStream.WriteAsync(requestBytes);
 
         using var reader = new System.IO.StreamReader(sslStream, Encoding.ASCII, false, 4096, true);
         var statusLine = await reader.ReadLineAsync();

@@ -72,11 +72,7 @@ internal static class Http3OriginBridge
         }
 
         // Route resolved to non-H3 (forced Http2/Http11 override, or no H3 capability known).
-        var preferredProtocol = sessionArgs.UpstreamHttpProtocol ?? UpstreamHttpProtocol.Auto;
-        var sslProtocol = preferredProtocol == UpstreamHttpProtocol.Http2
-            ? SslApplicationProtocol.Http2
-            : default;
-        await ForwardOverTcpAsync(sessionArgs, server, sslProtocol, cancellationToken, onInterimResponse);
+        await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
     }
 
     /// <summary>
@@ -125,7 +121,7 @@ internal static class Http3OriginBridge
     ///     When <see langword="true" />, QUIC failures are terminal (return 502); no TCP fallback.
     ///     When <see langword="false" /> (Auto policy), evict the stale cache entry and fall back to TCP.
     /// </param>
-    private static async Task ForwardOverQuicAsync(
+    private static async Task ForwardOverQuicAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         SessionEventArgs sessionArgs,
         ProxyServer server,
         string connectHost,
@@ -169,9 +165,14 @@ internal static class Http3OriginBridge
         {
         try
         {
+            // Pass the session so ServerCertificateValidationCallback is honoured. The factory's
+            // default path supplies sessionArgs: null, which skips the user callback and rejects
+            // any chain that is not already trusted by the OS (breaking MITM-test and custom-CA
+            // deployments for every H3→H3 origin connect).
             quicConn = await server.QuicConnectionPool.GetOrCreateAsync(
                 connectHost, port, upStreamEndPoint, upstreamProxy,
-                null /* default cert validation */,
+                (sender, certificate, chain, errors) =>
+                    server.ValidateServerCertificate(sender, sessionArgs, certificate, chain, errors),
                 cancellationToken,
                 sniHost: sniHost);
 
@@ -261,12 +262,12 @@ internal static class Http3OriginBridge
 
             var maxPayload = sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes;
             var bodyStream = new System.IO.MemoryStream();
-            // maxPayload above only bounds a single DATA frame (Http3Frame.ReadAsync's per-call check);
-            // an origin sending many small frames could otherwise accumulate an unbounded response body
-            // in memory. Wrap the buffering write in a cumulative BoundedWriteStream — per the hardening
-            // plan, a response-side breach must close the connection rather than deliver a truncated body
-            // as if it were complete, so the resulting BodySizeLimitExceededException is deliberately left
-            // to propagate to the catch below, which disposes (never pools) the origin connection.
+            // maxPayload above only bounds a single DATA frame per read; an origin sending many small
+            // frames could otherwise accumulate an unbounded response body in memory. Wrap the buffering
+            // write in a cumulative bounded stream — per the hardening plan, a response-side breach must
+            // close the connection rather than deliver a truncated body as if it were complete, so the
+            // resulting size-limit exception is deliberately left to propagate to the catch below, which
+            // disposes (never pools) the origin connection.
             var boundedBodyStream = new BoundedWriteStream(bodyStream, maxPayload, server.PolicyModes[PolicyFamily.BodyBudget]);
             try
             {
@@ -321,7 +322,7 @@ internal static class Http3OriginBridge
             }
             finally
             {
-                bodyStream.Dispose();
+                await bodyStream.DisposeAsync();
             }
 
             response.IsBodyRead = true;
@@ -347,15 +348,16 @@ internal static class Http3OriginBridge
 
             break; // success — exit the retry loop
         }
-        catch (QuicProxyNotSupportedException)
+        catch (QuicProxyNotSupportedException ex)
         {
             // System.Net.Quic cannot route via a proxy.
             // For Auto policy: fall back to TCP so proxy rules are honoured.
             // For forced H3:   a proxy was explicitly configured but cannot carry QUIC — return 502.
-            logger.LogDebug(
-                "QUIC cannot route via proxy; {Behavior} for {Host}:{Port}",
-                isForcedH3 ? "returning 502 (forced H3)" : "falling back to TCP",
-                sniHost, port);
+            if (logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug(ex,
+                    "QUIC cannot route via proxy; {Behavior} for {Host}:{Port}",
+                    isForcedH3 ? "returning 502 (forced H3)" : "falling back to TCP",
+                    sniHost, port);
 
             quicConn = null; // GetOrCreateAsync threw before creating a connection
 
@@ -363,7 +365,7 @@ internal static class Http3OriginBridge
             {
                 try
                 {
-                    await ForwardOverTcpAsync(sessionArgs, server, default, cancellationToken, onInterimResponse);
+                    await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
                 }
                 catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
                 {
@@ -378,7 +380,8 @@ internal static class Http3OriginBridge
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogDebug(ex, "H3→H3 origin forwarding failed for {Host}:{Port}", sniHost, port);
+            if (logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug(ex, "H3→H3 origin forwarding failed for {Host}:{Port}", sniHost, port);
 
             if (quicConn != null)
             {
@@ -403,9 +406,10 @@ internal static class Http3OriginBridge
             if (reused && !requestSent && staleConnectionRetries < QuicConnectionPool.MaxStaleConnectionRetries)
             {
                 staleConnectionRetries++;
-                logger.LogDebug(
-                    "Pooled QUIC connection to {Host}:{Port} was stale ({ExceptionType}); retrying (attempt {Attempt}/{Max}).",
-                    sniHost, port, ex.GetType().Name, staleConnectionRetries, QuicConnectionPool.MaxStaleConnectionRetries);
+                if (logger.IsEnabled(LogLevel.Debug))
+                    logger.LogDebug(
+                        "Pooled QUIC connection to {Host}:{Port} was stale ({ExceptionType}); retrying (attempt {Attempt}/{Max}).",
+                        sniHost, port, ex.GetType().Name, staleConnectionRetries, QuicConnectionPool.MaxStaleConnectionRetries);
                 continue;
             }
 
@@ -417,15 +421,17 @@ internal static class Http3OriginBridge
                 var originPort = request.RequestUri?.Port ?? port;
                 var hostAndPort = $"{sniHost}:{originPort}";
                 server.Http3OriginCapabilityCache.Evict(hostAndPort);
-                logger.LogDebug("Evicted stale H3 capability for {HostAndPort}; falling back to TCP.", hostAndPort);
+                if (logger.IsEnabled(LogLevel.Debug))
+                    logger.LogDebug("Evicted stale H3 capability for {HostAndPort}; falling back to TCP.", hostAndPort);
                 try
                 {
-                    await ForwardOverTcpAsync(sessionArgs, server, default, cancellationToken, onInterimResponse);
+                    await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
                 }
                 catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
                 {
-                    logger.LogDebug(tcpEx, "TCP fallback after H3 failure also failed for {Host}:{Port}",
-                        sniHost, originPort);
+                    if (logger.IsEnabled(LogLevel.Debug))
+                        logger.LogDebug(tcpEx, "TCP fallback after H3 failure also failed for {Host}:{Port}",
+                            sniHost, originPort);
                     sessionArgs.HttpClient.Response = MakeBadGatewayResponse(
                         $"QUIC failed: {ex.Message}; TCP fallback failed: {tcpEx.Message}");
                 }
@@ -446,7 +452,7 @@ internal static class Http3OriginBridge
             // escaping the loop would otherwise leave the stream registered forever, pinning the
             // connection as permanently busy and blocking idle eviction.
             if (quicConn != null)
-                await server.QuicConnectionPool.ReleaseAsync(quicConn);
+                await QuicConnectionPool.ReleaseAsync(quicConn);
         }
     }
 
@@ -464,10 +470,9 @@ internal static class Http3OriginBridge
     ///         (logged as <c>H2↔H1.0</c>).
     ///     </para>
     /// </summary>
-    private static async Task ForwardOverTcpAsync(
+    private static async Task ForwardOverTcpAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         SessionEventArgs sessionArgs,
         ProxyServer server,
-        SslApplicationProtocol preferredProtocol,
         CancellationToken cancellationToken,
         Func<Response, CancellationToken, Task>? onInterimResponse = null)
     {
@@ -499,7 +504,9 @@ internal static class Http3OriginBridge
             // CompressBodyAndUpdateContentLength() assumes the opposite (decompressed Body, to be
             // compressed for the wire) and would double-compress it here, corrupting the payload sent
             // to the TCP-fallback origin. Forward the bytes as-is and only fix up Content-Length.
-            body = request.IsBodyRead ? request.Body : null;
+            // Use BodyAvailable: IsBodyRead is true for GET with an empty body, and Body throws
+            // BodyNotFoundException when HasBody is false.
+            body = request.BodyAvailable ? request.Body : null;
             request.UpdateContentLength();
         }
 

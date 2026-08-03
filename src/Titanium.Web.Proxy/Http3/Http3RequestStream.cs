@@ -48,7 +48,7 @@ internal static class Http3RequestStream
     /// <param name="onBeforeRequest">Proxy BeforeRequest event dispatcher.</param>
     /// <param name="onBeforeResponse">Proxy BeforeResponse event dispatcher.</param>
     /// <param name="onAfterResponse">Proxy AfterResponse event dispatcher.</param>
-    public static async Task HandleAsync(
+    public static async Task HandleAsync( // NOSONAR S3776, CA1068 -- Protocol flow and established token position are retained.
         QuicStream stream,
         QuicConnection connection,
         TransparentQuicProxyEndPoint endPoint,
@@ -96,20 +96,13 @@ internal static class Http3RequestStream
                 // streams share one ClientConnectionId (caller owns dispose).
                 clientConnection ??= new QuicClientConnection(
                     server,
-                    (System.Net.IPEndPoint)connection.LocalEndPoint,
-                    (System.Net.IPEndPoint)connection.RemoteEndPoint);
+                    connection.LocalEndPoint,
+                    connection.RemoteEndPoint);
 
-                var request = new Request();
-                request.Method = method;
-                var url = BuildUrl(scheme ?? "https", authority, path ?? "/");
-                request.RequestUri = new Uri(url);
-                request.HttpVersion = HttpHeader.Version30;
-                request.IsHttps = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase);
-
-                foreach (var (name, value) in regularHeaders)
-                    request.Headers.AddHeader(new HttpHeader(name, value));
-
-                // 4. Create SessionEventArgs using a null-backed HttpClientStream.
+                // 4. Create SessionEventArgs using a null-backed HttpClientStream, then populate
+                // the session's Request. SessionEventArgs always constructs its own Request; a
+                // discarded local Request previously left Host/URI empty so H3→origin forwarding
+                // failed with Invalid URI: 'http://'.
                 cts = new CancellationTokenSource();
                 linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
 
@@ -118,6 +111,22 @@ internal static class Http3RequestStream
                     server.BufferPool, linkedCts.Token);
 
                 sessionArgs = new SessionEventArgs(server, endPoint, nullHttpClientStream, null, cts);
+
+                var request = sessionArgs.HttpClient.Request;
+                request.Method = method;
+                // Mirror Http2Helper: keep :authority and :path separate (origin-form RequestUriString8).
+                // Storing an absolute URL here made transparent H3→H1 SendRequest write absolute-form
+                // request targets ("GET https://host/path HTTP/1.1"), which Kestrel rejects with 400.
+                var normalizedPath = path ?? "/";
+                if (!normalizedPath.StartsWith('/'))
+                    normalizedPath = "/" + normalizedPath; // NOSONAR S1075 -- Slash is the HTTP origin-form delimiter, not a filesystem path.
+                request.Authority = (ByteString)authority;
+                request.RequestUriString8 = (ByteString)normalizedPath;
+                request.HttpVersion = HttpHeader.Version30;
+                request.IsHttps = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase);
+
+                foreach (var (name, value) in regularHeaders)
+                    request.Headers.AddHeader(new HttpHeader(name, value));
 
                 // Seed per-connection overrides from the auth event.
                 // CustomUpStreamProxy is the typed proxy field read by the bridge; UserData is
@@ -175,6 +184,10 @@ internal static class Http3RequestStream
                 }
                 else
                 {
+                    // Lock after BeforeRequest so GetResponseBody (TCP fallback) and API contracts
+                    // agree the request has been committed to the origin pipeline.
+                    sessionArgs.HttpClient.Request.Locked = true;
+
                     // 7. Forward to origin using the appropriate protocol bridge (H3→H3, H3→H2, or H3→H1.1).
                     // Pass a relay callback so that 1xx interim responses are forwarded to the client before
                     // the final response arrives.
@@ -204,8 +217,10 @@ internal static class Http3RequestStream
                 // Http3Connection.HandleRequestStreamAsync can tear down the whole connection with
                 // the same error code rather than letting the other streams continue against
                 // corrupted shared state.
-                logger.LogDebug("HTTP/3 stream {StreamId} hit a connection-level error: {ErrorCode} {Message}",
-                    stream.Id, ex.ErrorCode, ex.Message);
+                if (logger.IsEnabled(LogLevel.Debug))
+                    logger.LogDebug(ex,
+                        "HTTP/3 stream {StreamId} hit a connection-level error: {ErrorCode}",
+                        stream.Id, ex.ErrorCode);
                 stream.Abort(QuicAbortDirection.Write, (long)ex.ErrorCode);
                 stream.Abort(QuicAbortDirection.Read, (long)ex.ErrorCode);
                 throw;
@@ -213,8 +228,9 @@ internal static class Http3RequestStream
             catch (Http3StreamException ex)
             {
                 ProxyMetrics.ParserError("http3");
-                logger.LogDebug("HTTP/3 stream {StreamId} aborted: {ErrorCode} {Message}",
-                    stream.Id, ex.ErrorCode, ex.Message);
+                if (logger.IsEnabled(LogLevel.Debug))
+                    logger.LogDebug(ex, "HTTP/3 stream {StreamId} aborted: {ErrorCode}",
+                        stream.Id, ex.ErrorCode);
                 stream.Abort(QuicAbortDirection.Write, (long)ex.ErrorCode);
                 stream.Abort(QuicAbortDirection.Read, (long)ex.ErrorCode);
             }
@@ -258,7 +274,7 @@ internal static class Http3RequestStream
     ///     read-ahead so that <c>IsLastChunk</c> is accurate. A handler may set <c>IsLastChunk = true</c>
     ///     to terminate reading early; the stream read side is then aborted to release flow-control credit.
     /// </summary>
-    private static async ValueTask<byte[]> ReadRequestBodyAsync(
+    private static async ValueTask<byte[]> ReadRequestBodyAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         QuicStream stream,
         Request request,
         ProxyServer server,
@@ -337,7 +353,7 @@ internal static class Http3RequestStream
         }
         finally
         {
-            body.Dispose();
+            await body.DisposeAsync();
         }
     }
 
@@ -402,8 +418,9 @@ internal static class Http3RequestStream
         var qpackHeaders = QpackEncoder.Encode(headers, qpackContext);
         await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
 
-        // Send body if present.
-        var body = response.IsBodyRead ? response.Body : null;
+        // Send body if present. Ok()/Respond assign Body without setting IsBodyRead (H1 uses
+        // BodyAvailable); requiring IsBodyRead alone dropped every synthetic H3 response body.
+        var body = response.BodyAvailable || response.IsBodyRead ? response.Body : null;
         if (body is { Length: > 0 })
             await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct);
 
@@ -438,10 +455,5 @@ internal static class Http3RequestStream
         return (method, scheme, authority, path, regular);
     }
 
-    private static string BuildUrl(string scheme, string authority, string path)
-    {
-        if (!path.StartsWith('/')) path = "/" + path;
-        return $"{scheme}://{authority}{path}";
-    }
 }
 #pragma warning restore CA1416

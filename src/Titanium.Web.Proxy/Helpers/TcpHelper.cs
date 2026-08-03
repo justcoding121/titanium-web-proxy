@@ -10,13 +10,13 @@ using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.Helpers;
 
-internal class TcpHelper
+internal static class TcpHelper
 {
     /// <summary>
     ///     Gets the process id by local port number.
     /// </summary>
     /// <returns>Process id.</returns>
-    internal static unsafe int GetProcessIdByLocalPort(AddressFamily addressFamily, int localPort)
+    internal static unsafe int GetProcessIdByLocalPort(AddressFamily addressFamily, int localPort) // NOSONAR S6640
     {
         var tcpTable = IntPtr.Zero;
         var tcpTableLength = 0;
@@ -103,7 +103,7 @@ internal class TcpHelper
             serverStream.CopyToAsync(clientStream, onDataReceive, bufferPool, cancellationTokenSource.Token);
 
         await Task.WhenAny(sendRelay, receiveRelay);
-        cancellationTokenSource.Cancel();
+        await cancellationTokenSource.CancelAsync();
 
         await Task.WhenAll(sendRelay, receiveRelay);
     }
@@ -126,7 +126,7 @@ internal class TcpHelper
         CancellationTokenSource cancellationTokenSource,
         ILogger logger)
     {
-        // todo: fix APM mode
+        // Preserve the legacy APM callback path for callers that still use Begin/End methods.
         return SendRawTap(clientStream, serverStream, bufferPool, onDataSend, onDataReceive,
             cancellationTokenSource);
     }

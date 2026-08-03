@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -19,7 +19,8 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class StreamingBodyTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
+    private static readonly string[] writeBody = new[] { "chunk1", "chunk2", "chunk3" };
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -27,7 +28,7 @@ public class StreamingBodyTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -103,7 +104,7 @@ public class StreamingBodyTests
         for (var i = 0; i < payload.Length; i++) payload[i] = (byte)(i % 251);
 
         var server = testSuite.GetServer();
-        server.HandleRequest(context => context.Response.Body.WriteAsync(payload, 0, payload.Length));
+        server.HandleRequest(async context => await context.Response.Body.WriteAsync(payload));
 
         var proxy = testSuite.GetProxy();
 
@@ -156,10 +157,10 @@ public class StreamingBodyTests
 
             e.RespondStreaming(response, async (stream, ct) =>
             {
-                foreach (var part in new[] { "chunk1", "chunk2", "chunk3" })
+                foreach (var part in writeBody)
                 {
                     var bytes = Encoding.ASCII.GetBytes(part);
-                    await stream.WriteAsync(bytes, 0, bytes.Length, ct);
+                    await stream.WriteAsync(bytes, ct);
                 }
             }, closeServerConnection: true);
 
@@ -200,8 +201,8 @@ public class StreamingBodyTests
             e.RespondStreaming(response, async (stream, ct) =>
             {
                 // write in two pieces to prove streaming
-                await stream.WriteAsync(payload, 0, 8, ct);
-                await stream.WriteAsync(payload, 8, payload.Length - 8, ct);
+                await stream.WriteAsync(payload.AsMemory(0, 8), ct);
+                await stream.WriteAsync(payload.AsMemory(8, payload.Length - 8), ct);
             }, closeServerConnection: true);
 
             return Task.CompletedTask;
@@ -340,10 +341,10 @@ public class StreamingBodyTests
 
             e.RespondStreaming(response, async (stream, ct) =>
             {
-                foreach (var part in new[] { "chunk1", "chunk2", "chunk3" })
+                foreach (var part in writeBody)
                 {
                     var bytes = Encoding.ASCII.GetBytes(part);
-                    await stream.WriteAsync(bytes, 0, bytes.Length, ct);
+                    await stream.WriteAsync(bytes, ct);
                 }
             }, closeServerConnection: true);
 

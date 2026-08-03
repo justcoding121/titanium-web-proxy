@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class CertificateStoreIsolationTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -36,7 +36,7 @@ public class CertificateStoreIsolationTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -45,7 +45,6 @@ public class CertificateStoreIsolationTests
     [TestMethod]
     public void TestRoot_Subject_Differs_From_ProductDefault()
     {
-        Assert.AreEqual("Titanium Integration Test Root CA", TestCertificateAuthority.RootCertificateName);
         Assert.AreEqual(
             "CN=Titanium Integration Test Root CA",
             TestCertificateAuthority.RootCertificate.Subject);

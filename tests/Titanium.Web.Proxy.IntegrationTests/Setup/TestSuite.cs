@@ -38,14 +38,14 @@ public class TestSuite : IDisposable
         return server;
     }
 
-    public ProxyServer GetProxy(ProxyServer upStreamProxy = null)
+    public ProxyServer GetProxy(ProxyServer? upStreamProxy = null)
     {
         var proxyServer = new TestProxyServer(false, upStreamProxy).ProxyServer;
         proxyServers.Add(proxyServer);
         return proxyServer;
     }
 
-    public ProxyServer GetReverseProxy(ProxyServer upStreamProxy = null)
+    public ProxyServer GetReverseProxy(ProxyServer? upStreamProxy = null)
     {
         var proxyServer = new TestProxyServer(true, upStreamProxy).ProxyServer;
         proxyServers.Add(proxyServer);
@@ -86,5 +86,7 @@ public class TestSuite : IDisposable
         {
             server.Dispose();
         }
+
+        GC.SuppressFinalize(this);
     }
 }

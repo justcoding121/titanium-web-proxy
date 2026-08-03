@@ -40,7 +40,12 @@ jobs:
 
     - name: Install DocFX
       if: github.ref == 'refs/heads/develop'
-      run: choco install docfx -y
+      shell: pwsh
+      run: |
+        # Prefer the .NET tool over Chocolatey: choco's docfx package downloads an old
+        # GitHub release zip that intermittently 500s and blocks Sonar/coverage on develop.
+        dotnet tool install --global docfx
+        Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.dotnet\tools"
 
     - name: Restore
       run: dotnet restore src/Titanium.Web.Proxy.sln --warnaserror
@@ -57,6 +62,8 @@ jobs:
         /o:"justcoding121"
         /d:sonar.token="$env:SONAR_TOKEN"
         /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml"
+        /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**"
+        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**"
 
     - name: Build for SonarCloud analysis
       if: env.SONAR_TOKEN != ''
@@ -97,7 +104,7 @@ jobs:
 
     - name: Publish Documentation
       if: github.ref == 'refs/heads/develop'
-      uses: EndBug/add-and-commit@v9
+      uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5 # v9
       with:
         default_author: github_actions
         message: Update documentation
@@ -134,7 +141,7 @@ jobs:
       run: dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release
 
     - name: Log in to NuGet
-      uses: NuGet/login@v1
+      uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
       id: login
       with:
         user: ${{ secrets.NUGET_USER }}

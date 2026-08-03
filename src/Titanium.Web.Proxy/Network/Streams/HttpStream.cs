@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -51,6 +52,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     ///     not - so the per-chunk body-write hook fires with parity for plain and TLS-decrypted connections.
     /// </summary>
     public bool SupportsBodyWriteHook { get; }
+
+    /// <summary>
+    ///     Whether a header write failure should be translated into a retryable server-connection failure.
+    /// </summary>
+    protected virtual bool IsRetryableHeaderWriteFailure => false;
 
     public event EventHandler<DataEventArgs>? DataRead;
 
@@ -100,7 +106,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// </summary>
     private static void ReportSuppressedFailure(Exception ex)
     {
-        ProxyDiagnostics.ReportBenign(ProxyDiagnostics.FallbackLogger,
+        ProxyDiagnostics.ReportBenign(ProxyDiagnostics.Logger,
             "Suppressed a network stream read/write failure (expected when the remote endpoint closed or reset the connection).",
             ex);
     }
@@ -233,7 +239,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     {
         if (Available > 0)
         {
-            await destination.WriteAsync(streamBuffer, bufferPos, Available, cancellationToken);
+            await destination.WriteAsync(streamBuffer.AsMemory(bufferPos, Available), cancellationToken);
 
             Available = 0;
         }
@@ -370,7 +376,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     {
         // When index is greater than the buffer size
         if (streamBuffer.Length <= index)
-            throw new Exception("Requested Peek index exceeds the buffer size. Consider increasing the buffer size.");
+            throw new ArgumentOutOfRangeException(nameof(index), index,
+                "Requested peek index exceeds the buffer size. Consider increasing the buffer size.");
 
         while (Available <= index)
         {
@@ -396,8 +403,9 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     {
         // When index is greater than the buffer size
         if (streamBuffer.Length <= index + count)
-            throw new Exception(
-                "Requested Peek index and size exceeds the buffer size. Consider increasing the buffer size.");
+            throw new ArgumentOutOfRangeException(
+                nameof(count), count,
+                "Requested peek index and size exceed the buffer size. Consider increasing the buffer size.");
 
         while (Available <= index)
         {
@@ -419,7 +427,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// <exception cref="Exception">Index is out of buffer size</exception>
     public byte PeekByteFromBuffer(int index)
     {
-        if (Available <= index) throw new Exception("Index is out of buffer size");
+        if (Available <= index)
+            throw new ArgumentOutOfRangeException(nameof(index), index, "Index is outside the buffered data.");
 
         return streamBuffer[bufferPos + index];
     }
@@ -431,7 +440,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// <exception cref="Exception">Buffer is empty</exception>
     public byte ReadByteFromBuffer()
     {
-        if (Available == 0) throw new Exception("Buffer is empty");
+        if (Available == 0) throw new InvalidOperationException("Buffer is empty.");
 
         Available--;
         return streamBuffer[bufferPos++];
@@ -457,7 +466,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
         try
         {
-            await BaseStream.WriteAsync(buffer, offset, count, cancellationToken);
+            await BaseStream.WriteAsync(buffer.AsMemory(offset, count), cancellationToken);
         }
         catch (Exception ex)
         {
@@ -529,6 +538,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 bufferPool.ReturnBuffer(streamBuffer);
             }
         }
+
+        base.Dispose(disposing);
     }
 
     /// <summary>
@@ -674,7 +685,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         var cancelled = false;
         try
         {
-            var readTask = BaseStream.ReadAsync(streamBuffer, Available, bytesToRead, cancellationToken);
+            var readTask = BaseStream.ReadAsync(streamBuffer.AsMemory(Available, bytesToRead), cancellationToken).AsTask();
             if (IsNetworkStream) readTask = readTask.WithCancellation(cancellationToken);
 
             var readBytes = await readTask;
@@ -851,7 +862,12 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         return WriteAsync(newLine, cancellationToken: cancellationToken);
     }
 
-    private async ValueTask WriteAsyncInternal(string value, bool addNewLine, CancellationToken cancellationToken)
+    public ValueTask WriteLineAsync(string value, CancellationToken cancellationToken = default)
+    {
+        return WriteAsyncInternal(value, true, cancellationToken);
+    }
+
+    private async ValueTask WriteAsyncInternal(string value, bool addNewLine, CancellationToken cancellationToken) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (closedWrite) return;
 
@@ -869,7 +885,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                     idx += newLineChars;
                 }
 
-                await BaseStream.WriteAsync(buffer, 0, idx, cancellationToken);
+                await BaseStream.WriteAsync(buffer.AsMemory(0, idx), cancellationToken);
             }
             catch (Exception ex)
             {
@@ -895,7 +911,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
             try
             {
-                await BaseStream.WriteAsync(buffer, 0, idx, cancellationToken);
+                await BaseStream.WriteAsync(buffer.AsMemory(0, idx), cancellationToken);
             }
             catch (Exception ex)
             {
@@ -905,11 +921,6 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 ReportSuppressedFailure(ex);
             }
         }
-    }
-
-    public ValueTask WriteLineAsync(string value, CancellationToken cancellationToken = default)
-    {
-        return WriteAsyncInternal(value, true, cancellationToken);
     }
 
     /// <summary>
@@ -931,7 +942,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         catch (IOException e)
         {
             //throw this as ServerConnectionException so that RetryPolicy can retry with a new server connection.
-            if (this is HttpServerStream)
+            if (IsRetryableHeaderWriteFailure)
                 throw new RetryableServerConnectionException(
                     "Server connection was closed. Exception while sending request line and headers.", e);
 
@@ -951,7 +962,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
         try
         {
-            await BaseStream.WriteAsync(data, 0, data.Length, cancellationToken);
+            await BaseStream.WriteAsync(data.AsMemory(), cancellationToken);
             if (flush) await BaseStream.FlushAsync(cancellationToken);
         }
         catch (Exception ex)
@@ -970,7 +981,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
         try
         {
-            await BaseStream.WriteAsync(data, offset, count, cancellationToken);
+            await BaseStream.WriteAsync(data.AsMemory(offset, count), cancellationToken);
             if (flush) await BaseStream.FlushAsync(cancellationToken);
         }
         catch (Exception ex)
@@ -1042,14 +1053,14 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         }
         finally
         {
-            http.Dispose();
+            await http.DisposeAsync();
 
             if (decompressLayers != null)
                 for (var i = decompressLayers.Count - 1; i >= 0; i--)
-                    decompressLayers[i].Dispose();
+                    await decompressLayers[i].DisposeAsync();
 
             await limitedStream.Finish();
-            limitedStream.Dispose();
+            await limitedStream.DisposeAsync();
         }
     }
 
@@ -1074,14 +1085,14 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         // ITransportCapableStream marker rather than the public IHttpStreamWriter/IHttpStreamReader interfaces,
         // so external implementers of those public interfaces are not source-broken; one that doesn't also
         // implement the marker is simply treated as not supporting the hook (today's behavior, preserved).
-        var readerSupportsHook = this is ITransportCapableStream { SupportsBodyWriteHook: true };
-        var writerSupportsHook = writer is ITransportCapableStream { SupportsBodyWriteHook: true };
+        var readerSupportsHook = SupportsBodyWriteHook;
+        var writerSupportsHook = writer is ITransportCapableStream { SupportsBodyWriteHook: true }; // NOSONAR S3060 -- preserves external interface compatibility.
 
         if (readerSupportsHook && writerSupportsHook &&
             ((isRequest && args.HttpClient.Request.OriginalHasBody && !args.HttpClient.Request.IsBodyRead && server.ShouldCallBeforeRequestBodyWrite()) ||
              (isResponse && args.HttpClient.Response.OriginalHasBody && !args.HttpClient.Response.IsBodyRead && server.ShouldCallBeforeResponseBodyWrite())))
         {
-            return HandleBodyWrite(writer, isChunked, contentLength, isRequest, args, cancellationToken);
+            return HandleBodyWrite(writer, isChunked, isRequest, args, cancellationToken);
         }
 
         // For chunked request we need to read data as they arrive, until we reach a chunk end symbol
@@ -1102,7 +1113,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     ///     uses Content-Encoding); on-the-fly decompression/recompression is not performed here in order to
     ///     preserve exact framing and length. Reads are bounded by bufferPool.BufferSize to keep memory flat.
     /// </summary>
-    private async Task HandleBodyWrite(IHttpStreamWriter writer, bool isChunked, long contentLength,
+    private async Task HandleBodyWrite(IHttpStreamWriter writer, bool isChunked, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         bool isRequest, SessionEventArgs args, CancellationToken cancellationToken)
     {
         var requestResponse = isRequest ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
@@ -1164,7 +1175,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             while (remainingInCurrentChunk > 0)
             {
                 var toRead = (int)Math.Min(buffer.Length, remainingInCurrentChunk);
-                var bytesRead = await ReadAsync(buffer, 0, toRead, cancellationToken);
+                var bytesRead = await ReadAsync(buffer.AsMemory(0, toRead), cancellationToken);
                 if (bytesRead == 0) return;
                 remainingInCurrentChunk -= bytesRead;
             }
@@ -1192,7 +1203,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 while (toDiscard > 0)
                 {
                     var toRead = (int)Math.Min(buffer.Length, toDiscard);
-                    var bytesRead = await ReadAsync(buffer, 0, toRead, cancellationToken);
+                    var bytesRead = await ReadAsync(buffer.AsMemory(0, toRead), cancellationToken);
                     if (bytesRead == 0) return;
                     toDiscard -= bytesRead;
                 }
@@ -1230,7 +1241,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                     while (remaining > 0)
                     {
                         var toRead = (int)Math.Min(buffer.Length, remaining);
-                        var bytesRead = await ReadAsync(buffer, 0, toRead, cancellationToken);
+                        var bytesRead = await ReadAsync(buffer.AsMemory(0, toRead), cancellationToken);
                         if (bytesRead == 0)
                             throw new ProxyHttpException("Unexpected end of stream while reading chunk body.", null, args);
 
@@ -1268,7 +1279,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 while (remaining > 0)
                 {
                     var toRead = (int)Math.Min(buffer.Length, remaining);
-                    var bytesRead = await ReadAsync(buffer, 0, toRead, cancellationToken);
+                    var bytesRead = await ReadAsync(buffer.AsMemory(0, toRead), cancellationToken);
                     if (bytesRead == 0) break;
 
                     remaining -= bytesRead;
@@ -1381,7 +1392,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 var bytesToRead = buffer.Length;
                 if (remainingBytes < bytesToRead) bytesToRead = (int)remainingBytes;
 
-                var bytesRead = await ReadAsync(buffer, 0, bytesToRead, cancellationToken);
+                var bytesRead = await ReadAsync(buffer.AsMemory(0, bytesToRead), cancellationToken);
                 if (bytesRead == 0) break;
 
                 remainingBytes -= bytesRead;
@@ -1431,6 +1442,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken =
  default)
         {
+            if (MemoryMarshal.TryGetArray(buffer, out var segment))
+                OnDataWrite(segment.Array!, segment.Offset, segment.Count);
+            else
+                OnDataWrite(buffer.ToArray(), 0, buffer.Length);
+
             if (closedWrite)
             {
                 return;

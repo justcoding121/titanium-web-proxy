@@ -49,7 +49,7 @@ internal static class HttpHelper
         {
             // A malformed Content-Type header charset parameter just falls back to the default encoding
             // below - expected for the many real-world servers that send slightly invalid headers.
-            ProxyDiagnostics.ReportTrace(ProxyDiagnostics.FallbackLogger,
+            ProxyDiagnostics.ReportTrace(ProxyDiagnostics.Logger,
                 $"Failed to parse the charset from Content-Type header '{contentType}': {ex.Message}");
         }
 
@@ -107,7 +107,7 @@ internal static class HttpHelper
             var idx = hostname.IndexOf(ProxyConstants.DotSplit);
 
             // issue #352
-            if (hostname.Substring(0, idx).Contains("-")) return hostname;
+            if (hostname.Substring(0, idx).Contains('-')) return hostname;
 
             var rootDomain = hostname.Substring(idx + 1);
             return "*." + rootDomain;
@@ -125,7 +125,7 @@ internal static class HttpHelper
     {
         const int lengthToCheck = 20;
         if (bufferPool.BufferSize < lengthToCheck)
-            throw new Exception($"Buffer is too small. Minimum size is {lengthToCheck} bytes");
+            throw new ArgumentException($"Buffer is too small. Minimum size is {lengthToCheck} bytes");
 
         var buffer = bufferPool.GetBuffer(bufferPool.BufferSize);
         try
@@ -147,7 +147,7 @@ internal static class HttpHelper
                         return GetKnownMethod(buffer.AsSpan(0, i));
 
                     var ch = (char)b;
-                    if ((ch < 'A' || ch > 'z' || ch > 'Z' && ch < 'a') && ch != '-') // ASCII letter
+                    if (!IsMethodCharacter(ch))
                         return KnownMethod.Invalid;
 
                     i++;
@@ -163,7 +163,12 @@ internal static class HttpHelper
         }
     }
 
-    private static KnownMethod GetKnownMethod(ReadOnlySpan<byte> method)
+    private static bool IsMethodCharacter(char value)
+    {
+        return value is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or '-';
+    }
+
+    private static KnownMethod GetKnownMethod(ReadOnlySpan<byte> method) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         // the following methods are supported:
         // Connect
@@ -261,23 +266,23 @@ internal static class HttpHelper
             idx = 0;
         }
 
-        public SemicolonSplitEnumerator GetEnumerator()
+        public SemicolonSplitEnumerator GetEnumerator() // NOSONAR S1144 -- Required by the foreach pattern.
         {
             return this;
         }
 
-        public bool MoveNext()
+        public bool MoveNext() // NOSONAR S1144 -- Required by the foreach pattern.
         {
             if (this.idx > data.Length) return false;
 
-            var idx = data.Span.Slice(this.idx).IndexOf(';');
-            if (idx == -1)
-                idx = data.Length;
+            var separatorIndex = data.Span.Slice(this.idx).IndexOf(';');
+            if (separatorIndex == -1)
+                separatorIndex = data.Length;
             else
-                idx += this.idx;
+                separatorIndex += this.idx;
 
-            Current = data.Slice(this.idx, idx - this.idx);
-            this.idx = idx + 1;
+            Current = data.Slice(this.idx, separatorIndex - this.idx);
+            this.idx = separatorIndex + 1;
             return true;
         }
 

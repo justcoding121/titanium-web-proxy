@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Class TunnelConnectTiming | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Class TunnelConnectTiming | Titanium Web Proxy ">
+    
+    <meta name="description" content="Captures CONNECT-phase milestones that dominate cold HTTPS page-load latency: certificate readiness, origin capability discovery (SVCB / HTTP/2 probe), and browser TLS completion. Only allocated when  is enabled.">
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+
+        <div id="search-results">
+          <div class="search-list">Search Results for <span></span></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming">
+
+
+
+  <h1 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming" class="text-break">Class TunnelConnectTiming</h1>
+  <div class="markdown level0 summary"><p>Captures CONNECT-phase milestones that dominate cold HTTPS page-load latency: certificate
+readiness, origin capability discovery (SVCB / HTTP/2 probe), and browser TLS completion.
+Only allocated when <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableRequestTimingCapture">EnableRequestTimingCapture</a> is enabled.</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <div class="inheritance">
+    <h5>Inheritance</h5>
+    <div class="level0"><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object">object</a></div>
+    <div class="level1"><span class="xref">TunnelConnectTiming</span></div>
+  </div>
+  <div class="inheritedMembers">
+    <h5>Inherited Members</h5>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object)">object.Equals(object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object-system-object)">object.Equals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gethashcode">object.GetHashCode()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gettype">object.GetType()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.referenceequals">object.ReferenceEquals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.tostring">object.ToString()</a>
+    </div>
+  </div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.html">Titanium</a>.<a class="xref" href="Titanium.Web.html">Web</a>.<a class="xref" href="Titanium.Web.Proxy.html">Proxy</a>.<a class="xref" href="Titanium.Web.Proxy.Diagnostics.html">Diagnostics</a></h6>
+  <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
+  <h5 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public sealed class TunnelConnectTiming</code></pre>
+  </div>
+  <h3 id="properties">Properties
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_BrowserTlsCompletedAt.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.BrowserTlsCompletedAt%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L51">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_BrowserTlsCompletedAt_" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.BrowserTlsCompletedAt*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_BrowserTlsCompletedAt" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.BrowserTlsCompletedAt">BrowserTlsCompletedAt</h4>
+  <div class="markdown level1 summary"><p>When the browser-facing TLS handshake completed successfully.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DateTime? BrowserTlsCompletedAt { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime">DateTime</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_BrowserTlsDuration.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.BrowserTlsDuration%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L68">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_BrowserTlsDuration_" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.BrowserTlsDuration*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_BrowserTlsDuration" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.BrowserTlsDuration">BrowserTlsDuration</h4>
+  <div class="markdown level1 summary"><p>How long the browser TLS handshake took.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan? BrowserTlsDuration { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_BrowserTlsStartedAt.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.BrowserTlsStartedAt%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L48">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_BrowserTlsStartedAt_" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.BrowserTlsStartedAt*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_BrowserTlsStartedAt" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.BrowserTlsStartedAt">BrowserTlsStartedAt</h4>
+  <div class="markdown level1 summary"><p>When the browser-facing TLS handshake started.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DateTime? BrowserTlsStartedAt { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime">DateTime</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_CertificateDuration.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.CertificateDuration%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L57">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_CertificateDuration_" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.CertificateDuration*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_CertificateDuration" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.CertificateDuration">CertificateDuration</h4>
+  <div class="markdown level1 summary"><p>How long certificate generation/load took, once both marks are present.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan? CertificateDuration { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_CertificateReadyAt.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.CertificateReadyAt%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L21">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_CertificateReadyAt_" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.CertificateReadyAt*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_CertificateReadyAt" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.CertificateReadyAt">CertificateReadyAt</h4>
+  <div class="markdown level1 summary"><p>When the fake leaf certificate became available (cache hit or generation complete).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DateTime? CertificateReadyAt { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime">DateTime</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_Http2CapabilityCacheHit.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2CapabilityCacheHit%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L45">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_Http2CapabilityCacheHit_" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2CapabilityCacheHit*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_Http2CapabilityCacheHit" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2CapabilityCacheHit">Http2CapabilityCacheHit</h4>
+  <div class="markdown level1 summary"><p>Whether the HTTP/2 capability result came from cache (<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a>), a live
+probe (<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">false</a>), or was skipped (<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a>).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool? Http2CapabilityCacheHit { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_Http2ProbeCompletedAt.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2ProbeCompletedAt%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L39">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_Http2ProbeCompletedAt_" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2ProbeCompletedAt*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_Http2ProbeCompletedAt" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2ProbeCompletedAt">Http2ProbeCompletedAt</h4>
+  <div class="markdown level1 summary"><p>When the HTTP/2 origin capability probe (or cache lookup) completed.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DateTime? Http2ProbeCompletedAt { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime">DateTime</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_Http2ProbeDuration.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2ProbeDuration%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L65">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_Http2ProbeDuration_" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2ProbeDuration*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_Http2ProbeDuration" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2ProbeDuration">Http2ProbeDuration</h4>
+  <div class="markdown level1 summary"><p>How long the HTTP/2 capability probe or cache lookup took.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan? Http2ProbeDuration { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_Http2ProbeStartedAt.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2ProbeStartedAt%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L36">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_Http2ProbeStartedAt_" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2ProbeStartedAt*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_Http2ProbeStartedAt" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.Http2ProbeStartedAt">Http2ProbeStartedAt</h4>
+  <div class="markdown level1 summary"><p>When the HTTP/2 origin capability probe (or cache lookup) started.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DateTime? Http2ProbeStartedAt { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime">DateTime</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_OriginCapabilityCompletedAt.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilityCompletedAt%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L27">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_OriginCapabilityCompletedAt_" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilityCompletedAt*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_OriginCapabilityCompletedAt" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilityCompletedAt">OriginCapabilityCompletedAt</h4>
+  <div class="markdown level1 summary"><p>When origin HTTP/3 capability resolution returned a decision for this CONNECT.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DateTime? OriginCapabilityCompletedAt { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime">DateTime</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_OriginCapabilityDuration.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilityDuration%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L61">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_OriginCapabilityDuration_" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilityDuration*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_OriginCapabilityDuration" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilityDuration">OriginCapabilityDuration</h4>
+  <div class="markdown level1 summary"><p>How long origin capability resolution took for this CONNECT.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan? OriginCapabilityDuration { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_OriginCapabilitySource.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilitySource%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L33">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_OriginCapabilitySource_" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilitySource*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_OriginCapabilitySource" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilitySource">OriginCapabilitySource</h4>
+  <div class="markdown level1 summary"><p>How the HTTP/3 capability decision was reached for this CONNECT
+(<code>cache</code>, <code>forced</code>, <code>none</code>, or <code>background</code> when SVCB was queued).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public string? OriginCapabilitySource { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_OriginCapabilityStartedAt.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilityStartedAt%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L24">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_OriginCapabilityStartedAt_" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilityStartedAt*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_OriginCapabilityStartedAt" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.OriginCapabilityStartedAt">OriginCapabilityStartedAt</h4>
+  <div class="markdown level1 summary"><p>When origin HTTP/3 capability resolution started (cache lookup and/or SVCB queue).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DateTime? OriginCapabilityStartedAt { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime">DateTime</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_StartedAt.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.StartedAt%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L18">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_StartedAt_" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.StartedAt*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_StartedAt" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.StartedAt">StartedAt</h4>
+  <div class="markdown level1 summary"><p>When CONNECT decryption / capability negotiation began.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DateTime StartedAt { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime">DateTime</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_TotalDuration.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.TotalDuration%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L54">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_TotalDuration_" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.TotalDuration*"></a>
+  <h4 id="Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming_TotalDuration" data-uid="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.TotalDuration">TotalDuration</h4>
+  <div class="markdown level1 summary"><p>Wall time from CONNECT capability work start to browser TLS completion.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan? TotalDuration { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Diagnostics_TunnelConnectTiming.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Diagnostics/TunnelConnectTiming.cs/#L10" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

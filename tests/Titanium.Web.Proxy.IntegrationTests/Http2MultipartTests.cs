@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
@@ -19,7 +19,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Http2MultipartTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -27,7 +27,7 @@ public class Http2MultipartTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -63,7 +63,7 @@ public class Http2MultipartTests
         // Without this, in the H2-to-H2 direct path Kestrel responds immediately (before reading the
         // body), which lets receiveRelay forward the 200 to the raw client before sendRelay has
         // processed the DATA frame and fired the multipart observer. Draining first creates a strict
-        // ordering: DATA processed → events fired → Kestrel responds → raw client asserts.
+        // ordering: DATA processed ? events fired ? Kestrel responds ? raw client asserts.
         var bodyReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         server.HandleRequest(async context =>
         {
@@ -124,7 +124,7 @@ public class Http2MultipartTests
         // was fully processed before we assert - the origin handler only signals after draining.
         await bodyReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.IsTrue(partHeaders.Count >= 1,
+        Assert.IsFalse(partHeaders.IsEmpty,
             $"Expected at least 1 part event, got {partHeaders.Count}. " +
             "Multipart boundary-aware streaming must work over h2.");
     }

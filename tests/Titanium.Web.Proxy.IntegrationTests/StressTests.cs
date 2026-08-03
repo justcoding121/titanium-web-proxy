@@ -44,5 +44,8 @@ public class StressTests
         }
 
         await Task.WhenAll(tasks);
+        Assert.AreEqual(100, tasks.Count);
+        Assert.IsTrue(tasks.TrueForAll(t => t.IsCompletedSuccessfully),
+            "Every concurrent client request should complete without faulting.");
     }
 }

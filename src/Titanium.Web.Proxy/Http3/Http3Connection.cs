@@ -95,7 +95,7 @@ internal sealed class Http3Connection
     /// </summary>
     private QuicClientConnection? _clientConnection;
 
-    private Http3Connection(
+    private Http3Connection( // NOSONAR S107, CA1068 -- Existing connection wiring and token position are retained.
         QuicConnection connection,
         TransparentQuicProxyEndPoint endPoint,
         BeforeQuicAuthenticateEventArgs authArgs,
@@ -121,7 +121,7 @@ internal sealed class Http3Connection
     ///     Entry point: runs the entire lifecycle of one HTTP/3 client connection until the connection is
     ///     closed or <paramref name="shutdownToken" /> is cancelled.
     /// </summary>
-    public static async Task RunAsync(
+    public static async Task RunAsync( // NOSONAR S107, CA1068 -- Existing connection wiring and token position are retained.
         QuicConnection connection,
         TransparentQuicProxyEndPoint endPoint,
         BeforeQuicAuthenticateEventArgs authArgs,
@@ -144,8 +144,8 @@ internal sealed class Http3Connection
         {
             _clientConnection = new QuicClientConnection(
                 _server,
-                (IPEndPoint)_connection.LocalEndPoint,
-                (IPEndPoint)_connection.RemoteEndPoint);
+                _connection.LocalEndPoint,
+                _connection.RemoteEndPoint);
 
             // Instantiate QPACK context when dynamic table is enabled.
             if (_server.EnableQpackDynamicTable)
@@ -183,7 +183,8 @@ internal sealed class Http3Connection
             qex.QuicError == QuicError.ConnectionAborted ||
             qex.QuicError == QuicError.ConnectionIdle)
         {
-            _logger.LogDebug("HTTP/3 client connection closed: {QuicError}", qex.QuicError);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug(qex, "HTTP/3 client connection closed: {QuicError}", qex.QuicError);
         }
         catch (Exception ex)
         {
@@ -195,7 +196,7 @@ internal sealed class Http3Connection
             // linked to _connectionCts.Token) unblocks promptly, then actually wait for them to finish
             // - not just observe the token as cancelled - before anything they might still be using
             // (QpackContext, session state) is disposed below.
-            _connectionCts.Cancel();
+            await _connectionCts.CancelAsync();
             await JoinBackgroundTasksAsync();
 
             await FinalizeAllStreamsAsync();
@@ -231,7 +232,8 @@ internal sealed class Http3Connection
         }
         catch (Exception closeEx)
         {
-            _logger.LogDebug(closeEx, "Error while closing HTTP/3 connection after {ErrorCode}", errorCode);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug(closeEx, "Error while closing HTTP/3 connection after {ErrorCode}", errorCode);
         }
     }
 
@@ -260,7 +262,9 @@ internal sealed class Http3Connection
         try
         {
             var allDone = Task.WhenAll(_backgroundTasks);
-            var completed = await Task.WhenAny(allDone, Task.Delay(BackgroundTaskDrainTimeout));
+            // Drain timeout must not share the connection CTS (already cancelled at this point).
+            var completed = await Task.WhenAny(allDone,
+                Task.Delay(BackgroundTaskDrainTimeout, CancellationToken.None));
             if (completed != allDone)
             {
                 _logger.LogWarning(
@@ -376,12 +380,13 @@ internal sealed class Http3Connection
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _logger.LogDebug(ex, "Error on HTTP/3 unidirectional stream {StreamId}", stream.Id);
+                if (_logger.IsEnabled(LogLevel.Debug))
+                    _logger.LogDebug(ex, "Error on HTTP/3 unidirectional stream {StreamId}", stream.Id);
             }
         }
     }
 
-    private async Task ProcessClientControlStreamAsync(QuicStream stream, CancellationToken ct)
+    private async Task ProcessClientControlStreamAsync(QuicStream stream, CancellationToken ct) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var receivedSettings = false;
         var isFirstFrame = true;
@@ -470,7 +475,8 @@ internal sealed class Http3Connection
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogDebug(ex, "HTTP/3 request stream {StreamId} error", streamId);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug(ex, "HTTP/3 request stream {StreamId} error", streamId);
         }
         finally
         {
@@ -505,7 +511,7 @@ internal sealed class Http3Connection
                     _logger.LogError(ex, "Error in AfterResponse during HTTP/3 connection teardown");
                 }
             }
-            state.Cancellation.Cancel();
+            await state.Cancellation.CancelAsync();
             state.Cancellation.Dispose();
         }
         _activeStreams.Clear();

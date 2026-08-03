@@ -33,7 +33,7 @@ public class ProxyResourceLimitsTests
     {
         // Like MaxOpenHeaderBlockFrames, this is always-enforced: it is the wall-clock half of the
         // CONTINUATION-flood guard, so it must never be representable as "disabled".
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => ProxyResourceLimits.Create(
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => ProxyResourceLimits.Create(
             maxHeaderLineBytes: 8192,
             maxHeaderCount: 64,
             maxHeaderAggregateBytes: 32768,
@@ -111,7 +111,7 @@ public class ProxyResourceLimitsTests
     [DataRow(-1L)]
     public void Create_NonPositiveMaxHeaderLineBytes_Throws(long value)
     {
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => ProxyResourceLimits.Create(
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => ProxyResourceLimits.Create(
             maxHeaderLineBytes: value,
             maxHeaderCount: 64,
             maxHeaderAggregateBytes: 32768,
@@ -133,7 +133,7 @@ public class ProxyResourceLimitsTests
     {
         // This is the always-enforced HTTP/2 concurrency cap: unlike the nullable budgets, it must
         // never be representable as "disabled", since that would let a peer open unlimited streams.
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => ProxyResourceLimits.Create(
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => ProxyResourceLimits.Create(
             maxHeaderLineBytes: 8192,
             maxHeaderCount: 64,
             maxHeaderAggregateBytes: 32768,
@@ -156,7 +156,7 @@ public class ProxyResourceLimitsTests
         // This is exactly the "0 spins forever holding the pool lock" defect the plan requires to
         // become unrepresentable: disabling pooling is ConnectionPoolingEnabled=false, never a
         // zero-valued cache size.
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => ProxyResourceLimits.Create(
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => ProxyResourceLimits.Create(
             maxHeaderLineBytes: 8192,
             maxHeaderCount: 64,
             maxHeaderAggregateBytes: 32768,
@@ -176,7 +176,7 @@ public class ProxyResourceLimitsTests
     [TestMethod]
     public void Create_NegativeMaxDecompressionRatio_Throws()
     {
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => ProxyResourceLimits.Create(
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => ProxyResourceLimits.Create(
             maxHeaderLineBytes: 8192,
             maxHeaderCount: 64,
             maxHeaderAggregateBytes: 32768,

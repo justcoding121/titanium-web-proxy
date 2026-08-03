@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
@@ -21,7 +21,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class HttpOriginVersionNormalizationTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -29,7 +29,7 @@ public class HttpOriginVersionNormalizationTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -150,7 +150,7 @@ public class HttpOriginVersionNormalizationTests
         server.HandleTcpRequest(async context =>
         {
             var requestMsg = string.Empty;
-            Request request;
+            Request? request;
             while ((request = HttpMessageParsing.ParseRequest(requestMsg, false)) == null)
             {
                 var result = await context.Transport.Input.ReadAsync();
@@ -187,7 +187,7 @@ public class HttpOriginVersionNormalizationTests
         var headerBytes = encoding.GetBytes(request.HeaderText);
 
         var stream = client.GetStream();
-        await stream.WriteAsync(headerBytes, 0, headerBytes.Length);
+        await stream.WriteAsync(headerBytes);
 
         // No Content-Length was declared on this response (by either the origin or the proxy, since the client
         // itself is also HTTP/1.0 under the default PreserveClientVersion policy), so the only correct way to
@@ -195,7 +195,7 @@ public class HttpOriginVersionNormalizationTests
         var received = new MemoryStream();
         var buffer = new byte[4096];
         int read;
-        while ((read = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0) received.Write(buffer, 0, read);
+        while ((read = await stream.ReadAsync(buffer)) > 0) received.Write(buffer, 0, read);
 
         var rawResponse = encoding.GetString(received.ToArray());
         var headerEnd = rawResponse.IndexOf("\r\n\r\n", StringComparison.Ordinal);
@@ -214,8 +214,8 @@ public class HttpOriginVersionNormalizationTests
     ///     response. <paramref name="connectionHeaderValue" /> is included as an explicit "Connection" request
     ///     header when non-null.
     /// </summary>
-    private static async Task<Response> SendRawRequestAsync(int proxyPort, Version version,
-        string connectionHeaderValue)
+    private static async Task<Response?> SendRawRequestAsync(int proxyPort, Version version,
+        string? connectionHeaderValue)
     {
         using var client = new TcpClient("localhost", proxyPort)
         {
@@ -231,11 +231,11 @@ public class HttpOriginVersionNormalizationTests
         var headerBytes = encoding.GetBytes(request.HeaderText);
 
         var stream = client.GetStream();
-        await stream.WriteAsync(headerBytes, 0, headerBytes.Length);
+        await stream.WriteAsync(headerBytes);
 
         var buffer = new byte[4096];
         var responseMsg = string.Empty;
-        Response response;
+        Response? response;
         var deadline = DateTime.UtcNow.AddMilliseconds(SendReceiveTimeoutMs * 5);
 
         while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)
@@ -245,7 +245,7 @@ public class HttpOriginVersionNormalizationTests
             int read;
             try
             {
-                read = await stream.ReadAsync(buffer, 0, buffer.Length);
+                read = await stream.ReadAsync(buffer);
             }
             catch (IOException)
             {

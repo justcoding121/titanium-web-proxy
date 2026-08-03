@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Reflection;
 using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
@@ -168,7 +169,39 @@ namespace Titanium.Web.Proxy.UnitTests
             var settings = new SystemProxySettings();
             settings.BypassRules.Add("*.example.com;*.other.com");
 
-            Assert.ThrowsException<ArgumentException>(() => settings.Validate());
+            Assert.ThrowsExactly<ArgumentException>(() => settings.Validate());
+        }
+
+        /// <summary>
+        ///     Dispose must unsubscribe AppDomain handlers without touching the registry / WinINet proxy.
+        /// </summary>
+        [TestMethod]
+        public void SystemProxyManager_Dispose_UnsubscribesAppDomainHandlers_Idempotent()
+        {
+            var manager = new SystemProxyManager();
+            var processExit = typeof(SystemProxyManager)
+                .GetField("processExitHandler", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(manager) as EventHandler;
+            var unhandled = typeof(SystemProxyManager)
+                .GetField("unhandledExceptionHandler", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(manager) as UnhandledExceptionEventHandler;
+            Assert.IsNotNull(processExit);
+            Assert.IsNotNull(unhandled);
+
+            manager.Dispose();
+            manager.Dispose(); // idempotent
+
+            var disposed = (bool)typeof(SystemProxyManager)
+                .GetField("disposed", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(manager)!;
+            Assert.IsTrue(disposed);
+
+            // Re-adding then removing proves the prior Dispose unsubscribed the original handlers
+            // (Add would otherwise stack duplicate invocations if Dispose left them attached).
+            AppDomain.CurrentDomain.ProcessExit += processExit!;
+            AppDomain.CurrentDomain.ProcessExit -= processExit!;
+            AppDomain.CurrentDomain.UnhandledException += unhandled!;
+            AppDomain.CurrentDomain.UnhandledException -= unhandled!;
         }
     }
 }

@@ -8,7 +8,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Setup;
 
 public class TestProxyServer : IDisposable
 {
-    public TestProxyServer(bool isReverseProxy, ProxyServer upStreamProxy = null)
+    public TestProxyServer(bool isReverseProxy, ProxyServer? upStreamProxy = null)
     {
         ProxyServer = new ProxyServer(false, false, false);
         // Keep the manager's configured name aligned with the shared test root so any code path
@@ -49,5 +49,6 @@ public class TestProxyServer : IDisposable
     {
         ProxyServer.Stop();
         ProxyServer.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

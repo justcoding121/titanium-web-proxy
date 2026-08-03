@@ -31,6 +31,7 @@ public class Rfc8441H11ToH2TunnelTests
     private static TestServer sharedServer = null!;
     private static readonly Encoding Ascii = Encoding.ASCII;
     private const string SampleWsKey = "dGhlIHNhbXBsZSBub25jZQ==";
+    private static readonly string[] separator = new[] { "\r\n" };
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -38,7 +39,7 @@ public class Rfc8441H11ToH2TunnelTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -428,7 +429,7 @@ public class Rfc8441H11ToH2TunnelTests
             if (idx < 0) continue;
 
             var headerSection = text.Substring(0, idx);
-            var lines = headerSection.Split(new[] { "\r\n" }, StringSplitOptions.None);
+            var lines = headerSection.Split(separator, StringSplitOptions.None);
             var statusLine = lines[0];
             var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             for (var i = 1; i < lines.Length; i++)
@@ -517,6 +518,8 @@ public class Rfc8441H11ToH2TunnelTests
         public int Http2ConnectionsAccepted { get; private set; }
         public int Http11ConnectionsAccepted { get; private set; }
 
+        private static readonly string[] separator = new[] { "\r\n" };
+
         private async Task AcceptLoopAsync()
         {
             while (!disposed)
@@ -584,7 +587,7 @@ public class Rfc8441H11ToH2TunnelTests
         private static async Task HandleHttp11WebSocketAsync(Stream stream)
         {
             var upgradeRequest = await ReadUntilDoubleCrLfAsync(stream);
-            var keyLine = upgradeRequest.Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries)
+            var keyLine = upgradeRequest.Split(separator, StringSplitOptions.RemoveEmptyEntries)
                 .Single(line => line.StartsWith("Sec-WebSocket-Key:", StringComparison.OrdinalIgnoreCase));
             var wsKey = keyLine.Substring(keyLine.IndexOf(':') + 1).Trim();
             var wsAccept = Convert.ToBase64String(SHA1.HashData(

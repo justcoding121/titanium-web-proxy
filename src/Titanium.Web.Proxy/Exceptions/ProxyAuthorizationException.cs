@@ -34,7 +34,7 @@ public class ProxyAuthorizationException : ProxyException
         Headers = Redact(headers);
     }
 
-    private static IEnumerable<HttpHeader> Redact(IEnumerable<HttpHeader> headers) =>
+    private static List<HttpHeader> Redact(IEnumerable<HttpHeader> headers) =>
         headers.Select(h =>
             KnownHeaders.Authorization.Equals(h.Name) || KnownHeaders.ProxyAuthorization.Equals(h.Name)
                 ? new HttpHeader(h.Name, RedactedValue)

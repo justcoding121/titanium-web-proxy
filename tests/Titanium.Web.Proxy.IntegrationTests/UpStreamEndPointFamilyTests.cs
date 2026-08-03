@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -12,7 +12,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class UpStreamEndPointFamilyTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -20,7 +20,7 @@ public class UpStreamEndPointFamilyTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -35,7 +35,7 @@ public class UpStreamEndPointFamilyTests
 
         var proxy = testSuite.GetProxy();
         proxy.UpStreamEndPointIPv4 = new IPEndPoint(IPAddress.Loopback, 0);
-        // Intentionally set a wrong-family legacy endpoint — must be ignored for IPv4 when IPv4-specific is set,
+        // Intentionally set a wrong-family legacy endpoint � must be ignored for IPv4 when IPv4-specific is set,
         // and must not break IPv4 when only used as legacy... here we only set IPv4-specific.
 
         var client = testSuite.GetClient(proxy);

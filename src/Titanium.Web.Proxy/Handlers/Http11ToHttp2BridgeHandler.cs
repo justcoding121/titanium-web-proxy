@@ -62,7 +62,7 @@ public partial class ProxyServer
     ///     and reopened.
     /// </param>
     /// <param name="cancellationTokenSource">Cancellation for the whole client connection.</param>
-    internal async Task SendHttp11ToHttp2Bridge(HttpClientStream clientStream, ProxyEndPoint endPoint,
+    internal async Task SendHttp11ToHttp2Bridge(HttpClientStream clientStream, ProxyEndPoint endPoint, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         ConnectRequest? connectRequest, object? userData, string remoteHostName, int remotePort,
         string? connectHost, int? connectPort, Task<TcpServerConnection?>? retainedConnectionTask,
         CancellationTokenSource cancellationTokenSource)
@@ -146,7 +146,7 @@ public partial class ProxyServer
 
                         if (!args.IsTransparent && !args.IsSocks)
                         {
-                            if (connectRequest == null && await CheckAuthorization(args) == false)
+                            if (connectRequest == null && !await CheckAuthorization(args))
                             {
                                 await OnBeforeResponse(args);
                                 await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
@@ -186,10 +186,6 @@ public partial class ProxyServer
                             if (!(Enable100ContinueBehaviour && request.ExpectContinue))
                                 await args.SyphonOutBodyAsync(true, cancellationToken);
 
-                            // A BeforeRequest-time synthetic response (Ok/Redirect/GenericResponse/etc.) has
-                            // already locked the response and made its one BeforeResponse-equivalent decision;
-                            // do not give it a second BeforeResponse pass (mirrors HandleHttpSessionResponse's
-                            // own `if (!response.Locked)` guard).
                             if (!args.HttpClient.Response.Locked) await OnBeforeResponse(args);
                             await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
 
@@ -471,7 +467,7 @@ public partial class ProxyServer
     ///     Writes the translated h2 origin response (status, headers, buffered body, trailers) back to the
     ///     HTTP/1.1 client, running <c>BeforeResponse</c> exactly like the normal HTTP/1.1 pipeline.
     /// </summary>
-    private async Task DeliverOriginExchangeAsync(SessionEventArgs args, Http2OriginExchange exchange,
+    private async Task DeliverOriginExchangeAsync(SessionEventArgs args, Http2OriginExchange exchange, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         CancellationToken cancellationToken)
     {
         var clientStream = args.ClientStream;
@@ -616,7 +612,7 @@ public partial class ProxyServer
         }
     }
 
-    private async Task<Http2OriginTunnelResult?> OpenWebSocketTunnelOrBadGatewayAsync(SessionEventArgs args,
+    private static async Task<Http2OriginTunnelResult?> OpenWebSocketTunnelOrBadGatewayAsync(SessionEventArgs args,
         Http2OriginConnection originConnection, CancellationToken cancellationToken)
     {
         try

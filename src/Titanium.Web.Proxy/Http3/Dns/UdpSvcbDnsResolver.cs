@@ -121,7 +121,7 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
             return Task.FromResult<SvcbResult?>(null);
 
         // Coalesce: reuse in-flight shared task or start a new one.
-        var sharedTask = _inflight.GetOrAdd(key, _ => RunSharedQueryAsync(key, host, port));
+        var sharedTask = _inflight.GetOrAdd(key, cacheKey => RunSharedQueryAsync(cacheKey, host, port));
 
         // Per-waiter cancellation: WaitAsync throws OperationCanceledException to THIS caller but
         // leaves the shared task running so other waiters are unaffected.
@@ -270,14 +270,14 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
         // Without this, any host on the network path could race a spoofed UDP response to this
         // ephemeral port (classic off-path DNS cache-poisoning) and Send/ReceiveTo would happily accept
         // it, since plain SendToAsync/ReceiveAsync do not validate the peer address at all.
-        socket.Connect(_dnsServerEndPoint);
+        await socket.ConnectAsync(_dnsServerEndPoint, ct);
 
         await socket.SendAsync(queryPacket, SocketFlags.None, ct);
 
         var responseBuffer = new byte[4096];
         var received = await socket.ReceiveAsync(responseBuffer.AsMemory(), SocketFlags.None, ct);
 
-        var parsed = ParseDnsResponseCore(responseBuffer.AsSpan(0, received), queryId, host, port);
+        var parsed = ParseDnsResponseCore(responseBuffer.AsSpan(0, received), queryId, port);
 
         if (parsed.IsTransient) return (null, isTransient: true);
         if (parsed.BestRecord != null) return (parsed.BestRecord, isTransient: false);
@@ -338,17 +338,23 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     /// </summary>
     internal static SvcbResult? ParseDnsResponseInternal(
         ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, string host, int queriedPort)
-        => ParseDnsResponseCore(response, expectedId, host, queriedPort).BestRecord;
+    {
+        _ = host; // Retained for compatibility with the test-hook contract.
+        return ParseDnsResponseCore(response, expectedId, queriedPort).BestRecord;
+    }
 
     /// <summary>
     ///     Public test hook — returns whether a raw DNS response is classified as transient.
     /// </summary>
     internal static bool ParseDnsResponseIsTransientInternal(
         ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, string host, int queriedPort)
-        => ParseDnsResponseCore(response, expectedId, host, queriedPort).IsTransient;
+    {
+        _ = host; // Retained for compatibility with the test-hook contract.
+        return ParseDnsResponseCore(response, expectedId, queriedPort).IsTransient;
+    }
 
-    private static DnsParseResult ParseDnsResponseCore(
-        ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, string host, int queriedPort)
+    private static DnsParseResult ParseDnsResponseCore( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+        ReadOnlySpan<byte> response, ReadOnlySpan<byte> expectedId, int queriedPort)
     {
         if (response.Length < 12) return DnsParseResult.Transient;
 
@@ -498,7 +504,7 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     ///     Returns an empty string for <c>.</c> (root label = owner name).
     ///     Returns <see langword="null" /> on malformed or truncated input.
     /// </summary>
-    private static string? ReadDnsName(ReadOnlySpan<byte> rdata, ref int offset)
+    private static string? ReadDnsName(ReadOnlySpan<byte> rdata, ref int offset) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var sb = new StringBuilder();
         int iterations = 0;

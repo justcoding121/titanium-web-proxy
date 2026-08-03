@@ -21,7 +21,7 @@ internal class TcpServerConnection : IDisposable
 
     private int firstUseClaimed;
 
-    internal TcpServerConnection(ProxyServer proxyServer, Socket tcpSocket, HttpServerStream stream,
+    internal TcpServerConnection(ProxyServer proxyServer, Socket tcpSocket, HttpServerStream stream, // NOSONAR S107 -- Constructor captures the established connection state without changing internal wiring.
         string hostName, int port, bool isHttps, SslApplicationProtocol negotiatedApplicationProtocol,
         Version version, IExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint, string cacheKey)
     {
@@ -75,7 +75,7 @@ internal class TcpServerConnection : IDisposable
     /// <summary>
     ///     Http version
     /// </summary>
-    internal Version Version { get; set; } = HttpHeader.VersionUnknown;
+    internal Version Version { get; set; }
 
     /// <summary>
     ///     The TcpClient.
@@ -155,32 +155,41 @@ internal class TcpServerConnection : IDisposable
 
     public void Dispose()
     {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
         if (disposed) return;
 
-        disposed = true;
-
-        // No finalizer: sockets/streams already have their own finalization, and scheduling
-        // Task.Run / logging from a finalizer thread is unsafe.
-        Task.Run(async () =>
+        if (disposing)
         {
-            // delay calling tcp connection close()
-            // so that server have enough time to call close first.
-            // This way we can push tcp Time_Wait to server side when possible.
-            await Task.Delay(1000);
-
-            ProxyServer.UpdateServerConnectionCount(false);
-
-            Stream.Dispose();
-
-            try
+            // No finalizer: sockets/streams already have their own finalization, and scheduling
+            // Task.Run / logging from a finalizer thread is unsafe.
+            Task.Run(async () =>
             {
-                TcpSocket.Close();
-            }
-            catch (Exception ex)
-            {
-                Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
-                    "Failed to close a server socket during disposal.", ex);
-            }
-        });
+                // delay calling tcp connection close()
+                // so that server have enough time to call close first.
+                // This way we can push tcp Time_Wait to server side when possible.
+                await Task.Delay(1000);
+
+                ProxyServer.UpdateServerConnectionCount(false);
+
+                Stream.Dispose();
+
+                try
+                {
+                    TcpSocket.Close();
+                }
+                catch (Exception ex)
+                {
+                    Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
+                        "Failed to close a server socket during disposal.", ex);
+                }
+            });
+        }
+
+        disposed = true;
     }
 }

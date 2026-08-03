@@ -23,8 +23,7 @@ public class QpackContextTests
         using var cts = new CancellationTokenSource(500);
         // InsertCount is already 1; require 1 — should return without waiting.
         await ctx.AwaitInsertCountAsync(1, cts.Token);
-
-        Assert.IsTrue(true, "Should complete without timeout.");
+        Assert.AreEqual(1UL, ctx.InboundDecoderTable.InsertCount);
     }
 
     [TestMethod]
@@ -47,7 +46,6 @@ public class QpackContextTests
         ctx.NotifyInsert();
 
         await waitTask; // should complete promptly after notify
-        Assert.IsTrue(true, "AwaitInsertCountAsync completed after NotifyInsert.");
     }
 
     [TestMethod]
@@ -58,7 +56,7 @@ public class QpackContextTests
 
         using var cts = new CancellationTokenSource(100); // 100 ms timeout
 
-        await Assert.ThrowsExceptionAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(async () =>
         {
             await ctx.AwaitInsertCountAsync(5, cts.Token);
         });
@@ -71,7 +69,7 @@ public class QpackContextTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsExceptionAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(async () =>
         {
             await ctx.AwaitInsertCountAsync(1, cts.Token);
         });
@@ -88,14 +86,11 @@ public class QpackContextTests
         // After DisposeAsync, the channel writer should be completed and ReadAllAsync
         // should finish without hanging.
         var reader = ctx.DecoderAckChannel.Reader;
-        var completed = false;
         await foreach (var _ in reader.ReadAllAsync())
         {
             // drain remaining items
         }
-        completed = true;
-
-        Assert.IsTrue(completed);
+        Assert.IsTrue(reader.Completion.IsCompleted);
     }
 
     [TestMethod]
@@ -106,7 +101,8 @@ public class QpackContextTests
         for (int i = 0; i < 1100; i++)
             ctx.EnqueueSectionAck(i);
 
-        Assert.IsTrue(true, "No exception should be thrown when channel is full (DropNewest mode).");
+        Assert.IsTrue(ctx.DecoderAckChannel.Reader.TryRead(out _),
+            "The channel should retain acknowledgments while dropping overflow writes.");
     }
 
     [TestMethod]

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Enum ProxyProfile | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Enum ProxyProfile | Titanium Web Proxy ">
+    
+    <meta name="description" content="The three shipped profiles, per the plan&#39;s &amp;quot;Rollout, profiles and documentation&amp;quot; section. Selecting a profile via  applies its  atomically to resource limits, policy modes, TLS protocols, private-network blocking, admission caps, and deadline-second properties, so a caller can never observe a half-applied profile.">
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+
+        <div id="search-results">
+          <div class="search-list">Search Results for <span></span></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Options.ProxyProfile">
+
+
+
+
+  <h1 id="Titanium_Web_Proxy_Options_ProxyProfile" data-uid="Titanium.Web.Proxy.Options.ProxyProfile" class="text-break">Enum ProxyProfile</h1>
+  <div class="markdown level0 summary"><p>The three shipped profiles, per the plan's &quot;Rollout, profiles and documentation&quot; section.
+Selecting a profile via <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_Profile">Profile</a> applies its
+<a class="xref" href="Titanium.Web.Proxy.Options.ProxyProfileSettings.html">ProxyProfileSettings</a> atomically to resource limits, policy modes, TLS protocols,
+private-network blocking, admission caps, and deadline-second properties, so a caller can never
+observe a half-applied profile.</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.html">Titanium</a>.<a class="xref" href="Titanium.Web.html">Web</a>.<a class="xref" href="Titanium.Web.Proxy.html">Proxy</a>.<a class="xref" href="Titanium.Web.Proxy.Options.html">Options</a></h6>
+  <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
+  <h5 id="Titanium_Web_Proxy_Options_ProxyProfile_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public enum ProxyProfile</code></pre>
+  </div>
+  <h3 id="fields">Fields
+</h3>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    <thead>
+    </thead></thead><tbody>
+      <tr>
+        <td id="Titanium_Web_Proxy_Options_ProxyProfile_Balanced">Balanced</td>
+        <td><p>The default. Lenient toward user traffic - it does not block outbound destinations, does
+not add rejections beyond the always-enforced framing family, and keeps today's shipped
+limit values - but strict wherever leniency would let a peer exhaust the proxy: resource
+families are enforced rather than observed, and TLS is restricted to 1.2/1.3.</p>
+</td>
+      </tr>
+      <tr>
+        <td id="Titanium_Web_Proxy_Options_ProxyProfile_LegacyCompatible">LegacyCompatible</td>
+        <td><p>Opt-in for 4.x migrators. Permits legacy TLS 1.0/1.1 in addition to TLS 1.2/1.3 (SSL 3.0 is
+not offered on modern .NET) and relaxes the non-memory families to
+<a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html#Titanium_Web_Proxy_Options_PolicyMode_Observe">Observe</a>. The memory-bounding families
+(<a class="xref" href="Titanium.Web.Proxy.Options.PolicyFamily.html#Titanium_Web_Proxy_Options_PolicyFamily_BodyBudget">BodyBudget</a>, <a class="xref" href="Titanium.Web.Proxy.Options.PolicyFamily.html#Titanium_Web_Proxy_Options_PolicyFamily_DecompressionRatio">DecompressionRatio</a>)
+stay enforced even here, since Observe cannot protect against exhaustion. Framing remains
+enforce-only, as it always is.</p>
+</td>
+      </tr>
+      <tr>
+        <td id="Titanium_Web_Proxy_Options_ProxyProfile_PublicFacing">PublicFacing</td>
+        <td><p>Opt-in for deployments that accept requests from untrusted clients.
+<a class="xref" href="Titanium.Web.Proxy.Options.ProxyProfile.html#Titanium_Web_Proxy_Options_ProxyProfile_Balanced">Balanced</a> plus outbound destination blocking for private, link-local and
+metadata addresses (<a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_BlockPrivateNetworkDestinations">BlockPrivateNetworkDestinations</a>) and tighter
+admission and deadline values (a finite global connection cap and bounded client-header,
+response-header, idle and total-request deadlines, none of which are bounded by default
+under <a class="xref" href="Titanium.Web.Proxy.Options.ProxyProfile.html#Titanium_Web_Proxy_Options_ProxyProfile_Balanced">Balanced</a>). Header-name hygiene (control-character/CRLF rejection) is
+already unconditionally enforced under every profile - see the framing family's
+always-enforce rule - so this profile does not add a separate header-validation mode.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyProfile.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyProfile%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyProfile.cs/#L10" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

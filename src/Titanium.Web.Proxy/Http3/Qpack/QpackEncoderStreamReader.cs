@@ -1,6 +1,5 @@
-#pragma warning disable CA1416
 using System;
-using System.Net.Quic;
+using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -33,7 +32,7 @@ internal static class QpackEncoderStreamReader
     ///         dynamic-table insertion silently.
     ///     </para>
     /// </summary>
-    internal static async Task ProcessAsync(QuicStream stream, QpackContext context, CancellationToken ct)
+    internal static async Task ProcessAsync(Stream stream, QpackContext context, CancellationToken ct)
     {
         var readBuffer = new byte[4096];
         var pending = Array.Empty<byte>();
@@ -80,8 +79,9 @@ internal static class QpackEncoderStreamReader
     ///     silent no-op (matching the pre-existing, deliberately lenient behavior here) rather than
     ///     torn down as a connection error, since the entry may simply have been evicted by the time
     ///     this reader catches up - only a truncated instruction at end-of-stream is fatal.
+    ///     Exposed internally for unit tests that feed crafted instruction bytes without a live QUIC stream.
     /// </summary>
-    private static bool TryParseOneInstruction(ReadOnlySpan<byte> data, QpackContext context, out int consumed)
+    internal static bool TryParseOneInstruction(ReadOnlySpan<byte> data, QpackContext context, out int consumed) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         consumed = 0;
         if (data.IsEmpty) return false;
@@ -183,4 +183,3 @@ internal static class QpackEncoderStreamReader
         return true;
     }
 }
-#pragma warning restore CA1416

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class SocksAuthenticationTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -24,7 +24,7 @@ public class SocksAuthenticationTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -38,8 +38,8 @@ public class SocksAuthenticationTests
         var server = suite.GetServer();
         server.HandleRequest(ctx => ctx.Response.WriteAsync("ok"));
 
-        IPEndPoint capturedClient = null;
-        SocksProxyEndPoint capturedEndpoint = null;
+        IPEndPoint? capturedClient = null;
+        SocksProxyEndPoint? capturedEndpoint = null;
 
         using var proxyServer = BuildSocksProxy(endpoint =>
         {
@@ -231,7 +231,7 @@ public class SocksAuthenticationTests
         await tcpClient.ConnectAsync(IPAddress.Loopback, socksPort);
         var stream = tcpClient.GetStream();
 
-        // SOCKS4 CONNECT — should be closed without a grant when auth is required.
+        // SOCKS4 CONNECT ? should be closed without a grant when auth is required.
         var request = new byte[] { 0x04, 0x01, 0x00, 0x50, 127, 0, 0, 1, 0x00 };
         await stream.WriteAsync(request);
 
@@ -239,7 +239,7 @@ public class SocksAuthenticationTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         try
         {
-            var read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
+            var read = await stream.ReadAsync(buffer, cts.Token);
             if (read > 0)
                 Assert.AreNotEqual(90, buffer[1], "SOCKS4 must not be granted when auth is configured.");
         }
@@ -312,7 +312,7 @@ public class SocksAuthenticationTests
         Assert.IsTrue(response.StartsWith("HTTP/1.1 200", StringComparison.Ordinal), response);
     }
 
-    private static ProxyServer BuildSocksProxy(Action<SocksProxyEndPoint> configure = null)
+    private static ProxyServer BuildSocksProxy(Action<SocksProxyEndPoint>? configure = null)
     {
         var proxyServer = new ProxyServer(false, false, false);
         proxyServer.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
@@ -410,7 +410,7 @@ public class SocksAuthenticationTests
         var offset = 0;
         while (remaining > 0)
         {
-            var read = await stream.ReadAsync(buffer, offset, remaining, cts.Token);
+            var read = await stream.ReadAsync(buffer.AsMemory(offset, remaining), cts.Token);
             if (read == 0) throw new IOException("Connection closed early.");
             offset += read;
             remaining -= read;
@@ -425,7 +425,7 @@ public class SocksAuthenticationTests
         try
         {
             int read;
-            while ((read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token)) > 0)
+            while ((read = await stream.ReadAsync(buffer, cts.Token)) > 0)
                 ms.Write(buffer, 0, read);
         }
         catch (OperationCanceledException)

@@ -66,7 +66,7 @@ public class ProxyTimeoutOptionsTests
     [TestMethod]
     public void Create_ZeroClientHeaderTimeout_Throws()
     {
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => ProxyTimeoutOptions.Create(
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => ProxyTimeoutOptions.Create(
             clientHeaderTimeout: TimeSpan.Zero,
             connectTimeout: TimeSpan.FromSeconds(10),
             responseHeaderTimeout: TimeSpan.FromSeconds(15),
@@ -81,7 +81,7 @@ public class ProxyTimeoutOptionsTests
     [TestMethod]
     public void Create_NegativeConnectTimeout_Throws()
     {
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => ProxyTimeoutOptions.Create(
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => ProxyTimeoutOptions.Create(
             clientHeaderTimeout: TimeSpan.FromSeconds(5),
             connectTimeout: TimeSpan.FromSeconds(-1),
             responseHeaderTimeout: TimeSpan.FromSeconds(15),
@@ -98,7 +98,7 @@ public class ProxyTimeoutOptionsTests
     {
         // Present-but-zero must still be rejected: null is the only spelling of "no deadline",
         // so a caller cannot accidentally construct a callback timeout of zero duration.
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => ProxyTimeoutOptions.Create(
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => ProxyTimeoutOptions.Create(
             clientHeaderTimeout: TimeSpan.FromSeconds(5),
             connectTimeout: TimeSpan.FromSeconds(10),
             responseHeaderTimeout: TimeSpan.FromSeconds(15),

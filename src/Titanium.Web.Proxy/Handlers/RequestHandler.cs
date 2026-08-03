@@ -35,7 +35,7 @@ public partial class ProxyServer
     /// <param name="connectArgs">The Connect request if this is a HTTPS request from explicit endpoint.</param>
     /// <param name="prefetchConnectionTask">Prefetched server connection for current client using Connect/SNI headers.</param>
     /// <param name="isHttps">Is HTTPS</param>
-    private async Task HandleHttpSessionRequest(ProxyEndPoint endPoint, HttpClientStream clientStream,
+    private async Task HandleHttpSessionRequest(ProxyEndPoint endPoint, HttpClientStream clientStream, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         CancellationTokenSource cancellationTokenSource, TunnelConnectSessionEventArgs? connectArgs = null,
         Task<TcpServerConnection?>? prefetchConnectionTask = null, bool isHttps = false)
     {
@@ -95,7 +95,7 @@ public partial class ProxyServer
                     }
                 }
 
-                var request = args!.HttpClient.Request;
+                var request = args.HttpClient.Request;
                 if (isHttps) request.IsHttps = true;
 
                 try
@@ -190,7 +190,7 @@ public partial class ProxyServer
                             if (!args.IsTransparent && !args.IsSocks)
                             {
                                 // proxy authorization check
-                                if (connectRequest == null && await CheckAuthorization(args) == false)
+                                if (connectRequest == null && !await CheckAuthorization(args))
                                 {
                                     await OnBeforeResponse(args);
 
@@ -292,7 +292,7 @@ public partial class ProxyServer
                                 var socket = connection.TcpSocket;
                                 var part1 = socket.Poll(1000, SelectMode.SelectRead);
                                 var part2 = socket.Available == 0;
-                                if (part1 & part2)
+                                if (part1 && part2)
                                 {
                                     //connection is closed
                                     await TcpConnectionFactory.Release(connection, true);
@@ -304,7 +304,7 @@ public partial class ProxyServer
                             // only gets hit when connection pool is disabled.
                             // or when prefetch task has a unexpectedly different connection.
                             if (connection != null
-                                && await TcpConnectionFactory.GetConnectionCacheKey(this, args,
+                                && await Network.Tcp.TcpConnectionFactory.GetConnectionCacheKey(this, args,
                                     clientStream.Connection.NegotiatedApplicationProtocol)
                                 != connection.CacheKey)
                             {
@@ -415,18 +415,17 @@ public partial class ProxyServer
         }
     }
 
-    private async Task<RetryResult> HandleHttpSessionRequest(SessionEventArgs args,
+    private async Task<RetryResult> HandleHttpSessionRequest(SessionEventArgs args, // NOSONAR S3776, CA1068 -- Protocol flow and established token position are retained.
         TcpServerConnection? serverConnection, SslApplicationProtocol sslApplicationProtocol,
         CancellationToken cancellationToken, CancellationTokenSource cancellationTokenSource)
     {
-        args.HttpClient.Request.Locked = true;
-
         // do not cache server connections for WebSockets
         var noCache = args.HttpClient.Request.UpgradeToWebSocket;
 
         if (noCache) serverConnection = null;
 
         // H1.1 client → H3 origin bridge: resolve route from cache, warming SVCB in the background.
+        // Body must be buffered before Locked=true — GetRequestBody throws once the request is locked.
         if (!args.HttpClient.Request.UpgradeToWebSocket)
         {
             var reqHost = args.HttpClient.Request.RequestUri?.Host ?? string.Empty;
@@ -438,6 +437,14 @@ public partial class ProxyServer
 
             if (h3Route.UseH3)
             {
+                // Buffer the client request body before leaving the H1 pipeline. Without this, the
+                // body remains unread on the client stream (corrupting keep-alive reuse) and
+                // Http3OriginBridge forwards an empty Body to the H3 origin.
+                if (args.HttpClient.Request.HasBody && !args.HttpClient.Request.IsBodyRead)
+                    await args.GetRequestBody(cancellationToken);
+
+                args.HttpClient.Request.Locked = true;
+
                 await Http3.Http3OriginBridge.ForwardAsync(args, this, h3Route, logger, cancellationToken);
 
                 // Http3OriginBridge only fetches/buffers the origin response into args.HttpClient.Response -
@@ -512,6 +519,8 @@ public partial class ProxyServer
             }
         }
 
+        args.HttpClient.Request.Locked = true;
+
         // a connection generator task with captured parameters via closure.
         var generator = () =>
             TcpConnectionFactory.GetServerConnection(this,
@@ -539,7 +548,7 @@ public partial class ProxyServer
             {
                 // connectRequest can be null for SOCKS connection
                 if (args.HttpClient.ConnectRequest != null)
-                    args.HttpClient.ConnectRequest!.TunnelType = TunnelType.Websocket;
+                    args.HttpClient.ConnectRequest.TunnelType = TunnelType.Websocket;
 
                 // if upgrading to websocket then relay the request without reading the contents
                 await HandleWebSocketUpgrade(args, args.ClientStream, connection, cancellationTokenSource,
@@ -622,7 +631,7 @@ public partial class ProxyServer
     /// <summary>
     ///     Prepare the request headers so that we can avoid encodings not parseable by this proxy
     /// </summary>
-    private void PrepareRequestHeaders(HeaderCollection requestHeaders)
+    private static void PrepareRequestHeaders(HeaderCollection requestHeaders) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var acceptEncoding = requestHeaders.GetHeaderValueOrNull(KnownHeaders.AcceptEncoding);
 
@@ -695,7 +704,7 @@ public partial class ProxyServer
     ///     Appends a Via header entry to <paramref name="headers" /> per RFC 9110 §7.6.3.
     ///     If a Via header already exists its value is extended with a comma-separated suffix.
     /// </summary>
-    internal static void AddViaHeader(HeaderCollection headers, Version httpVersion, string pseudonym)
+    internal static void AddViaHeader(HeaderCollection headers, Version httpVersion, string pseudonym) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         // Via uses HTTP's protocol-version token, whose canonical form includes both digits
         // (RFC 9110 §2.5/§7.6.3): 1.1, 2.0, 3.0. Sending "2" is accepted by many origins,
@@ -750,9 +759,9 @@ public partial class ProxyServer
 
     private static bool ViaEntryMatches(string viaEntry, string protocol, string pseudonym)
     {
-        int separator = viaEntry.IndexOfAny(ViaWhitespaceChars);
-        if (separator <= 0 ||
-            !string.Equals(viaEntry.Substring(0, separator), protocol, StringComparison.OrdinalIgnoreCase))
+        int whitespaceIndex = viaEntry.IndexOfAny(ViaWhitespaceChars);
+        if (whitespaceIndex <= 0 ||
+            !string.Equals(viaEntry.Substring(0, whitespaceIndex), protocol, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -765,14 +774,14 @@ public partial class ProxyServer
     ///     <paramref name="pseudonym" /> exactly (case-insensitive), ignoring any optional port suffix.
     ///     Prevents false positives from suffix substring matches (e.g. "proxy" matching "my-proxy").
     /// </summary>
-    private static bool ViaTokenMatches(string viaEntry, string pseudonym)
+    private static bool ViaTokenMatches(string viaEntry, string pseudonym) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         // A Via entry is: received-protocol RWS received-by [ RWS comment ].
         // RFC 9110 RWS permits SP or HTAB, and received-by can include an optional port.
-        int separator = viaEntry.IndexOfAny(ViaWhitespaceChars);
-        if (separator < 0) return false;
+        int whitespaceIndex = viaEntry.IndexOfAny(ViaWhitespaceChars);
+        if (whitespaceIndex < 0) return false;
 
-        int receivedByStart = separator;
+        int receivedByStart = whitespaceIndex;
         while (receivedByStart < viaEntry.Length &&
                (viaEntry[receivedByStart] == ' ' || viaEntry[receivedByStart] == '\t'))
         {

@@ -46,7 +46,7 @@ public class ClientHelloInfo
         {
             var time = DateTime.MinValue;
             if (Random.Length > 3)
-                time = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                time = DateTime.UnixEpoch
                     .AddSeconds(((uint)Random[3] << 24) + ((uint)Random[2] << 16) + ((uint)Random[1] << 8) + Random[0])
                     .ToLocalTime();
 
@@ -75,12 +75,9 @@ public class ClientHelloInfo
             if (major == 3 && minor == 3)
             {
                 var protocols = this.GetSslProtocols();
-                if (protocols != null)
+                if (protocols != null && protocols.Contains("Tls1.3"))
                 {
-                    if (protocols.Contains("Tls1.3"))
-                    {
-                        return SslProtocols.Tls12 | SslProtocols.Tls13;
-                    }
+                    return SslProtocols.Tls12 | SslProtocols.Tls13;
                 }
 
                 return SslProtocols.Tls12;
@@ -88,20 +85,20 @@ public class ClientHelloInfo
 
             if (major == 3 && minor == 2)
 #pragma warning disable SYSLIB0039 // Report the legacy protocol advertised by this ClientHello.
-                return SslProtocols.Tls11;
+                return SslProtocols.Tls11; // NOSONAR S4423 - reporting ClientHello advertisement only
 #pragma warning restore SYSLIB0039
 
             if (major == 3 && minor == 1)
 #pragma warning disable SYSLIB0039 // Report the legacy protocol advertised by this ClientHello.
-                return SslProtocols.Tls;
+                return SslProtocols.Tls; // NOSONAR S4423 - reporting ClientHello advertisement only
 #pragma warning restore SYSLIB0039
 
 #pragma warning disable 618
             if (major == 3 && minor == 0)
-                return SslProtocols.Ssl3;
+                return SslProtocols.Ssl3; // NOSONAR S4423 - reporting ClientHello advertisement only
 
             if (major == 2 && minor == 0)
-                return SslProtocols.Ssl2;
+                return SslProtocols.Ssl2; // NOSONAR S4423 - reporting ClientHello advertisement only
 #pragma warning restore 618
 
             return SslProtocols.None;

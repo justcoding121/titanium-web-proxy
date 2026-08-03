@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Class ProxyPolicyModes | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Class ProxyPolicyModes | Titanium Web Proxy ">
+    
+    <meta name="description" content="Immutable snapshot of the  selected for each , plus the one deliberately-separate  escape hatch. Read live by enforcement call sites through , which the plan&#39;s rollout section requires to be a runtime switch: replacing the whole snapshot (see &#39;s setter) rather than mutating a field lets an operator drop every family to  without redeploying, while every in-flight request that already read the previous snapshot keeps behaving consistently with whichever snapshot it observed.       is not a  member and has no     corresponding : framing, chunk parsing and     Content-Length/Transfer-Encoding resolution have no safe &quot;detect but let it     through&quot; middle ground, so this is a single named, binary, off-by-default flag that     relays malformed framing instead of rejecting it - useful only for security research that     needs to observe how a client or origin reacts to smuggling-shaped input through the     proxy. No profile sets it:  never accepts it as a parameter, and the     only way to turn it on is the explicit      call, so enabling it can never be a side effect of selecting a profile.">
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+
+        <div id="search-results">
+          <div class="search-list">Search Results for <span></span></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes">
+
+
+
+  <h1 id="Titanium_Web_Proxy_Options_ProxyPolicyModes" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes" class="text-break">Class ProxyPolicyModes</h1>
+  <div class="markdown level0 summary"><p>Immutable snapshot of the <a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html">PolicyMode</a> selected for each <a class="xref" href="Titanium.Web.Proxy.Options.PolicyFamily.html">PolicyFamily</a>,
+plus the one deliberately-separate <a class="xref" href="Titanium.Web.Proxy.Options.ProxyPolicyModes.html#Titanium_Web_Proxy_Options_ProxyPolicyModes_AllowAmbiguousFraming">AllowAmbiguousFraming</a> escape hatch. Read live by
+enforcement call sites through <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_PolicyModes">PolicyModes</a>, which the plan's rollout
+section requires to be a runtime switch: replacing the whole snapshot (see
+<a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_PolicyModes">PolicyModes</a>'s setter) rather than mutating a field lets an operator
+drop every family to <a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html#Titanium_Web_Proxy_Options_PolicyMode_Observe">Observe</a> without redeploying, while every
+in-flight request that already read the previous snapshot keeps behaving consistently with
+whichever snapshot it observed.</p>
+<p>
+    <a class="xref" href="Titanium.Web.Proxy.Options.ProxyPolicyModes.html#Titanium_Web_Proxy_Options_ProxyPolicyModes_AllowAmbiguousFraming">AllowAmbiguousFraming</a> is not a <a class="xref" href="Titanium.Web.Proxy.Options.PolicyFamily.html">PolicyFamily</a> member and has no
+    corresponding <a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html">PolicyMode</a>: framing, chunk parsing and
+    <code>Content-Length</code>/<code>Transfer-Encoding</code> resolution have no safe "detect but let it
+    through" middle ground, so this is a single named, binary, off-by-default flag that
+    relays malformed framing instead of rejecting it - useful only for security research that
+    needs to observe how a client or origin reacts to smuggling-shaped input through the
+    proxy. No profile sets it: <a class="xref" href="Titanium.Web.Proxy.Options.ProxyPolicyModes.html#Titanium_Web_Proxy_Options_ProxyPolicyModes_Create_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_">Create(PolicyMode, PolicyMode, PolicyMode, PolicyMode, PolicyMode)</a> never accepts it as a parameter, and the
+    only way to turn it on is the explicit <a class="xref" href="Titanium.Web.Proxy.Options.ProxyPolicyModes.html#Titanium_Web_Proxy_Options_ProxyPolicyModes_WithAllowAmbiguousFramingEnabled">WithAllowAmbiguousFramingEnabled()</a>
+    call, so enabling it can never be a side effect of selecting a profile.
+</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <div class="inheritance">
+    <h5>Inheritance</h5>
+    <div class="level0"><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object">object</a></div>
+    <div class="level1"><span class="xref">ProxyPolicyModes</span></div>
+  </div>
+  <div class="inheritedMembers">
+    <h5>Inherited Members</h5>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object)">object.Equals(object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object-system-object)">object.Equals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gethashcode">object.GetHashCode()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gettype">object.GetType()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.referenceequals">object.ReferenceEquals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.tostring">object.ToString()</a>
+    </div>
+  </div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.html">Titanium</a>.<a class="xref" href="Titanium.Web.html">Web</a>.<a class="xref" href="Titanium.Web.Proxy.html">Proxy</a>.<a class="xref" href="Titanium.Web.Proxy.Options.html">Options</a></h6>
+  <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
+  <h5 id="Titanium_Web_Proxy_Options_ProxyPolicyModes_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public sealed class ProxyPolicyModes</code></pre>
+  </div>
+  <h3 id="properties">Properties
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyPolicyModes_AllEnforce.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyPolicyModes.AllEnforce%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyPolicyModes.cs/#L45">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyPolicyModes_AllEnforce_" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes.AllEnforce*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyPolicyModes_AllEnforce" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes.AllEnforce">AllEnforce</h4>
+  <div class="markdown level1 summary"><p>Every family enforced - today's shipped behavior, and the starting point every profile builds from.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static ProxyPolicyModes AllEnforce { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.ProxyPolicyModes.html">ProxyPolicyModes</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyPolicyModes_AllowAmbiguousFraming.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyPolicyModes.AllowAmbiguousFraming%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyPolicyModes.cs/#L42">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyPolicyModes_AllowAmbiguousFraming_" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes.AllowAmbiguousFraming*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyPolicyModes_AllowAmbiguousFraming" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes.AllowAmbiguousFraming">AllowAmbiguousFraming</h4>
+  <div class="markdown level1 summary"><p>Off by default and absent from every profile - see the type-level remarks. Never
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a> unless <a class="xref" href="Titanium.Web.Proxy.Options.ProxyPolicyModes.html#Titanium_Web_Proxy_Options_ProxyPolicyModes_WithAllowAmbiguousFramingEnabled">WithAllowAmbiguousFramingEnabled()</a> was called
+explicitly.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool AllowAmbiguousFraming { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyPolicyModes_Item_Titanium_Web_Proxy_Options_PolicyFamily_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyPolicyModes.Item(Titanium.Web.Proxy.Options.PolicyFamily)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyPolicyModes.cs/#L53">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyPolicyModes_Item_" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes.Item*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyPolicyModes_Item_Titanium_Web_Proxy_Options_PolicyFamily_" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes.Item(Titanium.Web.Proxy.Options.PolicyFamily)">this[PolicyFamily]</h4>
+  <div class="markdown level1 summary"><p>Returns the mode selected for <code class="paramref">family</code>.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public PolicyMode this[PolicyFamily family] { get; }</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.PolicyFamily.html">PolicyFamily</a></td>
+        <td><span class="parametername">family</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html">PolicyMode</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="methods">Methods
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyPolicyModes_Create_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyPolicyModes.Create(Titanium.Web.Proxy.Options.PolicyMode%2CTitanium.Web.Proxy.Options.PolicyMode%2CTitanium.Web.Proxy.Options.PolicyMode%2CTitanium.Web.Proxy.Options.PolicyMode%2CTitanium.Web.Proxy.Options.PolicyMode)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyPolicyModes.cs/#L56">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyPolicyModes_Create_" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes.Create*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyPolicyModes_Create_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_Titanium_Web_Proxy_Options_PolicyMode_" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes.Create(Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode,Titanium.Web.Proxy.Options.PolicyMode)">Create(PolicyMode, PolicyMode, PolicyMode, PolicyMode, PolicyMode)</h4>
+  <div class="markdown level1 summary"><p>Builds a snapshot with an explicit mode for every family. <a class="xref" href="Titanium.Web.Proxy.Options.ProxyPolicyModes.html#Titanium_Web_Proxy_Options_ProxyPolicyModes_AllowAmbiguousFraming">AllowAmbiguousFraming</a> starts <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">false</a>.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static ProxyPolicyModes Create(PolicyMode bodyBudget, PolicyMode decompressionRatio, PolicyMode headerLimits, PolicyMode admissionControl, PolicyMode http2AbuseBudget)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html">PolicyMode</a></td>
+        <td><span class="parametername">bodyBudget</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html">PolicyMode</a></td>
+        <td><span class="parametername">decompressionRatio</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html">PolicyMode</a></td>
+        <td><span class="parametername">headerLimits</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html">PolicyMode</a></td>
+        <td><span class="parametername">admissionControl</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html">PolicyMode</a></td>
+        <td><span class="parametername">http2AbuseBudget</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.ProxyPolicyModes.html">ProxyPolicyModes</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyPolicyModes_With_Titanium_Web_Proxy_Options_PolicyFamily_Titanium_Web_Proxy_Options_PolicyMode_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyPolicyModes.With(Titanium.Web.Proxy.Options.PolicyFamily%2CTitanium.Web.Proxy.Options.PolicyMode)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyPolicyModes.cs/#L75">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyPolicyModes_With_" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes.With*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyPolicyModes_With_Titanium_Web_Proxy_Options_PolicyFamily_Titanium_Web_Proxy_Options_PolicyMode_" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes.With(Titanium.Web.Proxy.Options.PolicyFamily,Titanium.Web.Proxy.Options.PolicyMode)">With(PolicyFamily, PolicyMode)</h4>
+  <div class="markdown level1 summary"><p>Returns a snapshot identical to this one but with <code class="paramref">mode</code> for <code class="paramref">family</code>.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public ProxyPolicyModes With(PolicyFamily family, PolicyMode mode)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.PolicyFamily.html">PolicyFamily</a></td>
+        <td><span class="parametername">family</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html">PolicyMode</a></td>
+        <td><span class="parametername">mode</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.ProxyPolicyModes.html">ProxyPolicyModes</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyPolicyModes_WithAllObservedExceptDisabled.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllObservedExceptDisabled%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyPolicyModes.cs/#L87">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyPolicyModes_WithAllObservedExceptDisabled_" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllObservedExceptDisabled*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyPolicyModes_WithAllObservedExceptDisabled" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllObservedExceptDisabled">WithAllObservedExceptDisabled()</h4>
+  <div class="markdown level1 summary"><p>Returns a snapshot identical to this one but with every family dropped to
+<a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html#Titanium_Web_Proxy_Options_PolicyMode_Observe">Observe</a>, except families already <a class="xref" href="Titanium.Web.Proxy.Options.PolicyMode.html#Titanium_Web_Proxy_Options_PolicyMode_Disabled">Disabled</a>
+(which stay disabled - Observe would silently turn a family back on). This is the &quot;drop to
+Observe without redeploying&quot; runtime switch the plan's rollout section requires.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public ProxyPolicyModes WithAllObservedExceptDisabled()</code></pre>
+  </div>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.ProxyPolicyModes.html">ProxyPolicyModes</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyPolicyModes_WithAllowAmbiguousFramingEnabled.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllowAmbiguousFramingEnabled%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyPolicyModes.cs/#L104">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyPolicyModes_WithAllowAmbiguousFramingEnabled_" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllowAmbiguousFramingEnabled*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyPolicyModes_WithAllowAmbiguousFramingEnabled" data-uid="Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllowAmbiguousFramingEnabled">WithAllowAmbiguousFramingEnabled()</h4>
+  <div class="markdown level1 summary"><p>The single, explicit, isolated act of relaying ambiguous HTTP/1 framing instead of
+rejecting it. See the type-level remarks; never call this as a side effect of applying a
+profile.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public ProxyPolicyModes WithAllowAmbiguousFramingEnabled()</code></pre>
+  </div>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.ProxyPolicyModes.html">ProxyPolicyModes</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyPolicyModes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyPolicyModes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyPolicyModes.cs/#L27" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

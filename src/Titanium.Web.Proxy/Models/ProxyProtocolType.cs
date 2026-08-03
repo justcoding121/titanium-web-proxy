@@ -3,7 +3,7 @@
 namespace Titanium.Web.Proxy.Models;
 
 [Flags]
-public enum ProxyProtocolType
+public enum ProxyProtocolType // NOSONAR S2342 -- Public API enum name is retained for compatibility.
 {
     /// <summary>
     ///     The none

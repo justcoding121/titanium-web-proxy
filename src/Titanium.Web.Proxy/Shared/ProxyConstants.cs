@@ -8,7 +8,7 @@ namespace Titanium.Web.Proxy.Shared;
 /// <summary>
 ///     Literals shared by Proxy Server
 /// </summary>
-internal class ProxyConstants
+internal static class ProxyConstants
 {
     internal static readonly char DotSplit = '.';
 
@@ -29,5 +29,5 @@ internal class ProxyConstants
         };
 
     internal static readonly Regex CnRemoverRegex =
-        new(@"^CN\s*=\s*", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        new(@"^CN\s*=\s*", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(1));
 }

@@ -10,8 +10,6 @@ internal class RetryPolicy<T> where T : Exception
     private readonly int retries;
     private readonly TcpConnectionFactory tcpConnectionFactory;
 
-    private TcpServerConnection? currentConnection;
-
     internal RetryPolicy(int retries, TcpConnectionFactory tcpConnectionFactory)
     {
         this.retries = retries;
@@ -28,7 +26,7 @@ internal class RetryPolicy<T> where T : Exception
     internal async Task<RetryResult> ExecuteAsync(Func<TcpServerConnection, Task<bool>> action,
         Func<Task<TcpServerConnection>> generator, TcpServerConnection? initialConnection)
     {
-        currentConnection = initialConnection;
+        var currentConnection = initialConnection;
         var @continue = true;
         Exception? exception = null;
 

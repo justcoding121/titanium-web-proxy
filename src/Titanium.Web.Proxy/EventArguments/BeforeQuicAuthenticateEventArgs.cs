@@ -100,7 +100,7 @@ public class BeforeQuicAuthenticateEventArgs : EventArgs
     public UpstreamHttpProtocol UpstreamHttpProtocol
     {
         get => upstreamHttpProtocol;
-        set => upstreamHttpProtocol = Enum.IsDefined(typeof(UpstreamHttpProtocol), value)
+        set => upstreamHttpProtocol = Enum.IsDefined(value)
             ? value
             : throw new ArgumentOutOfRangeException(nameof(value), value,
                 "Unknown UpstreamHttpProtocol value.");

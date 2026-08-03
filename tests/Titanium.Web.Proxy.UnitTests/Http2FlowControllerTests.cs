@@ -144,7 +144,9 @@ public class Http2FlowControllerTests
         flow.OnInitialWindowSizeChanged(Http2FlowController.InitialConnectionWindow + 100);
 
         // the +100 delta should now be available on stream 1 without any further WINDOW_UPDATE for it.
-        await flow.ReserveAsync(1, 100, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+        var reserveTask = flow.ReserveAsync(1, 100, CancellationToken.None);
+        await reserveTask.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.IsTrue(reserveTask.IsCompletedSuccessfully);
     }
 
     [TestMethod]
@@ -153,6 +155,9 @@ public class Http2FlowControllerTests
         var flow = new Http2FlowController();
         flow.RegisterStream(1);
         flow.RegisterStream(1);
+        var reserveTask = flow.ReserveAsync(1, Http2FlowController.InitialConnectionWindow, CancellationToken.None);
+        Assert.IsTrue(reserveTask.IsCompletedSuccessfully,
+            "Re-registering a stream must reset its window to the current initial size.");
     }
 
     [TestMethod]
@@ -160,6 +165,10 @@ public class Http2FlowControllerTests
     {
         var flow = new Http2FlowController();
         flow.RemoveStream(12345);
+        flow.RegisterStream(1);
+        var reserveTask = flow.ReserveAsync(1, 100, CancellationToken.None);
+        Assert.IsTrue(reserveTask.IsCompletedSuccessfully,
+            "Removing an unknown stream must not affect subsequent reservations.");
     }
 
     [TestMethod]
@@ -176,7 +185,7 @@ public class Http2FlowControllerTests
 
         cts.Cancel();
 
-        await Assert.ThrowsExceptionAsync<TaskCanceledException>(async () => await cancelledTask);
+        await Assert.ThrowsExactlyAsync<TaskCanceledException>(async () => await cancelledTask);
 
         // stream 2, whose window was untouched, must be unaffected by the other waiter's cancellation once
         // the connection window is replenished.
@@ -225,6 +234,9 @@ public class Http2FlowControllerTests
         // must return immediately without consuming any window or requiring registration.
         await flow.ReserveAsync(1, 0, CancellationToken.None);
         await flow.ReserveAsync(42, 0, CancellationToken.None);
+        var reserveTask = flow.ReserveAsync(1, Http2FlowController.InitialConnectionWindow, CancellationToken.None);
+        Assert.IsTrue(reserveTask.IsCompletedSuccessfully,
+            "Zero-byte reservations must not consume flow-control window.");
     }
 
     [TestMethod]
@@ -234,6 +246,8 @@ public class Http2FlowControllerTests
 
         // stream 7 was never explicitly registered - ReserveAsync must not throw, treating it as having
         // the controller's current initial window rather than failing the write outright.
-        await flow.ReserveAsync(7, 100, CancellationToken.None);
+        var reserveTask = flow.ReserveAsync(7, 100, CancellationToken.None);
+        await reserveTask.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.IsTrue(reserveTask.IsCompletedSuccessfully);
     }
 }

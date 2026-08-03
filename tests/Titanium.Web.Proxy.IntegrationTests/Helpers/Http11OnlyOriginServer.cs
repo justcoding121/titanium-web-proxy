@@ -59,7 +59,7 @@ internal sealed class Http11OnlyOriginServer : IDisposable
                     });
 
                     using var reader = new System.IO.StreamReader(sslStream, Encoding.ASCII, false, 4096, true);
-                    string line;
+                    string? line;
                     while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
                     {
                         // drain request headers
@@ -70,7 +70,7 @@ internal sealed class Http11OnlyOriginServer : IDisposable
                                    $"Content-Length: {Encoding.ASCII.GetByteCount(body)}\r\n" +
                                    "Connection: close\r\n\r\n" + body;
                     var responseBytes = Encoding.ASCII.GetBytes(response);
-                    await sslStream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                    await sslStream.WriteAsync(responseBytes);
                 }
                 catch
                 {

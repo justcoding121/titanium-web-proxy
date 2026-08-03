@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class WebSocketUpgradeTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -36,7 +36,7 @@ public class WebSocketUpgradeTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -257,7 +257,7 @@ public class WebSocketUpgradeTests
         await stream.WriteAsync(BuildFrame(WebsocketOpCode.Ping, Encoding.UTF8.GetBytes("ctl"), mask: true));
 
         var clientDecoder = new WebSocketDecoder(new DefaultBufferPool());
-        // Copy payloads immediately — WebSocketFrame.Data aliases the decoder buffer.
+        // Copy payloads immediately ? WebSocketFrame.Data aliases the decoder buffer.
         var frames = await reader.ReadFramesAsync(clientDecoder, 2, timeout);
         var captured = frames.Select(f => (Op: f.OpCode, Payload: f.Data.ToArray())).ToList();
 
@@ -366,7 +366,7 @@ public class WebSocketUpgradeTests
         try
         {
             int read;
-            while ((read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token)) > 0)
+            while ((read = await stream.ReadAsync(buffer, cts.Token)) > 0)
                 ms.Write(buffer, 0, read);
         }
         catch (OperationCanceledException)
@@ -396,7 +396,7 @@ public class WebSocketUpgradeTests
         using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
-        string capturedRequest = null;
+        string? capturedRequest = null;
         var requestReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         server.HandleTcpRequest(async context =>
@@ -473,7 +473,7 @@ public class WebSocketUpgradeTests
         using var testSuite = new TestSuite(sharedServer);
         var server = testSuite.GetServer();
 
-        string capturedRequest = null;
+        string? capturedRequest = null;
         var requestReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         server.HandleTcpRequest(async context =>
@@ -573,7 +573,7 @@ public class WebSocketUpgradeTests
             bytes.Add((byte)length);
         }
 
-        byte[] maskKeyBytes = null;
+        byte[]? maskKeyBytes = null;
         if (mask)
         {
             maskKeyBytes = new[]
@@ -586,7 +586,7 @@ public class WebSocketUpgradeTests
         var payloadBytes = (byte[])payload.Clone();
         if (mask)
             for (var i = 0; i < payloadBytes.Length; i++)
-                payloadBytes[i] ^= maskKeyBytes[i % 4];
+                payloadBytes[i] ^= maskKeyBytes![i % 4];
 
         bytes.AddRange(payloadBytes);
         return bytes.ToArray();
@@ -622,7 +622,7 @@ public class WebSocketUpgradeTests
                     return AsciiEncoding.GetString(headerBytes);
                 }
 
-                var read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
+                var read = await stream.ReadAsync(buffer, cts.Token);
                 if (read == 0) throw new IOException("Connection closed before response headers completed.");
                 pending.AddRange(buffer.Take(read));
             }
@@ -635,7 +635,7 @@ public class WebSocketUpgradeTests
 
             void Capture(IEnumerable<WebSocketFrame> decoded)
             {
-                // Copy payload immediately — Data aliases decoder/read buffers.
+                // Copy payload immediately ? Data aliases decoder/read buffers.
                 foreach (var frame in decoded)
                     frames.Add(new WebSocketFrame
                     {
@@ -656,7 +656,7 @@ public class WebSocketUpgradeTests
             var buffer = new byte[4096];
             while (frames.Count < minFrameCount)
             {
-                var read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
+                var read = await stream.ReadAsync(buffer, cts.Token);
                 if (read == 0) throw new IOException("Connection closed before enough frames arrived.");
                 Capture(decoder.Decode(buffer, 0, read));
             }

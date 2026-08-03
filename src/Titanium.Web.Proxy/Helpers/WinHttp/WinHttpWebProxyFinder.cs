@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -22,7 +23,7 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
         session = NativeMethods.WinHttp.WinHttpOpen(null, NativeMethods.WinHttp.AccessType.NoProxy, null, null, 0);
         if (session == null || session.IsInvalid)
         {
-            var lastWin32Error = GetLastWin32Error();
+            _ = GetLastWin32Error();
         }
         else
         {
@@ -31,7 +32,7 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
                     downloadTimeout))
                 return;
 
-            var lastWin32Error = GetLastWin32Error();
+            _ = GetLastWin32Error();
         }
     }
 
@@ -87,7 +88,7 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
 
         if (!string.IsNullOrEmpty(proxyListString))
         {
-            proxyListString = RemoveWhitespaces(proxyListString!);
+            proxyListString = RemoveWhitespaces(proxyListString);
             proxyList = proxyListString.Split(';');
         }
 
@@ -123,7 +124,7 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
             HttpSystemProxyValue? value = null;
             if (ProxyInfo?.Proxies?.TryGetValue(protocolType.Value, out value) == true)
             {
-                var systemProxy = new ExternalProxy(value!.HostName, value.Port);
+                var systemProxy = new ExternalProxy(value.HostName, value.Port);
                 return systemProxy;
             }
         }
@@ -160,7 +161,7 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
         AutomaticConfigurationScript = pi.AutoConfigUrl == null ? null : new Uri(pi.AutoConfigUrl);
         BypassLoopback = pi.BypassLoopback;
         BypassOnLocal = pi.BypassOnLocal;
-        Proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal, pi.BypassList);
+        Proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal, pi.BypassList); // NOSONAR S1075 -- WinHTTP fallback proxy fixture requires an absolute URI.
     }
 
     internal void UsePacFile(Uri upstreamProxyConfigurationScript)
@@ -169,10 +170,10 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
         AutomaticConfigurationScript = upstreamProxyConfigurationScript;
         BypassLoopback = true;
         BypassOnLocal = false;
-        Proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal);
+        Proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal); // NOSONAR S1075 -- WinHTTP PAC fallback requires an absolute URI.
     }
 
-    private ProxyInfo GetProxyInfo()
+    private static ProxyInfo GetProxyInfo()
     {
         var proxyConfig = new NativeMethods.WinHttp.WinhttpCurrentUserIeProxyConfig();
         try
@@ -189,7 +190,8 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
             }
             else
             {
-                if (Marshal.GetLastWin32Error() == 8) throw new OutOfMemoryException();
+                if (Marshal.GetLastWin32Error() == 8)
+                    throw new InvalidOperationException("WinHTTP could not allocate the proxy configuration.");
 
                 result = new ProxyInfo(true, null, null, null, null);
             }
@@ -271,7 +273,8 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
     private static int GetLastWin32Error()
     {
         var lastWin32Error = Marshal.GetLastWin32Error();
-        if (lastWin32Error == 8) throw new OutOfMemoryException();
+        if (lastWin32Error == 8)
+            throw new InvalidOperationException("WinHTTP could not allocate proxy discovery data.");
 
         return lastWin32Error;
     }
@@ -317,12 +320,7 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
 
     private static string RemoveWhitespaces(string value)
     {
-        var stringBuilder = new StringBuilder();
-        foreach (var c in value)
-            if (!char.IsWhiteSpace(c))
-                stringBuilder.Append(c);
-
-        return stringBuilder.ToString();
+        return string.Concat(value.Where(c => !char.IsWhiteSpace(c)));
     }
 
     private static bool IsErrorFatalForAutoDetect(NativeMethods.WinHttp.ErrorCodes errorCode)

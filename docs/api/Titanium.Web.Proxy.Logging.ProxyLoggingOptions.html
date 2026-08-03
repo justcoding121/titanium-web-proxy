@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Class ProxyLoggingOptions | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Class ProxyLoggingOptions | Titanium Web Proxy ">
+    
+    <meta name="description" content="Central configuration for the proxy&#39;s built-in diagnostic logging. A single instance is owned by ; mutate its properties (or replace the whole object) before  to control how the proxy reports every caught exception and diagnostic event. Logging never blocks proxy traffic: built-in sinks are asynchronous and best-effort, and setting  to false removes all logging overhead (no timestamps are read, no strings are formatted, no providers run).">
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+
+        <div id="search-results">
+          <div class="search-list">Search Results for <span></span></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions">
+
+
+
+  <h1 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions" class="text-break">Class ProxyLoggingOptions</h1>
+  <div class="markdown level0 summary"><p>Central configuration for the proxy's built-in diagnostic logging. A single instance is owned by
+<a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_Logging">Logging</a>; mutate its properties (or replace the whole object) before
+<a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_Start_System_Boolean_">Start(bool)</a> to control how the proxy reports every caught exception and
+diagnostic event. Logging never blocks proxy traffic: built-in sinks are asynchronous and
+best-effort, and setting <a class="xref" href="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.html#Titanium_Web_Proxy_Logging_ProxyLoggingOptions_Enabled">Enabled</a> to <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">false</a> removes all logging
+overhead (no timestamps are read, no strings are formatted, no providers run).</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <div class="inheritance">
+    <h5>Inheritance</h5>
+    <div class="level0"><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object">object</a></div>
+    <div class="level1"><span class="xref">ProxyLoggingOptions</span></div>
+  </div>
+  <div class="inheritedMembers">
+    <h5>Inherited Members</h5>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object)">object.Equals(object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object-system-object)">object.Equals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gethashcode">object.GetHashCode()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gettype">object.GetType()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.referenceequals">object.ReferenceEquals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.tostring">object.ToString()</a>
+    </div>
+  </div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.html">Titanium</a>.<a class="xref" href="Titanium.Web.html">Web</a>.<a class="xref" href="Titanium.Web.Proxy.html">Proxy</a>.<a class="xref" href="Titanium.Web.Proxy.Logging.html">Logging</a></h6>
+  <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
+  <h5 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public sealed class ProxyLoggingOptions</code></pre>
+  </div>
+  <h3 id="properties">Properties
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableConsole.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsole%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L36">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableConsole_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsole*"></a>
+  <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableConsole" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsole">EnableConsole</h4>
+  <div class="markdown level1 summary"><p>Whether the built-in console sink is active. Defaults to <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a>. Ignored when
+<a class="xref" href="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.html#Titanium_Web_Proxy_Logging_ProxyLoggingOptions_LoggerFactory">LoggerFactory</a> is set.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool EnableConsole { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableConsoleColors.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsoleColors%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L48">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableConsoleColors_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsoleColors*"></a>
+  <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableConsoleColors" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsoleColors">EnableConsoleColors</h4>
+  <div class="markdown level1 summary"><p>Whether the built-in console sink colors each line by <a class="xref" href="https://learn.microsoft.com/dotnet/api/microsoft.extensions.logging.loglevel">LogLevel</a> using ANSI escape
+codes (dim for <a class="xref" href="https://learn.microsoft.com/dotnet/api/microsoft.extensions.logging.loglevel#microsoft-extensions-logging-loglevel-trace">Trace</a>/<a class="xref" href="https://learn.microsoft.com/dotnet/api/microsoft.extensions.logging.loglevel#microsoft-extensions-logging-loglevel-debug">Debug</a>, default for
+<a class="xref" href="https://learn.microsoft.com/dotnet/api/microsoft.extensions.logging.loglevel#microsoft-extensions-logging-loglevel-information">Information</a>, yellow for <a class="xref" href="https://learn.microsoft.com/dotnet/api/microsoft.extensions.logging.loglevel#microsoft-extensions-logging-loglevel-warning">Warning</a>, red for
+<a class="xref" href="https://learn.microsoft.com/dotnet/api/microsoft.extensions.logging.loglevel#microsoft-extensions-logging-loglevel-error">Error</a>, bold red for <a class="xref" href="https://learn.microsoft.com/dotnet/api/microsoft.extensions.logging.loglevel#microsoft-extensions-logging-loglevel-critical">Critical</a>). Defaults to
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a>; automatically suppressed - regardless of this setting - for a stream
+(stdout/stderr) that is redirected (e.g. piped to a file), or entirely when the
+<code>NO_COLOR</code> environment variable (see <a href="https://no-color.org/">https://no-color.org/</a>) is set, so
+redirected output/log files never contain raw escape codes.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool EnableConsoleColors { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableFile.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableFile%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L54">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableFile_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableFile*"></a>
+  <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableFile" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableFile">EnableFile</h4>
+  <div class="markdown level1 summary"><p>Whether the built-in rolling-file sink is active. Defaults to <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">false</a>.
+Ignored when <a class="xref" href="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.html#Titanium_Web_Proxy_Logging_ProxyLoggingOptions_LoggerFactory">LoggerFactory</a> is set.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool EnableFile { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_Enabled.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.Enabled%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L21">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_Enabled_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.Enabled*"></a>
+  <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_Enabled" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.Enabled">Enabled</h4>
+  <div class="markdown level1 summary"><p>Master switch for all proxy logging. When <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">false</a> (default is
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a>) the proxy uses a no-op logger; no log-related work of any kind is
+performed anywhere in the library, so this is the zero-overhead configuration for users who
+do not want logging at all.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool Enabled { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_FilePath.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.FilePath%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L60">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_FilePath_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.FilePath*"></a>
+  <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_FilePath" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.FilePath">FilePath</h4>
+  <div class="markdown level1 summary"><p>Path of the log file used by the built-in rolling-file sink. Relative paths are resolved
+against the current working directory. The containing directory is created on demand.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public string FilePath { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_LoggerFactory.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.LoggerFactory%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L83">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_LoggerFactory_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.LoggerFactory*"></a>
+  <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_LoggerFactory" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.LoggerFactory">LoggerFactory</h4>
+  <div class="markdown level1 summary"><p>Optional externally supplied <a class="xref" href="https://learn.microsoft.com/dotnet/api/microsoft.extensions.logging.iloggerfactory">ILoggerFactory</a> (e.g. bridging to Serilog, NLog, or
+an ASP.NET Core host's logging pipeline). When set, the built-in Console/File sinks are not
+created and this factory is used verbatim; the proxy never disposes a factory it does not own.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public ILoggerFactory? LoggerFactory { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/microsoft.extensions.logging.iloggerfactory">ILoggerFactory</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MaxFileSizeBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxFileSizeBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L65">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MaxFileSizeBytes_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxFileSizeBytes*"></a>
+  <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MaxFileSizeBytes" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxFileSizeBytes">MaxFileSizeBytes</h4>
+  <div class="markdown level1 summary"><p>Maximum size, in bytes, a log file is allowed to reach before it is rolled. Defaults to 10 MiB.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public long MaxFileSizeBytes { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MaxRolledFiles.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxRolledFiles%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L70">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MaxRolledFiles_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxRolledFiles*"></a>
+  <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MaxRolledFiles" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxRolledFiles">MaxRolledFiles</h4>
+  <div class="markdown level1 summary"><p>Maximum number of rolled-over log files retained alongside the active log file. Defaults to 5.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int MaxRolledFiles { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MinimumLevel.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MinimumLevel%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L30">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MinimumLevel_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MinimumLevel*"></a>
+  <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MinimumLevel" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MinimumLevel">MinimumLevel</h4>
+  <div class="markdown level1 summary"><p>The minimum <a class="xref" href="https://learn.microsoft.com/dotnet/api/microsoft.extensions.logging.loglevel">LogLevel</a> that is actually written to any sink. Every caught
+exception in the proxy is still reported to the gateway regardless of this setting - this
+only controls how much of that stream is materialized/written. Defaults to
+<a class="xref" href="https://learn.microsoft.com/dotnet/api/microsoft.extensions.logging.loglevel#microsoft-extensions-logging-loglevel-error">Error</a> so out-of-the-box behavior stays quiet, while still surfacing
+every genuinely unexpected failure.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public LogLevel MinimumLevel { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/microsoft.extensions.logging.loglevel">LogLevel</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_QueueCapacity.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.QueueCapacity%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L76">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_QueueCapacity_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.QueueCapacity*"></a>
+  <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_QueueCapacity" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.QueueCapacity">QueueCapacity</h4>
+  <div class="markdown level1 summary"><p>Capacity of the bounded in-memory queue used by each built-in sink before entries are
+considered saturated (see the sink's own delivery guarantees). Defaults to 4096.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int QueueCapacity { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L13" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

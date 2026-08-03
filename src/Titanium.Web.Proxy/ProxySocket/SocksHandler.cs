@@ -63,7 +63,7 @@ internal abstract class SocksHandler
     /// <param name="server">The socket connection with the proxy server.</param>
     /// <param name="user">The username to use when authenticating with the server.</param>
     /// <exception cref="ArgumentNullException"><c>server</c> -or- <c>user</c> is null.</exception>
-    public SocksHandler(Socket server, string user)
+    protected SocksHandler(Socket server, string user)
     {
         this.server = server ?? throw new ArgumentNullException(nameof(server));
         username = user ?? throw new ArgumentNullException(nameof(user));
@@ -77,7 +77,7 @@ internal abstract class SocksHandler
     protected Socket Server
     {
         get => server;
-        set => server = value ?? throw new ArgumentNullException();
+        set => server = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     /// <summary>
@@ -88,7 +88,7 @@ internal abstract class SocksHandler
     protected string Username
     {
         get => username;
-        set => username = value ?? throw new ArgumentNullException();
+        set => username = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     /// <summary>
@@ -128,7 +128,7 @@ internal abstract class SocksHandler
     /// <param name="port">The port to convert.</param>
     /// <param name="buffer">The buffer which contains the result data.</param>
     /// <returns>An array of two bytes that represents the specified port.</returns>
-    protected void PortToBytes(int port, Span<byte> buffer)
+    protected static void PortToBytes(int port, Span<byte> buffer)
     {
         buffer[0] = (byte)(port / 256);
         buffer[1] = (byte)(port % 256);
@@ -139,7 +139,7 @@ internal abstract class SocksHandler
     /// </summary>
     /// <param name="address">The IP address to convert.</param>
     /// <returns>An array of four bytes that represents the specified IP address.</returns>
-    protected byte[] AddressToBytes(long address)
+    protected static byte[] AddressToBytes(long address)
     {
         var ret = new byte[4];
         ret[0] = (byte)(address % 256);

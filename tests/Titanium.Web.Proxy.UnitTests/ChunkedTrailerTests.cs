@@ -62,6 +62,8 @@ public class ChunkedTrailerTests
         Assert.AreEqual("trailer-value", trailers.GetFirstHeader("X-Trailer")?.Value);
     }
 
+    private static readonly string[] expected = new[] { "X-First: one", "X-Second: two", "X-Third: three" };
+
     [TestMethod]
     public async Task ReadTrailingHeaders_MultipleTrailerLines_AreAllParsedAndRawLinesCapturedInOrder()
     {
@@ -76,8 +78,10 @@ public class ChunkedTrailerTests
         Assert.AreEqual("three", trailers.GetFirstHeader("X-Third")?.Value);
 
         CollectionAssert.AreEqual(
-            new[] { "X-First: one", "X-Second: two", "X-Third: three" }, rawLines);
+            expected, rawLines);
     }
+
+    private static readonly string[] expectedDuplicateTrailerValues = new[] { "one", "two" };
 
     [TestMethod]
     public async Task ReadTrailingHeaders_DuplicateHeaderName_KeepsBothAsNonUniqueHeader()
@@ -88,7 +92,7 @@ public class ChunkedTrailerTests
         await ChunkedTrailerHelper.ReadTrailingHeaders(reader, trailers, null);
 
         var values = trailers.GetHeaders("X-Trailer")!.Select(h => h.Value).ToArray();
-        CollectionAssert.AreEquivalent(new[] { "one", "two" }, values);
+        CollectionAssert.AreEquivalent(expectedDuplicateTrailerValues, values);
     }
 
     [TestMethod]
@@ -97,7 +101,7 @@ public class ChunkedTrailerTests
         using var reader = MakeReader("this-is-not-a-valid-header-line\r\n\r\n");
         var trailers = new HeaderCollection();
 
-        await Assert.ThrowsExceptionAsync<ProxyHttpException>(
+        await Assert.ThrowsExactlyAsync<ProxyHttpException>(
             async () => await ChunkedTrailerHelper.ReadTrailingHeaders(reader, trailers, null));
     }
 
@@ -112,7 +116,7 @@ public class ChunkedTrailerTests
         using var reader = MakeReader(sb.ToString());
         var trailers = new HeaderCollection();
 
-        await Assert.ThrowsExceptionAsync<ProxyHttpException>(
+        await Assert.ThrowsExactlyAsync<ProxyHttpException>(
             async () => await ChunkedTrailerHelper.ReadTrailingHeaders(reader, trailers, null));
     }
 
@@ -123,7 +127,7 @@ public class ChunkedTrailerTests
         using var reader = MakeReader($"X-Trailer: {hugeValue}\r\n\r\n");
         var trailers = new HeaderCollection();
 
-        await Assert.ThrowsExceptionAsync<ProxyHttpException>(
+        await Assert.ThrowsExactlyAsync<ProxyHttpException>(
             async () => await ChunkedTrailerHelper.ReadTrailingHeaders(reader, trailers, null));
     }
 
@@ -156,7 +160,7 @@ public class ChunkedTrailerTests
         var trailers = new HeaderCollection();
         trailers.AddHeader(KnownHeaders.ContentLength.String, "5");
 
-        await Assert.ThrowsExceptionAsync<ProxyHttpException>(
+        await Assert.ThrowsExactlyAsync<ProxyHttpException>(
             async () => await ChunkedTrailerHelper.WriteTrailingHeadersAsync(writer, trailers));
     }
 

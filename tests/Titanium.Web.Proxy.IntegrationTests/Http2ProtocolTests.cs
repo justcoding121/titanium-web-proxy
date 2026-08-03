@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
@@ -27,7 +27,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Http2ProtocolTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -35,7 +35,7 @@ public class Http2ProtocolTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -77,8 +77,8 @@ public class Http2ProtocolTests
     public async Task Http2_Mitm_Origin_Receives_Settings_Before_Connection_Window_Update()
     {
         // Regression for Chrome ERR_HTTP2_PROTOCOL_ERROR on strict origins (MSN/Wikipedia): after the
-        // connection preface, the first frame toward the origin must be SETTINGS (RFC 7540 §3.5). The
-        // Chrome-sized connection WINDOW_UPDATE must follow that SETTINGS — never precede it, and must
+        // connection preface, the first frame toward the origin must be SETTINGS (RFC 7540 �3.5). The
+        // Chrome-sized connection WINDOW_UPDATE must follow that SETTINGS � never precede it, and must
         // not be paired with a proxy-owned SETTINGS whose ACK would be forwarded to the browser.
         var done = new TaskCompletionSource<Http2RawFrame.Frame[]>(
             TaskCreationOptions.RunContinuationsAsynchronously);
@@ -120,7 +120,7 @@ public class Http2ProtocolTests
 
         Assert.AreEqual(2, firstFrames.Length, "Origin should see SETTINGS then WINDOW_UPDATE before HEADERS.");
         Assert.AreEqual(Http2FrameType.Settings, firstFrames[0].Type,
-            "RFC 7540 §3.5: the first frame after the client preface must be SETTINGS.");
+            "RFC 7540 �3.5: the first frame after the client preface must be SETTINGS.");
         Assert.AreEqual(Http2FrameType.WindowUpdate, firstFrames[1].Type,
             "Chrome-sized connection WINDOW_UPDATE must immediately follow the browser SETTINGS.");
         Assert.AreEqual(0, firstFrames[1].StreamId);
@@ -180,7 +180,7 @@ public class Http2ProtocolTests
         var dataFrame = await rawClient.Connection.ReadFrameAsync();
         Assert.AreEqual(Http2FrameType.Data, dataFrame.Type);
         Assert.AreEqual("second-body", Encoding.ASCII.GetString(dataFrame.Payload));
-        Assert.IsTrue((dataFrame.Flags & Http2FrameFlag.EndStream) != 0);
+        Assert.AreNotEqual((Http2FrameFlag)0, dataFrame.Flags & Http2FrameFlag.EndStream);
     }
 
     [TestMethod]
@@ -267,11 +267,11 @@ public class Http2ProtocolTests
 
         // Real browsers routinely open a pooled/speculative HTTP/2 connection and then decide they no
         // longer need it, tearing it down by sending GOAWAY as literally the first frame after the
-        // connection preface - without ever sending SETTINGS. RFC 7540 §6.8 explicitly permits GOAWAY at
+        // connection preface - without ever sending SETTINGS. RFC 7540 �6.8 explicitly permits GOAWAY at
         // any time, so the proxy must not treat this as a connection-level PROTOCOL_ERROR (regression test
         // for the ERROR-level "expected a SETTINGS frame immediately after the connection preface, got
         // GoAway" seen in production whenever this happened).
-        await tunnel.SslStream.WriteAsync(Http2Helper.ConnectionPreface, 0, Http2Helper.ConnectionPreface.Length);
+        await tunnel.SslStream.WriteAsync(Http2Helper.ConnectionPreface);
         var connection = new Http2RawFrame.Connection(tunnel.SslStream);
         await connection.WriteFrameAsync(Http2FrameType.GoAway, 0, 0, new byte[8]);
 
@@ -360,7 +360,7 @@ public class Http2ProtocolTests
         var uri = new Uri(rawServer.Url);
         using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
 
-        // RFC 7540 §6.5: a SETTINGS frame with the ACK flag set must have a zero-length payload.
+        // RFC 7540 �6.5: a SETTINGS frame with the ACK flag set must have a zero-length payload.
         await rawClient.Connection.WriteFrameAsync(Http2FrameType.Settings, 0, Http2FrameFlag.Ack, new byte[6]);
 
         var frame = await ReadNonSettingsFrameAsync(rawClient);
@@ -382,7 +382,7 @@ public class Http2ProtocolTests
         var uri = new Uri(rawServer.Url);
         using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
 
-        // RFC 7540 §6.9.1: a zero increment on a stream-level WINDOW_UPDATE is a stream PROTOCOL_ERROR.
+        // RFC 7540 �6.9.1: a zero increment on a stream-level WINDOW_UPDATE is a stream PROTOCOL_ERROR.
         await rawClient.Connection.WriteFrameAsync(Http2FrameType.WindowUpdate, 1, 0, Encode32(0));
 
         var frame = await ReadNonSettingsFrameAsync(rawClient);
@@ -405,7 +405,7 @@ public class Http2ProtocolTests
         var uri = new Uri(rawServer.Url);
         using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
 
-        // RFC 7540 §6.9.1: a zero increment on the connection-level (stream id 0) WINDOW_UPDATE is a
+        // RFC 7540 �6.9.1: a zero increment on the connection-level (stream id 0) WINDOW_UPDATE is a
         // connection PROTOCOL_ERROR.
         await rawClient.Connection.WriteFrameAsync(Http2FrameType.WindowUpdate, 0, 0, Encode32(0));
 

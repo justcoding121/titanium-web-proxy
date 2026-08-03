@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
@@ -13,8 +14,6 @@ internal class HeaderBuilder
 
     public void WriteRequestLine(string httpMethod, string httpUrl, Version version)
     {
-        // "{httpMethod} {httpUrl} HTTP/{version.Major}.{version.Minor}";
-
         Write(httpMethod);
         Write(" ");
         Write(httpUrl);
@@ -27,8 +26,6 @@ internal class HeaderBuilder
 
     public void WriteResponseLine(Version version, int statusCode, string statusDescription)
     {
-        // "HTTP/{version.Major}.{version.Minor} {statusCode} {statusDescription}";
-
         Write("HTTP/");
         Write(version.Major.ToString());
         Write(".");
@@ -49,9 +46,9 @@ internal class HeaderBuilder
             WriteHeader(HttpHeader.GetProxyAuthorizationHeader(upstreamProxyUserName, upstreamProxyPassword));
         }
 
-        foreach (var header in headers)
-            if (sendProxyAuthorization || !KnownHeaders.ProxyAuthorization.Equals(header.Name))
-                WriteHeader(header);
+        foreach (var header in headers.Where(header =>
+                     sendProxyAuthorization || !KnownHeaders.ProxyAuthorization.Equals(header.Name)))
+            WriteHeader(header);
 
         WriteLine();
     }

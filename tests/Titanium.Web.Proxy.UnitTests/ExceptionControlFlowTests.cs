@@ -56,6 +56,81 @@ public class ExceptionControlFlowTests
     }
 
     [TestMethod]
+    public void ProxyDiagnostics_ObjectDisposedException_IsExpected()
+    {
+        Assert.IsTrue(ProxyDiagnostics.IsExpected(new ObjectDisposedException("stream")));
+    }
+
+    [TestMethod]
+    public void ProxyDiagnostics_ProxyTimeoutException_IsExpected()
+    {
+        var ex = new ProxyTimeoutException("connect timed out", ProxyTimeoutKind.Connect);
+        Assert.IsTrue(ProxyDiagnostics.IsExpected(ex));
+    }
+
+    [TestMethod]
+    public void ProxyDiagnostics_ReportTrace_LogsAtTrace_WhenEnabled()
+    {
+        var capturing = new CapturingLogger();
+        ProxyDiagnostics.ReportTrace(capturing, "low-level trace");
+
+        Assert.AreEqual(1, capturing.TraceCount);
+        StringAssert.Contains(capturing.LastMessage!, "low-level trace");
+    }
+
+    [TestMethod]
+    public void ProxyDiagnostics_ReportCritical_WithAndWithoutException()
+    {
+        var capturing = new CapturingLogger();
+        ProxyDiagnostics.ReportCritical(capturing, "subsystem halted");
+        ProxyDiagnostics.ReportCritical(capturing, "subsystem fault", new InvalidOperationException("root"));
+
+        Assert.AreEqual(2, capturing.CriticalCount);
+        Assert.IsNull(capturing.Entries[0].Exception);
+        Assert.IsInstanceOfType<InvalidOperationException>(capturing.Entries[1].Exception);
+    }
+
+    [TestMethod]
+    public void ProxyDiagnostics_ReportWarning_And_ReportInformation()
+    {
+        var capturing = new CapturingLogger();
+        ProxyDiagnostics.ReportWarning(capturing, "undisposed warning");
+        ProxyDiagnostics.ReportInformation(capturing, "startup milestone");
+
+        Assert.AreEqual(1, capturing.WarningCount);
+        Assert.AreEqual(1, capturing.InformationCount);
+    }
+
+    [TestMethod]
+    public void ProxyDiagnostics_ReportUndisposedFinalizer_UsesSuppliedLogger()
+    {
+        var capturing = new CapturingLogger();
+        ProxyDiagnostics.ReportUndisposedFinalizer(capturing, "CopyStream");
+
+        Assert.AreEqual(1, capturing.WarningCount);
+        StringAssert.Contains(capturing.LastMessage!, "CopyStream was finalized without being disposed first.");
+    }
+
+    [TestMethod]
+    public void ProxyDiagnostics_ReportUndisposedFinalizer_FallsBackToProcessLogger()
+    {
+        var capturing = new CapturingLogger();
+        var previous = ProxyDiagnostics.Logger;
+        try
+        {
+            ProxyDiagnostics.Logger = capturing;
+            ProxyDiagnostics.ReportUndisposedFinalizer(null, "BufferPool");
+        }
+        finally
+        {
+            ProxyDiagnostics.Logger = previous;
+        }
+
+        Assert.AreEqual(1, capturing.WarningCount);
+        StringAssert.Contains(capturing.LastMessage!, "BufferPool was finalized without being disposed first.");
+    }
+
+    [TestMethod]
     public async Task ReadResponseStatus_EofBeforeStatus_ReturnsNull()
     {
         using var stream = CreateServerStream(Array.Empty<byte>());
@@ -86,7 +161,7 @@ public class ExceptionControlFlowTests
     public async Task ReadResponseStatus_MalformedStatusLine_StillThrows()
     {
         using var stream = CreateServerStream(Encoding.ASCII.GetBytes("NOT-A-STATUS\r\n"));
-        await Assert.ThrowsExceptionAsync<Exception>(async () =>
+        await Assert.ThrowsExactlyAsync<FormatException>(async () =>
             await stream.ReadResponseStatus(CancellationToken.None));
     }
 
@@ -103,6 +178,11 @@ public class ExceptionControlFlowTests
     {
         public int ErrorCount { get; private set; }
         public int DebugCount { get; private set; }
+        public int TraceCount { get; private set; }
+        public int WarningCount { get; private set; }
+        public int InformationCount { get; private set; }
+        public int CriticalCount { get; private set; }
+        public string? LastMessage { get; private set; }
         public List<(LogLevel Level, Exception? Exception)> Entries { get; } = new();
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
@@ -112,9 +192,17 @@ public class ExceptionControlFlowTests
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
+            LastMessage = formatter(state, exception);
             Entries.Add((logLevel, exception));
-            if (logLevel == LogLevel.Error) ErrorCount++;
-            if (logLevel == LogLevel.Debug) DebugCount++;
+            switch (logLevel)
+            {
+                case LogLevel.Trace: TraceCount++; break;
+                case LogLevel.Debug: DebugCount++; break;
+                case LogLevel.Information: InformationCount++; break;
+                case LogLevel.Warning: WarningCount++; break;
+                case LogLevel.Error: ErrorCount++; break;
+                case LogLevel.Critical: CriticalCount++; break;
+            }
         }
     }
 }

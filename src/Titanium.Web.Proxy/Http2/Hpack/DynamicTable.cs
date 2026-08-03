@@ -77,7 +77,7 @@ internal class DynamicTable
     /// <param name="index">Index.</param>
     public HttpHeader GetEntry(int index)
     {
-        if (index <= 0 || index > Length()) throw new IndexOutOfRangeException();
+        if (index <= 0 || index > Length()) throw new ArgumentOutOfRangeException(nameof(index));
 
         var i = head - index;
         if (i < 0) i += headerFields.Length;

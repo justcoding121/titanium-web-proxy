@@ -145,7 +145,7 @@ public class TransparentQuicProxyEndPoint : TransparentBaseProxyEndPoint
     ///         This event does <b>not</b> expose <c>DecryptSsl</c>: QUIC always decrypts at the proxy.
     ///     </para>
     /// </summary>
-    public event AsyncEventHandler<BeforeQuicAuthenticateEventArgs>? BeforeQuicAuthenticate;
+    public event AsyncEventHandler<BeforeQuicAuthenticateEventArgs>? BeforeQuicAuthenticate; // NOSONAR S3264 -- Public extension event invoked by the QUIC pipeline.
 
     internal async Task InvokeBeforeQuicAuthenticate(ProxyServer proxyServer,
         BeforeQuicAuthenticateEventArgs args, ILogger logger)

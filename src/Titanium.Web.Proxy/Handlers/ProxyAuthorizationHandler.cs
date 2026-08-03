@@ -11,6 +11,8 @@ namespace Titanium.Web.Proxy;
 
 public partial class ProxyServer
 {
+    private const string ProxyAuthenticationInvalid = "Proxy Authentication Invalid";
+
     /// <summary>
     ///     Callback to authorize clients of this proxy instance.
     /// </summary>
@@ -18,8 +20,11 @@ public partial class ProxyServer
     /// <returns>True if authorized.</returns>
     private async Task<bool> CheckAuthorization(SessionEventArgsBase session)
     {
+        var basicAuthenticate = ProxyBasicAuthenticateFunc;
+        var schemeAuthenticate = ProxySchemeAuthenticateFunc;
+
         // If we are not authorizing clients return true
-        if (ProxyBasicAuthenticateFunc == null && ProxySchemeAuthenticateFunc == null) return true;
+        if (basicAuthenticate is null && schemeAuthenticate is null) return true;
 
         var httpHeaders = session.HttpClient.Request.Headers;
 
@@ -39,34 +44,35 @@ public partial class ProxyServer
             if (firstSpace == -1 || header.IndexOf(' ', firstSpace + 1) != -1)
             {
                 // Return not authorized
-                session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
+                session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid);
                 return false;
             }
 
             var authenticationType = header.AsMemory(0, firstSpace);
             var credentials = header.AsMemory(firstSpace + 1);
 
-            if (ProxyBasicAuthenticateFunc != null)
+            // Prefer basic when configured; otherwise use scheme auth.
+            if (basicAuthenticate is not null)
                 return await AuthenticateUserBasic(session, authenticationType, credentials,
-                    ProxyBasicAuthenticateFunc);
+                    basicAuthenticate);
 
-            if (ProxySchemeAuthenticateFunc != null)
+            // Dual-null returned above and basic path returned above ⇒ schemeAuthenticate is set.
+            // Nullable flow does not carry that proof across the early return, so silence CS8602
+            // rather than using `!` (S8969) or a dead null check (S2583).
+#pragma warning disable CS8602
+            var result = await schemeAuthenticate(session, authenticationType.ToString(),
+                credentials.ToString());
+#pragma warning restore CS8602
+
+            if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
             {
-                var result =
-                    await ProxySchemeAuthenticateFunc(session, authenticationType.ToString(), credentials.ToString());
+                session.HttpClient.Response =
+                    CreateAuthentication407Response(ProxyAuthenticationInvalid, result.Continuation);
 
-                if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
-                {
-                    session.HttpClient.Response =
-                        CreateAuthentication407Response("Proxy Authentication Invalid", result.Continuation);
-
-                    return false;
-                }
-
-                return result.Result == ProxyAuthenticationResult.Success;
+                return false;
             }
 
-            return false;
+            return result.Result == ProxyAuthenticationResult.Success;
         }
         catch (Exception e)
         {
@@ -74,7 +80,7 @@ public partial class ProxyServer
                 httpHeaders));
 
             // Return not authorized
-            session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
+            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid);
             return false;
         }
     }
@@ -86,7 +92,7 @@ public partial class ProxyServer
         if (!KnownHeaders.ProxyAuthorizationBasic.Equals(authenticationType.Span))
         {
             // Return not authorized
-            session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
+            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid);
             return false;
         }
 
@@ -95,7 +101,7 @@ public partial class ProxyServer
         if (colonIndex == -1)
         {
             // Return not authorized
-            session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
+            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid);
             return false;
         }
 
@@ -103,7 +109,7 @@ public partial class ProxyServer
         var password = decoded.Substring(colonIndex + 1);
         var authenticated = await proxyBasicAuthenticateFunc(session, username, password);
         if (!authenticated)
-            session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Invalid");
+            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid);
 
         return authenticated;
     }
@@ -123,7 +129,7 @@ public partial class ProxyServer
             StatusDescription = description
         };
 
-        if (!string.IsNullOrWhiteSpace(continuation)) return CreateContinuationResponse(response, continuation!);
+        if (!string.IsNullOrWhiteSpace(continuation)) return CreateContinuationResponse(response, continuation);
 
         if (ProxyBasicAuthenticateFunc != null)
             response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, $"Basic realm=\"{ProxyAuthenticationRealm}\"");
@@ -138,7 +144,7 @@ public partial class ProxyServer
         return response;
     }
 
-    private Response CreateContinuationResponse(Response response, string continuation)
+    private static Response CreateContinuationResponse(Response response, string continuation)
     {
         response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, continuation);
 

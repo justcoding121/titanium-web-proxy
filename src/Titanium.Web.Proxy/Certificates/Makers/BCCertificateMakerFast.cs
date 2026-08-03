@@ -53,9 +53,9 @@ internal class BcCertificateMakerFast : ICertificateMaker
     /// <param name="sSubjectCn">The s subject cn.</param>
     /// <param name="signingCert">The signing cert.</param>
     /// <returns>X509Certificate2 instance.</returns>
-    public X509Certificate2 MakeCertificate(string sSubjectCn, X509Certificate2? signingCert = null)
+    public X509Certificate2 MakeCertificate(string sSubjectCn, X509Certificate2? signingCert)
     {
-        return MakeCertificateInternal(sSubjectCn, true, signingCert);
+        return MakeCertificateInternal(sSubjectCn, signingCert);
     }
 
     /// <summary>
@@ -74,7 +74,7 @@ internal class BcCertificateMakerFast : ICertificateMaker
     /// <param name="hostName">The host name</param>
     /// <returns>X509Certificate2 instance.</returns>
     /// <exception cref="PemException">Malformed sequence in RSA private key</exception>
-    private static X509Certificate2 GenerateCertificate(string? hostName,
+    private static X509Certificate2 GenerateCertificate(string? hostName, // NOSONAR S107 -- Certificate fields map directly to the generated X.509 structure.
         string subjectName,
         X509Name issuerDn, DateTime validFrom,
         DateTime validTo, AsymmetricCipherKeyPair subjectKeyPair,
@@ -164,7 +164,7 @@ internal class BcCertificateMakerFast : ICertificateMaker
         return x509Certificate;
     }
 
-    public AsymmetricCipherKeyPair GenerateKeyPair(int keyStrength = 2048)
+    public static AsymmetricCipherKeyPair GenerateKeyPair(int keyStrength = 2048)
     {
         var randomGenerator = new CryptoApiRandomGenerator();
         var secureRandom = new SecureRandom(randomGenerator);
@@ -255,11 +255,10 @@ internal class BcCertificateMakerFast : ICertificateMaker
     ///     Makes the certificate internal.
     /// </summary>
     /// <param name="subject">The s subject cn.</param>
-    /// <param name="switchToMtaIfNeeded">if set to <c>true</c> [switch to MTA if needed].</param>
     /// <param name="signingCert">The signing cert.</param>
     /// <returns>X509Certificate2.</returns>
     private X509Certificate2 MakeCertificateInternal(string subject,
-        bool switchToMtaIfNeeded, X509Certificate2? signingCert = null)
+        X509Certificate2? signingCert = null)
     {
         return MakeCertificateInternal(subject, $"CN={subject}",
             DateTime.UtcNow.AddDays(-certificateGraceDays), DateTime.UtcNow.AddDays(certificateValidDays),

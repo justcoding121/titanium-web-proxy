@@ -60,7 +60,8 @@ internal class ProxyInfo
     {
         var match =
             new Regex("^(?<scheme>.*://)?(?<host>[^:]*)(?<port>:[0-9]{1,5})?$",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Match(rawString);
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+                TimeSpan.FromSeconds(1)).Match(rawString);
         string empty1;
         string rawString1;
         string empty2;
@@ -94,7 +95,7 @@ internal class ProxyInfo
         var stringBuilder = new StringBuilder();
         foreach (var ch in rawString)
         {
-            if ("#$()+.?[\\^{|".IndexOf(ch) != -1)
+            if ("#$()+.?[\\^{|".Contains(ch))
                 stringBuilder.Append('\\');
             else if (ch == 42) stringBuilder.Append('.');
 
@@ -134,7 +135,7 @@ internal class ProxyInfo
 
         if (string.IsNullOrWhiteSpace(proxyServerValues)) return result;
 
-        foreach (var str in proxyServerValues!.Split(';'))
+        foreach (var str in proxyServerValues.Split(';'))
             result.AddRange(ParseProxyValue(str));
 
         return result;
@@ -150,10 +151,10 @@ internal class ProxyInfo
     /// <returns></returns>
     private static IEnumerable<HttpSystemProxyValue> ParseProxyValue(string value)
     {
-        var tmp = Regex.Replace(value, @"\s+", " ").Trim();
+        var tmp = Regex.Replace(value, @"\s+", " ", RegexOptions.None, TimeSpan.FromSeconds(1)).Trim();
         if (tmp.Length == 0) yield break;
 
-        var equalsIndex = tmp.IndexOf("=", StringComparison.InvariantCulture);
+        var equalsIndex = tmp.IndexOf('=');
         if (equalsIndex >= 0)
         {
             var protocolTypeStr = tmp.Substring(0, equalsIndex);

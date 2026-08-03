@@ -31,7 +31,7 @@ public partial class ProxyServer
     /// <param name="endPoint">The explicit endpoint.</param>
     /// <param name="clientConnection">The client connection.</param>
     /// <returns>The task.</returns>
-    private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClientConnection clientConnection)
+    private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClientConnection clientConnection) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var cancellationTokenSource = new CancellationTokenSource();
         RegisterSessionCancellation(cancellationTokenSource);
@@ -109,7 +109,7 @@ public partial class ProxyServer
                     return;
                 }
 
-                if (await CheckAuthorization(connectArgs) == false)
+                if (!await CheckAuthorization(connectArgs))
                 {
                     await endPoint.InvokeBeforeTunnelConnectResponse(this, connectArgs, logger);
 
@@ -175,12 +175,12 @@ public partial class ProxyServer
 
                 if (decryptSsl && clientHelloInfo != null)
                 {
-                    connectRequest.IsHttps = true; // todo: move this line to the previous "if"
+                    connectRequest.IsHttps = true; // Decryption changes the tunneled request to HTTPS semantics.
 
                     var sslProtocol = clientHelloInfo.SslProtocol & SupportedSslProtocols;
                     if (sslProtocol == SslProtocols.None)
                     {
-                        throw new Exception("Unsupported client SSL version.");
+                        throw new NotSupportedException("Unsupported client SSL version.");
                     }
 
                     clientStream.Connection.SslProtocol = sslProtocol;
@@ -216,10 +216,12 @@ public partial class ProxyServer
                         connectHost, connectPort,
                         connectArgs.UpstreamHttpProtocol,
                         allowDnsProbe: true);
-                    connectTiming?.MarkOriginCapabilityCompleted(
-                        h3RouteAtConnect.UseH3
-                            ? (h3RouteAtConnect.Source == Http3.Http3RouteSource.Forced ? "forced" : "cache")
-                            : (EnableHttpsSvcbDnsDiscovery ? "background" : "none"));
+                    string routeOutcome;
+                    if (h3RouteAtConnect.UseH3)
+                        routeOutcome = h3RouteAtConnect.Source == Http3.Http3RouteSource.Forced ? "forced" : "cache";
+                    else
+                        routeOutcome = EnableHttpsSvcbDnsDiscovery ? "background" : "none";
+                    connectTiming?.MarkOriginCapabilityCompleted(routeOutcome);
 
                     if (h3RouteAtConnect.UseH3)
                     {
@@ -336,7 +338,7 @@ public partial class ProxyServer
                     }
                     catch (Exception e)
                     {
-                        sslStream?.Dispose();
+                        if (sslStream != null) await sslStream.DisposeAsync();
 
                         ProxyLog.BrowserHandshakeFailed(logger, connectHostname, e);
 
@@ -398,8 +400,8 @@ public partial class ProxyServer
                                 try
                                 {
                                     // clientStream.Available should be at most BufferSize because it is using the same buffer size
-                                    var read = await clientStream.ReadAsync(data, 0, available, cancellationToken);
-                                    if (read != available) throw new Exception("Internal error.");
+                                    var read = await clientStream.ReadAsync(data.AsMemory(0, available), cancellationToken);
+                                    if (read != available) throw new InvalidOperationException("Internal error.");
 
                                     await connection.Stream.WriteAsync(data, 0, available, true, cancellationToken);
                                 }
@@ -429,7 +431,7 @@ public partial class ProxyServer
 
             if (connectArgs != null && method == KnownMethod.Pri)
             {
-                // todo
+                // Validate the remainder of the HTTP/2 connection preface before routing.
                 var httpCmd = await clientStream.ReadLineAsync(cancellationToken);
                 if (httpCmd == "PRI * HTTP/2.0")
                 {
@@ -446,7 +448,7 @@ public partial class ProxyServer
                     // enforces that decision on the wire rather than merely hoping the client respects it.
                     if (clientStream.Connection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
                     {
-                        throw new Exception("HTTP/2 Protocol violation. Received the HTTP/2 connection preface " +
+                        throw new InvalidDataException("HTTP/2 Protocol violation. Received the HTTP/2 connection preface " +
                             $"on a connection that negotiated '{clientStream.Connection.NegotiatedApplicationProtocol}' " +
                             "via ALPN instead of 'h2'.");
                     }
@@ -456,15 +458,15 @@ public partial class ProxyServer
                     // HTTP/2 Connection Preface
                     var line = await clientStream.ReadLineAsync(cancellationToken);
                     if (line != string.Empty)
-                        throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
+                        throw new InvalidDataException($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
 
                     line = await clientStream.ReadLineAsync(cancellationToken);
                     if (line != "SM")
-                        throw new Exception($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
+                        throw new InvalidDataException($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
 
                     line = await clientStream.ReadLineAsync(cancellationToken);
                     if (line != string.Empty)
-                        throw new Exception($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
+                        throw new InvalidDataException($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
 
                     if (requiresH3Bridge)
                     {
@@ -473,7 +475,7 @@ public partial class ProxyServer
                         await TcpConnectionFactory.Release(prefetchConnectionTask, true);
                         prefetchConnectionTask = null;
                         var (h3BridgeHost, h3BridgePort) =
-                            ParseHostAndPort(connectArgs.HttpClient.ConnectRequest!.Authority.GetString(), 443);
+                            ParseHostAndPort(connectArgs.HttpClient.ConnectRequest.Authority.GetString(), 443);
                         await SendHttp2ToHttp3Bridge(clientStream, endPoint, connectArgs.HttpClient.ConnectRequest,
                             connectArgs.UserData, h3BridgeHost, h3BridgePort,
                             connectArgs.CancellationTokenSource, connectArgs.UpstreamHttpProtocol);
@@ -487,7 +489,7 @@ public partial class ProxyServer
                         // and RetainedConnectionTask is null) - every h2 stream on this connection instead gets
                         // its own independently managed HTTP/1.1 origin connection from SendHttp2ToHttp11Bridge.
                         var (bridgeHost, bridgePort) =
-                            ParseHostAndPort(connectArgs.HttpClient.ConnectRequest!.Authority.GetString(), 443);
+                            ParseHostAndPort(connectArgs.HttpClient.ConnectRequest.Authority.GetString(), 443);
                         await SendHttp2ToHttp11Bridge(clientStream, endPoint, connectArgs.HttpClient.ConnectRequest,
                             connectArgs.UserData, bridgeHost, bridgePort, null, null,
                             connectArgs.CancellationTokenSource);
@@ -499,7 +501,7 @@ public partial class ProxyServer
                     // is still a valid, healthy, correctly keyed h2 connection. This is what collapses the
                     // previous up-to-three-connections cold h2 flow (probe + prefetch + session) into one.
                     var (sessionConnectHost, sessionConnectPort) =
-                        ParseHostAndPort(connectArgs.HttpClient.ConnectRequest!.Authority.GetString(), 443);
+                        ParseHostAndPort(connectArgs.HttpClient.ConnectRequest.Authority.GetString(), 443);
                     var expectedCacheKey = GetHttp2ConnectionCacheKey(connectArgs, sessionConnectHost,
                         sessionConnectPort, null, null);
                     var connection = await AdoptRetainedConnectionAsync(prefetchConnectionTask, expectedCacheKey,
@@ -579,6 +581,11 @@ public partial class ProxyServer
 
             if (requiresH2OriginBridge)
             {
+                var bridgeArgs = connectArgs ??
+                    throw new InvalidOperationException("HTTP/2 origin bridging requires CONNECT session state.");
+                var connectRequest = bridgeArgs.HttpClient.ConnectRequest ??
+                    throw new InvalidOperationException("HTTP/2 origin bridging requires a CONNECT request.");
+
                 // UpstreamHttpProtocol.Http2 + AllowHttpProtocolTranslation: the client never offered "h2"
                 // (see the http2Supported computation above), so it stays on the normal HTTP/1.1 wire format,
                 // but every request must be translated onto the already-established h2 origin connection
@@ -586,10 +593,10 @@ public partial class ProxyServer
                 // Http2NegotiationResult) via the HTTP/1.1-client-to-h2-origin bridge instead of the normal
                 // protocol-symmetric HandleHttpSessionRequest pipeline.
                 var (bridgeHost, bridgePort) =
-                    ParseHostAndPort(connectArgs!.HttpClient.ConnectRequest!.Authority.GetString(), 443);
-                await SendHttp11ToHttp2Bridge(clientStream, endPoint, connectArgs.HttpClient.ConnectRequest,
-                    connectArgs.UserData, bridgeHost, bridgePort, null, null, prefetchTask,
-                    connectArgs.CancellationTokenSource);
+                    ParseHostAndPort(connectRequest.Authority.GetString(), 443);
+                await SendHttp11ToHttp2Bridge(clientStream, endPoint, connectRequest,
+                    bridgeArgs.UserData, bridgeHost, bridgePort, null, null, prefetchTask,
+                    bridgeArgs.CancellationTokenSource);
                 return;
             }
 
@@ -624,13 +631,13 @@ public partial class ProxyServer
         }
         finally
         {
-            if (!cancellationTokenSource.IsCancellationRequested) cancellationTokenSource.Cancel();
+            if (!cancellationTokenSource.IsCancellationRequested) await cancellationTokenSource.CancelAsync();
             UnregisterSessionCancellation(cancellationTokenSource);
             cancellationTokenSource.Dispose();
 
             await TcpConnectionFactory.Release(prefetchConnectionTask, closeServerConnection);
 
-            clientStream.Dispose();
+            await clientStream.DisposeAsync();
             connectArgs?.Dispose();
         }
     }

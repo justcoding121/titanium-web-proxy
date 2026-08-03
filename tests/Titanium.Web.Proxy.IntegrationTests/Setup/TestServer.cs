@@ -21,8 +21,8 @@ public class TestServer : IDisposable
 {
     private readonly IHost host;
 
-    private Func<HttpContext, Task> requestHandler;
-    private Func<ConnectionContext, Task> tcpRequestHandler;
+    private Func<HttpContext, Task> requestHandler = null!;
+    private Func<ConnectionContext, Task> tcpRequestHandler = null!;
 
     public TestServer(X509Certificate2 serverCertificate, bool requireMutualTls)
     {
@@ -77,7 +77,7 @@ public class TestServer : IDisposable
         host.Start();
 
         var addresses = host.Services.GetRequiredService<IServer>()
-            .Features.Get<IServerAddressesFeature>()
+            .Features.Get<IServerAddressesFeature>()!
             .Addresses.ToArray();
 
         HttpListeningPort = new Uri(addresses[0]).Port;
@@ -97,6 +97,7 @@ public class TestServer : IDisposable
     {
         host.StopAsync().Wait();
         host.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     public void HandleRequest(Func<HttpContext, Task> requestHandler)
@@ -131,7 +132,7 @@ public class TestServer : IDisposable
             });
         }
 
-        public void ConfigureServices(IServiceCollection services)
+        public static void ConfigureServices(IServiceCollection services)
         {
         }
     }

@@ -49,7 +49,8 @@ internal sealed class WebSocketMessageTracker
             // Note: RSV1 is not preserved in WebSocketFrame.Data after decode (the decoder unmasks).
             // For now, we track whether the frame was the opener and assume RSV1=false
             // (permessage-deflate is not yet negotiated since we strip the extension in Phase 1.4).
-            messageRsv1 = false; // TODO: wire RSV1 from wire bytes when permessage-deflate is enabled
+            // Frame metadata currently does not expose RSV1, so compressed-message tracking starts clear.
+            messageRsv1 = false;
             inFragmentedMessage = !frame.IsFinal;
             isCompressed = messageRsv1;
             return frame.IsFinal;

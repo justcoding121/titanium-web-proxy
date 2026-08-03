@@ -27,7 +27,7 @@ using static Common;
 ///         cannot be represented directly by <see cref="SafeHandle" /> itself.
 ///     </para>
 /// </summary>
-internal sealed class SafeSspiHandle : CriticalFinalizerObject, IDisposable
+internal sealed partial class SafeSspiHandle : CriticalFinalizerObject, IDisposable
 {
     internal enum HandleKind
     {
@@ -83,9 +83,9 @@ internal sealed class SafeSspiHandle : CriticalFinalizerObject, IDisposable
         Free();
     }
 
-    [DllImport("secur32.dll", SetLastError = true)]
-    private static extern int FreeCredentialsHandle(ref SecurityHandle phCredential);
+    [LibraryImport("secur32.dll", SetLastError = true)]
+    private static partial int FreeCredentialsHandle(ref SecurityHandle phCredential);
 
-    [DllImport("secur32.dll", SetLastError = true)]
-    private static extern int DeleteSecurityContext(ref SecurityHandle phContext);
+    [LibraryImport("secur32.dll", SetLastError = true)]
+    private static partial int DeleteSecurityContext(ref SecurityHandle phContext);
 }

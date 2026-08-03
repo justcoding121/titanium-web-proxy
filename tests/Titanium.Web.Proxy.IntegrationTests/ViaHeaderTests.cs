@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class ViaHeaderTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -19,7 +19,7 @@ public class ViaHeaderTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -43,7 +43,7 @@ public class ViaHeaderTests
 
         server.HandleRequest(context =>
         {
-            capturedVia = context.Request.Headers["Via"].ToString();
+            capturedVia = context.Request.Headers.Via.ToString();
             if (string.IsNullOrEmpty(capturedVia)) capturedVia = null;
             context.Response.StatusCode = 200;
             return Task.CompletedTask;
@@ -98,7 +98,7 @@ public class ViaHeaderTests
 
         server.HandleRequest(context =>
         {
-            capturedVia = context.Request.Headers["Via"].ToString();
+            capturedVia = context.Request.Headers.Via.ToString();
             if (string.IsNullOrEmpty(capturedVia)) capturedVia = null;
             context.Response.StatusCode = 200;
             return Task.CompletedTask;
@@ -149,7 +149,7 @@ public class ViaHeaderTests
 
         server.HandleRequest(context =>
         {
-            capturedVia = context.Request.Headers["Via"].ToString();
+            capturedVia = context.Request.Headers.Via.ToString();
             if (string.IsNullOrEmpty(capturedVia)) capturedVia = null;
             context.Response.StatusCode = 200;
             return Task.CompletedTask;

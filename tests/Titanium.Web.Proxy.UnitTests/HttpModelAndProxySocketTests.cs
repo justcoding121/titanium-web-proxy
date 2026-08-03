@@ -4,6 +4,8 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.ProxySocket;
@@ -32,7 +34,7 @@ namespace Titanium.Web.Proxy.UnitTests
                 socket.ProxyEndPoint = new IPEndPoint(IPAddress.Loopback, 1);
                 socket.ProxyType = (ProxyTypes)int.MaxValue;
 
-                var exception = Assert.ThrowsException<InvalidOperationException>(() =>
+                var exception = Assert.ThrowsExactly<InvalidOperationException>(() =>
                     socket.BeginConnect(new IPEndPoint(IPAddress.Loopback, 80), null, null));
 
                 StringAssert.Contains(exception.Message, "Unsupported proxy type");
@@ -132,6 +134,157 @@ namespace Titanium.Web.Proxy.UnitTests
             // The test simply asserts that Request.Url does not go through System.Uri normalisation.
             // The only guarantee is that Request.Url matches the original raw string.
             Assert.AreEqual(rawUri, url, "Request.Url round-trip must be lossless");
+        }
+
+        [DataTestMethod]
+        [DataRow("get /items HTTP/1.0", "GET", "/items", 1, 0)]
+        [DataRow("POST /submit HTTP/1.1", "POST", "/submit", 1, 1)]
+        [DataRow("options *", "OPTIONS", "*", 1, 1)]
+        public void ParseRequestLine_ExtractsAndNormalizesComponents(
+            string line, string expectedMethod, string expectedTarget, int expectedMajor, int expectedMinor)
+        {
+            Request.ParseRequestLine(line, out var method, out var target, out var version);
+
+            Assert.AreEqual(expectedMethod, method);
+            Assert.AreEqual(expectedTarget, target.GetString());
+            Assert.AreEqual(new Version(expectedMajor, expectedMinor), version);
+        }
+
+        [TestMethod]
+        public void ParseRequestLine_WithoutSpaces_ThrowsFormatException()
+        {
+            var exception = Assert.ThrowsExactly<FormatException>(() =>
+                Request.ParseRequestLine("GET", out _, out _, out _));
+
+            StringAssert.Contains(exception.Message, "Invalid HTTP request line");
+        }
+
+        [DataTestMethod]
+        [DataRow("HTTP/1.0 404 Not Found", 1, 0, 404, "Not Found")]
+        [DataRow("HTTP/1.1 204", 1, 1, 204, "")]
+        [DataRow("HTTP/9.9 299 Custom", 1, 1, 299, "Custom")]
+        public void ParseResponseLine_ExtractsVersionStatusAndDescription(
+            string line, int expectedMajor, int expectedMinor, int expectedStatus, string expectedDescription)
+        {
+            Response.ParseResponseLine(line, out var version, out var status, out var description);
+
+            Assert.AreEqual(new Version(expectedMajor, expectedMinor), version);
+            Assert.AreEqual(expectedStatus, status);
+            Assert.AreEqual(expectedDescription, description);
+        }
+
+        [TestMethod]
+        public void ParseResponseLine_WithoutStatusSeparator_ThrowsFormatException()
+        {
+            var exception = Assert.ThrowsExactly<FormatException>(() =>
+                Response.ParseResponseLine("HTTP/1.1", out _, out _, out _));
+
+            StringAssert.Contains(exception.Message, "Invalid HTTP status line");
+        }
+
+        [TestMethod]
+        public void Request_OriginFormUrl_UsesHostAndScheme()
+        {
+            var request = new Request { RequestUriString = "/path?q=1", Host = "example.com" };
+
+            Assert.AreEqual("http://example.com/path?q=1", request.Url);
+
+            request.IsHttps = true;
+            Assert.AreEqual("https://example.com/path?q=1", request.Url);
+        }
+
+        [TestMethod]
+        public void Request_AbsoluteUri_UpdatesHostAndClearsAuthority()
+        {
+            var request = new Request
+            {
+                Host = "old.example",
+                Authority = (ByteString)"authority.example"
+            };
+
+            request.RequestUriString = "https://new.example:8443/a";
+
+            Assert.IsTrue(request.IsHttps);
+            Assert.AreEqual("new.example:8443", request.Host);
+            Assert.AreEqual(string.Empty, request.Authority.GetString());
+            Assert.AreEqual("https://new.example:8443/a", request.Url);
+        }
+
+        [TestMethod]
+        public void Request_ConvenienceFlags_ReflectHeadersAndProtocol()
+        {
+            var request = new Request();
+            request.Headers.AddHeader(KnownHeaders.Expect, KnownHeaders.Expect100Continue.String);
+            request.ContentType = "Multipart/Form-Data; boundary=x";
+            request.Headers.AddHeader(KnownHeaders.Upgrade, "WebSocket");
+
+            Assert.IsTrue(request.ExpectContinue);
+            Assert.IsTrue(request.IsMultipartFormData);
+            Assert.IsTrue(request.UpgradeToWebSocket);
+
+            request.ExtendedConnectProtocol = "not-websocket";
+            Assert.IsFalse(request.UpgradeToWebSocket,
+                "Extended CONNECT protocol takes precedence over the HTTP/1.1 Upgrade header.");
+            request.ExtendedConnectProtocol = "WEBSOCKET";
+            Assert.IsTrue(request.UpgradeToWebSocket);
+        }
+
+        [TestMethod]
+        public void Request_HasBody_CoversFramingAndHttp10PostRules()
+        {
+            var request = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
+            Assert.IsFalse(request.HasBody);
+
+            request.ContentLength = 3;
+            Assert.IsTrue(request.HasBody);
+
+            request.ContentLength = 0;
+            request.IsChunked = true;
+            Assert.IsTrue(request.HasBody,
+                "Enabling chunked framing removes the conflicting Content-Length and supplies body framing.");
+
+            request.ContentLength = -1;
+            request.IsChunked = false;
+            request.Method = "POST";
+            request.HttpVersion = HttpHeader.Version10;
+            Assert.IsTrue(request.HasBody);
+        }
+
+        [TestMethod]
+        public void EnsureBodyAvailable_DistinguishesMissingUnreadAndLockedRequestBodies()
+        {
+            var noBody = new Request();
+            Assert.ThrowsExactly<BodyNotFoundException>(() => noBody.EnsureBodyAvailable());
+
+            var unread = new Request { ContentLength = 1 };
+            var unreadException = Assert.ThrowsExactly<InvalidOperationException>(() => unread.EnsureBodyAvailable());
+            StringAssert.Contains(unreadException.Message, "not read yet");
+
+            unread.Locked = true;
+            var lockedException = Assert.ThrowsExactly<InvalidOperationException>(() => unread.EnsureBodyAvailable());
+            StringAssert.Contains(lockedException.Message, "after request is made");
+        }
+
+        [TestMethod]
+        public void HeaderText_SerializesRequestAndResponseStartLines()
+        {
+            var request = new Request
+            {
+                Method = "GET",
+                RequestUriString = "/resource",
+                HttpVersion = HttpHeader.Version11,
+                Host = "example.com"
+            };
+            var response = new Response
+            {
+                HttpVersion = HttpHeader.Version10,
+                StatusCode = 418,
+                StatusDescription = "Teapot"
+            };
+
+            StringAssert.StartsWith(request.HeaderText, "GET /resource HTTP/1.1\r\n");
+            StringAssert.Contains(request.HeaderText, "Host: example.com\r\n");
+            StringAssert.StartsWith(response.HeaderText, "HTTP/1.0 418 Teapot\r\n");
         }
 
         private static Titanium.Web.Proxy.ProxySocket.ProxySocket CreateSocket()

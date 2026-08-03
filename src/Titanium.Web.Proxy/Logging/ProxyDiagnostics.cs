@@ -16,6 +16,7 @@ namespace Titanium.Web.Proxy.Logging;
 /// </summary>
 internal static class ProxyDiagnostics
 {
+    private const string ContextTemplate = "{Context}";
     /// <summary>
     ///     Reports a caught exception that is expected/benign under normal operation - client
     ///     disconnects, cancelled operations, expected socket resets, cache races, retries, and similar.
@@ -26,7 +27,7 @@ internal static class ProxyDiagnostics
     public static void ReportBenign(ILogger logger, string context, Exception exception)
     {
         if (!logger.IsEnabled(LogLevel.Debug)) return;
-        logger.LogDebug(exception, "{Context}", context);
+        logger.LogDebug(exception, ContextTemplate, context);
     }
 
     /// <summary>
@@ -35,7 +36,7 @@ internal static class ProxyDiagnostics
     public static void ReportTrace(ILogger logger, string context)
     {
         if (!logger.IsEnabled(LogLevel.Trace)) return;
-        logger.LogTrace("{Context}", context);
+        logger.LogTrace(ContextTemplate, context);
     }
 
     /// <summary>
@@ -62,7 +63,7 @@ internal static class ProxyDiagnostics
     public static void ReportUnexpected(ILogger logger, string context, Exception exception)
     {
         if (!logger.IsEnabled(LogLevel.Error)) return;
-        logger.LogError(exception, "{Context}", context);
+        logger.LogError(exception, ContextTemplate, context);
     }
 
     /// <summary>
@@ -73,9 +74,9 @@ internal static class ProxyDiagnostics
     {
         if (!logger.IsEnabled(LogLevel.Critical)) return;
         if (exception != null)
-            logger.LogCritical(exception, "{Context}", context);
+            logger.LogCritical(exception, ContextTemplate, context);
         else
-            logger.LogCritical("{Context}", context);
+            logger.LogCritical(ContextTemplate, context);
     }
 
     /// <summary>
@@ -87,7 +88,7 @@ internal static class ProxyDiagnostics
     public static void ReportWarning(ILogger logger, string context)
     {
         if (!logger.IsEnabled(LogLevel.Warning)) return;
-        logger.LogWarning("{Context}", context);
+        logger.LogWarning(ContextTemplate, context);
     }
 
     /// <summary>
@@ -96,7 +97,7 @@ internal static class ProxyDiagnostics
     public static void ReportInformation(ILogger logger, string context)
     {
         if (!logger.IsEnabled(LogLevel.Information)) return;
-        logger.LogInformation("{Context}", context);
+        logger.LogInformation(ContextTemplate, context);
     }
 
     /// <summary>
@@ -109,7 +110,7 @@ internal static class ProxyDiagnostics
     /// </summary>
     public static void ReportUndisposedFinalizer(ILogger? logger, string typeName)
     {
-        var effectiveLogger = logger ?? FallbackLogger;
+        var effectiveLogger = logger ?? Logger;
         ReportWarning(effectiveLogger, $"{typeName} was finalized without being disposed first.");
     }
 
@@ -120,13 +121,13 @@ internal static class ProxyDiagnostics
     ///     warnings are still visible by default without requiring extra plumbing through every stream
     ///     helper class.
     /// </summary>
-    internal static ILogger FallbackLogger
+    internal static ILogger Logger
     {
-        get => fallbackLogger;
-        set => fallbackLogger = value ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+        get => logger;
+        set => logger = value ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
     }
 
-    private static ILogger fallbackLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+    private static ILogger logger = Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
 
     /// <summary>
     ///     True when <paramref name="exception" /> (or a nested inner exception) is a normal part of

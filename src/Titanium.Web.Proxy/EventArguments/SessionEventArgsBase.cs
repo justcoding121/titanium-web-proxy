@@ -139,7 +139,7 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
         set
         {
             if (value && !IsWindowsAuthenticationSupported)
-                throw new Exception("Windows Authentication is not supported");
+                throw new NotSupportedException("Windows Authentication is not supported");
 
             enableWinAuth = value;
         }
@@ -160,7 +160,7 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// </summary>
     public IPEndPoint ClientRemoteEndPoint => (IPEndPoint)ClientConnection.RemoteEndPoint;
 
-    [Obsolete("Use ClientRemoteEndPoint instead.")]
+    [Obsolete("Use ClientRemoteEndPoint instead.")] // NOSONAR S1133 -- Binary-compatible public API.
     public IPEndPoint ClientEndPoint => ClientRemoteEndPoint;
 
     /// <summary>
@@ -184,7 +184,8 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// </summary>
     public HttpWebClient HttpClient { get; }
 
-    [Obsolete("Use HttpClient instead.")] public HttpWebClient WebSession => HttpClient;
+    [Obsolete("Use HttpClient instead.")] // NOSONAR S1133 -- Binary-compatible public API.
+    public HttpWebClient WebSession => HttpClient;
 
     /// <summary>
     ///     Gets or sets the custom up stream proxy.
@@ -204,7 +205,7 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// </summary>
     public ProxyEndPoint ProxyEndPoint { get; }
 
-    [Obsolete("Use ProxyEndPoint instead.")]
+    [Obsolete("Use ProxyEndPoint instead.")] // NOSONAR S1133 -- Binary-compatible public API.
     public ProxyEndPoint LocalEndPoint => ProxyEndPoint;
 
     /// <summary>
@@ -238,6 +239,7 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     public void Dispose()
     {
         Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
     protected void OnException(Exception exception)

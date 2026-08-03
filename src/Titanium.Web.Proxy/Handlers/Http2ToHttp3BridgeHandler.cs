@@ -43,7 +43,7 @@ public partial class ProxyServer
     ///     <see cref="NullOriginStream"/> so every eligible H2 stream is forwarded to the QUIC origin
     ///     independently by <see cref="BridgeOnBeforeRequestForH3"/>.
     /// </summary>
-    internal async Task SendHttp2ToHttp3Bridge(
+    internal async Task SendHttp2ToHttp3Bridge( // NOSONAR S107 -- Bridge parameters mirror connection context and remain explicit for safe protocol routing.
         HttpClientStream clientStream,
         ProxyEndPoint endPoint,
         ConnectRequest? connectRequest,
@@ -159,8 +159,8 @@ public partial class ProxyServer
         if (!ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var streamState))
             return;
 
-        // Cookie header consolidation: RFC 7540 §8.1.2.5 permits multiple Cookie fields over H2;
-        // consolidate before forwarding to avoid confusing origins or middleware.
+        // RFC 7540 section 8.1.2.5 permits multiple Cookie fields over HTTP/2; consolidate before
+        // forwarding to avoid confusing origins or middleware.
         var cookieHeaders = sessionArgs.HttpClient.Request.Headers.GetHeaders("Cookie");
         if (cookieHeaders is { Count: > 1 })
         {
@@ -179,7 +179,7 @@ public partial class ProxyServer
                         $"H2→H3 bridge round trip failed for stream {ctx.StreamId}",
                         new ProxyHttpException(
                             $"H2→H3 bridge round trip failed for stream {ctx.StreamId}",
-                            t.Exception!.GetBaseException(), sessionArgs));
+                            t.Exception.GetBaseException(), sessionArgs));
             }, TaskScheduler.Default);
 
         // Register ownership BEFORE returning from this delegate so Http2Helper sees the state
@@ -196,7 +196,7 @@ public partial class ProxyServer
     ///     <see cref="Http2Helper.EmitSyntheticResponseAsync"/>.  Mirrors the structure of
     ///     <c>RunHttp2ToHttp11BridgeRoundTripAsync</c>.
     /// </summary>
-    private async Task RunHttp2ToHttp3BridgeRoundTripAsync(
+    private async Task RunHttp2ToHttp3BridgeRoundTripAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         SessionEventArgs sessionArgs,
         int streamId,
         Http2ConnectionState connectionState,

@@ -33,7 +33,7 @@ internal sealed class Http2RawOriginServer : IDisposable
 {
     private readonly TcpListener listener;
     private readonly X509Certificate2 certificate;
-    private Func<Http2RawFrame.Connection, Task> handler;
+    private Func<Http2RawFrame.Connection, Task> handler = null!;
     private bool disposed;
 
     public Http2RawOriginServer(X509Certificate2 certificate)
@@ -147,7 +147,7 @@ internal sealed class Http2RawOriginServer : IDisposable
         {
             while (true)
             {
-                int read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
+                int read = await stream.ReadAsync(buffer, cts.Token);
                 if (read <= 0)
                 {
                     // graceful EOF from the peer - nothing more to drain.

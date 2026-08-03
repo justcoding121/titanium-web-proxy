@@ -49,7 +49,7 @@ internal sealed class HttpClientStream : HttpStream
         var httpCmd = await ReadLineAsync(cancellationToken);
         if (string.IsNullOrEmpty(httpCmd)) return default;
 
-        Request.ParseRequestLine(httpCmd!, out var method, out var requestUri, out var version);
+        Request.ParseRequestLine(httpCmd, out var method, out var requestUri, out var version);
 
         return new RequestStatusInfo { Method = method, RequestUri = requestUri, Version = version };
     }

@@ -8,7 +8,7 @@ namespace Titanium.Web.Proxy.Exceptions;
 ///     The caller should catch this and fall back to a TCP-based bridge so that proxy rules are honoured
 ///     on the TCP leg rather than being silently bypassed.
 /// </summary>
-internal sealed class QuicProxyNotSupportedException : Exception
+internal sealed class QuicProxyNotSupportedException : Exception // NOSONAR S3871 -- internal transport fallback signal is not supported public API.
 {
     internal QuicProxyNotSupportedException(string proxyDescription)
         : base($"QUIC cannot route via proxy '{proxyDescription}': System.Net.Quic does not support " +

@@ -43,6 +43,8 @@ internal class WinAuthEndPoint
             if (credentials != null)
                 authIdentity = MarshaledAuthIdentity.Create(credentials);
 
+            var lifetime = new SecurityInteger(0);
+
             var result = AcquireCredentialsHandle(
                 credentials == null ? WindowsIdentity.GetCurrent().Name : null!,
                 authScheme,
@@ -52,7 +54,7 @@ internal class WinAuthEndPoint
                 0,
                 IntPtr.Zero,
                 ref state.Credentials.RawHandle,
-                ref NewLifeTime);
+                ref lifetime);
 
             if (result != SuccessfulResult) return null;
 
@@ -66,8 +68,8 @@ internal class WinAuthEndPoint
                 0,
                 out state.Context.RawHandle,
                 out clientToken,
-                out NewContextAttributes,
-                out NewLifeTime);
+                out _,
+                out lifetime);
 
             if (result != IntermediateResult && result != SuccessfulResult) return null;
 
@@ -228,8 +230,8 @@ internal class WinAuthEndPoint
                 0,
                 out state.Context.RawHandle,
                 out clientToken,
-                out NewContextAttributes,
-                out NewLifeTime);
+                out _,
+                out _);
 
             // SuccessfulResult => authentication complete.
             // IntermediateResult => another leg is required (multi-round Negotiate).
@@ -273,22 +275,18 @@ internal class WinAuthEndPoint
             {
                 for (var index = 0; index < clientToken.cBuffers; index++)
                 {
-                    // The bits were written out the following order:
-                    // int cbBuffer;
-                    // int BufferType;
-                    // pvBuffer;
-                    // What we need to do here is to grab a hold of the pvBuffer allocate by the individual
-                    // SecBuffer and release it...
-                    var currentOffset = index * Marshal.SizeOf(typeof(SecurityBuffer));
+                    // SecurityBuffer layout in memory: cbBuffer, BufferType, pvBuffer.
+                    // Release each native pvBuffer allocated by the individual SecBuffer entries.
+                    var currentOffset = index * Marshal.SizeOf<SecurityBuffer>();
                     var cbBuffer = Marshal.ReadInt32(clientToken.pBuffers, currentOffset);
                     var secBufferpvBuffer = Marshal.ReadIntPtr(clientToken.pBuffers,
-                        currentOffset + Marshal.SizeOf(typeof(int)) + Marshal.SizeOf(typeof(int)));
+                        currentOffset + Marshal.SizeOf<int>() + Marshal.SizeOf<int>());
                     ZeroBuffer(secBufferpvBuffer, cbBuffer);
                     Marshal.FreeHGlobal(secBufferpvBuffer);
                 }
             }
 
-            ZeroBuffer(clientToken.pBuffers, clientToken.cBuffers * Marshal.SizeOf(typeof(SecurityBuffer)));
+            ZeroBuffer(clientToken.pBuffers, clientToken.cBuffers * Marshal.SizeOf<SecurityBuffer>());
             Marshal.FreeHGlobal(clientToken.pBuffers);
             clientToken.pBuffers = IntPtr.Zero;
         }
@@ -341,7 +339,7 @@ internal class WinAuthEndPoint
                    (state!.AuthState == State.WinAuthState.FinalToken ||
                     state.AuthState == State.WinAuthState.Authorized);
 
-        throw new Exception("Unsupported validation of WinAuthState");
+        throw new NotSupportedException("Unsupported validation of WinAuthState");
     }
 
     /// <summary>
@@ -359,10 +357,10 @@ internal class WinAuthEndPoint
 
     #region Native calls to secur32.dll
 
-    [DllImport("secur32.dll", SetLastError = true)]
-    private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, // PCredHandle
+    [DllImport("secur32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, // NOSONAR SYSLIB1054 -- Legacy SSPI marshalling is required by this existing interop signature.
         IntPtr phContext, // PCtxtHandle
-        string pszTargetName,
+        [MarshalAs(UnmanagedType.LPWStr)] string pszTargetName,
         int fContextReq,
         int reserved1,
         int targetDataRep,
@@ -373,10 +371,10 @@ internal class WinAuthEndPoint
         out uint pfContextAttr, // managed ulong == 64 bits!!!
         out SecurityInteger ptsExpiry); // PTimeStamp
 
-    [DllImport("secur32", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, // PCredHandle
+    [DllImport("secur32", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, // NOSONAR SYSLIB1054 -- Legacy SSPI marshalling is required by this existing interop signature.
         ref SecurityHandle phContext, // PCtxtHandle
-        string pszTargetName,
+        [MarshalAs(UnmanagedType.LPWStr)] string pszTargetName,
         int fContextReq,
         int reserved1,
         int targetDataRep,
@@ -387,10 +385,10 @@ internal class WinAuthEndPoint
         out uint pfContextAttr, // managed ulong == 64 bits!!!
         out SecurityInteger ptsExpiry); // PTimeStamp
 
-    [DllImport("secur32.dll", CharSet = CharSet.Auto, SetLastError = false)]
-    private static extern int AcquireCredentialsHandle(
-        string? pszPrincipal, // SEC_CHAR*
-        string pszPackage, // SEC_CHAR* // "Kerberos","NTLM","Negotiative"
+    [DllImport("secur32.dll", CharSet = CharSet.Unicode, SetLastError = false)]
+    private static extern int AcquireCredentialsHandle( // NOSONAR SYSLIB1054 -- Legacy SSPI marshalling is required by this existing interop signature.
+        [MarshalAs(UnmanagedType.LPWStr)] string? pszPrincipal, // SEC_CHAR*
+        [MarshalAs(UnmanagedType.LPWStr)] string pszPackage, // SEC_CHAR* // "Kerberos","NTLM","Negotiative"
         int fCredentialUse,
         IntPtr pAuthenticationId, // _LUID AuthenticationID,//pvLogonID, // PLUID
         IntPtr pAuthData, // PVOID

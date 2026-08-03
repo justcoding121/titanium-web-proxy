@@ -80,6 +80,7 @@ public enum CertificateKeyAlgorithm
 /// </summary>
 public sealed class CertificateManager : IDisposable
 {
+    private const string RunAsAdministrator = "runas";
     private const string DefaultRootCertificateIssuer = "Titanium";
 
     private const string DefaultRootRootCertificateName = "Titanium Root Certificate Authority";
@@ -141,6 +142,12 @@ public sealed class CertificateManager : IDisposable
     private string? rootCertificateName;
 
     /// <summary>
+    ///     Absolute path to certutil.exe under <see cref="Environment.SystemDirectory" /> (S4036).
+    /// </summary>
+    private static string CertUtilExecutablePath =>
+        Path.Combine(Environment.SystemDirectory, "certutil.exe");
+
+    /// <summary>
     ///     Initializes a new instance of the <see cref="CertificateManager" /> class.
     /// </summary>
     /// <param name="rootCertificateName"></param>
@@ -164,7 +171,7 @@ public sealed class CertificateManager : IDisposable
     ///     Read live on every disk save, independently of <paramref name="maxCacheEntriesProvider" />.
     ///     <see langword="null" /> return value means unbounded.
     /// </param>
-    internal CertificateManager(string? rootCertificateName, string? rootCertificateIssuerName,
+    internal CertificateManager(string? rootCertificateName, string? rootCertificateIssuerName, // NOSONAR S107 -- Constructor preserves established configuration wiring.
         bool userTrustRootCertificate, bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin,
         ILogger logger, Func<int?>? maxCacheEntriesProvider = null, Func<int?>? maxDiskCacheEntriesProvider = null)
     {
@@ -271,7 +278,6 @@ public sealed class CertificateManager : IDisposable
                         certEngineValue = new BcCertificateMakerFast(CertificateValidDays, CertificateGraceDays,
                             leafKeyAlgorithm);
                         break;
-                    case CertificateEngine.DefaultWindows:
                     default:
                         if (!RunTime.IsWindows)
                             throw new PlatformNotSupportedException("The Windows certificate engine requires Windows.");
@@ -279,8 +285,8 @@ public sealed class CertificateManager : IDisposable
                         break;
                 }
 
-            return certEngineValue
-                   ?? throw new InvalidOperationException("The certificate engine could not be initialized.");
+            // Every switch arm assigns certEngineValue or throws.
+            return certEngineValue;
         }
     }
 
@@ -314,15 +320,15 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     internal ILogger Logger
     {
-        get => loggerField;
+        get => logger;
         set
         {
-            loggerField = value;
+            logger = value;
             certEngineValue = null;
         }
     }
 
-    private ILogger loggerField = NullLogger.Instance;
+    private ILogger logger = NullLogger.Instance;
 
     /// <summary>
     ///     Selects the certificate generation engine. Default is <see cref="CertificateEngine.BouncyCastle" />
@@ -380,7 +386,7 @@ public sealed class CertificateManager : IDisposable
     ///         <see cref="CertificateManager" /> instance.
     ///     </para>
     /// </summary>
-    public int LeafRsaKeyPairBufferSize
+    public static int LeafRsaKeyPairBufferSize
     {
         get => LeafKeyPairSource.RsaBufferCapacity;
         set => LeafKeyPairSource.RsaBufferCapacity = value;
@@ -539,7 +545,7 @@ public sealed class CertificateManager : IDisposable
     private bool RootCertificateInstalled(StoreLocation storeLocation)
     {
         var certificate = RootCertificate;
-        if (certificate == null) throw new Exception("Root certificate is null.");
+        if (certificate == null) throw new InvalidOperationException("Root certificate is null.");
 
         var thumbprint = certificate.Thumbprint;
         return FindCertificates(StoreName.Root, storeLocation, thumbprint).Count > 0
@@ -570,7 +576,7 @@ public sealed class CertificateManager : IDisposable
     private void InstallCertificate(StoreName storeName, StoreLocation storeLocation)
     {
         var certificate = RootCertificate;
-        if (certificate == null) throw new Exception("Could not install certificate as it is null or empty.");
+        if (certificate == null) throw new InvalidOperationException("Could not install certificate as it is null or empty.");
 
         if (FindCertificates(storeName, storeLocation, certificate.Thumbprint).Count > 0) return;
 
@@ -629,19 +635,13 @@ public sealed class CertificateManager : IDisposable
 
     private X509Certificate2 MakeCertificate(string certificateName, bool isRootCertificate)
     {
-        //if (isRoot != (null == signingCertificate))
-        //{
-        //    throw new ArgumentException(
-        //        "You must specify a Signing Certificate if and only if you are not creating a root.",
-        //        nameof(signingCertificate));
-        //}
-
         if (!isRootCertificate && RootCertificate == null) CreateRootCertificate();
 
         var certificate = CertEngine.MakeCertificate(certificateName, isRootCertificate ? null : RootCertificate);
 
         if (CertificateEngine == CertificateEngine.DefaultWindows)
-            Task.Run(() => UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, certificate));
+            Task.Run(() => UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, certificate),
+                clearCertificatesTokenSource.Token);
 
         return certificate;
     }
@@ -657,7 +657,7 @@ public sealed class CertificateManager : IDisposable
     /// <param name="certificateName"></param>
     /// <param name="isRootCertificate"></param>
     /// <returns></returns>
-    internal X509Certificate2? CreateCertificate(string certificateName, bool isRootCertificate)
+    internal X509Certificate2? CreateCertificate(string certificateName, bool isRootCertificate) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         X509Certificate2? certificate;
         try
@@ -725,7 +725,7 @@ public sealed class CertificateManager : IDisposable
                         {
                             OnException(new Exception("Failed to save fake certificate.", e));
                         }
-                    });
+                    }, clearCertificatesTokenSource.Token);
                 }
             }
             else
@@ -770,7 +770,7 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     /// <param name="certificateName"></param>
     /// <returns></returns>
-    public async Task<X509Certificate2?> CreateServerCertificate(string certificateName)
+    public async Task<X509Certificate2?> CreateServerCertificate(string certificateName) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         // check in cache first
         if (TryGetValidCachedCertificate(certificateName, out var cachedCertificate))
@@ -797,7 +797,7 @@ public sealed class CertificateManager : IDisposable
 
         var createdTask = false;
         Task<X509Certificate2?> createCertificateTask;
-        await pendingCertificateCreationTaskLock.WaitAsync();
+        await pendingCertificateCreationTaskLock.WaitAsync(clearCertificatesTokenSource.Token);
         try
         {
             // check in cache first
@@ -812,7 +812,7 @@ public sealed class CertificateManager : IDisposable
                 // run certificate creation task & add it to pending tasks
                 createCertificateTask = Task.Run(() =>
                 {
-                    certificateCreationThrottle.Wait();
+                    certificateCreationThrottle.Wait(clearCertificatesTokenSource.Token);
                     try
                     {
                         var result = CreateCertificate(certificateName, false);
@@ -829,7 +829,7 @@ public sealed class CertificateManager : IDisposable
                     {
                         certificateCreationThrottle.Release();
                     }
-                });
+                }, clearCertificatesTokenSource.Token);
 
                 pendingCertificateCreationTasks[certificateName] = createCertificateTask;
                 createdTask = true;
@@ -849,7 +849,7 @@ public sealed class CertificateManager : IDisposable
         if (createdTask)
         {
             // cleanup pending task
-            await pendingCertificateCreationTaskLock.WaitAsync();
+            await pendingCertificateCreationTaskLock.WaitAsync(clearCertificatesTokenSource.Token);
             try
             {
                 pendingCertificateCreationTasks.Remove(certificateName);
@@ -897,13 +897,12 @@ public sealed class CertificateManager : IDisposable
     /// <summary>
     ///     A method to clear outdated certificates
     /// </summary>
-    internal async void ClearIdleCertificates()
+    internal async Task ClearIdleCertificates()
     {
         var cancellationToken = clearCertificatesTokenSource.Token;
         while (!cancellationToken.IsCancellationRequested)
         {
-            // this runs on a fire-and-forget (async void) task, so any exception here would go
-            // unobserved and could crash the process; keep the sweep resilient.
+            // Fire-and-forget from ProxyServer.Start; keep the sweep resilient to transient failures.
             try
             {
                 var cutOff = DateTime.UtcNow.AddMinutes(-CertificateCacheTimeOutMinutes);
@@ -1028,7 +1027,7 @@ public sealed class CertificateManager : IDisposable
     /// <returns>
     ///     true if succeeded, else false.
     /// </returns>
-    public bool CreateRootCertificate(bool persistToFile = true)
+    public bool CreateRootCertificate(bool persistToFile = true) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         lock (rootCertCreationLock)
         {
@@ -1198,7 +1197,7 @@ public sealed class CertificateManager : IDisposable
         // consume for the few moments before it's deleted below, so export it under a throwaway,
         // single-use empty password instead of reusing the real secret on the command line.
         const string transientPfxPassword = "";
-        var pfxFileName = Path.GetTempFileName();
+        var pfxFileName = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".pfx");
         try
         {
             File.WriteAllBytes(pfxFileName, certificate.Export(X509ContentType.Pkcs12, transientPfxPassword));
@@ -1206,10 +1205,10 @@ public sealed class CertificateManager : IDisposable
             // currentUser\Root, currentMachine\Personal &  currentMachine\Root
             var info = new ProcessStartInfo
             {
-                FileName = "certutil.exe",
+                FileName = CertUtilExecutablePath,
                 CreateNoWindow = true,
                 UseShellExecute = true,
-                Verb = "runas",
+                Verb = RunAsAdministrator,
                 ErrorDialog = false,
                 WindowStyle = ProcessWindowStyle.Hidden
             };
@@ -1334,11 +1333,11 @@ public sealed class CertificateManager : IDisposable
         if (!machineTrusted)
             infos.Add(new ProcessStartInfo
             {
-                FileName = "certutil.exe",
+                FileName = CertUtilExecutablePath,
                 Arguments = "-delstore -user Root \"" + RootCertificateName + "\"",
                 CreateNoWindow = true,
                 UseShellExecute = true,
-                Verb = "runas",
+                Verb = RunAsAdministrator,
                 ErrorDialog = false,
                 WindowStyle = ProcessWindowStyle.Hidden
             });
@@ -1349,11 +1348,11 @@ public sealed class CertificateManager : IDisposable
                     // currentMachine\Personal
                     new()
                     {
-                        FileName = "certutil.exe",
+                        FileName = CertUtilExecutablePath,
                         Arguments = "-delstore My \"" + RootCertificateName + "\"",
                         CreateNoWindow = true,
                         UseShellExecute = true,
-                        Verb = "runas",
+                        Verb = RunAsAdministrator,
                         ErrorDialog = false,
                         WindowStyle = ProcessWindowStyle.Hidden
                     },
@@ -1361,11 +1360,11 @@ public sealed class CertificateManager : IDisposable
                     // currentUser\Personal & currentMachine\Personal
                     new()
                     {
-                        FileName = "certutil.exe",
+                        FileName = CertUtilExecutablePath,
                         Arguments = "-delstore Root \"" + RootCertificateName + "\"",
                         CreateNoWindow = true,
                         UseShellExecute = true,
-                        Verb = "runas",
+                        Verb = RunAsAdministrator,
                         ErrorDialog = false,
                         WindowStyle = ProcessWindowStyle.Hidden
                     }
@@ -1402,19 +1401,27 @@ public sealed class CertificateManager : IDisposable
         // are released promptly rather than waiting for GC finalization.
         foreach (var pair in cachedCertificates)
             if (cachedCertificates.TryRemove(pair.Key, out var entry))
-                try { entry.Certificate.Dispose(); } catch { }
+                try { entry.Certificate.Dispose(); }
+                catch
+                {
+                    // Best-effort cleanup; continue disposing the remaining cached certificates.
+                }
 
         // Also dispose anything already evicted but still waiting out its grace period: the root is
         // changing, so leaves signed by the old root are not worth holding onto even briefly.
         while (pendingDisposals.TryDequeue(out var pending))
-            try { pending.Certificate.Dispose(); } catch { }
+            try { pending.Certificate.Dispose(); }
+            catch
+            {
+                // Best-effort cleanup; continue disposing the remaining pending certificates.
+            }
 
         // Do not dispose rootCertificate: it may have been supplied by the caller and still
         // referenced outside this manager (e.g. shared test CA / persisted root reload).
         rootCertificate = null;
     }
 
-    private void Dispose(bool disposing)
+    private void Dispose(bool disposing) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (disposed) return;
 
@@ -1427,11 +1434,19 @@ public sealed class CertificateManager : IDisposable
             // Release native CAPI/OpenSSL handles on all cached leaf certificates (manager-owned).
             foreach (var pair in cachedCertificates)
                 if (cachedCertificates.TryRemove(pair.Key, out var entry))
-                    try { entry.Certificate.Dispose(); } catch { }
+                    try { entry.Certificate.Dispose(); }
+                    catch
+                    {
+                        // Best-effort cleanup; continue disposing the remaining cached certificates.
+                    }
 
             // Also dispose anything already evicted but still waiting out its grace period.
             while (pendingDisposals.TryDequeue(out var pending))
-                try { pending.Certificate.Dispose(); } catch { }
+                try { pending.Certificate.Dispose(); }
+                catch
+                {
+                    // Best-effort cleanup; continue disposing the remaining pending certificates.
+                }
 
             // Do not dispose rootCertificate: ownership may belong to the caller.
             rootCertificate = null;

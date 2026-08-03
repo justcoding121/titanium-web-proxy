@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -32,7 +32,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Http2ProtocolPolicyTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -40,7 +40,7 @@ public class Http2ProtocolPolicyTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -125,7 +125,7 @@ public class Http2ProtocolPolicyTests
 
         var requestBytes =
             Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-        await tunnel.SslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+        await tunnel.SslStream.WriteAsync(requestBytes);
 
         using var reader = new StreamReader(tunnel.SslStream, Encoding.ASCII, false, 4096, true);
         var statusLine = await reader.ReadLineAsync();
@@ -448,7 +448,7 @@ public class Http2ProtocolPolicyTests
 
             var requestBytes =
                 Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-            await tunnel.SslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+            await tunnel.SslStream.WriteAsync(requestBytes);
 
             using var reader = new StreamReader(tunnel.SslStream, Encoding.ASCII, false, 4096, true);
             var statusLine = await reader.ReadLineAsync();
@@ -506,7 +506,7 @@ public class Http2ProtocolPolicyTests
 
         var requestBytes =
             Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-        await tunnel.SslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+        await tunnel.SslStream.WriteAsync(requestBytes);
 
         using var reader = new StreamReader(tunnel.SslStream, Encoding.ASCII, false, 4096, true);
         var statusLine = await reader.ReadLineAsync();
@@ -570,7 +570,7 @@ public class Http2ProtocolPolicyTests
                            $"Content-Length: {bodyBytes.Length}\r\n" +
                            "Connection: close\r\n\r\n" + requestBody;
         var requestBytes = Encoding.ASCII.GetBytes(requestText);
-        await tunnel.SslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+        await tunnel.SslStream.WriteAsync(requestBytes);
 
         using var reader = new StreamReader(tunnel.SslStream, Encoding.ASCII, false, 4096, true);
         var statusLine = await reader.ReadLineAsync();
@@ -631,7 +631,7 @@ public class Http2ProtocolPolicyTests
         for (var i = 0; i < 2; i++)
         {
             var requestBytes = Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
-            await networkStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+            await networkStream.WriteAsync(requestBytes);
 
             var (statusLine, headerLines, body) = await ReadHttp11ResponseAsync(networkStream);
             Assert.IsTrue(statusLine.StartsWith("HTTP/1.1 200"), $"Request {i}: got '{statusLine}'.");
@@ -889,7 +889,7 @@ public class Http2ProtocolPolicyTests
 
         var requestBytes =
             Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-        await sslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+        await sslStream.WriteAsync(requestBytes);
 
         using var reader = new StreamReader(sslStream, Encoding.ASCII, false, 4096, true);
         var statusLine = await reader.ReadLineAsync();

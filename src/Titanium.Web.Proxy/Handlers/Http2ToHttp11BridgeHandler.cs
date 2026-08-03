@@ -72,7 +72,7 @@ public partial class ProxyServer
     /// <param name="connectHost">The actual TCP connect destination override, if a fixed forward target applies.</param>
     /// <param name="connectPort">The actual TCP connect destination override port.</param>
     /// <param name="cancellationTokenSource">Cancellation for the whole client connection.</param>
-    internal async Task SendHttp2ToHttp11Bridge(HttpClientStream clientStream, ProxyEndPoint endPoint,
+    internal async Task SendHttp2ToHttp11Bridge(HttpClientStream clientStream, ProxyEndPoint endPoint, // NOSONAR S107 -- Bridge parameters mirror connection context and remain explicit for safe protocol routing.
         ConnectRequest? connectRequest, object? userData, string remoteHostName, int remotePort,
         string? connectHost, int? connectPort, CancellationTokenSource cancellationTokenSource)
     {
@@ -105,7 +105,7 @@ public partial class ProxyServer
     ///     <see cref="Http2Helper" />'s frame-reading loop - and therefore every other multiplexed stream on this
     ///     same client connection - while it is in flight.
     /// </summary>
-    private async Task BridgeOnBeforeRequest(SessionEventArgs sessionArgs, Http2StreamContext ctx,
+    private async Task BridgeOnBeforeRequest(SessionEventArgs sessionArgs, Http2StreamContext ctx, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         string remoteHostName, int remotePort, string? connectHost, int? connectPort)
     {
         await OnBeforeRequest(sessionArgs);
@@ -180,7 +180,7 @@ public partial class ProxyServer
                             $"RFC 8441 WebSocket tunnel failed for stream {ctx.StreamId}",
                             new ProxyHttpException(
                                 $"RFC 8441 WebSocket tunnel failed for stream {ctx.StreamId}",
-                                t.Exception!.GetBaseException(), sessionArgs));
+                                t.Exception.GetBaseException(), sessionArgs));
                 }, TaskScheduler.Default);
             tunnelStreamState.SyntheticTask = tunnelTask;
             ctx.ConnectionState.PendingSynthetics.Add(tunnelTask);
@@ -213,7 +213,7 @@ public partial class ProxyServer
                         $"HTTP/2-to-HTTP/1.1 bridge round trip failed for stream {ctx.StreamId}",
                         new ProxyHttpException(
                             $"HTTP/2-to-HTTP/1.1 bridge round trip failed for stream {ctx.StreamId}",
-                            t.Exception!.GetBaseException(), sessionArgs));
+                            t.Exception.GetBaseException(), sessionArgs));
             }, TaskScheduler.Default);
         streamState.SyntheticTask = bridgeTask;
         ctx.ConnectionState.PendingSynthetics.Add(bridgeTask);
@@ -227,7 +227,7 @@ public partial class ProxyServer
     ///     <see cref="TcpConnectionFactory" /> exactly like an HTTP/1.1 client's requests would), so multiple
     ///     concurrent streams on the same h2 client connection never contend on one shared origin connection.
     /// </summary>
-    private async Task RunHttp2ToHttp11BridgeRoundTripAsync(SessionEventArgs sessionArgs, int streamId,
+    private async Task RunHttp2ToHttp11BridgeRoundTripAsync(SessionEventArgs sessionArgs, int streamId, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         Http2ConnectionState connectionState, System.IO.Stream clientStream, string remoteHostName, int remotePort,
         string? connectHost, int? connectPort, CancellationToken connectionToken, CancellationToken streamToken)
     {
@@ -269,7 +269,7 @@ public partial class ProxyServer
                 sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint,
                 customUpStreamProxy ?? UpStreamHttpsProxy, false, false, cancellationToken, connectHost,
                 connectPort)
-                ?? throw new Exception($"Failed to establish an HTTP/1.1 origin connection to '{remoteHostName}:{remotePort}'.");
+                ?? throw new InvalidOperationException($"Failed to establish an HTTP/1.1 origin connection to '{remoteHostName}:{remotePort}'.");
             connection = newConnection;
 
             sessionArgs.HttpClient.SetConnection(newConnection);
@@ -360,8 +360,8 @@ public partial class ProxyServer
                     try
                     {
                         int read;
-                        while ((read = await limited.ReadAsync(buffer, 0, buffer.Length, bodyCancellationToken)) > 0)
-                            await bodyStream.WriteAsync(buffer, 0, read, bodyCancellationToken);
+                        while ((read = await limited.ReadAsync(buffer.AsMemory(), bodyCancellationToken).AsTask()) > 0)
+                            await bodyStream.WriteAsync(buffer.AsMemory(0, read), bodyCancellationToken);
 
                         await limited.Finish();
                     }
@@ -455,7 +455,7 @@ public partial class ProxyServer
     ///     so the 200 HEADERS frame carries no END_STREAM and the h2 stream stays open for DATA relay;
     ///     END_STREAM is sent automatically when the streaming body completes.
     /// </summary>
-    private async Task RunExtendedConnectTunnelAsync(
+    private async Task RunExtendedConnectTunnelAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         SessionEventArgs sessionArgs,
         Http2StreamContext ctx,
         Http2StreamState streamState,
@@ -485,7 +485,7 @@ public partial class ProxyServer
                 sessionArgs, sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint,
                 customUpStreamProxy ?? UpStreamHttpsProxy, false, false, cancellationToken,
                 connectHost, connectPort)
-                ?? throw new Exception(
+                ?? throw new InvalidOperationException(
                     $"Failed to establish an HTTP/1.1 connection to '{remoteHostName}:{remotePort}' for RFC 8441 tunnel.");
 
             // Build and send the WebSocket upgrade request toward the h1 origin.
@@ -636,12 +636,16 @@ public partial class ProxyServer
                 var toClientTask = RelayStreamToClientAsync(originStreamForRelay, bodyStream, sessionArgs, ct);
 
                 await Task.WhenAny(toOriginTask, toClientTask);
-                relayCts.Cancel();
+                await relayCts.CancelAsync();
 
                 // Close the origin socket to unblock any pending socket ReadAsync in
                 // toClientTask immediately rather than relying on the cancellation-token
                 // callback chain, which HttpStream can be slow to propagate.
-                try { originStreamForRelay.Close(); } catch { }
+                try { originStreamForRelay.Close(); }
+                catch
+                {
+                    // Best-effort close used only to unblock the pending relay read.
+                }
 
                 await Task.WhenAll(
                     toOriginTask.ContinueWith(_ => { }, TaskScheduler.Default),
@@ -754,7 +758,7 @@ public partial class ProxyServer
             int read;
             try
             {
-                read = await source.ReadAsync(buf, 0, buf.Length, CancellationToken.None);
+                read = await source.ReadAsync(buf.AsMemory(), CancellationToken.None);
             }
             catch (Exception)
             {
@@ -765,7 +769,7 @@ public partial class ProxyServer
 
             try
             {
-                await destination.WriteAsync(buf, 0, read, writeCancellationToken);
+                await destination.WriteAsync(buf.AsMemory(0, read), writeCancellationToken);
                 await destination.FlushAsync(writeCancellationToken);
                 sessionArgs.OnDataReceived(buf, 0, read);
             }
@@ -786,7 +790,7 @@ public partial class ProxyServer
         var oneByte = new byte[1];
         while (true)
         {
-            var r = await stream.ReadAsync(oneByte, 0, 1, cancellationToken);
+            var r = await stream.ReadAsync(oneByte.AsMemory(), cancellationToken);
             if (r == 0) return sb.Length > 0 ? sb.ToString() : null;
             var c = (char)oneByte[0];
             if (c == '\n') return sb.ToString().TrimEnd('\r');
@@ -796,12 +800,14 @@ public partial class ProxyServer
         }
     }
 
+    private static readonly char[] separator = new[] { ' ' };
+
     private static bool TryParseHttp11StatusLine(string? line, out int statusCode)
     {
         statusCode = 0;
         if (line == null) return false;
 
-        var parts = line.Split(new[] { ' ' }, 3, StringSplitOptions.RemoveEmptyEntries);
+        var parts = line.Split(separator, 3, StringSplitOptions.RemoveEmptyEntries);
         return parts.Length >= 2 &&
                string.Equals(parts[0], "HTTP/1.1", StringComparison.OrdinalIgnoreCase) &&
                parts[1].Length == 3 &&

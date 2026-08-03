@@ -1,27 +1,36 @@
-﻿
+
 <div id="sidetoggle">
   <div>
     <div class="sidefilter">
       <form class="toc-filter">
         <span class="glyphicon glyphicon-filter filter-icon"></span>
         <span class="glyphicon glyphicon-remove clear-icon" id="toc_filter_clear"></span>
-        <input type="text" id="toc_filter_input" placeholder="Enter here to filter..." onkeypress="if(event.keyCode==13) {return false;}">
+        <input type="text" id="toc_filter_input" placeholder="Filter by title" onkeypress="if(event.keyCode==13) {return false;}">
       </form>
     </div>
     <div class="sidetoc">
       <div class="toc" id="toc">
-          
+
           <ul class="nav level1">
                 <li>
                     <span class="expand-stub"></span>
                     <a href="Titanium.Web.Proxy.html" name="" title="Titanium.Web.Proxy">Titanium.Web.Proxy</a>
-                    
+
                     <ul class="nav level2">
                           <li>
-                              <a href="Titanium.Web.Proxy.ExceptionHandler.html" name="" title="ExceptionHandler">ExceptionHandler</a>
+                              <a href="Titanium.Web.Proxy.ProxyLimits.html" name="" title="ProxyLimits">ProxyLimits</a>
                           </li>
                           <li>
                               <a href="Titanium.Web.Proxy.ProxyServer.html" name="" title="ProxyServer">ProxyServer</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.SystemProxyBypassRuleMode.html" name="" title="SystemProxyBypassRuleMode">SystemProxyBypassRuleMode</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.SystemProxyLoopbackPlacement.html" name="" title="SystemProxyLoopbackPlacement">SystemProxyLoopbackPlacement</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.SystemProxySettings.html" name="" title="SystemProxySettings">SystemProxySettings</a>
                           </li>
                           <li>
                               <a href="Titanium.Web.Proxy.WebSocketDecoder.html" name="" title="WebSocketDecoder">WebSocketDecoder</a>
@@ -30,17 +39,51 @@
                               <a href="Titanium.Web.Proxy.WebSocketFrame.html" name="" title="WebSocketFrame">WebSocketFrame</a>
                           </li>
                           <li>
+                              <a href="Titanium.Web.Proxy.WebSocketFrameEncoder.html" name="" title="WebSocketFrameEncoder">WebSocketFrameEncoder</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.WebSocketFrameWriter.html" name="" title="WebSocketFrameWriter">WebSocketFrameWriter</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.WebSocketProtocolException.html" name="" title="WebSocketProtocolException">WebSocketProtocolException</a>
+                          </li>
+                          <li>
                               <a href="Titanium.Web.Proxy.WebsocketOpCode.html" name="" title="WebsocketOpCode">WebsocketOpCode</a>
                           </li>
                     </ul>
                 </li>
                 <li>
                     <span class="expand-stub"></span>
+                    <a href="Titanium.Web.Proxy.Diagnostics.html" name="" title="Titanium.Web.Proxy.Diagnostics">Titanium.Web.Proxy.Diagnostics</a>
+
+                    <ul class="nav level2">
+                          <li>
+                              <a href="Titanium.Web.Proxy.Diagnostics.ClientTlsTiming.html" name="" title="ClientTlsTiming">ClientTlsTiming</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Diagnostics.HttpRequestTiming.html" name="" title="HttpRequestTiming">HttpRequestTiming</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Diagnostics.TunnelConnectTiming.html" name="" title="TunnelConnectTiming">TunnelConnectTiming</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Diagnostics.UpstreamConnectionTiming.html" name="" title="UpstreamConnectionTiming">UpstreamConnectionTiming</a>
+                          </li>
+                    </ul>
+                </li>
+                <li>
+                    <span class="expand-stub"></span>
                     <a href="Titanium.Web.Proxy.EventArguments.html" name="" title="Titanium.Web.Proxy.EventArguments">Titanium.Web.Proxy.EventArguments</a>
-                    
+
                     <ul class="nav level2">
                           <li>
                               <a href="Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html" name="" title="AsyncEventHandler&lt;TEventArgs&gt;">AsyncEventHandler&lt;TEventArgs&gt;</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.EventArguments.BeforeBodyWriteEventArgs.html" name="" title="BeforeBodyWriteEventArgs">BeforeBodyWriteEventArgs</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.html" name="" title="BeforeQuicAuthenticateEventArgs">BeforeQuicAuthenticateEventArgs</a>
                           </li>
                           <li>
                               <a href="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html" name="" title="BeforeSslAuthenticateEventArgs">BeforeSslAuthenticateEventArgs</a>
@@ -50,9 +93,6 @@
                           </li>
                           <li>
                               <a href="Titanium.Web.Proxy.EventArguments.CertificateValidationEventArgs.html" name="" title="CertificateValidationEventArgs">CertificateValidationEventArgs</a>
-                          </li>
-                          <li>
-                              <a href="Titanium.Web.Proxy.EventArguments.EmptyProxyEventArgs.html" name="" title="EmptyProxyEventArgs">EmptyProxyEventArgs</a>
                           </li>
                           <li>
                               <a href="Titanium.Web.Proxy.EventArguments.MultipartRequestPartSentEventArgs.html" name="" title="MultipartRequestPartSentEventArgs">MultipartRequestPartSentEventArgs</a>
@@ -67,17 +107,35 @@
                               <a href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html" name="" title="SessionEventArgsBase">SessionEventArgsBase</a>
                           </li>
                           <li>
+                              <a href="Titanium.Web.Proxy.EventArguments.SocksAuthenticateEventArgs.html" name="" title="SocksAuthenticateEventArgs">SocksAuthenticateEventArgs</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.EventArguments.TunnelConnectFailureEventArgs.html" name="" title="TunnelConnectFailureEventArgs">TunnelConnectFailureEventArgs</a>
+                          </li>
+                          <li>
                               <a href="Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html" name="" title="TunnelConnectSessionEventArgs">TunnelConnectSessionEventArgs</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.EventArguments.WebSocketFrameDirection.html" name="" title="WebSocketFrameDirection">WebSocketFrameDirection</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptAction.html" name="" title="WebSocketFrameInterceptAction">WebSocketFrameInterceptAction</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.html" name="" title="WebSocketFrameInterceptEventArgs">WebSocketFrameInterceptEventArgs</a>
                           </li>
                     </ul>
                 </li>
                 <li>
                     <span class="expand-stub"></span>
                     <a href="Titanium.Web.Proxy.Exceptions.html" name="" title="Titanium.Web.Proxy.Exceptions">Titanium.Web.Proxy.Exceptions</a>
-                    
+
                     <ul class="nav level2">
                           <li>
                               <a href="Titanium.Web.Proxy.Exceptions.BodyNotFoundException.html" name="" title="BodyNotFoundException">BodyNotFoundException</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Exceptions.OutboundDestinationBlockedException.html" name="" title="OutboundDestinationBlockedException">OutboundDestinationBlockedException</a>
                           </li>
                           <li>
                               <a href="Titanium.Web.Proxy.Exceptions.ProxyAuthorizationException.html" name="" title="ProxyAuthorizationException">ProxyAuthorizationException</a>
@@ -92,24 +150,20 @@
                               <a href="Titanium.Web.Proxy.Exceptions.ProxyHttpException.html" name="" title="ProxyHttpException">ProxyHttpException</a>
                           </li>
                           <li>
-                              <a href="Titanium.Web.Proxy.Exceptions.RetryableServerConnectionException.html" name="" title="RetryableServerConnectionException">RetryableServerConnectionException</a>
+                              <a href="Titanium.Web.Proxy.Exceptions.ProxyTimeoutException.html" name="" title="ProxyTimeoutException">ProxyTimeoutException</a>
                           </li>
-                    </ul>
-                </li>
-                <li>
-                    <span class="expand-stub"></span>
-                    <a href="Titanium.Web.Proxy.Helpers.html" name="" title="Titanium.Web.Proxy.Helpers">Titanium.Web.Proxy.Helpers</a>
-                    
-                    <ul class="nav level2">
                           <li>
-                              <a href="Titanium.Web.Proxy.Helpers.RunTime.html" name="" title="RunTime">RunTime</a>
+                              <a href="Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind.html" name="" title="ProxyTimeoutKind">ProxyTimeoutKind</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Exceptions.UpstreamProxyConnectException.html" name="" title="UpstreamProxyConnectException">UpstreamProxyConnectException</a>
                           </li>
                     </ul>
                 </li>
                 <li>
                     <span class="expand-stub"></span>
                     <a href="Titanium.Web.Proxy.Http.html" name="" title="Titanium.Web.Proxy.Http">Titanium.Web.Proxy.Http</a>
-                    
+
                     <ul class="nav level2">
                           <li>
                               <a href="Titanium.Web.Proxy.Http.ConnectRequest.html" name="" title="ConnectRequest">ConnectRequest</a>
@@ -119,6 +173,9 @@
                           </li>
                           <li>
                               <a href="Titanium.Web.Proxy.Http.HeaderCollection.html" name="" title="HeaderCollection">HeaderCollection</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Http.HeaderCollection.Enumerator.html" name="" title="HeaderCollection.Enumerator">HeaderCollection.Enumerator</a>
                           </li>
                           <li>
                               <a href="Titanium.Web.Proxy.Http.HttpWebClient.html" name="" title="HttpWebClient">HttpWebClient</a>
@@ -146,7 +203,7 @@
                 <li>
                     <span class="expand-stub"></span>
                     <a href="Titanium.Web.Proxy.Http.Responses.html" name="" title="Titanium.Web.Proxy.Http.Responses">Titanium.Web.Proxy.Http.Responses</a>
-                    
+
                     <ul class="nav level2">
                           <li>
                               <a href="Titanium.Web.Proxy.Http.Responses.GenericResponse.html" name="" title="GenericResponse">GenericResponse</a>
@@ -161,27 +218,18 @@
                 </li>
                 <li>
                     <span class="expand-stub"></span>
-                    <a href="Titanium.Web.Proxy.Http2.Hpack.html" name="" title="Titanium.Web.Proxy.Http2.Hpack">Titanium.Web.Proxy.Http2.Hpack</a>
-                    
+                    <a href="Titanium.Web.Proxy.Logging.html" name="" title="Titanium.Web.Proxy.Logging">Titanium.Web.Proxy.Logging</a>
+
                     <ul class="nav level2">
                           <li>
-                              <a href="Titanium.Web.Proxy.Http2.Hpack.DynamicTable.html" name="" title="DynamicTable">DynamicTable</a>
-                          </li>
-                          <li>
-                              <a href="Titanium.Web.Proxy.Http2.Hpack.HpackUtil.html" name="" title="HpackUtil">HpackUtil</a>
-                          </li>
-                          <li>
-                              <a href="Titanium.Web.Proxy.Http2.Hpack.HpackUtil.IndexType.html" name="" title="HpackUtil.IndexType">HpackUtil.IndexType</a>
-                          </li>
-                          <li>
-                              <a href="Titanium.Web.Proxy.Http2.Hpack.HuffmanDecoder.html" name="" title="HuffmanDecoder">HuffmanDecoder</a>
+                              <a href="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.html" name="" title="ProxyLoggingOptions">ProxyLoggingOptions</a>
                           </li>
                     </ul>
                 </li>
                 <li>
                     <span class="expand-stub"></span>
                     <a href="Titanium.Web.Proxy.Models.html" name="" title="Titanium.Web.Proxy.Models">Titanium.Web.Proxy.Models</a>
-                    
+
                     <ul class="nav level2">
                           <li>
                               <a href="Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html" name="" title="ExplicitProxyEndPoint">ExplicitProxyEndPoint</a>
@@ -197,6 +245,9 @@
                           </li>
                           <li>
                               <a href="Titanium.Web.Proxy.Models.IExternalProxy.html" name="" title="IExternalProxy">IExternalProxy</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Models.OriginHttpVersionPolicy.html" name="" title="OriginHttpVersionPolicy">OriginHttpVersionPolicy</a>
                           </li>
                           <li>
                               <a href="Titanium.Web.Proxy.Models.ProxyAuthenticationContext.html" name="" title="ProxyAuthenticationContext">ProxyAuthenticationContext</a>
@@ -219,15 +270,27 @@
                           <li>
                               <a href="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html" name="" title="TransparentProxyEndPoint">TransparentProxyEndPoint</a>
                           </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.html" name="" title="TransparentQuicProxyEndPoint">TransparentQuicProxyEndPoint</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Models.UpstreamHttpProtocol.html" name="" title="UpstreamHttpProtocol">UpstreamHttpProtocol</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Models.WinAuthCredentials.html" name="" title="WinAuthCredentials">WinAuthCredentials</a>
+                          </li>
                     </ul>
                 </li>
                 <li>
                     <span class="expand-stub"></span>
                     <a href="Titanium.Web.Proxy.Network.html" name="" title="Titanium.Web.Proxy.Network">Titanium.Web.Proxy.Network</a>
-                    
+
                     <ul class="nav level2">
                           <li>
                               <a href="Titanium.Web.Proxy.Network.CertificateEngine.html" name="" title="CertificateEngine">CertificateEngine</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Network.CertificateKeyAlgorithm.html" name="" title="CertificateKeyAlgorithm">CertificateKeyAlgorithm</a>
                           </li>
                           <li>
                               <a href="Titanium.Web.Proxy.Network.CertificateManager.html" name="" title="CertificateManager">CertificateManager</a>
@@ -242,21 +305,49 @@
                 </li>
                 <li>
                     <span class="expand-stub"></span>
-                    <a href="Titanium.Web.Proxy.Network.Certificate.html" name="" title="Titanium.Web.Proxy.Network.Certificate">Titanium.Web.Proxy.Network.Certificate</a>
-                    
+                    <a href="Titanium.Web.Proxy.Network.Quic.html" name="" title="Titanium.Web.Proxy.Network.Quic">Titanium.Web.Proxy.Network.Quic</a>
+
                     <ul class="nav level2">
                           <li>
-                              <a href="Titanium.Web.Proxy.Network.Certificate.AlternativeNameType.html" name="" title="AlternativeNameType">AlternativeNameType</a>
+                              <a href="Titanium.Web.Proxy.Network.Quic.IOriginalDestinationResolver.html" name="" title="IOriginalDestinationResolver">IOriginalDestinationResolver</a>
+                          </li>
+                    </ul>
+                </li>
+                <li>
+                    <span class="expand-stub"></span>
+                    <a href="Titanium.Web.Proxy.Options.html" name="" title="Titanium.Web.Proxy.Options">Titanium.Web.Proxy.Options</a>
+
+                    <ul class="nav level2">
+                          <li>
+                              <a href="Titanium.Web.Proxy.Options.PolicyFamily.html" name="" title="PolicyFamily">PolicyFamily</a>
                           </li>
                           <li>
-                              <a href="Titanium.Web.Proxy.Network.Certificate.EncodingType.html" name="" title="EncodingType">EncodingType</a>
+                              <a href="Titanium.Web.Proxy.Options.PolicyMode.html" name="" title="PolicyMode">PolicyMode</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Options.ProxyPolicyModes.html" name="" title="ProxyPolicyModes">ProxyPolicyModes</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Options.ProxyProfile.html" name="" title="ProxyProfile">ProxyProfile</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Options.ProxyProfileSettings.html" name="" title="ProxyProfileSettings">ProxyProfileSettings</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html" name="" title="ProxyResourceLimits">ProxyResourceLimits</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Options.ProxyTimeoutOptions.html" name="" title="ProxyTimeoutOptions">ProxyTimeoutOptions</a>
+                          </li>
+                          <li>
+                              <a href="Titanium.Web.Proxy.Options.ResolvedSessionPolicy.html" name="" title="ResolvedSessionPolicy">ResolvedSessionPolicy</a>
                           </li>
                     </ul>
                 </li>
                 <li>
                     <span class="expand-stub"></span>
                     <a href="Titanium.Web.Proxy.StreamExtended.html" name="" title="Titanium.Web.Proxy.StreamExtended">Titanium.Web.Proxy.StreamExtended</a>
-                    
+
                     <ul class="nav level2">
                           <li>
                               <a href="Titanium.Web.Proxy.StreamExtended.ClientHelloInfo.html" name="" title="ClientHelloInfo">ClientHelloInfo</a>
@@ -269,7 +360,7 @@
                 <li>
                     <span class="expand-stub"></span>
                     <a href="Titanium.Web.Proxy.StreamExtended.BufferPool.html" name="" title="Titanium.Web.Proxy.StreamExtended.BufferPool">Titanium.Web.Proxy.StreamExtended.BufferPool</a>
-                    
+
                     <ul class="nav level2">
                           <li>
                               <a href="Titanium.Web.Proxy.StreamExtended.BufferPool.IBufferPool.html" name="" title="IBufferPool">IBufferPool</a>
@@ -279,7 +370,7 @@
                 <li>
                     <span class="expand-stub"></span>
                     <a href="Titanium.Web.Proxy.StreamExtended.Models.html" name="" title="Titanium.Web.Proxy.StreamExtended.Models">Titanium.Web.Proxy.StreamExtended.Models</a>
-                    
+
                     <ul class="nav level2">
                           <li>
                               <a href="Titanium.Web.Proxy.StreamExtended.Models.SslExtension.html" name="" title="SslExtension">SslExtension</a>
@@ -289,7 +380,7 @@
                 <li>
                     <span class="expand-stub"></span>
                     <a href="Titanium.Web.Proxy.StreamExtended.Network.html" name="" title="Titanium.Web.Proxy.StreamExtended.Network">Titanium.Web.Proxy.StreamExtended.Network</a>
-                    
+
                     <ul class="nav level2">
                           <li>
                               <a href="Titanium.Web.Proxy.StreamExtended.Network.DataEventArgs.html" name="" title="DataEventArgs">DataEventArgs</a>
@@ -305,12 +396,6 @@
                           </li>
                           <li>
                               <a href="Titanium.Web.Proxy.StreamExtended.Network.IPeekStream.html" name="" title="IPeekStream">IPeekStream</a>
-                          </li>
-                          <li>
-                              <a href="Titanium.Web.Proxy.StreamExtended.Network.TaskResult.html" name="" title="TaskResult">TaskResult</a>
-                          </li>
-                          <li>
-                              <a href="Titanium.Web.Proxy.StreamExtended.Network.TaskResult-1.html" name="" title="TaskResult&lt;T&gt;">TaskResult&lt;T&gt;</a>
                           </li>
                     </ul>
                 </li>

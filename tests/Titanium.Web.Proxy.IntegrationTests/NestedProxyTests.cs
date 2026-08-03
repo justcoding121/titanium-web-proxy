@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -14,7 +14,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class NestedProxyTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -22,7 +22,7 @@ public class NestedProxyTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -70,7 +70,7 @@ public class NestedProxyTests
         proxy1.ViaHeaderPseudonym = "proxy1";
         proxy1.ProxyBasicAuthenticateFunc = async (session, username, password) =>
         {
-            session.UserData = "Test";
+            session!.UserData = "Test";
             return await Task.FromResult(true);
         };
 
@@ -79,7 +79,7 @@ public class NestedProxyTests
 
         proxy1.GetCustomUpStreamProxyFunc = async session =>
         {
-            Assert.AreEqual("Test", session.UserData);
+            Assert.AreEqual("Test", session.UserData!);
 
             return await Task.FromResult(new ExternalProxy("localhost", proxy2.ProxyEndPoints[0].Port));
         };
@@ -113,12 +113,12 @@ public class NestedProxyTests
 
         // initial upstream points at a closed port so the first connection attempt fails
         proxy.GetCustomUpStreamProxyFunc = _ =>
-            Task.FromResult<IExternalProxy>(new ExternalProxy("localhost", 1) { ProxyType = ExternalProxyType.Http });
+            Task.FromResult<IExternalProxy?>(new ExternalProxy("localhost", 1) { ProxyType = ExternalProxyType.Http });
 
         proxy.CustomUpStreamProxyFailureFunc = _ =>
         {
             failoverInvoked = true;
-            return Task.FromResult<IExternalProxy>(
+            return Task.FromResult<IExternalProxy?>(
                 new ExternalProxy("localhost", workingUpstream.ProxyEndPoints[0].Port)
                     { ProxyType = ExternalProxyType.Http });
         };
@@ -212,6 +212,9 @@ public class NestedProxyTests
         }
 
         await Task.WhenAll(tasks);
+        Assert.AreEqual(1_000, tasks.Count);
+        Assert.IsTrue(tasks.TrueForAll(t => t.IsCompleted),
+            "Every request task must finish without hanging.");
     }
 
 
@@ -294,5 +297,8 @@ public class NestedProxyTests
         }
 
         await Task.WhenAll(tasks);
+        Assert.AreEqual(1_000, tasks.Count);
+        Assert.IsTrue(tasks.TrueForAll(t => t.IsCompleted),
+            "Every request task must finish without hanging.");
     }
 }

@@ -61,15 +61,16 @@ internal static class ChunkedTrailerHelper
         var count = 0;
         var totalSize = 0;
 
-        string? line;
-        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(cancellationToken)))
+        while (true)
         {
+            var line = await reader.ReadLineAsync(cancellationToken);
+            if (string.IsNullOrEmpty(line)) break;
             count++;
             if (count > MaxTrailerHeaderCount)
                 throw new ProxyHttpException(
                     $"Chunked trailer has too many header lines (> {MaxTrailerHeaderCount}).", null, null);
 
-            totalSize += line!.Length;
+            totalSize += line.Length;
             if (totalSize > MaxTrailerHeaderBlockSize)
                 throw new ProxyHttpException(
                     $"Chunked trailer exceeds the maximum allowed size of {MaxTrailerHeaderBlockSize} bytes.",

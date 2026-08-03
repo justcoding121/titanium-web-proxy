@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class ExpectContinueTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -21,7 +21,7 @@ public class ExpectContinueTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -47,7 +47,7 @@ public class ExpectContinueTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
 
         Assert.IsNotNull(response, "No response to 'expect: 100-continue' request");
         Assert.AreEqual((int)HttpStatusCode.OK, response.StatusCode);
@@ -71,7 +71,7 @@ public class ExpectContinueTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
 
         Assert.IsNotNull(response, "No response to 'expect: 100-continue' request");
         Assert.AreEqual((int)HttpStatusCode.ExpectationFailed, response.StatusCode);
@@ -94,7 +94,7 @@ public class ExpectContinueTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
 
         Assert.IsNotNull(response, "No response to 'expect: 100-continue' request");
         Assert.AreEqual((int)HttpStatusCode.NotFound, response.StatusCode);
@@ -136,10 +136,10 @@ public class ExpectContinueTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
 
         Assert.IsNotNull(response, "No response to 'expect: 100-continue' request");
-        Assert.AreEqual(response.StatusCode, (int)HttpStatusCode.InternalServerError);
-        Assert.AreEqual(response.BodyString, dbzString);
+        Assert.AreEqual((int)HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.AreEqual(dbzString, response.BodyString);
     }
 }

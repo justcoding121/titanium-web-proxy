@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class WebSocketInterceptionSafetyTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -31,7 +31,7 @@ public class WebSocketInterceptionSafetyTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -52,7 +52,7 @@ public class WebSocketInterceptionSafetyTests
         var server = testSuite.GetServer();
 
         // Capture the raw upgrade request the origin server actually receives.
-        string capturedRequest = null;
+        string? capturedRequest = null;
         var requestReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         server.HandleTcpRequest(async context =>
@@ -166,7 +166,7 @@ public class WebSocketInterceptionSafetyTests
             e.HttpClient.Request.Url = server.ListeningTcpUrl;
             return Task.CompletedTask;
         };
-        // No BeforeWebSocketFrame registered → raw relay path.
+        // No BeforeWebSocketFrame registered ? raw relay path.
 
         using var tcpClient = new TcpClient();
         await tcpClient.ConnectAsync(IPAddress.Loopback, proxy.ProxyEndPoints[0].Port);
@@ -293,7 +293,7 @@ public class WebSocketInterceptionSafetyTests
         // The proxy must have intercepted at least the server-to-client greeting
         // and the server's echo of the client frame.
         WaitForCondition(() => interceptedDirections.Count >= 2, timeout,
-            "Expected the proxy to intercept at least 2 frames (server→client greeting and echo).");
+            "Expected the proxy to intercept at least 2 frames (server?client greeting and echo).");
 
         Assert.IsTrue(interceptedDirections.Contains(WebSocketFrameDirection.ServerToClient),
             "Intercepted directions must include ServerToClient.");
@@ -323,7 +323,7 @@ public class WebSocketInterceptionSafetyTests
                 "\r\n");
             await context.Transport.Output.WriteAsync(handshake);
 
-            // Send a frame with reserved opcode 0x3 — a protocol violation.
+            // Send a frame with reserved opcode 0x3 � a protocol violation.
             var badFrame = BuildRawFrame(firstByte: 0x83 /* FIN=1, opcode=3 */, payload: new byte[] { 0x01 });
             await context.Transport.Output.WriteAsync(badFrame);
 
@@ -364,7 +364,7 @@ public class WebSocketInterceptionSafetyTests
             $"Expected 101 Switching Protocols. Got:\n{headerText}");
 
         // The relay should close the client-side connection shortly after receiving the bad frame.
-        // A conformant close (RFC 6455 §§5.5.1/7.1.1) means the client first receives an actual Close
+        // A conformant close (RFC 6455 ��5.5.1/7.1.1) means the client first receives an actual Close
         // control frame before the TCP connection itself is torn down - so a non-zero read here (the
         // Close frame) is expected and must not be mistaken for the proxy staying open indefinitely;
         // keep reading until EOF to confirm the connection is eventually closed.
@@ -375,7 +375,7 @@ public class WebSocketInterceptionSafetyTests
         {
             while (true)
             {
-                var read = await stream.ReadAsync(buf, 0, buf.Length, cts.Token);
+                var read = await stream.ReadAsync(buf, cts.Token);
                 if (read == 0)
                 {
                     sawEof = true;
@@ -398,7 +398,7 @@ public class WebSocketInterceptionSafetyTests
     }
 
     // -------------------------------------------------------------------------
-    // Test 5: A protocol violation produces a conformant Close per RFC 6455 §§5.5.1/7.1.1 -
+    // Test 5: A protocol violation produces a conformant Close per RFC 6455 ��5.5.1/7.1.1 -
     //         the client leg receives an actual Close control frame carrying the correct status
     //         code, not just an abrupt disconnect.
     // -------------------------------------------------------------------------
@@ -421,7 +421,7 @@ public class WebSocketInterceptionSafetyTests
                 "\r\n");
             await context.Transport.Output.WriteAsync(handshake);
 
-            // Send a frame with reserved opcode 0x3 — a protocol violation (RFC 6455 §5.2).
+            // Send a frame with reserved opcode 0x3 � a protocol violation (RFC 6455 �5.2).
             var badFrame = BuildRawFrame(firstByte: 0x83 /* FIN=1, opcode=3 */, payload: new byte[] { 0x01 });
             await context.Transport.Output.WriteAsync(badFrame);
 
@@ -465,7 +465,7 @@ public class WebSocketInterceptionSafetyTests
 
         Assert.AreEqual(1, frames.Count);
         Assert.AreEqual(WebsocketOpCode.ConnectionClose, frames[0].OpCode,
-            "RFC 6455 §7.1.1: a protocol violation must produce an actual Close control frame on the " +
+            "RFC 6455 �7.1.1: a protocol violation must produce an actual Close control frame on the " +
             "client leg, not merely an abrupt TCP disconnect.");
         Assert.IsTrue(frames[0].Data.Length >= 2, "Close frame must carry a 2-byte status code.");
         var closeCode = (ushort)((frames[0].Data.Span[0] << 8) | frames[0].Data.Span[1]);
@@ -661,7 +661,7 @@ public class WebSocketInterceptionSafetyTests
                     return Ascii.GetString(hdrBytes);
                 }
 
-                var read = await stream.ReadAsync(buf, 0, buf.Length, cts.Token);
+                var read = await stream.ReadAsync(buf, cts.Token);
                 if (read == 0) throw new IOException("Connection closed before HTTP headers completed.");
                 pending.AddRange(new ArraySegment<byte>(buf, 0, read));
             }
@@ -689,7 +689,7 @@ public class WebSocketInterceptionSafetyTests
             var buf = new byte[4096];
             while (frames.Count < minCount)
             {
-                var read = await stream.ReadAsync(buf, 0, buf.Length, cts.Token);
+                var read = await stream.ReadAsync(buf, cts.Token);
                 if (read == 0) throw new IOException("Connection closed before enough frames arrived.");
                 Capture(decoder.Decode(buf, 0, read));
             }

@@ -82,7 +82,12 @@ internal static class AltSvcParser
         var port = ParsePort(altAuthority);
         if (port < 0) return false; // invalid port or different host
 
-        // Read semicolon-delimited parameters for ma=
+        result = new Http3AltSvc(port, ParseMaxAge(rest));
+        return true;
+    }
+
+    private static int ParseMaxAge(ReadOnlySpan<char> rest)
+    {
         var maxAge = DefaultMaxAge;
         while (rest.Length > 0)
         {
@@ -103,8 +108,7 @@ internal static class AltSvcParser
                 maxAge = ma;
         }
 
-        result = new Http3AltSvc(port, maxAge);
-        return true;
+        return maxAge;
     }
 
     private static bool IsHttp3AlpnId(ReadOnlySpan<char> id)

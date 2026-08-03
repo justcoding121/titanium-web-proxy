@@ -10,11 +10,12 @@ internal static class HeaderParser
     internal static async ValueTask ReadHeaders(ILineStream reader, HeaderCollection headerCollection,
         CancellationToken cancellationToken)
     {
-        string? tmpLine;
-        while (!string.IsNullOrEmpty(tmpLine = await reader.ReadLineAsync(cancellationToken)))
+        while (true)
         {
-            var colonIndex = tmpLine!.IndexOf(':');
-            if (colonIndex == -1) throw new Exception("Header line should contain a colon character.");
+            var tmpLine = await reader.ReadLineAsync(cancellationToken);
+            if (string.IsNullOrEmpty(tmpLine)) break;
+            var colonIndex = tmpLine.IndexOf(':');
+            if (colonIndex == -1) throw new FormatException("Header line should contain a colon character.");
 
             var headerName = tmpLine.AsSpan(0, colonIndex).ToString();
             var headerValue = tmpLine.AsSpan(colonIndex + 1).TrimStart().ToString();

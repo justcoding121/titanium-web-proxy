@@ -68,33 +68,33 @@ internal sealed class BodyStreamWriter : Stream
         throw new NotSupportedException("Use WriteAsync.");
     }
 
-    public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
-        if (count == 0) return;
-
-        if (isChunked)
-        {
-            await writer.WriteLineAsync(count.ToString("x"), cancellationToken);
-            await writer.WriteAsync(buffer, offset, count, cancellationToken);
-            await writer.WriteLineAsync(cancellationToken);
-        }
-        else
-        {
-            await writer.WriteAsync(buffer, offset, count, cancellationToken);
-        }
+        return WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
     }
 
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
-        if (System.Runtime.InteropServices.MemoryMarshal.TryGetArray(buffer, out var segment) && segment.Array != null)
+        if (buffer.IsEmpty) return;
+
+        if (isChunked)
         {
-            await WriteAsync(segment.Array, segment.Offset, segment.Count, cancellationToken);
+            await writer.WriteLineAsync(buffer.Length.ToString("x"), cancellationToken);
+            await WriteToWriterAsync(buffer, cancellationToken);
+            await writer.WriteLineAsync(cancellationToken);
         }
         else
         {
-            var array = buffer.ToArray();
-            await WriteAsync(array, 0, array.Length, cancellationToken);
+            await WriteToWriterAsync(buffer, cancellationToken);
         }
+    }
+
+    private async Task WriteToWriterAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
+    {
+        if (System.Runtime.InteropServices.MemoryMarshal.TryGetArray(buffer, out var segment) && segment.Array != null)
+            await writer.WriteAsync(segment.Array, segment.Offset, segment.Count, cancellationToken);
+        else
+            await writer.WriteAsync(buffer.ToArray(), 0, buffer.Length, cancellationToken);
     }
 
     /// <summary>

@@ -24,22 +24,7 @@ public static class WebSocketFrameEncoder
 
         var maskBit = mask ? (byte)0x80 : (byte)0x00;
         var length = payload.Length;
-        if (length <= 125)
-        {
-            ms.WriteByte((byte)(maskBit | length));
-        }
-        else if (length <= 65535)
-        {
-            ms.WriteByte((byte)(maskBit | 126));
-            ms.WriteByte((byte)(length >> 8));
-            ms.WriteByte((byte)length);
-        }
-        else
-        {
-            ms.WriteByte((byte)(maskBit | 127));
-            for (var i = 7; i >= 0; i--)
-                ms.WriteByte((byte)((long)length >> (i * 8)));
-        }
+        WritePayloadLength(ms, maskBit, length);
 
         Span<byte> maskKeyBytes = stackalloc byte[4];
         if (mask)
@@ -54,21 +39,44 @@ public static class WebSocketFrameEncoder
             ms.Write(maskKeyBytes);
         }
 
-        if (length > 0)
+        WritePayload(ms, payload, mask, maskKeyBytes);
+        return ms.ToArray();
+    }
+
+    private static void WritePayloadLength(Stream stream, byte maskBit, int length)
+    {
+        if (length <= 125)
         {
-            if (mask)
-            {
-                var masked = new byte[length];
-                for (var i = 0; i < length; i++)
-                    masked[i] = (byte)(payload[i] ^ maskKeyBytes[i % 4]);
-                ms.Write(masked, 0, length);
-            }
-            else
-            {
-                ms.Write(payload);
-            }
+            stream.WriteByte((byte)(maskBit | length));
+        }
+        else if (length <= 65535)
+        {
+            stream.WriteByte((byte)(maskBit | 126));
+            stream.WriteByte((byte)(length >> 8));
+            stream.WriteByte((byte)length);
+        }
+        else
+        {
+            stream.WriteByte((byte)(maskBit | 127));
+            for (var i = 7; i >= 0; i--)
+                stream.WriteByte((byte)((long)length >> (i * 8)));
+        }
+    }
+
+    private static void WritePayload(Stream stream, ReadOnlySpan<byte> payload, bool mask,
+        ReadOnlySpan<byte> maskKeyBytes)
+    {
+        if (payload.Length == 0) return;
+
+        if (mask)
+        {
+            var masked = new byte[payload.Length];
+            for (var i = 0; i < payload.Length; i++)
+                masked[i] = (byte)(payload[i] ^ maskKeyBytes[i % 4]);
+            stream.Write(masked, 0, payload.Length);
+            return;
         }
 
-        return ms.ToArray();
+        stream.Write(payload);
     }
 }

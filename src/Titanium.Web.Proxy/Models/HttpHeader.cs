@@ -46,7 +46,7 @@ public class HttpHeader
     /// <param name="value">Header value.</param>
     public HttpHeader(string name, string value)
     {
-        if (string.IsNullOrEmpty(name)) throw new Exception("Name cannot be null or empty");
+        if (string.IsNullOrEmpty(name)) throw new ArgumentException("Name cannot be null or empty");
 
         nameString = name.Trim();
         NameData = nameString.GetByteString();
@@ -75,7 +75,7 @@ public class HttpHeader
 
     internal HttpHeader(ByteString name, ByteString value)
     {
-        if (name.Length == 0) throw new Exception("Name cannot be empty");
+        if (name.Length == 0) throw new ArgumentException("Name cannot be empty");
 
         NameData = name;
         ValueData = value;

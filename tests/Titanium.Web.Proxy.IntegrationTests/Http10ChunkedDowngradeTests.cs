@@ -63,7 +63,7 @@ public class Http10ChunkedDowngradeTests
             $"{chunkPayload.Length:x}\r\n{chunkPayload}\r\n0\r\n\r\n";
 
         var requestBytes = Encoding.ASCII.GetBytes(requestHeaderText + chunkedBody);
-        await stream.WriteAsync(requestBytes, 0, requestBytes.Length);
+        await stream.WriteAsync(requestBytes);
 
         var buffer = new byte[4096];
         var received = new MemoryStream();
@@ -75,7 +75,7 @@ public class Http10ChunkedDowngradeTests
             int read;
             try
             {
-                read = await stream.ReadAsync(buffer, 0, buffer.Length);
+                read = await stream.ReadAsync(buffer);
             }
             catch (IOException)
             {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -18,7 +18,8 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class ConnectFailureResponseTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
+    private static readonly string[] separator = new[] { "\r\n" };
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -26,7 +27,7 @@ public class ConnectFailureResponseTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -107,7 +108,7 @@ public class ConnectFailureResponseTests
         };
 
         var endPoint = (ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
-        UpstreamProxyConnectException typed = null;
+        UpstreamProxyConnectException? typed = null;
 
         endPoint.BeforeTunnelConnectRequest += async (_, e) =>
         {
@@ -173,7 +174,7 @@ public class ConnectFailureResponseTests
         string text = string.Empty;
         while (ms.Length < 64 * 1024)
         {
-            var read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
+            var read = await stream.ReadAsync(buffer, cts.Token);
             if (read == 0) break;
             ms.Write(buffer, 0, read);
             text = Encoding.ASCII.GetString(ms.ToArray());
@@ -181,7 +182,7 @@ public class ConnectFailureResponseTests
             if (headerEnd < 0) continue;
 
             var contentLength = 0;
-            foreach (var line in text.Substring(0, headerEnd).Split(new[] { "\r\n" }, StringSplitOptions.None))
+            foreach (var line in text.Substring(0, headerEnd).Split(separator, StringSplitOptions.None))
             {
                 if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase) &&
                     int.TryParse(line.Substring("Content-Length:".Length).Trim(), out var parsed))

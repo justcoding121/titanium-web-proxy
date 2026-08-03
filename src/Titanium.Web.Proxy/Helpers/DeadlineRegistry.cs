@@ -53,7 +53,7 @@ internal sealed class DeadlineRegistry
     ///     Starts a new deadline against <paramref name="parentToken" />. Dispose the returned scope in a
     ///     <c>finally</c>/<c>using</c> block once the bounded operation completes.
     /// </summary>
-    public Deadline Start(CancellationToken parentToken, TimeSpan? timeout, ProxyTimeoutKind kind)
+    public Deadline Start(CancellationToken parentToken, TimeSpan? timeout, ProxyTimeoutKind kind) // NOSONAR CA1068 -- Parameter order is retained to avoid churn across deadline call sites.
     {
         return new Deadline(this, parentToken, timeout, kind);
     }
@@ -111,7 +111,7 @@ internal sealed class DeadlineRegistry
         private readonly CancellationTokenSource? linkedCts;
         private bool disposed;
 
-        internal Deadline(DeadlineRegistry registry, CancellationToken parentToken, TimeSpan? timeout,
+        internal Deadline(DeadlineRegistry registry, CancellationToken parentToken, TimeSpan? timeout, // NOSONAR CA1068 -- Constructor mirrors Start parameter order.
             ProxyTimeoutKind kind)
         {
             this.registry = registry;

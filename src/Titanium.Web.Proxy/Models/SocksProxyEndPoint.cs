@@ -46,7 +46,7 @@ public class SocksProxyEndPoint : TransparentBaseProxyEndPoint
     /// <summary>
     ///     Before Ssl authentication this event is fired.
     /// </summary>
-    public event AsyncEventHandler<BeforeSslAuthenticateEventArgs>? BeforeSslAuthenticate;
+    public event AsyncEventHandler<BeforeSslAuthenticateEventArgs>? BeforeSslAuthenticate; // NOSONAR S3264 -- Public extension event invoked by the proxy pipeline.
 
     internal override async Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
         BeforeSslAuthenticateEventArgs connectArgs, ILogger logger)

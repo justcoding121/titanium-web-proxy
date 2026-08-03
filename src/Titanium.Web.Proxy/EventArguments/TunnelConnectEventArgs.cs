@@ -53,7 +53,7 @@ public class TunnelConnectSessionEventArgs : SessionEventArgsBase
     public UpstreamHttpProtocol UpstreamHttpProtocol
     {
         get => upstreamHttpProtocol;
-        set => upstreamHttpProtocol = Enum.IsDefined(typeof(UpstreamHttpProtocol), value)
+        set => upstreamHttpProtocol = Enum.IsDefined(value)
             ? value
             : throw new ArgumentOutOfRangeException(nameof(value), value,
                 "Unknown UpstreamHttpProtocol value.");
@@ -90,7 +90,7 @@ public class TunnelConnectSessionEventArgs : SessionEventArgsBase
     public bool IsHttpsConnect
     {
         get => isHttpsConnect ??
-               throw new Exception("The value of this property is known in the BeforeTunnelConnectResponse event");
+               throw new InvalidOperationException("The value of this property is known in the BeforeTunnelConnectResponse event");
 
         internal set => isHttpsConnect = value;
     }

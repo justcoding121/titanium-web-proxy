@@ -1,23 +1,21 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <!--[if IE]><![endif]-->
 <html>
-  
+
   <head>
     <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-    <title>Class SessionEventArgs
-   | Titanium Web Proxy </title>
-    <meta name="viewport" content="width=device-width">
-    <meta name="title" content="Class SessionEventArgs
-   | Titanium Web Proxy ">
-    <meta name="generator" content="docfx 2.59.4.0">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Class SessionEventArgs | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Class SessionEventArgs | Titanium Web Proxy ">
     
-    <link rel="shortcut icon" href="../favicon.ico">
-    <link rel="stylesheet" href="../styles/docfx.vendor.css">
-    <link rel="stylesheet" href="../styles/docfx.css">
-    <link rel="stylesheet" href="../styles/main.css">
-    <meta property="docfx:navrel" content="">
-    <meta property="docfx:tocrel" content="toc.html">
+    <meta name="description" content="Holds info related to a single proxy session (single request/response exchange). Under HTTP/2 and HTTP/3, many sessions share one client connection (one stream each); ending a session ends that request/response exchange, not necessarily the connection.">
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
     
     <meta property="docfx:rel" content="../">
     
@@ -25,7 +23,7 @@
   <body data-spy="scroll" data-target="#affix" data-offset="120">
     <div id="wrapper">
       <header>
-        
+
         <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
           <div class="container">
             <div class="navbar-header">
@@ -35,7 +33,7 @@
                 <span class="icon-bar"></span>
                 <span class="icon-bar"></span>
               </button>
-              
+
               <a class="navbar-brand" href="../index.html">
                 <img id="logo" class="svg" src="../logo.svg" alt="">
               </a>
@@ -49,7 +47,7 @@
             </div>
           </div>
         </nav>
-        
+
         <div class="subnav navbar navbar-default">
           <div class="container hide-when-search" id="breadcrumb">
             <ul class="breadcrumb">
@@ -59,17 +57,17 @@
         </div>
       </header>
       <div class="container body-content">
-        
+
         <div id="search-results">
           <div class="search-list">Search Results for <span></span></div>
           <div class="sr-items">
             <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
           </div>
-          <ul id="pagination" data-first="First" data-prev="Previous" data-next="Next" data-last="Last"></ul>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
         </div>
       </div>
       <div role="main" class="container body-content hide-when-search">
-        
+
         <div class="sidenav hide-when-search">
           <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
           <div class="sidetoggle collapse" id="sidetoggle">
@@ -79,19 +77,18 @@
         <div class="article row grid-right">
           <div class="col-md-10">
             <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs">
-  
-  
-  <h1 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs" class="text-break">Class SessionEventArgs
-  </h1>
-  <div class="markdown level0 summary"><p>Holds info related to a single proxy session (single request/response sequence).
-A proxy session is bounded to a single connection from client.
-A proxy session ends when client terminates connection to proxy
-or when server terminates connection from proxy.</p>
+
+
+
+  <h1 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs" class="text-break">Class SessionEventArgs</h1>
+  <div class="markdown level0 summary"><p>Holds info related to a single proxy session (single request/response exchange).
+Under HTTP/2 and HTTP/3, many sessions share one client connection (one stream each);
+ending a session ends that request/response exchange, not necessarily the connection.</p>
 </div>
   <div class="markdown level0 conceptual"></div>
   <div class="inheritance">
     <h5>Inheritance</h5>
-    <div class="level0"><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object">Object</a></div>
+    <div class="level0"><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object">object</a></div>
     <div class="level1"><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.eventargs">EventArgs</a></div>
     <div class="level2"><a class="xref" href="Titanium.Web.Proxy.EventArguments.ProxyEventArgsBase.html">ProxyEventArgsBase</a></div>
     <div class="level3"><a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">SessionEventArgsBase</a></div>
@@ -107,19 +104,22 @@ or when server terminates connection from proxy.</p>
       <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_BufferPool">SessionEventArgsBase.BufferPool</a>
     </div>
     <div>
-      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ExceptionFunc">SessionEventArgsBase.ExceptionFunc</a>
-    </div>
-    <div>
       <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ClientConnectionId">SessionEventArgsBase.ClientConnectionId</a>
     </div>
     <div>
       <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ServerConnectionId">SessionEventArgsBase.ServerConnectionId</a>
     </div>
     <div>
-      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_TimeLine">SessionEventArgsBase.TimeLine</a>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Timing">SessionEventArgsBase.Timing</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_UpstreamConnectionTiming">SessionEventArgsBase.UpstreamConnectionTiming</a>
     </div>
     <div>
       <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_UserData">SessionEventArgsBase.UserData</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ConnectTimeout">SessionEventArgsBase.ConnectTimeout</a>
     </div>
     <div>
       <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_EnableWinAuth">SessionEventArgsBase.EnableWinAuth</a>
@@ -135,6 +135,12 @@ or when server terminates connection from proxy.</p>
     </div>
     <div>
       <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ClientEndPoint">SessionEventArgsBase.ClientEndPoint</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ServerRemoteEndPoint">SessionEventArgsBase.ServerRemoteEndPoint</a>
+    </div>
+    <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ServerIpAddress">SessionEventArgsBase.ServerIpAddress</a>
     </div>
     <div>
       <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_HttpClient">SessionEventArgsBase.HttpClient</a>
@@ -164,6 +170,9 @@ or when server terminates connection from proxy.</p>
       <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Exception">SessionEventArgsBase.Exception</a>
     </div>
     <div>
+      <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Logger">SessionEventArgsBase.Logger</a>
+    </div>
+    <div>
       <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Dispose">SessionEventArgsBase.Dispose()</a>
     </div>
     <div>
@@ -185,53 +194,117 @@ or when server terminates connection from proxy.</p>
       <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.eventargs.empty">EventArgs.Empty</a>
     </div>
     <div>
-      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.tostring#system-object-tostring">Object.ToString()</a>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object)">object.Equals(object)</a>
     </div>
     <div>
-      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object)">Object.Equals(Object)</a>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object-system-object)">object.Equals(object, object)</a>
     </div>
     <div>
-      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object-system-object)">Object.Equals(Object, Object)</a>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gethashcode">object.GetHashCode()</a>
     </div>
     <div>
-      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.referenceequals#system-object-referenceequals(system-object-system-object)">Object.ReferenceEquals(Object, Object)</a>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gettype">object.GetType()</a>
     </div>
     <div>
-      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gethashcode#system-object-gethashcode">Object.GetHashCode()</a>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.memberwiseclone">object.MemberwiseClone()</a>
     </div>
     <div>
-      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gettype#system-object-gettype">Object.GetType()</a>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.referenceequals">object.ReferenceEquals(object, object)</a>
     </div>
     <div>
-      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.memberwiseclone#system-object-memberwiseclone">Object.MemberwiseClone()</a>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.tostring">object.ToString()</a>
     </div>
   </div>
-  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.Web.Proxy.EventArguments.html">Titanium.Web.Proxy.EventArguments</a></h6>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.html">Titanium</a>.<a class="xref" href="Titanium.Web.html">Web</a>.<a class="xref" href="Titanium.Web.Proxy.html">Proxy</a>.<a class="xref" href="Titanium.Web.Proxy.EventArguments.html">EventArguments</a></h6>
   <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
   <h5 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_syntax">Syntax</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public class SessionEventArgs : SessionEventArgsBase, IDisposable</code></pre>
   </div>
   <h3 id="properties">Properties
-  </h3>
+</h3>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_IsPromise.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.IsPromise%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_IdleReadTimeout.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.IdleReadTimeout%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L45">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L59">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_IdleReadTimeout_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.IdleReadTimeout*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_IdleReadTimeout" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.IdleReadTimeout">IdleReadTimeout</h4>
+  <div class="markdown level1 summary"><p>Per-session override for <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_IdleReadTimeoutSeconds">IdleReadTimeoutSeconds</a>.
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> uses the server default; <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan.zero">Zero</a> or negative disables.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan? IdleReadTimeout { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_IdleWriteTimeout.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.IdleWriteTimeout%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L65">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_IdleWriteTimeout_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.IdleWriteTimeout*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_IdleWriteTimeout" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.IdleWriteTimeout">IdleWriteTimeout</h4>
+  <div class="markdown level1 summary"><p>Per-session override for <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_IdleWriteTimeoutSeconds">IdleWriteTimeoutSeconds</a>.
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> uses the server default; <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan.zero">Zero</a> or negative disables.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan? IdleWriteTimeout { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_IsPromise.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.IsPromise%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L47">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_IsPromise_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.IsPromise*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_IsPromise" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.IsPromise">IsPromise</h4>
   <div class="markdown level1 summary"><p>Is this session a HTTP/2 promise?</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public bool IsPromise { get; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -240,29 +313,161 @@ or when server terminates connection from proxy.</p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
         <td></td>
       </tr>
     </tbody>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_ReRequest.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.ReRequest%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_MaxBufferedBodyBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.MaxBufferedBodyBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L52">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L78">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_MaxBufferedBodyBytes_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.MaxBufferedBodyBytes*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_MaxBufferedBodyBytes" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.MaxBufferedBodyBytes">MaxBufferedBodyBytes</h4>
+  <div class="markdown level1 summary"><p>Per-session override for <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_MaxBufferedBodyBytes">MaxBufferedBodyBytes</a>.
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> uses the server default. Set in <code>BeforeRequest</code> to increase the
+limit for large uploads/downloads without relaxing the global limit for all requests.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int? MaxBufferedBodyBytes { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_MaxWebSocketFramePayloadBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.MaxWebSocketFramePayloadBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L92">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_MaxWebSocketFramePayloadBytes_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.MaxWebSocketFramePayloadBytes*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_MaxWebSocketFramePayloadBytes" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.MaxWebSocketFramePayloadBytes">MaxWebSocketFramePayloadBytes</h4>
+  <div class="markdown level1 summary"><p>Per-session override for <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_MaxWebSocketFramePayloadBytes">MaxWebSocketFramePayloadBytes</a>.
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> uses the server default. Set in <code>BeforeRequest</code> before the
+WebSocket upgrade completes.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int? MaxWebSocketFramePayloadBytes { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_NetworkFailureRetryAttempts.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.NetworkFailureRetryAttempts%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L85">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_NetworkFailureRetryAttempts_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.NetworkFailureRetryAttempts*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_NetworkFailureRetryAttempts" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.NetworkFailureRetryAttempts">NetworkFailureRetryAttempts</h4>
+  <div class="markdown level1 summary"><p>Per-session override for <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_NetworkFailureRetryAttempts">NetworkFailureRetryAttempts</a>.
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> uses the server default. Set to 0 in <code>BeforeRequest</code> for
+non-idempotent methods (POST, PATCH) to prevent unsafe retries.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int? NetworkFailureRetryAttempts { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_OriginHttpVersionPolicy.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.OriginHttpVersionPolicy%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L99">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_OriginHttpVersionPolicy_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.OriginHttpVersionPolicy*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_OriginHttpVersionPolicy" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.OriginHttpVersionPolicy">OriginHttpVersionPolicy</h4>
+  <div class="markdown level1 summary"><p>Per-session override for <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_OriginHttpVersionPolicy">OriginHttpVersionPolicy</a>.
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> uses the server default (<a class="xref" href="Titanium.Web.Proxy.Models.OriginHttpVersionPolicy.html#Titanium_Web_Proxy_Models_OriginHttpVersionPolicy_PreserveClientVersion">PreserveClientVersion</a>
+unless the server property was changed). Set in <code>BeforeRequest</code>.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public OriginHttpVersionPolicy? OriginHttpVersionPolicy { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.OriginHttpVersionPolicy.html">OriginHttpVersionPolicy</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_ReRequest.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.ReRequest%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L120">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_ReRequest_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.ReRequest*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_ReRequest" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.ReRequest">ReRequest</h4>
   <div class="markdown level1 summary"><p>Should we send the request again ?</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public bool ReRequest { get; set; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -271,29 +476,165 @@ or when server terminates connection from proxy.</p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
         <td></td>
       </tr>
     </tbody>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoder.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoder%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_RequestTimeout.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.RequestTimeout%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L63">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L71">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_RequestTimeout_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.RequestTimeout*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_RequestTimeout" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.RequestTimeout">RequestTimeout</h4>
+  <div class="markdown level1 summary"><p>Per-session override for <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_RequestTimeoutSeconds">RequestTimeoutSeconds</a>.
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> uses the server default; <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan.zero">Zero</a> or negative disables.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan? RequestTimeout { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_ResponseHeaderTimeout.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.ResponseHeaderTimeout%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L53">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_ResponseHeaderTimeout_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.ResponseHeaderTimeout*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_ResponseHeaderTimeout" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.ResponseHeaderTimeout">ResponseHeaderTimeout</h4>
+  <div class="markdown level1 summary"><p>Per-session override for <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ResponseHeaderTimeoutSeconds">ResponseHeaderTimeoutSeconds</a>.
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> uses the server default; <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan.zero">Zero</a> or negative disables.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan? ResponseHeaderTimeout { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_UpstreamHttpProtocol.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.UpstreamHttpProtocol%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L113">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_UpstreamHttpProtocol_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.UpstreamHttpProtocol*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_UpstreamHttpProtocol" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.UpstreamHttpProtocol">UpstreamHttpProtocol</h4>
+  <div class="markdown level1 summary"><p>Per-request outbound protocol version policy. Overrides the connection-level
+<a class="xref" href="Titanium.Web.Proxy.Models.UpstreamHttpProtocol.html">UpstreamHttpProtocol</a> value set during <code>BeforeSslAuthenticate</code> /
+<code>BeforeQuicAuthenticate</code> for this single request stream only.
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> uses the connection-level policy (or <a class="xref" href="Titanium.Web.Proxy.Models.UpstreamHttpProtocol.html#Titanium_Web_Proxy_Models_UpstreamHttpProtocol_Auto">Auto</a>
+if none was set). Evaluated in <code>BeforeRequest</code>; changes after that have no effect.</p>
+<p>
+    On an H3 inbound connection (one client QUIC connection serving many concurrent streams),
+    each stream resolves its outbound protocol independently after <code>BeforeRequest</code> fires,
+    making per-stream protocol overrides possible even though the inbound leg is already QUIC.
+</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public UpstreamHttpProtocol? UpstreamHttpProtocol { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.UpstreamHttpProtocol.html">UpstreamHttpProtocol</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketClientWriter.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketClientWriter%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L163">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketClientWriter_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketClientWriter*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketClientWriter" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketClientWriter">WebSocketClientWriter</h4>
+  <div class="markdown level1 summary"><p>Inject frames toward the local client (server→client direction, unmasked).
+Available only while an intercepted WebSocket relay is active.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public WebSocketFrameWriter? WebSocketClientWriter { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.WebSocketFrameWriter.html">WebSocketFrameWriter</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoder.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoder%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L131">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoder_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoder*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoder" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoder">WebSocketDecoder</h4>
   <div class="markdown level1 summary"></div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">[Obsolete(&quot;Use [WebSocketDecoderReceive] instead&quot;)]
 public WebSocketDecoder WebSocketDecoder { get; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -309,21 +650,21 @@ public WebSocketDecoder WebSocketDecoder { get; }</code></pre>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoderReceive.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderReceive%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoderReceive.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderReceive%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L68">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L138">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoderReceive_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderReceive*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoderReceive" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderReceive">WebSocketDecoderReceive</h4>
   <div class="markdown level1 summary"></div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public WebSocketDecoder WebSocketDecoderReceive { get; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -339,21 +680,21 @@ public WebSocketDecoder WebSocketDecoder { get; }</code></pre>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoderSend.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderSend%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoderSend.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderSend%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L66">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L134">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoderSend_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderSend*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketDecoderSend" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketDecoderSend">WebSocketDecoderSend</h4>
   <div class="markdown level1 summary"></div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public WebSocketDecoder WebSocketDecoderSend { get; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -367,25 +708,57 @@ public WebSocketDecoder WebSocketDecoder { get; }</code></pre>
       </tr>
     </tbody>
   </table>
-  <h3 id="methods">Methods
-  </h3>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_Dispose_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.Dispose(System.Boolean)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketServerWriter.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketServerWriter%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L617">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L157">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketServerWriter_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketServerWriter*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_WebSocketServerWriter" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.WebSocketServerWriter">WebSocketServerWriter</h4>
+  <div class="markdown level1 summary"><p>Inject frames toward the remote server (client→server direction, masked).
+Available only while an intercepted WebSocket relay is active.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public WebSocketFrameWriter? WebSocketServerWriter { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.WebSocketFrameWriter.html">WebSocketFrameWriter</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="methods">Methods
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_Dispose_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.Dispose(System.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L820">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Dispose_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Dispose*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Dispose_System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Dispose(System.Boolean)">Dispose(Boolean)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Dispose_System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Dispose(System.Boolean)">Dispose(bool)</h4>
   <div class="markdown level1 summary"></div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">protected override void Dispose(bool disposing)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -395,48 +768,148 @@ public WebSocketDecoder WebSocketDecoder { get; }</code></pre>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
         <td><span class="parametername">disposing</span></td>
         <td></td>
       </tr>
     </tbody>
   </table>
   <h5 class="overrides">Overrides</h5>
-  <div><a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Dispose_System_Boolean_">SessionEventArgsBase.Dispose(Boolean)</a></div>
+  <div><a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_Dispose_System_Boolean_">SessionEventArgsBase.Dispose(bool)</a></div>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_Finalize.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.Finalize%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_DrainClientBodyAsync_System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.DrainClientBodyAsync(System.Threading.CancellationToken)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L627">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L815">View Source</a>
   </span>
-  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Finalize_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Finalize*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Finalize" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Finalize">Finalize()</h4>
-  <div class="markdown level1 summary"></div>
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_DrainClientBodyAsync_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.DrainClientBodyAsync*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_DrainClientBodyAsync_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.DrainClientBodyAsync(System.Threading.CancellationToken)">DrainClientBodyAsync(CancellationToken)</h4>
+  <div class="markdown level1 summary"><p>Drains (reads and discards) any unread client request body from the underlying stream or
+connection so the client's keep-alive / multiplexed connection can be reused. This reads the
+bytes off the wire without buffering them in memory. It is a no-op if the body was already
+received or the request has no body.</p>
+</div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">protected void Finalize()</code></pre>
+    <pre><code class="lang-csharp hljs">public Task DrainClientBodyAsync(CancellationToken cancellationToken = default)</code></pre>
   </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.cancellationtoken">CancellationToken</a></td>
+        <td><span class="parametername">cancellationToken</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task">Task</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_DrainClientBodyAsync_System_Threading_CancellationToken__remarks">Remarks</h5>
+  <div class="markdown level1 remarks"><p>Useful when short-circuiting a request (e.g. <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_Titanium_Web_Proxy_Http_Response_System_Boolean_">Respond(Response, bool)</a>, <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_RespondStreaming_Titanium_Web_Proxy_Http_Response_System_Func_System_IO_Stream_System_Threading_CancellationToken_System_Threading_Tasks_Task__System_Boolean_">RespondStreaming(Response, Func&lt;Stream, CancellationToken, Task&gt;, bool)</a>, or
+blocking) while the client is uploading a body: draining leaves the client connection in a reusable
+state. Note the proxy already drains the client body automatically on the normal synthetic-response
+path, so this is only needed for advanced/manual control.
+Warning: for an endless chunked request (one that never sends its terminating zero chunk) this will
+block until the passed <code class="paramref">cancellationToken</code> is cancelled or the connection closes.</p>
+</div>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_Byte___System_Net_HttpStatusCode_System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte%5B%5D%2CSystem.Net.HttpStatusCode%2CSystem.Collections.Generic.IDictionary%7BSystem.String%2CTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_DrainServerBodyAsync_System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.DrainServerBodyAsync(System.Threading.CancellationToken)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L532">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L796">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_DrainServerBodyAsync_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.DrainServerBodyAsync*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_DrainServerBodyAsync_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.DrainServerBodyAsync(System.Threading.CancellationToken)">DrainServerBodyAsync(CancellationToken)</h4>
+  <div class="markdown level1 summary"><p>Drains (reads and discards) any unread server response body from the underlying
+client/server stream or connection so it can be reused. This reads the bytes off the wire
+without buffering them in memory. It is a no-op if the body was already received or the
+response has no body.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Task DrainServerBodyAsync(CancellationToken cancellationToken = default)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.cancellationtoken">CancellationToken</a></td>
+        <td><span class="parametername">cancellationToken</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task">Task</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_DrainServerBodyAsync_System_Threading_CancellationToken__remarks">Remarks</h5>
+  <div class="markdown level1 remarks"><p>Warning: for an endless chunked response (one that never sends its terminating zero chunk) this will
+block until the passed <code class="paramref">cancellationToken</code> is cancelled or the connection closes. In
+that case prefer closing the connection (e.g. <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_TerminateServerConnection">TerminateServerConnection()</a>) instead.</p>
+</div>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_Byte___System_Net_HttpStatusCode_System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte%5B%5D%2CSystem.Net.HttpStatusCode%2CSystem.Collections.Generic.IDictionary%7BSystem.String%2CTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L663">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_Byte___System_Net_HttpStatusCode_System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[],System.Net.HttpStatusCode,System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">GenericResponse(Byte[], HttpStatusCode, IDictionary&lt;String, HttpHeader&gt;, Boolean)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_Byte___System_Net_HttpStatusCode_System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[],System.Net.HttpStatusCode,System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">GenericResponse(byte[], HttpStatusCode, IDictionary&lt;string, HttpHeader&gt;, bool)</h4>
   <div class="markdown level1 summary"><p>Before request is made to server respond with the specified byte[],
 the specified status  to client. And then ignore the request.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public void GenericResponse(byte[] result, HttpStatusCode status, IDictionary&lt;string, HttpHeader&gt; headers, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -446,7 +919,7 @@ the specified status  to client. And then ignore the request.</p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">Byte</a>[]</td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">byte</a>[]</td>
         <td><span class="parametername">result</span></td>
         <td><p>The bytes to sent.</p>
 </td>
@@ -458,13 +931,13 @@ the specified status  to client. And then ignore the request.</p>
 </td>
       </tr>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.idictionary-2">IDictionary</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.idictionary-2">IDictionary</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
         <td><span class="parametername">headers</span></td>
         <td><p>The HTTP headers.</p>
 </td>
       </tr>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
         <td><span class="parametername">closeServerConnection</span></td>
         <td><p>Close the server connection used by request if any?</p>
 </td>
@@ -473,23 +946,23 @@ the specified status  to client. And then ignore the request.</p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_Byte___System_Net_HttpStatusCode_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte%5B%5D%2CSystem.Net.HttpStatusCode%2CSystem.Collections.Generic.IEnumerable%7BTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_Byte___System_Net_HttpStatusCode_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte%5B%5D%2CSystem.Net.HttpStatusCode%2CSystem.Collections.Generic.IEnumerable%7BTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L546">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L677">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_Byte___System_Net_HttpStatusCode_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[],System.Net.HttpStatusCode,System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">GenericResponse(Byte[], HttpStatusCode, IEnumerable&lt;HttpHeader&gt;, Boolean)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_Byte___System_Net_HttpStatusCode_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.Byte[],System.Net.HttpStatusCode,System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">GenericResponse(byte[], HttpStatusCode, IEnumerable&lt;HttpHeader&gt;?, bool)</h4>
   <div class="markdown level1 summary"><p>Before request is made to server respond with the specified byte[],
 the specified status  to client. And then ignore the request.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public void GenericResponse(byte[] result, HttpStatusCode status, IEnumerable&lt;HttpHeader&gt; headers, bool closeServerConnection = false)</code></pre>
+    <pre><code class="lang-csharp hljs">public void GenericResponse(byte[] result, HttpStatusCode status, IEnumerable&lt;HttpHeader&gt;? headers, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -499,7 +972,7 @@ the specified status  to client. And then ignore the request.</p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">Byte</a>[]</td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">byte</a>[]</td>
         <td><span class="parametername">result</span></td>
         <td><p>The bytes to sent.</p>
 </td>
@@ -517,7 +990,7 @@ the specified status  to client. And then ignore the request.</p>
 </td>
       </tr>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
         <td><span class="parametername">closeServerConnection</span></td>
         <td><p>Close the server connection used by request if any?</p>
 </td>
@@ -526,24 +999,24 @@ the specified status  to client. And then ignore the request.</p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_String_System_Net_HttpStatusCode_System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String%2CSystem.Net.HttpStatusCode%2CSystem.Collections.Generic.IDictionary%7BSystem.String%2CTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_String_System_Net_HttpStatusCode_System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String%2CSystem.Net.HttpStatusCode%2CSystem.Collections.Generic.IDictionary%7BSystem.String%2CTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L498">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L629">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_String_System_Net_HttpStatusCode_System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String,System.Net.HttpStatusCode,System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">GenericResponse(String, HttpStatusCode, IDictionary&lt;String, HttpHeader&gt;, Boolean)</h4>
-  <div class="markdown level1 summary"><p>Before request is made to server 
-respond with the specified HTML string and the specified status to client.
-And then ignore the request. </p>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_String_System_Net_HttpStatusCode_System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String,System.Net.HttpStatusCode,System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">GenericResponse(string, HttpStatusCode, IDictionary&lt;string, HttpHeader&gt;?, bool)</h4>
+  <div class="markdown level1 summary"><p>Before request is made to server 
+respond with the specified HTML string and the specified status to client.
+And then ignore the request.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public void GenericResponse(string html, HttpStatusCode status, IDictionary&lt;string, HttpHeader&gt; headers, bool closeServerConnection = false)</code></pre>
+    <pre><code class="lang-csharp hljs">public void GenericResponse(string html, HttpStatusCode status, IDictionary&lt;string, HttpHeader&gt;? headers, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -553,7 +1026,7 @@ And then ignore the request. </p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
         <td><span class="parametername">html</span></td>
         <td><p>The html content.</p>
 </td>
@@ -565,13 +1038,13 @@ And then ignore the request. </p>
 </td>
       </tr>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.idictionary-2">IDictionary</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.idictionary-2">IDictionary</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
         <td><span class="parametername">headers</span></td>
         <td><p>The HTTP headers.</p>
 </td>
       </tr>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
         <td><span class="parametername">closeServerConnection</span></td>
         <td><p>Close the server connection used by request if any?</p>
 </td>
@@ -580,24 +1053,24 @@ And then ignore the request. </p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_String_System_Net_HttpStatusCode_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String%2CSystem.Net.HttpStatusCode%2CSystem.Collections.Generic.IEnumerable%7BTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_String_System_Net_HttpStatusCode_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String%2CSystem.Net.HttpStatusCode%2CSystem.Collections.Generic.IEnumerable%7BTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L513">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L644">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_String_System_Net_HttpStatusCode_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String,System.Net.HttpStatusCode,System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">GenericResponse(String, HttpStatusCode, IEnumerable&lt;HttpHeader&gt;, Boolean)</h4>
-  <div class="markdown level1 summary"><p>Before request is made to server 
-respond with the specified HTML string and the specified status to client.
-And then ignore the request. </p>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GenericResponse_System_String_System_Net_HttpStatusCode_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GenericResponse(System.String,System.Net.HttpStatusCode,System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">GenericResponse(string, HttpStatusCode, IEnumerable&lt;HttpHeader&gt;?, bool)</h4>
+  <div class="markdown level1 summary"><p>Before request is made to server 
+respond with the specified HTML string and the specified status to client.
+And then ignore the request.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public void GenericResponse(string html, HttpStatusCode status, IEnumerable&lt;HttpHeader&gt; headers = null, bool closeServerConnection = false)</code></pre>
+    <pre><code class="lang-csharp hljs">public void GenericResponse(string html, HttpStatusCode status, IEnumerable&lt;HttpHeader&gt;? headers = null, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -607,7 +1080,7 @@ And then ignore the request. </p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
         <td><span class="parametername">html</span></td>
         <td><p>The html content.</p>
 </td>
@@ -625,7 +1098,7 @@ And then ignore the request. </p>
 </td>
       </tr>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
         <td><span class="parametername">closeServerConnection</span></td>
         <td><p>Close the server connection used by request if any?</p>
 </td>
@@ -634,22 +1107,22 @@ And then ignore the request. </p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBody_System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBody(System.Threading.CancellationToken)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBody_System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBody(System.Threading.CancellationToken)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L334">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L465">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBody_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBody*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBody_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBody(System.Threading.CancellationToken)">GetRequestBody(CancellationToken)</h4>
   <div class="markdown level1 summary"><p>Gets the request body as bytes.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public async Task&lt;byte[]&gt; GetRequestBody(CancellationToken cancellationToken = default(CancellationToken))</code></pre>
+    <pre><code class="lang-csharp hljs">public Task&lt;byte[]&gt; GetRequestBody(CancellationToken cancellationToken = default)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -667,7 +1140,7 @@ And then ignore the request. </p>
     </tbody>
   </table>
   <h5 class="returns">Returns</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -676,7 +1149,7 @@ And then ignore the request. </p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">Byte</a>[]&gt;</td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">byte</a>[]&gt;</td>
         <td><p>The body as bytes.</p>
 </td>
       </tr>
@@ -684,22 +1157,22 @@ And then ignore the request. </p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBodyAsString_System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBodyAsString(System.Threading.CancellationToken)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBodyAsString_System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBodyAsString(System.Threading.CancellationToken)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L346">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L477">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBodyAsString_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBodyAsString*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetRequestBodyAsString_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetRequestBodyAsString(System.Threading.CancellationToken)">GetRequestBodyAsString(CancellationToken)</h4>
   <div class="markdown level1 summary"><p>Gets the request body as string.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public async Task&lt;string&gt; GetRequestBodyAsString(CancellationToken cancellationToken = default(CancellationToken))</code></pre>
+    <pre><code class="lang-csharp hljs">public Task&lt;string&gt; GetRequestBodyAsString(CancellationToken cancellationToken = default)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -717,7 +1190,7 @@ And then ignore the request. </p>
     </tbody>
   </table>
   <h5 class="returns">Returns</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -726,7 +1199,7 @@ And then ignore the request. </p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">String</a>&gt;</td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
         <td><p>The body as string.</p>
 </td>
       </tr>
@@ -734,22 +1207,22 @@ And then ignore the request. </p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBody_System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBody(System.Threading.CancellationToken)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBody_System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBody(System.Threading.CancellationToken)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L382">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L513">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBody_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBody*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBody_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBody(System.Threading.CancellationToken)">GetResponseBody(CancellationToken)</h4>
   <div class="markdown level1 summary"><p>Gets the response body as bytes.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public async Task&lt;byte[]&gt; GetResponseBody(CancellationToken cancellationToken = default(CancellationToken))</code></pre>
+    <pre><code class="lang-csharp hljs">public Task&lt;byte[]&gt; GetResponseBody(CancellationToken cancellationToken = default)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -767,7 +1240,7 @@ And then ignore the request. </p>
     </tbody>
   </table>
   <h5 class="returns">Returns</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -776,7 +1249,7 @@ And then ignore the request. </p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">Byte</a>[]&gt;</td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">byte</a>[]&gt;</td>
         <td><p>The resulting bytes.</p>
 </td>
       </tr>
@@ -784,22 +1257,22 @@ And then ignore the request. </p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBodyAsString_System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBodyAsString(System.Threading.CancellationToken)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBodyAsString_System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBodyAsString(System.Threading.CancellationToken)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L394">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L525">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBodyAsString_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBodyAsString*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_GetResponseBodyAsString_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.GetResponseBodyAsString(System.Threading.CancellationToken)">GetResponseBodyAsString(CancellationToken)</h4>
   <div class="markdown level1 summary"><p>Gets the response body as string.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public async Task&lt;string&gt; GetResponseBodyAsString(CancellationToken cancellationToken = default(CancellationToken))</code></pre>
+    <pre><code class="lang-csharp hljs">public Task&lt;string&gt; GetResponseBodyAsString(CancellationToken cancellationToken = default)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -817,7 +1290,7 @@ And then ignore the request. </p>
     </tbody>
   </table>
   <h5 class="returns">Returns</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -826,7 +1299,7 @@ And then ignore the request. </p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">String</a>&gt;</td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
         <td><p>The string body.</p>
 </td>
       </tr>
@@ -834,23 +1307,23 @@ And then ignore the request. </p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_Byte___System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte%5B%5D%2CSystem.Collections.Generic.IDictionary%7BSystem.String%2CTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_Byte___System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte%5B%5D%2CSystem.Collections.Generic.IDictionary%7BSystem.String%2CTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L465">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L596">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_Byte___System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[],System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">Ok(Byte[], IDictionary&lt;String, HttpHeader&gt;, Boolean)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_Byte___System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[],System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">Ok(byte[], IDictionary&lt;string, HttpHeader&gt;?, bool)</h4>
   <div class="markdown level1 summary"><p>Before request is made to server respond with the specified byte[] to client
-and ignore the request. </p>
+and ignore the request.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public void Ok(byte[] result, IDictionary&lt;string, HttpHeader&gt; headers, bool closeServerConnection = false)</code></pre>
+    <pre><code class="lang-csharp hljs">public void Ok(byte[] result, IDictionary&lt;string, HttpHeader&gt;? headers, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -860,19 +1333,19 @@ and ignore the request. </p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">Byte</a>[]</td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">byte</a>[]</td>
         <td><span class="parametername">result</span></td>
         <td><p>The html content bytes.</p>
 </td>
       </tr>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.idictionary-2">IDictionary</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.idictionary-2">IDictionary</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
         <td><span class="parametername">headers</span></td>
         <td><p>The HTTP headers.</p>
 </td>
       </tr>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
         <td><span class="parametername">closeServerConnection</span></td>
         <td><p>Close the server connection used by request if any?</p>
 </td>
@@ -881,23 +1354,23 @@ and ignore the request. </p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_Byte___System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte%5B%5D%2CSystem.Collections.Generic.IEnumerable%7BTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_Byte___System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte%5B%5D%2CSystem.Collections.Generic.IEnumerable%7BTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L478">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L609">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_Byte___System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[],System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">Ok(Byte[], IEnumerable&lt;HttpHeader&gt;, Boolean)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_Byte___System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.Byte[],System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">Ok(byte[], IEnumerable&lt;HttpHeader&gt;?, bool)</h4>
   <div class="markdown level1 summary"><p>Before request is made to server respond with the specified byte[] to client
-and ignore the request. </p>
+and ignore the request.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public void Ok(byte[] result, IEnumerable&lt;HttpHeader&gt; headers = null, bool closeServerConnection = false)</code></pre>
+    <pre><code class="lang-csharp hljs">public void Ok(byte[] result, IEnumerable&lt;HttpHeader&gt;? headers = null, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -907,7 +1380,7 @@ and ignore the request. </p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">Byte</a>[]</td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">byte</a>[]</td>
         <td><span class="parametername">result</span></td>
         <td><p>The html content bytes.</p>
 </td>
@@ -919,7 +1392,7 @@ and ignore the request. </p>
 </td>
       </tr>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
         <td><span class="parametername">closeServerConnection</span></td>
         <td><p>Close the server connection used by request if any?</p>
 </td>
@@ -928,23 +1401,23 @@ and ignore the request. </p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_String_System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String%2CSystem.Collections.Generic.IDictionary%7BSystem.String%2CTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_String_System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String%2CSystem.Collections.Generic.IDictionary%7BSystem.String%2CTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L433">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L564">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_String_System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String,System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">Ok(String, IDictionary&lt;String, HttpHeader&gt;, Boolean)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_String_System_Collections_Generic_IDictionary_System_String_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String,System.Collections.Generic.IDictionary{System.String,Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">Ok(string, IDictionary&lt;string, HttpHeader&gt;?, bool)</h4>
   <div class="markdown level1 summary"><p>Before request is made to server respond with the specified HTML string to client
-and ignore the request. </p>
+and ignore the request.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public void Ok(string html, IDictionary&lt;string, HttpHeader&gt; headers, bool closeServerConnection = false)</code></pre>
+    <pre><code class="lang-csharp hljs">public void Ok(string html, IDictionary&lt;string, HttpHeader&gt;? headers, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -954,19 +1427,19 @@ and ignore the request. </p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
         <td><span class="parametername">html</span></td>
         <td><p>HTML content to sent.</p>
 </td>
       </tr>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.idictionary-2">IDictionary</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">String</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.idictionary-2">IDictionary</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>, <a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;</td>
         <td><span class="parametername">headers</span></td>
         <td><p>HTTP response headers.</p>
 </td>
       </tr>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
         <td><span class="parametername">closeServerConnection</span></td>
         <td><p>Close the server connection used by request if any?</p>
 </td>
@@ -975,23 +1448,23 @@ and ignore the request. </p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_String_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String%2CSystem.Collections.Generic.IEnumerable%7BTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_String_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String%2CSystem.Collections.Generic.IEnumerable%7BTitanium.Web.Proxy.Models.HttpHeader%7D%2CSystem.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L446">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L577">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_String_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String,System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">Ok(String, IEnumerable&lt;HttpHeader&gt;, Boolean)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Ok_System_String_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Ok(System.String,System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader},System.Boolean)">Ok(string, IEnumerable&lt;HttpHeader&gt;?, bool)</h4>
   <div class="markdown level1 summary"><p>Before request is made to server respond with the specified HTML string to client
-and ignore the request. </p>
+and ignore the request.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public void Ok(string html, IEnumerable&lt;HttpHeader&gt; headers = null, bool closeServerConnection = false)</code></pre>
+    <pre><code class="lang-csharp hljs">public void Ok(string html, IEnumerable&lt;HttpHeader&gt;? headers = null, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -1001,7 +1474,7 @@ and ignore the request. </p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
         <td><span class="parametername">html</span></td>
         <td><p>HTML content to sent.</p>
 </td>
@@ -1013,7 +1486,7 @@ and ignore the request. </p>
 </td>
       </tr>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
         <td><span class="parametername">closeServerConnection</span></td>
         <td><p>Close the server connection used by request if any?</p>
 </td>
@@ -1022,22 +1495,22 @@ and ignore the request. </p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_Redirect_System_String_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.Redirect(System.String%2CSystem.Boolean)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_Redirect_System_String_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.Redirect(System.String%2CSystem.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L562">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L693">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Redirect_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Redirect*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Redirect_System_String_System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Redirect(System.String,System.Boolean)">Redirect(String, Boolean)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Redirect_System_String_System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Redirect(System.String,System.Boolean)">Redirect(string, bool)</h4>
   <div class="markdown level1 summary"><p>Redirect to provided URL.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public void Redirect(string url, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -1047,13 +1520,13 @@ and ignore the request. </p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
         <td><span class="parametername">url</span></td>
         <td><p>The URL to redirect.</p>
 </td>
       </tr>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
         <td><span class="parametername">closeServerConnection</span></td>
         <td><p>Close the server connection used by request if any?</p>
 </td>
@@ -1062,22 +1535,22 @@ and ignore the request. </p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_Titanium_Web_Proxy_Http_Response_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.Respond(Titanium.Web.Proxy.Http.Response%2CSystem.Boolean)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_Titanium_Web_Proxy_Http_Response_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.Respond(Titanium.Web.Proxy.Http.Response%2CSystem.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L577">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L715">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Respond*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_Titanium_Web_Proxy_Http_Response_System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Respond(Titanium.Web.Proxy.Http.Response,System.Boolean)">Respond(Response, Boolean)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_Titanium_Web_Proxy_Http_Response_System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.Respond(Titanium.Web.Proxy.Http.Response,System.Boolean)">Respond(Response, bool)</h4>
   <div class="markdown level1 summary"><p>Respond with given response object to client.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public void Respond(Response response, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -1093,31 +1566,40 @@ and ignore the request. </p>
 </td>
       </tr>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">Boolean</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
         <td><span class="parametername">closeServerConnection</span></td>
         <td><p>Close the server connection used by request if any?</p>
 </td>
       </tr>
     </tbody>
   </table>
+  <h5 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_Titanium_Web_Proxy_Http_Response_System_Boolean__remarks">Remarks</h5>
+  <div class="markdown level1 remarks"><p>If the server response was already received, the original server body (if any) is drained (syphoned) so the
+server connection stays reusable. To avoid reading a large or endless server body, pass
+<code class="paramref">closeServerConnection</code> = true (or call <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_TerminateServerConnection">TerminateServerConnection()</a>), which
+closes the connection instead of draining. Note that an HTTP/1.1 connection cannot be both reused and have
+its body skipped.</p>
+</div>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBody_System_Byte___.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBody(System.Byte%5B%5D)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_RespondStreaming_Titanium_Web_Proxy_Http_Response_System_Func_System_IO_Stream_System_Threading_CancellationToken_System_Threading_Tasks_Task__System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.RespondStreaming(Titanium.Web.Proxy.Http.Response%2CSystem.Func%7BSystem.IO.Stream%2CSystem.Threading.CancellationToken%2CSystem.Threading.Tasks.Task%7D%2CSystem.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L357">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L763">View Source</a>
   </span>
-  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBody_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBody*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBody_System_Byte___" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBody(System.Byte[])">SetRequestBody(Byte[])</h4>
-  <div class="markdown level1 summary"><p>Sets the request body.</p>
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_RespondStreaming_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.RespondStreaming*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_RespondStreaming_Titanium_Web_Proxy_Http_Response_System_Func_System_IO_Stream_System_Threading_CancellationToken_System_Threading_Tasks_Task__System_Boolean_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.RespondStreaming(Titanium.Web.Proxy.Http.Response,System.Func{System.IO.Stream,System.Threading.CancellationToken,System.Threading.Tasks.Task},System.Boolean)">RespondStreaming(Response, Func&lt;Stream, CancellationToken, Task&gt;, bool)</h4>
+  <div class="markdown level1 summary"><p>Respond to the client with a streamed body produced on the fly, without buffering the whole body in
+memory. Use this to serve large or endless bodies (e.g. a multi-gigabyte file or a synthetic
+server-sent-events stream) from scratch.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public void SetRequestBody(byte[] body)</code></pre>
+    <pre><code class="lang-csharp hljs">public void RespondStreaming(Response response, Func&lt;Stream, CancellationToken, Task&gt; writeBody, bool closeServerConnection = false)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -1127,7 +1609,61 @@ and ignore the request. </p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">Byte</a>[]</td>
+        <td><a class="xref" href="Titanium.Web.Proxy.Http.Response.html">Response</a></td>
+        <td><span class="parametername">response</span></td>
+        <td><p>The response object (status and headers).</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.func-3">Func</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.io.stream">Stream</a>, <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.cancellationtoken">CancellationToken</a>, <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task">Task</a>&gt;</td>
+        <td><span class="parametername">writeBody</span></td>
+        <td><p>Delegate that writes the body to the provided stream.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td><span class="parametername">closeServerConnection</span></td>
+        <td><p>Close the server connection used by request if any?</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_RespondStreaming_Titanium_Web_Proxy_Http_Response_System_Func_System_IO_Stream_System_Threading_CancellationToken_System_Threading_Tasks_Task__System_Boolean__remarks">Remarks</h5>
+  <div class="markdown level1 remarks"><p>Framing is chosen from the response headers: if a Content-Length is set on <code class="paramref">response</code>
+the body is written raw (the delegate must write exactly that many bytes); otherwise HTTP/1.1 uses
+chunked transfer-encoding and HTTP/2/HTTP/3 emit DATA / stream frames. The delegate receives a
+write-only stream; only a single buffer is in flight at a time, so memory stays bounded regardless
+of the total size. See <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_Titanium_Web_Proxy_Http_Response_System_Boolean_">Respond(Response, bool)</a> for the server body syphon-vs-close trade-off controlled
+by <code class="paramref">closeServerConnection</code>.</p>
+</div>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBody_System_Byte___.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBody(System.Byte%5B%5D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L488">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBody_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBody*"></a>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBody_System_Byte___" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBody(System.Byte[])">SetRequestBody(byte[])</h4>
+  <div class="markdown level1 summary"><p>Sets the request body.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void SetRequestBody(byte[] body)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">byte</a>[]</td>
         <td><span class="parametername">body</span></td>
         <td><p>The request body bytes.</p>
 </td>
@@ -1136,22 +1672,22 @@ and ignore the request. </p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBodyString_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBodyString(System.String)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBodyString_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBodyString(System.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L369">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L500">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBodyString_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBodyString*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBodyString_System_String_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBodyString(System.String)">SetRequestBodyString(String)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetRequestBodyString_System_String_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetRequestBodyString(System.String)">SetRequestBodyString(string)</h4>
   <div class="markdown level1 summary"><p>Sets the body with the specified string.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public void SetRequestBodyString(string body)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -1161,7 +1697,7 @@ and ignore the request. </p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
         <td><span class="parametername">body</span></td>
         <td><p>The request body string to set.</p>
 </td>
@@ -1170,22 +1706,22 @@ and ignore the request. </p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBody_System_Byte___.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBody(System.Byte%5B%5D)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBody_System_Byte___.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBody(System.Byte%5B%5D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L405">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L536">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBody_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBody*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBody_System_Byte___" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBody(System.Byte[])">SetResponseBody(Byte[])</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBody_System_Byte___" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBody(System.Byte[])">SetResponseBody(byte[])</h4>
   <div class="markdown level1 summary"><p>Set the response body bytes.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public void SetResponseBody(byte[] body)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -1195,7 +1731,7 @@ and ignore the request. </p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">Byte</a>[]</td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.byte">byte</a>[]</td>
         <td><span class="parametername">body</span></td>
         <td><p>The body bytes to set.</p>
 </td>
@@ -1204,22 +1740,22 @@ and ignore the request. </p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBodyString_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBodyString(System.String)%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBodyString_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBodyString(System.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L417">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L548">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBodyString_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBodyString*"></a>
-  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBodyString_System_String_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBodyString(System.String)">SetResponseBodyString(String)</h4>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_SetResponseBodyString_System_String_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.SetResponseBodyString(System.String)">SetResponseBodyString(string)</h4>
   <div class="markdown level1 summary"><p>Replace the response body with the specified string.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public void SetResponseBodyString(string body)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -1229,7 +1765,7 @@ and ignore the request. </p>
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">String</a></td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
         <td><span class="parametername">body</span></td>
         <td><p>The body string to set.</p>
 </td>
@@ -1238,39 +1774,75 @@ and ignore the request. </p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_TerminateServerConnection.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.TerminateServerConnection%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_TerminateServerConnection.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.TerminateServerConnection%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L612">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L780">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_TerminateServerConnection_" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.TerminateServerConnection*"></a>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_TerminateServerConnection" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.TerminateServerConnection">TerminateServerConnection()</h4>
   <div class="markdown level1 summary"><p>Terminate the connection to server at the end of this HTTP request/response session.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public void TerminateServerConnection()</code></pre>
   </div>
   <h3 id="events">Events
-  </h3>
+</h3>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_MultipartRequestPartSent.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.MultipartRequestPartSent%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Improve this Doc</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_BeforeWebSocketFrame.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.BeforeWebSocketFrame%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L73">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L151">View Source</a>
+  </span>
+  <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_BeforeWebSocketFrame" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.BeforeWebSocketFrame">BeforeWebSocketFrame</h4>
+  <div class="markdown level1 summary"><p>Fired for each WebSocket frame after upgrade when at least one handler is subscribed.
+Handlers may <a class="xref" href="Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptAction.html#Titanium_Web_Proxy_EventArguments_WebSocketFrameInterceptAction_Forward">Forward</a>,
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptAction.html#Titanium_Web_Proxy_EventArguments_WebSocketFrameInterceptAction_Drop">Drop</a>, or
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptAction.html#Titanium_Web_Proxy_EventArguments_WebSocketFrameInterceptAction_Replace">Replace</a> the frame, optionally with a
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.html#Titanium_Web_Proxy_EventArguments_WebSocketFrameInterceptEventArgs_Delay">Delay</a>. Observational
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_DataSent">DataSent</a> / <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_DataReceived">DataReceived</a>
+still fire for bytes actually written to the peer.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public event AsyncEventHandler&lt;WebSocketFrameInterceptEventArgs&gt;? BeforeWebSocketFrame</code></pre>
+  </div>
+  <h5 class="eventType">Event Type</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.EventArguments.AsyncEventHandler-1.html">AsyncEventHandler</a>&lt;<a class="xref" href="Titanium.Web.Proxy.EventArguments.WebSocketFrameInterceptEventArgs.html">WebSocketFrameInterceptEventArgs</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs_MultipartRequestPartSent.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs.MultipartRequestPartSent%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L176">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_EventArguments_SessionEventArgs_MultipartRequestPartSent" data-uid="Titanium.Web.Proxy.EventArguments.SessionEventArgs.MultipartRequestPartSent">MultipartRequestPartSent</h4>
   <div class="markdown level1 summary"><p>Occurs when multipart request part sent.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
-  <h5 class="decalaration">Declaration</h5>
+  <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public event EventHandler&lt;MultipartRequestPartSentEventArgs&gt; MultipartRequestPartSent</code></pre>
+    <pre><code class="lang-csharp hljs">public event EventHandler&lt;MultipartRequestPartSentEventArgs&gt;? MultipartRequestPartSent</code></pre>
   </div>
   <h5 class="eventType">Event Type</h5>
-  <table class="table table-bordered table-striped table-condensed">
+  <table class="table table-bordered table-condensed">
     <thead>
       <tr>
         <th>Type</th>
@@ -1286,32 +1858,33 @@ and ignore the request. </p>
   </table>
   <h3 id="implements">Implements</h3>
   <div>
-      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.idisposable">System.IDisposable</a>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.idisposable">IDisposable</a>
   </div>
+
 </article>
           </div>
-          
+
           <div class="hidden-sm col-md-2" role="complementary">
             <div class="sideaffix">
               <div class="contribution">
                 <ul class="nav">
                   <li>
-                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Improve this Doc</a>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_EventArguments_SessionEventArgs.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.EventArguments.SessionEventArgs%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
                   </li>
                   <li>
-                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L21" class="contribution-link">View Source</a>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/EventArguments/SessionEventArgs.cs/#L23" class="contribution-link">View Source</a>
                   </li>
                 </ul>
               </div>
               <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
-                <h5>In This Article</h5>
+                <h5>In this article</h5>
                 <div></div>
               </nav>
             </div>
           </div>
         </div>
       </div>
-      
+
       <footer>
         <div class="grad-bottom"></div>
         <div class="footer">
@@ -1319,14 +1892,14 @@ and ignore the request. </p>
             <span class="pull-right">
               <a href="#top">Back to top</a>
             </span>
-            
-            <span>Generated by <strong>DocFX</strong></span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
           </div>
         </div>
       </footer>
     </div>
-    
-    <script type="text/javascript" src="../styles/docfx.vendor.js"></script>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
     <script type="text/javascript" src="../styles/docfx.js"></script>
     <script type="text/javascript" src="../styles/main.js"></script>
   </body>

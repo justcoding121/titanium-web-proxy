@@ -18,7 +18,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class OutboundDestinationPolicyTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -26,7 +26,7 @@ public class OutboundDestinationPolicyTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -63,7 +63,7 @@ public class OutboundDestinationPolicyTests
         // Plain (non-CONNECT) requests have no synthesized error-response path on a server-connection
         // failure: the proxy tears down the client connection, which surfaces to the HttpClient as a
         // transport-level failure rather than a well-formed 5xx response.
-        await Assert.ThrowsExceptionAsync<HttpRequestException>(
+        await Assert.ThrowsExactlyAsync<HttpRequestException>(
             () => client.GetStringAsync(new Uri(server.ListeningHttpUrl)),
             "a blocked private-network destination must never be forwarded to");
     }

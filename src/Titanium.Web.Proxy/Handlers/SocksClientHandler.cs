@@ -17,7 +17,7 @@ public partial class ProxyServer
     /// </summary>
     /// <param name="endPoint">The SOCKS endpoint.</param>
     /// <param name="clientConnection">The client connection.</param>
-    private async Task HandleClient(SocksProxyEndPoint endPoint, TcpClientConnection clientConnection)
+    private async Task HandleClient(SocksProxyEndPoint endPoint, TcpClientConnection clientConnection) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         using var cancellationTokenSource = new CancellationTokenSource();
         // Session registration happens in HandleClient(TransparentBase...) below once the SOCKS
@@ -55,7 +55,7 @@ public partial class ProxyServer
 
                 buffer[0] = 0;
                 buffer[1] = 90; // request granted
-                await stream.WriteAsync(buffer, 0, 8, cancellationToken);
+                await stream.WriteAsync(buffer.AsMemory(0, 8), cancellationToken);
             }
             else if (buffer[0] == 5)
             {
@@ -85,7 +85,7 @@ public partial class ProxyServer
 
                 buffer[0] = 5;
                 buffer[1] = (byte)acceptedMethod;
-                await stream.WriteAsync(buffer, 0, 2, cancellationToken);
+                await stream.WriteAsync(buffer.AsMemory(0, 2), cancellationToken);
 
                 if (acceptedMethod == 255)
                     // no acceptable method
@@ -113,7 +113,7 @@ public partial class ProxyServer
 
                     buffer[0] = 1;
                     buffer[1] = success ? (byte)0 : (byte)1;
-                    await stream.WriteAsync(buffer, 0, 2, cancellationToken);
+                    await stream.WriteAsync(buffer.AsMemory(0, 2), cancellationToken);
                     if (!success) return;
                 }
 
@@ -159,7 +159,7 @@ public partial class ProxyServer
                 // Echo request with REP=succeeded (bound address = request address).
                 var replyLength = 4 + addressLength + 2;
                 buffer[1] = 0;
-                await stream.WriteAsync(buffer, 0, replyLength, cancellationToken);
+                await stream.WriteAsync(buffer.AsMemory(0, replyLength), cancellationToken);
             }
             else
             {
@@ -206,7 +206,7 @@ public partial class ProxyServer
         var position = offset;
         while (remaining > 0)
         {
-            var read = await stream.ReadAsync(buffer, position, remaining, cancellationToken);
+            var read = await stream.ReadAsync(buffer.AsMemory(position, remaining), cancellationToken);
             if (read == 0) return false;
             position += read;
             remaining -= read;

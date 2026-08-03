@@ -54,19 +54,28 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     private readonly ConcurrentDictionary<string, OriginEntry> _pool = new();
     private readonly ConcurrentDictionary<string, byte> _warmupsInFlight = new();
     private readonly ProxyServer _proxyServer;
-    private readonly QuicConnectionFactory _factory;
+    private readonly IQuicConnectionFactory _factory;
     private readonly SemaphoreSlim _drainGate = new(1, 1);
     private readonly CancellationTokenSource _cleanupCts = new();
     private readonly Task _cleanupTask;
     private volatile bool _draining;
 
     internal QuicConnectionPool(ProxyServer proxyServer)
+        : this(proxyServer, new QuicConnectionFactory(proxyServer))
+    {
+    }
+
+    /// <summary>
+    ///     Test seam: inject a fake factory so pool share/invalidate/warmup policy can be exercised
+    ///     without MsQuic.
+    /// </summary>
+    internal QuicConnectionPool(ProxyServer proxyServer, IQuicConnectionFactory factory)
     {
         _proxyServer = proxyServer;
-        _factory = new QuicConnectionFactory(proxyServer);
+        _factory = factory;
         // Run on the thread pool so the first sweep (which may complete synchronously if the pool
         // starts empty) cannot block construction.
-        _cleanupTask = Task.Run(ClearIdleConnectionsAsync);
+        _cleanupTask = Task.Run(ClearIdleConnectionsAsync, _cleanupCts.Token);
     }
 
     /// <summary>
@@ -133,7 +142,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     ///     stays shared and available to other requests; only a retired connection whose last stream
     ///     has now finished is disposed.
     /// </summary>
-    internal async ValueTask ReleaseAsync(QuicServerConnection connection)
+    internal static async ValueTask ReleaseAsync(QuicServerConnection connection)
     {
         var remaining = connection.ReleaseStream();
         if (connection.IsClosed && remaining <= 0)
@@ -190,7 +199,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
             {
                 _warmupsInFlight.TryRemove(originKey, out _);
             }
-        });
+        }, _cleanupCts.Token);
     }
 
     private void Retire(QuicServerConnection connection)
@@ -206,7 +215,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     /// </summary>
     public async ValueTask DrainAsync()
     {
-        await _drainGate.WaitAsync();
+        await _drainGate.WaitAsync(_cleanupCts.Token);
         try
         {
             _draining = true;
@@ -229,11 +238,12 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _cleanupCts.Cancel();
+        await _cleanupCts.CancelAsync();
         try { await _cleanupTask; } catch { /* best effort */ }
-        _cleanupCts.Dispose();
 
-        await DrainAsync();
+        // Drain while the CTS is still alive so WaitAsync can observe the token; dispose after.
+        try { await DrainAsync(); } catch (OperationCanceledException) { /* shutting down */ }
+        _cleanupCts.Dispose();
         _drainGate.Dispose();
     }
 
@@ -261,7 +271,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     ///     come) and removes entries left empty afterward so <see cref="_pool" /> does not grow one
     ///     entry per distinct origin ever contacted for the lifetime of the proxy.
     /// </summary>
-    private async Task ClearIdleConnectionsAsync()
+    private async Task ClearIdleConnectionsAsync() // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         while (!_cleanupCts.IsCancellationRequested)
         {
@@ -293,7 +303,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
 
                     // Only drop the entry once it is genuinely unused: taking the gate proves no
                     // caller is mid-creation and about to publish a connection into it.
-                    if (!entry.CreationGate.Wait(0)) continue;
+                    if (!await entry.CreationGate.WaitAsync(0, _cleanupCts.Token)) continue;
                     try
                     {
                         if (Volatile.Read(ref entry.Current) == null)

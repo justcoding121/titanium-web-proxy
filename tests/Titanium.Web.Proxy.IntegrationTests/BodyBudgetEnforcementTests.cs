@@ -18,7 +18,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class BodyBudgetEnforcementTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -26,7 +26,7 @@ public class BodyBudgetEnforcementTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -72,7 +72,7 @@ public class BodyBudgetEnforcementTests
         var proxy = testSuite.GetProxy();
         proxy.MaxBufferedBodyBytes = 1024;
 
-        byte[] capturedBody = null;
+        byte[]? capturedBody = null;
         proxy.BeforeRequest += async (_, e) => { capturedBody = await e.GetRequestBody(); };
 
         var client = testSuite.GetClient(proxy);
@@ -81,7 +81,7 @@ public class BodyBudgetEnforcementTests
         using var response = await client.PostAsync(server.ListeningHttpUrl, new StringContent(payload));
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(payload, System.Text.Encoding.UTF8.GetString(capturedBody));
+        Assert.AreEqual(payload, System.Text.Encoding.UTF8.GetString(capturedBody!));
     }
 
     [TestMethod]
@@ -107,7 +107,7 @@ public class BodyBudgetEnforcementTests
         // A response-side breach has already committed nothing to the client, so the only RFC-safe
         // outcome is closing the connection - never handing back a body that is silently truncated
         // to (and mistakeable for) a complete, valid response.
-        await Assert.ThrowsExceptionAsync<HttpRequestException>(
+        await Assert.ThrowsExactlyAsync<HttpRequestException>(
             () => client.GetStringAsync(server.ListeningHttpUrl));
     }
 }

@@ -255,7 +255,7 @@ public abstract class RequestResponseBase
     /// <param name="encodingType"></param>
     /// <param name="body"></param>
     /// <returns></returns>
-    internal byte[] GetCompressedBody(HttpCompression encodingType, byte[] body)
+    internal static byte[] GetCompressedBody(HttpCompression encodingType, byte[] body)
     {
         using (var ms = new MemoryStream())
         {
@@ -285,7 +285,7 @@ public abstract class RequestResponseBase
             {
                 body = GetCompressedBody(CompressionUtil.CompressionNameToEnum(contentEncoding), body);
 
-                if (isChunked == false)
+                if (!isChunked)
                     ContentLength = body.Length;
                 else
                     ContentLength = -1;
@@ -293,7 +293,7 @@ public abstract class RequestResponseBase
             else if (BodyInternal != null && !isChunked && ContentLength < 0)
             {
                 // Buffered body with no Content-Length (e.g. H2/H3 origin) — publish the length.
-                ContentLength = body?.Length ?? 0;
+                ContentLength = body.Length;
             }
 
             return body;

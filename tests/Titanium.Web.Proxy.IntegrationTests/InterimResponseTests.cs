@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -31,7 +31,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class InterimResponseTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -39,7 +39,7 @@ public class InterimResponseTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -256,7 +256,7 @@ public class InterimResponseTests
         {
             while (true)
             {
-                var read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
+                var read = await stream.ReadAsync(buffer, cts.Token);
                 if (read == 0) break;
                 ms.Write(buffer, 0, read);
             }

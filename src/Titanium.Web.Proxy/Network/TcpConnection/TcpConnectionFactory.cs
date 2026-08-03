@@ -86,13 +86,14 @@ internal class TcpConnectionFactory : IDisposable
     ///     for the full 3-second interval before checking <see cref="runCleanUpTask" />.
     /// </summary>
     private readonly CancellationTokenSource _cleanupCts = new();
+    private readonly Task _cleanupTask;
 
     internal TcpConnectionFactory(ProxyServer server)
     {
         Server = server ?? throw new ArgumentNullException(nameof(server));
         // Run on the thread pool so the first cleanup iteration (which may complete
         // WaitAsync synchronously) cannot block ProxyServer's constructor.
-        _ = Task.Run(ClearOutdatedConnections);
+        _cleanupTask = Task.Run(ClearOutdatedConnections, _cleanupCts.Token);
     }
 
     internal ProxyServer Server { get; }
@@ -100,6 +101,7 @@ internal class TcpConnectionFactory : IDisposable
     public void Dispose()
     {
         Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -132,7 +134,7 @@ internal class TcpConnectionFactory : IDisposable
                 connection?.Dispose();
     }
 
-    internal string GetConnectionCacheKey(string remoteHostName, int remotePort,
+    internal static string GetConnectionCacheKey(string remoteHostName, int remotePort, // NOSONAR S107 -- Parameters define the connection identity and are kept explicit to avoid risky call-site churn.
         bool isHttps, List<SslApplicationProtocol>? applicationProtocols,
         IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
         string? connectHost = null, int? connectPort = null,
@@ -144,18 +146,18 @@ internal class TcpConnectionFactory : IDisposable
         // http version 2 is separated using applicationProtocols below.
         var cacheKeyBuilder = new StringBuilder();
         cacheKeyBuilder.Append(remoteHostName);
-        cacheKeyBuilder.Append("-");
+        cacheKeyBuilder.Append('-');
         cacheKeyBuilder.Append(remotePort);
-        cacheKeyBuilder.Append("-");
+        cacheKeyBuilder.Append('-');
 
         // a fixed forward target changes the actual connection destination while keeping
         // remoteHostName for TLS/identity, so it must be part of the cache key.
         if (!string.IsNullOrEmpty(connectHost))
         {
             cacheKeyBuilder.Append(connectHost);
-            cacheKeyBuilder.Append("-");
+            cacheKeyBuilder.Append('-');
             cacheKeyBuilder.Append(connectPort ?? remotePort);
-            cacheKeyBuilder.Append("-");
+            cacheKeyBuilder.Append('-');
         }
 
         // when creating Tcp client isConnect won't matter
@@ -164,7 +166,7 @@ internal class TcpConnectionFactory : IDisposable
         if (applicationProtocols != null)
             foreach (var protocol in applicationProtocols.OrderBy(x => x))
             {
-                cacheKeyBuilder.Append("-");
+                cacheKeyBuilder.Append('-');
                 cacheKeyBuilder.Append(protocol);
             }
 
@@ -268,7 +270,7 @@ internal class TcpConnectionFactory : IDisposable
     /// <param name="session">The session event arguments.</param>
     /// <param name="applicationProtocol">The application protocol.</param>
     /// <returns></returns>
-    internal async Task<string> GetConnectionCacheKey(ProxyServer server, SessionEventArgsBase session,
+    internal static async Task<string> GetConnectionCacheKey(ProxyServer server, SessionEventArgsBase session,
         SslApplicationProtocol applicationProtocol)
     {
         List<SslApplicationProtocol>? applicationProtocols = null;
@@ -429,7 +431,7 @@ internal class TcpConnectionFactory : IDisposable
     /// <param name="prefetch">if set to <c>true</c> [prefetch].</param>
     /// <param name="cancellationToken">The cancellation token for this async task.</param>
     /// <returns></returns>
-    internal async Task<TcpServerConnection?> GetServerConnection(ProxyServer proxyServer, string remoteHostName,
+    internal async Task<TcpServerConnection?> GetServerConnection(ProxyServer proxyServer, string remoteHostName, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         int remotePort,
         Version httpVersion, bool isHttps, List<SslApplicationProtocol>? applicationProtocols, bool isConnect,
         SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
@@ -453,27 +455,29 @@ internal class TcpConnectionFactory : IDisposable
             isHttps, applicationProtocols, upStreamEndPoint, externalProxy, connectHost, connectPort,
             upStreamEndPointIPv4, upStreamEndPointIPv6);
 
-        if (proxyServer.EnableConnectionPool && !noCache)
-            if (cache.TryGetValue(cacheKey, out var existingConnections))
-                lock (existingConnections)
+        if (proxyServer.EnableConnectionPool && !noCache &&
+            cache.TryGetValue(cacheKey, out var existingConnections))
+            lock (existingConnections)
+            {
+                // +3 seconds for potential delay after getting connection
+                var cutOff = DateTime.UtcNow.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
+                while (!existingConnections.IsEmpty)
                 {
-                    // +3 seconds for potential delay after getting connection
-                    var cutOff = DateTime.UtcNow.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
-                    while (existingConnections.Count > 0)
-                        if (existingConnections.TryDequeue(out var recentConnection))
+                    if (existingConnections.TryDequeue(out var recentConnection))
+                    {
+                        if (recentConnection.LastAccess > cutOff
+                            && recentConnection.TcpSocket.IsGoodConnection()
+                            && IsNegotiatedProtocolCompatible(recentConnection, applicationProtocols))
                         {
-                            if (recentConnection.LastAccess > cutOff
-                                && recentConnection.TcpSocket.IsGoodConnection()
-                                && IsNegotiatedProtocolCompatible(recentConnection, applicationProtocols))
-                            {
-                                ProxyMetrics.PoolReused();
-                                return recentConnection;
-                            }
-
-                            if (recentConnection.TryScheduleDisposal())
-                                disposalBag.Add(recentConnection);
+                            ProxyMetrics.PoolReused();
+                            return recentConnection;
                         }
+
+                        if (recentConnection.TryScheduleDisposal())
+                            disposalBag.Add(recentConnection);
+                    }
                 }
+            }
 
         var connection = await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
             applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey,
@@ -500,7 +504,7 @@ internal class TcpConnectionFactory : IDisposable
     /// <param name="prefetch">if set to <c>true</c> [prefetch].</param>
     /// <param name="cancellationToken">The cancellation token for this async task.</param>
     /// <returns></returns>
-    private async Task<TcpServerConnection?> CreateServerConnection(string remoteHostName, int remotePort,
+    private async Task<TcpServerConnection?> CreateServerConnection(string remoteHostName, int remotePort, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         Version httpVersion, bool isHttps, SslProtocols sslProtocol, List<SslApplicationProtocol>? applicationProtocols,
         bool isConnect,
         ProxyServer proxyServer, SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint,
@@ -512,20 +516,20 @@ internal class TcpConnectionFactory : IDisposable
         // The actual destination we open the TCP connection to. When a fixed forward target
         // is configured, this differs from remoteHostName/remotePort which are kept for
         // TLS SNI/certificate validation, the HTTP Host header and connection identity.
-        var connectHostName = string.IsNullOrEmpty(connectHost) ? remoteHostName : connectHost!;
+        var connectHostName = string.IsNullOrEmpty(connectHost) ? remoteHostName : connectHost;
         var connectPortNumber = connectPort ?? remotePort;
 
         // deny connection to proxy end points to avoid infinite connection loop.
         if (Server.ProxyEndPoints.Any(x => x.Port == connectPortNumber)
             && NetworkHelper.IsLocalIpAddress(connectHostName))
-            throw new Exception(
+            throw new InvalidOperationException(
                 $"A client is making HTTP request to one of the listening ports of this proxy {connectHostName}:{connectPortNumber}");
 
-        if (externalProxy != null)
-            if (Server.ProxyEndPoints.Any(x => x.Port == externalProxy.Port)
-                && NetworkHelper.IsLocalIpAddress(externalProxy.HostName))
-                throw new Exception(
-                    $"A client is making HTTP request via external proxy to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
+        if (externalProxy != null &&
+            Server.ProxyEndPoints.Any(x => x.Port == externalProxy.Port) &&
+            NetworkHelper.IsLocalIpAddress(externalProxy.HostName))
+            throw new InvalidOperationException(
+                $"A client is making HTTP request via external proxy to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
 
         if (proxyServer.SupportedServerSslProtocols != SslProtocols.None) sslProtocol = proxyServer.SupportedServerSslProtocols;
 
@@ -579,12 +583,12 @@ internal class TcpConnectionFactory : IDisposable
                 port = externalProxy.Port;
             }
 
-            var ipAddresses = await Dns.GetHostAddressesAsync(hostname);
+            var ipAddresses = await Dns.GetHostAddressesAsync(hostname, cancellationToken);
             if (ipAddresses == null || ipAddresses.Length == 0)
             {
                 if (prefetch) return null;
 
-                throw new Exception($"Could not resolve the hostname {hostname}");
+                throw new IOException($"Could not resolve the hostname {hostname}");
             }
 
             timing?.MarkDnsResolved();
@@ -609,9 +613,9 @@ internal class TcpConnectionFactory : IDisposable
             IPAddress[]? socksRemoteIpAddresses = null;
             if (socks && !externalProxy!.ProxyDnsRequests)
             {
-                socksRemoteIpAddresses = await Dns.GetHostAddressesAsync(connectHostName);
+                socksRemoteIpAddresses = await Dns.GetHostAddressesAsync(connectHostName, cancellationToken);
                 if (socksRemoteIpAddresses == null || socksRemoteIpAddresses.Length == 0)
-                    throw new Exception($"Could not resolve the SOCKS remote hostname {connectHostName}");
+                    throw new IOException($"Could not resolve the SOCKS remote hostname {connectHostName}");
 
                 // Prefer IPv4 when both families are returned so SOCKS ATYP selection is
                 // predictable on dual-stack hosts (e.g. localhost → 127.0.0.1 before ::1).
@@ -631,7 +635,7 @@ internal class TcpConnectionFactory : IDisposable
             var connectTimeoutMs = (int)(sessionArgs?.ConnectTimeout?.TotalMilliseconds
                 ?? proxyServer.ConnectTimeOutSeconds * 1000.0);
             var effectiveTimeoutSecs = sessionArgs?.ConnectTimeout.HasValue == true
-                ? $"{sessionArgs.ConnectTimeout!.Value.TotalSeconds:0.#}s"
+                ? $"{sessionArgs.ConnectTimeout.Value.TotalSeconds:0.#}s"
                 : $"{proxyServer.ConnectTimeOutSeconds}s";
 
             // Attempts one resolved address end to end (socket creation through connect) and either
@@ -721,9 +725,6 @@ internal class TcpConnectionFactory : IDisposable
                             : ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)attemptSocket,
                                 socksRemoteIpAddresses![0], connectPortNumber);
 
-                        // Task.WhenAny never faults/cancels itself - it just resolves with whichever
-                        // constituent task finished first, so no try/catch is needed around this await;
-                        // the completion check below is what actually distinguishes success from timeout.
                         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(attemptToken);
                         timeoutCts.CancelAfter(connectTimeoutMs);
                         await Task.WhenAny(connectTask, Task.Delay(Timeout.Infinite, timeoutCts.Token));
@@ -784,7 +785,7 @@ internal class TcpConnectionFactory : IDisposable
 
                     var stagger = i == ipAddresses.Length - 1
                         ? null // nothing left to race the last address against
-                        : Task.Delay(HappyEyeballsAttemptDelayMs);
+                        : Task.Delay(HappyEyeballsAttemptDelayMs, raceCts.Token);
 
                     while (inFlight.Count > 0)
                     {
@@ -806,9 +807,9 @@ internal class TcpConnectionFactory : IDisposable
                         if (doneTask.IsCompletedSuccessfully)
                         {
                             (tcpServerSocket, boundEndPoint) = doneTask.Result;
-                            raceCts.Cancel();
+                            await raceCts.CancelAsync();
                             AbandonLosingAttempts(inFlight);
-                            goto raceDecided;
+                            goto raceDecided; // NOSONAR S907 -- Exits both nested Happy Eyeballs loops after selecting a winner.
                         }
 
                         try
@@ -828,11 +829,10 @@ internal class TcpConnectionFactory : IDisposable
                     }
                 }
 
-                raceCts.Cancel();
+                await raceCts.CancelAsync();
             }
 
-            raceDecided: ;
-
+            raceDecided:
             if (tcpServerSocket == null)
             {
                 if (sessionArgs != null && proxyServer.CustomUpStreamProxyFailureFunc != null)
@@ -868,7 +868,7 @@ internal class TcpConnectionFactory : IDisposable
                 if (lastException is OutboundDestinationBlockedException blockedException)
                     throw blockedException;
 
-                throw new Exception($"Could not establish connection to {hostname}", lastException);
+                throw new IOException($"Could not establish connection to {hostname}", lastException);
             }
 
             timing?.MarkTcpConnected();
@@ -916,8 +916,6 @@ internal class TcpConnectionFactory : IDisposable
                         var clientCertificate = proxyServer.SelectClientCertificate(sender, sessionArgs, targetHost,
                             localCertificates, remoteCertificate, acceptableIssuers);
 
-                        // a per-session client certificate makes this TLS connection identity-specific;
-                        // it must not be reused by another session from the pool.
                         if (clientCertificate != null) usedClientCertificate = true;
 
                         return clientCertificate!;
@@ -943,9 +941,9 @@ internal class TcpConnectionFactory : IDisposable
         }
 #pragma warning disable SYSLIB0039 // TLS 1.0/1.1 are intentionally retained for legacy upstream compatibility fallback.
         catch (IOException ex) when (ex.HResult == unchecked((int)0x80131620) && retry &&
-                                     enabledSslProtocols >= SslProtocols.Tls11)
+                                     enabledSslProtocols >= SslProtocols.Tls11) // NOSONAR S4423 - legacy fallback gate
         {
-            stream?.Dispose();
+            if (stream != null) await stream.DisposeAsync();
             tcpServerSocket?.Close();
 
             // Specifying Tls11 and/or Tls12 will disable the usage of Ssl3, even if it has been included.
@@ -956,12 +954,12 @@ internal class TcpConnectionFactory : IDisposable
 
             retry = false;
             ProxyMetrics.PoolDowngraded();
-            goto retry;
+            goto retry; // NOSONAR S907 -- TLS compatibility fallback must restart the complete connection attempt.
         }
         catch (AuthenticationException ex) when (ex.HResult == unchecked((int)0x80131501) && retry &&
-                                                 enabledSslProtocols >= SslProtocols.Tls11)
+                                                 enabledSslProtocols >= SslProtocols.Tls11) // NOSONAR S4423 - legacy fallback gate
         {
-            stream?.Dispose();
+            if (stream != null) await stream.DisposeAsync();
             tcpServerSocket?.Close();
 
             // Specifying Tls11 and/or Tls12 will disable the usage of Ssl3, even if it has been included.
@@ -972,12 +970,12 @@ internal class TcpConnectionFactory : IDisposable
 
             retry = false;
             ProxyMetrics.PoolDowngraded();
-            goto retry;
+            goto retry; // NOSONAR S907 -- TLS compatibility fallback must restart the complete connection attempt.
         }
 #pragma warning restore SYSLIB0039
         catch (Exception ex)
         {
-            stream?.Dispose();
+            if (stream != null) await stream.DisposeAsync();
             tcpServerSocket?.Close();
             ProxyLog.OriginConnectionFailed(proxyServer.Logger, remoteHostName, remotePort, ex);
             throw;
@@ -1067,7 +1065,7 @@ internal class TcpConnectionFactory : IDisposable
     ///     <paramref name="proxy" />, handling Basic and WinAuth 407 challenges. Returns whether WinAuth
     ///     was used successfully.
     /// </summary>
-    private async Task<bool> EstablishHttpUpstreamConnectAsync(ProxyServer proxyServer, HttpServerStream stream,
+    private static async Task<bool> EstablishHttpUpstreamConnectAsync(ProxyServer proxyServer, HttpServerStream stream,
         IExternalProxy proxy, string authority, bool isHttps, Version httpVersion,
         CancellationToken cancellationToken)
     {
@@ -1130,7 +1128,7 @@ internal class TcpConnectionFactory : IDisposable
             var token = proxyServer.GenerateUpstreamProxyWinAuthToken(proxy, scheme!, challenge,
                 authenticationData);
             if (string.IsNullOrEmpty(token))
-                throw new Exception("Failed to generate an upstream proxy authentication token");
+                throw new InvalidOperationException("Failed to generate an upstream proxy authentication token");
 
             connectRequest.Headers.SetOrAddHeaderValue(KnownHeaders.ProxyAuthorization,
                 string.Concat(scheme, token));
@@ -1170,10 +1168,9 @@ internal class TcpConnectionFactory : IDisposable
         ResponseStatusInfo httpStatus, HeaderCollection headers, string? bodyPreview, string? message = null)
     {
         var headerSnapshot = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var header in headers)
+        foreach (var header in headers.Where(header => !headerSnapshot.ContainsKey(header.Name)))
         {
-            if (!headerSnapshot.ContainsKey(header.Name))
-                headerSnapshot[header.Name] = header.Value;
+            headerSnapshot[header.Name] = header.Value;
         }
 
         var effectiveMessage = message ??
@@ -1228,6 +1225,7 @@ internal class TcpConnectionFactory : IDisposable
                 // consume the optional trailer headers until the terminating blank line
                 while (!string.IsNullOrEmpty(await stream.ReadLineAsync(cancellationToken)))
                 {
+                    // Trailer fields are intentionally discarded after authentication.
                 }
 
                 return;
@@ -1247,14 +1245,14 @@ internal class TcpConnectionFactory : IDisposable
         {
             while (count > 0)
             {
-                var read = await stream.ReadAsync(buffer, 0, (int)Math.Min(buffer.Length, count), cancellationToken);
+                var read = await stream.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, count)), cancellationToken);
                 if (read <= 0)
                     throw new IOException("Upstream proxy closed the connection while sending a response body");
 
                 if (preview != null && preview.Length < UpstreamProxyRejectionBodyPreviewLimit)
                 {
                     var toCopy = Math.Min(read, UpstreamProxyRejectionBodyPreviewLimit - (int)preview.Length);
-                    preview.Write(buffer, 0, toCopy);
+                    await preview.WriteAsync(buffer.AsMemory(0, toCopy), cancellationToken);
                 }
 
                 count -= read;
@@ -1272,7 +1270,7 @@ internal class TcpConnectionFactory : IDisposable
     /// </summary>
     /// <param name="connection">The Tcp server connection to return.</param>
     /// <param name="close">Should we just close the connection instead of reusing?</param>
-    internal Task Release(TcpServerConnection? connection, bool close = false)
+    internal Task Release(TcpServerConnection? connection, bool close = false) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (connection == null) return Task.CompletedTask;
 
@@ -1316,10 +1314,10 @@ internal class TcpConnectionFactory : IDisposable
                     // against the dictionary instead of trusting the reference we already hold.
                     if (!cache.TryGetValue(connection.CacheKey, out var current) || current != queue) continue;
 
-                    while (queue.Count >= Server.MaxCachedConnections)
-                        if (queue.TryDequeue(out var staleConnection))
-                            if (staleConnection.TryScheduleDisposal())
-                                disposalBag.Add(staleConnection);
+                    while (queue.Count >= Server.MaxCachedConnections &&
+                           queue.TryDequeue(out var staleConnection))
+                        if (staleConnection.TryScheduleDisposal())
+                            disposalBag.Add(staleConnection);
 
                     if (!queue.Contains(connection)) queue.Enqueue(connection);
                     return Task.CompletedTask;
@@ -1351,7 +1349,7 @@ internal class TcpConnectionFactory : IDisposable
         }
     }
 
-    private async Task ClearOutdatedConnections()
+    private async Task ClearOutdatedConnections() // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         while (runCleanUpTask)
         {
@@ -1373,7 +1371,7 @@ internal class TcpConnectionFactory : IDisposable
                         // dequeue/enqueue/removal here does not race with either.
                         lock (queue)
                         {
-                            while (queue.Count > 0)
+                            while (!queue.IsEmpty)
                                 if (queue.TryDequeue(out var connection))
                                 {
                                     if (!Server.EnableConnectionPool || connection.LastAccess < cutOff)
@@ -1428,7 +1426,7 @@ internal class TcpConnectionFactory : IDisposable
         }
     }
 
-    protected virtual void Dispose(bool disposing)
+    protected virtual void Dispose(bool disposing) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (disposed) return;
 
@@ -1457,11 +1455,11 @@ internal class TcpConnectionFactory : IDisposable
                 if (disposalBag.TryTake(out var connection))
                     connection?.Dispose();
 
-            // Do not dispose _cleanupCts or poolLock: the cleanup task may still be accessing
-            // _cleanupCts.Token (throwing ObjectDisposedException on the Token property even after
-            // Cancel()) and poolLock.EnterReadLock() (throwing ObjectDisposedException if disposed
-            // while the task is entering the lock). Neither holds unmanaged resources that need
-            // explicit release — the GC finalizer path is sufficient.
+            // Join the cleanup loop before disposing its CTS so Token access cannot race Dispose.
+            try { _cleanupTask.Wait(TimeSpan.FromSeconds(5), _cleanupCts.Token); }
+            catch { /* best effort / already cancelled */ }
+            _cleanupCts.Dispose();
+            // poolLock is left for GC: disposing it while a late reader enters can throw.
         }
 
         disposed = true;

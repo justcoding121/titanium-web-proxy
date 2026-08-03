@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http2;
 
@@ -69,14 +70,14 @@ public class Http2OriginCapabilityCacheTests
     }
 
     [TestMethod]
-    public void TryGet_AfterTtlElapses_NoLongerReturnsTheExpiredEntry()
+    public async Task TryGet_AfterTtlElapses_NoLongerReturnsTheExpiredEntry()
     {
         var cache = new Http2OriginCapabilityCache(TimeSpan.FromMilliseconds(50));
 
         cache.Set("www.google.com:443", true);
         Assert.IsTrue(cache.TryGet("www.google.com:443", out _), "Entry should still be fresh immediately after Set.");
 
-        Thread.Sleep(200);
+        await Task.Delay(200);
 
         var found = cache.TryGet("www.google.com:443", out var supported);
 
@@ -85,13 +86,13 @@ public class Http2OriginCapabilityCacheTests
     }
 
     [TestMethod]
-    public void TrimExpired_RemovesExpiredEntries()
+    public async Task TrimExpired_RemovesExpiredEntries()
     {
         var cache = new Http2OriginCapabilityCache(TimeSpan.FromMilliseconds(50));
         cache.Set("a.example.com:443", true);
         cache.Set("b.example.com:443", false);
 
-        Thread.Sleep(200);
+        await Task.Delay(200);
 
         cache.TrimExpired();
 

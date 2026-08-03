@@ -34,6 +34,8 @@ internal sealed class PerMessageDeflateParameters
     /// </summary>
     internal int ServerMaxWindowBits { get; set; } = 15;
 
+    internal static readonly char[] anyOf = new[] { ';', ' ', '\r', '\n' };
+
     /// <summary>
     ///     Tries to parse permessage-deflate parameters from the
     ///     <c>Sec-WebSocket-Extensions</c> header value.
@@ -65,10 +67,10 @@ internal sealed class PerMessageDeflateParameters
         if (idx < 0) return null;
 
         var rest = header.Substring(idx + param.Length).TrimStart();
-        if (!rest.StartsWith("=")) return null;
+        if (!rest.StartsWith('=')) return null;
 
         var value = rest.Substring(1).TrimStart();
-        var end = value.IndexOfAny(new[] { ';', ' ', '\r', '\n' });
+        var end = value.IndexOfAny(anyOf);
         var numStr = end < 0 ? value : value.Substring(0, end);
 
         return int.TryParse(numStr.Trim(), out var bits) && bits >= 8 && bits <= 15 ? bits : null;

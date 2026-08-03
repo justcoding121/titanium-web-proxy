@@ -184,7 +184,7 @@ public class ConnectionPoolTests
 
         using (var rejectedClient = testSuite.GetClient(proxy))
         {
-            await Assert.ThrowsExceptionAsync<HttpRequestException>(
+            await Assert.ThrowsExactlyAsync<HttpRequestException>(
                 () => rejectedClient.GetStringAsync(server.ListeningHttpUrl),
                 "a connection beyond the admission limit should be rejected before any HTTP response is produced");
         }
@@ -234,7 +234,7 @@ public class ConnectionPoolTests
 
         using (var rejectedClient = testSuite.GetClient(proxy))
         {
-            await Assert.ThrowsExceptionAsync<HttpRequestException>(
+            await Assert.ThrowsExactlyAsync<HttpRequestException>(
                 () => rejectedClient.GetStringAsync(server.ListeningHttpUrl),
                 "a connection beyond the endpoint's admission limit should be rejected");
         }

@@ -48,7 +48,7 @@ public class SystemProxySettings
             if (string.IsNullOrWhiteSpace(rule))
                 throw new ArgumentException("System proxy bypass rules cannot be null or empty.");
 
-            if (rule.Contains(";"))
+            if (rule.Contains(';'))
                 throw new ArgumentException(
                     "Add each system proxy bypass rule separately; rules cannot contain semicolons.");
         }
@@ -63,7 +63,7 @@ public class SystemProxySettings
             AddRule(result, seen, SubtractImplicitLoopbackRule);
 
         if (BypassRuleMode == SystemProxyBypassRuleMode.Merge && !string.IsNullOrWhiteSpace(currentProxyOverride))
-            foreach (var rule in currentProxyOverride!.Split(';'))
+            foreach (var rule in currentProxyOverride.Split(';'))
                 AddRule(result, seen, rule);
 
         foreach (var rule in BypassRules) AddRule(result, seen, rule);
@@ -78,7 +78,7 @@ public class SystemProxySettings
     {
         if (string.IsNullOrWhiteSpace(rule)) return;
 
-        var normalizedRule = rule!.Trim();
+        var normalizedRule = rule.Trim();
         if (seen.Add(normalizedRule)) result.Add(normalizedRule);
     }
 }

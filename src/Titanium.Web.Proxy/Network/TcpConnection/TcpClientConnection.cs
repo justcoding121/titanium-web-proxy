@@ -83,32 +83,41 @@ internal class TcpClientConnection : IDisposable
 
     public void Dispose()
     {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
         if (disposed) return;
 
-        disposed = true;
-
-        // No finalizer: sockets already have safe-handle finalization, and scheduling
-        // Task.Run / logging from a finalizer thread is unsafe.
-        Task.Run(async () =>
+        if (disposing)
         {
-            // delay calling tcp connection close()
-            // so that client have enough time to call close first.
-            // This way we can push tcp Time_Wait to client side when possible.
-            await Task.Delay(1000);
-            if (trackClientConnectionCount)
-                ProxyServer.UpdateClientConnectionCount(false);
+            // No finalizer: sockets already have safe-handle finalization, and scheduling
+            // Task.Run / logging from a finalizer thread is unsafe.
+            Task.Run(async () =>
+            {
+                // delay calling tcp connection close()
+                // so that client have enough time to call close first.
+                // This way we can push tcp Time_Wait to client side when possible.
+                await Task.Delay(1000);
+                if (trackClientConnectionCount)
+                    ProxyServer.UpdateClientConnectionCount(false);
 
-            if (tcpClientSocket == null) return;
-            try
-            {
-                tcpClientSocket.Close();
-            }
-            catch (Exception ex)
-            {
-                Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
-                    "Failed to close a client socket during disposal.", ex);
-            }
-        });
+                if (tcpClientSocket == null) return;
+                try
+                {
+                    tcpClientSocket.Close();
+                }
+                catch (Exception ex)
+                {
+                    Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
+                        "Failed to close a client socket during disposal.", ex);
+                }
+            });
+        }
+
+        disposed = true;
     }
 
     public Stream GetStream()

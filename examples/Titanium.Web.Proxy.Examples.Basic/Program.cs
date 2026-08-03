@@ -3,7 +3,7 @@ using Titanium.Web.Proxy.Examples.Basic.Helpers;
 
 namespace Titanium.Web.Proxy.Examples.Basic
 {
-    public class Program
+    public static class Program
     {
         private static readonly ProxyTestController controller = new ProxyTestController();
         private static readonly object exitLock = new object();
@@ -58,7 +58,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
             }
 
             // Wake the main thread from Console.Read by closing stdin isn't portable;
-            // Environment.Exit runs ProcessExit (library restores proxy) then finally below if we Shutdown first.
+            // calling Exit runs ProcessExit (library restores proxy) then finally below if we Shutdown first.
             Shutdown();
             Environment.Exit(0);
         }

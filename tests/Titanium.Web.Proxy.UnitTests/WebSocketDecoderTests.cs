@@ -218,7 +218,7 @@ public class WebSocketDecoderTests
         // internal buffer starting from the same offset frameA's Data used to point into.
         var frameB = BuildFrame(WebsocketOpCode.Text, Encoding.UTF8.GetBytes("second-msg"));
         Assert.AreEqual(0, decoder.Decode(frameB, 0, frameB.Length - 2).Count());
-        decoder.Decode(frameB, frameB.Length - 2, 2).Single();
+        _ = decoder.Decode(frameB, frameB.Length - 2, 2).Single();
 
         // The long-retained reference to frameA's Data now observes frameB's raw wire bytes instead - it
         // no longer reads back "first-message". This is the exact bug this test would have caught: naively
@@ -242,7 +242,7 @@ public class WebSocketDecoderTests
             0x80, 0, 0, 0, 0, 0, 0, 1 // reserved high bit set; low bits declare length=1
         };
 
-        var ex = Assert.ThrowsException<WebSocketProtocolException>(
+        var ex = Assert.ThrowsExactly<WebSocketProtocolException>(
             () => decoder.Decode(header, 0, header.Length).ToList());
         Assert.AreEqual((ushort)1002, ex.CloseCode);
     }
@@ -261,7 +261,7 @@ public class WebSocketDecoderTests
             0, 0, 0, 1, 0, 0, 0, 0 // (long)1 << 32 = 4,294,967,296, well over int.MaxValue
         };
 
-        var ex = Assert.ThrowsException<WebSocketProtocolException>(
+        var ex = Assert.ThrowsExactly<WebSocketProtocolException>(
             () => decoder.Decode(header, 0, header.Length).ToList());
         Assert.AreEqual((ushort)1002, ex.CloseCode);
     }
@@ -281,7 +281,7 @@ public class WebSocketDecoderTests
             0, 0, 0, 0, 0, 0, 0x27, 0x10 // 10_000
         };
 
-        var ex = Assert.ThrowsException<WebSocketProtocolException>(
+        var ex = Assert.ThrowsExactly<WebSocketProtocolException>(
             () => decoder.Decode(header, 0, header.Length).ToList());
         Assert.AreEqual((ushort)1009, ex.CloseCode);
     }
@@ -294,7 +294,7 @@ public class WebSocketDecoderTests
 
         // Deliver only the 4-byte header (opcode/flags + 126-marker + 16-bit length) - the limit check
         // must fire without any of the 500-byte payload having arrived.
-        var ex = Assert.ThrowsException<WebSocketProtocolException>(
+        var ex = Assert.ThrowsExactly<WebSocketProtocolException>(
             () => decoder.Decode(raw, 0, 4).ToList());
         Assert.AreEqual((ushort)1009, ex.CloseCode);
     }
@@ -338,7 +338,7 @@ public class WebSocketDecoderTests
             for (var i = 7; i >= 0; i--) bytes.Add((byte)((long)length >> (i * 8)));
         }
 
-        byte[] maskKeyBytes = null;
+        byte[]? maskKeyBytes = null;
         if (mask)
         {
             maskKeyBytes = new[]
@@ -351,7 +351,7 @@ public class WebSocketDecoderTests
         var payloadBytes = (byte[])payload.Clone();
         if (mask)
             for (var i = 0; i < payloadBytes.Length; i++)
-                payloadBytes[i] ^= maskKeyBytes[i % 4];
+                payloadBytes[i] ^= maskKeyBytes![i % 4];
 
         bytes.AddRange(payloadBytes);
         return bytes.ToArray();

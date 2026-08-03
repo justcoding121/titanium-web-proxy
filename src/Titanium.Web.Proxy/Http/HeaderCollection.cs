@@ -168,13 +168,14 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     /// <returns></returns>
     public List<HttpHeader>? GetHeaders(string name)
     {
-        if (headers.ContainsKey(name))
+        if (headers.TryGetValue(name, out var header))
             return new List<HttpHeader>
             {
-                headers[name]
+                header
             };
 
-        if (nonUniqueHeaders.ContainsKey(name)) return new List<HttpHeader>(nonUniqueHeaders[name]);
+        if (nonUniqueHeaders.TryGetValue(name, out var nonUnique))
+            return new List<HttpHeader>(nonUnique);
 
         return null;
     }
@@ -214,8 +215,10 @@ public class HeaderCollection : IEnumerable<HttpHeader>
         foreach (var header in headers.Values) result.Add(header);
 
         foreach (var list in nonUniqueHeaders.Values)
-        foreach (var header in list)
-            result.Add(header);
+        {
+            foreach (var header in list)
+                result.Add(header);
+        }
 
         return result;
     }
@@ -304,7 +307,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
         foreach (var header in newHeaders)
         {
             if (header.Key != header.Value.Name)
-                throw new Exception(
+                throw new ArgumentException(
                     "Header name mismatch. Key and the name of the HttpHeader object should be the same.");
 
             AddHeader(header.Value);
@@ -353,17 +356,16 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     /// <param name="header">Returns true if header exists and was removed </param>
     public bool RemoveHeader(HttpHeader header)
     {
-        if (headers.ContainsKey(header.Name))
+        if (headers.TryGetValue(header.Name, out var existing))
         {
-            if (headers[header.Name].Equals(header))
-            {
-                headers.Remove(header.Name);
-                return true;
-            }
+            if (!existing.Equals(header)) return false;
+            return headers.Remove(header.Name);
         }
-        else if (nonUniqueHeaders.ContainsKey(header.Name))
+
+        if (nonUniqueHeaders.TryGetValue(header.Name, out var matchingHeaders) &&
+            matchingHeaders.RemoveAll(x => x.Equals(header)) > 0)
         {
-            if (nonUniqueHeaders[header.Name].RemoveAll(x => x.Equals(header)) > 0) return true;
+            return true;
         }
 
         return false;

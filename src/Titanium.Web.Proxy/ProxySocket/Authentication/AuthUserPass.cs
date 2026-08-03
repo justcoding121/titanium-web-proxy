@@ -69,7 +69,7 @@ internal sealed class AuthUserPass : AuthMethod
     private string Username
     {
         get => username;
-        set => username = value ?? throw new ArgumentNullException();
+        set => username = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     /// <summary>
@@ -80,7 +80,7 @@ internal sealed class AuthUserPass : AuthMethod
     private string Password
     {
         get => password;
-        set => password = value ?? throw new ArgumentNullException();
+        set => password = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     /// <summary>

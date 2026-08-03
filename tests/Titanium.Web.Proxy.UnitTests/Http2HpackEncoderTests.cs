@@ -69,11 +69,65 @@ namespace Titanium.Web.Proxy.UnitTests
                 "Two independent Encoder instances/tables can never benefit from cross-instance indexing.");
         }
 
-        private static byte[] EncodeHeader(Encoder encoder, string name, string value)
+        [TestMethod]
+        public void Encoder_SensitiveHeader_UsesNeverIndexedPrefix()
+        {
+            var encoder = new Encoder(4096);
+            var encoded = EncodeHeader(encoder, "authorization", "secret", sensitive: true);
+            Assert.IsTrue(encoded.Length > 0);
+            Assert.AreEqual(0x10, encoded[0] & 0xF0);
+
+            // A second sensitive encode of the same header stays a full literal (never indexed).
+            var again = EncodeHeader(encoder, "authorization", "secret", sensitive: true);
+            Assert.AreEqual(encoded.Length, again.Length);
+        }
+
+        [TestMethod]
+        public void Encoder_MaxHeaderTableSizeZero_UsesLiteralWithoutIndexingForUnknown()
+        {
+            var encoder = new Encoder(0);
+            var custom = EncodeHeader(encoder, "x-custom", "v");
+            Assert.AreEqual(0x00, custom[0] & 0xF0); // literal without indexing
+            Assert.IsTrue(custom.Length > 1);
+
+            // Round-trip still works with a zero-capacity encoder/decoder pair.
+            var decoder = new Decoder(8192, 0);
+            var listener = new RecordingHeaderListener();
+            Decode(decoder, listener, custom);
+            Assert.AreEqual(1, listener.Headers.Count);
+            Assert.AreEqual("x-custom", listener.Headers[0].Item1);
+        }
+
+        [TestMethod]
+        public void Encoder_IndexTypeNone_DoesNotEnableLaterIndexing()
+        {
+            var encoder = new Encoder(4096);
+            var first = EncodeHeader(encoder, "x-path-like", "/a", sensitive: false, HpackUtil.IndexType.None);
+            var second = EncodeHeader(encoder, "x-path-like", "/a", sensitive: false, HpackUtil.IndexType.None);
+            Assert.AreEqual(first.Length, second.Length);
+            Assert.AreEqual(0x00, first[0] & 0xF0);
+        }
+
+        [TestMethod]
+        public void Encoder_UseStaticNameFalse_StillRoundTrips()
+        {
+            var encoded = EncodeHeader(new Encoder(4096), "x-unique-name", "v1", useStaticName: false);
+            var decoder = new Decoder(8192, 4096);
+            var listener = new RecordingHeaderListener();
+            Decode(decoder, listener, encoded);
+            Assert.AreEqual(1, listener.Headers.Count);
+            Assert.AreEqual("x-unique-name", listener.Headers[0].Item1);
+            Assert.AreEqual("v1", listener.Headers[0].Item2);
+        }
+
+        private static byte[] EncodeHeader(Encoder encoder, string name, string value,
+            bool sensitive = false, HpackUtil.IndexType indexType = HpackUtil.IndexType.Incremental,
+            bool useStaticName = true)
         {
             using var ms = new MemoryStream();
             using var writer = new BinaryWriter(ms);
-            encoder.EncodeHeader(writer, Encoding.ASCII.GetBytes(name), Encoding.ASCII.GetBytes(value));
+            encoder.EncodeHeader(writer, Encoding.ASCII.GetBytes(name), Encoding.ASCII.GetBytes(value),
+                sensitive, indexType, useStaticName);
             return ms.ToArray();
         }
 

@@ -7,7 +7,7 @@ namespace Titanium.Web.Proxy.Compression;
 /// <summary>
 ///     A factory to generate the de-compression methods based on the type of compression
 /// </summary>
-internal class DecompressionFactory
+internal static class DecompressionFactory
 {
     internal static Stream Create(HttpCompression type, Stream stream, bool leaveOpen = true)
     {
@@ -22,7 +22,7 @@ internal class DecompressionFactory
             // that wrapped stream is a LimitedStream (async-only by design - see LimitedStream.Read),
             // this throws NotSupportedException instead of decompressing.
             HttpCompression.Brotli => new BrotliStream(stream, CompressionMode.Decompress, leaveOpen),
-            _ => throw new Exception($"Unsupported decompression mode: {type}")
+            _ => throw new NotSupportedException($"Unsupported decompression mode: {type}")
         };
     }
 }

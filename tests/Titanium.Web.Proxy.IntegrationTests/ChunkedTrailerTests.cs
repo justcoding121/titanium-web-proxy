@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Net;
@@ -14,7 +14,7 @@ using Titanium.Web.Proxy.IntegrationTests.Setup;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
-///     Integration tests for HTTP/1.1 chunked trailer handling (RFC 9110 §6.5 / RFC 9112 §7.1.2).
+///     Integration tests for HTTP/1.1 chunked trailer handling (RFC 9110 �6.5 / RFC 9112 �7.1.2).
 ///     Previously the proxy relayed a syntactically valid, trailer-less terminator ("0\r\n\r\n") to the
 ///     client regardless of whether the upstream message actually carried trailers, silently dropping them.
 ///     These tests assert the corrected behavior: trailers are forwarded byte-for-byte, and - critically -
@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class ChunkedTrailerTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -34,7 +34,7 @@ public class ChunkedTrailerTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -359,7 +359,7 @@ public class ChunkedTrailerTests
 
     /// <summary>
     ///     Characterization for issue #547: when an origin response carries both Content-Length and
-    ///     Transfer-Encoding, the proxy must not forward both (RFC 9112 §6.3). Content-Length is stripped.
+    ///     Transfer-Encoding, the proxy must not forward both (RFC 9112 �6.3). Content-Length is stripped.
     /// </summary>
     [TestMethod]
     [Timeout(30 * 1000)]
@@ -402,7 +402,7 @@ public class ChunkedTrailerTests
         try
         {
             int read;
-            while ((read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token)) > 0)
+            while ((read = await stream.ReadAsync(buffer, cts.Token)) > 0)
                 ms.Write(buffer, 0, read);
         }
         catch (OperationCanceledException)

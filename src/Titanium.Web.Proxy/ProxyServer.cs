@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -41,8 +42,8 @@ public partial class ProxyServer : IDisposable
 
     internal static readonly string UriSchemeHttps = Uri.UriSchemeHttps;
 
-    internal static ByteString UriSchemeHttp8 = (ByteString)UriSchemeHttp;
-    internal static ByteString UriSchemeHttps8 = (ByteString)UriSchemeHttps;
+    internal static readonly ByteString UriSchemeHttp8 = (ByteString)UriSchemeHttp;
+    internal static readonly ByteString UriSchemeHttps8 = (ByteString)UriSchemeHttps;
 
     /// <summary>
     ///     Backing field for exposed public property.
@@ -995,7 +996,7 @@ public partial class ProxyServer : IDisposable
         }
 
         logger = activeLoggerFactory.CreateLogger("Titanium.Web.Proxy");
-        ProxyDiagnostics.FallbackLogger = logger;
+        ProxyDiagnostics.Logger = logger;
 
         // CertificateManager may not exist yet on the very first call from the constructor.
         if (CertificateManager != null) CertificateManager.Logger = logger;
@@ -1056,7 +1057,7 @@ public partial class ProxyServer : IDisposable
     ///     required.
     ///     Works in relation with ProxySchemeAuthenticateFunc.
     /// </summary>
-    public IEnumerable<string> ProxyAuthenticationSchemes { get; set; } = new string[0];
+    public IEnumerable<string> ProxyAuthenticationSchemes { get; set; } = Array.Empty<string>();
 
     /// <summary>
     ///     Event occurs when client connection count changed.
@@ -1081,17 +1082,17 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     Event to override the default verification logic of remote SSL certificate received during authentication.
     /// </summary>
-    public event AsyncEventHandler<CertificateValidationEventArgs>? ServerCertificateValidationCallback;
+    public event AsyncEventHandler<CertificateValidationEventArgs>? ServerCertificateValidationCallback; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Event to override client certificate selection during mutual SSL authentication.
     /// </summary>
-    public event AsyncEventHandler<CertificateSelectionEventArgs>? ClientCertificateSelectionCallback;
+    public event AsyncEventHandler<CertificateSelectionEventArgs>? ClientCertificateSelectionCallback; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Intercept request event to server.
     /// </summary>
-    public event AsyncEventHandler<SessionEventArgs>? BeforeRequest;
+    public event AsyncEventHandler<SessionEventArgs>? BeforeRequest; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Intercept request body send event to server.
@@ -1103,7 +1104,7 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     Intercept response event from server.
     /// </summary>
-    public event AsyncEventHandler<SessionEventArgs>? BeforeResponse;
+    public event AsyncEventHandler<SessionEventArgs>? BeforeResponse; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Intercept response body send event to client.
@@ -1124,22 +1125,22 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     Intercept after response event from server.
     /// </summary>
-    public event AsyncEventHandler<SessionEventArgs>? AfterResponse;
+    public event AsyncEventHandler<SessionEventArgs>? AfterResponse; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Customize TcpClient used for client connection upon create.
     /// </summary>
-    public event AsyncEventHandler<Socket>? OnClientConnectionCreate;
+    public event AsyncEventHandler<Socket>? OnClientConnectionCreate; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Customize TcpClient used for server connection upon create.
     /// </summary>
-    public event AsyncEventHandler<Socket>? OnServerConnectionCreate;
+    public event AsyncEventHandler<Socket>? OnServerConnectionCreate; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Intercept connect request sent to upstream proxy.
     /// </summary>
-    public event AsyncEventHandler<ConnectRequest>? BeforeUpStreamConnectRequest;
+    public event AsyncEventHandler<ConnectRequest>? BeforeUpStreamConnectRequest; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
     ///     Customize the minimum ThreadPool size (increase it on a server)
@@ -1154,7 +1155,7 @@ public partial class ProxyServer : IDisposable
     {
         if (ProxyEndPoints.Any(x =>
                 x.IpAddress.Equals(endPoint.IpAddress) && endPoint.Port != 0 && x.Port == endPoint.Port))
-            throw new Exception("Cannot add another endpoint to same port & ip address");
+            throw new InvalidOperationException("Cannot add another endpoint to same port & ip address");
 
         ProxyEndPoints.Add(endPoint);
 
@@ -1176,8 +1177,8 @@ public partial class ProxyServer : IDisposable
     /// <param name="endPoint">The existing endpoint to remove.</param>
     public void RemoveEndPoint(ProxyEndPoint endPoint)
     {
-        if (ProxyEndPoints.Contains(endPoint) == false)
-            throw new Exception("Cannot remove endPoints not added to proxy");
+        if (!ProxyEndPoints.Contains(endPoint))
+            throw new InvalidOperationException("Cannot remove endPoints not added to proxy");
 
         ProxyEndPoints.Remove(endPoint);
 
@@ -1278,12 +1279,12 @@ public partial class ProxyServer : IDisposable
         string? proxyOverride = null;
         if (settings != null)
         {
-            var currentProxyOverride = SystemProxySettingsManager.GetProxyInfoFromRegistry()?.ProxyOverride;
+            var currentProxyOverride = SystemProxyManager.GetProxyInfoFromRegistry()?.ProxyOverride;
             proxyOverride = settings.BuildProxyOverride(currentProxyOverride);
         }
 
         SystemProxySettingsManager.SetProxy(
-            Equals(endPoint.IpAddress, IPAddress.Any) |
+            Equals(endPoint.IpAddress, IPAddress.Any) ||
             Equals(endPoint.IpAddress, IPAddress.Loopback)
                 ? "localhost"
                 : endPoint.IpAddress.ToString(),
@@ -1410,9 +1411,9 @@ public partial class ProxyServer : IDisposable
     ///     Whether or not clear any system proxy settings which is pointing to our own endpoint (causing a cycle).
     ///     E.g due to ungracious proxy shutdown before.
     /// </param>
-    public void Start(bool changeSystemProxySettings = true)
+    public void Start(bool changeSystemProxySettings = true) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
-        if (ProxyRunning) throw new Exception("Proxy is already running.");
+        if (ProxyRunning) throw new InvalidOperationException("Proxy is already running.");
 
         // Freeze the active logging configuration for the duration of this run.
         ApplyLoggingConfiguration();
@@ -1429,14 +1430,14 @@ public partial class ProxyServer : IDisposable
         if (changeSystemProxySettings && SystemProxySettingsManager != null && RunTime.IsWindows &&
             !RunTime.IsUwpOnWindows)
         {
-            var proxyInfo = SystemProxySettingsManager.GetProxyInfoFromRegistry();
+            var proxyInfo = SystemProxyManager.GetProxyInfoFromRegistry();
             if (proxyInfo?.Proxies != null)
             {
                 var protocolToRemove = ProxyProtocolType.None;
-                foreach (var proxy in proxyInfo.Proxies.Values)
-                    if (NetworkHelper.IsLocalIpAddress(proxy.HostName)
-                        && ProxyEndPoints.Any(x => x.Port == proxy.Port))
-                        protocolToRemove |= proxy.ProtocolType;
+                foreach (var proxy in proxyInfo.Proxies.Values.Where(proxy =>
+                             NetworkHelper.IsLocalIpAddress(proxy.HostName) &&
+                             ProxyEndPoints.Any(x => x.Port == proxy.Port)))
+                    protocolToRemove |= proxy.ProtocolType;
 
                 if (protocolToRemove != ProxyProtocolType.None)
                     SystemProxySettingsManager.RemoveProxy(protocolToRemove, false);
@@ -1464,7 +1465,7 @@ public partial class ProxyServer : IDisposable
         // Name only, per the plan's rollout section - never hosts, URLs or secrets.
         ProxyLog.EffectiveProfileAtStartup(logger, profile, policyModes);
 
-        CertificateManager.ClearIdleCertificates();
+        _ = CertificateManager.ClearIdleCertificates();
 
         var startedTcpEndPoints = new List<ProxyEndPoint>();
         var startedQuicEndPoints = new List<TransparentQuicProxyEndPoint>();
@@ -1570,7 +1571,7 @@ public partial class ProxyServer : IDisposable
     /// </param>
     public async Task StopAsync(TimeSpan? drainTimeout = null)
     {
-        if (!ProxyRunning) throw new Exception("Proxy is not running.");
+        if (!ProxyRunning) throw new InvalidOperationException("Proxy is not running.");
 
         StopCore(cancelSessions: true, clearPools: false);
 
@@ -1580,15 +1581,16 @@ public partial class ProxyServer : IDisposable
         // ClientConnectionCount (TCP-based H1/H2); draining only the former would let this
         // return, and the pools below get cleared, while HTTP/3 streams are still in flight.
         while ((ClientConnectionCount > 0 || Http3ClientConnectionCount > 0) && DateTime.UtcNow < deadline)
-            await Task.Delay(50).ConfigureAwait(false);
+            // StopCore already cancelled quicListenerCts; drain polling must not share that token.
+            await Task.Delay(50, CancellationToken.None).ConfigureAwait(false);
 
         TcpConnectionFactory.ClearPools();
         await QuicConnectionPool.DrainAsync();
     }
 
-    private void StopCore(bool cancelSessions, bool clearPools)
+    private void StopCore(bool cancelSessions, bool clearPools) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
-        if (!ProxyRunning) throw new Exception("Proxy is not running.");
+        if (!ProxyRunning) throw new InvalidOperationException("Proxy is not running.");
 
         if (RunTime.IsWindows && SystemProxySettingsManager != null)
         {
@@ -1703,12 +1705,12 @@ public partial class ProxyServer : IDisposable
     /// <param name="endPoint">The end point to validate.</param>
     private void ValidateEndPointAsSystemProxy(ExplicitProxyEndPoint endPoint)
     {
-        if (endPoint == null) throw new ArgumentNullException(nameof(endPoint));
+        ArgumentNullException.ThrowIfNull(endPoint);
 
         if (!ProxyEndPoints.Contains(endPoint))
-            throw new Exception("Cannot set endPoints not added to proxy as system proxy");
+            throw new InvalidOperationException("Cannot set endPoints not added to proxy as system proxy");
 
-        if (!ProxyRunning) throw new Exception("Cannot set system proxy settings before proxy has been started.");
+        if (!ProxyRunning) throw new InvalidOperationException("Cannot set system proxy settings before proxy has been started.");
     }
 
     /// <summary>
@@ -1728,7 +1730,7 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     Act when a connection is received from client.
     /// </summary>
-    private void OnAcceptConnection(IAsyncResult asyn)
+    private void OnAcceptConnection(IAsyncResult asyn) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var endPoint = (ProxyEndPoint)asyn.AsyncState!;
         var listener = endPoint.Listener!;
@@ -1780,6 +1782,7 @@ public partial class ProxyServer : IDisposable
                     }
 
                     var acceptedClient = tcpClient;
+                    // Session lifetime is tracked separately; opt out of a process-wide token here.
                     Task.Run(async () =>
                     {
                         // HandleClient runs detached (fire-and-forget); an unobserved exception here would
@@ -1800,7 +1803,7 @@ public partial class ProxyServer : IDisposable
                             // connections cannot starve admission for a following burst.
                             ReleaseClientConnection(endPoint);
                         }
-                    });
+                    }, CancellationToken.None);
                 }
             }
             else
@@ -1907,9 +1910,9 @@ public partial class ProxyServer : IDisposable
             // Retry shortly instead of permanently abandoning the accept loop.
             _ = Task.Run(async () =>
             {
-                await Task.Delay(100).ConfigureAwait(false);
+                await Task.Delay(100, CancellationToken.None).ConfigureAwait(false);
                 BeginAcceptConnection(endPoint, listener);
-            });
+            }, CancellationToken.None);
         }
     }
 
@@ -1918,7 +1921,7 @@ public partial class ProxyServer : IDisposable
     ///     Change the ThreadPool.WorkerThread minThread
     /// </summary>
     /// <param name="workerThreads">minimum Threads allocated in the ThreadPool</param>
-    private void SetThreadPoolMinThread(int workerThreads)
+    private static void SetThreadPoolMinThread(int workerThreads)
     {
         ThreadPool.GetMinThreads(out var minWorkerThreads, out var minCompletionPortThreads);
         ThreadPool.GetMaxThreads(out var maxWorkerThreads, out _);
@@ -1964,13 +1967,14 @@ public partial class ProxyServer : IDisposable
     /// <param name="exception">The exception.</param>
     private void OnException(HttpClientStream? clientStream, Exception exception)
     {
+        _ = clientStream; // Reserved for attaching connection context to future diagnostics.
         ProxyDiagnostics.ReportException(logger, "Unhandled exception in proxy", exception);
     }
 
     /// <summary>
     ///     Quit listening on the given end point.
     /// </summary>
-    private void QuitListen(ProxyEndPoint endPoint)
+    private static void QuitListen(ProxyEndPoint endPoint)
     {
         var listener = endPoint.Listener;
         if (listener == null) return;
@@ -2088,14 +2092,6 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
-    ///     Connection retry policy when using connection pool.
-    /// </summary>
-    private RetryPolicy<T> RetryPolicy<T>() where T : Exception
-    {
-        return new RetryPolicy<T>(NetworkFailureRetryAttempts, TcpConnectionFactory);
-    }
-
-    /// <summary>
     ///     Connection retry policy that respects the per-session
     ///     <see cref="SessionEventArgs.NetworkFailureRetryAttempts" /> override when set.
     /// </summary>
@@ -2109,22 +2105,44 @@ public partial class ProxyServer : IDisposable
 
     public void Dispose()
     {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    [SuppressMessage("ApiDesign", "RS0016:Add public types and members to the declared API",
+        Justification = "Protected Dispose(bool) is required by the standard IDisposable pattern but is not public API.")]
+    protected virtual void Dispose(bool disposing)
+    {
         if (disposed) return;
 
+        if (disposing)
+        {
+            // No finalizer: Stop()/certificate/buffer disposal must only run on the explicit
+            // Dispose path. Callers that omit Dispose leave OS sockets to safe-handle cleanup.
+            StopIfRunning();
+            DisposeConnectionResources();
+            DisposeOwnedLoggerFactory();
+        }
+
         disposed = true;
+    }
 
-        // No finalizer: Stop()/certificate/buffer disposal must only run on the explicit
-        // Dispose path. Callers that omit Dispose leave OS sockets to safe-handle cleanup.
-        if (ProxyRunning)
-            try
-            {
-                Stop();
-            }
-            catch
-            {
-                // ignore
-            }
+    private void StopIfRunning()
+    {
+        if (!ProxyRunning) return;
 
+        try
+        {
+            Stop();
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private void DisposeConnectionResources()
+    {
         try
         {
             TcpConnectionFactory.Dispose();
@@ -2148,18 +2166,21 @@ public partial class ProxyServer : IDisposable
         _svcbDiscoveryCoordinator?.Dispose();
 
         // SystemProxyManager is [SupportedOSPlatform("windows")]; the platform analyzer cannot
-        // prove that from a null-conditional access alone, so guard explicitly (mirrors the
-        // Start() rollback path below).
+        // prove that from a null-conditional access alone, so guard explicitly.
         if (RunTime.IsWindows) SystemProxySettingsManager?.Dispose();
+    }
 
-        if (ownsActiveLoggerFactory)
-            try
-            {
-                activeLoggerFactory.Dispose();
-            }
-            catch
-            {
-                // A misbehaving sink must never prevent proxy disposal from completing.
-            }
+    private void DisposeOwnedLoggerFactory()
+    {
+        if (!ownsActiveLoggerFactory) return;
+
+        try
+        {
+            activeLoggerFactory.Dispose();
+        }
+        catch
+        {
+            // A misbehaving sink must never prevent proxy disposal from completing.
+        }
     }
 }

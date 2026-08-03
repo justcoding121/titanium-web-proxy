@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Rfc8441H2ToH2TunnelTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     private static readonly Encoding Ascii = Encoding.ASCII;
 
@@ -33,7 +33,7 @@ public class Rfc8441H2ToH2TunnelTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();

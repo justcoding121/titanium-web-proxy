@@ -28,7 +28,7 @@ public class ProxyProfileSettingsTests
     [TestMethod]
     public void For_UnknownProfile_Throws()
     {
-        Assert.ThrowsException<System.ArgumentOutOfRangeException>(
+        Assert.ThrowsExactly<System.ArgumentOutOfRangeException>(
             () => ProxyProfileSettings.For((ProxyProfile)999));
     }
 

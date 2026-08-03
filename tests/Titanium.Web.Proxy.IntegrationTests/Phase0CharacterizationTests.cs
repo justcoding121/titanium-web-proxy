@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -23,7 +23,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Phase0CharacterizationTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -31,7 +31,7 @@ public class Phase0CharacterizationTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -64,7 +64,7 @@ public class Phase0CharacterizationTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "body text");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "body text");
 
         Assert.IsNull(response,
             "Strict Expect:100-continue client must time out when proxy does not forward 100 Continue " +
@@ -123,7 +123,7 @@ public class Phase0CharacterizationTests
         {
             var encoding = Encoding.ASCII;
             var requestMsg = string.Empty;
-            Request request = null;
+            Request? request = null;
             while ((request = HttpMessageParsing.ParseRequest(requestMsg, false)) == null)
             {
                 var result = await context.Transport.Input.ReadAsync();
@@ -135,7 +135,7 @@ public class Phase0CharacterizationTests
             string responseText;
             if (request.Method == "HEAD")
             {
-                // Advertise a 1000-byte body but send no bytes - HEAD semantics per RFC 7231 §4.3.2.
+                // Advertise a 1000-byte body but send no bytes - HEAD semantics per RFC 7231 �4.3.2.
                 responseText = "HTTP/1.1 200 OK\r\nContent-Length: 1000\r\nConnection: close\r\n\r\n";
             }
             else
@@ -170,11 +170,11 @@ public class Phase0CharacterizationTests
 
             var received = new List<byte>();
             var buf = new byte[1024];
-            string headersSection = null;
+            string? headersSection = null;
 
             while (headersSection == null)
             {
-                int read = await stream.ReadAsync(buf, 0, buf.Length);
+                int read = await stream.ReadAsync(buf);
                 if (read == 0) break;
                 received.AddRange(buf.Take(read));
                 var text = Encoding.ASCII.GetString(received.ToArray());
@@ -208,7 +208,7 @@ public class Phase0CharacterizationTests
             while (true)
             {
                 int read;
-                try { read = await stream2.ReadAsync(buf2, 0, buf2.Length); }
+                try { read = await stream2.ReadAsync(buf2); }
                 catch { break; }
                 if (read == 0) break;
                 received2.AddRange(buf2.Take(read));
@@ -249,7 +249,7 @@ public class Phase0CharacterizationTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "hello");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "hello");
 
         Assert.IsNotNull(response, "Enable100ContinueBehaviour=true must relay 100 Continue and return a final response.");
         Assert.AreEqual((int)HttpStatusCode.OK, response.StatusCode);
@@ -280,7 +280,7 @@ public class Phase0CharacterizationTests
         };
 
         var client = new HttpContinueClient();
-        var response = await client.Post("localhost", proxy.ProxyEndPoints[0].Port, "hello");
+        var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "hello");
 
         Assert.IsNull(response,
             "Origin silence + strict client must time out when Enable100ContinueBehaviour=false.");

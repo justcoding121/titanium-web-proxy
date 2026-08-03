@@ -78,13 +78,13 @@ public class UpStreamEndPointSelectorTests
         var factory = new TcpConnectionFactory(new ProxyServer());
         try
         {
-            var ipv4Only = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+            var ipv4Only = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
                 upStreamEndPointIPv4: IPv4Adapter);
-            var ipv6Only = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+            var ipv6Only = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
                 upStreamEndPointIPv6: IPv6Adapter);
-            var dual = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+            var dual = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
                 upStreamEndPointIPv4: IPv4Adapter, upStreamEndPointIPv6: IPv6Adapter);
-            var dualAgain = factory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
+            var dualAgain = TcpConnectionFactory.GetConnectionCacheKey("example.com", 443, true, null, null, null,
                 upStreamEndPointIPv4: IPv4Adapter, upStreamEndPointIPv6: IPv6Adapter);
 
             Assert.AreNotEqual(ipv4Only, ipv6Only);

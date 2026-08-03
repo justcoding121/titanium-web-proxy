@@ -12,7 +12,7 @@ namespace Titanium.Web.Proxy.StreamExtended;
 /// <summary>
 ///     Use this class to peek SSL client/server hello information.
 /// </summary>
-internal class SslTools
+internal static class SslTools
 {
     /// <summary>
     ///     Peek the SSL client hello information.
@@ -21,7 +21,7 @@ internal class SslTools
     /// <param name="bufferPool"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    public static async Task<ClientHelloInfo?> PeekClientHello(IPeekStream clientStream, IBufferPool bufferPool,
+    public static async Task<ClientHelloInfo?> PeekClientHello(IPeekStream clientStream, IBufferPool bufferPool, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         CancellationToken cancellationToken = default)
     {
         // detects the HTTPS ClientHello message as it is described in the following url:
@@ -47,8 +47,8 @@ internal class SslTools
                 // should be ClientHello
                 return null;
 
-            int majorVersion = peekStream.ReadByte();
-            int minorVersion = peekStream.ReadByte();
+            var majorVersion = peekStream.ReadByte();
+            var minorVersion = peekStream.ReadByte();
 
             var ciphersCount = peekStream.ReadInt16() / 3;
             var sessionIdLength = peekStream.ReadInt16();
@@ -79,8 +79,8 @@ internal class SslTools
             if (!await peekStream.EnsureBufferLength(43, cancellationToken)) return null;
 
             // SSL 3.0 or TLS 1.0, 1.1 and 1.2
-            int majorVersion = peekStream.ReadByte();
-            int minorVersion = peekStream.ReadByte();
+            _ = peekStream.ReadByte();
+            _ = peekStream.ReadByte();
 
             var recordLength = peekStream.ReadInt16();
 
@@ -88,25 +88,25 @@ internal class SslTools
                 // should be ClientHello
                 return null;
 
-            var length = peekStream.ReadInt24();
+            _ = peekStream.ReadInt24();
 
-            majorVersion = peekStream.ReadByte();
-            minorVersion = peekStream.ReadByte();
+            var majorVersion = peekStream.ReadByte();
+            var minorVersion = peekStream.ReadByte();
 
             var random = peekStream.ReadBytes(32);
-            length = peekStream.ReadByte();
+            var length = peekStream.ReadByte();
 
             // sessionid + 2 ciphersData length
             if (!await peekStream.EnsureBufferLength(length + 2, cancellationToken)) return null;
 
             var sessionId = peekStream.ReadBytes(length);
 
-            length = peekStream.ReadInt16();
+            var ciphersLength = peekStream.ReadInt16();
 
             // ciphersData + compressionData length
-            if (!await peekStream.EnsureBufferLength(length + 1, cancellationToken)) return null;
+            if (!await peekStream.EnsureBufferLength(ciphersLength + 1, cancellationToken)) return null;
 
-            var ciphers = new int[length / 2];
+            var ciphers = new int[ciphersLength / 2];
             for (var i = 0; i < ciphers.Length; i++) ciphers[i] = peekStream.ReadInt16();
 
             length = peekStream.ReadByte();
@@ -160,7 +160,7 @@ internal class SslTools
     /// <param name="bufferPool"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    public static async Task<ServerHelloInfo?> PeekServerHello(IPeekStream serverStream, IBufferPool bufferPool,
+    public static async Task<ServerHelloInfo?> PeekServerHello(IPeekStream serverStream, IBufferPool bufferPool, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         CancellationToken cancellationToken = default)
     {
         // detects the HTTPS ClientHello message as it is described in the following url:
@@ -187,8 +187,8 @@ internal class SslTools
                 // should be ServerHello
                 return null;
 
-            int majorVersion = peekStream.ReadByte();
-            int minorVersion = peekStream.ReadByte();
+            var majorVersion = peekStream.ReadByte();
+            var minorVersion = peekStream.ReadByte();
 
             // 32 bytes random + 1 byte sessionId + 2 bytes cipherSuite
             if (!await peekStream.EnsureBufferLength(35, cancellationToken)) return null;
@@ -212,8 +212,8 @@ internal class SslTools
             if (!await peekStream.EnsureBufferLength(43, cancellationToken)) return null;
 
             // SSL 3.0 or TLS 1.0, 1.1 and 1.2
-            int majorVersion = peekStream.ReadByte();
-            int minorVersion = peekStream.ReadByte();
+            _ = peekStream.ReadByte();
+            _ = peekStream.ReadByte();
 
             var recordLength = peekStream.ReadInt16();
 
@@ -221,13 +221,13 @@ internal class SslTools
                 // should be ServerHello
                 return null;
 
-            var length = peekStream.ReadInt24();
+            _ = peekStream.ReadInt24();
 
-            majorVersion = peekStream.ReadByte();
-            minorVersion = peekStream.ReadByte();
+            var majorVersion = peekStream.ReadByte();
+            var minorVersion = peekStream.ReadByte();
 
             var random = peekStream.ReadBytes(32);
-            length = peekStream.ReadByte();
+            var length = peekStream.ReadByte();
 
             // sessionid + cipherSuite + compressionMethod
             if (!await peekStream.EnsureBufferLength(length + 2 + 1, cancellationToken)) return null;
@@ -262,26 +262,26 @@ internal class SslTools
         PeekStreamReader peekStreamReader, CancellationToken cancellationToken)
     {
         Dictionary<string, SslExtension>? extensions = null;
-        if (majorVersion > 3 || majorVersion == 3 && minorVersion >= 1)
-            if (await peekStreamReader.EnsureBufferLength(2, cancellationToken))
-            {
-                var extensionsLength = peekStreamReader.ReadInt16();
+        if ((majorVersion > 3 || majorVersion == 3 && minorVersion >= 1) &&
+            await peekStreamReader.EnsureBufferLength(2, cancellationToken))
+        {
+            var extensionsLength = peekStreamReader.ReadInt16();
 
-                if (await peekStreamReader.EnsureBufferLength(extensionsLength, cancellationToken))
+            if (await peekStreamReader.EnsureBufferLength(extensionsLength, cancellationToken))
+            {
+                var extensionsData = peekStreamReader.ReadBytes(extensionsLength).AsMemory();
+                extensions = new Dictionary<string, SslExtension>();
+                var idx = 0;
+                while (extensionsData.Length > 3)
                 {
-                    var extensionsData = peekStreamReader.ReadBytes(extensionsLength).AsMemory();
-                    extensions = new Dictionary<string, SslExtension>();
-                    var idx = 0;
-                    while (extensionsData.Length > 3)
-                    {
-                        var id = BinaryPrimitives.ReadInt16BigEndian(extensionsData.Span);
-                        var length = BinaryPrimitives.ReadInt16BigEndian(extensionsData.Span.Slice(2));
-                        var extension = new SslExtension(id, extensionsData.Slice(4, length), idx++);
-                        extensions[extension.Name] = extension;
-                        extensionsData = extensionsData.Slice(4 + length);
-                    }
+                    var id = BinaryPrimitives.ReadInt16BigEndian(extensionsData.Span);
+                    var length = BinaryPrimitives.ReadInt16BigEndian(extensionsData.Span.Slice(2));
+                    var extension = new SslExtension(id, extensionsData.Slice(4, length), idx++);
+                    extensions[extension.Name] = extension;
+                    extensionsData = extensionsData.Slice(4 + length);
                 }
             }
+        }
 
         return extensions;
     }

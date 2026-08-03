@@ -26,13 +26,13 @@ public class Http2TunnelStreamTests
         channel.Writer.TryComplete();
 
         var buffer = new byte[3];
-        Assert.AreEqual(3, await stream.ReadAsync(buffer, 0, 3));
+        Assert.AreEqual(3, await stream.ReadAsync(buffer.AsMemory(0, 3)));
         CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, buffer);
 
-        Assert.AreEqual(1, await stream.ReadAsync(buffer, 0, 3));
+        Assert.AreEqual(1, await stream.ReadAsync(buffer.AsMemory(0, 3)));
         Assert.AreEqual(4, buffer[0]);
 
-        Assert.AreEqual(0, await stream.ReadAsync(buffer, 0, 3));
+        Assert.AreEqual(0, await stream.ReadAsync(buffer.AsMemory(0, 3)));
     }
 
     [TestMethod]
@@ -53,7 +53,7 @@ public class Http2TunnelStreamTests
             (_, _) => Task.CompletedTask,
             () => { });
 
-        await stream.WriteAsync(new byte[] { 9, 8, 7 }, 0, 3);
+        await stream.WriteAsync(new byte[] { 9, 8, 7 }.AsMemory());
         CollectionAssert.AreEqual(new byte[] { 9, 8, 7 }, seen.ToArray());
         Assert.IsFalse(endStream);
     }
@@ -93,7 +93,7 @@ public class Http2TunnelStreamTests
             () => { });
 
         await stream.CompleteWriteAsync(CancellationToken.None);
-        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
             () => stream.WriteAsync(new byte[] { 1 }, 0, 1));
     }
 
@@ -107,13 +107,13 @@ public class Http2TunnelStreamTests
             (_, _) => Task.CompletedTask,
             () => { });
 
-        Assert.ThrowsException<NotSupportedException>(() => stream.Read(new byte[1], 0, 1));
-        Assert.ThrowsException<NotSupportedException>(() => stream.Write(new byte[1], 0, 1));
-        Assert.ThrowsException<NotSupportedException>(() => stream.Seek(0, SeekOrigin.Begin));
-        Assert.ThrowsException<NotSupportedException>(() => stream.SetLength(1));
-        Assert.ThrowsException<NotSupportedException>(() => _ = stream.Length);
-        Assert.ThrowsException<NotSupportedException>(() => _ = stream.Position);
-        Assert.ThrowsException<NotSupportedException>(() => stream.Position = 0);
+        Assert.ThrowsExactly<NotSupportedException>(() => stream.Read(new byte[1], 0, 1));
+        Assert.ThrowsExactly<NotSupportedException>(() => stream.Write(new byte[1], 0, 1));
+        Assert.ThrowsExactly<NotSupportedException>(() => stream.Seek(0, SeekOrigin.Begin));
+        Assert.ThrowsExactly<NotSupportedException>(() => stream.SetLength(1));
+        Assert.ThrowsExactly<NotSupportedException>(() => _ = stream.Length);
+        Assert.ThrowsExactly<NotSupportedException>(() => _ = stream.Position);
+        Assert.ThrowsExactly<NotSupportedException>(() => stream.Position = 0);
     }
 
     [TestMethod]

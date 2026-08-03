@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Interface IOriginalDestinationResolver | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Interface IOriginalDestinationResolver | Titanium Web Proxy ">
+    
+    <meta name="description" content="Resolves the original (pre-NAT) destination of an inbound QUIC connection.      When the proxy intercepts traffic via firewall/NAT redirection, the destination seen by the OS     socket is the proxy&#39;s own UDP endpoint, not the origin server. This interface bridges the     managed interception contract: the operator&#39;s firewall rules or packet-filter driver supply     original-destination data, and this adapter exposes it to the proxy.       SNI from the QUIC ClientHello (BeforeQuicAuthenticateEventArgs.SniHostName) and     the :authority pseudo-header are validation inputs and context hints, but are not a     reliable replacement for the actual original destination obtained from the OS routing table or     packet-filter metadata, especially for pinned certificates, IP-literal URLs, or non-standard ports.">
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+
+        <div id="search-results">
+          <div class="search-list">Search Results for <span></span></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Network.Quic.IOriginalDestinationResolver">
+
+
+
+  <h1 id="Titanium_Web_Proxy_Network_Quic_IOriginalDestinationResolver" data-uid="Titanium.Web.Proxy.Network.Quic.IOriginalDestinationResolver" class="text-break">Interface IOriginalDestinationResolver</h1>
+  <div class="markdown level0 summary"><p>Resolves the original (pre-NAT) destination of an inbound QUIC connection.</p>
+<p>
+    When the proxy intercepts traffic via firewall/NAT redirection, the destination seen by the OS
+    socket is the proxy's own UDP endpoint, not the origin server. This interface bridges the
+    managed interception contract: the operator's firewall rules or packet-filter driver supply
+    original-destination data, and this adapter exposes it to the proxy.
+</p>
+<p>
+    SNI from the QUIC ClientHello (BeforeQuicAuthenticateEventArgs.SniHostName) and
+    the <code>:authority</code> pseudo-header are validation inputs and context hints, but are not a
+    reliable replacement for the actual original destination obtained from the OS routing table or
+    packet-filter metadata, especially for pinned certificates, IP-literal URLs, or non-standard ports.
+</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.html">Titanium</a>.<a class="xref" href="Titanium.Web.html">Web</a>.<a class="xref" href="Titanium.Web.Proxy.html">Proxy</a>.<a class="xref" href="Titanium.Web.Proxy.Network.html">Network</a>.<a class="xref" href="Titanium.Web.Proxy.Network.Quic.html">Quic</a></h6>
+  <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
+  <h5 id="Titanium_Web_Proxy_Network_Quic_IOriginalDestinationResolver_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public interface IOriginalDestinationResolver</code></pre>
+  </div>
+  <h3 id="methods">Methods
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_Quic_IOriginalDestinationResolver_ResolveAsync_System_Net_IPEndPoint_System_Net_IPEndPoint_System_String_System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.Quic.IOriginalDestinationResolver.ResolveAsync(System.Net.IPEndPoint%2CSystem.Net.IPEndPoint%2CSystem.String%2CSystem.Threading.CancellationToken)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Network/Quic/IOriginalDestinationResolver.cs/#L40">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Network_Quic_IOriginalDestinationResolver_ResolveAsync_" data-uid="Titanium.Web.Proxy.Network.Quic.IOriginalDestinationResolver.ResolveAsync*"></a>
+  <h4 id="Titanium_Web_Proxy_Network_Quic_IOriginalDestinationResolver_ResolveAsync_System_Net_IPEndPoint_System_Net_IPEndPoint_System_String_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.Network.Quic.IOriginalDestinationResolver.ResolveAsync(System.Net.IPEndPoint,System.Net.IPEndPoint,System.String,System.Threading.CancellationToken)">ResolveAsync(IPEndPoint, IPEndPoint, string?, CancellationToken)</h4>
+  <div class="markdown level1 summary"><p>Resolves the original destination host name and port for the given inbound QUIC connection.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">ValueTask&lt;(string hostName, int port)?&gt; ResolveAsync(IPEndPoint localEndPoint, IPEndPoint remoteEndPoint, string? sniHostName, CancellationToken cancellationToken)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.net.ipendpoint">IPEndPoint</a></td>
+        <td><span class="parametername">localEndPoint</span></td>
+        <td><p>The local UDP endpoint the proxy is listening on.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.net.ipendpoint">IPEndPoint</a></td>
+        <td><span class="parametername">remoteEndPoint</span></td>
+        <td><p>The remote UDP endpoint of the connecting QUIC client.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td><span class="parametername">sniHostName</span></td>
+        <td><p>The SNI hostname from the QUIC ClientHello, or <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> if not present.
+May be used as a hint but should not be trusted as the authoritative destination.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.cancellationtoken">CancellationToken</a></td>
+        <td><span class="parametername">cancellationToken</span></td>
+        <td><p>Cancellation token for the lookup.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.valuetask-1">ValueTask</a>&lt;(<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a> <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.valuetuple-system.string,system.int32-.hostname">hostName</a>, <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a> <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.valuetuple-system.string,system.int32-.port">port</a>)?&gt;</td>
+        <td><p>The resolved (<code>hostName</code>, <code>port</code>) tuple, where <code>hostName</code> is the original
+destination host name or IP address string and <code>port</code> is the original destination port.
+Returns <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> if resolution fails and the caller should fall back to
+TransparentQuicProxyEndPoint.ForwardHost / TransparentQuicProxyEndPoint.ForwardPort.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Network_Quic_IOriginalDestinationResolver.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Network.Quic.IOriginalDestinationResolver%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Network/Quic/IOriginalDestinationResolver.cs/#L22" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

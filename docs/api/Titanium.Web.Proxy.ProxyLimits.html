@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Class ProxyLimits | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Class ProxyLimits | Titanium Web Proxy ">
+    
+    <meta name="description" content="Reference values for a handful of resource-limit defaults, kept here for documentation and cross-checking purposes.">
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+
+        <div id="search-results">
+          <div class="search-list">Search Results for <span></span></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.ProxyLimits">
+
+
+
+  <h1 id="Titanium_Web_Proxy_ProxyLimits" data-uid="Titanium.Web.Proxy.ProxyLimits" class="text-break">Class ProxyLimits</h1>
+  <div class="markdown level0 summary"><p>Reference values for a handful of resource-limit defaults, kept here for documentation and
+cross-checking purposes.</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <div class="inheritance">
+    <h5>Inheritance</h5>
+    <div class="level0"><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object">object</a></div>
+    <div class="level1"><span class="xref">ProxyLimits</span></div>
+  </div>
+  <div class="inheritedMembers">
+    <h5>Inherited Members</h5>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object)">object.Equals(object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object-system-object)">object.Equals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gethashcode">object.GetHashCode()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gettype">object.GetType()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.memberwiseclone">object.MemberwiseClone()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.referenceequals">object.ReferenceEquals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.tostring">object.ToString()</a>
+    </div>
+  </div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.html">Titanium</a>.<a class="xref" href="Titanium.Web.html">Web</a>.<a class="xref" href="Titanium.Web.Proxy.html">Proxy</a></h6>
+  <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
+  <h5 id="Titanium_Web_Proxy_ProxyLimits_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static class ProxyLimits</code></pre>
+  </div>
+  <h5 id="Titanium_Web_Proxy_ProxyLimits_remarks"><strong>Remarks</strong></h5>
+  <div class="markdown level0 remarks"><p>
+These fields are <code>static readonly</code>, not <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/const">const</a>, so that if a
+later release changes one of these reference values, a consumer that has not recompiled still
+picks up the new value from the referenced <code>Titanium.Web.Proxy.dll</code> at load time rather than
+keeping a stale value inlined by the compiler into their own assembly.
+</p>
+<p>
+<b>These fields cannot be "overridden by assigning them before starting the proxy":</b> they are
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/readonly">readonly</a>, so external code cannot assign to them at all (that would be a
+compile error). Only <a class="xref" href="Titanium.Web.Proxy.ProxyLimits.html#Titanium_Web_Proxy_ProxyLimits_DefaultMaxChunkSizeBytes">DefaultMaxChunkSizeBytes</a> is actually read by any live code
+path (by <code>ChunkSizeParser.TryParse</code>'s call sites in <code>HttpStream</code>/<code>LimitedStream</code>);
+every other field below documents a value that is independently hardcoded as the real default on
+the corresponding <code>ProxyServer</code> (or, for authentication rounds, <code>WinAuthHandler</code>)
+property, and is not consulted by that property's own default or by any enforcement path. Treat
+the fields below other than <a class="xref" href="Titanium.Web.Proxy.ProxyLimits.html#Titanium_Web_Proxy_ProxyLimits_DefaultMaxChunkSizeBytes">DefaultMaxChunkSizeBytes</a> as documentation of what each
+corresponding property's shipped default currently is, not as the mechanism that produces it: to
+change a limit at runtime, set the actual <code>ProxyServer</code> property (e.g.
+<code>ProxyServer.MaxBufferedBodyBytes</code>), never the field here.
+</p>
+</div>
+  <h3 id="fields">Fields
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyLimits_DefaultMaxAuthRounds.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyLimits.DefaultMaxAuthRounds%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyLimits.cs/#L82">View Source</a>
+  </span>
+  <h4 id="Titanium_Web_Proxy_ProxyLimits_DefaultMaxAuthRounds" data-uid="Titanium.Web.Proxy.ProxyLimits.DefaultMaxAuthRounds">DefaultMaxAuthRounds</h4>
+  <div class="markdown level1 summary"><p>Reference value only - see the type-level remarks. Matches
+<code>WinAuthHandler.MaxAuthChallengeRounds</code>: maximum number of authentication challenge
+rounds allowed per request (e.g. NTLM three-way handshake counts as one round; additional
+401/407 responses count separately). The two values are independently maintained, not linked.
+Default: 3.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static readonly int DefaultMaxAuthRounds</code></pre>
+  </div>
+  <h5 class="fieldValue">Field Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyLimits_DefaultMaxBufferedBodyBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyLimits.DefaultMaxBufferedBodyBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyLimits.cs/#L46">View Source</a>
+  </span>
+  <h4 id="Titanium_Web_Proxy_ProxyLimits_DefaultMaxBufferedBodyBytes" data-uid="Titanium.Web.Proxy.ProxyLimits.DefaultMaxBufferedBodyBytes">DefaultMaxBufferedBodyBytes</h4>
+  <div class="markdown level1 summary"><p>Reference value only - see the type-level remarks. Matches the current default of
+<code>ProxyServer.MaxBufferedBodyBytes</code>: maximum buffered request or response body size for
+proxied exchanges where full buffering is required (body mutation, authentication retry,
+etc.).
+Default: 4 MiB.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static readonly long DefaultMaxBufferedBodyBytes</code></pre>
+  </div>
+  <h5 class="fieldValue">Field Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyLimits_DefaultMaxChunkSizeBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyLimits.DefaultMaxChunkSizeBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyLimits.cs/#L97">View Source</a>
+  </span>
+  <h4 id="Titanium_Web_Proxy_ProxyLimits_DefaultMaxChunkSizeBytes" data-uid="Titanium.Web.Proxy.ProxyLimits.DefaultMaxChunkSizeBytes">DefaultMaxChunkSizeBytes</h4>
+  <div class="markdown level1 summary"><p>Maximum accepted value of a single HTTP/1 <code>chunk-size</code> line (RFC 9112 §7.1), in bytes.
+The chunk-size grammar itself (<code>1*HEXDIG</code>) has no length ceiling, so this is a proxy-owned
+safety bound rather than a protocol requirement: it exists to reject the two's-complement chunk-
+size wrap (an attacker-supplied value like &quot;ffffffff&quot; must not decode to a small/negative sentinel)
+and to avoid ever attempting to allocate or forward a chunk of unbounded size. Set high enough
+that no legitimate chunk from real-world traffic should reach it.</p>
+<p>
+Unlike every other field on this type, this one is actually read live, by every
+<code>ChunkSizeParser.TryParse</code> call site in <code>HttpStream</code> and <code>LimitedStream</code>.
+</p>
+<p>Default: 1 GiB.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static readonly long DefaultMaxChunkSizeBytes</code></pre>
+  </div>
+  <h5 class="fieldValue">Field Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyLimits_DefaultMaxDecodedHeaderListBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyLimits.DefaultMaxDecodedHeaderListBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyLimits.cs/#L37">View Source</a>
+  </span>
+  <h4 id="Titanium_Web_Proxy_ProxyLimits_DefaultMaxDecodedHeaderListBytes" data-uid="Titanium.Web.Proxy.ProxyLimits.DefaultMaxDecodedHeaderListBytes">DefaultMaxDecodedHeaderListBytes</h4>
+  <div class="markdown level1 summary"><p>Reference value only - see the type-level remarks. Matches the current default of
+<code>ProxyServer.MaxDecodedHeaderListBytes</code>: maximum total decoded HTTP/2 header list size
+(sum of name + value + 32 per field). Streams with header lists exceeding that property's
+configured value are rejected with RST_STREAM(ENHANCE_YOUR_CALM).
+Default: 64 KiB.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static readonly int DefaultMaxDecodedHeaderListBytes</code></pre>
+  </div>
+  <h5 class="fieldValue">Field Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyLimits_DefaultMaxWebSocketFramePayloadBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyLimits.DefaultMaxWebSocketFramePayloadBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyLimits.cs/#L55">View Source</a>
+  </span>
+  <h4 id="Titanium_Web_Proxy_ProxyLimits_DefaultMaxWebSocketFramePayloadBytes" data-uid="Titanium.Web.Proxy.ProxyLimits.DefaultMaxWebSocketFramePayloadBytes">DefaultMaxWebSocketFramePayloadBytes</h4>
+  <div class="markdown level1 summary"><p>Reference value only - see the type-level remarks. Matches the current default of
+<code>ProxyServer.MaxWebSocketFramePayloadBytes</code>: maximum WebSocket frame payload size the
+proxy will accept during frame-level interception (validated against the declared length
+before any payload is buffered). Raw relay (no interception) is not subject to this limit.
+Default: 16 MiB.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static readonly int DefaultMaxWebSocketFramePayloadBytes</code></pre>
+  </div>
+  <h5 class="fieldValue">Field Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyLimits_DefaultMaxWebSocketMessageBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyLimits.DefaultMaxWebSocketMessageBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyLimits.cs/#L65">View Source</a>
+  </span>
+  <h4 id="Titanium_Web_Proxy_ProxyLimits_DefaultMaxWebSocketMessageBytes" data-uid="Titanium.Web.Proxy.ProxyLimits.DefaultMaxWebSocketMessageBytes">DefaultMaxWebSocketMessageBytes</h4>
+  <div class="markdown level1 summary"><p>Reference value only - see the type-level remarks. Unlike the other fields on this type, this
+one does not correspond to any enforced <code>ProxyServer</code> property today: there is no
+cumulative-reassembled-message-size cap on the WebSocket path, only the per-frame
+<a class="xref" href="Titanium.Web.Proxy.ProxyLimits.html#Titanium_Web_Proxy_ProxyLimits_DefaultMaxWebSocketFramePayloadBytes">DefaultMaxWebSocketFramePayloadBytes</a>/<code>MaxWebSocketFramePayloadBytes</code> limit.
+This value is retained as a documented target for that still-unimplemented cumulative budget.
+Default: 64 MiB.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static readonly long DefaultMaxWebSocketMessageBytes</code></pre>
+  </div>
+  <h5 class="fieldValue">Field Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyLimits_DefaultViaPseudonym.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyLimits.DefaultViaPseudonym%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyLimits.cs/#L73">View Source</a>
+  </span>
+  <h4 id="Titanium_Web_Proxy_ProxyLimits_DefaultViaPseudonym" data-uid="Titanium.Web.Proxy.ProxyLimits.DefaultViaPseudonym">DefaultViaPseudonym</h4>
+  <div class="markdown level1 summary"><p>Unused legacy field. <code>ProxyServer.ViaHeaderPseudonym</code> defaults to
+<code>&quot;titanium-web-proxy&quot;</code> (not empty) and does not read this field; nothing in the codebase
+references it. Retained only so removing it is not itself an undocumented breaking change;
+do not treat it as authoritative for the real default.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static readonly string DefaultViaPseudonym</code></pre>
+  </div>
+  <h5 class="fieldValue">Field Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyLimits.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyLimits%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyLimits.cs/#L28" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

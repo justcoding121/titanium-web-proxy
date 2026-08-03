@@ -6,7 +6,7 @@ namespace Titanium.Web.Proxy.Http;
 
 public class KnownHeader
 {
-    public string String;
+    public string String; // NOSONAR S1104 -- Retained as a field for public binary compatibility.
     internal ByteString String8;
 
     private KnownHeader(string str)

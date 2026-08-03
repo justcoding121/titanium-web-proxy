@@ -41,7 +41,7 @@ internal static class WebSocketInterceptRelay
             onWrite: (b, o, c) => session.OnDataReceived(b, o, c));
 
         await Task.WhenAny(clientToServer, serverToClient).ConfigureAwait(false);
-        cancellationTokenSource.Cancel();
+        await cancellationTokenSource.CancelAsync();
 
         ushort? closeCode = null;
         try
@@ -51,6 +51,7 @@ internal static class WebSocketInterceptRelay
         }
         catch (OperationCanceledException)
         {
+            // Expected when either relay direction completes and cancels its peer.
         }
         finally
         {
@@ -101,7 +102,7 @@ internal static class WebSocketInterceptRelay
             await writeLock.WaitAsync().ConfigureAwait(false);
             try
             {
-                await stream.WriteAsync(wire, 0, wire.Length).ConfigureAwait(false);
+                await stream.WriteAsync(wire.AsMemory()).ConfigureAwait(false);
                 await stream.FlushAsync().ConfigureAwait(false);
             }
             finally
@@ -121,7 +122,7 @@ internal static class WebSocketInterceptRelay
     ///     transport-level I/O error); otherwise the RFC 6455 section 7.4 status code to report in a
     ///     conformant Close for the frame/fragmentation violation that ended it.
     /// </returns>
-    private static async Task<ushort?> RelayDirectionAsync(Stream source, Stream destination, IBufferPool bufferPool,
+    private static async Task<ushort?> RelayDirectionAsync(Stream source, Stream destination, IBufferPool bufferPool, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         WebSocketFrameDirection direction, long maxFramePayloadBytes, SessionEventArgs session,
         SemaphoreSlim writeLock, CancellationTokenSource cancellationTokenSource,
         Action<byte[], int, int> onRead, Action<byte[], int, int> onWrite)
@@ -134,7 +135,7 @@ internal static class WebSocketInterceptRelay
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                var read = await source.ReadAsync(buffer, 0, buffer.Length, cancellationToken)
+                var read = await source.ReadAsync(buffer.AsMemory(), cancellationToken)
                     .ConfigureAwait(false);
                 if (read == 0) return null;
 
@@ -144,7 +145,7 @@ internal static class WebSocketInterceptRelay
                 {
                     foreach (var frame in decoder.Decode(buffer, 0, read))
                     {
-                        if (!ValidateWebSocketFrame(frame, direction, out var closeCode))
+                        if (!ValidateWebSocketFrame(frame, out var closeCode))
                         {
                             // RFC 6455 §7.2: a protocol error requires closing the connection.
                             messageTracker.Reset();
@@ -181,7 +182,7 @@ internal static class WebSocketInterceptRelay
                         await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
                         try
                         {
-                            await destination.WriteAsync(wire, 0, wire.Length, cancellationToken)
+                            await destination.WriteAsync(wire.AsMemory(), cancellationToken)
                                 .ConfigureAwait(false);
                             await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
                             onWrite(wire, 0, wire.Length);
@@ -206,9 +207,11 @@ internal static class WebSocketInterceptRelay
         }
         catch (OperationCanceledException)
         {
+            // Expected during coordinated relay shutdown.
         }
         catch (IOException)
         {
+            // The peer closed the transport while the relay was shutting down.
         }
         finally
         {
@@ -234,7 +237,6 @@ internal static class WebSocketInterceptRelay
     /// </remarks>
     private static bool ValidateWebSocketFrame(
         WebSocketFrame frame,
-        WebSocketFrameDirection direction,
         out ushort closeCode)
     {
         closeCode = 1002; // Protocol Error (default)

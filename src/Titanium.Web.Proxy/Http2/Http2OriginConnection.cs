@@ -52,7 +52,7 @@ internal sealed class Http2OriginGoAwayException : IOException
 ///         to the HTTP/1.1 client is a future phase).
 ///     </para>
 /// </summary>
-internal sealed class Http2OriginConnection
+internal sealed class Http2OriginConnection : IDisposable
 {
     /// <summary>Every HTTP/2 endpoint must accept frames up to this size (RFC 7540 §4.2), so it is always safe to send.</summary>
     private const int SafeMaxFrameSize = 16384;
@@ -79,7 +79,7 @@ internal sealed class Http2OriginConnection
     private volatile bool faulted;
     private volatile bool goingAway;
     private int goAwayLastStreamId = int.MaxValue;
-    private Task? readLoopTask;
+    private int disposed;
 
     private Http2OriginConnection(TcpServerConnection connection, ILogger logger, long maxBufferedBodyBytes,
         ProxyResourceLimits resourceLimits)
@@ -123,11 +123,11 @@ internal sealed class Http2OriginConnection
 
                 var preface = Http2Helper.ConnectionPreface;
                 connection.Http2SessionStarted = true;
-                await instance.stream.WriteAsync(preface, 0, preface.Length, cancellationToken);
+                await instance.stream.WriteAsync(preface.AsMemory(), cancellationToken);
                 // Shared with the H2↔H2 MITM path (SendHttp2ClientConnectionStartupAsync).
                 await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.stream, cancellationToken);
 
-                instance.readLoopTask = instance.ReadLoopAsync(instance.connectionCts.Token);
+                _ = instance.ReadLoopAsync(instance.connectionCts.Token);
 
                 try
                 {
@@ -475,7 +475,7 @@ internal sealed class Http2OriginConnection
         await writeLock.WaitAsync(cancellationToken);
         try
         {
-            await stream.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length, cancellationToken);
+            await stream.WriteAsync(frameHeaderBuffer.AsMemory(), cancellationToken);
         }
         finally
         {
@@ -495,8 +495,8 @@ internal sealed class Http2OriginConnection
         await writeLock.WaitAsync(cancellationToken);
         try
         {
-            await stream.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length, cancellationToken);
-            await stream.WriteAsync(payload, 0, payload.Length, cancellationToken);
+            await stream.WriteAsync(frameHeaderBuffer.AsMemory(), cancellationToken);
+            await stream.WriteAsync(payload.AsMemory(), cancellationToken);
         }
         finally
         {
@@ -526,7 +526,7 @@ internal sealed class Http2OriginConnection
         }
     }
 
-    private async Task ReadLoopAsync(CancellationToken cancellationToken)
+    private async Task ReadLoopAsync(CancellationToken cancellationToken) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var frameHeaderBuffer = new byte[9];
         var isFirstFrame = true;
@@ -666,7 +666,7 @@ internal sealed class Http2OriginConnection
                             return;
                         }
 
-                        headerBlockBuffer.Write(data, 0, data.Length);
+                        await headerBlockBuffer.WriteAsync(data.AsMemory(), cancellationToken);
                         if ((flags & Http2FrameFlag.EndHeaders) != 0)
                         {
                             ProcessHeaderBlock(streamId, headerBlockBuffer.ToArray(), headerBlockEndStream);
@@ -697,7 +697,7 @@ internal sealed class Http2OriginConnection
                             return;
                         }
 
-                        headerBlockBuffer.Write(payload, 0, payload.Length);
+                        await headerBlockBuffer.WriteAsync(payload.AsMemory(), cancellationToken);
                         if ((flags & Http2FrameFlag.EndHeaders) != 0)
                         {
                             ProcessHeaderBlock(streamId, headerBlockBuffer.ToArray(), headerBlockEndStream);
@@ -715,11 +715,14 @@ internal sealed class Http2OriginConnection
                             {
                                 if (data.Length > 0)
                                 {
+                                    var tunnelDataChannel = pendingData.TunnelDataChannel ??
+                                        throw new InvalidOperationException("A tunnel stream has no data channel.");
+
                                     // Bounded channel provides backpressure; drop only if the tunnel is
                                     // already tearing down (writer completed).
                                     try
                                     {
-                                        await pendingData.TunnelDataChannel!.Writer
+                                        await tunnelDataChannel.Writer
                                             .WriteAsync(data, cancellationToken);
                                     }
                                     catch (ChannelClosedException)
@@ -906,7 +909,7 @@ internal sealed class Http2OriginConnection
         return payload.AsSpan(1, end - 1).ToArray();
     }
 
-    private void ProcessHeaderBlock(int streamId, byte[] compressed, bool endStream)
+    private void ProcessHeaderBlock(int streamId, byte[] compressed, bool endStream) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var collected = new HeaderCollection();
         ByteString status = default;
@@ -1043,8 +1046,10 @@ internal sealed class Http2OriginConnection
     ///     <c>CloseServerConnection</c>) and must not, by itself, be reported through the logging gateway
     ///     - see <see cref="Fail" />.
     /// </summary>
-    internal void Dispose()
+    public void Dispose()
     {
+        if (Interlocked.Exchange(ref disposed, 1) != 0) return;
+
         Fail(new ObjectDisposedException(nameof(Http2OriginConnection)), false);
         connectionCts.Cancel();
         connectionCts.Dispose();
@@ -1058,7 +1063,7 @@ internal sealed class Http2OriginConnection
         var totalRead = 0;
         while (bytesToRead > 0)
         {
-            var read = await stream.ReadAsync(buffer, offset, bytesToRead, cancellationToken);
+            var read = await stream.ReadAsync(buffer.AsMemory(offset, bytesToRead), cancellationToken);
             if (read == 0) break;
 
             totalRead += read;

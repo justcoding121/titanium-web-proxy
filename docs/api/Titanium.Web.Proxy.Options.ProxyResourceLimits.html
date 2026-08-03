@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Class ProxyResourceLimits | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Class ProxyResourceLimits | Titanium Web Proxy ">
+    
+    <meta name="description" content="Immutable, validated snapshot of the resource bounds a peer can make the proxy allocate: header shape, body/decompression budgets, concurrency and abuse-rate ceilings, and pool / certificate-cache sizing. Constructed only through , which validates every field up front, so an invalid limit is a construction-time exception rather than a runtime surprise discovered mid-connection.      A limit that can legitimately be turned off is typed as nullable with     null meaning &quot;disabled&quot; - an explicit state - rather than overloading     0 or a negative number to mean the same thing. Limits that must always be     enforced because disabling them would leave the proxy itself exploitable (the     concurrent-stream cap, the open-header-block frame bound) are non-nullable and always     validated to be strictly positive.       This type has no back-reference to  and no mutable state after     construction: it is meant to be handed down to subsystems by value, not looked up through     a service locator or an ambient static, so the dependency graph among consumers stays     acyclic per the plan&#39;s &quot;Constraints on the policy layer&quot; section.">
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+
+        <div id="search-results">
+          <div class="search-list">Search Results for <span></span></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits">
+
+
+
+  <h1 id="Titanium_Web_Proxy_Options_ProxyResourceLimits" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits" class="text-break">Class ProxyResourceLimits</h1>
+  <div class="markdown level0 summary"><p>Immutable, validated snapshot of the resource bounds a peer can make the proxy allocate:
+header shape, body/decompression budgets, concurrency and abuse-rate ceilings, and pool /
+certificate-cache sizing. Constructed only through <a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_Create_System_Int64_System_Int32_System_Int64_System_Nullable_System_Int64__System_Nullable_System_Int64__System_Nullable_System_Double__System_Nullable_System_Int32__System_Int32_System_Nullable_System_Int32__System_Int32_System_TimeSpan_System_Boolean_System_Int32_System_Nullable_System_Int32__">Create(long, int, long, long?, long?, double?, int?, int, int?, int, TimeSpan, bool, int, int?)</a>, which validates
+every field up front, so an invalid limit is a construction-time exception rather than a
+runtime surprise discovered mid-connection.</p>
+<p>
+    A limit that can legitimately be turned off is typed as nullable with
+    <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> meaning "disabled" - an explicit state - rather than overloading
+    <code>0</code> or a negative number to mean the same thing. Limits that must always be
+    enforced because disabling them would leave the proxy itself exploitable (the
+    concurrent-stream cap, the open-header-block frame bound) are non-nullable and always
+    validated to be strictly positive.
+</p>
+<p>
+    This type has no back-reference to <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html">ProxyServer</a> and no mutable state after
+    construction: it is meant to be handed down to subsystems by value, not looked up through
+    a service locator or an ambient static, so the dependency graph among consumers stays
+    acyclic per the plan's "Constraints on the policy layer" section.
+</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <div class="inheritance">
+    <h5>Inheritance</h5>
+    <div class="level0"><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object">object</a></div>
+    <div class="level1"><span class="xref">ProxyResourceLimits</span></div>
+  </div>
+  <div class="inheritedMembers">
+    <h5>Inherited Members</h5>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object)">object.Equals(object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object-system-object)">object.Equals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gethashcode">object.GetHashCode()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gettype">object.GetType()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.referenceequals">object.ReferenceEquals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.tostring">object.ToString()</a>
+    </div>
+  </div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.html">Titanium</a>.<a class="xref" href="Titanium.Web.html">Web</a>.<a class="xref" href="Titanium.Web.Proxy.html">Proxy</a>.<a class="xref" href="Titanium.Web.Proxy.Options.html">Options</a></h6>
+  <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
+  <h5 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public sealed class ProxyResourceLimits</code></pre>
+  </div>
+  <h3 id="properties">Properties
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_ConnectionPoolingEnabled.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.ConnectionPoolingEnabled%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L106">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_ConnectionPoolingEnabled_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.ConnectionPoolingEnabled*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_ConnectionPoolingEnabled" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.ConnectionPoolingEnabled">ConnectionPoolingEnabled</h4>
+  <div class="markdown level1 summary"><p>Whether upstream TCP connection pooling is enabled. Disabling pooling is an explicit choice
+represented by this flag, not by giving <a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCachedConnectionsPerHost">MaxCachedConnectionsPerHost</a> a
+sentinel value that also has to be validated as &quot;not zero, not negative, unless it means
+disabled&quot;.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool ConnectionPoolingEnabled { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_Default.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.Default%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L155">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_Default_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.Default*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_Default" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.Default">Default</h4>
+  <div class="markdown level1 summary"><p>Today's shipped values, carried forward as the <code>Balanced</code> profile's starting point
+per the plan's rollout section: this is not a behavior change for existing traffic. Limits
+newly introduced by the hardening plan (header aggregate bytes, decompression ratio,
+CONTINUATION frame count, reset budget, admission cap) are set high enough that no
+browser-generated traffic should reach them; they are expected to move once the benchmark
+project has real numbers behind them.</p>
+<p>
+    <a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCertificateCacheEntries">MaxCertificateCacheEntries</a> is the one deliberate exception to "unchanged
+    for existing traffic": measurement showed process memory holding steady at ~100 MB
+    above baseline after closing every browser tab and idling for minutes, tracking the
+    number of distinct MITM'd hosts rather than any live connection or session count.
+    Unbounded in-memory certificate retention is a defect, not a compatibility guarantee,
+    so the shipped default now bounds it at 1024 entries (roughly 10 MB, comfortably above
+    real single-session browsing) rather than leaving it unbounded like every other
+    nullable limit here defaults to.
+</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static ProxyResourceLimits Default { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html">ProxyResourceLimits</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCachedConnectionsPerHost.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCachedConnectionsPerHost%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L114">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCachedConnectionsPerHost_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCachedConnectionsPerHost*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCachedConnectionsPerHost" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCachedConnectionsPerHost">MaxCachedConnectionsPerHost</h4>
+  <div class="markdown level1 summary"><p>Maximum pooled connections cached per remote host. Only meaningful when
+<a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_ConnectionPoolingEnabled">ConnectionPoolingEnabled</a> is <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a>; always validated as
+strictly positive regardless, so a future caller cannot re-introduce the &quot;0 spins forever
+holding the pool lock&quot; defect by flipping the flag without also fixing this value.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int MaxCachedConnectionsPerHost { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCertificateCacheEntries.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCertificateCacheEntries%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L124">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCertificateCacheEntries_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCertificateCacheEntries*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCertificateCacheEntries" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCertificateCacheEntries">MaxCertificateCacheEntries</h4>
+  <div class="markdown level1 summary"><p>Maximum number of generated leaf certificates held in the in-memory certificate cache.
+Each entry holds a full <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.x509certificate2">X509Certificate2</a>
+with its private key, so unlike most other limits in this type this one defends against
+unbounded memory growth from ordinary browsing (many distinct MITM'd hosts), not just
+against an adversarial peer. <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> disables the bound and is <em>not</em>
+the shipped default - see <a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_Default">Default</a>.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int? MaxCertificateCacheEntries { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCertificateDiskCacheEntries.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCertificateDiskCacheEntries%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L135">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCertificateDiskCacheEntries_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCertificateDiskCacheEntries*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCertificateDiskCacheEntries" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCertificateDiskCacheEntries">MaxCertificateDiskCacheEntries</h4>
+  <div class="markdown level1 summary"><p>Maximum number of generated leaf certificate files retained in the on-disk cache
+(Certificates.CertificateManager.SaveFakeCertificates), pruned independently
+of <a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCertificateCacheEntries">MaxCertificateCacheEntries</a>. Disk is far cheaper than the in-memory cache's
+live <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.x509certificate2">X509Certificate2</a> handles,
+and a warm disk cache avoids repeating expensive certificate generation across process
+restarts, so this bound is deliberately independent and typically much larger (or
+unbounded). <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> disables the bound.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int? MaxCertificateDiskCacheEntries { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxConcurrentClients.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxConcurrentClients%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L66">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxConcurrentClients_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxConcurrentClients*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxConcurrentClients" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxConcurrentClients">MaxConcurrentClients</h4>
+  <div class="markdown level1 summary"><p>Maximum number of concurrently admitted client connections, checked by the admission gate
+at handler entry/exit rather than the delayed <code>ClientConnectionCount</code>. <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a>
+disables global admission control.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int? MaxConcurrentClients { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxConcurrentStreamsPerConnection.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxConcurrentStreamsPerConnection%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L74">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxConcurrentStreamsPerConnection_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxConcurrentStreamsPerConnection*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxConcurrentStreamsPerConnection" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxConcurrentStreamsPerConnection">MaxConcurrentStreamsPerConnection</h4>
+  <div class="markdown level1 summary"><p>Proxy-owned cap on concurrent HTTP/2 streams per connection. Always enforced: this is the
+single source of truth consolidating what were previously two independent mechanisms, and
+is also the value advertised to the origin in the relayed SETTINGS frame so the advertised
+and enforced values never disagree.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int MaxConcurrentStreamsPerConnection { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxDecodedBodyBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDecodedBodyBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L53">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxDecodedBodyBytes_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDecodedBodyBytes*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxDecodedBodyBytes" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDecodedBodyBytes">MaxDecodedBodyBytes</h4>
+  <div class="markdown level1 summary"><p>Maximum cumulative decompressed body bytes produced for a single request or response.
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> disables the budget. Always checked alongside
+<a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxDecompressionRatio">MaxDecompressionRatio</a>, since a ratio alone cannot bound total memory for a
+small compressed input that expands enormously without also capping the output side.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public long? MaxDecodedBodyBytes { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxDecompressionRatio.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDecompressionRatio%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L59">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxDecompressionRatio_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDecompressionRatio*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxDecompressionRatio" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDecompressionRatio">MaxDecompressionRatio</h4>
+  <div class="markdown level1 summary"><p>Maximum allowed ratio of decompressed to compressed bytes. <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> disables
+the ratio check (relying on <a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxDecodedBodyBytes">MaxDecodedBodyBytes</a> alone).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public double? MaxDecompressionRatio { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.double">double</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxEncodedBodyBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxEncodedBodyBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L45">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxEncodedBodyBytes_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxEncodedBodyBytes*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxEncodedBodyBytes" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxEncodedBodyBytes">MaxEncodedBodyBytes</h4>
+  <div class="markdown level1 summary"><p>Maximum cumulative compressed/on-wire body bytes read for a single request or response.
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> disables the budget.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public long? MaxEncodedBodyBytes { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxHeaderAggregateBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHeaderAggregateBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L39">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxHeaderAggregateBytes_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHeaderAggregateBytes*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxHeaderAggregateBytes" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHeaderAggregateBytes">MaxHeaderAggregateBytes</h4>
+  <div class="markdown level1 summary"><p>Maximum aggregate size of all header fields in one request or response, in bytes.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public long MaxHeaderAggregateBytes { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxHeaderCount.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHeaderCount%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L36">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxHeaderCount_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHeaderCount*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxHeaderCount" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHeaderCount">MaxHeaderCount</h4>
+  <div class="markdown level1 summary"><p>Maximum number of header fields accepted in one request or response.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int MaxHeaderCount { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxHeaderLineBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHeaderLineBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L33">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxHeaderLineBytes_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHeaderLineBytes*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxHeaderLineBytes" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxHeaderLineBytes">MaxHeaderLineBytes</h4>
+  <div class="markdown level1 summary"><p>Maximum length of a single header line (request/status line or one header field), in bytes.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public long MaxHeaderLineBytes { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxOpenHeaderBlockDuration.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOpenHeaderBlockDuration%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L98">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxOpenHeaderBlockDuration_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOpenHeaderBlockDuration*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxOpenHeaderBlockDuration" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOpenHeaderBlockDuration">MaxOpenHeaderBlockDuration</h4>
+  <div class="markdown level1 summary"><p>Maximum wall-clock duration an HTTP/2 header block may stay open (from the initial
+HEADERS/PUSH_PROMISE frame sent without END_HEADERS through its terminating
+CONTINUATION), independent of <a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxOpenHeaderBlockFrames">MaxOpenHeaderBlockFrames</a>. Bounds a slow
+CONTINUATION-trickle variant that stays under the frame-count cap by pacing itself, which
+a frame-count-only bound cannot catch on its own. Always enforced.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan MaxOpenHeaderBlockDuration { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxOpenHeaderBlockFrames.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOpenHeaderBlockFrames%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L89">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxOpenHeaderBlockFrames_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOpenHeaderBlockFrames*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxOpenHeaderBlockFrames" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOpenHeaderBlockFrames">MaxOpenHeaderBlockFrames</h4>
+  <div class="markdown level1 summary"><p>Maximum number of CONTINUATION frames tolerated for a single open HTTP/2 header block,
+independent of the existing byte cap. Always enforced: zero-length CONTINUATION frames
+never trip a byte-based check, and only one header block may be open per connection
+direction, so an unbounded frame count also head-of-line blocks every other stream.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int MaxOpenHeaderBlockFrames { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxPeerInitiatedIncompleteStreamResets.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxPeerInitiatedIncompleteStreamResets%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L81">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxPeerInitiatedIncompleteStreamResets_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxPeerInitiatedIncompleteStreamResets*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxPeerInitiatedIncompleteStreamResets" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxPeerInitiatedIncompleteStreamResets">MaxPeerInitiatedIncompleteStreamResets</h4>
+  <div class="markdown level1 summary"><p>Maximum number of peer-initiated resets of streams that never completed, per connection,
+before the proxy tears the connection down. Proxy-initiated resets (e.g. in response to a
+client cancellation) do not count. <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> disables the reset budget.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int? MaxPeerInitiatedIncompleteStreamResets { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="methods">Methods
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_Create_System_Int64_System_Int32_System_Int64_System_Nullable_System_Int64__System_Nullable_System_Int64__System_Nullable_System_Double__System_Nullable_System_Int32__System_Int32_System_Nullable_System_Int32__System_Int32_System_TimeSpan_System_Boolean_System_Int32_System_Nullable_System_Int32__.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.Create(System.Int64%2CSystem.Int32%2CSystem.Int64%2CSystem.Nullable%7BSystem.Int64%7D%2CSystem.Nullable%7BSystem.Int64%7D%2CSystem.Nullable%7BSystem.Double%7D%2CSystem.Nullable%7BSystem.Int32%7D%2CSystem.Int32%2CSystem.Nullable%7BSystem.Int32%7D%2CSystem.Int32%2CSystem.TimeSpan%2CSystem.Boolean%2CSystem.Int32%2CSystem.Nullable%7BSystem.Int32%7D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L177">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_Create_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.Create*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_Create_System_Int64_System_Int32_System_Int64_System_Nullable_System_Int64__System_Nullable_System_Int64__System_Nullable_System_Double__System_Nullable_System_Int32__System_Int32_System_Nullable_System_Int32__System_Int32_System_TimeSpan_System_Boolean_System_Int32_System_Nullable_System_Int32__" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.Create(System.Int64,System.Int32,System.Int64,System.Nullable{System.Int64},System.Nullable{System.Int64},System.Nullable{System.Double},System.Nullable{System.Int32},System.Int32,System.Nullable{System.Int32},System.Int32,System.TimeSpan,System.Boolean,System.Int32,System.Nullable{System.Int32})">Create(long, int, long, long?, long?, double?, int?, int, int?, int, TimeSpan, bool, int, int?)</h4>
+  <div class="markdown level1 summary"><p>Validates and constructs a <a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html">ProxyResourceLimits</a> snapshot. Every non-nullable
+bound must be strictly positive; every nullable bound, if supplied, must also be strictly
+positive (use <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> to disable rather than a sentinel number).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static ProxyResourceLimits Create(long maxHeaderLineBytes, int maxHeaderCount, long maxHeaderAggregateBytes, long? maxEncodedBodyBytes, long? maxDecodedBodyBytes, double? maxDecompressionRatio, int? maxConcurrentClients, int maxConcurrentStreamsPerConnection, int? maxPeerInitiatedIncompleteStreamResets, int maxOpenHeaderBlockFrames, TimeSpan maxOpenHeaderBlockDuration, bool connectionPoolingEnabled, int maxCachedConnectionsPerHost, int? maxCertificateCacheEntries)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a></td>
+        <td><span class="parametername">maxHeaderLineBytes</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td><span class="parametername">maxHeaderCount</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a></td>
+        <td><span class="parametername">maxHeaderAggregateBytes</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a>?</td>
+        <td><span class="parametername">maxEncodedBodyBytes</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a>?</td>
+        <td><span class="parametername">maxDecodedBodyBytes</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.double">double</a>?</td>
+        <td><span class="parametername">maxDecompressionRatio</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a>?</td>
+        <td><span class="parametername">maxConcurrentClients</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td><span class="parametername">maxConcurrentStreamsPerConnection</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a>?</td>
+        <td><span class="parametername">maxPeerInitiatedIncompleteStreamResets</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td><span class="parametername">maxOpenHeaderBlockFrames</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a></td>
+        <td><span class="parametername">maxOpenHeaderBlockDuration</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td><span class="parametername">connectionPoolingEnabled</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td><span class="parametername">maxCachedConnectionsPerHost</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a>?</td>
+        <td><span class="parametername">maxCertificateCacheEntries</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html">ProxyResourceLimits</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="exceptions">Exceptions</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Condition</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.argumentoutofrangeexception">ArgumentOutOfRangeException</a></td>
+        <td><p>A supplied value is zero or negative.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits_WithCertificateCacheBounds_System_Nullable_System_Int32__System_Nullable_System_Int32__.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits.WithCertificateCacheBounds(System.Nullable%7BSystem.Int32%7D%2CSystem.Nullable%7BSystem.Int32%7D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L240">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_WithCertificateCacheBounds_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.WithCertificateCacheBounds*"></a>
+  <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_WithCertificateCacheBounds_System_Nullable_System_Int32__System_Nullable_System_Int32__" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.WithCertificateCacheBounds(System.Nullable{System.Int32},System.Nullable{System.Int32})">WithCertificateCacheBounds(int?, int?)</h4>
+  <div class="markdown level1 summary"><p>Returns a copy of this instance with <a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCertificateCacheEntries">MaxCertificateCacheEntries</a> and
+<a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCertificateDiskCacheEntries">MaxCertificateDiskCacheEntries</a> replaced, leaving every other limit
+unchanged. Added instead of extending <a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_Create_System_Int64_System_Int32_System_Int64_System_Nullable_System_Int64__System_Nullable_System_Int64__System_Nullable_System_Double__System_Nullable_System_Int32__System_Int32_System_Nullable_System_Int32__System_Int32_System_TimeSpan_System_Boolean_System_Int32_System_Nullable_System_Int32__">Create(long, int, long, long?, long?, double?, int?, int, int?, int, TimeSpan, bool, int, int?)</a> - which is public API already
+shipped with a fixed parameter list - so that adding the independent disk-cache bound
+could not be a breaking change for existing callers.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public ProxyResourceLimits WithCertificateCacheBounds(int? maxCertificateCacheEntries, int? maxCertificateDiskCacheEntries)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a>?</td>
+        <td><span class="parametername">maxCertificateCacheEntries</span></td>
+        <td><p>See <a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCertificateCacheEntries">MaxCertificateCacheEntries</a>. <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> disables the bound.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a>?</td>
+        <td><span class="parametername">maxCertificateDiskCacheEntries</span></td>
+        <td><p>See <a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxCertificateDiskCacheEntries">MaxCertificateDiskCacheEntries</a>. <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> disables the bound.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html">ProxyResourceLimits</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="exceptions">Exceptions</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Condition</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.argumentoutofrangeexception">ArgumentOutOfRangeException</a></td>
+        <td><p>A supplied value is zero or negative.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Options_ProxyResourceLimits.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Options.ProxyResourceLimits%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Options/ProxyResourceLimits.cs/#L26" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

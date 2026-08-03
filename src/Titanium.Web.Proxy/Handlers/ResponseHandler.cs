@@ -24,7 +24,7 @@ public partial class ProxyServer
     /// </summary>
     /// <param name="args">The session event arguments.</param>
     /// <returns> The task.</returns>
-    private async Task HandleHttpSessionResponse(SessionEventArgs args)
+    private async Task HandleHttpSessionResponse(SessionEventArgs args) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var cancellationToken = args.CancellationToken;
 
@@ -297,7 +297,7 @@ public partial class ProxyServer
         }
 
         if (!args.CancellationTokenSource.IsCancellationRequested)
-            args.CancellationTokenSource.Cancel();
+            await args.CancellationTokenSource.CancelAsync();
     }
 
     /// <summary>

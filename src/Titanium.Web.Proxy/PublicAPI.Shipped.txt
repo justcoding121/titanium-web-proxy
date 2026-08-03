@@ -69,35 +69,35 @@ static readonly Titanium.Web.Proxy.ProxyLimits.DefaultMaxWebSocketFramePayloadBy
 static readonly Titanium.Web.Proxy.ProxyLimits.DefaultMaxWebSocketMessageBytes -> long
 static readonly Titanium.Web.Proxy.ProxyLimits.DefaultViaPseudonym -> string!
 static Titanium.Web.Proxy.Http.KnownHeader.implicit operator Titanium.Web.Proxy.Http.KnownHeader!(string! str) -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.Accept -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.AcceptEncoding -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.Authorization -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.Connection -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ConnectionClose -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ConnectionKeepAlive -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ContentEncoding -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingBrotli -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingDeflate -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingGzip -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ContentLength -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ContentLengthHttp2 -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ContentType -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ContentTypeBoundary -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ContentTypeCharset -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.Expect -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.Expect100Continue -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.Host -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.Location -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ProxyAuthenticate -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ProxyAuthorization -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ProxyAuthorizationBasic -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ProxyConnection -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.ProxyConnectionClose -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.Trailer -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.TransferEncoding -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.TransferEncodingChunked -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.Upgrade -> Titanium.Web.Proxy.Http.KnownHeader!
-static Titanium.Web.Proxy.Http.KnownHeaders.UpgradeWebsocket -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.Accept -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.AcceptEncoding -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.Authorization -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.Connection -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ConnectionClose -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ConnectionKeepAlive -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentEncoding -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingBrotli -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingDeflate -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingGzip -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentLength -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentLengthHttp2 -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentType -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentTypeBoundary -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentTypeCharset -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.Expect -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.Expect100Continue -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.Host -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.Location -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ProxyAuthenticate -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ProxyAuthorization -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ProxyAuthorizationBasic -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ProxyConnection -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ProxyConnectionClose -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.Trailer -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.TransferEncoding -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.TransferEncodingChunked -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.Upgrade -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.UpgradeWebsocket -> Titanium.Web.Proxy.Http.KnownHeader!
 static Titanium.Web.Proxy.Models.HttpHeader.Encoding.get -> System.Text.Encoding!
 static Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Failed() -> Titanium.Web.Proxy.Models.ProxyAuthenticationContext!
 static Titanium.Web.Proxy.Models.ProxyAuthenticationContext.Succeeded() -> Titanium.Web.Proxy.Models.ProxyAuthenticationContext!

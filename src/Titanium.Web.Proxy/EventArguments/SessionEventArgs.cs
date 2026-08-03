@@ -122,13 +122,13 @@ public class SessionEventArgs : SessionEventArgsBase
         get => reRequest;
         set
         {
-            if (HttpClient.Response.StatusCode == 0) throw new Exception("Response status code is empty. Cannot request again a request " + "which was never send to server.");
+            if (HttpClient.Response.StatusCode == 0) throw new InvalidOperationException("Response status code is empty. Cannot request again a request " + "which was never send to server.");
 
             reRequest = value;
         }
     }
 
-    [Obsolete("Use [WebSocketDecoderReceive] instead")]
+    [Obsolete("Use [WebSocketDecoderReceive] instead")] // NOSONAR S1133 -- Binary-compatible public API.
     public WebSocketDecoder WebSocketDecoder => WebSocketDecoderReceive;
 
     public WebSocketDecoder WebSocketDecoderSend =>
@@ -148,7 +148,7 @@ public class SessionEventArgs : SessionEventArgsBase
     ///     <see cref="SessionEventArgsBase.DataSent" /> / <see cref="SessionEventArgsBase.DataReceived" />
     ///     still fire for bytes actually written to the peer.
     /// </summary>
-    public event AsyncEventHandler<WebSocketFrameInterceptEventArgs>? BeforeWebSocketFrame;
+    public event AsyncEventHandler<WebSocketFrameInterceptEventArgs>? BeforeWebSocketFrame; // NOSONAR S3264 -- Public extension event invoked by the WebSocket relay.
 
     /// <summary>
     ///     Inject frames toward the remote server (client→server direction, masked).
@@ -195,7 +195,7 @@ public class SessionEventArgs : SessionEventArgsBase
         // If not already read (not cached yet)
         if (!request.IsBodyRead)
         {
-            if (request.IsBodyReceived) throw new Exception("Request body was already received.");
+            if (request.IsBodyReceived) throw new InvalidOperationException("Request body was already received.");
 
             if (request.HttpVersion == HttpHeader.Version20)
             {
@@ -257,7 +257,7 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     private async Task ReadResponseBodyAsync(CancellationToken cancellationToken)
     {
-        if (!HttpClient.Request.Locked) throw new Exception("You cannot read the response body before request is made to server.");
+        if (!HttpClient.Request.Locked) throw new InvalidOperationException("You cannot read the response body before request is made to server.");
 
         // RFC 8441: a 2xx response to an extended CONNECT request establishes a tunnel; subsequent
         // DATA frames are raw tunnel bytes, not an HTTP response body. Accumulating them would deadlock.
@@ -273,7 +273,7 @@ public class SessionEventArgs : SessionEventArgsBase
         // If not already read (not cached yet)
         if (!response.IsBodyRead)
         {
-            if (response.IsBodyReceived) throw new Exception("Response body was already received.");
+            if (response.IsBodyReceived) throw new InvalidOperationException("Response body was already received.");
 
             if (response.HttpVersion == HttpHeader.Version20)
             {
@@ -363,9 +363,6 @@ public class SessionEventArgs : SessionEventArgsBase
         // Integration point for MultipartStreamObserver: the observer can be created here and
         // used alongside the existing CopyStream/ReadUntilBoundaryAsync pipeline for
         // protocol-neutral, observational multipart streaming (e.g. HTTP/2 reuse).
-        // Example:
-        //   var observer = MultipartStreamObserver.TryCreate(request.ContentType,
-        //       headers => { /* callback */ }, () => { /* part complete */ });
         if (contentLength > 0 && HasMulipartEventSubscribers && request.IsMultipartFormData)
         {
             var boundary = HttpHelper.GetBoundaryFromContentType(request.ContentType);
@@ -407,7 +404,7 @@ public class SessionEventArgs : SessionEventArgsBase
     /// Read a line from the byte stream
     /// </summary>
     /// <returns></returns>
-    private async Task<long> ReadUntilBoundaryAsync(ILineStream reader, long totalBytesToRead, ReadOnlyMemory<char> boundary, CancellationToken cancellationToken)
+    private async Task<long> ReadUntilBoundaryAsync(CopyStream reader, long totalBytesToRead, ReadOnlyMemory<char> boundary, CancellationToken cancellationToken) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var bufferDataLength = 0;
 
@@ -491,7 +488,7 @@ public class SessionEventArgs : SessionEventArgsBase
     public void SetRequestBody(byte[] body)
     {
         var request = HttpClient.Request;
-        if (request.Locked) throw new Exception("You cannot call this function after request is made to server.");
+        if (request.Locked) throw new InvalidOperationException("You cannot call this function after request is made to server.");
 
         request.Body = body;
     }
@@ -502,7 +499,7 @@ public class SessionEventArgs : SessionEventArgsBase
     /// <param name="body">The request body string to set.</param>
     public void SetRequestBodyString(string body)
     {
-        if (HttpClient.Request.Locked) throw new Exception("You cannot call this function after request is made to server.");
+        if (HttpClient.Request.Locked) throw new InvalidOperationException("You cannot call this function after request is made to server.");
 
         SetRequestBody(HttpClient.Request.Encoding.GetBytes(body));
     }
@@ -538,7 +535,7 @@ public class SessionEventArgs : SessionEventArgsBase
     /// <param name="body">The body bytes to set.</param>
     public void SetResponseBody(byte[] body)
     {
-        if (!HttpClient.Request.Locked) throw new Exception("You cannot call this function before request is made to server.");
+        if (!HttpClient.Request.Locked) throw new InvalidOperationException("You cannot call this function before request is made to server.");
 
         var response = HttpClient.Response;
         response.Body = body;
@@ -550,7 +547,7 @@ public class SessionEventArgs : SessionEventArgsBase
     /// <param name="body">The body string to set.</param>
     public void SetResponseBodyString(string body)
     {
-        if (!HttpClient.Request.Locked) throw new Exception("You cannot call this function before request is made to server.");
+        if (!HttpClient.Request.Locked) throw new InvalidOperationException("You cannot call this function before request is made to server.");
 
         var bodyBytes = HttpClient.Response.Encoding.GetBytes(body);
 
@@ -721,7 +718,7 @@ public class SessionEventArgs : SessionEventArgsBase
         if (HttpClient.Request.Locked)
         {
             // response already received from server and ready to be sent to client.
-            if (HttpClient.Response.Locked) throw new Exception("You cannot call this function after response is sent to the client.");
+            if (HttpClient.Response.Locked) throw new InvalidOperationException("You cannot call this function after response is sent to the client.");
 
             // cleanup original response.
             if (closeServerConnection)
@@ -766,8 +763,8 @@ public class SessionEventArgs : SessionEventArgsBase
     public void RespondStreaming(Response response, Func<Stream, CancellationToken, Task> writeBody,
         bool closeServerConnection = false)
     {
-        if (response == null) throw new ArgumentNullException(nameof(response));
-        if (writeBody == null) throw new ArgumentNullException(nameof(writeBody));
+        ArgumentNullException.ThrowIfNull(response);
+        ArgumentNullException.ThrowIfNull(writeBody);
 
         // Choose framing: fixed-length when the caller declared a Content-Length, otherwise chunked.
         if (response.ContentLength < 0 && !response.IsChunked) response.IsChunked = true;

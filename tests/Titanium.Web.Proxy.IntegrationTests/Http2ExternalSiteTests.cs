@@ -168,7 +168,7 @@ public class Http2ExternalSiteTests
         return ex.InnerException is System.Net.Sockets.SocketException;
     }
 
-    private static bool ValidateAgainstProxyRoot(ProxyServer proxy, X509Certificate certificate,
+    private static bool ValidateAgainstProxyRoot(ProxyServer proxy, X509Certificate? certificate,
         SslPolicyErrors sslPolicyErrors)
     {
         const SslPolicyErrors fatalErrors =

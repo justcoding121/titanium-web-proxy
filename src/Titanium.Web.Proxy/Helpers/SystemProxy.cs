@@ -10,11 +10,20 @@ namespace Titanium.Web.Proxy.Helpers;
 
 internal class HttpSystemProxyValue
 {
+    private readonly string protocol;
+
     public HttpSystemProxyValue(string hostName, int port, ProxyProtocolType protocolType)
     {
         HostName = hostName;
         Port = port;
         ProtocolType = protocolType;
+        protocol = protocolType switch
+        {
+            ProxyProtocolType.Http => ProxyServer.UriSchemeHttp,
+            ProxyProtocolType.Https => ProxyServer.UriSchemeHttps,
+            _ => throw new ArgumentOutOfRangeException(nameof(protocolType), protocolType,
+                "Only HTTP and HTTPS proxy values are supported.")
+        };
     }
 
     internal string HostName { get; }
@@ -25,19 +34,6 @@ internal class HttpSystemProxyValue
 
     public override string ToString()
     {
-        string protocol;
-        switch (ProtocolType)
-        {
-            case ProxyProtocolType.Http:
-                protocol = ProxyServer.UriSchemeHttp;
-                break;
-            case ProxyProtocolType.Https:
-                protocol = ProxyServer.UriSchemeHttps;
-                break;
-            default:
-                throw new Exception("Unsupported protocol type");
-        }
-
         return $"{protocol}={HostName}:{Port}";
     }
 }
@@ -87,8 +83,6 @@ internal class SystemProxyManager : IDisposable
 
                 return false;
             };
-            NativeMethods.Handler = consoleEventHandler;
-
             // On console control events, restore system proxy before the process exits.
             NativeMethods.SetConsoleCtrlHandler(consoleEventHandler, true);
         }
@@ -103,18 +97,26 @@ internal class SystemProxyManager : IDisposable
     /// </summary>
     public void Dispose()
     {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
         if (disposed) return;
-        disposed = true;
 
-        AppDomain.CurrentDomain.ProcessExit -= processExitHandler;
-        AppDomain.CurrentDomain.UnhandledException -= unhandledExceptionHandler;
-
-        if (consoleEventHandler != null)
+        if (disposing)
         {
-            NativeMethods.SetConsoleCtrlHandler(consoleEventHandler, false);
-            if (ReferenceEquals(NativeMethods.Handler, consoleEventHandler))
-                NativeMethods.Handler = null;
+            AppDomain.CurrentDomain.ProcessExit -= processExitHandler;
+            AppDomain.CurrentDomain.UnhandledException -= unhandledExceptionHandler;
+
+            if (consoleEventHandler != null)
+            {
+                NativeMethods.SetConsoleCtrlHandler(consoleEventHandler, false);
+            }
         }
+
+        disposed = true;
     }
 
     /// <summary>
@@ -288,7 +290,7 @@ internal class SystemProxyManager : IDisposable
         }
     }
 
-    internal ProxyInfo? GetProxyInfoFromRegistry()
+    internal static ProxyInfo? GetProxyInfoFromRegistry()
     {
         using (var reg = OpenInternetSettingsKey())
         {
@@ -298,7 +300,7 @@ internal class SystemProxyManager : IDisposable
         }
     }
 
-    private ProxyInfo GetProxyInfoFromRegistry(RegistryKey reg)
+    private static ProxyInfo GetProxyInfoFromRegistry(RegistryKey reg)
     {
         var proxyEnableValue = reg.GetValue(RegProxyEnable);
         var pi = new ProxyInfo(null,

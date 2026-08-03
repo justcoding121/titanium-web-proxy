@@ -56,12 +56,13 @@ public partial class ProxyServer
 
         try
         {
-            endPoint.QuicListener = QuicListener.ListenAsync(listenerOptions).GetAwaiter().GetResult();
+            endPoint.QuicListener = QuicListener.ListenAsync(listenerOptions, cts.Token).AsTask()
+                .GetAwaiter().GetResult();
             endPoint.Port = endPoint.QuicListener.LocalEndPoint.Port;
         }
         catch (Exception ex)
         {
-            throw new Exception(
+            throw new InvalidOperationException(
                 $"QUIC endpoint {endPoint.IpAddress}:{endPoint.Port} failed to start. " +
                 "Check inner exception for details.", ex);
         }
@@ -74,7 +75,7 @@ public partial class ProxyServer
     ///     Stops the <see cref="QuicListener" /> for the given endpoint and waits for the accept loop
     ///     to exit. Called from <see cref="StopCore" />.
     /// </summary>
-    private void QuitListenQuic(TransparentQuicProxyEndPoint endPoint)
+    private static void QuitListenQuic(TransparentQuicProxyEndPoint endPoint)
     {
         var listener = endPoint.QuicListener;
         endPoint.QuicListener = null;
@@ -96,8 +97,8 @@ public partial class ProxyServer
         CancellationToken cancellationToken)
     {
         var sniHostName = clientHello.ServerName;
-        var remoteEndPoint = (IPEndPoint)connection.RemoteEndPoint;
-        var localEndPoint = (IPEndPoint)connection.LocalEndPoint;
+        var remoteEndPoint = connection.RemoteEndPoint;
+        var localEndPoint = connection.LocalEndPoint;
 
         // Resolve original (pre-NAT) destination.
         string destHost;
@@ -223,7 +224,7 @@ public partial class ProxyServer
             if (!endPoint.PendingQuicAuthArgs.TryGetValue(connection, out var authArgs))
             {
                 // No auth args means the options callback failed or was skipped — reject this connection.
-                _ = connection.CloseAsync(0x100).AsTask();
+                _ = connection.CloseAsync(0x100, cancellationToken).AsTask();
                 continue;
             }
             endPoint.PendingQuicAuthArgs.Remove(connection);
@@ -257,7 +258,7 @@ public partial class ProxyServer
             }
             finally
             {
-                await connection.CloseAsync(0x100 /* H3_NO_ERROR */);
+                await connection.CloseAsync(0x100 /* H3_NO_ERROR */, cancellationToken);
             }
         }
     }

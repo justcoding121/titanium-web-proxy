@@ -7,11 +7,11 @@
 #
 
 # Self-elevate the script if required.
-if (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] 'Administrator')) {
+if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] 'Administrator')) {
 	if ([int](Get-CimInstance -Class Win32_OperatingSystem | Select-Object -ExpandProperty BuildNumber) -ge 6000) {
 		$CommandLine = "-File `"" + $MyInvocation.MyCommand.Path + "`" " + $MyInvocation.UnboundArguments
 		Start-Process -FilePath PowerShell.exe -Verb Runas -ArgumentList $CommandLine
-		Exit
+		exit
 	}
 }
 
@@ -29,12 +29,12 @@ if (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 # Check if the executable file exists.
 if(!$ExeFileInfo.Exists) {
 	# OH NO the executable was not found.
-	Write-host "Service executable not found $ServiceExePath"
+	Write-Host "Service executable not found $ServiceExePath"
 	Write-Host "Publish the project first (dotnet publish -c Release -r win-x64 --self-contained false -o publish) and run this script from the publish output."
 
 }else{
 	# Lets install the service.
-	Write-host "Installing service $ServiceExePath"
+	Write-Host "Installing service $ServiceExePath"
 	New-Service -Name $ServiceName -DisplayName $ServiceDisplayName -BinaryPathName $ServiceExePath -Description "Titanium Web Proxy HTTP(S) reverse/explicit proxy example service" -StartupType "Automatic"
 	# Service installed, lets start it.
 	Start-Service -Name $ServiceName

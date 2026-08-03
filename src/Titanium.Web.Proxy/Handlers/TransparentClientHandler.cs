@@ -35,7 +35,7 @@ public partial class ProxyServer
         return HandleClient(endPoint, clientConnection, endPoint.Port, cancellationTokenSource, cancellationToken);
     }
 
-    private async Task HandleClient(TransparentBaseProxyEndPoint endPoint, TcpClientConnection clientConnection,
+    private async Task HandleClient(TransparentBaseProxyEndPoint endPoint, TcpClientConnection clientConnection, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         int port, CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken,
         string? socksTargetHost = null)
     {
@@ -56,8 +56,6 @@ public partial class ProxyServer
                 var args = new BeforeSslAuthenticateEventArgs(this, clientConnection, cancellationTokenSource,
                     httpsHostName);
 
-                // seed the forward target from the endpoint's fixed forward configuration (if any);
-                // the BeforeSslAuthenticate event can still override it per request.
                 var forwardHost = endPoint.ForwardHost;
                 if (forwardHost != null && forwardHost.Length != 0)
                     args.ForwardHttpsHostName = forwardHost;
@@ -75,7 +73,7 @@ public partial class ProxyServer
                     var sslProtocol = clientHelloInfo.SslProtocol & SupportedSslProtocols;
                     if (sslProtocol == SslProtocols.None)
                     {
-                        throw new Exception("Unsupported client SSL version.");
+                        throw new NotSupportedException("Unsupported client SSL version.");
                     }
 
                     clientStream.Connection.SslProtocol = sslProtocol;
@@ -191,7 +189,7 @@ public partial class ProxyServer
                     }
                     catch (Exception e)
                     {
-                        sslStream?.Dispose();
+                        if (sslStream != null) await sslStream.DisposeAsync();
                         await TcpConnectionFactory.Release(prefetchConnectionTask, true);
                         prefetchConnectionTask = null;
 
@@ -236,7 +234,7 @@ public partial class ProxyServer
                                 if (clientStream.Connection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
                                 {
                                     await TcpConnectionFactory.Release(prefetchConnectionTask, true);
-                                    throw new Exception(
+                                    throw new InvalidDataException(
                                         "HTTP/2 Protocol violation. Received the HTTP/2 connection preface on a " +
                                         $"connection that negotiated '{clientStream.Connection.NegotiatedApplicationProtocol}' " +
                                         "via ALPN instead of 'h2'.");
@@ -247,7 +245,7 @@ public partial class ProxyServer
                                 if (line != string.Empty)
                                 {
                                     await TcpConnectionFactory.Release(prefetchConnectionTask, true);
-                                    throw new Exception(
+                                    throw new InvalidDataException(
                                         $"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
                                 }
 
@@ -255,14 +253,14 @@ public partial class ProxyServer
                                 if (line != "SM")
                                 {
                                     await TcpConnectionFactory.Release(prefetchConnectionTask, true);
-                                    throw new Exception($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
+                                    throw new InvalidDataException($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
                                 }
 
                                 line = await clientStream.ReadLineAsync(cancellationToken);
                                 if (line != string.Empty)
                                 {
                                     await TcpConnectionFactory.Release(prefetchConnectionTask, true);
-                                    throw new Exception(
+                                    throw new InvalidDataException(
                                         $"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
                                 }
 
@@ -386,7 +384,7 @@ public partial class ProxyServer
                                 var remaining = available;
                                 while (remaining > 0)
                                 {
-                                    var bytesRead = await clientStream.ReadAsync(data, 0, remaining, cancellationToken);
+                                    var bytesRead = await clientStream.ReadAsync(data.AsMemory(0, remaining), cancellationToken);
                                     if (bytesRead == 0) break;
 
                                     remaining -= bytesRead;
@@ -426,7 +424,6 @@ public partial class ProxyServer
                 if (method == KnownMethod.Invalid)
                 {
                     await TcpConnectionFactory.Release(prefetchTask, true);
-                    prefetchTask = null;
                     var session = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
                     var connection = (await TcpConnectionFactory.GetServerConnection(this, socksTargetHost, port,
                         HttpHeader.VersionUnknown, false, null,
@@ -471,11 +468,11 @@ public partial class ProxyServer
         }
         finally
         {
-            if (!cancellationTokenSource.IsCancellationRequested) cancellationTokenSource.Cancel();
+            if (!cancellationTokenSource.IsCancellationRequested) await cancellationTokenSource.CancelAsync();
             UnregisterSessionCancellation(cancellationTokenSource);
             cancellationTokenSource.Dispose();
             await TcpConnectionFactory.Release(prefetchConnectionTask, true);
-            clientStream.Dispose();
+            await clientStream.DisposeAsync();
         }
     }
 }

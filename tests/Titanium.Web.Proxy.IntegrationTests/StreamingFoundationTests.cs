@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -14,7 +14,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class StreamingFoundationTests
 {
-    private static TestServer sharedServer;
+    private static TestServer sharedServer = null!;
 
     [ClassInitialize]
     public static void ClassSetup(TestContext _)
@@ -22,7 +22,7 @@ public class StreamingFoundationTests
         sharedServer = new TestServer(TestCertificateAuthority.ServerCertificate, requireMutualTls: false);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void ClassCleanup()
     {
         sharedServer?.Dispose();
@@ -48,7 +48,7 @@ public class StreamingFoundationTests
         using var pipe = new BoundedBodyPipe(maxBytes: 10);
         var data = new byte[20];
 
-        await Assert.ThrowsExceptionAsync<BodySizeLimitExceededException>(
+        await Assert.ThrowsExactlyAsync<BodySizeLimitExceededException>(
             async () => await pipe.WriteAsync(data));
     }
 
@@ -72,7 +72,7 @@ public class StreamingFoundationTests
         cts.Cancel();
 
         // Writing with a cancelled token should throw once the pipe blocks on backpressure
-        await Assert.ThrowsExceptionAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(async () =>
         {
             // 1 MB exceeds the 512 KB pause threshold, so the second internal flush will block
             // and respect the pre-cancelled token.

@@ -33,6 +33,8 @@ public class DisposalTests
         var proxy = new ProxyServer();
         proxy.Dispose();
         proxy.Dispose();
+        AssertDisposed(proxy);
+        Assert.IsFalse(proxy.ProxyRunning);
     }
 
     [TestMethod]
@@ -42,6 +44,7 @@ public class DisposalTests
         var manager = proxy.CertificateManager;
         manager.Dispose();
         manager.Dispose();
+        AssertDisposed(manager);
     }
 
     [TestMethod]
@@ -55,6 +58,16 @@ public class DisposalTests
         factory.Dispose();
         // A second disposal must not throw (idempotent guard).
         factory.Dispose();
+        AssertDisposed(factory);
+    }
+
+    private static void AssertDisposed(object instance)
+    {
+        var field = instance.GetType().GetField("disposed",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.IsNotNull(field, $"{instance.GetType().Name} must expose a disposed guard field.");
+        Assert.IsTrue((bool)field.GetValue(instance)!,
+            $"{instance.GetType().Name} should be marked disposed after Dispose().");
     }
 
     private static void AssertHasNoFinalizer(System.Type type)
