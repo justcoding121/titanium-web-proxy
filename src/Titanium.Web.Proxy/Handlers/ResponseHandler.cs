@@ -297,7 +297,7 @@ public partial class ProxyServer
         }
 
         if (!args.CancellationTokenSource.IsCancellationRequested)
-            args.CancellationTokenSource.Cancel();
+            await args.CancellationTokenSource.CancelAsync();
     }
 
     /// <summary>

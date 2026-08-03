@@ -636,7 +636,7 @@ public partial class ProxyServer
                 var toClientTask = RelayStreamToClientAsync(originStreamForRelay, bodyStream, sessionArgs, ct);
 
                 await Task.WhenAny(toOriginTask, toClientTask);
-                relayCts.Cancel();
+                await relayCts.CancelAsync();
 
                 // Close the origin socket to unblock any pending socket ReadAsync in
                 // toClientTask immediately rather than relying on the cancellation-token

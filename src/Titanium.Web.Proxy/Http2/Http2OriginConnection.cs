@@ -666,7 +666,7 @@ internal sealed class Http2OriginConnection
                             return;
                         }
 
-                        headerBlockBuffer.Write(data, 0, data.Length);
+                        await headerBlockBuffer.WriteAsync(data, 0, data.Length);
                         if ((flags & Http2FrameFlag.EndHeaders) != 0)
                         {
                             ProcessHeaderBlock(streamId, headerBlockBuffer.ToArray(), headerBlockEndStream);
@@ -697,7 +697,7 @@ internal sealed class Http2OriginConnection
                             return;
                         }
 
-                        headerBlockBuffer.Write(payload, 0, payload.Length);
+                        await headerBlockBuffer.WriteAsync(payload, 0, payload.Length);
                         if ((flags & Http2FrameFlag.EndHeaders) != 0)
                         {
                             ProcessHeaderBlock(streamId, headerBlockBuffer.ToArray(), headerBlockEndStream);

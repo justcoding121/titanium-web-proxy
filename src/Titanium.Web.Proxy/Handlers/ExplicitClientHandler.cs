@@ -336,7 +336,7 @@ public partial class ProxyServer
                     }
                     catch (Exception e)
                     {
-                        sslStream?.Dispose();
+                        if (sslStream != null) await sslStream.DisposeAsync();
 
                         ProxyLog.BrowserHandshakeFailed(logger, connectHostname, e);
 
@@ -624,13 +624,13 @@ public partial class ProxyServer
         }
         finally
         {
-            if (!cancellationTokenSource.IsCancellationRequested) cancellationTokenSource.Cancel();
+            if (!cancellationTokenSource.IsCancellationRequested) await cancellationTokenSource.CancelAsync();
             UnregisterSessionCancellation(cancellationTokenSource);
             cancellationTokenSource.Dispose();
 
             await TcpConnectionFactory.Release(prefetchConnectionTask, closeServerConnection);
 
-            clientStream.Dispose();
+            await clientStream.DisposeAsync();
             connectArgs?.Dispose();
         }
     }

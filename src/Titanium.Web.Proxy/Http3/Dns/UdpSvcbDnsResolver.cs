@@ -270,7 +270,7 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
         // Without this, any host on the network path could race a spoofed UDP response to this
         // ephemeral port (classic off-path DNS cache-poisoning) and Send/ReceiveTo would happily accept
         // it, since plain SendToAsync/ReceiveAsync do not validate the peer address at all.
-        socket.Connect(_dnsServerEndPoint);
+        await socket.ConnectAsync(_dnsServerEndPoint, ct);
 
         await socket.SendAsync(queryPacket, SocketFlags.None, ct);
 

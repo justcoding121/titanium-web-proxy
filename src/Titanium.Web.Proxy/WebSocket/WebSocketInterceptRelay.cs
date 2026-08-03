@@ -41,7 +41,7 @@ internal static class WebSocketInterceptRelay
             onWrite: (b, o, c) => session.OnDataReceived(b, o, c));
 
         await Task.WhenAny(clientToServer, serverToClient).ConfigureAwait(false);
-        cancellationTokenSource.Cancel();
+        await cancellationTokenSource.CancelAsync();
 
         ushort? closeCode = null;
         try

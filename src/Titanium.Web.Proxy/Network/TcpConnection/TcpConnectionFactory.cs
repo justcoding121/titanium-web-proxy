@@ -807,7 +807,7 @@ internal class TcpConnectionFactory : IDisposable
                         if (doneTask.IsCompletedSuccessfully)
                         {
                             (tcpServerSocket, boundEndPoint) = doneTask.Result;
-                            raceCts.Cancel();
+                            await raceCts.CancelAsync();
                             AbandonLosingAttempts(inFlight);
                             goto raceDecided;
                         }
@@ -829,7 +829,7 @@ internal class TcpConnectionFactory : IDisposable
                     }
                 }
 
-                raceCts.Cancel();
+                await raceCts.CancelAsync();
             }
 
             raceDecided: ;
@@ -946,7 +946,7 @@ internal class TcpConnectionFactory : IDisposable
         catch (IOException ex) when (ex.HResult == unchecked((int)0x80131620) && retry &&
                                      enabledSslProtocols >= SslProtocols.Tls11) // NOSONAR S4423 - legacy fallback gate
         {
-            stream?.Dispose();
+            if (stream != null) await stream.DisposeAsync();
             tcpServerSocket?.Close();
 
             // Specifying Tls11 and/or Tls12 will disable the usage of Ssl3, even if it has been included.
@@ -962,7 +962,7 @@ internal class TcpConnectionFactory : IDisposable
         catch (AuthenticationException ex) when (ex.HResult == unchecked((int)0x80131501) && retry &&
                                                  enabledSslProtocols >= SslProtocols.Tls11) // NOSONAR S4423 - legacy fallback gate
         {
-            stream?.Dispose();
+            if (stream != null) await stream.DisposeAsync();
             tcpServerSocket?.Close();
 
             // Specifying Tls11 and/or Tls12 will disable the usage of Ssl3, even if it has been included.
@@ -978,7 +978,7 @@ internal class TcpConnectionFactory : IDisposable
 #pragma warning restore SYSLIB0039
         catch (Exception ex)
         {
-            stream?.Dispose();
+            if (stream != null) await stream.DisposeAsync();
             tcpServerSocket?.Close();
             ProxyLog.OriginConnectionFailed(proxyServer.Logger, remoteHostName, remotePort, ex);
             throw;
@@ -1255,7 +1255,7 @@ internal class TcpConnectionFactory : IDisposable
                 if (preview != null && preview.Length < UpstreamProxyRejectionBodyPreviewLimit)
                 {
                     var toCopy = Math.Min(read, UpstreamProxyRejectionBodyPreviewLimit - (int)preview.Length);
-                    preview.Write(buffer, 0, toCopy);
+                    await preview.WriteAsync(buffer, 0, toCopy);
                 }
 
                 count -= read;

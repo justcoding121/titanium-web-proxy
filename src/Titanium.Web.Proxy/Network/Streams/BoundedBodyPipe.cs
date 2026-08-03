@@ -60,7 +60,7 @@ internal sealed class BoundedBodyPipe : IDisposable
             var newTotal = totalWritten + buffer.Length;
             if (newTotal > maxBytes)
             {
-                pipe.Writer.Complete(new BodySizeLimitExceededException(
+                await pipe.Writer.CompleteAsync(new BodySizeLimitExceededException(
                     $"Body exceeds the configured limit of {maxBytes:N0} bytes."));
                 throw new BodySizeLimitExceededException(
                     $"Body byte count {newTotal:N0} exceeds the limit of {maxBytes:N0}.");
@@ -94,7 +94,7 @@ internal sealed class BoundedBodyPipe : IDisposable
     internal async Task CopyToAsync(Stream destination, CancellationToken cancellationToken = default)
     {
         await pipe.Reader.CopyToAsync(destination, cancellationToken);
-        pipe.Reader.Complete();
+        await pipe.Reader.CompleteAsync();
     }
 
     /// <summary>

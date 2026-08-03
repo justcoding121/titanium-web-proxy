@@ -67,14 +67,14 @@ function Start-Proxy([string] $LeafKey) {
         Start-Sleep -Milliseconds 150
     }
 
-    try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch { }
+    try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch { Write-Verbose $_.Exception.Message }
     throw "Proxy did not start listening on port $ProxyPort"
 }
 
 function Stop-Proxy($Proc) {
     if ($null -eq $Proc) { return }
-    try { Stop-Process -Id $Proc.Id -Force -ErrorAction SilentlyContinue } catch { }
-    try { $Proc.WaitForExit(5000) | Out-Null } catch { }
+    try { Stop-Process -Id $Proc.Id -Force -ErrorAction SilentlyContinue } catch { Write-Verbose $_.Exception.Message }
+    try { $Proc.WaitForExit(5000) | Out-Null } catch { Write-Verbose $_.Exception.Message }
 
     # The next measurement restarts the proxy immediately; wait for the listener to release the port
     # so the restart does not race an ephemeral bind failure.

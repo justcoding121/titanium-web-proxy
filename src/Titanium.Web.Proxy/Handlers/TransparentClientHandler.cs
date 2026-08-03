@@ -191,7 +191,7 @@ public partial class ProxyServer
                     }
                     catch (Exception e)
                     {
-                        sslStream?.Dispose();
+                        if (sslStream != null) await sslStream.DisposeAsync();
                         await TcpConnectionFactory.Release(prefetchConnectionTask, true);
                         prefetchConnectionTask = null;
 
@@ -471,11 +471,11 @@ public partial class ProxyServer
         }
         finally
         {
-            if (!cancellationTokenSource.IsCancellationRequested) cancellationTokenSource.Cancel();
+            if (!cancellationTokenSource.IsCancellationRequested) await cancellationTokenSource.CancelAsync();
             UnregisterSessionCancellation(cancellationTokenSource);
             cancellationTokenSource.Dispose();
             await TcpConnectionFactory.Release(prefetchConnectionTask, true);
-            clientStream.Dispose();
+            await clientStream.DisposeAsync();
         }
     }
 }

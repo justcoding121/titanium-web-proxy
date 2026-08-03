@@ -195,7 +195,7 @@ internal sealed class Http3Connection
             // linked to _connectionCts.Token) unblocks promptly, then actually wait for them to finish
             // - not just observe the token as cancelled - before anything they might still be using
             // (QpackContext, session state) is disposed below.
-            _connectionCts.Cancel();
+            await _connectionCts.CancelAsync();
             await JoinBackgroundTasksAsync();
 
             await FinalizeAllStreamsAsync();
@@ -507,7 +507,7 @@ internal sealed class Http3Connection
                     _logger.LogError(ex, "Error in AfterResponse during HTTP/3 connection teardown");
                 }
             }
-            state.Cancellation.Cancel();
+            await state.Cancellation.CancelAsync();
             state.Cancellation.Dispose();
         }
         _activeStreams.Clear();

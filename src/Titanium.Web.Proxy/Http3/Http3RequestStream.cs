@@ -350,7 +350,7 @@ internal static class Http3RequestStream
         }
         finally
         {
-            body.Dispose();
+            await body.DisposeAsync();
         }
     }
 

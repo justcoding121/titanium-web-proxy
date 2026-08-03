@@ -60,7 +60,7 @@ try
     builder.Services.AddHostedService<ProxyWorker>();
 
     var host = builder.Build();
-    host.Run();
+    await host.RunAsync();
 }
 catch (Exception ex)
 {
@@ -69,5 +69,5 @@ catch (Exception ex)
 }
 finally
 {
-    Log.CloseAndFlush();
+    await Log.CloseAndFlushAsync();
 }

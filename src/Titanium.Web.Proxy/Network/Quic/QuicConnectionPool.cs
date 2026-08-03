@@ -238,7 +238,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _cleanupCts.Cancel();
+        await _cleanupCts.CancelAsync();
         try { await _cleanupTask; } catch { /* best effort */ }
 
         // Drain while the CTS is still alive so WaitAsync can observe the token; dispose after.
@@ -303,7 +303,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
 
                     // Only drop the entry once it is genuinely unused: taking the gate proves no
                     // caller is mid-creation and about to publish a connection into it.
-                    if (!entry.CreationGate.Wait(0, _cleanupCts.Token)) continue;
+                    if (!await entry.CreationGate.WaitAsync(0, _cleanupCts.Token)) continue;
                     try
                     {
                         if (Volatile.Read(ref entry.Current) == null)

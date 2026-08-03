@@ -1042,14 +1042,14 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         }
         finally
         {
-            http.Dispose();
+            await http.DisposeAsync();
 
             if (decompressLayers != null)
                 for (var i = decompressLayers.Count - 1; i >= 0; i--)
-                    decompressLayers[i].Dispose();
+                    await decompressLayers[i].DisposeAsync();
 
             await limitedStream.Finish();
-            limitedStream.Dispose();
+            await limitedStream.DisposeAsync();
         }
     }
 

@@ -103,7 +103,7 @@ internal class TcpHelper
             serverStream.CopyToAsync(clientStream, onDataReceive, bufferPool, cancellationTokenSource.Token);
 
         await Task.WhenAny(sendRelay, receiveRelay);
-        cancellationTokenSource.Cancel();
+        await cancellationTokenSource.CancelAsync();
 
         await Task.WhenAll(sendRelay, receiveRelay);
     }

@@ -168,7 +168,7 @@ namespace Titanium.Web.Proxy.Http2
                     logger, maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, originConnection);
 
             await Task.WhenAny(sendRelay, receiveRelay);
-            cancellationTokenSource.Cancel();
+            await cancellationTokenSource.CancelAsync();
 
             await Task.WhenAll(sendRelay, receiveRelay);
 
@@ -1376,7 +1376,7 @@ namespace Titanium.Web.Proxy.Http2
                         // start of a multi-frame header block; buffer this fragment and wait for the
                         // CONTINUATION frame(s) that must immediately follow on the same stream.
                         pendingHeaderBlock = new MemoryStream();
-                        pendingHeaderBlock.Write(buffer, offset, fragmentLength);
+                        await pendingHeaderBlock.WriteAsync(buffer, offset, fragmentLength);
                         pendingHeaderStreamId = streamId;
                         pendingHeaderArgs = args;
                         pendingHeaderRr = rr;
@@ -1438,7 +1438,7 @@ namespace Titanium.Web.Proxy.Http2
                         }
                     }
 
-                    pendingHeaderBlock.Write(buffer, 0, length);
+                    await pendingHeaderBlock.WriteAsync(buffer, 0, length);
 
                     if ((flags & Http2FrameFlag.EndHeaders) != 0)
                     {
@@ -1683,7 +1683,7 @@ namespace Titanium.Web.Proxy.Http2
                                 rr.ReadHttp2BodyTaskCompletionSource = null;
                                 pendingTcs.TrySetException(sizeLimitException);
 
-                                rr.Http2BodyData?.Dispose();
+                                if (rr.Http2BodyData != null) await rr.Http2BodyData.DisposeAsync();
                                 rr.Http2BodyData = null;
 
                                 RemoveAndFinalizeStream(streamId);
@@ -1697,7 +1697,7 @@ namespace Titanium.Web.Proxy.Http2
                                 // Disabled, or Observe: the breach (if any) was already recorded above, but
                                 // the stream is not reset and the caller's whole-body read is not faulted -
                                 // per the plan, Observe detects without acting.
-                                data.Write(buffer, offset, length);
+                                await data.WriteAsync(buffer, offset, length);
                             }
                         }
                         else if (!rr.Http2IgnoreBodyFrames && !rr.IsBodyRead &&
@@ -1858,7 +1858,7 @@ namespace Titanium.Web.Proxy.Http2
                                 // that the peer has already said it will not send.
                                 kvp.Value.InboundTunnelChannel?.Writer.TryComplete(
                                     new IOException("Connection received GOAWAY."));
-                                kvp.Value.Cancellation.Cancel();
+                                await kvp.Value.Cancellation.CancelAsync();
                                 kvp.Value.Cancellation.Dispose();
                             }
                         }
@@ -2137,7 +2137,7 @@ namespace Titanium.Web.Proxy.Http2
                         // RFC 8441: if the reset stream is an extended CONNECT tunnel, unblock the relay
                         // that is reading from the inbound channel so it can shut down promptly.
                         resetStream.InboundTunnelChannel?.Writer.TryComplete();
-                        resetStream.Cancellation.Cancel();
+                        await resetStream.Cancellation.CancelAsync();
                         resetStream.Cancellation.Dispose();
                         connectionState.ClientSendFlow.RemoveStream(streamId);
                         connectionState.ServerSendFlow.RemoveStream(streamId);
@@ -2251,7 +2251,7 @@ namespace Titanium.Web.Proxy.Http2
                                 if (owned.Count > 0)
                                 {
                                     using var ms = new MemoryStream();
-                                    decompressStream.CopyTo(ms);
+                                    await decompressStream.CopyToAsync(ms);
                                     body = ms.ToArray();
                                 }
                                 // else: unsupported/unparseable encoding - leave body as the raw wire
@@ -2260,7 +2260,7 @@ namespace Titanium.Web.Proxy.Http2
                             finally
                             {
                                 for (var i = owned.Count - 1; i >= 0; i--)
-                                    owned[i].Dispose();
+                                    await owned[i].DisposeAsync();
                             }
                         }
 
@@ -2281,7 +2281,7 @@ namespace Titanium.Web.Proxy.Http2
                         tcs.SetResult(true);
                     }
 
-                    rr.Http2BodyData?.Dispose();
+                    if (rr.Http2BodyData != null) await rr.Http2BodyData.DisposeAsync();
                     rr.Http2BodyData = null;
 
                     if (rr.Http2BeforeHandlerTask != null)
@@ -2401,7 +2401,7 @@ namespace Titanium.Web.Proxy.Http2
                 // synthetic task on this direction that is still waiting on a signal only the other,
                 // still-running relay task can deliver would never observe cancellation, and this method
                 // would never complete for SendHttp2 to observe in the first place - a deadlock.
-                cancellationTokenSource.Cancel();
+                await cancellationTokenSource.CancelAsync();
 
                 if (!pendingSynthetics.IsEmpty)
                 {

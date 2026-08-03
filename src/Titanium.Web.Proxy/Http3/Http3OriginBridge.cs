@@ -326,7 +326,7 @@ internal static class Http3OriginBridge
             }
             finally
             {
-                bodyStream.Dispose();
+                await bodyStream.DisposeAsync();
             }
 
             response.IsBodyRead = true;
