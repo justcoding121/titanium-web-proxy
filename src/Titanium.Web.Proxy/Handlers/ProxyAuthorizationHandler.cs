@@ -55,12 +55,11 @@ public partial class ProxyServer
                 return await AuthenticateUserBasic(session, authenticationType, credentials,
                     basicAuthenticate);
 
-            if (schemeAuthenticate == null)
-                throw new InvalidOperationException("No proxy authentication callback is configured.");
-
-            // Both callbacks being null returned above, and the basic callback path returned here.
+            // Both-null returned above; basic path returned above — remaining path is scheme-only.
+            var schemeAuth = schemeAuthenticate
+                ?? throw new InvalidOperationException("No proxy authentication callback is configured.");
             var result =
-                await schemeAuthenticate(session, authenticationType.ToString(), credentials.ToString());
+                await schemeAuth(session, authenticationType.ToString(), credentials.ToString());
 
             if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
             {

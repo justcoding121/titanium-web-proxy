@@ -16,7 +16,13 @@
     <VersionPrefix>5.1.1</VersionPrefix>
     <!-- The library itself is the canonical implementation of the TWP001 experimental HTTP/3 APIs.
          Suppress the diagnostic internally; consumers will still see it. -->
-    <NoWarn>$(NoWarn);TWP001</NoWarn>
+    <!--
+      CA1068: several internal async APIs keep CancellationToken before trailing optional/context args.
+      CA1069: HTTP/2 frame flags and SSPI buffers intentionally reuse native constant values.
+      SYSLIB1054: WinHTTP/SSPI DllImport signatures need classic marshalling (structs/ref) that
+      LibraryImport does not support without a larger interop rewrite.
+    -->
+    <NoWarn>$(NoWarn);TWP001;CA1068;CA1069;SYSLIB1054</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
