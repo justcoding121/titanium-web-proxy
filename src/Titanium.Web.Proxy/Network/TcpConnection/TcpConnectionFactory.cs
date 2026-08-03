@@ -1255,7 +1255,7 @@ internal class TcpConnectionFactory : IDisposable
                 if (preview != null && preview.Length < UpstreamProxyRejectionBodyPreviewLimit)
                 {
                     var toCopy = Math.Min(read, UpstreamProxyRejectionBodyPreviewLimit - (int)preview.Length);
-                    await preview.WriteAsync(buffer, 0, toCopy);
+                    await preview.WriteAsync(buffer, 0, toCopy, cancellationToken);
                 }
 
                 count -= read;

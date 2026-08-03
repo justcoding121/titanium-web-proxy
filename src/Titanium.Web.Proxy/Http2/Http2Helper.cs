@@ -1376,7 +1376,7 @@ namespace Titanium.Web.Proxy.Http2
                         // start of a multi-frame header block; buffer this fragment and wait for the
                         // CONTINUATION frame(s) that must immediately follow on the same stream.
                         pendingHeaderBlock = new MemoryStream();
-                        await pendingHeaderBlock.WriteAsync(buffer, offset, fragmentLength);
+                        await pendingHeaderBlock.WriteAsync(buffer, offset, fragmentLength, cancellationToken);
                         pendingHeaderStreamId = streamId;
                         pendingHeaderArgs = args;
                         pendingHeaderRr = rr;
@@ -1438,7 +1438,7 @@ namespace Titanium.Web.Proxy.Http2
                         }
                     }
 
-                    await pendingHeaderBlock.WriteAsync(buffer, 0, length);
+                    await pendingHeaderBlock.WriteAsync(buffer, 0, length, cancellationToken);
 
                     if ((flags & Http2FrameFlag.EndHeaders) != 0)
                     {
@@ -1697,7 +1697,7 @@ namespace Titanium.Web.Proxy.Http2
                                 // Disabled, or Observe: the breach (if any) was already recorded above, but
                                 // the stream is not reset and the caller's whole-body read is not faulted -
                                 // per the plan, Observe detects without acting.
-                                await data.WriteAsync(buffer, offset, length);
+                                await data.WriteAsync(buffer, offset, length, cancellationToken);
                             }
                         }
                         else if (!rr.Http2IgnoreBodyFrames && !rr.IsBodyRead &&
@@ -2251,7 +2251,7 @@ namespace Titanium.Web.Proxy.Http2
                                 if (owned.Count > 0)
                                 {
                                     using var ms = new MemoryStream();
-                                    await decompressStream.CopyToAsync(ms);
+                                    await decompressStream.CopyToAsync(ms, cancellationToken);
                                     body = ms.ToArray();
                                 }
                                 // else: unsupported/unparseable encoding - leave body as the raw wire
