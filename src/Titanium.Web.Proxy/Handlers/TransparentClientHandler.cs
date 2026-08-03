@@ -56,7 +56,7 @@ public partial class ProxyServer
                 var args = new BeforeSslAuthenticateEventArgs(this, clientConnection, cancellationTokenSource,
                     httpsHostName);
 
-                // seed the forward target from the endpoint's fixed forward configuration (if any);
+                // Initialize the forward target from the endpoint fixed-forward settings when present;
                 // the BeforeSslAuthenticate event can still override it per request.
                 var forwardHost = endPoint.ForwardHost;
                 if (forwardHost != null && forwardHost.Length != 0)
@@ -386,7 +386,7 @@ public partial class ProxyServer
                                 var remaining = available;
                                 while (remaining > 0)
                                 {
-                                    var bytesRead = await clientStream.ReadAsync(data, 0, remaining, cancellationToken);
+                                    var bytesRead = await clientStream.ReadAsync(data.AsMemory(0, remaining), cancellationToken);
                                     if (bytesRead == 0) break;
 
                                     remaining -= bytesRead;

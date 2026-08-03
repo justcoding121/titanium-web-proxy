@@ -53,11 +53,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
             Directory.CreateDirectory(certificateDirectory);
             proxyServer.CertificateManager.PfxFilePath = Path.Combine(certificateDirectory, "rootCert.pfx");
 
-            //proxyServer.EnableHttp2 = false;
-
-            // generate root certificate without storing it in file system
-            //proxyServer.CertificateManager.CreateRootCertificate(false);
-
             // Installing a MITM root into the user's trust store is opt-in: set TWP_TRUST_ROOT=1 for
             // browser-driven runs. Nothing is added to any certificate store without it, and
             // RemoveTrustedRootCertificate() in Stop() takes it back out again.
@@ -66,7 +61,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
             {
                 proxyServer.CertificateManager.EnsureRootCertificate();
                 proxyServer.CertificateManager.TrustRootCertificate();
-                //proxyServer.CertificateManager.TrustRootCertificateAsAdmin();
             }
 
             // Library diagnostics stay quiet on the traffic tape: one-line errors (no stacks) in Release.
@@ -90,25 +84,18 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // Pooling reuses origin TCP/TLS sockets and sharply reduces CONNECT/cert stampede when
             // the example is installed as the system proxy (browser + OS services share the endpoint).
             //
-            // Overrides for the cold-start A/B matrix in tools/ColdStartProbe (optional env vars;
-            // when unset each knob keeps the example default assigned below):
-            //   TWP_ENABLE_CONNECTION_POOL=1|0
-            //   TWP_FORWARD_UPSTREAM=1|0
-            //   TWP_PREFETCH=1|0
-            //   TWP_ENABLE_HTTP2=1|0
-            //   TWP_SAVE_FAKE_CERTS=1|0
-            //   TWP_LEAF_KEY=ec|rsa
-            //   TWP_CAPTURE_TIMING=1|0
-            //   TWP_SET_SYSTEM_PROXY=1|0  (StartProxy)
-            //   TWP_ENABLE_HTTP3=1|0 / TWP_ENABLE_SVCB_DNS=1|0  (StartProxy)
+            // ColdStartProbe (tools/ColdStartProbe) can override the knobs below via optional environment
+            // variables; when unset each keeps the default on the next line. Names: TWP_ENABLE_CONNECTION_POOL,
+            // TWP_FORWARD_UPSTREAM, TWP_PREFETCH, TWP_ENABLE_HTTP2, TWP_SAVE_FAKE_CERTS, TWP_LEAF_KEY (ec or rsa),
+            // TWP_CAPTURE_TIMING, TWP_SET_SYSTEM_PROXY, TWP_ENABLE_HTTP3, TWP_ENABLE_SVCB_DNS (last two in StartProxy).
             proxyServer.EnableConnectionPool = ReadEnvBool("TWP_ENABLE_CONNECTION_POOL", defaultValue: true);
             // Per-request timing marks are measurement scaffolding; opt in for latency runs.
             proxyServer.EnableRequestTimingCapture =
                 Environment.GetEnvironmentVariable("TWP_CAPTURE_TIMING") is "1" or "true" or "TRUE";
             // Resolves the Windows system/PAC upstream gateway per destination. Left on so the example
-            // still works behind a corporate proxy. On a machine with no PAC/WPAD configured this
-            // resolves to "direct" without any network work, so it is not a cold-start cost there;
-            // set TWP_FORWARD_UPSTREAM=0 to measure its cost where a PAC script is actually deployed.
+            // still works behind a corporate proxy. On a machine with no PAC or WPAD configured the
+            // lookup is a no-op, so it is not a cold-start cost there; disable upstream forwarding to
+            // measure its cost where a PAC script is actually deployed.
             // Direct destinations still get HTTP/3 (Alt-Svc + background QUIC warm); only destinations
             // that actually resolve to an upstream proxy stay on TCP, since QUIC cannot be tunnelled.
             proxyServer.ForwardToUpstreamGateway = ReadEnvBool("TWP_FORWARD_UPSTREAM", defaultValue: true);
@@ -136,21 +123,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // reuse previously generated certificates instead of regenerating them.
             proxyServer.ResourceLimits = ProxyResourceLimits.Default.WithCertificateCacheBounds(
                 maxCertificateCacheEntries: 2048, maxCertificateDiskCacheEntries: null);
-            //proxyServer.ProxyBasicAuthenticateFunc = async (args, userName, password) =>
-            //{
-            //    return true;
-            //};
-
-            // this is just to show the functionality, provided implementations use junk value
-            //proxyServer.GetCustomUpStreamProxyFunc = onGetCustomUpStreamProxyFunc;
-            //proxyServer.CustomUpStreamProxyFailureFunc = onCustomUpStreamProxyFailureFunc;
-
-            // optionally set the Certificate Engine
-            // On non-Windows runtimes only BouncyCastle is supported (other values are coerced)
-            //proxyServer.CertificateManager.CertificateEngine = Network.CertificateEngine.BouncyCastle;
-
-            // optionally set the Root Certificate
-            //proxyServer.CertificateManager.RootCertificate = new X509Certificate2("myCert.pfx", string.Empty, X509KeyStorageFlags.Exportable);
         }
 
         private CancellationToken CancellationToken => cancellationTokenSource.Token;
@@ -172,12 +144,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             // Inspect/modify the response body chunk-by-chunk as it streams, without buffering it in memory.
             // Do not combine with SessionEventArgs.GetResponseBody (which buffers the whole body).
-            //proxyServer.OnResponseBodyWrite += OnResponseBodyWrite;
 
             proxyServer.ServerCertificateValidationCallback += OnCertificateValidation;
             proxyServer.ClientCertificateSelectionCallback += OnCertificateSelection;
-
-            //proxyServer.EnableWinAuth = true;
 
             explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000);
 
@@ -239,50 +208,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             proxyServer.Start();
 
-            // Transparent endpoint is useful for reverse proxy (client is not aware of the existence of proxy)
-            // A transparent endpoint usually requires a network router port forwarding HTTP(S) packets
-            // or by DNS to send data to this endPoint.
-            //var transparentEndPoint = new TransparentProxyEndPoint(IPAddress.Any, 443, true)
-            //{
-            //    // Generic Certificate hostname to use
-            //    // When SNI is disabled by client
-            //    GenericCertificateName = "localhost",
-            //
-            //    // Optionally forward all traffic on this endpoint to a fixed upstream server
-            //    // (e.g. a reverse proxy pointing at a fixed backend). Only the TCP connection
-            //    // target changes; the original hostname is still used for TLS SNI/certificate
-            //    // validation and the HTTP Host header.
-            //    ForwardHost = "198.51.100.1",
-            //    ForwardPort = 443
-            //};
-
-            //proxyServer.AddEndPoint(transparentEndPoint);
-            //proxyServer.UpStreamHttpProxy = new ExternalProxy("localhost", 8888);
-            //proxyServer.UpStreamHttpsProxy = new ExternalProxy("localhost", 8888);
-
-            // SOCKS proxy
-            //proxyServer.UpStreamHttpProxy = new ExternalProxy("127.0.0.1", 1080)
-            //    { ProxyType = ExternalProxyType.Socks5, UserName = "User1", Password = "Pass" };
-            //proxyServer.UpStreamHttpsProxy = new ExternalProxy("127.0.0.1", 1080)
-            //    { ProxyType = ExternalProxyType.Socks5, UserName = "User1", Password = "Pass" };
-
-
-            //var socksEndPoint = new SocksProxyEndPoint(IPAddress.Any, 1080, true)
-            //{
-            //    // Generic Certificate hostname to use
-            //    // When SNI is disabled by client
-            //    GenericCertificateName = "google.com"
-            //};
-
-            //proxyServer.AddEndPoint(socksEndPoint);
-
             foreach (var endPoint in proxyServer.ProxyEndPoints)
                 Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name,
                     endPoint.IpAddress, endPoint.Port);
 
-            // Only explicit proxies can be set as system proxy!
-            //proxyServer.SetAsSystemHttpProxy(explicitEndPoint);
-            //proxyServer.SetAsSystemHttpsProxy(explicitEndPoint);
             // tools/ColdStartProbe connects to the endpoint directly and sets TWP_SET_SYSTEM_PROXY=0,
             // so a measurement run never rewrites the machine's WinINet proxy configuration.
             if (OperatingSystem.IsWindows() && ReadEnvBool("TWP_SET_SYSTEM_PROXY", defaultValue: true))
@@ -458,40 +387,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             if (e.HttpClient.Request.Url.Contains("yahoo.com"))
                 e.CustomUpStreamProxy = new ExternalProxy("localhost", 8888);
-
-            // store it in the UserData property
-            // It can be a simple integer, Guid, or any type
-            //e.UserData = new CustomUserData()
-            //{
-            //    RequestHeaders = e.HttpClient.Request.Headers,
-            //    RequestBody = e.HttpClient.Request.HasBody ? e.HttpClient.Request.Body:null,
-            //    RequestBodyString = e.HttpClient.Request.HasBody? e.HttpClient.Request.BodyString:null
-            //};
-
-            ////This sample shows how to get the multipart form data headers
-            //if (e.HttpClient.Request.Host == "mail.yahoo.com" && e.HttpClient.Request.IsMultipartFormData)
-            //{
-            //    e.MultipartRequestPartSent += MultipartRequestPartSent;
-            //}
-
-            // To cancel a request with a custom HTML content
-            // Filter URL
-            //if (e.HttpClient.Request.RequestUri.AbsoluteUri.Contains("yahoo.com"))
-            //{ 
-            //    e.Ok("<!DOCTYPE html>" +
-            //          "<html><body><h1>" +
-            //          "Website Blocked" +
-            //          "</h1>" +
-            //          "<p>Blocked by titanium web proxy.</p>" +
-            //          "</body>" +
-            //          "</html>");
-            //} 
-
-            ////Redirect example
-            //if (e.HttpClient.Request.RequestUri.AbsoluteUri.Contains("wikipedia.org"))
-            //{ 
-            //   e.Redirect("https://www.paypal.com");
-            //} 
         }
 
         // Modify response
@@ -504,49 +399,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
             foreach (var header in e.Headers) WriteToConsole(header.ToString());
         }
 
-        private async Task OnResponse(object sender, SessionEventArgs e)
+        private Task OnResponse(object sender, SessionEventArgs e)
         {
             e.GetState().AppendPipeline(nameof(OnResponse));
-
-            // access user data set in request to do something with it
-            //var userData = e.HttpClient.UserData as CustomUserData;
-
-            //var ext = Path.GetExtension(e.HttpClient.Request.RequestUri.AbsolutePath);
-            //if (ext == ".gif" || ext == ".png" || ext == ".jpg")
-            //{ 
-            //    byte[] btBody = Encoding.UTF8.GetBytes("<!DOCTYPE html>" +
-            //                                           "<html><body><h1>" +
-            //                                           "Image is blocked" +
-            //                                           "</h1>" +
-            //                                           "<p>Blocked by Titanium</p>" +
-            //                                           "</body>" +
-            //                                           "</html>");
-
-            //    var response = new OkResponse(btBody);
-            //    response.HttpVersion = e.HttpClient.Request.HttpVersion;
-
-            //    e.Respond(response);
-            //    e.TerminateServerConnection();
-            //} 
-
-            //// print out process id of current session
-            ////WriteToConsole($"PID: {e.HttpClient.ProcessId.Value}");
-
-            ////if (!e.ProxySession.Request.Host.Equals("medeczane.sgk.gov.tr")) return;
-            //if (e.HttpClient.Request.Method == "GET" || e.HttpClient.Request.Method == "POST")
-            //{
-            //    if (e.HttpClient.Response.StatusCode == (int)HttpStatusCode.OK)
-            //    {
-            //        if (e.HttpClient.Response.ContentType != null && e.HttpClient.Response.ContentType.Trim().ToLower().Contains("text/html"))
-            //        {
-            //            var bodyBytes = await e.GetResponseBody();
-            //            e.SetResponseBody(bodyBytes);
-
-            //            string body = await e.GetResponseBodyAsString();
-            //            e.SetResponseBodyString(body);
-            //        }
-            //    }
-            //}
+            return Task.CompletedTask;
         }
 
         // Called for each response body chunk as it streams to the client (no full-body buffering).
@@ -798,16 +654,5 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 await Task.Delay(50, cancellationTokenSource.Token);
             }
         }
-
-        ///// <summary>
-        ///// User data object as defined by user.
-        ///// User data can be set to each SessionEventArgs.HttpClient.UserData property
-        ///// </summary>
-        //public class CustomUserData
-        //{
-        //    public HeaderCollection RequestHeaders { get; set; }
-        //    public byte[] RequestBody { get; set; }
-        //    public string RequestBodyString { get; set; }
-        //}
     }
 }

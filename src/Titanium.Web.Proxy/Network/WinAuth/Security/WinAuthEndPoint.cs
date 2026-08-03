@@ -275,12 +275,8 @@ internal class WinAuthEndPoint
             {
                 for (var index = 0; index < clientToken.cBuffers; index++)
                 {
-                    // The bits were written out the following order:
-                    // int cbBuffer;
-                    // int BufferType;
-                    // pvBuffer;
-                    // What we need to do here is to grab a hold of the pvBuffer allocate by the individual
-                    // SecBuffer and release it...
+                    // SecurityBuffer layout in memory: cbBuffer, BufferType, pvBuffer.
+                    // Release each native pvBuffer allocated by the individual SecBuffer entries.
                     var currentOffset = index * Marshal.SizeOf(typeof(SecurityBuffer));
                     var cbBuffer = Marshal.ReadInt32(clientToken.pBuffers, currentOffset);
                     var secBufferpvBuffer = Marshal.ReadIntPtr(clientToken.pBuffers,

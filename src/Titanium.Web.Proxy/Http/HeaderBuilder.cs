@@ -13,8 +13,6 @@ internal class HeaderBuilder
 
     public void WriteRequestLine(string httpMethod, string httpUrl, Version version)
     {
-        // "{httpMethod} {httpUrl} HTTP/{version.Major}.{version.Minor}";
-
         Write(httpMethod);
         Write(" ");
         Write(httpUrl);
@@ -27,8 +25,6 @@ internal class HeaderBuilder
 
     public void WriteResponseLine(Version version, int statusCode, string statusDescription)
     {
-        // "HTTP/{version.Major}.{version.Minor} {statusCode} {statusDescription}";
-
         Write("HTTP/");
         Write(version.Major.ToString());
         Write(".");

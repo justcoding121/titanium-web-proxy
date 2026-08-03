@@ -197,11 +197,8 @@ internal class Common
 
                 for (var index = 0; index < cBuffers; index++)
                 {
-                    // The bits were written out the following order:
-                    // int cbBuffer;
-                    // int BufferType;
-                    // pvBuffer;
-                    // What we need to do here calculate the total number of bytes we need to copy...
+                    // SecurityBuffer layout in memory: cbBuffer, BufferType, pvBuffer.
+                    // Sum cbBuffer across all entries to size the destination array.
                     var currentOffset = index * Marshal.SizeOf(typeof(SecurityBuffer));
                     bytesToAllocate += Marshal.ReadInt32(pBuffers, currentOffset);
                 }
@@ -210,12 +207,8 @@ internal class Common
 
                 for (int index = 0, bufferIndex = 0; index < cBuffers; index++)
                 {
-                    // The bits were written out the following order:
-                    // int cbBuffer;
-                    // int BufferType;
-                    // pvBuffer;
-                    // Now iterate over the individual buffers and put them together into a
-                    // byte array...
+                    // SecurityBuffer layout in memory: cbBuffer, BufferType, pvBuffer.
+                    // Copy each native buffer into the combined byte array.
                     var currentOffset = index * Marshal.SizeOf(typeof(SecurityBuffer));
                     var bytesToCopy = Marshal.ReadInt32(pBuffers, currentOffset);
                     var secBufferpvBuffer = Marshal.ReadIntPtr(pBuffers,

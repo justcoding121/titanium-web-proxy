@@ -57,7 +57,7 @@ internal static class StreamExtensions
                     // corrupting whichever connection borrowed it next. Awaiting the read directly lets
                     // it observe cancellation itself and actually stop before this method reuses its
                     // buffer.
-                    bytesRead = await input.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
+                    bytesRead = await input.ReadAsync(buffer.AsMemory(), cancellationToken);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -66,7 +66,7 @@ internal static class StreamExtensions
 
                 if (bytesRead == 0) break;
 
-                await output.WriteAsync(buffer, 0, bytesRead, CancellationToken.None);
+                await output.WriteAsync(buffer.AsMemory(0, bytesRead), CancellationToken.None);
                 onCopy?.Invoke(buffer, 0, bytesRead);
             }
         }

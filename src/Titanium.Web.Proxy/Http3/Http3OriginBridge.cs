@@ -266,12 +266,12 @@ internal static class Http3OriginBridge
 
             var maxPayload = sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes;
             var bodyStream = new System.IO.MemoryStream();
-            // maxPayload above only bounds a single DATA frame (Http3Frame.ReadAsync's per-call check);
-            // an origin sending many small frames could otherwise accumulate an unbounded response body
-            // in memory. Wrap the buffering write in a cumulative BoundedWriteStream — per the hardening
-            // plan, a response-side breach must close the connection rather than deliver a truncated body
-            // as if it were complete, so the resulting BodySizeLimitExceededException is deliberately left
-            // to propagate to the catch below, which disposes (never pools) the origin connection.
+            // maxPayload above only bounds a single DATA frame per read; an origin sending many small
+            // frames could otherwise accumulate an unbounded response body in memory. Wrap the buffering
+            // write in a cumulative bounded stream — per the hardening plan, a response-side breach must
+            // close the connection rather than deliver a truncated body as if it were complete, so the
+            // resulting size-limit exception is deliberately left to propagate to the catch below, which
+            // disposes (never pools) the origin connection.
             var boundedBodyStream = new BoundedWriteStream(bodyStream, maxPayload, server.PolicyModes[PolicyFamily.BodyBudget]);
             try
             {

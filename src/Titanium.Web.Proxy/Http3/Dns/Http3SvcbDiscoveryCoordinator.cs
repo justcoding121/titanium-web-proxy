@@ -71,7 +71,7 @@ internal sealed class Http3SvcbDiscoveryCoordinator : IDisposable
 
         var key = $"{host}:{port}";
 
-        // A recent miss for this exact host:port already told us there is nothing to discover;
+        // A recent miss for this exact destination already told us there is nothing to discover;
         // do not even spawn a background Task for it again until the suppression window elapses.
         if (missSuppressedUntil.TryGetValue(key, out var suppressedUntil) && DateTime.UtcNow < suppressedUntil)
             return;

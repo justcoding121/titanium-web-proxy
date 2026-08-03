@@ -150,7 +150,7 @@ internal class LimitedStream : Stream
         {
             while (bytesRemaining != -1)
             {
-                var res = await ReadAsync(buffer, 0, buffer.Length);
+                var res = await ReadAsync(buffer.AsMemory(), CancellationToken.None);
                 if (res == 0) break;
             }
         }

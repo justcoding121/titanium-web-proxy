@@ -123,7 +123,7 @@ internal sealed class Http2OriginConnection
 
                 var preface = Http2Helper.ConnectionPreface;
                 connection.Http2SessionStarted = true;
-                await instance.stream.WriteAsync(preface, 0, preface.Length, cancellationToken);
+                await instance.stream.WriteAsync(preface.AsMemory(), cancellationToken);
                 // Shared with the H2↔H2 MITM path (SendHttp2ClientConnectionStartupAsync).
                 await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.stream, cancellationToken);
 
@@ -475,7 +475,7 @@ internal sealed class Http2OriginConnection
         await writeLock.WaitAsync(cancellationToken);
         try
         {
-            await stream.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length, cancellationToken);
+            await stream.WriteAsync(frameHeaderBuffer.AsMemory(), cancellationToken);
         }
         finally
         {
@@ -495,8 +495,8 @@ internal sealed class Http2OriginConnection
         await writeLock.WaitAsync(cancellationToken);
         try
         {
-            await stream.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length, cancellationToken);
-            await stream.WriteAsync(payload, 0, payload.Length, cancellationToken);
+            await stream.WriteAsync(frameHeaderBuffer.AsMemory(), cancellationToken);
+            await stream.WriteAsync(payload.AsMemory(), cancellationToken);
         }
         finally
         {
@@ -666,7 +666,7 @@ internal sealed class Http2OriginConnection
                             return;
                         }
 
-                        await headerBlockBuffer.WriteAsync(data, 0, data.Length, cancellationToken);
+                        await headerBlockBuffer.WriteAsync(data.AsMemory(), cancellationToken);
                         if ((flags & Http2FrameFlag.EndHeaders) != 0)
                         {
                             ProcessHeaderBlock(streamId, headerBlockBuffer.ToArray(), headerBlockEndStream);
@@ -697,7 +697,7 @@ internal sealed class Http2OriginConnection
                             return;
                         }
 
-                        await headerBlockBuffer.WriteAsync(payload, 0, payload.Length, cancellationToken);
+                        await headerBlockBuffer.WriteAsync(payload.AsMemory(), cancellationToken);
                         if ((flags & Http2FrameFlag.EndHeaders) != 0)
                         {
                             ProcessHeaderBlock(streamId, headerBlockBuffer.ToArray(), headerBlockEndStream);
@@ -1058,7 +1058,7 @@ internal sealed class Http2OriginConnection
         var totalRead = 0;
         while (bytesToRead > 0)
         {
-            var read = await stream.ReadAsync(buffer, offset, bytesToRead, cancellationToken);
+            var read = await stream.ReadAsync(buffer.AsMemory(offset, bytesToRead), cancellationToken);
             if (read == 0) break;
 
             totalRead += read;

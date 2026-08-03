@@ -1376,7 +1376,7 @@ namespace Titanium.Web.Proxy.Http2
                         // start of a multi-frame header block; buffer this fragment and wait for the
                         // CONTINUATION frame(s) that must immediately follow on the same stream.
                         pendingHeaderBlock = new MemoryStream();
-                        await pendingHeaderBlock.WriteAsync(buffer, offset, fragmentLength, cancellationToken);
+                        await pendingHeaderBlock.WriteAsync(buffer.AsMemory(offset, fragmentLength), cancellationToken);
                         pendingHeaderStreamId = streamId;
                         pendingHeaderArgs = args;
                         pendingHeaderRr = rr;
@@ -1438,7 +1438,7 @@ namespace Titanium.Web.Proxy.Http2
                         }
                     }
 
-                    await pendingHeaderBlock.WriteAsync(buffer, 0, length, cancellationToken);
+                    await pendingHeaderBlock.WriteAsync(buffer.AsMemory(0, length), cancellationToken);
 
                     if ((flags & Http2FrameFlag.EndHeaders) != 0)
                     {
@@ -1697,7 +1697,7 @@ namespace Titanium.Web.Proxy.Http2
                                 // Disabled, or Observe: the breach (if any) was already recorded above, but
                                 // the stream is not reset and the caller's whole-body read is not faulted -
                                 // per the plan, Observe detects without acting.
-                                await data.WriteAsync(buffer, offset, length, cancellationToken);
+                                await data.WriteAsync(buffer.AsMemory(offset, length), cancellationToken);
                             }
                         }
                         else if (!rr.Http2IgnoreBodyFrames && !rr.IsBodyRead &&
@@ -1820,9 +1820,8 @@ namespace Titanium.Web.Proxy.Http2
                             };
                             var pingFrameHeaderBuffer = new byte[9];
                             pingFrameHeader.CopyToBuffer(pingFrameHeaderBuffer);
-                            await input.WriteAsync(pingFrameHeaderBuffer, 0, pingFrameHeaderBuffer.Length,
-                                cancellationToken);
-                            await input.WriteAsync(ackPayload, 0, 8, cancellationToken);
+                            await input.WriteAsync(pingFrameHeaderBuffer.AsMemory(), cancellationToken);
+                            await input.WriteAsync(ackPayload.AsMemory(0, 8), cancellationToken);
                         });
                     }
                     // an ACK for a PING this proxy never sends today - nothing to do.
@@ -2242,8 +2241,8 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             // Content-Encoding may list multiple stacked encodings (e.g. "gzip, br");
                             // previously only a single encoding name was ever recognized here, so a
-                            // stacked value matched none of the known headers and silently fell through
-                            // CompressionNameToEnum as Unsupported.
+                            // stacked value matched none of the known names and silently fell through
+                            // as unsupported.
                             var (decompressStream, owned) =
                                 CompressionUtil.CreateDecompressionChain(new MemoryStream(body), rr.ContentEncoding);
                             try
@@ -2355,9 +2354,8 @@ namespace Titanium.Web.Proxy.Http2
                         // Frame integrity: opt out of cancellation explicitly so a cancelled session
                         // token cannot leave a half-written frame on the wire.
                         frameHeader.CopyToBuffer(frameHeaderBuffer);
-                        await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length,
-                            CancellationToken.None);
-                        await output.WriteAsync(buffer, 0, frameLength, CancellationToken.None);
+                        await output.WriteAsync(frameHeaderBuffer.AsMemory(), CancellationToken.None);
+                        await output.WriteAsync(buffer.AsMemory(0, frameLength), CancellationToken.None);
                     }
 
                     await lockedOutputWrite(writeFrame);
@@ -2385,11 +2383,6 @@ namespace Titanium.Web.Proxy.Http2
                     return;
                 }
 
-                /*using (var fs = new System.IO.FileStream($@"c:\temp\{connectionId}.{streamId}.dat", FileMode.Append))
-                {
-                    fs.Write(headerBuffer, 0, headerBuffer.Length);
-                    fs.Write(buffer, 0, length);
-                }*/
             }
             }
             finally
@@ -2626,8 +2619,8 @@ namespace Titanium.Web.Proxy.Http2
                 frameHeader.Flags = flags;
 
                 frameHeader.CopyToBuffer(frameHeaderBuffer);
-                await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length);
-                await output.WriteAsync(data, pos, chunkLength);
+                await output.WriteAsync(frameHeaderBuffer.AsMemory());
+                await output.WriteAsync(data.AsMemory(pos, chunkLength));
 
                 pos += chunkLength;
                 first = false;
@@ -2661,8 +2654,8 @@ namespace Titanium.Web.Proxy.Http2
                     frameHeader.Flags = pos < body.Length ? (Http2FrameFlag)0 : Http2FrameFlag.EndStream;
 
                     frameHeader.CopyToBuffer(frameHeaderBuffer);
-                    await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length, cancellationToken);
-                    await output.WriteAsync(buffer, 0, bodyFrameLength, cancellationToken);
+                    await output.WriteAsync(frameHeaderBuffer.AsMemory(), cancellationToken);
+                    await output.WriteAsync(buffer.AsMemory(0, bodyFrameLength), cancellationToken);
                 }
             }
         }
@@ -2687,7 +2680,7 @@ namespace Titanium.Web.Proxy.Http2
                 frameHeader.Length = 0;
                 frameHeader.Flags = endStream ? Http2FrameFlag.EndStream : (Http2FrameFlag)0;
                 frameHeader.CopyToBuffer(frameHeaderBuffer);
-                await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length, cancellationToken);
+                await output.WriteAsync(frameHeaderBuffer.AsMemory(), cancellationToken);
                 return;
             }
 
@@ -2702,8 +2695,8 @@ namespace Titanium.Web.Proxy.Http2
                 frameHeader.Length = frameLength;
                 frameHeader.Flags = isLastFrame && endStream ? Http2FrameFlag.EndStream : (Http2FrameFlag)0;
                 frameHeader.CopyToBuffer(frameHeaderBuffer);
-                await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length, cancellationToken);
-                await output.WriteAsync(data, pos, frameLength, cancellationToken);
+                await output.WriteAsync(frameHeaderBuffer.AsMemory(), cancellationToken);
+                await output.WriteAsync(data.AsMemory(pos, frameLength), cancellationToken);
 
                 pos += frameLength;
             }
@@ -2720,11 +2713,11 @@ namespace Titanium.Web.Proxy.Http2
             frameHeader.Flags = 0;
             frameHeader.Length = 4;
             frameHeader.CopyToBuffer(frameHeaderBuffer);
-            await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length);
+            await output.WriteAsync(frameHeaderBuffer.AsMemory());
 
             var payload = new byte[4];
             BinaryPrimitives.WriteInt32BigEndian(payload, (int)errorCode);
-            await output.WriteAsync(payload, 0, 4);
+            await output.WriteAsync(payload.AsMemory(0, 4));
         }
 
         /// <summary>Writes a GOAWAY frame (RFC 7540 ?6.8) announcing connection-level shutdown with the given error code.</summary>
@@ -2738,16 +2731,16 @@ namespace Titanium.Web.Proxy.Http2
             frameHeader.Flags = 0;
             frameHeader.Length = 8;
             frameHeader.CopyToBuffer(frameHeaderBuffer);
-            await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length);
+            await output.WriteAsync(frameHeaderBuffer.AsMemory());
 
             var payload = new byte[8];
             BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), lastStreamId & 0x7fffffff);
             BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(4, 4), (int)errorCode);
-            await output.WriteAsync(payload, 0, 8);
+            await output.WriteAsync(payload.AsMemory(0, 8));
 
             // GOAWAY is often immediately followed by connection teardown (the sending relay returns
-            // and cancels its peer). Flush so the frame reaches the wire before the socket is closed;
-            // otherwise clients can observe a TCP RST without ever seeing the error code.
+            // and cancels its peer). Flushing here ensures the frame reaches the wire before the socket
+            // closes; otherwise clients can observe a TCP RST without ever seeing the error code.
             await output.FlushAsync();
         }
 
@@ -2762,11 +2755,11 @@ namespace Titanium.Web.Proxy.Http2
             frameHeader.Flags = 0;
             frameHeader.Length = 4;
             frameHeader.CopyToBuffer(frameHeaderBuffer);
-            await output.WriteAsync(frameHeaderBuffer, 0, frameHeaderBuffer.Length);
+            await output.WriteAsync(frameHeaderBuffer.AsMemory());
 
             var payload = new byte[4];
             BinaryPrimitives.WriteInt32BigEndian(payload, increment & 0x7fffffff);
-            await output.WriteAsync(payload, 0, 4);
+            await output.WriteAsync(payload.AsMemory(0, 4));
         }
 
         /// <summary>
@@ -2880,7 +2873,7 @@ namespace Titanium.Web.Proxy.Http2
             int totalRead = 0;
             while (bytesToRead > 0)
             {
-                int read = await input.ReadAsync(buffer, offset, bytesToRead, cancellationToken);
+                int read = await input.ReadAsync(buffer.AsMemory(offset, bytesToRead), cancellationToken);
                 if (read == 0)
                 {
                     break;
@@ -3003,12 +2996,17 @@ namespace Titanium.Web.Proxy.Http2
                 throw new NotSupportedException("Use WriteAsync.");
             }
 
-            public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct)
+            public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct)
             {
-                if (count == 0) return;
+                return WriteAsync(buffer.AsMemory(offset, count), ct).AsTask();
+            }
 
-                var data = new byte[count];
-                Buffer.BlockCopy(buffer, offset, data, 0, count);
+            public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
+                CancellationToken ct = default)
+            {
+                if (buffer.IsEmpty) return;
+
+                var data = buffer.ToArray();
 
                 await clientWriteLock.WaitAsync(cancellationToken);
                 try
@@ -3019,19 +3017,6 @@ namespace Titanium.Web.Proxy.Http2
                 finally
                 {
                     clientWriteLock.Release();
-                }
-            }
-
-            public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
-                CancellationToken ct = default)
-            {
-                if (System.Runtime.InteropServices.MemoryMarshal.TryGetArray(buffer, out var segment) &&
-                    segment.Array != null)
-                    await WriteAsync(segment.Array, segment.Offset, segment.Count, ct);
-                else
-                {
-                    var array = buffer.ToArray();
-                    await WriteAsync(array, 0, array.Length, ct);
                 }
             }
 

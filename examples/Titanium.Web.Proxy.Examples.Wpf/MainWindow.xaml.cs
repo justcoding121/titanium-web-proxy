@@ -67,19 +67,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             Directory.CreateDirectory(certificateDirectory);
             proxyServer.CertificateManager.PfxFilePath = Path.Combine(certificateDirectory, "rootCert.pfx");
 
-            //proxyServer.EnableHttp2 = false;
-
-            //proxyServer.CertificateManager.CertificateEngine = CertificateEngine.DefaultWindows;
-
-            ////Set a password for the .pfx file
-            //proxyServer.CertificateManager.PfxPassword = "PfxPassword";
-
-            ////Set Name(path) of the Root certificate file
-            //proxyServer.CertificateManager.PfxFilePath = @"C:\NameFolder\rootCert.pfx";
-
-            ////do you want Replace an existing Root certificate file(.pfx) if password is incorrect(RootCertificate=null)?  yes====>true
-            //proxyServer.CertificateManager.OverwritePfxFile = true;
-
             // Cache generated leaf certificates on disk (library default is off) so repeat runs against
             // the same hosts reuse them instead of regenerating a key pair per host on every launch.
             // Connection pooling and origin-connection prefetch are already on by library default.
@@ -96,37 +83,9 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             proxyServer.ResourceLimits = ProxyResourceLimits.Default.WithCertificateCacheBounds(
                 maxCertificateCacheEntries: 2048, maxCertificateDiskCacheEntries: null);
 
-            //increase the ThreadPool (for server prod)
-            //proxyServer.ThreadPoolWorkerThread = Environment.ProcessorCount * 6;
-
-            ////if you need Load or Create Certificate now. ////// "true" if you need Enable===> Trust the RootCertificate used by this proxy server
-            //proxyServer.CertificateManager.EnsureRootCertificate(true);
-
-            ////or load directly certificate(As Administrator if need this)
-            ////and At the same time chose path and password
-            ////if password is incorrect and (overwriteRootCert=true)(RootCertificate=null) ====> replace an existing .pfx file
-            ////note : load now (if existed)
-            //proxyServer.CertificateManager.LoadRootCertificate(@"C:\NameFolder\rootCert.pfx", "PfxPassword");
-
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000);
 
             proxyServer.AddEndPoint(explicitEndPoint);
-            //proxyServer.UpStreamHttpProxy = new ExternalProxy
-            //{
-            //    HostName = "158.69.115.45",
-            //    Port = 3128,
-            //    UserName = "Titanium",
-            //    Password = "Titanium",
-            //};
-
-            //var socksEndPoint = new SocksProxyEndPoint(IPAddress.Any, 1080, true)
-            //{
-            //    // Generic Certificate hostname to use
-            //    // When SNI is disabled by client
-            //    //GenericCertificateName = "google.com"
-            //};
-
-            //proxyServer.AddEndPoint(socksEndPoint);
 
             // HTTP/3 transparent QUIC endpoint (experimental — suppress TWP001 to opt in).
             // Requires MsQuic and a supported OS (Windows 11 / Server 2022+, or libmsquic on Linux/macOS).
@@ -359,8 +318,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
         private async Task ProxyServer_BeforeRequest(object sender, SessionEventArgs e)
         {
-            //if (e.HttpClient.Request.HttpVersion.Major != 2) return;
-
             SessionListItem item = null;
             await Dispatcher.InvokeAsync(() => { item = AddSession(e); });
 
@@ -426,7 +383,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 IsTunnelConnect = isTunnelConnect
             };
 
-            //if (isTunnelConnect || e.HttpClient.Request.UpgradeToWebSocket)
             e.DataReceived += (sender, args) =>
             {
                 var session = (SessionEventArgsBase)sender;
@@ -512,7 +468,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             var truncated = data.Length > truncateLimit;
             if (truncated) data = data.Take(truncateLimit).ToArray();
 
-            //string hexStr = string.Join(" ", data.Select(x => x.ToString("X2")));
             var sb = new StringBuilder();
             sb.AppendLine("URI: " + request.RequestUri);
             sb.Append(request.HeaderText);
@@ -532,7 +487,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             truncated = data.Length > truncateLimit;
             if (truncated) data = data.Take(truncateLimit).ToArray();
 
-            //hexStr = string.Join(" ", data.Select(x => x.ToString("X2")));
             sb = new StringBuilder();
             sb.Append(response.HeaderText);
             sb.Append(response.Encoding.GetString(data));

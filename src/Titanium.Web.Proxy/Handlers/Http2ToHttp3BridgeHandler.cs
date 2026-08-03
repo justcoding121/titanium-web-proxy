@@ -159,8 +159,8 @@ public partial class ProxyServer
         if (!ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var streamState))
             return;
 
-        // Cookie header consolidation: RFC 7540 §8.1.2.5 permits multiple Cookie fields over H2;
-        // consolidate before forwarding to avoid confusing origins or middleware.
+        // RFC 7540 section 8.1.2.5 permits multiple Cookie fields over HTTP/2; consolidate before
+        // forwarding to avoid confusing origins or middleware.
         var cookieHeaders = sessionArgs.HttpClient.Request.Headers.GetHeaders("Cookie");
         if (cookieHeaders is { Count: > 1 })
         {

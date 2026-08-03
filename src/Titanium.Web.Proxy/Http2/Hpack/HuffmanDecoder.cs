@@ -163,7 +163,6 @@ internal class HuffmanDecoder
         /// <param name="bits">the number of bits matched by this node</param>
         public Node(int symbol, int bits)
         {
-            //assert(bits > 0 && bits <= 8);
             Symbol = symbol;
             Bits = bits;
             Children = null;

@@ -722,9 +722,8 @@ internal class TcpConnectionFactory : IDisposable
                             : ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)attemptSocket,
                                 socksRemoteIpAddresses![0], connectPortNumber);
 
-                        // Task.WhenAny never faults/cancels itself - it just resolves with whichever
-                        // constituent task finished first, so no try/catch is needed around this await;
-                        // the completion check below is what actually distinguishes success from timeout.
+                        // WhenAny never faults or cancels by itself—it only completes when one child task finishes;
+                        // the completion check below distinguishes success from timeout.
                         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(attemptToken);
                         timeoutCts.CancelAfter(connectTimeoutMs);
                         await Task.WhenAny(connectTask, Task.Delay(Timeout.Infinite, timeoutCts.Token));
@@ -917,7 +916,7 @@ internal class TcpConnectionFactory : IDisposable
                         var clientCertificate = proxyServer.SelectClientCertificate(sender, sessionArgs, targetHost,
                             localCertificates, remoteCertificate, acceptableIssuers);
 
-                        // a per-session client certificate makes this TLS connection identity-specific;
+                        // A per-session client certificate makes this TLS connection identity-specific;
                         // it must not be reused by another session from the pool.
                         if (clientCertificate != null) usedClientCertificate = true;
 
@@ -1248,14 +1247,14 @@ internal class TcpConnectionFactory : IDisposable
         {
             while (count > 0)
             {
-                var read = await stream.ReadAsync(buffer, 0, (int)Math.Min(buffer.Length, count), cancellationToken);
+                var read = await stream.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, count)), cancellationToken);
                 if (read <= 0)
                     throw new IOException("Upstream proxy closed the connection while sending a response body");
 
                 if (preview != null && preview.Length < UpstreamProxyRejectionBodyPreviewLimit)
                 {
                     var toCopy = Math.Min(read, UpstreamProxyRejectionBodyPreviewLimit - (int)preview.Length);
-                    await preview.WriteAsync(buffer, 0, toCopy, cancellationToken);
+                    await preview.WriteAsync(buffer.AsMemory(0, toCopy), cancellationToken);
                 }
 
                 count -= read;

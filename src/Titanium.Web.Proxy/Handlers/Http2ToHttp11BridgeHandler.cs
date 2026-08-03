@@ -360,8 +360,8 @@ public partial class ProxyServer
                     try
                     {
                         int read;
-                        while ((read = await limited.ReadAsync(buffer, 0, buffer.Length, bodyCancellationToken)) > 0)
-                            await bodyStream.WriteAsync(buffer, 0, read, bodyCancellationToken);
+                        while ((read = await limited.ReadAsync(buffer.AsMemory(), bodyCancellationToken).AsTask()) > 0)
+                            await bodyStream.WriteAsync(buffer.AsMemory(0, read), bodyCancellationToken);
 
                         await limited.Finish();
                     }
@@ -754,7 +754,7 @@ public partial class ProxyServer
             int read;
             try
             {
-                read = await source.ReadAsync(buf, 0, buf.Length, CancellationToken.None);
+                read = await source.ReadAsync(buf.AsMemory(), CancellationToken.None);
             }
             catch (Exception)
             {
@@ -765,7 +765,7 @@ public partial class ProxyServer
 
             try
             {
-                await destination.WriteAsync(buf, 0, read, writeCancellationToken);
+                await destination.WriteAsync(buf.AsMemory(0, read), writeCancellationToken);
                 await destination.FlushAsync(writeCancellationToken);
                 sessionArgs.OnDataReceived(buf, 0, read);
             }
@@ -786,7 +786,7 @@ public partial class ProxyServer
         var oneByte = new byte[1];
         while (true)
         {
-            var r = await stream.ReadAsync(oneByte, 0, 1, cancellationToken);
+            var r = await stream.ReadAsync(oneByte.AsMemory(), cancellationToken);
             if (r == 0) return sb.Length > 0 ? sb.ToString() : null;
             var c = (char)oneByte[0];
             if (c == '\n') return sb.ToString().TrimEnd('\r');

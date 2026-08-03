@@ -123,8 +123,6 @@ public class WebSocketDecoder
 
             if (masked)
             {
-                //mask = (uint)(((long)data1[idx++] << 24) + (data1[idx++] << 16) + (data1[idx++] << 8) + data1[idx++]);
-                //mask = (uint)(data1[idx++] + (data1[idx++] << 8) + (data1[idx++] << 16) + ((long)data1[idx++] << 24));
                 var uData = MemoryMarshal.Cast<byte, uint>(data1.Slice(idx, (int)size + 4));
                 idx += 4;
 

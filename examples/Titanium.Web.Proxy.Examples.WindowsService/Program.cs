@@ -53,7 +53,7 @@ try
     // Must match the service Name in install.ps1 / remove.ps1.
     builder.Services.AddWindowsService(options => options.ServiceName = "TitaniumWebProxy");
 
-    // Serilog owns all sinks (file + Event Log Warning+ + console); drop default MEL providers.
+    // Serilog owns all sinks (file, Event Log Warning+, console); default Microsoft logging providers are cleared.
     builder.Logging.ClearProviders();
     builder.Services.AddSerilog();
     builder.Services.Configure<ProxySettings>(builder.Configuration.GetSection("ProxySettings"));

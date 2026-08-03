@@ -189,7 +189,7 @@ public partial class ProxyServer
                             // A BeforeRequest-time synthetic response (Ok/Redirect/GenericResponse/etc.) has
                             // already locked the response and made its one BeforeResponse-equivalent decision;
                             // do not give it a second BeforeResponse pass (mirrors HandleHttpSessionResponse's
-                            // own `if (!response.Locked)` guard).
+                            // guard that skips locked responses).
                             if (!args.HttpClient.Response.Locked) await OnBeforeResponse(args);
                             await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
 

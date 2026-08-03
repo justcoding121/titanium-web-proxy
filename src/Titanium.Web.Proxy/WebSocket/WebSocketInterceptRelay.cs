@@ -101,7 +101,7 @@ internal static class WebSocketInterceptRelay
             await writeLock.WaitAsync().ConfigureAwait(false);
             try
             {
-                await stream.WriteAsync(wire, 0, wire.Length).ConfigureAwait(false);
+                await stream.WriteAsync(wire.AsMemory()).ConfigureAwait(false);
                 await stream.FlushAsync().ConfigureAwait(false);
             }
             finally
@@ -134,7 +134,7 @@ internal static class WebSocketInterceptRelay
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                var read = await source.ReadAsync(buffer, 0, buffer.Length, cancellationToken)
+                var read = await source.ReadAsync(buffer.AsMemory(), cancellationToken)
                     .ConfigureAwait(false);
                 if (read == 0) return null;
 
@@ -181,7 +181,7 @@ internal static class WebSocketInterceptRelay
                         await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
                         try
                         {
-                            await destination.WriteAsync(wire, 0, wire.Length, cancellationToken)
+                            await destination.WriteAsync(wire.AsMemory(), cancellationToken)
                                 .ConfigureAwait(false);
                             await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
                             onWrite(wire, 0, wire.Length);

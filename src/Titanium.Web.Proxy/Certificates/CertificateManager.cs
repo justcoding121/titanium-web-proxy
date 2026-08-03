@@ -635,13 +635,6 @@ public sealed class CertificateManager : IDisposable
 
     private X509Certificate2 MakeCertificate(string certificateName, bool isRootCertificate)
     {
-        //if (isRoot != (null == signingCertificate))
-        //{
-        //    throw new ArgumentException(
-        //        "You must specify a Signing Certificate if and only if you are not creating a root.",
-        //        nameof(signingCertificate));
-        //}
-
         if (!isRootCertificate && RootCertificate == null) CreateRootCertificate();
 
         var certificate = CertEngine.MakeCertificate(certificateName, isRootCertificate ? null : RootCertificate);

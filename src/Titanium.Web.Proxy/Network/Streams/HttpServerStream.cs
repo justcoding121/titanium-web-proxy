@@ -42,8 +42,8 @@ internal sealed class HttpServerStream : HttpStream
 
         if (httpStatus.Length == 0)
         {
-            // A blank line before the status is unusual but treated as "try the next line";
-            // a subsequent EOF is still a normal close, not a protocol error.
+            // A blank line before the status is unusual; read again. A subsequent EOF is still a normal close,
+            // not a protocol error.
             httpStatus = await ReadLineAsync(cancellationToken);
             if (httpStatus == null)
                 return null;
