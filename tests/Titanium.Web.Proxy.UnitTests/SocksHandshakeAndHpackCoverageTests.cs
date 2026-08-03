@@ -130,6 +130,83 @@ public class SocksHandshakeAndHpackCoverageTests
     }
 
     [TestMethod]
+    public async Task ProxySocket_Socks5_UserPassAuthRejected_Throws()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var proxyEp = (IPEndPoint)listener.LocalEndpoint;
+
+        var peer = Task.Run(async () =>
+        {
+            using var client = await listener.AcceptTcpClientAsync();
+            using var stream = client.GetStream();
+            var buf = new byte[64];
+            Assert.IsTrue(await ReadExactAsync(stream, buf, 0, 4));
+            await stream.WriteAsync(new byte[] { 0x05, 0x02 }); // username/password
+            Assert.IsTrue(await ReadExactAsync(stream, buf, 0, 2));
+            var ulen = buf[1];
+            Assert.IsTrue(await ReadExactAsync(stream, buf, 0, ulen + 1));
+            var plen = buf[ulen];
+            Assert.IsTrue(await ReadExactAsync(stream, buf, 0, plen));
+            await stream.WriteAsync(new byte[] { 0x01, 0xFF }); // auth failure
+        });
+
+        using var sock = new ProxySock(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+        {
+            ProxyType = ProxyTypes.Socks5,
+            ProxyEndPoint = proxyEp,
+            ProxyUser = "alice",
+            ProxyPass = "bad"
+        };
+        var ar = sock.BeginConnect(IPAddress.Parse("1.2.3.4"), 80, null, null);
+        try
+        {
+            sock.EndConnect(ar);
+            Assert.Fail("expected auth failure");
+        }
+        catch (Exception ex) when (ex is ProxyException or SocketException)
+        {
+        }
+
+        await peer;
+    }
+
+    [TestMethod]
+    public async Task ProxySocket_Socks5_DomainAtypReply_Succeeds()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var proxyEp = (IPEndPoint)listener.LocalEndpoint;
+
+        var peer = Task.Run(async () =>
+        {
+            using var client = await listener.AcceptTcpClientAsync();
+            using var stream = client.GetStream();
+            var buf = new byte[64];
+            Assert.IsTrue(await ReadExactAsync(stream, buf, 0, 4));
+            await stream.WriteAsync(new byte[] { 0x05, 0x00 });
+            Assert.IsTrue(await ReadExactAsync(stream, buf, 0, 10));
+            // ATYP=3 domain reply: VER REP RSV ATYP LEN host port
+            await stream.WriteAsync(new byte[]
+            {
+                0x05, 0x00, 0x00, 0x03, 0x09,
+                (byte)'l', (byte)'o', (byte)'c', (byte)'a', (byte)'l',
+                (byte)'h', (byte)'o', (byte)'s', (byte)'t',
+                0x00, 0x50
+            });
+        });
+
+        using var sock = new ProxySock(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+        {
+            ProxyType = ProxyTypes.Socks5,
+            ProxyEndPoint = proxyEp
+        };
+        var ar = sock.BeginConnect(IPAddress.Parse("1.2.3.4"), 80, null, null);
+        sock.EndConnect(ar);
+        await peer;
+    }
+
+    [TestMethod]
     public async Task ProxySocket_Socks4_Reply90_Succeeds_Reply91_Fails()
     {
         using var okListener = new TcpListener(IPAddress.Loopback, 0);

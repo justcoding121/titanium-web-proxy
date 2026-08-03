@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -317,6 +318,63 @@ public class CertificateManagerStorageTests
         var thumb = tasks[0].Result!.Thumbprint;
         foreach (var t in tasks)
             Assert.AreEqual(thumb, t.Result!.Thumbprint);
+    }
+
+    [TestMethod]
+    public void IsSelfSigned_RootTrue_LeafFalse()
+    {
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        using var leaf = mgr.CreateServerCertificate("leaf-selfsigned-check.example").GetAwaiter().GetResult()!;
+
+        var isSelfSigned = typeof(CertificateManager).GetMethod("IsSelfSigned",
+            BindingFlags.Static | BindingFlags.NonPublic)!;
+        Assert.IsTrue((bool)isSelfSigned.Invoke(null, [mgr.RootCertificate!])!);
+        Assert.IsFalse((bool)isSelfSigned.Invoke(null, [leaf])!);
+    }
+
+    [TestMethod]
+    public void CreateSslCertificateContext_SelfSignedRoot_CreatesWithoutStoreTrust()
+    {
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        using var leaf = mgr.CreateServerCertificate("ctx.example").GetAwaiter().GetResult()!;
+
+        var ctx = mgr.CreateSslCertificateContext(leaf);
+        Assert.IsNotNull(ctx);
+        Assert.AreEqual(leaf.Thumbprint, ctx.TargetCertificate.Thumbprint);
+    }
+
+    [TestMethod]
+    public void EnforceCertificateCacheBound_NullProviderAndZeroCap_DoNotThrow()
+    {
+        using var unbounded = new CertificateManager(null, null, false, false, false, NullLogger.Instance,
+            maxCacheEntriesProvider: () => null)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle
+        };
+        Assert.IsTrue(unbounded.CreateRootCertificate(false));
+        using var a = unbounded.CreateServerCertificate("a.bound.example").GetAwaiter().GetResult()!;
+        Assert.IsNotNull(a);
+        var enforce = typeof(CertificateManager).GetMethod("EnforceCertificateCacheBound",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        enforce.Invoke(unbounded, null);
+
+        using var zeroCap = new CertificateManager(null, null, false, false, false, NullLogger.Instance,
+            maxCacheEntriesProvider: () => 0)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle
+        };
+        Assert.IsTrue(zeroCap.CreateRootCertificate(false));
+        using var b = zeroCap.CreateServerCertificate("b.bound.example").GetAwaiter().GetResult()!;
+        Assert.IsNotNull(b);
+        enforce.Invoke(zeroCap, null);
     }
 
     private sealed class FakeCertificateCache : ICertificateCache

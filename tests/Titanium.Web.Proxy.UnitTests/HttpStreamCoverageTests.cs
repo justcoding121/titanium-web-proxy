@@ -480,6 +480,111 @@ public class HttpStreamCoverageTests
     }
 
     [TestMethod]
+    public async Task HandleBodyWrite_RequestChunkedEarlyStop_DrainsRemaining()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var hookCalls = 0;
+        proxy.OnRequestBodyWrite += (_, e) =>
+        {
+            hookCalls++;
+            if (hookCalls == 1) e.IsLastChunk = true;
+            return Task.CompletedTask;
+        };
+
+        var payload = Encoding.ASCII.GetBytes("4\r\nabcd\r\n4\r\nefgh\r\n0\r\n\r\n");
+        var (reader, writer, sinkStream) =
+            await CreateNetworkCopyPairAsync(proxy, payload, CancellationToken.None);
+
+        using (reader)
+        using (writer)
+        {
+            using (var session = MakeSession(proxy))
+            {
+                session.HttpClient.Request.OriginalHasBody = true;
+                session.HttpClient.Request.OriginalIsChunked = true;
+                session.HttpClient.Request.IsBodyRead = false;
+
+                await reader.CopyBodyAsync(writer, isChunked: true, contentLength: -1, isRequest: true, session,
+                    CancellationToken.None);
+                var output = await ReadAvailableAsync(sinkStream, TimeSpan.FromSeconds(5));
+                var text = Encoding.ASCII.GetString(output);
+
+                Assert.AreEqual(1, hookCalls);
+                StringAssert.Contains(text, "4\r\nabcd\r\n");
+                StringAssert.Contains(text, "0\r\n");
+                Assert.IsFalse(text.Contains("efgh", StringComparison.Ordinal));
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task HandleBodyWrite_RequestBodyBytesNull_SkipsWriteButEmitsTerminator()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        proxy.OnRequestBodyWrite += (_, e) =>
+        {
+            e.BodyBytes = null!;
+            e.IsLastChunk = true;
+            return Task.CompletedTask;
+        };
+
+        var payload = Encoding.ASCII.GetBytes("5\r\nhello\r\n0\r\n\r\n");
+        var (reader, writer, sinkStream) =
+            await CreateNetworkCopyPairAsync(proxy, payload, CancellationToken.None);
+
+        using (reader)
+        using (writer)
+        {
+            using (var session = MakeSession(proxy))
+            {
+                session.HttpClient.Request.OriginalHasBody = true;
+                session.HttpClient.Request.OriginalIsChunked = true;
+                session.HttpClient.Request.IsBodyRead = false;
+
+                await reader.CopyBodyAsync(writer, isChunked: true, contentLength: -1, isRequest: true, session,
+                    CancellationToken.None);
+                var output = await ReadAvailableAsync(sinkStream, TimeSpan.FromSeconds(5));
+                var text = Encoding.ASCII.GetString(output);
+
+                Assert.IsFalse(text.Contains("hello", StringComparison.Ordinal));
+                StringAssert.Contains(text, "0\r\n");
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task HandleBodyWrite_RequestRewritesBodyBytes()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        proxy.OnRequestBodyWrite += (_, e) =>
+        {
+            e.BodyBytes = Encoding.ASCII.GetBytes("ZZ");
+            return Task.CompletedTask;
+        };
+
+        var payload = Encoding.ASCII.GetBytes("5\r\nhello\r\n0\r\n\r\n");
+        var (reader, writer, sinkStream) =
+            await CreateNetworkCopyPairAsync(proxy, payload, CancellationToken.None);
+
+        using (reader)
+        using (writer)
+        {
+            using (var session = MakeSession(proxy))
+            {
+                session.HttpClient.Request.OriginalHasBody = true;
+                session.HttpClient.Request.OriginalIsChunked = true;
+                session.HttpClient.Request.IsBodyRead = false;
+
+                await reader.CopyBodyAsync(writer, isChunked: true, contentLength: -1, isRequest: true, session,
+                    CancellationToken.None);
+                var text = Encoding.ASCII.GetString(await ReadAvailableAsync(sinkStream, TimeSpan.FromSeconds(5)));
+                StringAssert.Contains(text, "2\r\nZZ\r\n");
+                Assert.IsFalse(text.Contains("hello", StringComparison.Ordinal));
+            }
+        }
+    }
+
+    [TestMethod]
     public void ReadByteFromBuffer_ConsumesBufferedBytes_AndThrowsWhenEmpty()
     {
         using var stream = MakeReader(Encoding.ASCII.GetBytes("ab"));
