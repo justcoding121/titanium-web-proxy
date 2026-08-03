@@ -286,5 +286,33 @@ namespace Titanium.Web.Proxy.UnitTests
                 Assert.Inconclusive($"COM enrollment unavailable headless (may need UI/elevation): {ex.Message}");
             }
         }
+
+        [TestMethod]
+        [SupportedOSPlatform("windows")]
+        public void WinCertificateMaker_MakeLeafSignedByRoot_HeadlessWithoutStoreTrust()
+        {
+            if (!OperatingSystem.IsWindows())
+                Assert.Inconclusive("WinCertificateMaker requires Windows X509Enrollment COM.");
+
+            try
+            {
+                var maker = new WinCertificateMaker(30, 7);
+                var rootCn = $"twp-root-{Guid.NewGuid():N}.local";
+                var leafCn = $"twp-leaf-{Guid.NewGuid():N}.local";
+                using var root = maker.MakeCertificate(rootCn, null);
+                using var leaf = maker.MakeCertificate(leafCn, root);
+                Assert.IsTrue(leaf.HasPrivateKey);
+                StringAssert.Contains(leaf.Subject, leafCn);
+                StringAssert.Contains(leaf.Issuer, rootCn);
+            }
+            catch (PlatformNotSupportedException ex)
+            {
+                Assert.Inconclusive($"X509Enrollment COM unavailable: {ex.Message}");
+            }
+            catch (COMException ex)
+            {
+                Assert.Inconclusive($"COM enrollment unavailable headless (may need UI/elevation): {ex.Message}");
+            }
+        }
     }
 }
