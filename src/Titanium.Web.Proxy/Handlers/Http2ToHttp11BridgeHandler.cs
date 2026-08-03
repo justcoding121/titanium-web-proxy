@@ -180,7 +180,7 @@ public partial class ProxyServer
                             $"RFC 8441 WebSocket tunnel failed for stream {ctx.StreamId}",
                             new ProxyHttpException(
                                 $"RFC 8441 WebSocket tunnel failed for stream {ctx.StreamId}",
-                                t.Exception!.GetBaseException(), sessionArgs));
+                                t.Exception.GetBaseException(), sessionArgs));
                 }, TaskScheduler.Default);
             tunnelStreamState.SyntheticTask = tunnelTask;
             ctx.ConnectionState.PendingSynthetics.Add(tunnelTask);
@@ -213,7 +213,7 @@ public partial class ProxyServer
                         $"HTTP/2-to-HTTP/1.1 bridge round trip failed for stream {ctx.StreamId}",
                         new ProxyHttpException(
                             $"HTTP/2-to-HTTP/1.1 bridge round trip failed for stream {ctx.StreamId}",
-                            t.Exception!.GetBaseException(), sessionArgs));
+                            t.Exception.GetBaseException(), sessionArgs));
             }, TaskScheduler.Default);
         streamState.SyntheticTask = bridgeTask;
         ctx.ConnectionState.PendingSynthetics.Add(bridgeTask);
