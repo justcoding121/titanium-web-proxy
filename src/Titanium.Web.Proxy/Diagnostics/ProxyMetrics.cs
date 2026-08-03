@@ -118,7 +118,7 @@ internal static class ProxyMetrics
     /// </summary>
     private static readonly ConditionalWeakTable<CertificateManager, object?> LiveCertificateManagers = new();
 
-    private static readonly ObservableGauge<long> CachedCertificates =
+    private static readonly ObservableGauge<long> CachedCertificates = // NOSONAR S1144 -- Strong reference keeps the observable instrument registered.
         Meter.CreateObservableGauge("twp.certificates.cached", ObserveCachedCertificateCount, "{certificate}",
             "Leaf certificates currently held in the in-memory certificate cache, summed across every " +
             "live CertificateManager in this process. Operators can use this to confirm " +

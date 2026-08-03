@@ -161,7 +161,7 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
         AutomaticConfigurationScript = pi.AutoConfigUrl == null ? null : new Uri(pi.AutoConfigUrl);
         BypassLoopback = pi.BypassLoopback;
         BypassOnLocal = pi.BypassOnLocal;
-        Proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal, pi.BypassList);
+        Proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal, pi.BypassList); // NOSONAR S1075 -- WinHTTP fallback proxy fixture requires an absolute URI.
     }
 
     internal void UsePacFile(Uri upstreamProxyConfigurationScript)
@@ -170,7 +170,7 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
         AutomaticConfigurationScript = upstreamProxyConfigurationScript;
         BypassLoopback = true;
         BypassOnLocal = false;
-        Proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal);
+        Proxy = new WebProxy(new Uri("http://localhost"), BypassOnLocal); // NOSONAR S1075 -- WinHTTP PAC fallback requires an absolute URI.
     }
 
     private static ProxyInfo GetProxyInfo()
@@ -190,7 +190,8 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
             }
             else
             {
-                if (Marshal.GetLastWin32Error() == 8) throw new OutOfMemoryException();
+                if (Marshal.GetLastWin32Error() == 8)
+                    throw new InvalidOperationException("WinHTTP could not allocate the proxy configuration.");
 
                 result = new ProxyInfo(true, null, null, null, null);
             }
@@ -272,7 +273,8 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
     private static int GetLastWin32Error()
     {
         var lastWin32Error = Marshal.GetLastWin32Error();
-        if (lastWin32Error == 8) throw new OutOfMemoryException();
+        if (lastWin32Error == 8)
+            throw new InvalidOperationException("WinHTTP could not allocate proxy discovery data.");
 
         return lastWin32Error;
     }

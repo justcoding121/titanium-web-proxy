@@ -82,7 +82,7 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
             }
             catch (Exception cleanupEx)
             {
-                ProxyDiagnostics.ReportBenign(ProxyDiagnostics.FallbackLogger,
+                ProxyDiagnostics.ReportBenign(ProxyDiagnostics.Logger,
                     $"Failed to clean up temp certificate file '{tempPath}' after a failed atomic write.",
                     cleanupEx);
             }
@@ -117,7 +117,7 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
         }
         catch (Exception ex)
         {
-            ProxyDiagnostics.ReportBenign(ProxyDiagnostics.FallbackLogger,
+            ProxyDiagnostics.ReportBenign(ProxyDiagnostics.Logger,
                 "Failed to prune the on-disk certificate cache to its configured entry bound.", ex);
         }
     }
@@ -131,7 +131,7 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
         }
         catch (Exception ex)
         {
-            ProxyDiagnostics.ReportBenign(ProxyDiagnostics.FallbackLogger,
+            ProxyDiagnostics.ReportBenign(ProxyDiagnostics.Logger,
                 "Failed to clear the on-disk certificate cache directory.", ex);
         }
     }
@@ -260,7 +260,7 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
         }
         catch (Exception ex)
         {
-            ProxyDiagnostics.ReportBenign(ProxyDiagnostics.FallbackLogger,
+            ProxyDiagnostics.ReportBenign(ProxyDiagnostics.Logger,
                 $"Failed to create or tighten permissions on the certificate cache directory '{path}'.", ex);
             Directory.CreateDirectory(path);
         }
@@ -282,7 +282,7 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
             if (!File.Exists(legacyRootPath) || File.Exists(newRootPath)) return;
 
             orphanedLegacyRootNoticeLogged = true;
-            ProxyDiagnostics.ReportWarning(ProxyDiagnostics.FallbackLogger,
+            ProxyDiagnostics.ReportWarning(ProxyDiagnostics.Logger,
                 $"Titanium.Web.Proxy 5.0 moved its root certificate cache to a per-user protected " +
                 $"location. A root certificate from a previous version was found at '{legacyRootPath}' " +
                 "and is no longer used - a new root will be generated at the new location. The old " +
@@ -291,7 +291,7 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
         }
         catch (Exception ex)
         {
-            ProxyDiagnostics.ReportBenign(ProxyDiagnostics.FallbackLogger,
+            ProxyDiagnostics.ReportBenign(ProxyDiagnostics.Logger,
                 "Failed to check for an orphaned pre-5.0 root certificate.", ex);
         }
     }

@@ -38,7 +38,7 @@ internal static class NativeMethods
         }
 
         [Flags]
-        internal enum AutoProxyFlags
+        internal enum AutoProxyFlags // NOSONAR S2344 -- Name mirrors the native WINHTTP_AUTOPROXY_OPTIONS flags.
         {
             AutoDetect = 1,
             AutoProxyConfigUrl = 2,
@@ -54,7 +54,7 @@ internal static class NativeMethods
         }
 
         [Flags]
-        internal enum AutoDetectType
+        internal enum AutoDetectType // NOSONAR S2342 -- Name mirrors the native WinHTTP enum.
         {
             None = 0,
             Dhcp = 1,

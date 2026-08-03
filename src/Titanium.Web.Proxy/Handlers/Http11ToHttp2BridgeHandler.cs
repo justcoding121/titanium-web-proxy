@@ -186,10 +186,6 @@ public partial class ProxyServer
                             if (!(Enable100ContinueBehaviour && request.ExpectContinue))
                                 await args.SyphonOutBodyAsync(true, cancellationToken);
 
-                            // A BeforeRequest-time synthetic response (Ok/Redirect/GenericResponse/etc.) has
-                            // already locked the response and made its one BeforeResponse-equivalent decision;
-                            // do not give it a second BeforeResponse pass (mirrors HandleHttpSessionResponse's
-                            // guard that skips locked responses).
                             if (!args.HttpClient.Response.Locked) await OnBeforeResponse(args);
                             await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
 

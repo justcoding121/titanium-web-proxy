@@ -53,7 +53,7 @@ public class Http2TunnelStreamTests
             (_, _) => Task.CompletedTask,
             () => { });
 
-        await stream.WriteAsync(new byte[] { 9, 8, 7 }, 0, 3);
+        await stream.WriteAsync(new byte[] { 9, 8, 7 }.AsMemory());
         CollectionAssert.AreEqual(new byte[] { 9, 8, 7 }, seen.ToArray());
         Assert.IsFalse(endStream);
     }

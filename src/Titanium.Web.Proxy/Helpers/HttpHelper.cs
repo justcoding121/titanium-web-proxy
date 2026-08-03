@@ -49,7 +49,7 @@ internal static class HttpHelper
         {
             // A malformed Content-Type header charset parameter just falls back to the default encoding
             // below - expected for the many real-world servers that send slightly invalid headers.
-            ProxyDiagnostics.ReportTrace(ProxyDiagnostics.FallbackLogger,
+            ProxyDiagnostics.ReportTrace(ProxyDiagnostics.Logger,
                 $"Failed to parse the charset from Content-Type header '{contentType}': {ex.Message}");
         }
 

@@ -53,7 +53,7 @@ internal abstract class AuthMethod
     ///     Initializes an AuthMethod instance.
     /// </summary>
     /// <param name="server">The socket connection with the proxy server.</param>
-    public AuthMethod(Socket server)
+    protected AuthMethod(Socket server)
     {
         this.server = server ?? throw new ArgumentNullException(nameof(server));
     }

@@ -110,7 +110,7 @@ internal static class ProxyDiagnostics
     /// </summary>
     public static void ReportUndisposedFinalizer(ILogger? logger, string typeName)
     {
-        var effectiveLogger = logger ?? FallbackLogger;
+        var effectiveLogger = logger ?? Logger;
         ReportWarning(effectiveLogger, $"{typeName} was finalized without being disposed first.");
     }
 
@@ -121,13 +121,13 @@ internal static class ProxyDiagnostics
     ///     warnings are still visible by default without requiring extra plumbing through every stream
     ///     helper class.
     /// </summary>
-    internal static ILogger FallbackLogger
+    internal static ILogger Logger
     {
-        get => fallbackLogger;
-        set => fallbackLogger = value ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+        get => logger;
+        set => logger = value ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
     }
 
-    private static ILogger fallbackLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+    private static ILogger logger = Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
 
     /// <summary>
     ///     True when <paramref name="exception" /> (or a nested inner exception) is a normal part of

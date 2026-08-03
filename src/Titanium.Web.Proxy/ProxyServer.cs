@@ -996,7 +996,7 @@ public partial class ProxyServer : IDisposable
         }
 
         logger = activeLoggerFactory.CreateLogger("Titanium.Web.Proxy");
-        ProxyDiagnostics.FallbackLogger = logger;
+        ProxyDiagnostics.Logger = logger;
 
         // CertificateManager may not exist yet on the very first call from the constructor.
         if (CertificateManager != null) CertificateManager.Logger = logger;
@@ -2092,14 +2092,6 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
-    ///     Connection retry policy when using connection pool.
-    /// </summary>
-    private RetryPolicy<T> RetryPolicy<T>() where T : Exception
-    {
-        return new RetryPolicy<T>(NetworkFailureRetryAttempts, TcpConnectionFactory);
-    }
-
-    /// <summary>
     ///     Connection retry policy that respects the per-session
     ///     <see cref="SessionEventArgs.NetworkFailureRetryAttempts" /> override when set.
     /// </summary>
@@ -2127,54 +2119,68 @@ public partial class ProxyServer : IDisposable
         {
             // No finalizer: Stop()/certificate/buffer disposal must only run on the explicit
             // Dispose path. Callers that omit Dispose leave OS sockets to safe-handle cleanup.
-            if (ProxyRunning)
-                try
-                {
-                    Stop();
-                }
-                catch
-                {
-                    // ignore
-                }
-
-            try
-            {
-                TcpConnectionFactory.Dispose();
-            }
-            catch
-            {
-                // ignore
-            }
-
-            try
-            {
-                QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
-            }
-            catch
-            {
-                // ignore
-            }
-
-            CertificateManager?.Dispose();
-            BufferPool?.Dispose();
-            _svcbDiscoveryCoordinator?.Dispose();
-
-            // SystemProxyManager is [SupportedOSPlatform("windows")]; the platform analyzer cannot
-            // prove that from a null-conditional access alone, so guard explicitly (mirrors the
-            // Start() rollback path below).
-            if (RunTime.IsWindows) SystemProxySettingsManager?.Dispose();
-
-            if (ownsActiveLoggerFactory)
-                try
-                {
-                    activeLoggerFactory.Dispose();
-                }
-                catch
-                {
-                    // A misbehaving sink must never prevent proxy disposal from completing.
-                }
+            StopIfRunning();
+            DisposeConnectionResources();
+            DisposeOwnedLoggerFactory();
         }
 
         disposed = true;
+    }
+
+    private void StopIfRunning()
+    {
+        if (!ProxyRunning) return;
+
+        try
+        {
+            Stop();
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private void DisposeConnectionResources()
+    {
+        try
+        {
+            TcpConnectionFactory.Dispose();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        CertificateManager?.Dispose();
+        BufferPool?.Dispose();
+        _svcbDiscoveryCoordinator?.Dispose();
+
+        // SystemProxyManager is [SupportedOSPlatform("windows")]; the platform analyzer cannot
+        // prove that from a null-conditional access alone, so guard explicitly.
+        if (RunTime.IsWindows) SystemProxySettingsManager?.Dispose();
+    }
+
+    private void DisposeOwnedLoggerFactory()
+    {
+        if (!ownsActiveLoggerFactory) return;
+
+        try
+        {
+            activeLoggerFactory.Dispose();
+        }
+        catch
+        {
+            // A misbehaving sink must never prevent proxy disposal from completing.
+        }
     }
 }

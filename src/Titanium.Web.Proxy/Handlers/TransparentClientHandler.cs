@@ -56,8 +56,6 @@ public partial class ProxyServer
                 var args = new BeforeSslAuthenticateEventArgs(this, clientConnection, cancellationTokenSource,
                     httpsHostName);
 
-                // Initialize the forward target from the endpoint fixed-forward settings when present;
-                // the BeforeSslAuthenticate event can still override it per request.
                 var forwardHost = endPoint.ForwardHost;
                 if (forwardHost != null && forwardHost.Length != 0)
                     args.ForwardHttpsHostName = forwardHost;

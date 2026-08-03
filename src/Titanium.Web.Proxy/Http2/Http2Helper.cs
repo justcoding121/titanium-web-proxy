@@ -245,7 +245,7 @@ namespace Titanium.Web.Proxy.Http2
             "transfer-encoding", "content-length", "host", "trailer"
         };
 
-        private static async Task CopyHttp2FrameAsync(Stream input, Stream output, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+        private static async Task CopyHttp2FrameAsync(Stream input, Stream output, // NOSONAR S3776, CA1068 -- Protocol flow and established token position are retained.
             Http2ConnectionState connectionState,
             Func<SessionEventArgs> sessionFactory,
             Func<SessionEventArgs, Http2StreamContext, Task> onBeforeRequestResponse,
@@ -1997,7 +1997,8 @@ namespace Titanium.Web.Proxy.Http2
                             sawEnableConnectProtocol = true;
 
                             // RFC 8441 §3: value MUST be 0 or 1; any other value is a connection error.
-                            if (value != 0 && value != 1)
+                            if ((value != 0 && value != 1) ||
+                                (!isClient && value == 0 && localSettings.EnableConnectProtocolEverSet))
                             {
                                 invalidSettings = true;
                                 invalidSettingsError = Http2ErrorCode.ProtocolError;
@@ -2013,26 +2014,17 @@ namespace Titanium.Web.Proxy.Http2
                             }
                             else
                             {
-                                // RFC 8441 §3: a sender MUST NOT send 0 after previously sending 1.
-                                if (value == 0 && localSettings.EnableConnectProtocolEverSet)
-                                {
-                                    invalidSettings = true;
-                                    invalidSettingsError = Http2ErrorCode.ProtocolError;
-                                }
-                                else
-                                {
-                                    localSettings.EnableConnectProtocol = (value == 1);
-                                    if (value == 1) localSettings.EnableConnectProtocolEverSet = true;
+                                localSettings.EnableConnectProtocol = (value == 1);
+                                if (value == 1) localSettings.EnableConnectProtocolEverSet = true;
 
-                                    // Overwrite with what the proxy chooses to advertise to the client.
-                                    int wireValue = enableRfc8441 ? 1 : 0;
-                                    buffer[valueOffset] = 0;
-                                    buffer[valueOffset + 1] = 0;
-                                    buffer[valueOffset + 2] = 0;
-                                    buffer[valueOffset + 3] = (byte)wireValue;
-                                    if (wireValue == 1)
-                                        connectionState.DownstreamAdvertisedEnableConnect = true;
-                                }
+                                // Overwrite with what the proxy chooses to advertise to the client.
+                                int wireValue = enableRfc8441 ? 1 : 0;
+                                buffer[valueOffset] = 0;
+                                buffer[valueOffset + 1] = 0;
+                                buffer[valueOffset + 2] = 0;
+                                buffer[valueOffset + 3] = (byte)wireValue;
+                                if (wireValue == 1)
+                                    connectionState.DownstreamAdvertisedEnableConnect = true;
                             }
                         }
                     }
@@ -2234,10 +2226,6 @@ namespace Titanium.Web.Proxy.Http2
 
                         if (rr.ContentEncoding != null)
                         {
-                            // Content-Encoding may list multiple stacked encodings (e.g. "gzip, br");
-                            // previously only a single encoding name was ever recognized here, so a
-                            // stacked value matched none of the known names and silently fell through
-                            // as unsupported.
                             var (decompressStream, owned) =
                                 CompressionUtil.CreateDecompressionChain(new MemoryStream(body), rr.ContentEncoding);
                             try
@@ -2809,15 +2797,8 @@ namespace Titanium.Web.Proxy.Http2
                 var bodyWriter = new Http2BodyStreamWriter(streamId, clientStream, clientWriteLock, clientSendFlow,
                     cancellationToken);
 
-                try
-                {
-                    await response.StreamBodyWriter(bodyWriter, cancellationToken);
-                    await bodyWriter.CompleteAsync();
-                }
-                catch
-                {
-                    throw;
-                }
+                await response.StreamBodyWriter(bodyWriter, cancellationToken);
+                await bodyWriter.CompleteAsync();
             }
             else
             {

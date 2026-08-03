@@ -48,7 +48,7 @@ internal static class Http3RequestStream
     /// <param name="onBeforeRequest">Proxy BeforeRequest event dispatcher.</param>
     /// <param name="onBeforeResponse">Proxy BeforeResponse event dispatcher.</param>
     /// <param name="onAfterResponse">Proxy AfterResponse event dispatcher.</param>
-    public static async Task HandleAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    public static async Task HandleAsync( // NOSONAR S3776, CA1068 -- Protocol flow and established token position are retained.
         QuicStream stream,
         QuicConnection connection,
         TransparentQuicProxyEndPoint endPoint,
@@ -119,7 +119,7 @@ internal static class Http3RequestStream
                 // request targets ("GET https://host/path HTTP/1.1"), which Kestrel rejects with 400.
                 var normalizedPath = path ?? "/";
                 if (!normalizedPath.StartsWith('/'))
-                    normalizedPath = "/" + normalizedPath;
+                    normalizedPath = "/" + normalizedPath; // NOSONAR S1075 -- Slash is the HTTP origin-form delimiter, not a filesystem path.
                 request.Authority = (ByteString)authority;
                 request.RequestUriString8 = (ByteString)normalizedPath;
                 request.HttpVersion = HttpHeader.Version30;

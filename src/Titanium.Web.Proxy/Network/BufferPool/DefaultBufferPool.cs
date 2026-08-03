@@ -51,7 +51,7 @@ internal sealed class DefaultBufferPool : IBufferPool
         GC.SuppressFinalize(this);
     }
 
-    private void Dispose(bool disposing)
+    private static void Dispose(bool disposing)
     {
         // Nothing to dispose; required for IBufferPool.
     }

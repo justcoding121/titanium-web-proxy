@@ -25,13 +25,13 @@ internal class Common
     internal enum SecurityBufferType
     {
         SecbufferVersion = 0,
-        SecbufferEmpty = 0,
+        SecbufferEmpty = 0, // NOSONAR CA1069 -- SSPI defines both native constants as zero.
         SecbufferData = 1,
         SecbufferToken = 2
     }
 
     [Flags]
-    internal enum NtlmFlags
+    internal enum NtlmFlags // NOSONAR S2344 -- Name mirrors the native NTLM flags API.
     {
         // The client sets this flag to indicate that it supports Unicode strings.
         NegotiateUnicode = 0x00000001,

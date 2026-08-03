@@ -106,7 +106,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// </summary>
     private static void ReportSuppressedFailure(Exception ex)
     {
-        ProxyDiagnostics.ReportBenign(ProxyDiagnostics.FallbackLogger,
+        ProxyDiagnostics.ReportBenign(ProxyDiagnostics.Logger,
             "Suppressed a network stream read/write failure (expected when the remote endpoint closed or reset the connection).",
             ex);
     }
@@ -862,6 +862,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         return WriteAsync(newLine, cancellationToken: cancellationToken);
     }
 
+    public ValueTask WriteLineAsync(string value, CancellationToken cancellationToken = default)
+    {
+        return WriteAsyncInternal(value, true, cancellationToken);
+    }
+
     private async ValueTask WriteAsyncInternal(string value, bool addNewLine, CancellationToken cancellationToken) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (closedWrite) return;
@@ -916,11 +921,6 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 ReportSuppressedFailure(ex);
             }
         }
-    }
-
-    public ValueTask WriteLineAsync(string value, CancellationToken cancellationToken = default)
-    {
-        return WriteAsyncInternal(value, true, cancellationToken);
     }
 
     /// <summary>

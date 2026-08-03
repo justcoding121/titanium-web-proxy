@@ -455,27 +455,29 @@ internal class TcpConnectionFactory : IDisposable
             isHttps, applicationProtocols, upStreamEndPoint, externalProxy, connectHost, connectPort,
             upStreamEndPointIPv4, upStreamEndPointIPv6);
 
-        if (proxyServer.EnableConnectionPool && !noCache)
-            if (cache.TryGetValue(cacheKey, out var existingConnections))
-                lock (existingConnections)
+        if (proxyServer.EnableConnectionPool && !noCache &&
+            cache.TryGetValue(cacheKey, out var existingConnections))
+            lock (existingConnections)
+            {
+                // +3 seconds for potential delay after getting connection
+                var cutOff = DateTime.UtcNow.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
+                while (!existingConnections.IsEmpty)
                 {
-                    // +3 seconds for potential delay after getting connection
-                    var cutOff = DateTime.UtcNow.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
-                    while (!existingConnections.IsEmpty)
-                        if (existingConnections.TryDequeue(out var recentConnection))
+                    if (existingConnections.TryDequeue(out var recentConnection))
+                    {
+                        if (recentConnection.LastAccess > cutOff
+                            && recentConnection.TcpSocket.IsGoodConnection()
+                            && IsNegotiatedProtocolCompatible(recentConnection, applicationProtocols))
                         {
-                            if (recentConnection.LastAccess > cutOff
-                                && recentConnection.TcpSocket.IsGoodConnection()
-                                && IsNegotiatedProtocolCompatible(recentConnection, applicationProtocols))
-                            {
-                                ProxyMetrics.PoolReused();
-                                return recentConnection;
-                            }
-
-                            if (recentConnection.TryScheduleDisposal())
-                                disposalBag.Add(recentConnection);
+                            ProxyMetrics.PoolReused();
+                            return recentConnection;
                         }
+
+                        if (recentConnection.TryScheduleDisposal())
+                            disposalBag.Add(recentConnection);
+                    }
                 }
+            }
 
         var connection = await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
             applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey,
@@ -523,11 +525,11 @@ internal class TcpConnectionFactory : IDisposable
             throw new InvalidOperationException(
                 $"A client is making HTTP request to one of the listening ports of this proxy {connectHostName}:{connectPortNumber}");
 
-        if (externalProxy != null)
-            if (Server.ProxyEndPoints.Any(x => x.Port == externalProxy.Port)
-                && NetworkHelper.IsLocalIpAddress(externalProxy.HostName))
-                throw new InvalidOperationException(
-                    $"A client is making HTTP request via external proxy to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
+        if (externalProxy != null &&
+            Server.ProxyEndPoints.Any(x => x.Port == externalProxy.Port) &&
+            NetworkHelper.IsLocalIpAddress(externalProxy.HostName))
+            throw new InvalidOperationException(
+                $"A client is making HTTP request via external proxy to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
 
         if (proxyServer.SupportedServerSslProtocols != SslProtocols.None) sslProtocol = proxyServer.SupportedServerSslProtocols;
 
@@ -723,8 +725,6 @@ internal class TcpConnectionFactory : IDisposable
                             : ProxySocketConnectionTaskFactory.CreateTask((ProxySocket.ProxySocket)attemptSocket,
                                 socksRemoteIpAddresses![0], connectPortNumber);
 
-                        // WhenAny never faults or cancels by itself—it only completes when one child task finishes;
-                        // the completion check below distinguishes success from timeout.
                         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(attemptToken);
                         timeoutCts.CancelAfter(connectTimeoutMs);
                         await Task.WhenAny(connectTask, Task.Delay(Timeout.Infinite, timeoutCts.Token));
@@ -809,7 +809,7 @@ internal class TcpConnectionFactory : IDisposable
                             (tcpServerSocket, boundEndPoint) = doneTask.Result;
                             await raceCts.CancelAsync();
                             AbandonLosingAttempts(inFlight);
-                            goto raceDecided;
+                            goto raceDecided; // NOSONAR S907 -- Exits both nested Happy Eyeballs loops after selecting a winner.
                         }
 
                         try
@@ -832,8 +832,7 @@ internal class TcpConnectionFactory : IDisposable
                 await raceCts.CancelAsync();
             }
 
-            raceDecided: ;
-
+            raceDecided:
             if (tcpServerSocket == null)
             {
                 if (sessionArgs != null && proxyServer.CustomUpStreamProxyFailureFunc != null)
@@ -917,8 +916,6 @@ internal class TcpConnectionFactory : IDisposable
                         var clientCertificate = proxyServer.SelectClientCertificate(sender, sessionArgs, targetHost,
                             localCertificates, remoteCertificate, acceptableIssuers);
 
-                        // A per-session client certificate makes this TLS connection identity-specific;
-                        // it must not be reused by another session from the pool.
                         if (clientCertificate != null) usedClientCertificate = true;
 
                         return clientCertificate!;
@@ -957,7 +954,7 @@ internal class TcpConnectionFactory : IDisposable
 
             retry = false;
             ProxyMetrics.PoolDowngraded();
-            goto retry;
+            goto retry; // NOSONAR S907 -- TLS compatibility fallback must restart the complete connection attempt.
         }
         catch (AuthenticationException ex) when (ex.HResult == unchecked((int)0x80131501) && retry &&
                                                  enabledSslProtocols >= SslProtocols.Tls11) // NOSONAR S4423 - legacy fallback gate
@@ -973,7 +970,7 @@ internal class TcpConnectionFactory : IDisposable
 
             retry = false;
             ProxyMetrics.PoolDowngraded();
-            goto retry;
+            goto retry; // NOSONAR S907 -- TLS compatibility fallback must restart the complete connection attempt.
         }
 #pragma warning restore SYSLIB0039
         catch (Exception ex)
@@ -1317,10 +1314,10 @@ internal class TcpConnectionFactory : IDisposable
                     // against the dictionary instead of trusting the reference we already hold.
                     if (!cache.TryGetValue(connection.CacheKey, out var current) || current != queue) continue;
 
-                    while (queue.Count >= Server.MaxCachedConnections)
-                        if (queue.TryDequeue(out var staleConnection))
-                            if (staleConnection.TryScheduleDisposal())
-                                disposalBag.Add(staleConnection);
+                    while (queue.Count >= Server.MaxCachedConnections &&
+                           queue.TryDequeue(out var staleConnection))
+                        if (staleConnection.TryScheduleDisposal())
+                            disposalBag.Add(staleConnection);
 
                     if (!queue.Contains(connection)) queue.Enqueue(connection);
                     return Task.CompletedTask;

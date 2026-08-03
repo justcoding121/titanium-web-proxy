@@ -42,18 +42,7 @@ public class Request : RequestResponseBase
     /// </summary>
     public Uri RequestUri
     {
-        get
-        {
-            var url = Url;
-            try
-            {
-                return new Uri(url);
-            }
-            catch (Exception ex)
-            {
-                throw new ArgumentException($"Invalid URI: '{url}'", ex);
-            }
-        }
+        get => new(Url);
         set => Url = value.OriginalString;
     }
 

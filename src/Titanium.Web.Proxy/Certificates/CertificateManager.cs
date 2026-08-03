@@ -278,7 +278,6 @@ public sealed class CertificateManager : IDisposable
                         certEngineValue = new BcCertificateMakerFast(CertificateValidDays, CertificateGraceDays,
                             leafKeyAlgorithm);
                         break;
-                    case CertificateEngine.DefaultWindows:
                     default:
                         if (!RunTime.IsWindows)
                             throw new PlatformNotSupportedException("The Windows certificate engine requires Windows.");
@@ -321,15 +320,15 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     internal ILogger Logger
     {
-        get => loggerField;
+        get => logger;
         set
         {
-            loggerField = value;
+            logger = value;
             certEngineValue = null;
         }
     }
 
-    private ILogger loggerField = NullLogger.Instance;
+    private ILogger logger = NullLogger.Instance;
 
     /// <summary>
     ///     Selects the certificate generation engine. Default is <see cref="CertificateEngine.BouncyCastle" />

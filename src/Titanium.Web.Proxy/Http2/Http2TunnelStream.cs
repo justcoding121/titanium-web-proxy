@@ -134,12 +134,18 @@ internal sealed class Http2TunnelStream : Stream
     public override async Task WriteAsync(byte[] buffer, int offset, int count,
         CancellationToken cancellationToken)
     {
+        await WriteAsync(buffer.AsMemory(offset, count), cancellationToken).ConfigureAwait(false);
+    }
+
+    public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
+        CancellationToken cancellationToken = default)
+    {
         ObjectDisposedException.ThrowIf(disposed, this);
         if (writeEndStreamSent)
             throw new InvalidOperationException("The HTTP/2 tunnel stream has already been half-closed for writes.");
-        if (count == 0) return;
+        if (buffer.IsEmpty) return;
 
-        await writeDataAsync(buffer.AsMemory(offset, count), false, cancellationToken).ConfigureAwait(false);
+        await writeDataAsync(buffer, false, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

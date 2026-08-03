@@ -357,10 +357,10 @@ internal class WinAuthEndPoint
 
     #region Native calls to secur32.dll
 
-    [DllImport("secur32.dll", SetLastError = true)]
+    [DllImport("secur32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, // NOSONAR SYSLIB1054 -- Legacy SSPI marshalling is required by this existing interop signature.
         IntPtr phContext, // PCtxtHandle
-        string pszTargetName,
+        [MarshalAs(UnmanagedType.LPWStr)] string pszTargetName,
         int fContextReq,
         int reserved1,
         int targetDataRep,
@@ -371,10 +371,10 @@ internal class WinAuthEndPoint
         out uint pfContextAttr, // managed ulong == 64 bits!!!
         out SecurityInteger ptsExpiry); // PTimeStamp
 
-    [DllImport("secur32", CharSet = CharSet.Auto, SetLastError = true)]
+    [DllImport("secur32", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern int InitializeSecurityContext(ref SecurityHandle phCredential, // NOSONAR SYSLIB1054 -- Legacy SSPI marshalling is required by this existing interop signature.
         ref SecurityHandle phContext, // PCtxtHandle
-        string pszTargetName,
+        [MarshalAs(UnmanagedType.LPWStr)] string pszTargetName,
         int fContextReq,
         int reserved1,
         int targetDataRep,
@@ -385,10 +385,10 @@ internal class WinAuthEndPoint
         out uint pfContextAttr, // managed ulong == 64 bits!!!
         out SecurityInteger ptsExpiry); // PTimeStamp
 
-    [DllImport("secur32.dll", CharSet = CharSet.Auto, SetLastError = false)]
+    [DllImport("secur32.dll", CharSet = CharSet.Unicode, SetLastError = false)]
     private static extern int AcquireCredentialsHandle( // NOSONAR SYSLIB1054 -- Legacy SSPI marshalling is required by this existing interop signature.
-        string? pszPrincipal, // SEC_CHAR*
-        string pszPackage, // SEC_CHAR* // "Kerberos","NTLM","Negotiative"
+        [MarshalAs(UnmanagedType.LPWStr)] string? pszPrincipal, // SEC_CHAR*
+        [MarshalAs(UnmanagedType.LPWStr)] string pszPackage, // SEC_CHAR* // "Kerberos","NTLM","Negotiative"
         int fCredentialUse,
         IntPtr pAuthenticationId, // _LUID AuthenticationID,//pvLogonID, // PLUID
         IntPtr pAuthData, // PVOID

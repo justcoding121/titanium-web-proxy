@@ -43,7 +43,7 @@ public class TunnelConnectFailureEventArgs : ProxyEventArgsBase
     /// </summary>
     public Response Response { get; set; }
 
-    private static Response CreateDefaultResponse(TunnelConnectSessionEventArgs session, Exception exception)
+    private static GenericResponse CreateDefaultResponse(TunnelConnectSessionEventArgs session, Exception exception)
     {
         if (exception is UpstreamProxyConnectException upstream)
         {

@@ -121,7 +121,13 @@ internal sealed class NullOriginStream : Stream
 
     public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
+        return WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+    }
+
+    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
+        CancellationToken cancellationToken = default)
+    {
         // discarded - see class remarks.
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }

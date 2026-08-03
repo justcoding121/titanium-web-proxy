@@ -415,7 +415,7 @@ public partial class ProxyServer
         }
     }
 
-    private async Task<RetryResult> HandleHttpSessionRequest(SessionEventArgs args, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    private async Task<RetryResult> HandleHttpSessionRequest(SessionEventArgs args, // NOSONAR S3776, CA1068 -- Protocol flow and established token position are retained.
         TcpServerConnection? serverConnection, SslApplicationProtocol sslApplicationProtocol,
         CancellationToken cancellationToken, CancellationTokenSource cancellationTokenSource)
     {

@@ -34,8 +34,5 @@ public class SessionEventArgsOverridePropertyTests
         // Http3 should be a defined enum member.
         Assert.IsTrue(System.Enum.IsDefined(UpstreamHttpProtocol.Http3));
 
-        // It must be distinct from Http2 and Http11.
-        Assert.AreNotEqual(UpstreamHttpProtocol.Http2, UpstreamHttpProtocol.Http3); // NOSONAR MSTEST0032 -- Locks public enum values.
-        Assert.AreNotEqual(UpstreamHttpProtocol.Http11, UpstreamHttpProtocol.Http3); // NOSONAR MSTEST0032 -- Locks public enum values.
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -14,7 +15,7 @@ namespace Titanium.Web.Proxy.UnitTests;
 ///     minimum-level filtering, and rolling-file behavior.
 /// </summary>
 [TestClass]
-public class LoggingTests
+public partial class LoggingTests
 {
     [TestMethod]
     public void ProxyLoggingOptions_Defaults_Are_Sane()
@@ -245,8 +246,11 @@ public class LoggingTests
 
         StringAssert.Contains(outWriter.ToString(), "info goes to stdout");
         StringAssert.Contains(errorWriter.ToString(), "error goes to stderr");
-        StringAssert.DoesNotMatch(outWriter.ToString(), new System.Text.RegularExpressions.Regex("error goes to stderr"));
+        StringAssert.DoesNotMatch(outWriter.ToString(), ErrorOutputRegex());
     }
+
+    [GeneratedRegex("error goes to stderr")]
+    private static partial Regex ErrorOutputRegex();
 
     [TestMethod]
     [DataRow(LogLevel.Trace)]

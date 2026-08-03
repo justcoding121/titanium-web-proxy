@@ -95,7 +95,7 @@ internal sealed class Http3Connection
     /// </summary>
     private QuicClientConnection? _clientConnection;
 
-    private Http3Connection( // NOSONAR S107 -- Connection-scoped collaborators are passed once and retained for the lifetime of the protocol handler.
+    private Http3Connection( // NOSONAR S107, CA1068 -- Existing connection wiring and token position are retained.
         QuicConnection connection,
         TransparentQuicProxyEndPoint endPoint,
         BeforeQuicAuthenticateEventArgs authArgs,
@@ -121,7 +121,7 @@ internal sealed class Http3Connection
     ///     Entry point: runs the entire lifecycle of one HTTP/3 client connection until the connection is
     ///     closed or <paramref name="shutdownToken" /> is cancelled.
     /// </summary>
-    public static async Task RunAsync( // NOSONAR S107 -- Signature mirrors the connection constructor and is retained for stable call-site wiring.
+    public static async Task RunAsync( // NOSONAR S107, CA1068 -- Existing connection wiring and token position are retained.
         QuicConnection connection,
         TransparentQuicProxyEndPoint endPoint,
         BeforeQuicAuthenticateEventArgs authArgs,

@@ -54,7 +54,7 @@ internal static class NetworkHelper
             {
                 // A failed reverse-DNS lookup just means "not resolvable as local" - expected and common
                 // (e.g. no PTR record, or the resolver is unreachable), not a proxy fault.
-                ProxyDiagnostics.ReportTrace(ProxyDiagnostics.FallbackLogger,
+                ProxyDiagnostics.ReportTrace(ProxyDiagnostics.Logger,
                     $"Reverse DNS lookup for '{hostName}' failed while checking whether it is a local address: {ex.Message}");
             }
 

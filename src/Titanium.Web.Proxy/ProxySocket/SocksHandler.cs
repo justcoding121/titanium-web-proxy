@@ -63,7 +63,7 @@ internal abstract class SocksHandler
     /// <param name="server">The socket connection with the proxy server.</param>
     /// <param name="user">The username to use when authenticating with the server.</param>
     /// <exception cref="ArgumentNullException"><c>server</c> -or- <c>user</c> is null.</exception>
-    public SocksHandler(Socket server, string user)
+    protected SocksHandler(Socket server, string user)
     {
         this.server = server ?? throw new ArgumentNullException(nameof(server));
         username = user ?? throw new ArgumentNullException(nameof(user));
