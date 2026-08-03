@@ -56,8 +56,8 @@ public partial class ProxyServer
                 return await AuthenticateUserBasic(session, authenticationType, credentials,
                     basicAuthenticate);
 
-            var result = await schemeAuthenticate!(session, authenticationType.ToString(),
-                credentials.ToString()); // NOSONAR S8969 -- flow proves non-null after dual-null early return
+            var result = await schemeAuthenticate(session, authenticationType.ToString(),
+                credentials.ToString());
 
             if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
             {
