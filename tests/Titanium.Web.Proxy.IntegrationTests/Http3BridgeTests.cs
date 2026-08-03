@@ -2,6 +2,7 @@
 #pragma warning disable TWP001
 
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Quic;
@@ -258,6 +259,79 @@ public class Http3BridgeTests
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
         Assert.AreEqual("cold-tcp-fallback", body);
+    }
+
+    [TestMethod]
+    public async Task Http11Client_ForcedHttp3_UnreachableOrigin_Returns502()
+    {
+        RequireQuic();
+
+        // Bind then close so the port is almost certainly closed when the proxy dials QUIC.
+        int closedPort;
+        await using (var ephemeral = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate))
+            closedPort = ephemeral.Port;
+
+        using var testSuite = new TestSuite();
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp3 = true;
+        proxy.EnableHttpsSvcbDnsDiscovery = false;
+        proxy.BeforeRequest += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
+            return Task.CompletedTask;
+        };
+
+        using var client = testSuite.GetClient(proxy);
+        var response = await client.GetAsync($"https://localhost:{closedPort}/gone");
+        Assert.AreEqual(HttpStatusCode.BadGateway, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Http11Client_ForcedHttp3Origin_GzipBody_SurvivesBridgeWithoutCorruption()
+    {
+        RequireQuic();
+
+        var plain = Encoding.UTF8.GetBytes("gzip-plain");
+        byte[] gzipped;
+        using (var ms = new System.IO.MemoryStream())
+        {
+            using (var gzip = new System.IO.Compression.GZipStream(ms, System.IO.Compression.CompressionLevel.SmallestSize, leaveOpen: true))
+                gzip.Write(plain);
+            gzipped = ms.ToArray();
+        }
+
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleRequest(_ => Task.FromResult(new QuicHttp3Response(
+            200, "gzip-plain", gzipped,
+            extraHeaders: new List<(string, string)> { ("content-encoding", "gzip") })));
+
+        using var testSuite = new TestSuite();
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp3 = true;
+        proxy.EnableHttpsSvcbDnsDiscovery = false;
+        proxy.BeforeRequest += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
+            return Task.CompletedTask;
+        };
+
+        // AutomaticDecompression exercises the bridge's decompress-then-recompress path:
+        // H3OriginBridge decompresses wire bytes so CompressBodyAndUpdateContentLength can
+        // safely re-apply Content-Encoding for the H1 client without double-compressing.
+        using var handler = new HttpClientHandler
+        {
+            Proxy = new TestHelper.TestProxy($"http://localhost:{proxy.ProxyEndPoints[0].Port}", false),
+            UseProxy = true,
+            AutomaticDecompression = DecompressionMethods.GZip,
+            ServerCertificateCustomValidationCallback =
+                (_, certificate, _, errors) => TestCertificateAuthority.Validate(certificate, errors)
+        };
+        using var client = new HttpClient(handler);
+        var response = await client.GetAsync($"https://localhost:{origin.Port}/gzip");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+        Assert.AreEqual("gzip-plain", body);
     }
 }
 

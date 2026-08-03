@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Http3.Qpack;
 
 namespace Titanium.Web.Proxy.UnitTests;
@@ -134,5 +135,41 @@ public class QpackEncoderDecoderTests
         // Longer names use the prefixed-integer overflow form (low 3 bits all 1).
         var longEncoded = QpackEncoder.Encode([("x-custom-header", "my-value-123")]);
         Assert.AreEqual(0x27, longEncoded[2] & 0xFF, "name length >= 7 sets 3-bit prefix to max");
+    }
+
+    [TestMethod]
+    public void Decode_TooShort_ThrowsDecompressionFailed()
+    {
+        var ex = Assert.ThrowsException<Http3ConnectionException>(() => QpackDecoder.Decode(new byte[] { 0x00 }));
+        Assert.AreEqual(Http3ErrorCode.QpackDecompressionFailed, ex.ErrorCode);
+    }
+
+    [TestMethod]
+    public void Decode_NonZeroRicWithoutContext_Throws()
+    {
+        // Prefixed RIC=1 (byte 0x01) + Delta Base=0 (byte 0x00)
+        var ex = Assert.ThrowsException<Http3ConnectionException>(
+            () => QpackDecoder.Decode(new byte[] { 0x01, 0x00 }));
+        Assert.AreEqual(Http3ErrorCode.QpackDecompressionFailed, ex.ErrorCode);
+        StringAssert.Contains(ex.Message, "Required Insert Count");
+    }
+
+    [TestMethod]
+    public void Decode_StaticIndexOutOfRange_Throws()
+    {
+        // RIC=0, DeltaBase=0, then indexed static with absurd index (0xFF with 6-bit prefix overflow)
+        // Static indexed pattern: 11xxxxxx — use index far beyond table via 0xFF 0xFF
+        var ex = Assert.ThrowsException<Http3ConnectionException>(
+            () => QpackDecoder.Decode(new byte[] { 0x00, 0x00, 0xFF, 0xFF }));
+        Assert.AreEqual(Http3ErrorCode.QpackDecompressionFailed, ex.ErrorCode);
+    }
+
+    [TestMethod]
+    public async System.Threading.Tasks.Task DecodeAsync_Cancellation_Throws()
+    {
+        using var cts = new System.Threading.CancellationTokenSource();
+        cts.Cancel();
+        await Assert.ThrowsExceptionAsync<System.OperationCanceledException>(
+            () => QpackDecoder.DecodeAsync(new byte[] { 0x00, 0x00 }, null, cts.Token));
     }
 }
