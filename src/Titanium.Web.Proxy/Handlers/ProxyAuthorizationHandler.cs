@@ -51,23 +51,27 @@ public partial class ProxyServer
             var authenticationType = header.AsMemory(0, firstSpace);
             var credentials = header.AsMemory(firstSpace + 1);
 
-            // Prefer basic when configured; otherwise use scheme auth (guaranteed non-null here).
-            if (basicAuthenticate is not null)
-                return await AuthenticateUserBasic(session, authenticationType, credentials,
-                    basicAuthenticate);
-
-            var result = await schemeAuthenticate(session, authenticationType.ToString(),
-                credentials.ToString());
-
-            if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
+            // Prefer basic when configured; otherwise use scheme auth.
+            // Nesting the scheme path under `basicAuthenticate is null` narrows schemeAuthenticate
+            // for the compiler without `!` (S8969) or a redundant null check (S2583).
+            if (basicAuthenticate is null)
             {
-                session.HttpClient.Response =
-                    CreateAuthentication407Response(ProxyAuthenticationInvalid, result.Continuation);
+                var result = await schemeAuthenticate(session, authenticationType.ToString(),
+                    credentials.ToString());
 
-                return false;
+                if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
+                {
+                    session.HttpClient.Response =
+                        CreateAuthentication407Response(ProxyAuthenticationInvalid, result.Continuation);
+
+                    return false;
+                }
+
+                return result.Result == ProxyAuthenticationResult.Success;
             }
 
-            return result.Result == ProxyAuthenticationResult.Success;
+            return await AuthenticateUserBasic(session, authenticationType, credentials,
+                basicAuthenticate);
         }
         catch (Exception e)
         {
