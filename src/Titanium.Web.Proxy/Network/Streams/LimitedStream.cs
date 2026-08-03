@@ -35,11 +35,10 @@ internal class LimitedStream : Stream
         this.bufferPool = bufferPool;
         this.isChunked = isChunked;
         this.trailingHeaders = trailingHeaders;
-        bytesRemaining = isChunked
-            ? 0
-            : contentLength == -1
-                ? long.MaxValue
-                : contentLength;
+        if (isChunked)
+            bytesRemaining = 0;
+        else
+            bytesRemaining = contentLength == -1 ? long.MaxValue : contentLength;
     }
 
     public override bool CanRead => true;
@@ -117,6 +116,12 @@ internal class LimitedStream : Stream
 
     public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
+        return await ReadAsync(buffer.AsMemory(offset, count), cancellationToken);
+    }
+
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer,
+        CancellationToken cancellationToken = default)
+    {
         if (bytesRemaining == -1) return 0;
 
         if (bytesRemaining == 0)
@@ -129,8 +134,19 @@ internal class LimitedStream : Stream
 
         if (bytesRemaining == -1) return 0;
 
-        var toRead = (int)Math.Min(count, bytesRemaining);
-        var res = await baseReader.ReadAsync(buffer, offset, toRead, cancellationToken);
+        var toRead = (int)Math.Min(buffer.Length, bytesRemaining);
+        var rented = bufferPool.GetBuffer();
+        var temporary = toRead <= rented.Length ? rented : new byte[toRead];
+        int res;
+        try
+        {
+            res = await baseReader.ReadAsync(temporary, 0, toRead, cancellationToken);
+            temporary.AsMemory(0, res).CopyTo(buffer);
+        }
+        finally
+        {
+            bufferPool.ReturnBuffer(rented);
+        }
         bytesRemaining -= res;
 
         if (res == 0) bytesRemaining = -1;

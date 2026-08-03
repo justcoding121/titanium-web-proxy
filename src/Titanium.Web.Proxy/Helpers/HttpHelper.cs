@@ -107,7 +107,7 @@ internal static class HttpHelper
             var idx = hostname.IndexOf(ProxyConstants.DotSplit);
 
             // issue #352
-            if (hostname.Substring(0, idx).Contains("-")) return hostname;
+            if (hostname.Substring(0, idx).Contains('-')) return hostname;
 
             var rootDomain = hostname.Substring(idx + 1);
             return "*." + rootDomain;
@@ -266,23 +266,23 @@ internal static class HttpHelper
             idx = 0;
         }
 
-        public SemicolonSplitEnumerator GetEnumerator()
+        public SemicolonSplitEnumerator GetEnumerator() // NOSONAR S1144 -- Required by the foreach pattern.
         {
             return this;
         }
 
-        public bool MoveNext()
+        public bool MoveNext() // NOSONAR S1144 -- Required by the foreach pattern.
         {
             if (this.idx > data.Length) return false;
 
-            var idx = data.Span.Slice(this.idx).IndexOf(';');
-            if (idx == -1)
-                idx = data.Length;
+            var separatorIndex = data.Span.Slice(this.idx).IndexOf(';');
+            if (separatorIndex == -1)
+                separatorIndex = data.Length;
             else
-                idx += this.idx;
+                separatorIndex += this.idx;
 
-            Current = data.Slice(this.idx, idx - this.idx);
-            this.idx = idx + 1;
+            Current = data.Slice(this.idx, separatorIndex - this.idx);
+            this.idx = separatorIndex + 1;
             return true;
         }
 

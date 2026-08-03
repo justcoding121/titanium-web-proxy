@@ -39,7 +39,7 @@ public class Http2HelperStartupAndNullOriginTests
         var stream = new NullOriginStream(cts.Token);
 
         var buf = new byte[16];
-        var n1 = await stream.ReadAsync(buf, 0, buf.Length);
+        var n1 = await stream.ReadAsync(buf);
         Assert.AreEqual(9, n1);
         Assert.AreEqual((byte)Http2FrameType.Settings, buf[3]);
         Assert.AreEqual(0, (buf[0] << 16) | (buf[1] << 8) | buf[2]);
@@ -48,7 +48,7 @@ public class Http2HelperStartupAndNullOriginTests
         await stream.WriteAsync(new byte[] { 1, 2, 3 }, CancellationToken.None);
         await stream.FlushAsync();
 
-        var blocked = stream.ReadAsync(buf, 0, buf.Length);
+        var blocked = stream.ReadAsync(buf);
         Assert.IsFalse(blocked.IsCompleted);
         cts.Cancel();
         await Assert.ThrowsExactlyAsync<TaskCanceledException>(async () => await blocked);

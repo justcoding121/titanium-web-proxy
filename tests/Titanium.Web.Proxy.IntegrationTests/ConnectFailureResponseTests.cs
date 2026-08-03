@@ -174,7 +174,7 @@ public class ConnectFailureResponseTests
         string text = string.Empty;
         while (ms.Length < 64 * 1024)
         {
-            var read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
+            var read = await stream.ReadAsync(buffer, cts.Token);
             if (read == 0) break;
             ms.Write(buffer, 0, read);
             text = Encoding.ASCII.GetString(ms.ToArray());

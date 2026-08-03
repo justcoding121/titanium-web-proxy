@@ -70,7 +70,7 @@ internal sealed class Http11OnlyOriginServer : IDisposable
                                    $"Content-Length: {Encoding.ASCII.GetByteCount(body)}\r\n" +
                                    "Connection: close\r\n\r\n" + body;
                     var responseBytes = Encoding.ASCII.GetBytes(response);
-                    await sslStream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                    await sslStream.WriteAsync(responseBytes);
                 }
                 catch
                 {

@@ -59,7 +59,7 @@ internal sealed class Http2RawClient : IDisposable
         var networkStream = tcpClient.GetStream();
         var connectRequest = $"CONNECT {targetHost}:{targetPort} HTTP/1.1\r\nHost: {targetHost}:{targetPort}\r\n\r\n";
         var connectBytes = Encoding.ASCII.GetBytes(connectRequest);
-        await networkStream.WriteAsync(connectBytes, 0, connectBytes.Length);
+        await networkStream.WriteAsync(connectBytes);
 
         await ReadUntilBlankLineAsync(networkStream);
 
@@ -93,7 +93,7 @@ internal sealed class Http2RawClient : IDisposable
             EnabledSslProtocols = System.Security.Authentication.SslProtocols.None
         });
 
-        await sslStream.WriteAsync(Http2Helper.ConnectionPreface, 0, Http2Helper.ConnectionPreface.Length);
+        await sslStream.WriteAsync(Http2Helper.ConnectionPreface);
 
         var connection = new Http2RawFrame.Connection(sslStream);
         if (headerTableSize.HasValue)
@@ -127,7 +127,7 @@ internal sealed class Http2RawClient : IDisposable
         var networkStream = tcpClient.GetStream();
         var connectRequest = $"CONNECT {targetHost}:{targetPort} HTTP/1.1\r\nHost: {targetHost}:{targetPort}\r\n\r\n";
         var connectBytes = Encoding.ASCII.GetBytes(connectRequest);
-        await networkStream.WriteAsync(connectBytes, 0, connectBytes.Length);
+        await networkStream.WriteAsync(connectBytes);
 
         await ReadUntilBlankLineAsync(networkStream);
 
@@ -168,7 +168,7 @@ internal sealed class Http2RawClient : IDisposable
         /// </summary>
         public async Task<Http2RawFrame.Connection> StartHttp2Async()
         {
-            await SslStream.WriteAsync(Http2Helper.ConnectionPreface, 0, Http2Helper.ConnectionPreface.Length);
+            await SslStream.WriteAsync(Http2Helper.ConnectionPreface);
 
             var connection = new Http2RawFrame.Connection(SslStream);
             await connection.SendInitialSettingsAsync();
@@ -193,7 +193,7 @@ internal sealed class Http2RawClient : IDisposable
         var matched = 0;
         while (matched < terminator.Length)
         {
-            var read = await stream.ReadAsync(buffer, 0, 1);
+            var read = await stream.ReadAsync(buffer.AsMemory(0, 1));
             if (read == 0)
             {
                 throw new EndOfStreamException(

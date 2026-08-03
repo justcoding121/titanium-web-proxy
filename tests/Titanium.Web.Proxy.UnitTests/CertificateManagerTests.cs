@@ -51,7 +51,7 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.AreEqual(validDays + graceDays, (int)Math.Round(totalDays), 1,
                 $"Total lifetime should be {validDays + graceDays} days, got {totalDays:F1}");
 
-            // NotBefore must be close to now - graceDays (allow ±1 minute for test execution lag)
+            // NotBefore must be close to now - graceDays (allow ù1 minute for test execution lag)
             var expectedNotBefore = DateTime.UtcNow.AddDays(-graceDays);
             Assert.IsTrue(
                 Math.Abs((cert.NotBefore.ToUniversalTime() - expectedNotBefore).TotalMinutes) < 2,
@@ -586,7 +586,7 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.IsNotNull(cacheField, "cachedCertificates field not found via reflection");
             var cache = (ConcurrentDictionary<string, CachedCertificate>)cacheField.GetValue(mgr)!;
 
-            Assert.IsTrue(cache.Count > 0, "pre-condition: cache must be non-empty before Dispose");
+            Assert.IsFalse(cache.IsEmpty, "pre-condition: cache must be non-empty before Dispose");
 
             mgr.Dispose();
 

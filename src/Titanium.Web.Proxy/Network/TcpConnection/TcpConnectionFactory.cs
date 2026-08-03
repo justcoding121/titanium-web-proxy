@@ -146,18 +146,18 @@ internal class TcpConnectionFactory : IDisposable
         // http version 2 is separated using applicationProtocols below.
         var cacheKeyBuilder = new StringBuilder();
         cacheKeyBuilder.Append(remoteHostName);
-        cacheKeyBuilder.Append("-");
+        cacheKeyBuilder.Append('-');
         cacheKeyBuilder.Append(remotePort);
-        cacheKeyBuilder.Append("-");
+        cacheKeyBuilder.Append('-');
 
         // a fixed forward target changes the actual connection destination while keeping
         // remoteHostName for TLS/identity, so it must be part of the cache key.
         if (!string.IsNullOrEmpty(connectHost))
         {
             cacheKeyBuilder.Append(connectHost);
-            cacheKeyBuilder.Append("-");
+            cacheKeyBuilder.Append('-');
             cacheKeyBuilder.Append(connectPort ?? remotePort);
-            cacheKeyBuilder.Append("-");
+            cacheKeyBuilder.Append('-');
         }
 
         // when creating Tcp client isConnect won't matter
@@ -166,7 +166,7 @@ internal class TcpConnectionFactory : IDisposable
         if (applicationProtocols != null)
             foreach (var protocol in applicationProtocols.OrderBy(x => x))
             {
-                cacheKeyBuilder.Append("-");
+                cacheKeyBuilder.Append('-');
                 cacheKeyBuilder.Append(protocol);
             }
 
@@ -270,7 +270,7 @@ internal class TcpConnectionFactory : IDisposable
     /// <param name="session">The session event arguments.</param>
     /// <param name="applicationProtocol">The application protocol.</param>
     /// <returns></returns>
-    internal async Task<string> GetConnectionCacheKey(ProxyServer server, SessionEventArgsBase session,
+    internal static async Task<string> GetConnectionCacheKey(ProxyServer server, SessionEventArgsBase session,
         SslApplicationProtocol applicationProtocol)
     {
         List<SslApplicationProtocol>? applicationProtocols = null;
@@ -461,7 +461,7 @@ internal class TcpConnectionFactory : IDisposable
                 {
                     // +3 seconds for potential delay after getting connection
                     var cutOff = DateTime.UtcNow.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
-                    while (existingConnections.Count > 0)
+                    while (!existingConnections.IsEmpty)
                         if (existingConnections.TryDequeue(out var recentConnection))
                         {
                             if (recentConnection.LastAccess > cutOff
@@ -1374,7 +1374,7 @@ internal class TcpConnectionFactory : IDisposable
                         // dequeue/enqueue/removal here does not race with either.
                         lock (queue)
                         {
-                            while (queue.Count > 0)
+                            while (!queue.IsEmpty)
                                 if (queue.TryDequeue(out var connection))
                                 {
                                     if (!Server.EnableConnectionPool || connection.LastAccess < cutOff)

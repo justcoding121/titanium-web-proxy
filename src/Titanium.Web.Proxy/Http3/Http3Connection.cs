@@ -184,7 +184,7 @@ internal sealed class Http3Connection
             qex.QuicError == QuicError.ConnectionIdle)
         {
             if (_logger.IsEnabled(LogLevel.Debug))
-                _logger.LogDebug("HTTP/3 client connection closed: {QuicError}", qex.QuicError);
+                _logger.LogDebug(qex, "HTTP/3 client connection closed: {QuicError}", qex.QuicError);
         }
         catch (Exception ex)
         {

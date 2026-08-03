@@ -103,7 +103,7 @@ internal sealed class Socks5Handler : SocksHandler
     /// <returns>An array of bytes that has to be sent when the user wants to connect to a specific host/port combination.</returns>
     /// <exception cref="ArgumentNullException"><c>host</c> is null.</exception>
     /// <exception cref="ArgumentException"><c>port</c> or <c>host</c> is invalid.</exception>
-    private int GetHostPortBytes(string host, int port, Memory<byte> buffer)
+    private static int GetHostPortBytes(string host, int port, Memory<byte> buffer)
     {
         ArgumentNullException.ThrowIfNull(host);
 
@@ -132,7 +132,7 @@ internal sealed class Socks5Handler : SocksHandler
     /// <param name="buffer">The buffer which contains the result data.</param>
     /// <returns>An array of bytes that has to be sent when the user wants to connect to a specific IPEndPoint.</returns>
     /// <exception cref="ArgumentNullException"><c>remoteEP</c> is null.</exception>
-    private int GetEndPointBytes(IPEndPoint remoteEp, Memory<byte> buffer)
+    private static int GetEndPointBytes(IPEndPoint remoteEp, Memory<byte> buffer)
     {
         ArgumentNullException.ThrowIfNull(remoteEp);
 

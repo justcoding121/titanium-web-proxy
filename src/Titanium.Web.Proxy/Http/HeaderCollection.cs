@@ -168,13 +168,14 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     /// <returns></returns>
     public List<HttpHeader>? GetHeaders(string name)
     {
-        if (headers.ContainsKey(name))
+        if (headers.TryGetValue(name, out var header))
             return new List<HttpHeader>
             {
-                headers[name]
+                header
             };
 
-        if (nonUniqueHeaders.ContainsKey(name)) return new List<HttpHeader>(nonUniqueHeaders[name]);
+        if (nonUniqueHeaders.TryGetValue(name, out var nonUnique))
+            return new List<HttpHeader>(nonUnique);
 
         return null;
     }
@@ -355,19 +356,14 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     /// <param name="header">Returns true if header exists and was removed </param>
     public bool RemoveHeader(HttpHeader header)
     {
-        if (headers.ContainsKey(header.Name) && headers[header.Name].Equals(header))
+        if (headers.TryGetValue(header.Name, out var existing))
         {
-            headers.Remove(header.Name);
-            return true;
+            if (!existing.Equals(header)) return false;
+            return headers.Remove(header.Name);
         }
 
-        if (headers.ContainsKey(header.Name))
-        {
-            return false;
-        }
-
-        if (nonUniqueHeaders.ContainsKey(header.Name) &&
-            nonUniqueHeaders[header.Name].RemoveAll(x => x.Equals(header)) > 0)
+        if (nonUniqueHeaders.TryGetValue(header.Name, out var matchingHeaders) &&
+            matchingHeaders.RemoveAll(x => x.Equals(header)) > 0)
         {
             return true;
         }

@@ -109,7 +109,7 @@ public partial class ProxyServer
                     return;
                 }
 
-                if (await CheckAuthorization(connectArgs) == false)
+                if (!await CheckAuthorization(connectArgs))
                 {
                     await endPoint.InvokeBeforeTunnelConnectResponse(this, connectArgs, logger);
 
@@ -175,7 +175,7 @@ public partial class ProxyServer
 
                 if (decryptSsl && clientHelloInfo != null)
                 {
-                    connectRequest.IsHttps = true; // todo: move this line to the previous "if"
+                    connectRequest.IsHttps = true; // Decryption changes the tunneled request to HTTPS semantics.
 
                     var sslProtocol = clientHelloInfo.SslProtocol & SupportedSslProtocols;
                     if (sslProtocol == SslProtocols.None)
@@ -216,10 +216,12 @@ public partial class ProxyServer
                         connectHost, connectPort,
                         connectArgs.UpstreamHttpProtocol,
                         allowDnsProbe: true);
-                    connectTiming?.MarkOriginCapabilityCompleted(
-                        h3RouteAtConnect.UseH3
-                            ? (h3RouteAtConnect.Source == Http3.Http3RouteSource.Forced ? "forced" : "cache")
-                            : (EnableHttpsSvcbDnsDiscovery ? "background" : "none"));
+                    string routeOutcome;
+                    if (h3RouteAtConnect.UseH3)
+                        routeOutcome = h3RouteAtConnect.Source == Http3.Http3RouteSource.Forced ? "forced" : "cache";
+                    else
+                        routeOutcome = EnableHttpsSvcbDnsDiscovery ? "background" : "none";
+                    connectTiming?.MarkOriginCapabilityCompleted(routeOutcome);
 
                     if (h3RouteAtConnect.UseH3)
                     {
@@ -429,7 +431,7 @@ public partial class ProxyServer
 
             if (connectArgs != null && method == KnownMethod.Pri)
             {
-                // todo
+                // Validate the remainder of the HTTP/2 connection preface before routing.
                 var httpCmd = await clientStream.ReadLineAsync(cancellationToken);
                 if (httpCmd == "PRI * HTTP/2.0")
                 {

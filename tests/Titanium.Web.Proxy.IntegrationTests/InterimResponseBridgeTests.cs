@@ -66,7 +66,7 @@ public class InterimResponseBridgeTests
             new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 });
 
         var requestBytes = Ascii.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-        await tunnel.SslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+        await tunnel.SslStream.WriteAsync(requestBytes);
 
         using var reader = new StreamReader(tunnel.SslStream, Ascii, false, 4096, true);
         var statusLine = await reader.ReadLineAsync();
@@ -116,7 +116,7 @@ public class InterimResponseBridgeTests
         var requestBytes = Ascii.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
         for (var i = 0; i < 3; i++)
         {
-            await tunnel.SslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+            await tunnel.SslStream.WriteAsync(requestBytes);
 
             // Read status line and headers.
             var statusLine = await reader.ReadLineAsync();
@@ -134,7 +134,7 @@ public class InterimResponseBridgeTests
             var bodyRead = 0;
             while (bodyRead < contentLength)
             {
-                var n = await reader.ReadAsync(bodyChars, bodyRead, contentLength - bodyRead);
+                var n = await reader.ReadAsync(bodyChars.AsMemory(bodyRead, contentLength - bodyRead));
                 if (n == 0) break;
                 bodyRead += n;
             }
@@ -160,7 +160,7 @@ public class InterimResponseBridgeTests
         {
             Interlocked.Increment(ref hitCount);
             context.Response.StatusCode = 401;
-            context.Response.Headers["WWW-Authenticate"] = "Basic realm=\"test\"";
+            context.Response.Headers.WWWAuthenticate = "Basic realm=\"test\"";
             return Task.CompletedTask;
         });
 

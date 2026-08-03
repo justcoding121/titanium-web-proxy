@@ -50,7 +50,7 @@ public class Http2TransparentTests
     {
         var handler = new SocketsHttpHandler
         {
-            // Direct to the transparent endpoint — must not ride the machine system proxy
+            // Direct to the transparent endpoint ï¿½ must not ride the machine system proxy
             // (Basic example on :8000) which would MITM with the product root instead.
             UseProxy = false,
             SslOptions =
@@ -185,7 +185,7 @@ public class Http2TransparentTests
             "The origin does not support h2, so the proxy must not have negotiated h2 with the client either.");
 
         var requestBytes = Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-        await sslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+        await sslStream.WriteAsync(requestBytes);
 
         using var reader = new System.IO.StreamReader(sslStream, Encoding.ASCII, false, 4096, true);
         var statusLine = await reader.ReadLineAsync();
@@ -338,7 +338,7 @@ public class Http2TransparentTests
                 foreach (var part in writeBody)
                 {
                     var bytes = Encoding.ASCII.GetBytes(part);
-                    await stream.WriteAsync(bytes, 0, bytes.Length, ct);
+                    await stream.WriteAsync(bytes, ct);
                 }
             }, closeServerConnection: true);
 
@@ -419,7 +419,7 @@ public class Http2TransparentTests
             "cached capability result.");
 
         var requestBytes = Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-        await sslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+        await sslStream.WriteAsync(requestBytes);
 
         using var reader = new System.IO.StreamReader(sslStream, Encoding.ASCII, false, 4096, true);
         var statusLine = await reader.ReadLineAsync();

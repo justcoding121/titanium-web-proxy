@@ -55,12 +55,9 @@ public partial class ProxyServer
                 return await AuthenticateUserBasic(session, authenticationType, credentials,
                     basicAuthenticate);
 
-            // Both funcs null already returned above; Basic path returned; Scheme is therefore required.
-            if (schemeAuthenticate == null)
-                throw new InvalidOperationException(
-                    "A scheme authentication callback is required when basic authentication is unavailable.");
+            // Both callbacks being null returned above, and the basic callback path returned here.
             var result =
-                await schemeAuthenticate(session, authenticationType.ToString(), credentials.ToString());
+                await schemeAuthenticate!(session, authenticationType.ToString(), credentials.ToString());
 
             if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
             {

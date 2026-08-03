@@ -13,9 +13,9 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
 ///     Integration tests for HTTP/2 behavior that cannot be driven through a real HttpClient on both ends
-///     of the proxy at once: response and request trailers (RFC 7540 ß8.1.2.1), interim (1xx) informational
-///     responses relayed over h2 (RFC 9110 ß15.2), and HEADERS/CONTINUATION reassembly + re-splitting (RFC
-///     7540 ß4.3/ß6.10). HttpClient has no public API to send request trailers or to deliberately fragment
+///     of the proxy at once: response and request trailers (RFC 7540 ù8.1.2.1), interim (1xx) informational
+///     responses relayed over h2 (RFC 9110 ù15.2), and HEADERS/CONTINUATION reassembly + re-splitting (RFC
+///     7540 ù4.3/ù6.10). HttpClient has no public API to send request trailers or to deliberately fragment
 ///     a header block across CONTINUATION frames, and does not reliably surface informational responses to
 ///     test code - so these tests use <see cref="Http2RawClient" /> and <see cref="Http2RawOriginServer" />
 ///     (hand-rolled but protocol-accurate h2 endpoints built on the proxy's own internal frame/HPACK types)
@@ -91,7 +91,7 @@ public class Http2TrailerInterimContinuationTests
         var dataFrame = await rawClient.Connection.ReadFrameAsync();
         Assert.AreEqual(Http2FrameType.Data, dataFrame.Type);
         Assert.AreEqual("hello", Encoding.ASCII.GetString(dataFrame.Payload));
-        Assert.IsFalse((dataFrame.Flags & Http2FrameFlag.EndStream) != 0);
+        Assert.AreEqual((Http2FrameFlag)0, dataFrame.Flags & Http2FrameFlag.EndStream);
 
         var (_, trailerHeaders, trailerEndStream) = await rawClient.Connection.ReadHeaderBlockAsync();
         Assert.IsTrue(trailerEndStream, "The trailer HEADERS block should have carried END_STREAM.");
@@ -224,7 +224,7 @@ public class Http2TrailerInterimContinuationTests
         var dataFrame = await rawClient.Connection.ReadFrameAsync();
         Assert.AreEqual(Http2FrameType.Data, dataFrame.Type);
         Assert.AreEqual("final-body", Encoding.ASCII.GetString(dataFrame.Payload));
-        Assert.IsTrue((dataFrame.Flags & Http2FrameFlag.EndStream) != 0);
+        Assert.AreNotEqual((Http2FrameFlag)0, dataFrame.Flags & Http2FrameFlag.EndStream);
     }
 
     [TestMethod]

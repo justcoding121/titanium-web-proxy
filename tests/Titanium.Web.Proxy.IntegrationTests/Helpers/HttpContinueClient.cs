@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
@@ -25,7 +25,7 @@ internal class HttpContinueClient
         request.Headers.AddHeader(KnownHeaders.Expect, KnownHeaders.Expect100Continue);
 
         var header = _msgEncoding.GetBytes(request.HeaderText);
-        await client.GetStream().WriteAsync(header, 0, header.Length);
+        await client.GetStream().WriteAsync(header);
 
         var buffer = new byte[1024];
         var responseMsg = string.Empty;
@@ -33,7 +33,7 @@ internal class HttpContinueClient
 
         while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)
         {
-            var readTask = client.GetStream().ReadAsync(buffer, 0, 1024);
+            var readTask = client.GetStream().ReadAsync(buffer.AsMemory(0, 1024)).AsTask();
             if (!readTask.Wait(WaitTimeout))
             {
                 return null;
@@ -50,7 +50,7 @@ internal class HttpContinueClient
 
             while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)
             {
-                var readTask = client.GetStream().ReadAsync(buffer, 0, 1024);
+                var readTask = client.GetStream().ReadAsync(buffer.AsMemory(0, 1024)).AsTask();
                 if (!readTask.Wait(WaitTimeout))
                 {
                     return null;

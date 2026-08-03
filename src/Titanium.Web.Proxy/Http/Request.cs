@@ -69,7 +69,7 @@ public class Request : RequestResponseBase
             {
                 var hostAndPath = Host ?? Authority.GetString();
 
-                if (url.StartsWith("/"))
+                if (url.StartsWith('/'))
                 {
                     hostAndPath += url;
                 }

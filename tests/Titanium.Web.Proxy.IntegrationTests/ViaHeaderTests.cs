@@ -43,7 +43,7 @@ public class ViaHeaderTests
 
         server.HandleRequest(context =>
         {
-            capturedVia = context.Request.Headers["Via"].ToString();
+            capturedVia = context.Request.Headers.Via.ToString();
             if (string.IsNullOrEmpty(capturedVia)) capturedVia = null;
             context.Response.StatusCode = 200;
             return Task.CompletedTask;
@@ -98,7 +98,7 @@ public class ViaHeaderTests
 
         server.HandleRequest(context =>
         {
-            capturedVia = context.Request.Headers["Via"].ToString();
+            capturedVia = context.Request.Headers.Via.ToString();
             if (string.IsNullOrEmpty(capturedVia)) capturedVia = null;
             context.Response.StatusCode = 200;
             return Task.CompletedTask;
@@ -149,7 +149,7 @@ public class ViaHeaderTests
 
         server.HandleRequest(context =>
         {
-            capturedVia = context.Request.Headers["Via"].ToString();
+            capturedVia = context.Request.Headers.Via.ToString();
             if (string.IsNullOrEmpty(capturedVia)) capturedVia = null;
             context.Response.StatusCode = 200;
             return Task.CompletedTask;

@@ -53,7 +53,7 @@ public class TransferEncodingConflictTests
         using var limited = new LimitedStream(httpStream, new DefaultBufferPool(), true, -1);
 
         var buffer = new byte[16];
-        var read = await limited.ReadAsync(buffer, 0, buffer.Length);
+        var read = await limited.ReadAsync(buffer);
         Assert.AreEqual(5, read);
         Assert.AreEqual("hello", Encoding.ASCII.GetString(buffer, 0, read));
     }
@@ -73,7 +73,7 @@ public class TransferEncodingConflictTests
             // Single-shot probe: oversized chunk size must fail during framing parse,
             // before any body bytes are returned (CA2022 does not apply to exception paths).
 #pragma warning disable CA2022
-            _ = await limited.ReadAsync(buffer, 0, buffer.Length);
+            _ = await limited.ReadAsync(buffer);
 #pragma warning restore CA2022
         });
     }
@@ -91,7 +91,7 @@ public class TransferEncodingConflictTests
         var buffer = new byte[16];
         var total = 0;
         int n;
-        while ((n = await limited.ReadAsync(buffer, 0, buffer.Length)) > 0)
+        while ((n = await limited.ReadAsync(buffer)) > 0)
             total += n;
 
         Assert.AreEqual(3, total);

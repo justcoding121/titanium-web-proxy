@@ -128,7 +128,7 @@ public class SessionEventArgs : SessionEventArgsBase
         }
     }
 
-    [Obsolete("Use [WebSocketDecoderReceive] instead")]
+    [Obsolete("Use [WebSocketDecoderReceive] instead")] // NOSONAR S1133 -- Binary-compatible public API.
     public WebSocketDecoder WebSocketDecoder => WebSocketDecoderReceive;
 
     public WebSocketDecoder WebSocketDecoderSend =>

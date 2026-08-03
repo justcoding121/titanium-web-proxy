@@ -366,7 +366,7 @@ public class WebSocketUpgradeTests
         try
         {
             int read;
-            while ((read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token)) > 0)
+            while ((read = await stream.ReadAsync(buffer, cts.Token)) > 0)
                 ms.Write(buffer, 0, read);
         }
         catch (OperationCanceledException)
@@ -622,7 +622,7 @@ public class WebSocketUpgradeTests
                     return AsciiEncoding.GetString(headerBytes);
                 }
 
-                var read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
+                var read = await stream.ReadAsync(buffer, cts.Token);
                 if (read == 0) throw new IOException("Connection closed before response headers completed.");
                 pending.AddRange(buffer.Take(read));
             }
@@ -656,7 +656,7 @@ public class WebSocketUpgradeTests
             var buffer = new byte[4096];
             while (frames.Count < minFrameCount)
             {
-                var read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
+                var read = await stream.ReadAsync(buffer, cts.Token);
                 if (read == 0) throw new IOException("Connection closed before enough frames arrived.");
                 Capture(decoder.Decode(buffer, 0, read));
             }

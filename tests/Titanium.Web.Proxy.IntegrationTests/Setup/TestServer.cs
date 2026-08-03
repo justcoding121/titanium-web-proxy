@@ -97,6 +97,7 @@ public class TestServer : IDisposable
     {
         host.StopAsync().Wait();
         host.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     public void HandleRequest(Func<HttpContext, Task> requestHandler)

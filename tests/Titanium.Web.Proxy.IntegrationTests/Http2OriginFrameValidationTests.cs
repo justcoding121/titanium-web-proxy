@@ -74,7 +74,7 @@ public class Http2OriginFrameValidationTests
     }
 
     // -------------------------------------------------------------------------
-    // Bug 3 – RFC 7540 §6.9.1: zero-increment WINDOW_UPDATE is PROTOCOL_ERROR
+    // Bug 3 ï¿½ RFC 7540 ï¿½6.9.1: zero-increment WINDOW_UPDATE is PROTOCOL_ERROR
     // -------------------------------------------------------------------------
 
     [TestMethod]
@@ -107,7 +107,7 @@ public class Http2OriginFrameValidationTests
     }
 
     // -------------------------------------------------------------------------
-    // Bug 1 – RFC 7540 §4.2: frame declaring payload > 16 KiB is PROTOCOL_ERROR
+    // Bug 1 ï¿½ RFC 7540 ï¿½4.2: frame declaring payload > 16 KiB is PROTOCOL_ERROR
     // -------------------------------------------------------------------------
 
     [TestMethod]
@@ -124,7 +124,7 @@ public class Http2OriginFrameValidationTests
             // Allow a moment for the proxy to process SETTINGS and open the stream.
             await Task.Delay(100);
 
-            // Write a raw 9-byte frame header declaring length = 1,048,576 (1 MiB) — way above the 16 KiB
+            // Write a raw 9-byte frame header declaring length = 1,048,576 (1 MiB) ï¿½ way above the 16 KiB
             // default maximum. Use DATA type on stream 1. Do NOT write the payload bytes.
             const int oversizedLength = 1 << 20; // 1 MiB
             var header = new byte[9];
@@ -139,7 +139,7 @@ public class Http2OriginFrameValidationTests
             header[8] = 0x01; // stream 1
 
             var stream = connection.GetStream();
-            await stream.WriteAsync(header, 0, header.Length);
+            await stream.WriteAsync(header);
             await stream.FlushAsync();
 
             // Keep the connection open so the proxy has time to read the header and reject it.
@@ -158,7 +158,7 @@ public class Http2OriginFrameValidationTests
     }
 
     // -------------------------------------------------------------------------
-    // Bug 5 – RFC 7540 §6.5: SETTINGS must have stream ID 0
+    // Bug 5 ï¿½ RFC 7540 ï¿½6.5: SETTINGS must have stream ID 0
     // -------------------------------------------------------------------------
 
     [TestMethod]
@@ -179,7 +179,7 @@ public class Http2OriginFrameValidationTests
             header[8] = 0x01; // stream ID 1
 
             var stream = connection.GetStream();
-            await stream.WriteAsync(header, 0, header.Length);
+            await stream.WriteAsync(header);
             await stream.FlushAsync();
 
             try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
@@ -197,7 +197,7 @@ public class Http2OriginFrameValidationTests
     }
 
     // -------------------------------------------------------------------------
-    // Bug 4 – RFC 7540 §6.10: CONTINUATION outside a header block is PROTOCOL_ERROR
+    // Bug 4 ï¿½ RFC 7540 ï¿½6.10: CONTINUATION outside a header block is PROTOCOL_ERROR
     // -------------------------------------------------------------------------
 
     [TestMethod]
@@ -219,7 +219,7 @@ public class Http2OriginFrameValidationTests
             await connection.WriteHeaderBlockAsync(streamId, responseHeaders, true);
 
             // Now send a stray CONTINUATION on the same stream.
-            // There is no open header block at this point ? connection error (RFC 7540 §6.10).
+            // There is no open header block at this point ? connection error (RFC 7540 ï¿½6.10).
             var contHeader = new byte[9];
             contHeader[3] = 0x09; // CONTINUATION
             contHeader[4] = (byte)Http2FrameFlag.EndHeaders;
@@ -229,7 +229,7 @@ public class Http2OriginFrameValidationTests
             contHeader[8] = (byte)(streamId & 0xff);
 
             var rawStream = connection.GetStream();
-            await rawStream.WriteAsync(contHeader, 0, contHeader.Length);
+            await rawStream.WriteAsync(contHeader);
             await rawStream.FlushAsync();
 
             try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
@@ -241,7 +241,7 @@ public class Http2OriginFrameValidationTests
 
         // The request may have already completed by the time the proxy processes the
         // stray CONTINUATION (the 200 response is sent first). What matters is that
-        // the test finishes within the timeout — no deadlock.
+        // the test finishes within the timeout ï¿½ no deadlock.
         _ = await TrySendRequestAsync(proxy.ProxyEndPoints[0].Port, new Uri(rawServer.Url));
         cts.Cancel(); // unblock the server handler immediately if still waiting
         Assert.IsTrue(cts.IsCancellationRequested,
@@ -249,7 +249,7 @@ public class Http2OriginFrameValidationTests
     }
 
     // -------------------------------------------------------------------------
-    // Bug 6 – RFC 7540 §6.8: GOAWAY must have stream ID 0
+    // Bug 6 ï¿½ RFC 7540 ï¿½6.8: GOAWAY must have stream ID 0
     // -------------------------------------------------------------------------
 
     [TestMethod]
@@ -278,8 +278,8 @@ public class Http2OriginFrameValidationTests
             header[8] = 0x01; // stream ID 1
 
             var stream = connection.GetStream();
-            await stream.WriteAsync(header, 0, header.Length);
-            await stream.WriteAsync(payload, 0, payload.Length);
+            await stream.WriteAsync(header);
+            await stream.WriteAsync(payload);
             await stream.FlushAsync();
 
             try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }

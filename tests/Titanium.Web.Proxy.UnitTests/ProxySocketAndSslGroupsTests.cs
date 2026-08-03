@@ -41,27 +41,26 @@ public class ProxySocketAndSslGroupsTests
     public void Socks5Handler_GetHostPortBytes_And_GetEndPointBytes_IPv4_IPv6()
     {
         using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        var handler = new Socks5Handler(socket, "user", "pass");
         var hostMethod = typeof(Socks5Handler).GetMethod("GetHostPortBytes",
-            BindingFlags.Instance | BindingFlags.NonPublic)!;
+            BindingFlags.Static | BindingFlags.NonPublic)!;
         var epMethod = typeof(Socks5Handler).GetMethod("GetEndPointBytes",
-            BindingFlags.Instance | BindingFlags.NonPublic)!;
+            BindingFlags.Static | BindingFlags.NonPublic)!;
 
         var hostBuf = new byte[64];
-        var hostLen = (int)hostMethod.Invoke(handler, ["example.com", 443, hostBuf.AsMemory()])!;
+        var hostLen = (int)hostMethod.Invoke(null, ["example.com", 443, hostBuf.AsMemory()])!;
         Assert.AreEqual(7 + "example.com".Length, hostLen);
         Assert.AreEqual(5, hostBuf[0]);
         Assert.AreEqual(3, hostBuf[3]); // domain ATYP
         Assert.AreEqual((byte)"example.com".Length, hostBuf[4]);
 
         var v4Buf = new byte[16];
-        var v4Len = (int)epMethod.Invoke(handler, [new IPEndPoint(IPAddress.Parse("1.2.3.4"), 8080), v4Buf.AsMemory()])!;
+        var v4Len = (int)epMethod.Invoke(null, [new IPEndPoint(IPAddress.Parse("1.2.3.4"), 8080), v4Buf.AsMemory()])!;
         Assert.AreEqual(10, v4Len);
         Assert.AreEqual(1, v4Buf[3]); // IPv4 ATYP
         CollectionAssert.AreEqual(new byte[] { 1, 2, 3, 4 }, v4Buf.Skip(4).Take(4).ToArray());
 
         var v6Buf = new byte[32];
-        var v6Len = (int)epMethod.Invoke(handler,
+        var v6Len = (int)epMethod.Invoke(null,
             [new IPEndPoint(IPAddress.Parse("::1"), 443), v6Buf.AsMemory()])!;
         Assert.AreEqual(22, v6Len);
         Assert.AreEqual(4, v6Buf[3]); // IPv6 ATYP (regression: must not be ATYP=1)

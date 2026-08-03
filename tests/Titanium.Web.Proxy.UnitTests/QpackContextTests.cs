@@ -23,6 +23,7 @@ public class QpackContextTests
         using var cts = new CancellationTokenSource(500);
         // InsertCount is already 1; require 1 — should return without waiting.
         await ctx.AwaitInsertCountAsync(1, cts.Token);
+        Assert.AreEqual(1UL, ctx.InboundDecoderTable.InsertCount);
     }
 
     [TestMethod]
@@ -89,6 +90,7 @@ public class QpackContextTests
         {
             // drain remaining items
         }
+        Assert.IsTrue(reader.Completion.IsCompleted);
     }
 
     [TestMethod]

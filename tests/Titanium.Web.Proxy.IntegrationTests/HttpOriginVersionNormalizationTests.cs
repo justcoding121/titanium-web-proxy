@@ -187,7 +187,7 @@ public class HttpOriginVersionNormalizationTests
         var headerBytes = encoding.GetBytes(request.HeaderText);
 
         var stream = client.GetStream();
-        await stream.WriteAsync(headerBytes, 0, headerBytes.Length);
+        await stream.WriteAsync(headerBytes);
 
         // No Content-Length was declared on this response (by either the origin or the proxy, since the client
         // itself is also HTTP/1.0 under the default PreserveClientVersion policy), so the only correct way to
@@ -195,7 +195,7 @@ public class HttpOriginVersionNormalizationTests
         var received = new MemoryStream();
         var buffer = new byte[4096];
         int read;
-        while ((read = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0) received.Write(buffer, 0, read);
+        while ((read = await stream.ReadAsync(buffer)) > 0) received.Write(buffer, 0, read);
 
         var rawResponse = encoding.GetString(received.ToArray());
         var headerEnd = rawResponse.IndexOf("\r\n\r\n", StringComparison.Ordinal);
@@ -231,7 +231,7 @@ public class HttpOriginVersionNormalizationTests
         var headerBytes = encoding.GetBytes(request.HeaderText);
 
         var stream = client.GetStream();
-        await stream.WriteAsync(headerBytes, 0, headerBytes.Length);
+        await stream.WriteAsync(headerBytes);
 
         var buffer = new byte[4096];
         var responseMsg = string.Empty;
@@ -245,7 +245,7 @@ public class HttpOriginVersionNormalizationTests
             int read;
             try
             {
-                read = await stream.ReadAsync(buffer, 0, buffer.Length);
+                read = await stream.ReadAsync(buffer);
             }
             catch (IOException)
             {

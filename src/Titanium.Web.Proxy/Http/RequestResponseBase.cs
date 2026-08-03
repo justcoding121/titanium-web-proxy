@@ -285,7 +285,7 @@ public abstract class RequestResponseBase
             {
                 body = GetCompressedBody(CompressionUtil.CompressionNameToEnum(contentEncoding), body);
 
-                if (isChunked == false)
+                if (!isChunked)
                     ContentLength = body.Length;
                 else
                     ContentLength = -1;

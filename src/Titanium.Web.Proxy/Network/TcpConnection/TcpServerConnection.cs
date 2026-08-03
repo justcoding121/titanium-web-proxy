@@ -75,7 +75,7 @@ internal class TcpServerConnection : IDisposable
     /// <summary>
     ///     Http version
     /// </summary>
-    internal Version Version { get; set; } = HttpHeader.VersionUnknown;
+    internal Version Version { get; set; }
 
     /// <summary>
     ///     The TcpClient.

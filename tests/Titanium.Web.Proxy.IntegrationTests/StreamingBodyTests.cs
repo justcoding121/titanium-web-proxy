@@ -104,7 +104,7 @@ public class StreamingBodyTests
         for (var i = 0; i < payload.Length; i++) payload[i] = (byte)(i % 251);
 
         var server = testSuite.GetServer();
-        server.HandleRequest(context => context.Response.Body.WriteAsync(payload, 0, payload.Length));
+        server.HandleRequest(async context => await context.Response.Body.WriteAsync(payload));
 
         var proxy = testSuite.GetProxy();
 
@@ -160,7 +160,7 @@ public class StreamingBodyTests
                 foreach (var part in writeBody)
                 {
                     var bytes = Encoding.ASCII.GetBytes(part);
-                    await stream.WriteAsync(bytes, 0, bytes.Length, ct);
+                    await stream.WriteAsync(bytes, ct);
                 }
             }, closeServerConnection: true);
 
@@ -201,8 +201,8 @@ public class StreamingBodyTests
             e.RespondStreaming(response, async (stream, ct) =>
             {
                 // write in two pieces to prove streaming
-                await stream.WriteAsync(payload, 0, 8, ct);
-                await stream.WriteAsync(payload, 8, payload.Length - 8, ct);
+                await stream.WriteAsync(payload.AsMemory(0, 8), ct);
+                await stream.WriteAsync(payload.AsMemory(8, payload.Length - 8), ct);
             }, closeServerConnection: true);
 
             return Task.CompletedTask;
@@ -344,7 +344,7 @@ public class StreamingBodyTests
                 foreach (var part in writeBody)
                 {
                     var bytes = Encoding.ASCII.GetBytes(part);
-                    await stream.WriteAsync(bytes, 0, bytes.Length, ct);
+                    await stream.WriteAsync(bytes, ct);
                 }
             }, closeServerConnection: true);
 

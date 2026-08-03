@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -1441,6 +1442,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken =
  default)
         {
+            if (MemoryMarshal.TryGetArray(buffer, out var segment))
+                OnDataWrite(segment.Array!, segment.Offset, segment.Count);
+            else
+                OnDataWrite(buffer.ToArray(), 0, buffer.Length);
+
             if (closedWrite)
             {
                 return;

@@ -95,7 +95,7 @@ internal class ProxyInfo
         var stringBuilder = new StringBuilder();
         foreach (var ch in rawString)
         {
-            if ("#$()+.?[\\^{|".IndexOf(ch) != -1)
+            if ("#$()+.?[\\^{|".Contains(ch))
                 stringBuilder.Append('\\');
             else if (ch == 42) stringBuilder.Append('.');
 
@@ -154,7 +154,7 @@ internal class ProxyInfo
         var tmp = Regex.Replace(value, @"\s+", " ", RegexOptions.None, TimeSpan.FromSeconds(1)).Trim();
         if (tmp.Length == 0) yield break;
 
-        var equalsIndex = tmp.IndexOf("=", StringComparison.InvariantCulture);
+        var equalsIndex = tmp.IndexOf('=');
         if (equalsIndex >= 0)
         {
             var protocolTypeStr = tmp.Substring(0, equalsIndex);

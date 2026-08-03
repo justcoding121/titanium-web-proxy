@@ -68,12 +68,18 @@ internal sealed class Http2TunnelStream : Stream
     public override async Task<int> ReadAsync(byte[] buffer, int offset, int count,
         CancellationToken cancellationToken)
     {
+        return await ReadAsync(buffer.AsMemory(offset, count), cancellationToken);
+    }
+
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer,
+        CancellationToken cancellationToken = default)
+    {
         ObjectDisposedException.ThrowIf(disposed, this);
-        if (count == 0) return 0;
+        if (buffer.IsEmpty) return 0;
 
         while (true)
         {
-            var copied = TryCopyPending(buffer, offset, count);
+            var copied = TryCopyPending(buffer);
             if (copied > 0) return copied;
             if (inboundCompleted) return 0;
 
@@ -82,13 +88,13 @@ internal sealed class Http2TunnelStream : Stream
         }
     }
 
-    private int TryCopyPending(byte[] buffer, int offset, int count)
+    private int TryCopyPending(Memory<byte> buffer)
     {
         if (pending == null || pending.Length <= pendingOffset) return 0;
 
         var available = pending.Length - pendingOffset;
-        var toCopy = Math.Min(count, available);
-        Buffer.BlockCopy(pending, pendingOffset, buffer, offset, toCopy);
+        var toCopy = Math.Min(buffer.Length, available);
+        pending.AsMemory(pendingOffset, toCopy).CopyTo(buffer);
         pendingOffset += toCopy;
         if (pendingOffset >= pending.Length)
         {

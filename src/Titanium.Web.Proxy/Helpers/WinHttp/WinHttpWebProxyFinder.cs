@@ -23,7 +23,7 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
         session = NativeMethods.WinHttp.WinHttpOpen(null, NativeMethods.WinHttp.AccessType.NoProxy, null, null, 0);
         if (session == null || session.IsInvalid)
         {
-            var lastWin32Error = GetLastWin32Error();
+            _ = GetLastWin32Error();
         }
         else
         {
@@ -32,7 +32,7 @@ internal sealed class WinHttpWebProxyFinder : IDisposable
                     downloadTimeout))
                 return;
 
-            var lastWin32Error = GetLastWin32Error();
+            _ = GetLastWin32Error();
         }
     }
 

@@ -45,7 +45,7 @@ internal sealed class DefaultBufferPool : IBufferPool
         ArrayPool<byte>.Shared.Return(buffer);
     }
 
-    public void Dispose()
+    public void Dispose() // NOSONAR CA1822 -- IDisposable contract requires an instance member.
     {
         Dispose(true);
         GC.SuppressFinalize(this);

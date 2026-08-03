@@ -241,7 +241,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <param name="value">Value.</param>
         /// <param name="indexType">Index type.</param>
         /// <param name="nameIndex">Name index.</param>
-        private void EncodeLiteral(BinaryWriter output, ByteString name, ByteString value, HpackUtil.IndexType indexType,
+        private static void EncodeLiteral(BinaryWriter output, ByteString name, ByteString value, HpackUtil.IndexType indexType,
             int nameIndex)
         {
             int mask;
@@ -426,11 +426,11 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <summary>
         /// Remove and return the oldest header field from the dynamic table.
         /// </summary>
-        private HttpHeader? Remove()
+        private void Remove()
         {
             if (size == 0)
             {
-                return null;
+                return;
             }
 
             var eldest = head.After;
@@ -454,14 +454,13 @@ namespace Titanium.Web.Proxy.Http2.Hpack
 
                     eldest.Remove();
                     size -= eldest.Size;
-                    return eldest;
+                    return;
                 }
 
                 prev = e;
                 e = next;
             }
 
-            return null;
         }
 
         /// <summary>
@@ -516,7 +515,7 @@ namespace Titanium.Web.Proxy.Http2.Hpack
         /// <summary>
         /// A linked hash map HeaderField entry.
         /// </summary>
-        private class HeaderEntry : HttpHeader
+        private sealed class HeaderEntry : HttpHeader
         {
             // This is used to compute the index in the dynamic table.
 

@@ -126,7 +126,7 @@ internal static class TcpHelper
         CancellationTokenSource cancellationTokenSource,
         ILogger logger)
     {
-        // todo: fix APM mode
+        // Preserve the legacy APM callback path for callers that still use Begin/End methods.
         return SendRawTap(clientStream, serverStream, bufferPool, onDataSend, onDataReceive,
             cancellationTokenSource);
     }

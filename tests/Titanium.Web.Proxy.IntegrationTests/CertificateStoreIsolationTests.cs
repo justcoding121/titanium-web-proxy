@@ -45,7 +45,7 @@ public class CertificateStoreIsolationTests
     [TestMethod]
     public void TestRoot_Subject_Differs_From_ProductDefault()
     {
-        Assert.AreEqual("Titanium Integration Test Root CA", TestCertificateAuthority.RootCertificateName);
+        Assert.AreEqual("Titanium Integration Test Root CA", TestCertificateAuthority.RootCertificateName); // NOSONAR MSTEST0032 -- Prevents test CA identity drift.
         Assert.AreEqual(
             "CN=Titanium Integration Test Root CA",
             TestCertificateAuthority.RootCertificate.Subject);

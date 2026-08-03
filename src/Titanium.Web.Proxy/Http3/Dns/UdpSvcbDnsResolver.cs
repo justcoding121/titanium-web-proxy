@@ -121,7 +121,7 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
             return Task.FromResult<SvcbResult?>(null);
 
         // Coalesce: reuse in-flight shared task or start a new one.
-        var sharedTask = _inflight.GetOrAdd(key, _ => RunSharedQueryAsync(key, host, port));
+        var sharedTask = _inflight.GetOrAdd(key, cacheKey => RunSharedQueryAsync(cacheKey, host, port));
 
         // Per-waiter cancellation: WaitAsync throws OperationCanceledException to THIS caller but
         // leaves the shared task running so other waiters are unaffected.

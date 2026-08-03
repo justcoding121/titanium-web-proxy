@@ -141,35 +141,35 @@ internal class WinCertificateMaker : ICertificateMaker
 
         typeX500Dn.InvokeMember("Encode", BindingFlags.InvokeMethod, null, x500RootCertDn, typeValue);
 
-        object? sharedPrivateKey = null;
-        if (signingCertificate != null) sharedPrivateKey = this.sharedPrivateKey;
+        object? certificatePrivateKey = null;
+        if (signingCertificate != null) certificatePrivateKey = sharedPrivateKey;
 
-        if (sharedPrivateKey == null)
+        if (certificatePrivateKey == null)
         {
-            sharedPrivateKey = CreateComObject(typeX509PrivateKey);
+            certificatePrivateKey = CreateComObject(typeX509PrivateKey);
             typeValue = new object?[] { sProviderName };
-            typeX509PrivateKey.InvokeMember("ProviderName", BindingFlags.PutDispProperty, null, sharedPrivateKey,
+            typeX509PrivateKey.InvokeMember("ProviderName", BindingFlags.PutDispProperty, null, certificatePrivateKey,
                 typeValue);
             typeValue[0] = 2;
-            typeX509PrivateKey.InvokeMember("ExportPolicy", BindingFlags.PutDispProperty, null, sharedPrivateKey,
+            typeX509PrivateKey.InvokeMember("ExportPolicy", BindingFlags.PutDispProperty, null, certificatePrivateKey,
                 typeValue);
             typeValue = new object?[] { signingCertificate == null ? 2 : 1 };
-            typeX509PrivateKey.InvokeMember("KeySpec", BindingFlags.PutDispProperty, null, sharedPrivateKey,
+            typeX509PrivateKey.InvokeMember("KeySpec", BindingFlags.PutDispProperty, null, certificatePrivateKey,
                 typeValue);
 
             if (signingCertificate != null)
             {
                 typeValue = new object?[] { 176 };
-                typeX509PrivateKey.InvokeMember("KeyUsage", BindingFlags.PutDispProperty, null, sharedPrivateKey,
+                typeX509PrivateKey.InvokeMember("KeyUsage", BindingFlags.PutDispProperty, null, certificatePrivateKey,
                     typeValue);
             }
 
             typeValue[0] = privateKeyLength;
-            typeX509PrivateKey.InvokeMember("Length", BindingFlags.PutDispProperty, null, sharedPrivateKey,
+            typeX509PrivateKey.InvokeMember("Length", BindingFlags.PutDispProperty, null, certificatePrivateKey,
                 typeValue);
-            typeX509PrivateKey.InvokeMember("Create", BindingFlags.InvokeMethod, null, sharedPrivateKey, null);
+            typeX509PrivateKey.InvokeMember("Create", BindingFlags.InvokeMethod, null, certificatePrivateKey, null);
 
-            if (signingCertificate != null) this.sharedPrivateKey = sharedPrivateKey;
+            if (signingCertificate != null) sharedPrivateKey = certificatePrivateKey;
         }
 
         typeValue = new object?[1];
@@ -188,7 +188,7 @@ internal class WinCertificateMaker : ICertificateMaker
 
         var requestCert = CreateComObject(typeRequestCert);
 
-        typeValue = new object?[] { 1, sharedPrivateKey, string.Empty };
+        typeValue = new object?[] { 1, certificatePrivateKey, string.Empty };
         typeRequestCert.InvokeMember("InitializeFromPrivateKey", BindingFlags.InvokeMethod, null, requestCert,
             typeValue);
         typeValue = new object?[] { x500CertDn };

@@ -36,10 +36,10 @@ internal static class Http2RawFrame
         header[7] = (byte)((streamId >> 8) & 0xff);
         header[8] = (byte)(streamId & 0xff);
 
-        await stream.WriteAsync(header, 0, header.Length);
+        await stream.WriteAsync(header);
         if (length > 0)
         {
-            await stream.WriteAsync(payload, 0, length);
+            await stream.WriteAsync(payload.AsMemory(0, length));
         }
     }
 
@@ -66,7 +66,7 @@ internal static class Http2RawFrame
     {
         while (count > 0)
         {
-            var read = await stream.ReadAsync(buffer, offset, count);
+            var read = await stream.ReadAsync(buffer.AsMemory(offset, count));
             if (read == 0)
             {
                 throw new EndOfStreamException("The peer closed the connection before the expected bytes arrived.");

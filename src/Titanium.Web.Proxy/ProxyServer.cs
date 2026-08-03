@@ -1057,7 +1057,7 @@ public partial class ProxyServer : IDisposable
     ///     required.
     ///     Works in relation with ProxySchemeAuthenticateFunc.
     /// </summary>
-    public IEnumerable<string> ProxyAuthenticationSchemes { get; set; } = new string[0];
+    public IEnumerable<string> ProxyAuthenticationSchemes { get; set; } = Array.Empty<string>();
 
     /// <summary>
     ///     Event occurs when client connection count changed.
@@ -1177,7 +1177,7 @@ public partial class ProxyServer : IDisposable
     /// <param name="endPoint">The existing endpoint to remove.</param>
     public void RemoveEndPoint(ProxyEndPoint endPoint)
     {
-        if (ProxyEndPoints.Contains(endPoint) == false)
+        if (!ProxyEndPoints.Contains(endPoint))
             throw new InvalidOperationException("Cannot remove endPoints not added to proxy");
 
         ProxyEndPoints.Remove(endPoint);

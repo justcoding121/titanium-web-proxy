@@ -135,7 +135,7 @@ public class Phase0CharacterizationTests
             string responseText;
             if (request.Method == "HEAD")
             {
-                // Advertise a 1000-byte body but send no bytes - HEAD semantics per RFC 7231 ù4.3.2.
+                // Advertise a 1000-byte body but send no bytes - HEAD semantics per RFC 7231 ÔøΩ4.3.2.
                 responseText = "HTTP/1.1 200 OK\r\nContent-Length: 1000\r\nConnection: close\r\n\r\n";
             }
             else
@@ -174,7 +174,7 @@ public class Phase0CharacterizationTests
 
             while (headersSection == null)
             {
-                int read = await stream.ReadAsync(buf, 0, buf.Length);
+                int read = await stream.ReadAsync(buf);
                 if (read == 0) break;
                 received.AddRange(buf.Take(read));
                 var text = Encoding.ASCII.GetString(received.ToArray());
@@ -208,7 +208,7 @@ public class Phase0CharacterizationTests
             while (true)
             {
                 int read;
-                try { read = await stream2.ReadAsync(buf2, 0, buf2.Length); }
+                try { read = await stream2.ReadAsync(buf2); }
                 catch { break; }
                 if (read == 0) break;
                 received2.AddRange(buf2.Take(read));

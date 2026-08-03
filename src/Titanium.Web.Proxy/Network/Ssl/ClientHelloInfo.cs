@@ -46,7 +46,7 @@ public class ClientHelloInfo
         {
             var time = DateTime.MinValue;
             if (Random.Length > 3)
-                time = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                time = DateTime.UnixEpoch
                     .AddSeconds(((uint)Random[3] << 24) + ((uint)Random[2] << 16) + ((uint)Random[1] << 8) + Random[0])
                     .ToLocalTime();
 

@@ -52,7 +52,7 @@ public class HttpStreamCoverageTests
         Assert.IsTrue(await stream.FillBufferAsync());
         // Drain available bytes via Read
         var buf = new byte[8];
-        Assert.AreEqual(3, await stream.ReadAsync(buf, 0, buf.Length));
+        Assert.AreEqual(3, await stream.ReadAsync(buf));
         Assert.IsFalse(await stream.FillBufferAsync());
         Assert.IsFalse(await stream.FillBufferAsync());
         Assert.IsTrue(stream.IsClosed);
@@ -65,9 +65,9 @@ public class HttpStreamCoverageTests
         Assert.AreEqual((int)'Y', await stream.PeekByteAsync(0));
         Assert.AreEqual((int)'Z', await stream.PeekByteAsync(1));
         var one = new byte[1];
-        Assert.AreEqual(1, await stream.ReadAsync(one, 0, 1));
+        Assert.AreEqual(1, await stream.ReadAsync(one.AsMemory(0, 1)));
         Assert.AreEqual((byte)'Y', one[0]);
-        Assert.AreEqual(1, await stream.ReadAsync(one, 0, 1));
+        Assert.AreEqual(1, await stream.ReadAsync(one.AsMemory(0, 1)));
         Assert.AreEqual((byte)'Z', one[0]);
         Assert.AreEqual(-1, await stream.PeekByteAsync(0));
     }
@@ -90,7 +90,7 @@ public class HttpStreamCoverageTests
         CollectionAssert.AreEqual(Encoding.ASCII.GetBytes("hel"), buf);
         // Peek must not advance
         var one = new byte[1];
-        Assert.AreEqual(1, await stream.ReadAsync(one, 0, 1));
+        Assert.AreEqual(1, await stream.ReadAsync(one.AsMemory(0, 1)));
         Assert.AreEqual((byte)'h', one[0]);
     }
 
@@ -282,7 +282,7 @@ public class HttpStreamCoverageTests
         using var reader = MakeReader(Encoding.ASCII.GetBytes("prefetched-rest"));
         Assert.IsTrue(await reader.FillBufferAsync());
         var one = new byte[1];
-        Assert.AreEqual(1, await reader.ReadAsync(one, 0, 1));
+        Assert.AreEqual(1, await reader.ReadAsync(one.AsMemory(0, 1)));
         Assert.AreEqual((byte)'p', one[0]);
 
         using var dest = new MemoryStream();
@@ -308,7 +308,7 @@ public class HttpStreamCoverageTests
         using var writer = new HttpStream(proxy, dest, new DefaultBufferPool(), CancellationToken.None, true);
         var writeBytes = 0L;
         writer.DataWrite += (_, e) => writeBytes += e.Count;
-        await writer.WriteAsync(payload, 0, payload.Length);
+        await writer.WriteAsync(payload.AsMemory());
         Assert.AreEqual(3, writeBytes);
     }
 
@@ -393,6 +393,12 @@ public class HttpStreamCoverageTests
         {
             WriteCount++;
             return Task.FromException(new IOException("write failed"));
+        }
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            WriteCount++;
+            return ValueTask.FromException(new IOException("write failed"));
         }
     }
 

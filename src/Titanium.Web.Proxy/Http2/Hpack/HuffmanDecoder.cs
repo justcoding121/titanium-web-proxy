@@ -155,7 +155,7 @@ internal class HuffmanDecoder
         for (var i = start; i < start + end; i++) currentChildren[i] = terminal;
     }
 
-    private class Node
+    private sealed class Node
     {
         /// <summary>
         ///     Initializes a new instance of the <see cref="HuffmanDecoder" /> class.

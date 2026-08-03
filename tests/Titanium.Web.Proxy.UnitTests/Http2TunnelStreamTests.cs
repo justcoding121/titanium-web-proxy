@@ -26,13 +26,13 @@ public class Http2TunnelStreamTests
         channel.Writer.TryComplete();
 
         var buffer = new byte[3];
-        Assert.AreEqual(3, await stream.ReadAsync(buffer, 0, 3));
+        Assert.AreEqual(3, await stream.ReadAsync(buffer.AsMemory(0, 3)));
         CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, buffer);
 
-        Assert.AreEqual(1, await stream.ReadAsync(buffer, 0, 3));
+        Assert.AreEqual(1, await stream.ReadAsync(buffer.AsMemory(0, 3)));
         Assert.AreEqual(4, buffer[0]);
 
-        Assert.AreEqual(0, await stream.ReadAsync(buffer, 0, 3));
+        Assert.AreEqual(0, await stream.ReadAsync(buffer.AsMemory(0, 3)));
     }
 
     [TestMethod]

@@ -56,7 +56,8 @@ public partial class ProxyServer
 
         try
         {
-            endPoint.QuicListener = QuicListener.ListenAsync(listenerOptions, cts.Token).GetAwaiter().GetResult();
+            endPoint.QuicListener = QuicListener.ListenAsync(listenerOptions, cts.Token).AsTask()
+                .GetAwaiter().GetResult();
             endPoint.Port = endPoint.QuicListener.LocalEndPoint.Port;
         }
         catch (Exception ex)
@@ -96,8 +97,8 @@ public partial class ProxyServer
         CancellationToken cancellationToken)
     {
         var sniHostName = clientHello.ServerName;
-        var remoteEndPoint = (IPEndPoint)connection.RemoteEndPoint;
-        var localEndPoint = (IPEndPoint)connection.LocalEndPoint;
+        var remoteEndPoint = connection.RemoteEndPoint;
+        var localEndPoint = connection.LocalEndPoint;
 
         // Resolve original (pre-NAT) destination.
         string destHost;

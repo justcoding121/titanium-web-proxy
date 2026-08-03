@@ -86,5 +86,7 @@ public class TestSuite : IDisposable
         {
             server.Dispose();
         }
+
+        GC.SuppressFinalize(this);
     }
 }

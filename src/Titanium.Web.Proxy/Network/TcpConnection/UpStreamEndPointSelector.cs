@@ -21,11 +21,12 @@ internal static class UpStreamEndPointSelector
         IPEndPoint? sessionEndPoint, IPEndPoint? sessionIPv4, IPEndPoint? sessionIPv6,
         IPEndPoint? serverEndPoint, IPEndPoint? serverIPv4, IPEndPoint? serverIPv6)
     {
-        var familySpecific = destinationFamily == AddressFamily.InterNetwork
-            ? sessionIPv4 ?? serverIPv4
-            : destinationFamily == AddressFamily.InterNetworkV6
-                ? sessionIPv6 ?? serverIPv6
-                : null;
+        var familySpecific = destinationFamily switch
+        {
+            AddressFamily.InterNetwork => sessionIPv4 ?? serverIPv4,
+            AddressFamily.InterNetworkV6 => sessionIPv6 ?? serverIPv6,
+            _ => null
+        };
 
         if (familySpecific != null) return familySpecific;
 

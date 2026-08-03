@@ -459,7 +459,7 @@ public class SslExtension
                             break;
                     }
 
-                    sb.AppendFormat("_");
+                    sb.Append('_');
 
                     switch (val0)
                     {
@@ -496,7 +496,7 @@ public class SslExtension
                     break;
             }
 
-            sb.AppendFormat(", ");
+            sb.Append(", ");
             index += 2;
         }
 

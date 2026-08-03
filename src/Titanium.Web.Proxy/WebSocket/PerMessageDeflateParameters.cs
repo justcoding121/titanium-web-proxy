@@ -67,7 +67,7 @@ internal sealed class PerMessageDeflateParameters
         if (idx < 0) return null;
 
         var rest = header.Substring(idx + param.Length).TrimStart();
-        if (!rest.StartsWith("=")) return null;
+        if (!rest.StartsWith('=')) return null;
 
         var value = rest.Substring(1).TrimStart();
         var end = value.IndexOfAny(anyOf);

@@ -348,13 +348,13 @@ internal static class Http3OriginBridge
 
             break; // success — exit the retry loop
         }
-        catch (QuicProxyNotSupportedException)
+        catch (QuicProxyNotSupportedException ex)
         {
             // System.Net.Quic cannot route via a proxy.
             // For Auto policy: fall back to TCP so proxy rules are honoured.
             // For forced H3:   a proxy was explicitly configured but cannot carry QUIC — return 502.
             if (logger.IsEnabled(LogLevel.Debug))
-                logger.LogDebug(
+                logger.LogDebug(ex,
                     "QUIC cannot route via proxy; {Behavior} for {Host}:{Port}",
                     isForcedH3 ? "returning 502 (forced H3)" : "falling back to TCP",
                     sniHost, port);

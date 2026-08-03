@@ -124,7 +124,7 @@ public class Http2MultipartTests
         // was fully processed before we assert - the origin handler only signals after draining.
         await bodyReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.IsTrue(partHeaders.Count >= 1,
+        Assert.IsFalse(partHeaders.IsEmpty,
             $"Expected at least 1 part event, got {partHeaders.Count}. " +
             "Multipart boundary-aware streaming must work over h2.");
     }

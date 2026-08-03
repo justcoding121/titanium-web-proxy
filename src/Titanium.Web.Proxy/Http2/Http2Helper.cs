@@ -260,7 +260,6 @@ namespace Titanium.Web.Proxy.Http2
             TcpServerConnection? originConnection = null)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
-            var connectionId = connectionState.ConnectionId;
             var cancellationTokenSource = connectionState.CancellationTokenSource;
 
             // "Settings describing the peer this task reads from" - used both to size the HPACK decoder for
@@ -484,11 +483,12 @@ namespace Titanium.Web.Proxy.Http2
                     return false;
                 }
 
-                foreach (var header in collected.Where(header =>
-                             ForbiddenConnectionSpecificHeaders.Contains(header.Name)))
+                var forbiddenConnectionHeader = collected.FirstOrDefault(header =>
+                    ForbiddenConnectionSpecificHeaders.Contains(header.Name));
+                if (forbiddenConnectionHeader != null)
                 {
                     ReportException(logger, new ProxyHttpException(
-                        "HTTP/2 protocol error: connection-specific header field '" + header.Name +
+                        "HTTP/2 protocol error: connection-specific header field '" + forbiddenConnectionHeader.Name +
                         "' is forbidden.", null, sessionArgs));
                     await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
                         Http2ErrorCode.ProtocolError, input));
@@ -672,12 +672,13 @@ namespace Titanium.Web.Proxy.Http2
                         }
 
                         // RFC 9110 §6.5.1: certain fields are forbidden in trailers.
-                        foreach (var header in collected.Where(header =>
-                                     ForbiddenTrailerHeaders.Contains(header.Name)))
+                        var forbiddenTrailerHeader = collected.FirstOrDefault(header =>
+                            ForbiddenTrailerHeaders.Contains(header.Name));
+                        if (forbiddenTrailerHeader != null)
                         {
                             ReportException(logger, new ProxyHttpException(
                                 "HTTP/2 protocol error: request trailer HEADERS contains forbidden field '" +
-                                header.Name + "'.", null, sessionArgs));
+                                forbiddenTrailerHeader.Name + "'.", null, sessionArgs));
                             await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
                                 hbStreamId, Http2ErrorCode.ProtocolError, input));
                             return false;
@@ -1085,12 +1086,13 @@ namespace Titanium.Web.Proxy.Http2
                     }
 
                     // RFC 9110 §6.5.1: certain fields are forbidden in trailers.
-                    foreach (var header in collected.Where(header =>
-                                 ForbiddenTrailerHeaders.Contains(header.Name)))
+                    var forbiddenTrailerHeader = collected.FirstOrDefault(header =>
+                        ForbiddenTrailerHeaders.Contains(header.Name));
+                    if (forbiddenTrailerHeader != null)
                     {
                         ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: response trailer HEADERS contains forbidden field '" +
-                            header.Name + "'.", null, sessionArgs));
+                            forbiddenTrailerHeader.Name + "'.", null, sessionArgs));
                         await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
                             hbStreamId, Http2ErrorCode.ProtocolError, input));
                         return false;

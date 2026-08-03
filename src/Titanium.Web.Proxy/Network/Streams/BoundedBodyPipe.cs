@@ -50,7 +50,7 @@ internal sealed class BoundedBodyPipe : IDisposable
     /// </summary>
     internal async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
-        if (disposed) throw new ObjectDisposedException(nameof(BoundedBodyPipe));
+        ObjectDisposedException.ThrowIf(disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
 
         if (maxBytes > 0)

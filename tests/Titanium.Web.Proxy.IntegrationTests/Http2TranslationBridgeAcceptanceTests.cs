@@ -143,7 +143,7 @@ public class Http2TranslationBridgeAcceptanceTests
                 { System.Net.Security.SslApplicationProtocol.Http11 });
 
         var requestBytes = Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-        await tunnel.SslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+        await tunnel.SslStream.WriteAsync(requestBytes);
 
         using var reader = new StreamReader(tunnel.SslStream, Encoding.ASCII, false, 4096, true);
         var statusLine = await reader.ReadLineAsync();
@@ -259,8 +259,8 @@ public class Http2TranslationBridgeAcceptanceTests
                            $"Content-Length: {bodyBytes.Length}\r\n" +
                            "Connection: close\r\n\r\n";
         var requestBytes = Encoding.ASCII.GetBytes(requestText);
-        await tunnel.SslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
-        await tunnel.SslStream.WriteAsync(bodyBytes, 0, bodyBytes.Length);
+        await tunnel.SslStream.WriteAsync(requestBytes);
+        await tunnel.SslStream.WriteAsync(bodyBytes);
 
         using var reader = new StreamReader(tunnel.SslStream, Encoding.ASCII, false, 4096, true);
         var statusLine = await reader.ReadLineAsync();
@@ -324,7 +324,7 @@ public class Http2TranslationBridgeAcceptanceTests
                 { System.Net.Security.SslApplicationProtocol.Http11 });
 
         var requestBytes = Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-        await tunnel.SslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+        await tunnel.SslStream.WriteAsync(requestBytes);
 
         using var reader = new StreamReader(tunnel.SslStream, Encoding.ASCII, false, 4096, true);
         var statusLine = await reader.ReadLineAsync();

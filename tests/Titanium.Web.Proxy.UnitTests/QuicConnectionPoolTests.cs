@@ -150,7 +150,7 @@ public class QuicConnectionPoolTests
     [TestMethod]
     public void MaxStaleConnectionRetries_IsAtLeastOne()
     {
-        Assert.IsTrue(QuicConnectionPool.MaxStaleConnectionRetries >= 1);
+        Assert.IsTrue(QuicConnectionPool.MaxStaleConnectionRetries >= 1); // NOSONAR MSTEST0032 -- Guards configuration drift.
     }
 
     private sealed class FakeQuicFactory : IQuicConnectionFactory

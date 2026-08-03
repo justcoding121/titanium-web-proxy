@@ -78,7 +78,7 @@ public class SocksNonHttpRelayTests
 
         await stream.WriteAsync(BinaryPayload);
 
-        // Do not shut down send side here — let the server-close trigger relay teardown.
+        // Do not shut down send side here ï¿½ let the server-close trigger relay teardown.
         // The echo server reads, echoes and closes its write side; the proxy relay's
         // server?client direction completes first, cancels client?server, and the
         // client can then read the full echo before getting EOF.
@@ -351,7 +351,7 @@ public class SocksNonHttpRelayTests
         var offset = 0;
         while (remaining > 0)
         {
-            var read = await stream.ReadAsync(buffer, offset, remaining, cts.Token);
+            var read = await stream.ReadAsync(buffer.AsMemory(offset, remaining), cts.Token);
             if (read == 0) throw new IOException("Connection closed before all expected bytes were read.");
             offset += read;
             remaining -= read;
@@ -366,7 +366,7 @@ public class SocksNonHttpRelayTests
         try
         {
             int read;
-            while ((read = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token)) > 0)
+            while ((read = await stream.ReadAsync(buffer, cts.Token)) > 0)
                 ms.Write(buffer, 0, read);
         }
         catch (OperationCanceledException)

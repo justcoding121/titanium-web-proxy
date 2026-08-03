@@ -146,7 +146,7 @@ public partial class ProxyServer
 
                         if (!args.IsTransparent && !args.IsSocks)
                         {
-                            if (connectRequest == null && await CheckAuthorization(args) == false)
+                            if (connectRequest == null && !await CheckAuthorization(args))
                             {
                                 await OnBeforeResponse(args);
                                 await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);

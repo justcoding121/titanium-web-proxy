@@ -190,7 +190,7 @@ public partial class ProxyServer
                             if (!args.IsTransparent && !args.IsSocks)
                             {
                                 // proxy authorization check
-                                if (connectRequest == null && await CheckAuthorization(args) == false)
+                                if (connectRequest == null && !await CheckAuthorization(args))
                                 {
                                     await OnBeforeResponse(args);
 
@@ -304,7 +304,7 @@ public partial class ProxyServer
                             // only gets hit when connection pool is disabled.
                             // or when prefetch task has a unexpectedly different connection.
                             if (connection != null
-                                && await TcpConnectionFactory.GetConnectionCacheKey(this, args,
+                                && await Network.Tcp.TcpConnectionFactory.GetConnectionCacheKey(this, args,
                                     clientStream.Connection.NegotiatedApplicationProtocol)
                                 != connection.CacheKey)
                             {
@@ -759,9 +759,9 @@ public partial class ProxyServer
 
     private static bool ViaEntryMatches(string viaEntry, string protocol, string pseudonym)
     {
-        int separator = viaEntry.IndexOfAny(ViaWhitespaceChars);
-        if (separator <= 0 ||
-            !string.Equals(viaEntry.Substring(0, separator), protocol, StringComparison.OrdinalIgnoreCase))
+        int whitespaceIndex = viaEntry.IndexOfAny(ViaWhitespaceChars);
+        if (whitespaceIndex <= 0 ||
+            !string.Equals(viaEntry.Substring(0, whitespaceIndex), protocol, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -778,10 +778,10 @@ public partial class ProxyServer
     {
         // A Via entry is: received-protocol RWS received-by [ RWS comment ].
         // RFC 9110 RWS permits SP or HTAB, and received-by can include an optional port.
-        int separator = viaEntry.IndexOfAny(ViaWhitespaceChars);
-        if (separator < 0) return false;
+        int whitespaceIndex = viaEntry.IndexOfAny(ViaWhitespaceChars);
+        if (whitespaceIndex < 0) return false;
 
-        int receivedByStart = separator;
+        int receivedByStart = whitespaceIndex;
         while (receivedByStart < viaEntry.Length &&
                (viaEntry[receivedByStart] == ' ' || viaEntry[receivedByStart] == '\t'))
         {

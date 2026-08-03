@@ -218,8 +218,9 @@ internal static class Http3RequestStream
                 // the same error code rather than letting the other streams continue against
                 // corrupted shared state.
                 if (logger.IsEnabled(LogLevel.Debug))
-                    logger.LogDebug("HTTP/3 stream {StreamId} hit a connection-level error: {ErrorCode} {Message}",
-                        stream.Id, ex.ErrorCode, ex.Message);
+                    logger.LogDebug(ex,
+                        "HTTP/3 stream {StreamId} hit a connection-level error: {ErrorCode}",
+                        stream.Id, ex.ErrorCode);
                 stream.Abort(QuicAbortDirection.Write, (long)ex.ErrorCode);
                 stream.Abort(QuicAbortDirection.Read, (long)ex.ErrorCode);
                 throw;
@@ -228,8 +229,8 @@ internal static class Http3RequestStream
             {
                 ProxyMetrics.ParserError("http3");
                 if (logger.IsEnabled(LogLevel.Debug))
-                    logger.LogDebug("HTTP/3 stream {StreamId} aborted: {ErrorCode} {Message}",
-                        stream.Id, ex.ErrorCode, ex.Message);
+                    logger.LogDebug(ex, "HTTP/3 stream {StreamId} aborted: {ErrorCode}",
+                        stream.Id, ex.ErrorCode);
                 stream.Abort(QuicAbortDirection.Write, (long)ex.ErrorCode);
                 stream.Abort(QuicAbortDirection.Read, (long)ex.ErrorCode);
             }

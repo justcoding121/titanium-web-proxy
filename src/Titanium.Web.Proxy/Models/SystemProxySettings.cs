@@ -48,7 +48,7 @@ public class SystemProxySettings
             if (string.IsNullOrWhiteSpace(rule))
                 throw new ArgumentException("System proxy bypass rules cannot be null or empty.");
 
-            if (rule.Contains(";"))
+            if (rule.Contains(';'))
                 throw new ArgumentException(
                     "Add each system proxy bypass rule separately; rules cannot contain semicolons.");
         }

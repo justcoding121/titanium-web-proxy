@@ -323,7 +323,7 @@ public class WebSocketInterceptionSafetyTests
                 "\r\n");
             await context.Transport.Output.WriteAsync(handshake);
 
-            // Send a frame with reserved opcode 0x3 — a protocol violation.
+            // Send a frame with reserved opcode 0x3 ï¿½ a protocol violation.
             var badFrame = BuildRawFrame(firstByte: 0x83 /* FIN=1, opcode=3 */, payload: new byte[] { 0x01 });
             await context.Transport.Output.WriteAsync(badFrame);
 
@@ -364,7 +364,7 @@ public class WebSocketInterceptionSafetyTests
             $"Expected 101 Switching Protocols. Got:\n{headerText}");
 
         // The relay should close the client-side connection shortly after receiving the bad frame.
-        // A conformant close (RFC 6455 §§5.5.1/7.1.1) means the client first receives an actual Close
+        // A conformant close (RFC 6455 ï¿½ï¿½5.5.1/7.1.1) means the client first receives an actual Close
         // control frame before the TCP connection itself is torn down - so a non-zero read here (the
         // Close frame) is expected and must not be mistaken for the proxy staying open indefinitely;
         // keep reading until EOF to confirm the connection is eventually closed.
@@ -375,7 +375,7 @@ public class WebSocketInterceptionSafetyTests
         {
             while (true)
             {
-                var read = await stream.ReadAsync(buf, 0, buf.Length, cts.Token);
+                var read = await stream.ReadAsync(buf, cts.Token);
                 if (read == 0)
                 {
                     sawEof = true;
@@ -398,7 +398,7 @@ public class WebSocketInterceptionSafetyTests
     }
 
     // -------------------------------------------------------------------------
-    // Test 5: A protocol violation produces a conformant Close per RFC 6455 §§5.5.1/7.1.1 -
+    // Test 5: A protocol violation produces a conformant Close per RFC 6455 ï¿½ï¿½5.5.1/7.1.1 -
     //         the client leg receives an actual Close control frame carrying the correct status
     //         code, not just an abrupt disconnect.
     // -------------------------------------------------------------------------
@@ -421,7 +421,7 @@ public class WebSocketInterceptionSafetyTests
                 "\r\n");
             await context.Transport.Output.WriteAsync(handshake);
 
-            // Send a frame with reserved opcode 0x3 — a protocol violation (RFC 6455 §5.2).
+            // Send a frame with reserved opcode 0x3 ï¿½ a protocol violation (RFC 6455 ï¿½5.2).
             var badFrame = BuildRawFrame(firstByte: 0x83 /* FIN=1, opcode=3 */, payload: new byte[] { 0x01 });
             await context.Transport.Output.WriteAsync(badFrame);
 
@@ -465,7 +465,7 @@ public class WebSocketInterceptionSafetyTests
 
         Assert.AreEqual(1, frames.Count);
         Assert.AreEqual(WebsocketOpCode.ConnectionClose, frames[0].OpCode,
-            "RFC 6455 §7.1.1: a protocol violation must produce an actual Close control frame on the " +
+            "RFC 6455 ï¿½7.1.1: a protocol violation must produce an actual Close control frame on the " +
             "client leg, not merely an abrupt TCP disconnect.");
         Assert.IsTrue(frames[0].Data.Length >= 2, "Close frame must carry a 2-byte status code.");
         var closeCode = (ushort)((frames[0].Data.Span[0] << 8) | frames[0].Data.Span[1]);
@@ -661,7 +661,7 @@ public class WebSocketInterceptionSafetyTests
                     return Ascii.GetString(hdrBytes);
                 }
 
-                var read = await stream.ReadAsync(buf, 0, buf.Length, cts.Token);
+                var read = await stream.ReadAsync(buf, cts.Token);
                 if (read == 0) throw new IOException("Connection closed before HTTP headers completed.");
                 pending.AddRange(new ArraySegment<byte>(buf, 0, read));
             }
@@ -689,7 +689,7 @@ public class WebSocketInterceptionSafetyTests
             var buf = new byte[4096];
             while (frames.Count < minCount)
             {
-                var read = await stream.ReadAsync(buf, 0, buf.Length, cts.Token);
+                var read = await stream.ReadAsync(buf, cts.Token);
                 if (read == 0) throw new IOException("Connection closed before enough frames arrived.");
                 Capture(decoder.Decode(buf, 0, read));
             }

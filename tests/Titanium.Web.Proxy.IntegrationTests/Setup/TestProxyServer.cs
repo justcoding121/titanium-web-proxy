@@ -49,5 +49,6 @@ public class TestProxyServer : IDisposable
     {
         ProxyServer.Stop();
         ProxyServer.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

@@ -30,7 +30,7 @@ internal sealed class ProxyLoggerFactory : ILoggerFactory
 
     public void AddProvider(ILoggerProvider provider)
     {
-        if (disposed) throw new ObjectDisposedException(nameof(ProxyLoggerFactory));
+        ObjectDisposedException.ThrowIf(disposed, this);
         providers.Add(provider);
     }
 

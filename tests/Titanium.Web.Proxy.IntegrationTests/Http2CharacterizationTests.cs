@@ -64,14 +64,14 @@ public class Http2CharacterizationTests
         var networkStream = tcpClient.GetStream();
         var connectRequest = $"CONNECT {targetHost}:{targetPort} HTTP/1.1\r\nHost: {targetHost}:{targetPort}\r\n\r\n";
         var connectBytes = Encoding.ASCII.GetBytes(connectRequest);
-        await networkStream.WriteAsync(connectBytes, 0, connectBytes.Length);
+        await networkStream.WriteAsync(connectBytes);
 
         const string terminator = "\r\n\r\n";
         var buffer = new byte[1];
         var matched = 0;
         while (matched < terminator.Length)
         {
-            var read = await networkStream.ReadAsync(buffer, 0, 1);
+            var read = await networkStream.ReadAsync(buffer.AsMemory(0, 1));
             if (read == 0)
             {
                 throw new EndOfStreamException("Proxy closed the connection before completing the CONNECT handshake.");
@@ -218,8 +218,7 @@ public class Http2CharacterizationTests
         using var _ = tcpClient;
         using var __ = sslStream;
 
-        await sslStream.WriteAsync(Titanium.Web.Proxy.Http2.Http2Helper.ConnectionPreface, 0,
-            Titanium.Web.Proxy.Http2.Http2Helper.ConnectionPreface.Length);
+        await sslStream.WriteAsync(Titanium.Web.Proxy.Http2.Http2Helper.ConnectionPreface);
 
         // send a HEADERS frame (not SETTINGS) as the very first frame - a real client would never do this.
         var connection = new Http2RawFrame.Connection(sslStream);
@@ -276,8 +275,7 @@ public class Http2CharacterizationTests
 
         // Send the literal HTTP/2 connection preface anyway - routing must be governed by the
         // TLS-negotiated ALPN, not by these bytes, so the proxy must refuse to switch to HTTP/2 here.
-        await sslStream.WriteAsync(Titanium.Web.Proxy.Http2.Http2Helper.ConnectionPreface, 0,
-            Titanium.Web.Proxy.Http2.Http2Helper.ConnectionPreface.Length);
+        await sslStream.WriteAsync(Titanium.Web.Proxy.Http2.Http2Helper.ConnectionPreface);
 
         var readBuffer = new byte[16];
         int totalRead = 0;
@@ -286,7 +284,7 @@ public class Http2CharacterizationTests
             using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(5));
             while (true)
             {
-                var read = await sslStream.ReadAsync(readBuffer, 0, readBuffer.Length, cts.Token);
+                var read = await sslStream.ReadAsync(readBuffer, cts.Token);
                 if (read == 0) break; // graceful close - the expected outcome.
                 totalRead += read;
             }
@@ -331,7 +329,7 @@ public class Http2CharacterizationTests
             "No ALPN was offered, so none should have been negotiated.");
 
         var requestBytes = Encoding.ASCII.GetBytes($"GET / HTTP/1.1\r\nHost: {uri.Host}\r\nConnection: close\r\n\r\n");
-        await sslStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+        await sslStream.WriteAsync(requestBytes);
 
         using var reader = new StreamReader(sslStream, Encoding.ASCII, false, 4096, true);
         var statusLine = await reader.ReadLineAsync();

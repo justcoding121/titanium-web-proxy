@@ -90,7 +90,7 @@ internal static class QpackDecoder
         // Parse S bit and Delta Base
         if (data.IsEmpty)
             throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Missing Base field.");
-        if (!TryReadPrefixedInt(data, 7, out var deltaBase, out consumed))
+        if (!TryReadPrefixedInt(data, 7, out _, out consumed))
             throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed, "Invalid Delta Base.");
         data = data[consumed..];
 

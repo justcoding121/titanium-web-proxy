@@ -139,7 +139,7 @@ public class ExpectContinueTests
         var response = await HttpContinueClient.Post("localhost", proxy.ProxyEndPoints[0].Port, "Hello server. I am a client.");
 
         Assert.IsNotNull(response, "No response to 'expect: 100-continue' request");
-        Assert.AreEqual(response.StatusCode, (int)HttpStatusCode.InternalServerError);
-        Assert.AreEqual(response.BodyString, dbzString);
+        Assert.AreEqual((int)HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.AreEqual(dbzString, response.BodyString);
     }
 }

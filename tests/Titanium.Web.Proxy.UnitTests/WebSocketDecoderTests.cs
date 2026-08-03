@@ -218,7 +218,7 @@ public class WebSocketDecoderTests
         // internal buffer starting from the same offset frameA's Data used to point into.
         var frameB = BuildFrame(WebsocketOpCode.Text, Encoding.UTF8.GetBytes("second-msg"));
         Assert.AreEqual(0, decoder.Decode(frameB, 0, frameB.Length - 2).Count());
-        decoder.Decode(frameB, frameB.Length - 2, 2).Single();
+        _ = decoder.Decode(frameB, frameB.Length - 2, 2).Single();
 
         // The long-retained reference to frameA's Data now observes frameB's raw wire bytes instead - it
         // no longer reads back "first-message". This is the exact bug this test would have caught: naively

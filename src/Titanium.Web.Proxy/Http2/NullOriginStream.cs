@@ -90,11 +90,17 @@ internal sealed class NullOriginStream : Stream
     public override async Task<int> ReadAsync(byte[] buffer, int offset, int count,
         CancellationToken cancellationToken)
     {
+        return await ReadAsync(buffer.AsMemory(offset, count), cancellationToken);
+    }
+
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer,
+        CancellationToken cancellationToken = default)
+    {
         if (settingsBytesServed < EmptySettingsFrame.Length)
         {
             var remaining = EmptySettingsFrame.Length - settingsBytesServed;
-            var toCopy = Math.Min(count, remaining);
-            Buffer.BlockCopy(EmptySettingsFrame, settingsBytesServed, buffer, offset, toCopy);
+            var toCopy = Math.Min(buffer.Length, remaining);
+            EmptySettingsFrame.AsMemory(settingsBytesServed, toCopy).CopyTo(buffer);
             settingsBytesServed += toCopy;
             return toCopy;
         }

@@ -46,19 +46,19 @@ public class WebSocketDecoder
     /// </remarks>
     public IEnumerable<WebSocketFrame> Decode(byte[] data, int offset, int count) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
-        var buffer = data.AsMemory(offset, count);
+        var decodeBuffer = data.AsMemory(offset, count);
 
         var copied = false;
         if (bufferLength > 0)
         {
             // already have remaining data
-            buffer = CopyToBuffer(buffer);
+            decodeBuffer = CopyToBuffer(decodeBuffer);
             copied = true;
         }
 
         while (true)
         {
-            var data1 = buffer.Span;
+            var data1 = decodeBuffer.Span;
             if (!IsDataEnough(data1)) break;
 
             var opCode = (WebsocketOpCode)(data1[0] & 0xf);
@@ -147,25 +147,25 @@ public class WebSocketDecoder
                 }
             }
 
-            var frameData = buffer.Slice(idx, (int)size);
+            var frameData = decodeBuffer.Slice(idx, (int)size);
             var frame = new WebSocketFrame { IsFinal = isFinal, Data = frameData, OpCode = opCode };
             yield return frame;
 
-            buffer = buffer.Slice((int)(idx + size));
+            decodeBuffer = decodeBuffer.Slice((int)(idx + size));
         }
 
-        if (!copied && buffer.Length > 0) CopyToBuffer(buffer);
+        if (!copied && decodeBuffer.Length > 0) CopyToBuffer(decodeBuffer);
 
         if (copied)
         {
-            if (buffer.Length == 0)
+            if (decodeBuffer.Length == 0)
             {
                 bufferLength = 0;
             }
             else
             {
-                buffer.CopyTo(this.buffer);
-                bufferLength = buffer.Length;
+                decodeBuffer.CopyTo(buffer);
+                bufferLength = decodeBuffer.Length;
             }
         }
     }
