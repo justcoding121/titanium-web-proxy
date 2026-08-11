@@ -37,7 +37,7 @@ internal sealed class ProxySettings
     /// </summary>
     public bool ForwardToUpstreamGateway { get; set; }
 
-    public int MaxCachedConnections { get; set; } = 2;
+    public int MaxCachedConnections { get; set; } = 4;
 
     public bool ReuseSocket { get; set; } = true;
 
@@ -47,25 +47,27 @@ internal sealed class ProxySettings
     /// </summary>
     public int TcpTimeWaitSeconds { get; set; }
 
-    public bool SaveFakeCertificates { get; set; } = true;
+    /// <summary>
+    ///     Matches the library Balanced default (<see langword="false" />). Set <see langword="true" />
+    ///     to keep generated leaves on disk across restarts.
+    /// </summary>
+    public bool SaveFakeCertificates { get; set; }
 
     /// <summary>
-    ///     Key algorithm for the per-host leaf certificates the proxy issues. RSA-2048 key generation is
-    ///     expensive, but <c>LeafRsaKeyPairBufferSize</c> (default 8) pre-generates pairs so many first
-    ///     visits avoid paying that on CONNECT; a P-256 leaf is cheap inline and still gives every host
-    ///     its own key. Set this to <see cref="CertificateKeyAlgorithm.Rsa2048" /> when clients that cannot
-    ///     handle ECDSA server certificates are being intercepted. The root certificate stays RSA either way.
+    ///     Matches the library Balanced default (<see cref="CertificateKeyAlgorithm.Rsa2048" />).
+    ///     Set <see cref="CertificateKeyAlgorithm.EcdsaP256" /> for much cheaper first-visit MITM when
+    ///     clients accept ECDSA server certificates (all current browsers). The root stays RSA either way.
     /// </summary>
-    public CertificateKeyAlgorithm LeafCertificateKeyAlgorithm { get; set; } = CertificateKeyAlgorithm.EcdsaP256;
+    public CertificateKeyAlgorithm LeafCertificateKeyAlgorithm { get; set; } = CertificateKeyAlgorithm.Rsa2048;
 
     public bool EnableHttp2 { get; set; } = true;
 
     /// <summary>
-    ///     Enable experimental HTTP/3 (QUIC) support. Requires MsQuic and a supported OS
-    ///     (<see cref="System.Net.Quic.QuicListener.IsSupported" />). When true, a
+    ///     Experimental HTTP/3 (QUIC). Off by default to match library Balanced. Requires MsQuic and a
+    ///     supported OS (<see cref="System.Net.Quic.QuicListener.IsSupported" />). When true, a
     ///     <c>TransparentQuicProxyEndPoint</c> is bound on <see cref="QuicListeningPort" />.
     /// </summary>
-    public bool EnableHttp3 { get; set; } = true;
+    public bool EnableHttp3 { get; set; }
 
     /// <summary>
     ///     When true with <see cref="EnableHttp3" />, queues background HTTPS/SVCB DNS discovery.

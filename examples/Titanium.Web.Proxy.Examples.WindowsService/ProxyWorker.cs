@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Examples.Shared;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Examples.WindowsService;
 
@@ -38,6 +39,7 @@ internal sealed class ProxyWorker : BackgroundService
         // We create a fresh ProxyServer instance on every start so a service restart also reloads settings.
         proxyServer = new ProxyServer(false)
         {
+            Profile = ProxyProfile.Balanced,
             CheckCertificateRevocation = settings.CheckCertificateRevocation,
             ConnectionTimeOutSeconds = settings.ConnectionTimeOutSeconds,
             Enable100ContinueBehaviour = settings.Enable100ContinueBehaviour,

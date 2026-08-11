@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Net.Quic;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
@@ -83,46 +82,20 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 proxyServer.CertificateManager.TrustRootCertificate(machineTrusted: trustRootCertificateMachine);
             }
 
-            // Cache generated leaf certificates on disk (library default is off) so repeat runs against
-            // the same hosts reuse them instead of regenerating a key pair per host on every launch.
-            // Connection pooling and origin-connection prefetch are already on by library default.
-            proxyServer.CertificateManager.SaveFakeCertificates = true;
-            // Issue P-256 leaves rather than the default RSA-2048 ones. RSA keygen is expensive, though
-            // LeafRsaKeyPairBufferSize (default 8) pre-generates pairs for many first visits; P-256 is
-            // cheap inline and still gives every host its own key. Browsers all accept ECDSA server
-            // certificates - revert to Rsa2048 if something older is being intercepted. The root stays RSA.
-            proxyServer.CertificateManager.LeafCertificateKeyAlgorithm =
-                Network.CertificateKeyAlgorithm.EcdsaP256;
+            // Match ProxyProfile.Balanced / library defaults (same as the Basic example).
+            // Speed opt-ins for modern browsers: LeafCertificateKeyAlgorithm = EcdsaP256,
+            // SaveFakeCertificates = true, EnableHttp3 = true — see wiki Home.md Performance.
+            proxyServer.Profile = ProxyProfile.Balanced;
             proxyServer.ForwardToUpstreamGateway = true;
-            // Bound the in-memory certificate cache a little higher for a browsing-heavy manual test
-            // session; leave the on-disk cache unbounded so it survives across runs.
-            proxyServer.ResourceLimits = ProxyResourceLimits.Default.WithCertificateCacheBounds(
-                maxCertificateCacheEntries: 2048, maxCertificateDiskCacheEntries: null);
+            proxyServer.ResourceLimits = ProxyResourceLimits.Default;
 
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000);
 
             proxyServer.AddEndPoint(explicitEndPoint);
 
-            // HTTP/3 transparent QUIC endpoint (experimental — suppress TWP001 to opt in).
-            // Requires MsQuic and a supported OS (Windows 11 / Server 2022+, or libmsquic on Linux/macOS).
-            // UDP traffic must be redirected here; see wiki/HTTP-3.md.
-#pragma warning disable TWP001
-            if (QuicListener.IsSupported)
-            {
-                proxyServer.EnableHttp3 = true;
-                // Learn H3 from Alt-Svc on the first response; proactive SVCB DNS is off for
-                // interactive browsing (same default as the Basic example).
-                proxyServer.EnableHttpsSvcbDnsDiscovery = false;
-                var quicEndPoint = new TransparentQuicProxyEndPoint(IPAddress.Any, 443)
-                {
-                    // Replace with IOriginalDestinationResolver for real NAT-transparent interception.
-                    ForwardHost = "localhost",
-                    ForwardPort = 443
-                };
-                quicEndPoint.BeforeQuicAuthenticate += ProxyServer_BeforeQuicAuthenticate;
-                proxyServer.AddEndPoint(quicEndPoint);
-            }
-#pragma warning restore TWP001
+            // HTTP/3 stays off unless explicitly enabled (Balanced / library default).
+            // To demo QUIC: set EnableHttp3 = true when QuicListener.IsSupported and add a
+            // TransparentQuicProxyEndPoint — see wiki/HTTP-3.md and the Basic example's TWP_ENABLE_HTTP3.
 
             proxyServer.BeforeRequest += ProxyServer_BeforeRequest;
             proxyServer.BeforeResponse += ProxyServer_BeforeResponse;
@@ -320,13 +293,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             get => (int)GetValue(Http3ServerConnectionCountProperty);
             set => SetValue(Http3ServerConnectionCountProperty, value);
         }
-
-#pragma warning disable TWP001
-        private Task ProxyServer_BeforeQuicAuthenticate(object sender, BeforeQuicAuthenticateEventArgs e)
-        {
-            return Task.CompletedTask;
-        }
-#pragma warning restore TWP001
 
         private async Task ProxyServer_BeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
