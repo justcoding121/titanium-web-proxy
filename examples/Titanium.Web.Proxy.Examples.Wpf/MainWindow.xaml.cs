@@ -14,6 +14,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Examples.Shared;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Options;
@@ -45,10 +46,13 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         private int lastSessionNumber;
         private SessionListItem selectedSession;
         private bool proxyShutdownDone;
+        private readonly bool trustRootCertificate;
+        private readonly bool trustRootCertificateMachine;
 
         public MainWindow()
         {
-            proxyServer = new ProxyServer();
+            // false,false: do not auto-trust on Start/SetAsSystemProxy — trust is opt-in via TWP_TRUST_ROOT.
+            proxyServer = new ProxyServer(false, false, false);
 
             // Session traffic is shown in the UI. Library diagnostics go to a rolling file (not the
             // console — WinExe usually has none). Debug builds capture full protocol diagnostics.
@@ -66,6 +70,18 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 "Titanium.Web.Proxy");
             Directory.CreateDirectory(certificateDirectory);
             proxyServer.CertificateManager.PfxFilePath = Path.Combine(certificateDirectory, "rootCert.pfx");
+
+            // Opt-in MITM root trust (same as Basic):
+            //   TWP_TRUST_ROOT=1           → Current User Personal + Trusted Root
+            //   TWP_TRUST_ROOT_MACHINE=1   → also Local Machine stores (needs elevation)
+            trustRootCertificate = Environment.GetEnvironmentVariable("TWP_TRUST_ROOT") is "1" or "true" or "TRUE";
+            trustRootCertificateMachine =
+                Environment.GetEnvironmentVariable("TWP_TRUST_ROOT_MACHINE") is "1" or "true" or "TRUE";
+            if (trustRootCertificate || trustRootCertificateMachine)
+            {
+                proxyServer.CertificateManager.EnsureRootCertificate();
+                proxyServer.CertificateManager.TrustRootCertificate(machineTrusted: trustRootCertificateMachine);
+            }
 
             // Cache generated leaf certificates on disk (library default is off) so repeat runs against
             // the same hosts reuse them instead of regenerating a key pair per host on every launch.
@@ -136,11 +152,12 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             var capturePath = Environment.GetEnvironmentVariable("TWP_CAPTURE_PATH");
             if (string.IsNullOrWhiteSpace(capturePath))
             {
-                proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp, new SystemProxySettings
-                {
-                    // Route localhost/loopback traffic through the proxy for this example.
-                    ProxyLoopback = true
-                });
+                proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp,
+                    KnownMitmExclusions.CreateSystemProxySettings(settings =>
+                    {
+                        // Route localhost/loopback traffic through the proxy for this example.
+                        settings.ProxyLoopback = true;
+                    }));
             }
 
             InitializeComponent();
@@ -245,6 +262,17 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             try
             {
+                if (trustRootCertificate || trustRootCertificateMachine)
+                    proxyServer.CertificateManager.RemoveTrustedRootCertificate(
+                        machineTrusted: trustRootCertificateMachine);
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+
+            try
+            {
                 proxyServer.Dispose();
             }
             catch (Exception)
@@ -303,7 +331,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         private async Task ProxyServer_BeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
             var hostname = e.HttpClient.Request.RequestUri.Host;
-            if (hostname.EndsWith("webex.com")) e.DecryptSsl = false;
+            if (KnownMitmExclusions.ShouldDisableSslDecrypt(hostname))
+                e.DecryptSsl = false;
 
             await Dispatcher.InvokeAsync(() => { AddSession(e); });
         }
@@ -525,7 +554,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             var button = (ToggleButton)sender;
             if (button.IsChecked == true)
                 proxyServer.SetAsSystemProxy((ExplicitProxyEndPoint)proxyServer.ProxyEndPoints[0],
-                    ProxyProtocolType.AllHttp);
+                    ProxyProtocolType.AllHttp,
+                    KnownMitmExclusions.CreateSystemProxySettings(settings => settings.ProxyLoopback = true));
             else
                 proxyServer.RestoreOriginalProxySettings();
         }

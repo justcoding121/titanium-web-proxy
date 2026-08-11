@@ -90,6 +90,20 @@ internal sealed class ProxySettings
     public bool DecryptSsl { get; set; }
 
     /// <summary>
+    ///     When true, trusts the MITM root in Current User Personal + Trusted Root.
+    ///     Removed again on stop when this run installed them. Prefer this over machine trust for
+    ///     interactive/`dotnet run` demos.
+    /// </summary>
+    public bool TrustRootCertificate { get; set; } = true;
+
+    /// <summary>
+    ///     When true with <see cref="TrustRootCertificate"/>, also trust in Local Machine Personal +
+    ///     Trusted Root (needs elevation or a privileged service account such as LocalSystem).
+    ///     Defaults to false — machine trust is opt-in.
+    /// </summary>
+    public bool TrustRootCertificateMachine { get; set; }
+
+    /// <summary>
     ///     When true, registers the listening endpoint as the Windows system HTTP/HTTPS proxy
     ///     (Current User WinINet settings). Cleared automatically on <see cref="ProxyServer.Stop" />.
     ///     Prefer true when running interactively (`dotnet run`); for a LocalSystem service install

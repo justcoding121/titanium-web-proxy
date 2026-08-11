@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
+    <ProjectReference Include="..\Titanium.Web.Proxy.Examples.Shared\Titanium.Web.Proxy.Examples.Shared.csproj" />
   </ItemGroup>
 
 </Project>

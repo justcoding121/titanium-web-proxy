@@ -1150,33 +1150,39 @@ public sealed class CertificateManager : IDisposable
     }
 
     /// <summary>
-    ///     Trusts the root certificate in user store, optionally also in machine store.
-    ///     Machine trust would require elevated permissions (will silently fail otherwise).
+    ///     Trusts the root certificate in the current-user Personal and Trusted Root stores,
+    ///     and optionally also in the local-machine Personal and Trusted Root stores.
     /// </summary>
+    /// <param name="machineTrusted">
+    ///     When <see langword="true"/>, also install into the local-machine stores. Defaults to
+    ///     <see langword="false"/> — user-only trust is the recommended default for interactive
+    ///     apps; machine trust needs elevation (or a privileged service account) and otherwise
+    ///     fails silently.
+    /// </param>
     public void TrustRootCertificate(bool machineTrusted = false)
     {
         // currentUser\personal
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
+        // currentUser\Root
+        InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
 
-        if (!machineTrusted)
+        if (machineTrusted)
         {
-            // currentUser\Root
-            InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
-        }
-        else
-        {
-            // current system
+            // localMachine\personal
             InstallCertificate(StoreName.My, StoreLocation.LocalMachine);
-
-            // this adds to both currentUser\Root & currentMachine\Root
+            // localMachine\Root
             InstallCertificate(StoreName.Root, StoreLocation.LocalMachine);
         }
     }
 
     /// <summary>
-    ///     Puts the certificate to the user store, optionally also to machine store.
-    ///     Prompts with UAC if elevated permissions are required. Works only on Windows.
+    ///     Puts the certificate to the user store, optionally also to the machine store, prompting
+    ///     with UAC when elevation is required. Works only on Windows.
     /// </summary>
+    /// <param name="machineTrusted">
+    ///     When <see langword="true"/>, elevate to install into local-machine stores. Defaults to
+    ///     <see langword="false"/> (user store only).
+    /// </param>
     /// <returns>True if success.</returns>
     public bool TrustRootCertificateAsAdmin(bool machineTrusted = false)
     {
@@ -1185,8 +1191,9 @@ public sealed class CertificateManager : IDisposable
         var certificate = RootCertificate;
         if (certificate == null) return false;
 
-        // currentUser\Personal
+        // currentUser\Personal + currentUser\Root (machine elevation is only needed for LocalMachine).
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
+        InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
 
         // certutil.exe only accepts the PFX password via a plain "-p password" command-line argument -
         // it has no file/stdin-based alternative (confirmed: no documented option to read it from a
@@ -1202,7 +1209,7 @@ public sealed class CertificateManager : IDisposable
         {
             File.WriteAllBytes(pfxFileName, certificate.Export(X509ContentType.Pkcs12, transientPfxPassword));
 
-            // currentUser\Root, currentMachine\Personal &  currentMachine\Root
+            // Elevated: currentUser\Root (when !machineTrusted) or localMachine Personal+Root.
             var info = new ProcessStartInfo
             {
                 FileName = CertUtilExecutablePath,
@@ -1257,15 +1264,16 @@ public sealed class CertificateManager : IDisposable
     /// <summary>
     ///     Ensure certificates are setup (creates root if required).
     ///     Also makes root certificate trusted based on provided parameters.
-    ///     Note:setting machineTrustRootCertificate to true will force userTrustRootCertificate to true.
     /// </summary>
     /// <param name="userTrustRootCertificate">
-    ///     Should the proxy root CA be trusted in the current-user Root store?
+    ///     Trust in the current-user stores. Prefer true for interactive MITM; false for fully opt-in trust.
     /// </param>
-    /// <param name="machineTrustRootCertificate">Should the proxy root CA be trusted in the local-machine Root store?</param>
+    /// <param name="machineTrustRootCertificate">
+    ///     Also trust in local-machine stores (needs elevation). Implies user trust. Prefer false unless
+    ///     installing for a service / all users.
+    /// </param>
     /// <param name="trustRootCertificateAsAdmin">
-    ///     Should we attempt to trust certificates with elevated permissions by
-    ///     prompting for UAC if required?
+    ///     Elevate via UAC when installing (Windows only). Defaults to false.
     /// </param>
     public void EnsureRootCertificate(bool userTrustRootCertificate,
         bool machineTrustRootCertificate, bool trustRootCertificateAsAdmin = false)
@@ -1294,26 +1302,25 @@ public sealed class CertificateManager : IDisposable
     }
 
     /// <summary>
-    ///     Removes the trusted certificates from user store, optionally also from machine store.
-    ///     To remove from machine store elevated permissions are required (will fail silently otherwise).
+    ///     Removes the trusted certificates from the current-user Personal and Trusted Root stores,
+    ///     and optionally also from the local-machine Personal and Trusted Root stores.
     /// </summary>
-    /// <param name="machineTrusted">Should also remove from machine store?</param>
+    /// <param name="machineTrusted">
+    ///     When <see langword="true"/>, also remove from local-machine stores (needs elevation;
+    ///     fails silently otherwise). Pass the same value used when trusting.
+    /// </param>
     public void RemoveTrustedRootCertificate(bool machineTrusted = false)
     {
         // currentUser\personal
         UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
+        // currentUser\Root
+        UninstallCertificate(StoreName.Root, StoreLocation.CurrentUser, RootCertificate);
 
-        if (!machineTrusted)
+        if (machineTrusted)
         {
-            // currentUser\Root
-            UninstallCertificate(StoreName.Root, StoreLocation.CurrentUser, RootCertificate);
-        }
-        else
-        {
-            // current system
+            // localMachine\personal
             UninstallCertificate(StoreName.My, StoreLocation.LocalMachine, RootCertificate);
-
-            // this adds to both currentUser\Root & currentMachine\Root
+            // localMachine\Root
             UninstallCertificate(StoreName.Root, StoreLocation.LocalMachine, RootCertificate);
         }
     }
@@ -1326,8 +1333,9 @@ public sealed class CertificateManager : IDisposable
     {
         if (!RunTime.IsWindows) return false;
 
-        // currentUser\Personal
+        // currentUser\Personal + currentUser\Root
         UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
+        UninstallCertificate(StoreName.Root, StoreLocation.CurrentUser, RootCertificate);
 
         var infos = new List<ProcessStartInfo>();
         if (!machineTrusted)
@@ -1345,7 +1353,7 @@ public sealed class CertificateManager : IDisposable
             infos.AddRange(
                 new List<ProcessStartInfo>
                 {
-                    // currentMachine\Personal
+                    // localMachine\Personal
                     new()
                     {
                         FileName = CertUtilExecutablePath,
@@ -1357,7 +1365,7 @@ public sealed class CertificateManager : IDisposable
                         WindowStyle = ProcessWindowStyle.Hidden
                     },
 
-                    // currentUser\Personal & currentMachine\Personal
+                    // localMachine\Root
                     new()
                     {
                         FileName = CertUtilExecutablePath,

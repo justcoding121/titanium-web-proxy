@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Examples.Basic.Helpers;
+using Titanium.Web.Proxy.Examples.Shared;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Options;
@@ -35,6 +36,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private ExplicitProxyEndPoint explicitEndPoint;
 
         private readonly bool trustRootCertificate;
+        private readonly bool trustRootCertificateMachine;
 
 #pragma warning disable TWP001 // HTTP/3 is experimental — example intentionally exercises this API
 #nullable enable
@@ -46,21 +48,24 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             Task.Run(() => ListenToConsole(), cancellationTokenSource.Token);
 
-            proxyServer = new ProxyServer();
+            // false,false: do not auto-trust on Start/SetAsSystemProxy — trust is opt-in via TWP_TRUST_ROOT.
+            proxyServer = new ProxyServer(false, false, false);
             var certificateDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Titanium.Web.Proxy");
             Directory.CreateDirectory(certificateDirectory);
             proxyServer.CertificateManager.PfxFilePath = Path.Combine(certificateDirectory, "rootCert.pfx");
 
-            // Installing a MITM root into the user's trust store is opt-in: set TWP_TRUST_ROOT=1 for
-            // browser-driven runs. Nothing is added to any certificate store without it, and
-            // RemoveTrustedRootCertificate() in Stop() takes it back out again.
+            // Opt-in MITM root trust for browser-driven runs:
+            //   TWP_TRUST_ROOT=1           → Current User Personal + Trusted Root (recommended default)
+            //   TWP_TRUST_ROOT_MACHINE=1   → also Local Machine stores (needs elevation)
             trustRootCertificate = Environment.GetEnvironmentVariable("TWP_TRUST_ROOT") is "1" or "true" or "TRUE";
-            if (trustRootCertificate)
+            trustRootCertificateMachine =
+                Environment.GetEnvironmentVariable("TWP_TRUST_ROOT_MACHINE") is "1" or "true" or "TRUE";
+            if (trustRootCertificate || trustRootCertificateMachine)
             {
                 proxyServer.CertificateManager.EnsureRootCertificate();
-                proxyServer.CertificateManager.TrustRootCertificate();
+                proxyServer.CertificateManager.TrustRootCertificate(machineTrusted: trustRootCertificateMachine);
             }
 
             // Library diagnostics stay quiet on the traffic tape: one-line errors (no stacks) in Release.
@@ -215,7 +220,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // tools/ColdStartProbe connects to the endpoint directly and sets TWP_SET_SYSTEM_PROXY=0,
             // so a measurement run never rewrites the machine's WinINet proxy configuration.
             if (OperatingSystem.IsWindows() && ReadEnvBool("TWP_SET_SYSTEM_PROXY", defaultValue: true))
-                proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp);
+            {
+                // Identity hosts are WinINET-bypassed; pinning demos use DecryptSsl=false below.
+                proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp,
+                    KnownMitmExclusions.CreateSystemProxySettings());
+            }
 
             Console.WriteLine(
                 $"Knobs: pool={proxyServer.EnableConnectionPool} prefetch={proxyServer.EnableTcpServerConnectionPrefetch} " +
@@ -255,9 +264,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             proxyServer.Stop();
 
-            // Only undo what this run installed (see TWP_TRUST_ROOT above).
-            if (trustRootCertificate)
-                proxyServer.CertificateManager.RemoveTrustedRootCertificate();
+            // Only undo what this run installed (see TWP_TRUST_ROOT / TWP_TRUST_ROOT_MACHINE above).
+            if (trustRootCertificate || trustRootCertificateMachine)
+                proxyServer.CertificateManager.RemoveTrustedRootCertificate(
+                    machineTrusted: trustRootCertificateMachine);
         }
 
         private async Task<IExternalProxy> OnGetCustomUpStreamProxyFunc(SessionEventArgsBase arg)
@@ -301,10 +311,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             if (!clientLocalIp.Equals(IPAddress.Loopback) && !clientLocalIp.Equals(IPAddress.IPv6Loopback))
                 e.HttpClient.UpStreamEndPoint = new IPEndPoint(clientLocalIp, 0);
 
-            if (hostname.Contains("dropbox.com"))
-                // Exclude Https addresses you don't want to proxy
-                // Useful for clients that use certificate pinning
-                // for example dropbox.com
+            if (KnownMitmExclusions.ShouldDisableSslDecrypt(hostname))
+                // Opaque tunnel for pinned apps (Dropbox/Webex) and identity hosts that still CONNECT.
                 e.DecryptSsl = false;
 
             // Opaque tunnels (no decrypt) get a single line; decrypted hosts show up as request lines later.
@@ -626,7 +634,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private void WriteToConsole(string message, ConsoleColor? consoleColor = null)
         {
-            consoleMessageQueue.Enqueue(new Tuple<ConsoleColor?, string>(consoleColor, message));
+            var stamped = DateTime.Now.ToString("yyyy-MM-dd h:mm:ss.fff tt") + "  " + message;
+            consoleMessageQueue.Enqueue(new Tuple<ConsoleColor?, string>(consoleColor, stamped));
         }
 
         private async Task ListenToConsole()

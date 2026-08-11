@@ -14,7 +14,7 @@ public class TestProxyServer : IDisposable
         // Keep the manager's configured name aligned with the shared test root so any code path
         // that falls back to CreateRootCertificate cannot mint a product-default-CN root that
         // would collide with an example-trusted "Titanium Root Certificate Authority" in the
-        // current-user Windows stores (Basic example uses new ProxyServer() which trusts on Start).
+        // current-user Windows stores (examples that opt into trust use ProxyServer(false,...) then TrustRootCertificate).
         ProxyServer.CertificateManager.RootCertificateName = TestCertificateAuthority.RootCertificateName;
         ProxyServer.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
         ProxyServer.CertificateManager.SaveFakeCertificates = false;
