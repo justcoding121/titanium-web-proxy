@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Quic;
@@ -37,6 +38,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private readonly bool trustRootCertificate;
         private readonly bool trustRootCertificateMachine;
+
+        /// <summary>
+        ///     Optional smoke-test override from env:
+        ///     TWP_FORCE_UPSTREAM=Http11|Http2|Http3 (default Auto / unset),
+        ///     TWP_FORCE_TRANSLATION=1 to allow client/origin version mismatch bridges,
+        ///     TWP_FORCE_HOSTS=example.com,www.google.com (comma list; empty = all hosts).
+        /// </summary>
+        private readonly UpstreamHttpProtocol? forceUpstreamProtocol;
+        private readonly bool forceAllowTranslation;
+        private readonly HashSet<string> forceHosts;
 
 #pragma warning disable TWP001 // HTTP/3 is experimental — example intentionally exercises this API
 #nullable enable
@@ -116,6 +127,26 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             // Balanced / ProxyResourceLimits.Default: 1024 in-memory cert entries, unbounded disk.
             proxyServer.ResourceLimits = ProxyResourceLimits.Default;
+
+            forceUpstreamProtocol = Environment.GetEnvironmentVariable("TWP_FORCE_UPSTREAM")?.Trim() switch
+            {
+                "Http11" or "HTTP11" or "h1.1" or "1.1" => UpstreamHttpProtocol.Http11,
+                "Http2" or "HTTP2" or "h2" or "2" => UpstreamHttpProtocol.Http2,
+                "Http3" or "HTTP3" or "h3" or "3" => UpstreamHttpProtocol.Http3,
+                "Auto" or "AUTO" or "" or null => null,
+                var other => throw new InvalidOperationException(
+                    $"Unknown TWP_FORCE_UPSTREAM '{other}'. Use Http11, Http2, Http3, or Auto.")
+            };
+            forceAllowTranslation =
+                Environment.GetEnvironmentVariable("TWP_FORCE_TRANSLATION") is "1" or "true" or "TRUE";
+            forceHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var forceHostsEnv = Environment.GetEnvironmentVariable("TWP_FORCE_HOSTS");
+            if (!string.IsNullOrWhiteSpace(forceHostsEnv))
+            {
+                foreach (var host in forceHostsEnv.Split(',',
+                             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    forceHosts.Add(host);
+            }
         }
 
         private CancellationToken CancellationToken => cancellationTokenSource.Token;
@@ -215,6 +246,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 $"saveCerts={proxyServer.CertificateManager.SaveFakeCertificates} " +
                 $"leafKey={proxyServer.CertificateManager.LeafCertificateKeyAlgorithm} " +
                 $"timing={proxyServer.EnableRequestTimingCapture}");
+            if (forceUpstreamProtocol != null)
+                Console.WriteLine(
+                    $"Force policy: upstream={forceUpstreamProtocol} translation={forceAllowTranslation} " +
+                    $"hosts={(forceHosts.Count == 0 ? "*" : string.Join(",", forceHosts))}");
         }
 
         private static bool ReadEnvBool(string name, bool defaultValue)
@@ -297,6 +332,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
             if (KnownMitmExclusions.ShouldDisableSslDecrypt(hostname))
                 // Opaque tunnel for pinned apps (Dropbox/Webex) and identity hosts that still CONNECT.
                 e.DecryptSsl = false;
+
+            if (forceUpstreamProtocol != null &&
+                (forceHosts.Count == 0 || forceHosts.Contains(hostname)))
+            {
+                e.UpstreamHttpProtocol = forceUpstreamProtocol.Value;
+                e.AllowHttpProtocolTranslation = forceAllowTranslation;
+                WriteToConsole(
+                    $"FORCE {hostname} upstream={forceUpstreamProtocol} translation={forceAllowTranslation}",
+                    ConsoleColor.Magenta);
+            }
 
             // Opaque tunnels (no decrypt) get a single line; decrypted hosts show up as request lines later.
             // DEBUG also logs every CONNECT for diagnosis.
