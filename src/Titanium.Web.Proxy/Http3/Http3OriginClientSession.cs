@@ -65,7 +65,7 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
 
             if (stream.Type == QuicStreamType.Bidirectional)
             {
-                await DisposeStreamQuietlyAsync(stream, "Failed disposing unexpected inbound bidi stream");
+                await DisposeUnexpectedBidiStreamQuietlyAsync(stream);
                 continue;
             }
 
@@ -98,13 +98,13 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
         }
     }
 
-    private async Task DisposeStreamQuietlyAsync(QuicStream stream, string debugMessage)
+    private async Task DisposeUnexpectedBidiStreamQuietlyAsync(QuicStream stream)
     {
         try { await stream.DisposeAsync(); }
         catch (Exception ex)
         {
             if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))
-                _proxyServer.Logger.LogDebug(ex, debugMessage);
+                _proxyServer.Logger.LogDebug(ex, "Failed disposing unexpected inbound bidi stream");
         }
     }
 
@@ -176,53 +176,68 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
+        await CancelQuietlyAsync();
+        await JoinAcceptLoopQuietlyAsync();
+        await JoinBackgroundTasksQuietlyAsync();
+        await DisposeControlStreamQuietlyAsync();
+
+        _cts.Dispose();
+    }
+
+    private async Task CancelQuietlyAsync()
+    {
         try { await _cts.CancelAsync(); }
         catch (Exception ex)
         {
             if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))
                 _proxyServer.Logger.LogDebug(ex, "HTTP/3 origin client session cancel failed");
         }
+    }
 
-        if (_acceptLoop != null)
+    private async Task JoinAcceptLoopQuietlyAsync()
+    {
+        if (_acceptLoop is null) return;
+
+        try
         {
-            try
-            {
-                // CancellationToken.None: workers were already cancelled via _cts; this timed join
-                // must not abort immediately because _cts.Token is already in the cancelled state.
-                await _acceptLoop.WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))
-                    _proxyServer.Logger.LogDebug(ex, "HTTP/3 origin accept loop did not finish cleanly");
-            }
+            // CancellationToken.None: workers were already cancelled via _cts; this timed join
+            // must not abort immediately because _cts.Token is already in the cancelled state.
+            await _acceptLoop.WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))
+                _proxyServer.Logger.LogDebug(ex, "HTTP/3 origin accept loop did not finish cleanly");
+        }
+    }
+
+    private async Task JoinBackgroundTasksQuietlyAsync()
+    {
+        if (_backgroundTasks.IsEmpty) return;
+
+        try
+        {
+            await Task.WhenAll(_backgroundTasks).WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))
+                _proxyServer.Logger.LogDebug(ex, "HTTP/3 origin background drains did not finish cleanly");
+        }
+    }
+
+    private async Task DisposeControlStreamQuietlyAsync()
+    {
+        if (_controlStream is null) return;
+
+        try { await _controlStream.DisposeAsync(); }
+        catch (Exception ex)
+        {
+            if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))
+                _proxyServer.Logger.LogDebug(ex, "HTTP/3 origin control stream dispose failed");
         }
 
-        if (!_backgroundTasks.IsEmpty)
-        {
-            try
-            {
-                await Task.WhenAll(_backgroundTasks).WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))
-                    _proxyServer.Logger.LogDebug(ex, "HTTP/3 origin background drains did not finish cleanly");
-            }
-        }
-
-        if (_controlStream != null)
-        {
-            try { await _controlStream.DisposeAsync(); }
-            catch (Exception ex)
-            {
-                if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))
-                    _proxyServer.Logger.LogDebug(ex, "HTTP/3 origin control stream dispose failed");
-            }
-            _controlStream = null;
-        }
-
-        _cts.Dispose();
+        _controlStream = null;
     }
 }
 #pragma warning restore CA1416
