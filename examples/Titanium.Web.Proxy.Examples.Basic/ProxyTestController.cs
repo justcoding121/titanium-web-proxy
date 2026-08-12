@@ -417,6 +417,13 @@ namespace Titanium.Web.Proxy.Examples.Basic
                         $"{request.Method,-7} {FormatUrlForConsole(request.Url)} ⇢ cancelled by client  {elapsedMs}ms";
                     level = LogLevel.Information;
                     break;
+                case IncompleteSessionKind.OriginReset:
+                    // Origin RST_STREAM (REFUSED_STREAM / early reset) before any response headers —
+                    // common under CDN load-shedding (e.g. GitHub/Fastly). Not a client abort.
+                    line =
+                        $"{request.Method,-7} {FormatUrlForConsole(request.Url)} ⇢ reset by origin  {elapsedMs}ms";
+                    level = LogLevel.Information;
+                    break;
                 case IncompleteSessionKind.ConnectFailed:
                     line =
                         $"{request.Method,-7} {FormatUrlForConsole(request.Url)} ⇢ connect failed  {FormatHttpProtocolShort(request.HttpVersion)}↔?  {elapsedMs}ms";
@@ -447,6 +454,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             None,
             ClientCancelled,
+            OriginReset,
             ConnectFailed
         }
 
@@ -460,9 +468,17 @@ namespace Titanium.Web.Proxy.Examples.Basic
             if (statusCode != 0 || exception == null)
                 return IncompleteSessionKind.None;
 
-            if (exception is OperationCanceledException ||
-                GetInnermostException(exception) is OperationCanceledException)
+            var oce = exception as OperationCanceledException
+                      ?? GetInnermostException(exception) as OperationCanceledException;
+            if (oce != null)
+            {
+                // Http2Helper stamps distinct messages for client vs origin RST_STREAM before headers.
+                if (oce.Message.Contains("reset by the origin", StringComparison.OrdinalIgnoreCase) ||
+                    oce.Message.Contains("connection was closed before this stream", StringComparison.OrdinalIgnoreCase))
+                    return IncompleteSessionKind.OriginReset;
+
                 return IncompleteSessionKind.ClientCancelled;
+            }
 
             if (IsOriginConnectFailure(exception))
                 return IncompleteSessionKind.ConnectFailed;
