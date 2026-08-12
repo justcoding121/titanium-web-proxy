@@ -98,9 +98,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 Environment.GetEnvironmentVariable("TWP_LEAF_KEY") is "ec" or "EC" or "ecdsa" or "ECDSA" or "EcdsaP256"
                     ? Network.CertificateKeyAlgorithm.EcdsaP256
                     : Network.CertificateKeyAlgorithm.Rsa2048;
-
-            // Balanced / ProxyResourceLimits.Default: 1024 in-memory cert entries, unbounded disk.
-            proxyServer.ResourceLimits = ProxyResourceLimits.Default;
         }
 
         public void Dispose()

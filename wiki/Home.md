@@ -351,7 +351,8 @@ proxyServer.ForwardToUpstreamGateway = true;
 
 Shipped defaults follow `ProxyProfile.Balanced`: networking knobs that are safe for every client are
 on; certificate and experimental-protocol choices that trade compatibility or persistence stay
-opt-in. Examples match those library defaults.
+opt-in. Examples match those library defaults, except they opt into experimental HTTP/3 so the
+QUIC endpoint is visible without extra config.
 
 | Knob | Balanced default | Speed opt-in | Notes |
 |---|---|---|---|

@@ -88,7 +88,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             // SaveFakeCertificates = true — see wiki Home.md Performance.
             proxyServer.Profile = ProxyProfile.Balanced;
             proxyServer.ForwardToUpstreamGateway = true;
-            proxyServer.ResourceLimits = ProxyResourceLimits.Default;
 
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000);
 
