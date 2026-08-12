@@ -63,16 +63,16 @@ internal sealed class ProxySettings
     public bool EnableHttp2 { get; set; } = true;
 
     /// <summary>
-    ///     Experimental HTTP/3 (QUIC). Off by default to match library Balanced. Requires MsQuic and a
-    ///     supported OS (<see cref="System.Net.Quic.QuicListener.IsSupported" />). When true, a
-    ///     <c>TransparentQuicProxyEndPoint</c> is bound on <see cref="QuicListeningPort" />.
+    ///     Experimental HTTP/3 (QUIC). On by default in this example (library Balanced remains off).
+    ///     Requires MsQuic and a supported OS (<see cref="System.Net.Quic.QuicListener.IsSupported" />).
+    ///     When true, a <c>TransparentQuicProxyEndPoint</c> is bound on <see cref="QuicListeningPort" />.
     /// </summary>
-    public bool EnableHttp3 { get; set; }
+    public bool EnableHttp3 { get; set; } = true;
 
     /// <summary>
     ///     When true with <see cref="EnableHttp3" />, queues background HTTPS/SVCB DNS discovery.
-    ///     Defaults to false for interactive/system-proxy use: learn H3 from Alt-Svc instead
-    ///     (same as the Basic example). Library default inherits <see cref="EnableHttp3" /> when unset.
+    ///     Defaults to false here: learn H3 from Alt-Svc instead (same as Basic/WPF).
+    ///     Library default inherits <see cref="EnableHttp3" /> when unset.
     /// </summary>
     public bool EnableHttpsSvcbDnsDiscovery { get; set; }
 

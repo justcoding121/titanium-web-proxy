@@ -159,9 +159,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // Traffic must be redirected here (e.g. via iptables/nftables UDP REDIRECT on Linux,
             // WFP on Windows, or pf rdr on macOS). See wiki/HTTP-3.md for setup details.
 #pragma warning disable TWP001
-            // HTTP/3 is opt-in (library Balanced default is off). Set TWP_ENABLE_HTTP3=1 to demo it.
+            // Example default is on (library Balanced default remains off). Set TWP_ENABLE_HTTP3=0 to disable.
             //   TWP_ENABLE_SVCB_DNS=1 enables background HTTPS/SVCB discovery when HTTP/3 is on.
-            var enableHttp3 = ReadEnvBool("TWP_ENABLE_HTTP3", defaultValue: false);
+            var enableHttp3 = ReadEnvBool("TWP_ENABLE_HTTP3", defaultValue: true);
             var enableSvcbEnv = Environment.GetEnvironmentVariable("TWP_ENABLE_SVCB_DNS");
 
             if (enableHttp3 && QuicListener.IsSupported)

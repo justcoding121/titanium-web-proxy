@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Quic;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
@@ -84,7 +85,7 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             // Match ProxyProfile.Balanced / library defaults (same as the Basic example).
             // Speed opt-ins for modern browsers: LeafCertificateKeyAlgorithm = EcdsaP256,
-            // SaveFakeCertificates = true, EnableHttp3 = true — see wiki Home.md Performance.
+            // SaveFakeCertificates = true — see wiki Home.md Performance.
             proxyServer.Profile = ProxyProfile.Balanced;
             proxyServer.ForwardToUpstreamGateway = true;
             proxyServer.ResourceLimits = ProxyResourceLimits.Default;
@@ -93,9 +94,28 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             proxyServer.AddEndPoint(explicitEndPoint);
 
-            // HTTP/3 stays off unless explicitly enabled (Balanced / library default).
-            // To demo QUIC: set EnableHttp3 = true when QuicListener.IsSupported and add a
-            // TransparentQuicProxyEndPoint — see wiki/HTTP-3.md and the Basic example's TWP_ENABLE_HTTP3.
+            // HTTP/3 (experimental — suppress TWP001). Example default is on; library Balanced stays off.
+            // Set TWP_ENABLE_HTTP3=0 to disable. Requires MsQuic + supported OS; see wiki/HTTP-3.md.
+#pragma warning disable TWP001
+            var enableHttp3 = Environment.GetEnvironmentVariable("TWP_ENABLE_HTTP3") switch
+            {
+                "0" or "false" or "FALSE" => false,
+                _ => true
+            };
+            if (enableHttp3 && QuicListener.IsSupported)
+            {
+                proxyServer.EnableHttp3 = true;
+                // Learn H3 from Alt-Svc; set TWP_ENABLE_SVCB_DNS=1 for proactive HTTPS/SVCB discovery.
+                proxyServer.EnableHttpsSvcbDnsDiscovery =
+                    Environment.GetEnvironmentVariable("TWP_ENABLE_SVCB_DNS") is "1" or "true" or "TRUE";
+                var quicEndPoint = new TransparentQuicProxyEndPoint(IPAddress.Any, 443)
+                {
+                    ForwardHost = "localhost",
+                    ForwardPort = 443
+                };
+                proxyServer.AddEndPoint(quicEndPoint);
+            }
+#pragma warning restore TWP001
 
             proxyServer.BeforeRequest += ProxyServer_BeforeRequest;
             proxyServer.BeforeResponse += ProxyServer_BeforeResponse;
