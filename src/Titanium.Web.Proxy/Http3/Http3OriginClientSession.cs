@@ -59,42 +59,52 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
     {
         while (!ct.IsCancellationRequested)
         {
-            QuicStream stream;
-            try
-            {
-                stream = await _connection.AcceptInboundStreamAsync(ct);
-            }
-            catch (OperationCanceledException)
-            {
+            var stream = await TryAcceptInboundStreamAsync(ct);
+            if (stream is null)
                 return;
-            }
-            catch (QuicException qex) when (qex.QuicError is QuicError.ConnectionAborted
-                                           or QuicError.ConnectionIdle
-                                           or QuicError.ConnectionTimeout)
-            {
-                return;
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))
-                    _proxyServer.Logger.LogDebug(ex, "HTTP/3 origin AcceptInboundStreamAsync ended");
-                return;
-            }
 
-            // Origin connections never accept inbound bidi request streams (MaxInboundBidirectionalStreams=0).
             if (stream.Type == QuicStreamType.Bidirectional)
             {
-                try { await stream.DisposeAsync(); }
-                catch (Exception ex)
-                {
-                    if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))
-                        _proxyServer.Logger.LogDebug(ex, "Failed disposing unexpected inbound bidi stream");
-                }
+                await DisposeStreamQuietlyAsync(stream, "Failed disposing unexpected inbound bidi stream");
                 continue;
             }
 
             // Track drain tasks (do not discard) so DisposeAsync can join them.
             _backgroundTasks.Add(DrainInboundUnidirectionalStreamAsync(stream, ct));
+        }
+    }
+
+    private async Task<QuicStream?> TryAcceptInboundStreamAsync(CancellationToken ct)
+    {
+        try
+        {
+            return await _connection.AcceptInboundStreamAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (QuicException qex) when (qex.QuicError is QuicError.ConnectionAborted
+                                       or QuicError.ConnectionIdle
+                                       or QuicError.ConnectionTimeout)
+        {
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))
+                _proxyServer.Logger.LogDebug(ex, "HTTP/3 origin AcceptInboundStreamAsync ended");
+            return null;
+        }
+    }
+
+    private async Task DisposeStreamQuietlyAsync(QuicStream stream, string debugMessage)
+    {
+        try { await stream.DisposeAsync(); }
+        catch (Exception ex)
+        {
+            if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))
+                _proxyServer.Logger.LogDebug(ex, debugMessage);
         }
     }
 
@@ -109,17 +119,14 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
 
                 if (streamType.Value == Http3StreamType.Control)
                 {
-                    await ProcessPeerControlStreamAsync(stream, ct);
+                    var peerSettings = await ProcessPeerControlStreamAsync(stream, ct);
+                    if (peerSettings != null)
+                        _peerSettings = peerSettings;
                     return;
                 }
 
                 // QPACK / push / unknown: drain so connection flow control never stalls.
-                var buf = new byte[4096];
-                while (!ct.IsCancellationRequested)
-                {
-                    var read = await stream.ReadAsync(buf, ct);
-                    if (read == 0) return;
-                }
+                await DrainBytesAsync(stream, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -129,27 +136,40 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
         }
     }
 
-    private async Task ProcessPeerControlStreamAsync(QuicStream stream, CancellationToken ct)
+    private static async Task DrainBytesAsync(QuicStream stream, CancellationToken ct)
+    {
+        var buf = new byte[4096];
+        while (!ct.IsCancellationRequested)
+        {
+            var read = await stream.ReadAsync(buf, ct);
+            if (read == 0) return;
+        }
+    }
+
+    private static async Task<Http3Settings?> ProcessPeerControlStreamAsync(QuicStream stream, CancellationToken ct)
     {
         var receivedSettings = false;
+        Http3Settings? settings = null;
         while (!ct.IsCancellationRequested)
         {
             var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 16 * 1024, ct);
-            if (frame is null) return;
+            if (frame is null) return settings;
 
             if (!receivedSettings)
             {
                 if (frame.Type != Http3FrameType.Settings)
-                    return; // peer violation; leave connection for request paths to fail/retry
-                _peerSettings = Http3Settings.Parse(frame.Payload.Span);
+                    return settings; // peer violation; leave connection for request paths to fail/retry
+                settings = Http3Settings.Parse(frame.Payload.Span);
                 receivedSettings = true;
                 continue;
             }
 
             // Drain remaining control frames (GOAWAY, etc.).
             if (frame.Type == Http3FrameType.GoAway)
-                return;
+                return settings;
         }
+
+        return settings;
     }
 
     public async ValueTask DisposeAsync()
@@ -165,7 +185,12 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
 
         if (_acceptLoop != null)
         {
-            try { await _acceptLoop.WaitAsync(TimeSpan.FromSeconds(2)); }
+            try
+            {
+                // CancellationToken.None: workers were already cancelled via _cts; this timed join
+                // must not abort immediately because _cts.Token is already in the cancelled state.
+                await _acceptLoop.WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None);
+            }
             catch (Exception ex)
             {
                 if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))
@@ -175,7 +200,10 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
 
         if (!_backgroundTasks.IsEmpty)
         {
-            try { await Task.WhenAll(_backgroundTasks).WaitAsync(TimeSpan.FromSeconds(2)); }
+            try
+            {
+                await Task.WhenAll(_backgroundTasks).WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None);
+            }
             catch (Exception ex)
             {
                 if (_proxyServer.Logger.IsEnabled(LogLevel.Debug))

@@ -1,14 +1,12 @@
 #pragma warning disable CA1416
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net.Quic;
 using System.Net.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
@@ -16,7 +14,6 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Quic;
-using Titanium.Web.Proxy.Network.Streams;
 using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Http3;
@@ -303,8 +300,11 @@ internal static class Http3OriginBridge
             if (response.ContentLength < 0 && !response.IsChunked)
                 response.Headers.AddHeader(KnownHeaders.TransferEncoding, "chunked");
 
-            var streamToClient = originStream;
-            var connToRelease = quicConn;
+            if (originStream is null || quicConn is null)
+                throw new InvalidOperationException("HTTP/3 origin stream or connection missing after response headers.");
+
+            QuicStream streamToClient = originStream;
+            QuicServerConnection connToRelease = quicConn;
             originStream = null;
             quicConn = null;
             streamHandedOff = true;
@@ -319,7 +319,7 @@ internal static class Http3OriginBridge
                     {
                         while (true)
                         {
-                            var frame = await Http3Frame.ReadAsync(streamToClient!, maxPayloadBytes: maxPayload, ct);
+                            var frame = await Http3Frame.ReadAsync(streamToClient, maxPayloadBytes: maxPayload, ct);
                             if (frame == null) break;
                             if (frame.Type == Http3FrameType.Headers)
                                 break; // trailers — ignored for now
@@ -331,10 +331,10 @@ internal static class Http3OriginBridge
                     }
                     else
                     {
-                        var current = await Http3Frame.ReadAsync(streamToClient!, maxPayloadBytes: maxPayload, ct);
+                        var current = await Http3Frame.ReadAsync(streamToClient, maxPayloadBytes: maxPayload, ct);
                         while (current != null)
                         {
-                            var next = await Http3Frame.ReadAsync(streamToClient!, maxPayloadBytes: maxPayload, ct);
+                            var next = await Http3Frame.ReadAsync(streamToClient, maxPayloadBytes: maxPayload, ct);
                             var isLast = next == null || next.Type == Http3FrameType.Headers;
 
                             if (current.Type == Http3FrameType.Data)
@@ -348,7 +348,7 @@ internal static class Http3OriginBridge
 
                                 if (hookArgs.IsLastChunk && !isLast)
                                 {
-                                    streamToClient!.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
+                                    streamToClient.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
                                     break;
                                 }
                             }
@@ -359,8 +359,8 @@ internal static class Http3OriginBridge
                 }
                 finally
                 {
-                    try { await streamToClient!.DisposeAsync(); } catch { /* best effort */ }
-                    try { await QuicConnectionPool.ReleaseAsync(connToRelease!); } catch { /* best effort */ }
+                    try { await streamToClient.DisposeAsync(); } catch { /* best effort */ }
+                    try { await QuicConnectionPool.ReleaseAsync(connToRelease); } catch { /* best effort */ }
                 }
             };
 
@@ -405,7 +405,6 @@ internal static class Http3OriginBridge
             if (originStream != null)
             {
                 try { await originStream.DisposeAsync(); } catch { /* best effort */ }
-                originStream = null;
             }
 
             if (quicConn != null)
@@ -639,44 +638,5 @@ internal static class Http3OriginBridge
     private static bool IsForbiddenOnRequestStream(ulong frameType) =>
         frameType is Http3FrameType.Settings or Http3FrameType.GoAway
             or Http3FrameType.MaxPushId or Http3FrameType.CancelPush;
-
-    /// <summary>
-    ///     Decompresses <paramref name="raw" /> when <paramref name="contentEncoding" /> is present,
-    ///     matching <see cref="SessionEventArgs.GetResponseBody"/> so later
-    ///     <c>CompressBodyAndUpdateContentLength</c> does not double-compress.
-    /// </summary>
-    private static async Task<byte[]> DecompressIfEncodedAsync(
-        byte[] raw, string? contentEncoding, CancellationToken cancellationToken)
-    {
-        var layers = CompressionUtil.ParseContentEncodings(contentEncoding);
-        if (layers.Count == 0 || raw.Length == 0) return raw;
-
-        Stream current = new MemoryStream(raw, writable: false);
-        var owned = new List<Stream> { current };
-        try
-        {
-            for (var i = layers.Count - 1; i >= 0; i--)
-            {
-                var kind = CompressionUtil.CompressionNameToEnum(layers[i]);
-                if (kind == HttpCompression.Unsupported) return raw;
-                current = DecompressionFactory.Create(kind, current);
-                owned.Add(current);
-            }
-
-            using var output = new MemoryStream();
-            await current.CopyToAsync(output, cancellationToken);
-            return output.ToArray();
-        }
-        catch
-        {
-            // Leave wire bytes as-is; caller still has Content-Encoding for the client.
-            return raw;
-        }
-        finally
-        {
-            for (var i = owned.Count - 1; i >= 0; i--)
-                await owned[i].DisposeAsync();
-        }
-    }
 }
 #pragma warning restore CA1416
