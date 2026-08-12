@@ -1,4 +1,5 @@
 ﻿using System;
+using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.Examples.Basic.Helpers;
 
 namespace Titanium.Web.Proxy.Examples.Basic
@@ -28,9 +29,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
             {
                 controller.StartProxy();
 
-                Console.WriteLine("Traffic tape: one compact line per completed request (errors are one-liners).");
-                Console.WriteLine("Hit any key to exit..");
-                Console.WriteLine();
+                controller.Logger.LogInformation(
+                    "Traffic tape: one compact line per completed request (errors are one-liners).");
+                controller.Logger.LogInformation("Hit any key to exit..");
 
                 if (Console.IsInputRedirected)
                     // Console.Read() returns immediately (EOF) when stdin has no real interactive source

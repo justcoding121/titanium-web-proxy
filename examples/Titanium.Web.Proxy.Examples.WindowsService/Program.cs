@@ -24,14 +24,15 @@ Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Is(minimumLevel)
     .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
     .Enrich.FromLogContext()
-    .WriteTo.Console(outputTemplate: timestampedTemplate)
-    .WriteTo.File(
+    // Console/file I/O on a background worker so LogInformation from a session thread never blocks.
+    .WriteTo.Async(a => a.Console(outputTemplate: timestampedTemplate))
+    .WriteTo.Async(a => a.File(
         path: Path.Combine(logDirectory, "proxy-service.log"),
         rollingInterval: RollingInterval.Day,
         fileSizeLimitBytes: 10 * 1024 * 1024,
         retainedFileCountLimit: 5,
         shared: true,
-        outputTemplate: timestampedTemplate)
+        outputTemplate: timestampedTemplate))
     .WriteTo.EventLog(
         source: "Titanium Web Proxy",
         logName: "Application",

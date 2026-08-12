@@ -1,16 +1,12 @@
 ﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
 using System.Net.Sockets;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Examples.Basic.Helpers;
 using Titanium.Web.Proxy.Examples.Shared;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -25,14 +21,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private const int MaxWebSocketTextLength = 120;
 
         private readonly ProxyServer proxyServer;
-#if !DEBUG
-        private readonly ILoggerFactory compactLoggerFactory;
-#endif
-
-        private readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
-
-        private readonly ConcurrentQueue<Tuple<ConsoleColor?, string>> consoleMessageQueue
-            = new ConcurrentQueue<Tuple<ConsoleColor?, string>>();
 
         private ExplicitProxyEndPoint explicitEndPoint;
 
@@ -47,8 +35,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public ProxyTestController()
         {
-            Task.Run(() => ListenToConsole(), cancellationTokenSource.Token);
-
             // false,false: do not auto-trust on Start/SetAsSystemProxy — trust is opt-in via TWP_TRUST_ROOT.
             proxyServer = new ProxyServer(false, false, false);
             var certificateDirectory = Path.Combine(
@@ -69,20 +55,18 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 proxyServer.CertificateManager.TrustRootCertificate(machineTrusted: trustRootCertificateMachine);
             }
 
-            // Library diagnostics stay quiet on the traffic tape: one-line errors (no stacks) in Release.
-            // DEBUG keeps the built-in Trace console (full stacks) for deep diagnosis.
+            // Traffic tape uses LogInformation so the built-in console sink (bounded channel,
+            // dedicated writer) never blocks a session thread on Console.WriteLine.
+            // DEBUG also keeps Trace + a rolling file for deep diagnosis.
 #if DEBUG
             proxyServer.Logging.MinimumLevel = LogLevel.Trace;
             proxyServer.Logging.EnableFile = true;
             proxyServer.Logging.FilePath = Path.Combine(
                 AppContext.BaseDirectory, "logs", "basic-proxy.log");
 #else
-            proxyServer.Logging.MinimumLevel = LogLevel.Warning;
-            proxyServer.Logging.EnableConsole = false;
-            compactLoggerFactory = new CompactConsoleLoggerFactory((level, line) =>
-                WriteToConsole(line, level >= LogLevel.Error ? ConsoleColor.Red : ConsoleColor.Yellow));
-            proxyServer.Logging.LoggerFactory = compactLoggerFactory;
+            proxyServer.Logging.MinimumLevel = LogLevel.Information;
 #endif
+            proxyServer.ApplyLoggingConfiguration();
 
             // Match ProxyProfile.Balanced / library defaults so this example advertises the same
             // out-of-the-box posture as NuGet consumers get from new ProxyServer(). Probe harnesses
@@ -119,15 +103,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
             proxyServer.ResourceLimits = ProxyResourceLimits.Default;
         }
 
-        private CancellationToken CancellationToken => cancellationTokenSource.Token;
-
         public void Dispose()
         {
-            cancellationTokenSource.Dispose();
             proxyServer.Dispose();
-#if !DEBUG
-            compactLoggerFactory?.Dispose();
-#endif
         }
 
         public void StartProxy()
@@ -181,23 +159,25 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 };
                 quicEndPoint.BeforeQuicAuthenticate += OnBeforeQuicAuthenticate;
                 proxyServer.AddEndPoint(quicEndPoint);
-                Console.WriteLine(
-                    $"HTTP/3 QUIC endpoint started on UDP 443 (SVCB discovery={(proxyServer.EnableHttpsSvcbDnsDiscovery ? "on" : "off")}).");
+                Logger.LogInformation(
+                    "HTTP/3 QUIC endpoint started on UDP 443 (SVCB discovery={Discovery}).",
+                    proxyServer.EnableHttpsSvcbDnsDiscovery ? "on" : "off");
             }
             else
             {
-                Console.WriteLine("[HTTP/3] Skipped: QuicListener.IsSupported is false on this platform, or TWP_ENABLE_HTTP3 disabled it.");
-                Console.WriteLine("  Windows: requires Windows 11 / Server 2022+.");
-                Console.WriteLine("  Linux:   apt install libmsquic");
-                Console.WriteLine("  macOS:   bundle libmsquic + libssl + libcrypto with @loader_path RPATH.");
+                Logger.LogInformation(
+                    "[HTTP/3] Skipped: QuicListener.IsSupported is false on this platform, or TWP_ENABLE_HTTP3 disabled it.");
+                Logger.LogInformation("  Windows: requires Windows 11 / Server 2022+.");
+                Logger.LogInformation("  Linux:   apt install libmsquic");
+                Logger.LogInformation("  macOS:   bundle libmsquic + libssl + libcrypto with @loader_path RPATH.");
             }
 #pragma warning restore TWP001
 
             proxyServer.Start();
 
             foreach (var endPoint in proxyServer.ProxyEndPoints)
-                Console.WriteLine("Listening on '{0}' endpoint at Ip {1} and port: {2} ", endPoint.GetType().Name,
-                    endPoint.IpAddress, endPoint.Port);
+                Logger.LogInformation("Listening on '{EndPointType}' endpoint at Ip {IpAddress} and port: {Port}",
+                    endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
             // tools/ColdStartProbe connects to the endpoint directly and sets TWP_SET_SYSTEM_PROXY=0,
             // so a measurement run never rewrites the machine's WinINet proxy configuration.
@@ -208,14 +188,18 @@ namespace Titanium.Web.Proxy.Examples.Basic
                     KnownMitmExclusions.CreateSystemProxySettings());
             }
 
-            Console.WriteLine(
-                $"Knobs: profile={proxyServer.Profile} pool={proxyServer.EnableConnectionPool} " +
-                $"prefetch={proxyServer.EnableTcpServerConnectionPrefetch} " +
-                $"h2={proxyServer.EnableHttp2} h3={enableHttp3} " +
-                $"forwardUpstream={proxyServer.ForwardToUpstreamGateway} " +
-                $"saveCerts={proxyServer.CertificateManager.SaveFakeCertificates} " +
-                $"leafKey={proxyServer.CertificateManager.LeafCertificateKeyAlgorithm} " +
-                $"timing={proxyServer.EnableRequestTimingCapture}");
+            Logger.LogInformation(
+                "Knobs: profile={Profile} pool={Pool} prefetch={Prefetch} h2={Http2} h3={Http3} " +
+                "forwardUpstream={ForwardUpstream} saveCerts={SaveCerts} leafKey={LeafKey} timing={Timing}",
+                proxyServer.Profile,
+                proxyServer.EnableConnectionPool,
+                proxyServer.EnableTcpServerConnectionPrefetch,
+                proxyServer.EnableHttp2,
+                enableHttp3,
+                proxyServer.ForwardToUpstreamGateway,
+                proxyServer.CertificateManager.SaveFakeCertificates,
+                proxyServer.CertificateManager.LeafCertificateKeyAlgorithm,
+                proxyServer.EnableRequestTimingCapture);
         }
 
         private static bool ReadEnvBool(string name, bool defaultValue)
@@ -230,7 +214,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public void Stop()
         {
-            WriteToConsole("Stopping proxy...");
+            Logger.LogInformation("Stopping proxy...");
 
             explicitEndPoint.BeforeTunnelConnectRequest -= OnBeforeTunnelConnectRequest;
             explicitEndPoint.BeforeTunnelConnectResponse -= OnBeforeTunnelConnectResponse;
@@ -302,10 +286,10 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // Opaque tunnels (no decrypt) get a single line; decrypted hosts show up as request lines later.
             // DEBUG also logs every CONNECT for diagnosis.
             if (!e.DecryptSsl)
-                WriteToConsole($"TUNNEL {hostname} (ssl passthrough)");
+                Logger.LogInformation("TUNNEL {Hostname} (ssl passthrough)", hostname);
 #if DEBUG
             else
-                WriteToConsole("Tunnel to: " + hostname);
+                Logger.LogDebug("Tunnel to: {Hostname}", hostname);
 #endif
         }
 
@@ -323,7 +307,6 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private void WebSocketDataSentReceived(SessionEventArgs args, DataEventArgs e, bool sent)
         {
-            var color = sent ? ConsoleColor.Green : ConsoleColor.Blue;
             var arrow = sent ? "→" : "←";
             var decoder = sent ? args.WebSocketDecoderSend : args.WebSocketDecoderReceive;
 
@@ -331,12 +314,13 @@ namespace Titanium.Web.Proxy.Examples.Basic
             {
                 if (frame.OpCode == WebsocketOpCode.Binary)
                 {
-                    WriteToConsole($"WS {arrow} binary {frame.Data.Length}B", color);
+                    Logger.LogInformation("WS {Arrow} binary {Length}B", arrow, frame.Data.Length);
                     continue;
                 }
 
                 if (frame.OpCode == WebsocketOpCode.Text)
-                    WriteToConsole($"WS {arrow} {Truncate(frame.GetText(), MaxWebSocketTextLength)}", color);
+                    Logger.LogInformation("WS {Arrow} {Text}", arrow,
+                        Truncate(frame.GetText(), MaxWebSocketTextLength));
             }
         }
 
@@ -351,7 +335,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
 #pragma warning disable TWP001
         private Task OnBeforeQuicAuthenticate(object sender, BeforeQuicAuthenticateEventArgs e)
         {
-            WriteToConsole($"[QUIC] Connection from {e.RemoteEndPoint} (SNI: {e.SniHostName})");
+            Logger.LogInformation("[QUIC] Connection from {RemoteEndPoint} (SNI: {SniHostName})",
+                e.RemoteEndPoint, e.SniHostName);
             return Task.CompletedTask;
         }
 #pragma warning restore TWP001
@@ -386,9 +371,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             e.GetState().AppendPipeline(nameof(MultipartRequestPartSent));
 
-            var session = (SessionEventArgs)sender;
-            WriteToConsole("Multipart form data headers:");
-            foreach (var header in e.Headers) WriteToConsole(header.ToString());
+            Logger.LogInformation("Multipart form data headers:");
+            foreach (var header in e.Headers)
+                Logger.LogInformation("{Header}", header.ToString());
         }
 
         private static Task OnResponse(object sender, SessionEventArgs e)
@@ -402,7 +387,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private Task OnResponseBodyWrite(object sender, BeforeBodyWriteEventArgs e)
         {
             _ = sender; // Required by the event-handler signature.
-            WriteToConsole($"Response body chunk: {e.BodyBytes.Length} bytes (last: {e.IsLastChunk})");
+            Logger.LogInformation("Response body chunk: {Length} bytes (last: {IsLastChunk})",
+                e.BodyBytes.Length, e.IsLastChunk);
             return Task.CompletedTask;
         }
 
@@ -423,32 +409,32 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
             // Compact traffic tape: METHOD host/path → status  H2↔H2  187ms
             string line;
-            ConsoleColor color;
+            LogLevel level;
             switch (tapeKind)
             {
                 case IncompleteSessionKind.ClientCancelled:
                     line =
                         $"{request.Method,-7} {FormatUrlForConsole(request.Url)} ⇢ cancelled by client  {elapsedMs}ms";
-                    color = ConsoleColor.DarkGray;
+                    level = LogLevel.Information;
                     break;
                 case IncompleteSessionKind.ConnectFailed:
                     line =
                         $"{request.Method,-7} {FormatUrlForConsole(request.Url)} ⇢ connect failed  {FormatHttpProtocolShort(request.HttpVersion)}↔?  {elapsedMs}ms";
-                    color = ConsoleColor.DarkYellow;
+                    level = LogLevel.Warning;
                     break;
                 default:
                     line =
                         $"{request.Method,-7} {FormatUrlForConsole(request.Url)} → {statusCode,3}  {FormatHttpProtocolShort(request.HttpVersion)}↔{FormatHttpProtocolShort(response?.HttpVersion)}  {elapsedMs}ms";
-                    color = ColorForStatusCode(statusCode);
+                    level = LevelForStatusCode(statusCode);
                     break;
             }
 
-            WriteToConsole(line, color);
+            Logger.Log(level, "{Line}", line);
 
 #if DEBUG
             try
             {
-                WriteToConsole($"Pipelineinfo: {state.GetPipelineInfo()}", ConsoleColor.Yellow);
+                LogLines(LogLevel.Debug, "Pipelineinfo: " + state.GetPipelineInfo());
             }
             catch
             {
@@ -531,13 +517,13 @@ namespace Titanium.Web.Proxy.Examples.Basic
             return current;
         }
 
-        private static ConsoleColor ColorForStatusCode(int statusCode)
+        private static LogLevel LevelForStatusCode(int statusCode)
         {
             if (statusCode >= 500 || statusCode == 0)
-                return ConsoleColor.Red;
+                return LogLevel.Error;
             if (statusCode >= 400)
-                return ConsoleColor.Yellow;
-            return ConsoleColor.Cyan;
+                return LogLevel.Warning;
+            return LogLevel.Information;
         }
 
         /// <summary>
@@ -616,36 +602,25 @@ namespace Titanium.Web.Proxy.Examples.Basic
             return "H" + version.Major + "." + version.Minor;
         }
 
-        private void WriteToConsole(string message, ConsoleColor? consoleColor = null)
-        {
-            var stamped = DateTime.Now.ToString("yyyy-MM-dd h:mm:ss.fff tt") + "  " + message;
-            consoleMessageQueue.Enqueue(new Tuple<ConsoleColor?, string>(consoleColor, stamped));
-        }
+        internal ILogger Logger => proxyServer.Logger;
 
-        private async Task ListenToConsole()
+        /// <summary>
+        ///     Logs each line separately so the async sink stamps every line. Never calls Console I/O
+        ///     on the calling thread — <see cref="ILogger.Log" /> is a non-blocking channel write.
+        /// </summary>
+        private void LogLines(LogLevel level, string message)
         {
-            while (!CancellationToken.IsCancellationRequested)
+            var logger = Logger;
+            if (!logger.IsEnabled(level) || string.IsNullOrEmpty(message))
+                return;
+
+            foreach (var line in message.Split('\n'))
             {
-                while (consoleMessageQueue.TryDequeue(out var item))
-                {
-                    var consoleColor = item.Item1;
-                    var message = item.Item2;
+                var trimmed = line.TrimEnd('\r');
+                if (trimmed.Length == 0)
+                    continue;
 
-                    if (consoleColor.HasValue)
-                    {
-                        var existing = Console.ForegroundColor;
-                        Console.ForegroundColor = consoleColor.Value;
-                        Console.WriteLine(message);
-                        Console.ForegroundColor = existing;
-                    }
-                    else
-                    {
-                        Console.WriteLine(message);
-                    }
-                }
-
-                //reduce CPU usage
-                await Task.Delay(50, cancellationTokenSource.Token);
+                logger.Log(level, "{Line}", trimmed);
             }
         }
     }
