@@ -445,7 +445,12 @@ public partial class ProxyServer
 
                 args.HttpClient.Request.Locked = true;
 
-                await Http3.Http3OriginBridge.ForwardAsync(args, this, h3Route, logger, cancellationToken);
+                await Http3.Http3OriginBridge.ForwardAsync(args, this, h3Route, logger, cancellationToken,
+                    onInterimResponse: async (interim, ct) =>
+                    {
+                        interim.HttpVersion = args.HttpClient.Request.HttpVersion;
+                        await args.ClientStream.WriteResponseAsync(interim, ct);
+                    });
 
                 // Http3OriginBridge only fetches/buffers the origin response into args.HttpClient.Response -
                 // unlike the TCP path below, it never touches args.ClientStream. Mirror the H2->H3 bridge's
@@ -512,6 +517,16 @@ public partial class ProxyServer
                     h3Response.Locked = true;
                     await h3ClientStream.WriteResponseAsync(h3Response, cancellationToken);
                     args.IsClientResponseCommitted = true;
+
+                    if (h3Response.StreamBodyWriter != null && !h3Response.IsBodySent)
+                    {
+                        var bodyWriter = new BodyStreamWriter(h3ClientStream, h3Response.IsChunked);
+                        await h3Response.StreamBodyWriter(bodyWriter, cancellationToken);
+                        await bodyWriter.CompleteAsync(
+                            h3Response.HasTrailingHeaders ? h3Response.TrailingHeaders : null, cancellationToken);
+                        h3Response.IsBodySent = true;
+                    }
+
                     h3Response.IsBodyReceived = true;
                 }
 

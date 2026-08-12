@@ -2747,6 +2747,42 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         /// <summary>
+        ///     Relays a 1xx interim response (e.g. 103 Early Hints) from an external bridge (H2→H3) to the
+        ///     client as a HEADERS frame without END_STREAM. Mirrors the native H2 interim path in
+        ///     <c>ProcessCompleteHeaderBlockAsync</c>. Flushing after the write is required so Navigation
+        ///     Timing <c>responseStart</c> can move before the final response arrives.
+        /// </summary>
+        internal static async Task EmitInterimResponseAsync(SessionEventArgs args, int streamId,
+            Http2ConnectionState connectionState, Stream clientStream, Response interim,
+            CancellationToken cancellationToken)
+        {
+            await connectionState.ServerSettingsRelayed.Task.WaitAsync(cancellationToken);
+
+            interim.Headers.RemoveHeader(KnownHeaders.Connection);
+            interim.Headers.RemoveHeader("Keep-Alive");
+            interim.Headers.RemoveHeader(KnownHeaders.ProxyConnection);
+            interim.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+            interim.Headers.RemoveHeader(KnownHeaders.Upgrade);
+
+            var frameHeader = new Http2FrameHeader { StreamId = streamId };
+            var frameHeaderBuffer = new byte[9];
+            var clientWriteLock = connectionState.ClientWriteLock;
+
+            await clientWriteLock.WaitAsync(cancellationToken);
+            try
+            {
+                // SendHeader lowercases field names for the HPACK encoder path as needed.
+                await SendHeader(connectionState.ClientSettings, frameHeader, frameHeaderBuffer, interim,
+                    endStream: false, clientStream, pushPromise: false);
+                await clientStream.FlushAsync(cancellationToken);
+            }
+            finally
+            {
+                clientWriteLock.Release();
+            }
+        }
+
+        /// <summary>
         ///     Emits a proxy-generated (synthetic) response to the client on the given stream without relaying
         ///     the corresponding server response - either because the request never reached the server (a
         ///     BeforeRequest-time <c>Ok</c>/<c>GenericResponse</c>/<c>Redirect</c>/<c>Respond</c>/

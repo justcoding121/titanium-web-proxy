@@ -146,6 +146,8 @@ internal static class Http3OriginBridge
         upstreamProxy ??= server.UpStreamHttpsProxy;
 
         QuicServerConnection? quicConn = null;
+        // When true, StreamBodyWriter owns originStream + quicConn release (do not dispose/release here).
+        var streamHandedOff = false;
         // A pooled connection can go stale between requests: MsQuic's own (server-negotiated) idle
         // timeout is often shorter than QuicConnectionPool's bookkeeping window, and a silently
         // dead connection isn't reflected by QuicServerConnection.IsClosed until it's actually used.
@@ -163,6 +165,7 @@ internal static class Http3OriginBridge
         {
         while (true)
         {
+        QuicStream? originStream = null;
         try
         {
             // Pass the session so ServerCertificateValidationCallback is honoured. The factory's
@@ -182,7 +185,7 @@ internal static class Http3OriginBridge
             // SetConnection on TCP fallback overwrites it if QUIC fails later in the loop.
             sessionArgs.HttpClient.BindUpstreamConnection(quicConn);
 
-            await using var originStream = await quicConn.OpenRequestStreamAsync(cancellationToken);
+            originStream = await quicConn.OpenRequestStreamAsync(cancellationToken);
 
             // GetRequestBody() (called unconditionally by BridgeOnBeforeRequestForH3 as part of its
             // H2 frame-reading handshake, regardless of whether any user handler wants the body)
@@ -204,6 +207,10 @@ internal static class Http3OriginBridge
 
             if (body is { Length: > 0 })
                 await Http3Frame.WriteAsync(originStream, Http3FrameType.Data, body, cancellationToken);
+
+            // QuicStream WriteAsync may buffer; without Flush the peer can see the request hundreds of
+            // ms late (observed ~450ms Cloudflare HTML TTFB with inFlight=1 after request "sent").
+            await originStream.FlushAsync(cancellationToken);
             originStream.CompleteWrites();
             requestSent = true; // request fully on the wire — no longer safe to silently retry
             sessionArgs.Timing?.MarkRequestSent();
@@ -259,76 +266,9 @@ internal static class Http3OriginBridge
             sessionArgs.Timing?.MarkResponseHeadersReceived();
 
             var response = BuildResponseFromHeaders(decodedResponseHeaders, HttpHeader.Version30);
+            response.RequestMethod = request.Method;
 
-            var maxPayload = sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes;
-            var bodyStream = new System.IO.MemoryStream();
-            // maxPayload above only bounds a single DATA frame per read; an origin sending many small
-            // frames could otherwise accumulate an unbounded response body in memory. Wrap the buffering
-            // write in a cumulative bounded stream — per the hardening plan, a response-side breach must
-            // close the connection rather than deliver a truncated body as if it were complete, so the
-            // resulting size-limit exception is deliberately left to propagate to the catch below, which
-            // disposes (never pools) the origin connection.
-            var boundedBodyStream = new BoundedWriteStream(bodyStream, maxPayload, server.PolicyModes[PolicyFamily.BodyBudget]);
-            try
-            {
-                if (!server.HasOnResponseBodyWriteSubscribers)
-                {
-                    while (true)
-                    {
-                        var frame = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload, cancellationToken);
-                        if (frame == null) break;
-                        if (frame.Type == Http3FrameType.Headers)
-                            break; // trailers — ignored for now
-                        if (frame.Type == Http3FrameType.Data)
-                            await boundedBodyStream.WriteAsync(frame.Payload, cancellationToken);
-                        // else: ignore GREASE / unknown frames per RFC 9114 §9
-                    }
-                }
-                else
-                {
-                    var current = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload, cancellationToken);
-                    while (current != null)
-                    {
-                        var next = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload, cancellationToken);
-                        bool isLast = next == null || next.Type == Http3FrameType.Headers;
-
-                        if (current.Type == Http3FrameType.Data)
-                        {
-                            var hookArgs = new BeforeBodyWriteEventArgs(
-                                sessionArgs, current.Payload.ToArray(), isChunked: true, isLastChunk: isLast);
-                            await server.OnBeforeResponseBodyWrite(hookArgs);
-
-                            if (hookArgs.BodyBytes?.Length > 0)
-                                await boundedBodyStream.WriteAsync(hookArgs.BodyBytes, cancellationToken);
-
-                            if (hookArgs.IsLastChunk && !isLast)
-                            {
-                                originStream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
-                                break;
-                            }
-                        }
-                        current = next;
-                    }
-                }
-
-                if (bodyStream.Length > 0)
-                {
-                    var raw = bodyStream.ToArray();
-                    // EmitSyntheticResponseAsync → CompressBodyAndUpdateContentLength assumes Body is
-                    // uncompressed and will re-apply Content-Encoding. Wire bytes from H3 are already
-                    // compressed — decompress here so the client does not receive double-compressed data.
-                    response.Body = await DecompressIfEncodedAsync(raw, response.ContentEncoding, cancellationToken);
-                }
-            }
-            finally
-            {
-                await bodyStream.DisposeAsync();
-            }
-
-            response.IsBodyRead = true;
-            sessionArgs.HttpClient.Response = response;
-
-            // Cache Alt-Svc from H3 response for future requests (keyed by origin identity).
+            // Cache Alt-Svc from response headers immediately (no need to wait for the body).
             var altSvc = response.Headers.GetHeaderValueOrNull("Alt-Svc");
             if (!string.IsNullOrEmpty(altSvc))
             {
@@ -336,9 +276,6 @@ internal static class Http3OriginBridge
                 if (entries.Count > 0 && entries[0].MaxAgeSeconds > 0)
                 {
                     var originPort = request.RequestUri?.Port ?? port;
-                    // Clamp to the same ceiling as Http3DiscoveryHandler's Alt-Svc handling, so an
-                    // origin cannot pin a stale H3 capability entry (e.g. after it drops H3 support)
-                    // far beyond the cache's own default lifetime by advertising an inflated ma= value.
                     var ttlSeconds = Math.Min(entries[0].MaxAgeSeconds, Http3OriginCapabilityCache.DefaultTtl.TotalSeconds * 2);
                     var ttl = TimeSpan.FromSeconds(ttlSeconds);
                     server.Http3OriginCapabilityCache.Set($"{sniHost}:{originPort}",
@@ -346,7 +283,89 @@ internal static class Http3OriginBridge
                 }
             }
 
-            break; // success — exit the retry loop
+            var maxPayload = sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes;
+
+            // Stream the body to the client as DATA frames arrive. Buffering the entire origin body
+            // before EmitSyntheticResponseAsync / WriteResponseAsync delayed TTFB to roughly the full
+            // download time (measured ~500ms+ on cloudflare.com HTML vs ~40ms over H2 streaming).
+            // Pass wire bytes through with Content-Encoding intact; StreamBodyWriter paths do not
+            // re-compress via CompressBodyAndUpdateContentLength.
+            if (!response.HasBody)
+            {
+                response.IsBodyRead = true;
+                sessionArgs.HttpClient.Response = response;
+                await originStream.DisposeAsync();
+                originStream = null;
+                break;
+            }
+
+            // H1 clients need chunked framing when Content-Length is absent; H2/H3 strip TE later.
+            if (response.ContentLength < 0 && !response.IsChunked)
+                response.Headers.AddHeader(KnownHeaders.TransferEncoding, "chunked");
+
+            var streamToClient = originStream;
+            var connToRelease = quicConn;
+            originStream = null;
+            quicConn = null;
+            streamHandedOff = true;
+
+            var hasBodyWriteHook = server.HasOnResponseBodyWriteSubscribers;
+
+            response.StreamBodyWriter = async (clientBodyStream, ct) =>
+            {
+                try
+                {
+                    if (!hasBodyWriteHook)
+                    {
+                        while (true)
+                        {
+                            var frame = await Http3Frame.ReadAsync(streamToClient!, maxPayloadBytes: maxPayload, ct);
+                            if (frame == null) break;
+                            if (frame.Type == Http3FrameType.Headers)
+                                break; // trailers — ignored for now
+                            if (frame.Type != Http3FrameType.Data || frame.Payload.Length == 0)
+                                continue;
+
+                            await clientBodyStream.WriteAsync(frame.Payload, ct);
+                        }
+                    }
+                    else
+                    {
+                        var current = await Http3Frame.ReadAsync(streamToClient!, maxPayloadBytes: maxPayload, ct);
+                        while (current != null)
+                        {
+                            var next = await Http3Frame.ReadAsync(streamToClient!, maxPayloadBytes: maxPayload, ct);
+                            var isLast = next == null || next.Type == Http3FrameType.Headers;
+
+                            if (current.Type == Http3FrameType.Data)
+                            {
+                                var hookArgs = new BeforeBodyWriteEventArgs(
+                                    sessionArgs, current.Payload.ToArray(), isChunked: true, isLastChunk: isLast);
+                                await server.OnBeforeResponseBodyWrite(hookArgs);
+
+                                if (hookArgs.BodyBytes is { Length: > 0 })
+                                    await clientBodyStream.WriteAsync(hookArgs.BodyBytes, ct);
+
+                                if (hookArgs.IsLastChunk && !isLast)
+                                {
+                                    streamToClient!.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
+                                    break;
+                                }
+                            }
+
+                            current = next;
+                        }
+                    }
+                }
+                finally
+                {
+                    try { await streamToClient!.DisposeAsync(); } catch { /* best effort */ }
+                    try { await QuicConnectionPool.ReleaseAsync(connToRelease!); } catch { /* best effort */ }
+                }
+            };
+
+            sessionArgs.HttpClient.Response = response;
+            break; // success — exit the retry loop; body drains when the client emit path runs StreamBodyWriter
         }
         catch (QuicProxyNotSupportedException ex)
         {
@@ -382,6 +401,12 @@ internal static class Http3OriginBridge
         {
             if (logger.IsEnabled(LogLevel.Debug))
                 logger.LogDebug(ex, "H3→H3 origin forwarding failed for {Host}:{Port}", sniHost, port);
+
+            if (originStream != null)
+            {
+                try { await originStream.DisposeAsync(); } catch { /* best effort */ }
+                originStream = null;
+            }
 
             if (quicConn != null)
             {
@@ -447,11 +472,9 @@ internal static class Http3OriginBridge
         }
         finally
         {
-            // The connection stays shared for other requests; this only gives up this request's
-            // stream. In a finally because the early returns above and an OperationCanceledException
-            // escaping the loop would otherwise leave the stream registered forever, pinning the
-            // connection as permanently busy and blocking idle eviction.
-            if (quicConn != null)
+            // When StreamBodyWriter owns the stream/connection, it releases on completion.
+            // Otherwise give up this request's stream so idle eviction is not blocked forever.
+            if (!streamHandedOff && quicConn != null)
                 await QuicConnectionPool.ReleaseAsync(quicConn);
         }
     }

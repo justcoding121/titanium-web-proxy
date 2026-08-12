@@ -96,6 +96,11 @@ internal sealed class QuicConnectionFactory : IQuicConnectionFactory
             _proxyServer, connection, sniHost, port,
             upStreamProxy, upStreamEndPoint, cacheKey);
 
+        // RFC 9114: open client control stream + SETTINGS and drain peer uni streams before any
+        // request. Without this, Cloudflare (and others) can stall response HEADERS for hundreds of
+        // ms under connection-level flow control when SETTINGS/QPACK bytes are never read.
+        await serverConnection.StartHttp3ClientSessionAsync(cancellationToken);
+
         if (_proxyServer.EnableRequestTimingCapture)
         {
             var timing = new UpstreamConnectionTiming(connectStartedAt);
