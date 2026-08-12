@@ -124,19 +124,19 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             explicitEndPoint.BeforeTunnelConnectResponse += ProxyServer_BeforeTunnelConnectResponse;
             proxyServer.ClientConnectionCountChanged += delegate
             {
-                Dispatcher.Invoke(() => { ClientConnectionCount = proxyServer.ClientConnectionCount; });
+                Dispatcher.BeginInvoke(() => { ClientConnectionCount = proxyServer.ClientConnectionCount; });
             };
             proxyServer.ServerConnectionCountChanged += delegate
             {
-                Dispatcher.Invoke(() => { ServerConnectionCount = proxyServer.ServerConnectionCount; });
+                Dispatcher.BeginInvoke(() => { ServerConnectionCount = proxyServer.ServerConnectionCount; });
             };
             proxyServer.Http3ClientConnectionCountChanged += delegate
             {
-                Dispatcher.Invoke(() => { Http3ClientConnectionCount = proxyServer.Http3ClientConnectionCount; });
+                Dispatcher.BeginInvoke(() => { Http3ClientConnectionCount = proxyServer.Http3ClientConnectionCount; });
             };
             proxyServer.Http3ServerConnectionCountChanged += delegate
             {
-                Dispatcher.Invoke(() => { Http3ServerConnectionCount = proxyServer.Http3ServerConnectionCount; });
+                Dispatcher.BeginInvoke(() => { Http3ServerConnectionCount = proxyServer.Http3ServerConnectionCount; });
             };
             proxyServer.Start();
 
