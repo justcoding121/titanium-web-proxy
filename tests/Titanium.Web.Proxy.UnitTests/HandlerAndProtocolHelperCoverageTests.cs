@@ -331,28 +331,6 @@ public class HandlerAndProtocolHelperCoverageTests
             or "proxy-authenticate"));
     }
 
-    [TestMethod]
-    public async Task DecompressIfEncodedAsync_DeflateAndEmptyPayload()
-    {
-        var raw = Encoding.UTF8.GetBytes("deflate-me");
-        byte[] deflated;
-        using (var ms = new MemoryStream())
-        {
-            await using (var compressor = new DeflateStream(ms, CompressionLevel.SmallestSize, leaveOpen: true))
-                await compressor.WriteAsync(raw);
-            deflated = ms.ToArray();
-        }
-
-        var decoded = await (Task<byte[]>)BridgeMethod("DecompressIfEncodedAsync")
-            .Invoke(null, [deflated, "deflate", CancellationToken.None])!;
-        CollectionAssert.AreEqual(raw, decoded);
-
-        var empty = Array.Empty<byte>();
-        var emptyResult = await (Task<byte[]>)BridgeMethod("DecompressIfEncodedAsync")
-            .Invoke(null, [empty, "gzip", CancellationToken.None])!;
-        Assert.AreSame(empty, emptyResult);
-    }
-
     // ─────────────────────────────────────────────────────────────────────────
     // UdpSvcbDnsResolver wire helpers / backoff reset
     // ─────────────────────────────────────────────────────────────────────────

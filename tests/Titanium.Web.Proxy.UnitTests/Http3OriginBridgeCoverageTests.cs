@@ -1,12 +1,9 @@
 #pragma warning disable CA1416
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http;
@@ -121,31 +118,5 @@ public class Http3OriginBridgeCoverageTests
         Assert.AreEqual(expected, actual);
     }
 
-    [TestMethod]
-    public async Task DecompressIfEncodedAsync_HandlesIdentityGzipUnsupportedAndCorruptInput()
-    {
-        var raw = Encoding.UTF8.GetBytes("compressed payload");
-        byte[] gzip;
-        using (var target = new MemoryStream())
-        {
-            await using (var compressor = new GZipStream(target, CompressionMode.Compress, leaveOpen: true))
-                await compressor.WriteAsync(raw);
-            gzip = target.ToArray();
-        }
-
-        var identity = await Decompress(raw, null);
-        var decoded = await Decompress(gzip, "gzip");
-        var unsupported = await Decompress(raw, "made-up");
-        var corrupt = await Decompress(raw, "gzip");
-
-        Assert.AreSame(raw, identity);
-        CollectionAssert.AreEqual(raw, decoded);
-        Assert.AreSame(raw, unsupported);
-        Assert.AreSame(raw, corrupt);
-    }
-
-    private static Task<byte[]> Decompress(byte[] raw, string? encoding) =>
-        (Task<byte[]>)BridgeMethod("DecompressIfEncodedAsync")
-            .Invoke(null, [raw, encoding, CancellationToken.None])!;
 }
 #pragma warning restore CA1416

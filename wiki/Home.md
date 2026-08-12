@@ -289,8 +289,9 @@ proxy.Start();
 
 All existing `BeforeRequest`/`BeforeResponse`/`AfterResponse` event handlers work unchanged for HTTP/3
 streams. The proxy auto-discovers HTTP/3 capability via `Alt-Svc` (and optional background HTTPS/SVCB
-DNS) and uses HTTP/3 for subsequent Auto-mode requests once that origin is warm — a cache hit alone
-only starts background QUIC warm-up.
+DNS) and uses HTTP/3 on **new** Auto-mode connections once that origin is warm — a cache hit alone
+only starts background QUIC warm-up. An already-open H2↔H2 MITM session keeps using H2 for its
+streams rather than upgrading them mid-connection.
 
 ## Tunnel (CONNECT) interception
 

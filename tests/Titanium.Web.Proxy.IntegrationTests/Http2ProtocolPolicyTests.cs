@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
@@ -152,6 +153,17 @@ public class Http2ProtocolPolicyTests
         proxy.Logging.LoggerFactory = exceptionCapture;
         proxy.ApplyLoggingConfiguration();
 
+        Version? afterResponseRequestVersion = null;
+        Version? afterResponseResponseVersion = null;
+        var afterResponseSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        proxy.AfterResponse += (_, e) =>
+        {
+            afterResponseRequestVersion = e.HttpClient.Request.HttpVersion;
+            afterResponseResponseVersion = e.HttpClient.Response?.HttpVersion;
+            afterResponseSeen.TrySetResult();
+            return Task.CompletedTask;
+        };
+
         var endpoint = (Models.ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
         endpoint.BeforeTunnelConnectRequest += (_, e) =>
         {
@@ -189,6 +201,22 @@ public class Http2ProtocolPolicyTests
 
         Assert.AreEqual("h2-to-h11-bridge-ok", Encoding.ASCII.GetString(body.ToArray()));
         Assert.IsNull(exceptionCapture.LastException, $"No exception should be raised on a successful bridge: {exceptionCapture.LastException}");
+
+        try
+        {
+            await afterResponseSeen.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        catch (TimeoutException)
+        {
+            Assert.Fail("AfterResponse should run for the bridged stream.");
+        }
+
+        // Bridge mutates Request.HttpVersion to 1.1 for the origin wire; it must restore the client
+        // version before AfterResponse so observers/tape report H2↔H1.1 (not H1.1↔H1.1).
+        Assert.AreEqual(HttpHeader.Version20, afterResponseRequestVersion,
+            "AfterResponse must still see the client HTTP/2 version after H2→H1.1 translation.");
+        Assert.AreEqual(HttpHeader.Version11, afterResponseResponseVersion,
+            "AfterResponse must report the origin HTTP/1.1 response version on the H2→H1.1 bridge.");
     }
 
     [TestMethod]

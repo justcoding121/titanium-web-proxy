@@ -238,6 +238,11 @@ public partial class ProxyServer
         TcpServerConnection? connection = null;
         var closeConnection = true;
 
+        // Client-facing version (almost always HTTP/2). Origin wire needs HTTP/1.1 below; restore
+        // afterward so AfterResponse / traffic tape report H2↔H1.1 instead of H1.1↔H1.1. Same pattern
+        // as Http3OriginBridge.ForwardOverTcpAsync.
+        var clientHttpVersion = request.HttpVersion;
+
         try
         {
             // Translate the h2 request onto the wire shape an HTTP/1.1 origin expects: h2 clients send
@@ -429,6 +434,10 @@ public partial class ProxyServer
         }
         finally
         {
+            // Wire translation is local to the origin send/receive above. Restore before AfterResponse
+            // so session observers / traffic tape still see the client protocol (H2↔H1.1).
+            request.HttpVersion = clientHttpVersion;
+
             if (connection != null) await TcpConnectionFactory.Release(connection, closeConnection);
 
             // Finalize (AfterResponse + Dispose) this stream immediately rather than deferring to connection

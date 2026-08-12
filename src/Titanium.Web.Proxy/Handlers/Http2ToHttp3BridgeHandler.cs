@@ -28,9 +28,9 @@ namespace Titanium.Web.Proxy;
 ///         forwards to the QUIC origin and emits the response back as H2 frames.
 ///     </para>
 ///     <para>
-///         The <em>warm path</em> (Alt-Svc cache populated from an earlier H2 response) passes
-///         <see cref="BridgeOnBeforeRequestForH3" /> as the <c>onBeforeRequest</c> delegate of an
-///         existing H2-to-H2 relay so individual streams can be intercepted mid-connection.
+///         The <em>warm path</em> still installs <see cref="BridgeOnBeforeRequestForH3" /> on
+///         H2↔H2 relays (for Via / BeforeRequest consistency), but mid-connection Alt-Svc upgrades
+///         are intentionally not taken — see the guard in that method.
 ///     </para>
 /// </summary>
 public partial class ProxyServer
@@ -76,18 +76,19 @@ public partial class ProxyServer
     }
 
     /// <summary>
-    ///     The per-stream <c>onBeforeRequest</c> delegate for the H2→H3 bridge (both cold and warm
-    ///     paths).  Runs user <c>BeforeRequest</c> handlers, performs a synchronous cache-only H3 route
-    ///     check, buffers the request body, registers the background round-trip task, and marks the
-    ///     stream as <see cref="Http2StreamState.IsExternalBridge"/> so
-    ///     <see cref="Http2Helper"/> suppresses native H2 origin forwarding.
+    ///     The per-stream <c>onBeforeRequest</c> delegate for the H2→H3 bridge. On the cold path it
+    ///     runs user <c>BeforeRequest</c> handlers, performs a synchronous cache-only H3 route check,
+    ///     buffers the request body, registers the background round-trip task, and marks the stream
+    ///     as <see cref="Http2StreamState.IsExternalBridge"/> so <see cref="Http2Helper"/> suppresses
+    ///     native H2 origin forwarding. On the warm path it only runs <c>BeforeRequest</c> and then
+    ///     returns so the attached H2 origin relay continues.
     /// </summary>
     /// <param name="coldH3Bridge">
     ///     <see langword="true"/> when this connection has no real H2 origin (NullOriginStream cold
     ///     path). On a cache miss / post-eviction, the bridge must TCP-fallback itself — forwarding
     ///     HEADERS into <see cref="NullOriginStream"/> would silently discard them and hang the
-    ///     client stream. Warm-path callers pass <see langword="false"/> so a miss falls through to
-    ///     the native H2 origin relay.
+    ///     client stream. Warm-path callers pass <see langword="false"/>; mid-connection H3
+    ///     upgrades are not taken on that path (native H2 origin relay only).
     /// </param>
     private async Task BridgeOnBeforeRequestForH3(
         SessionEventArgs sessionArgs,
@@ -110,6 +111,14 @@ public partial class ProxyServer
             return;
         }
 
+        // Warm path (attached H2 origin): never upgrade individual streams to H3 mid-connection.
+        // Mixing native H2↔H2 relay with EmitSyntheticResponseAsync on the same client H2 session
+        // has been observed to trigger Chrome ERR_HTTP2_PROTOCOL_ERROR (blank YouTube after Alt-Svc
+        // / QUIC warmup). Keep serving this multiplexed connection over H2↔H2; cold NullOriginStream
+        // bridges remain the supported H2→H3 path for connections that commit to H3 at CONNECT time.
+        if (!coldH3Bridge)
+            return;
+
         // Synchronous (cache-only) H3 route resolution — DNS I/O must never block the H2 frame reader.
         var reqHost = sessionArgs.HttpClient.Request.RequestUri?.Host ?? remoteHostName;
         var reqPort = sessionArgs.HttpClient.Request.RequestUri?.Port ?? remotePort;
@@ -118,12 +127,6 @@ public partial class ProxyServer
 
         if (!h3Route.UseH3)
         {
-            if (!coldH3Bridge)
-            {
-                // Warm path: a real H2 origin is attached — let Http2Helper forward HEADERS there.
-                return;
-            }
-
             // Cold path: CONNECT committed to H2→H3 with NullOriginStream. After QUIC failure evicts
             // the capability cache, later multiplexed streams must still be answered (via TCP).
             h3Route = Http3OriginRoute.None;
