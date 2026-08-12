@@ -89,7 +89,11 @@ internal sealed class ProxySettings
     /// </summary>
     public int ThreadPoolWorkerThreads { get; set; } = -1;
 
-    public bool DecryptSsl { get; set; }
+    /// <summary>
+    ///     MITM HTTPS by default, matching the Basic/WPF examples.
+    ///     <c>KnownMitmExclusions</c> still force passthrough for pinning/identity hosts.
+    /// </summary>
+    public bool DecryptSsl { get; set; } = true;
 
     /// <summary>
     ///     When true, trusts the MITM root in Current User Personal + Trusted Root.
