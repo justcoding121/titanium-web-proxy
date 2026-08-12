@@ -25,6 +25,7 @@
                   ScrollViewer.HorizontalScrollBarVisibility="Auto">
             <ListView.View>
                 <GridView>
+                    <GridViewColumn Header="Time" Width="180" DisplayMemberBinding="{Binding Timestamp}" />
                     <GridViewColumn Header="Result" Width="55" DisplayMemberBinding="{Binding StatusCode}" />
                     <GridViewColumn Header="Client↔Server" Width="130" DisplayMemberBinding="{Binding Protocol}" />
                     <GridViewColumn Header="Host" Width="140" DisplayMemberBinding="{Binding Host}" />

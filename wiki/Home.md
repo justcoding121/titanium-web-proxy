@@ -348,6 +348,27 @@ proxyServer.ForwardToUpstreamGateway = true;
 
 ## Performance and pooling
 
+Shipped defaults follow `ProxyProfile.Balanced`: networking knobs that are safe for every client are
+on; certificate and experimental-protocol choices that trade compatibility or persistence stay
+opt-in. Examples match those library defaults.
+
+| Knob | Balanced default | Speed opt-in | Notes |
+|---|---|---|---|
+| `EnableConnectionPool` | `true` | — | Live pool switch; prefer this over unused `ProxyResourceLimits.ConnectionPoolingEnabled`. |
+| `MaxCachedConnections` | `4` | raise for high fan-out per origin | Same: live knob is on `ProxyServer`, not `ResourceLimits.MaxCachedConnectionsPerHost`. |
+| `EnableTcpServerConnectionPrefetch` | `true` | — | Overlaps origin connect with client work. |
+| `NoDelay` | `true` | — | Disables Nagle. |
+| `EnableTcpKeepAlive` | `true` | — | NAT-friendly for long tunnels. |
+| `TcpTimeWaitSeconds` | `0` | — | Abortive close; avoids TIME_WAIT churn. |
+| `EnableHttp2` | `true` | — | Used when peers negotiate ALPN. |
+| `CheckCertificateRevocation` | off | — | Revocation checks add latency. |
+| `BufferPool` / `BufferSize` | `DefaultBufferPool` / 8 KiB | larger buffers | Higher memory per concurrent stream. |
+| `LeafCertificateKeyAlgorithm` | `Rsa2048` | `EcdsaP256` | Biggest first-visit win for modern browsers; see below. |
+| `LeafRsaKeyPairBufferSize` | `8` | raise under RSA stampede | Unused when leaves are ECDSA. |
+| `SaveFakeCertificates` | `false` | `true` | Disk cache across restarts; privacy/disk tradeoff. |
+| `EnableHttp3` / QPACK dynamic / RFC 8441 | off | opt-in | Experimental / feature flags. |
+| `CertificateEngine` | `BouncyCastle` | `BouncyCastleFast` | Fast shares one leaf key across hosts — weaker isolation. |
+
 - `EnableConnectionPool` — reuse idle upstream TCP connections (enabled by default). Only connections that are safe to reuse under HTTP (persistent, body fully received, not authenticated to a specific identity) are pooled; set to `false` to force a fresh connection per client.
 - `ConnectionTimeOutSeconds`, `TcpTimeWaitSeconds`, `ReuseSocket` — tune connection lifetime.
 - `BufferPool` / `BufferSize` — reuse I/O buffers.

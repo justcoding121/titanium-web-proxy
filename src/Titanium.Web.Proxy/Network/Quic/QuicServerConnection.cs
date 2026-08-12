@@ -6,6 +6,7 @@ using System.Net.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Diagnostics;
+using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Network.Quic;
@@ -22,6 +23,7 @@ internal sealed class QuicServerConnection : IAsyncDisposable
     private int _disposalScheduled;
     private int _firstUseClaimed;
     private int _inFlightStreams;
+    private Http3OriginClientSession? _http3ClientSession;
 
     internal QuicServerConnection(
         ProxyServer proxyServer,
@@ -150,6 +152,22 @@ internal sealed class QuicServerConnection : IAsyncDisposable
     internal int InFlightStreams => Volatile.Read(ref _inFlightStreams);
 
     /// <summary>
+    ///     HTTP/3 client session (control SETTINGS + inbound uni drain). Null for detached test doubles.
+    /// </summary>
+    internal Http3OriginClientSession? Http3ClientSession => _http3ClientSession;
+
+    /// <summary>
+    ///     Opens the client control stream (SETTINGS) and starts draining peer unidirectional streams.
+    ///     Must complete before the first request stream is opened.
+    /// </summary>
+    internal async Task StartHttp3ClientSessionAsync(CancellationToken cancellationToken)
+    {
+        if (Connection is null || _http3ClientSession != null) return;
+        _http3ClientSession = new Http3OriginClientSession(Connection, ProxyServer);
+        await _http3ClientSession.StartAsync(cancellationToken);
+    }
+
+    /// <summary>
     ///     Registers a request's intent to open a stream on this connection, returning
     ///     <see langword="false" /> if the connection has been retired or disposed and the caller must
     ///     obtain a different one. Every successful call must be paired with <see cref="ReleaseStream" />.
@@ -196,6 +214,11 @@ internal sealed class QuicServerConnection : IAsyncDisposable
         _disposed = true;
         ProxyServer.UpdateServerConnectionCount(false);
         ProxyServer.UpdateHttp3ServerConnectionCount(false);
+        if (_http3ClientSession != null)
+        {
+            try { await _http3ClientSession.DisposeAsync(); } catch { /* best effort */ }
+            _http3ClientSession = null;
+        }
         if (Connection is null) return;
         try
         {

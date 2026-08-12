@@ -14,6 +14,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Examples.Shared;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Options;
@@ -45,10 +46,13 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         private int lastSessionNumber;
         private SessionListItem selectedSession;
         private bool proxyShutdownDone;
+        private readonly bool trustRootCertificate;
+        private readonly bool trustRootCertificateMachine;
 
         public MainWindow()
         {
-            proxyServer = new ProxyServer();
+            // false,false: do not auto-trust on Start/SetAsSystemProxy — trust is opt-in via TWP_TRUST_ROOT.
+            proxyServer = new ProxyServer(false, false, false);
 
             // Session traffic is shown in the UI. Library diagnostics go to a rolling file (not the
             // console — WinExe usually has none). Debug builds capture full protocol diagnostics.
@@ -67,43 +71,48 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             Directory.CreateDirectory(certificateDirectory);
             proxyServer.CertificateManager.PfxFilePath = Path.Combine(certificateDirectory, "rootCert.pfx");
 
-            // Cache generated leaf certificates on disk (library default is off) so repeat runs against
-            // the same hosts reuse them instead of regenerating a key pair per host on every launch.
-            // Connection pooling and origin-connection prefetch are already on by library default.
-            proxyServer.CertificateManager.SaveFakeCertificates = true;
-            // Issue P-256 leaves rather than the default RSA-2048 ones. RSA keygen is expensive, though
-            // LeafRsaKeyPairBufferSize (default 8) pre-generates pairs for many first visits; P-256 is
-            // cheap inline and still gives every host its own key. Browsers all accept ECDSA server
-            // certificates - revert to Rsa2048 if something older is being intercepted. The root stays RSA.
-            proxyServer.CertificateManager.LeafCertificateKeyAlgorithm =
-                Network.CertificateKeyAlgorithm.EcdsaP256;
+            // Opt-in MITM root trust (same as Basic):
+            //   TWP_TRUST_ROOT=1           → Current User Personal + Trusted Root
+            //   TWP_TRUST_ROOT_MACHINE=1   → also Local Machine stores (needs elevation)
+            trustRootCertificate = Environment.GetEnvironmentVariable("TWP_TRUST_ROOT") is "1" or "true" or "TRUE";
+            trustRootCertificateMachine =
+                Environment.GetEnvironmentVariable("TWP_TRUST_ROOT_MACHINE") is "1" or "true" or "TRUE";
+            if (trustRootCertificate || trustRootCertificateMachine)
+            {
+                proxyServer.CertificateManager.EnsureRootCertificate();
+                proxyServer.CertificateManager.TrustRootCertificate(machineTrusted: trustRootCertificateMachine);
+            }
+
+            // Match ProxyProfile.Balanced / library defaults (same as the Basic example).
+            // Speed opt-ins for modern browsers: LeafCertificateKeyAlgorithm = EcdsaP256,
+            // SaveFakeCertificates = true — see wiki Home.md Performance.
+            proxyServer.Profile = ProxyProfile.Balanced;
             proxyServer.ForwardToUpstreamGateway = true;
-            // Bound the in-memory certificate cache a little higher for a browsing-heavy manual test
-            // session; leave the on-disk cache unbounded so it survives across runs.
-            proxyServer.ResourceLimits = ProxyResourceLimits.Default.WithCertificateCacheBounds(
-                maxCertificateCacheEntries: 2048, maxCertificateDiskCacheEntries: null);
+            proxyServer.ResourceLimits = ProxyResourceLimits.Default;
 
             var explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 8000);
 
             proxyServer.AddEndPoint(explicitEndPoint);
 
-            // HTTP/3 transparent QUIC endpoint (experimental — suppress TWP001 to opt in).
-            // Requires MsQuic and a supported OS (Windows 11 / Server 2022+, or libmsquic on Linux/macOS).
-            // UDP traffic must be redirected here; see wiki/HTTP-3.md.
+            // HTTP/3 (experimental — suppress TWP001). Example default is on; library Balanced stays off.
+            // Set TWP_ENABLE_HTTP3=0 to disable. Requires MsQuic + supported OS; see wiki/HTTP-3.md.
 #pragma warning disable TWP001
-            if (QuicListener.IsSupported)
+            var enableHttp3 = Environment.GetEnvironmentVariable("TWP_ENABLE_HTTP3") switch
+            {
+                "0" or "false" or "FALSE" => false,
+                _ => true
+            };
+            if (enableHttp3 && QuicListener.IsSupported)
             {
                 proxyServer.EnableHttp3 = true;
-                // Learn H3 from Alt-Svc on the first response; proactive SVCB DNS is off for
-                // interactive browsing (same default as the Basic example).
-                proxyServer.EnableHttpsSvcbDnsDiscovery = false;
+                // Learn H3 from Alt-Svc; set TWP_ENABLE_SVCB_DNS=1 for proactive HTTPS/SVCB discovery.
+                proxyServer.EnableHttpsSvcbDnsDiscovery =
+                    Environment.GetEnvironmentVariable("TWP_ENABLE_SVCB_DNS") is "1" or "true" or "TRUE";
                 var quicEndPoint = new TransparentQuicProxyEndPoint(IPAddress.Any, 443)
                 {
-                    // Replace with IOriginalDestinationResolver for real NAT-transparent interception.
                     ForwardHost = "localhost",
                     ForwardPort = 443
                 };
-                quicEndPoint.BeforeQuicAuthenticate += ProxyServer_BeforeQuicAuthenticate;
                 proxyServer.AddEndPoint(quicEndPoint);
             }
 #pragma warning restore TWP001
@@ -136,11 +145,12 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             var capturePath = Environment.GetEnvironmentVariable("TWP_CAPTURE_PATH");
             if (string.IsNullOrWhiteSpace(capturePath))
             {
-                proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp, new SystemProxySettings
-                {
-                    // Route localhost/loopback traffic through the proxy for this example.
-                    ProxyLoopback = true
-                });
+                proxyServer.SetAsSystemProxy(explicitEndPoint, ProxyProtocolType.AllHttp,
+                    KnownMitmExclusions.CreateSystemProxySettings(settings =>
+                    {
+                        // Route localhost/loopback traffic through the proxy for this example.
+                        settings.ProxyLoopback = true;
+                    }));
             }
 
             InitializeComponent();
@@ -245,6 +255,17 @@ namespace Titanium.Web.Proxy.Examples.Wpf
 
             try
             {
+                if (trustRootCertificate || trustRootCertificateMachine)
+                    proxyServer.CertificateManager.RemoveTrustedRootCertificate(
+                        machineTrusted: trustRootCertificateMachine);
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+
+            try
+            {
                 proxyServer.Dispose();
             }
             catch (Exception)
@@ -293,17 +314,11 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             set => SetValue(Http3ServerConnectionCountProperty, value);
         }
 
-#pragma warning disable TWP001
-        private Task ProxyServer_BeforeQuicAuthenticate(object sender, BeforeQuicAuthenticateEventArgs e)
-        {
-            return Task.CompletedTask;
-        }
-#pragma warning restore TWP001
-
         private async Task ProxyServer_BeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
         {
             var hostname = e.HttpClient.Request.RequestUri.Host;
-            if (hostname.EndsWith("webex.com")) e.DecryptSsl = false;
+            if (KnownMitmExclusions.ShouldDisableSslDecrypt(hostname))
+                e.DecryptSsl = false;
 
             await Dispatcher.InvokeAsync(() => { AddSession(e); });
         }
@@ -525,7 +540,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             var button = (ToggleButton)sender;
             if (button.IsChecked == true)
                 proxyServer.SetAsSystemProxy((ExplicitProxyEndPoint)proxyServer.ProxyEndPoints[0],
-                    ProxyProtocolType.AllHttp);
+                    ProxyProtocolType.AllHttp,
+                    KnownMitmExclusions.CreateSystemProxySettings(settings => settings.ProxyLoopback = true));
             else
                 proxyServer.RestoreOriginalProxySettings();
         }

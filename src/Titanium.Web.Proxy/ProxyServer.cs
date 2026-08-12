@@ -133,12 +133,16 @@ public partial class ProxyServer : IDisposable
     ///     Initializes a new instance of ProxyServer class with provided parameters.
     /// </summary>
     /// <param name="userTrustRootCertificate">
-    ///     Should the proxy root CA be trusted in the current-user Root store?
+    ///     When true (the default), <see cref="CertificateManager.EnsureRootCertificate()"/> installs the
+    ///     MITM root into the current-user Personal and Trusted Root stores. Prefer user-only trust for
+    ///     interactive apps; pass false when trust must be fully opt-in.
     /// </param>
-    /// <param name="machineTrustRootCertificate">Should the proxy root CA be trusted in the local-machine Root store?</param>
+    /// <param name="machineTrustRootCertificate">
+    ///     When true, also trust in the local-machine stores (needs elevation). Defaults to false —
+    ///     machine trust is opt-in for services/admin installs, not for normal desktop use.
+    /// </param>
     /// <param name="trustRootCertificateAsAdmin">
-    ///     Should we attempt to trust certificates with elevated permissions by
-    ///     prompting for UAC if required?
+    ///     When true, attempt elevated trust via UAC (Windows only). Defaults to false.
     /// </param>
     public ProxyServer(bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false,
         bool trustRootCertificateAsAdmin = false) : this(null, null, userTrustRootCertificate,
@@ -152,12 +156,16 @@ public partial class ProxyServer : IDisposable
     /// <param name="rootCertificateName">Name of the root certificate.</param>
     /// <param name="rootCertificateIssuerName">Name of the root certificate issuer.</param>
     /// <param name="userTrustRootCertificate">
-    ///     Should the proxy root CA be trusted in the current-user Root store?
+    ///     When true (the default), <see cref="CertificateManager.EnsureRootCertificate()"/> installs the
+    ///     MITM root into the current-user Personal and Trusted Root stores. Prefer user-only trust for
+    ///     interactive apps; pass false when trust must be fully opt-in.
     /// </param>
-    /// <param name="machineTrustRootCertificate">Should the proxy root CA be trusted in the local-machine Root store?</param>
+    /// <param name="machineTrustRootCertificate">
+    ///     When true, also trust in the local-machine stores (needs elevation). Defaults to false —
+    ///     machine trust is opt-in for services/admin installs, not for normal desktop use.
+    /// </param>
     /// <param name="trustRootCertificateAsAdmin">
-    ///     Should we attempt to trust certificates with elevated permissions by
-    ///     prompting for UAC if required?
+    ///     When true, attempt elevated trust via UAC (Windows only). Defaults to false.
     /// </param>
     public ProxyServer(string? rootCertificateName, string? rootCertificateIssuerName,
         bool userTrustRootCertificate = true, bool machineTrustRootCertificate = false,

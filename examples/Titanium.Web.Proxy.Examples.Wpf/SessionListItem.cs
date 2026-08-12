@@ -20,9 +20,16 @@ namespace Titanium.Web.Proxy.Examples.Wpf
         private long sentDataCount;
         private long? serverConnectionId;
         private string statusCode;
+        private string timestamp;
         private string url;
 
         public int Number { get; set; }
+
+        public string Timestamp
+        {
+            get => timestamp;
+            set => SetField(ref timestamp, value);
+        }
 
         public long? ClientConnectionId
         {
@@ -171,6 +178,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             var request = HttpClient.Request;
             var response = HttpClient.Response;
             var statusCode = response?.StatusCode ?? 0;
+            if (string.IsNullOrEmpty(Timestamp))
+                Timestamp = DateTime.Now.ToString("yyyy-MM-dd h:mm:ss.fff tt");
             StatusCode = statusCode == 0 ? "-" : statusCode.ToString();
             // e.g. "HTTP/2 ↔ HTTP/3" (client↔proxy | proxy↔server).
             Protocol = FormatClientServerProtocol(request.HttpVersion, response?.HttpVersion);

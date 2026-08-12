@@ -179,7 +179,7 @@ public partial class ProxyServer
                         $"H2→H3 bridge round trip failed for stream {ctx.StreamId}",
                         new ProxyHttpException(
                             $"H2→H3 bridge round trip failed for stream {ctx.StreamId}",
-                            t.Exception!.GetBaseException(), sessionArgs));
+                            t.Exception.GetBaseException(), sessionArgs));
             }, TaskScheduler.Default);
 
         // Register ownership BEFORE returning from this delegate so Http2Helper sees the state
@@ -211,9 +211,16 @@ public partial class ProxyServer
         try
         {
             // Forward the request to the QUIC origin using the pre-resolved route (avoids re-probing
-            // DNS and ensures the correct alternative port is used).
+            // DNS and ensures the correct alternative port is used). Relay 1xx (103 Early Hints)
+            // immediately so browser TTFB is not gated on the final 200.
             await Http3OriginBridge.ForwardAsync(
-                sessionArgs, this, h3Route, logger, cancellationToken);
+                sessionArgs, this, h3Route, logger, cancellationToken,
+                onInterimResponse: async (interim, ct) =>
+                {
+                    LowercaseHeaderNames(interim.Headers);
+                    await Http2Helper.EmitInterimResponseAsync(
+                        sessionArgs, streamId, connectionState, clientStream, interim, ct);
+                });
 
             sessionArgs.Timing?.MarkResponseHeadersReceived();
 

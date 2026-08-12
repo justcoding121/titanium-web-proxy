@@ -7,7 +7,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Examples.Shared;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Examples.WindowsService;
 
@@ -37,6 +39,7 @@ internal sealed class ProxyWorker : BackgroundService
         // We create a fresh ProxyServer instance on every start so a service restart also reloads settings.
         proxyServer = new ProxyServer(false)
         {
+            Profile = ProxyProfile.Balanced,
             CheckCertificateRevocation = settings.CheckCertificateRevocation,
             ConnectionTimeOutSeconds = settings.ConnectionTimeOutSeconds,
             Enable100ContinueBehaviour = settings.Enable100ContinueBehaviour,
@@ -53,6 +56,17 @@ internal sealed class ProxyWorker : BackgroundService
         proxyServer.CertificateManager.SaveFakeCertificates = settings.SaveFakeCertificates;
         proxyServer.CertificateManager.LeafCertificateKeyAlgorithm = settings.LeafCertificateKeyAlgorithm;
 
+        if (settings.TrustRootCertificate || settings.TrustRootCertificateMachine)
+        {
+            proxyServer.CertificateManager.EnsureRootCertificate();
+            proxyServer.CertificateManager.TrustRootCertificate(
+                machineTrusted: settings.TrustRootCertificateMachine);
+            logger.LogInformation(
+                settings.TrustRootCertificateMachine
+                    ? "Trusted MITM root in Current User and Local Machine certificate stores (machine install needs elevation)"
+                    : "Trusted MITM root in Current User certificate stores");
+        }
+
         proxyServer.ThreadPoolWorkerThread = settings.ThreadPoolWorkerThreads < 0
             ? Environment.ProcessorCount
             : settings.ThreadPoolWorkerThreads;
@@ -63,12 +77,14 @@ internal sealed class ProxyWorker : BackgroundService
                 "This may be on purpose.", settings.ThreadPoolWorkerThreads, Environment.ProcessorCount);
 
         var explicitEndPointV4 = new ExplicitProxyEndPoint(IPAddress.Any, settings.ListeningPort, settings.DecryptSsl);
+        explicitEndPointV4.BeforeTunnelConnectRequest += OnBeforeTunnelConnectRequest;
         proxyServer.AddEndPoint(explicitEndPointV4);
 
         if (settings.EnableIpV6)
         {
             var explicitEndPointV6 =
                 new ExplicitProxyEndPoint(IPAddress.IPv6Any, settings.ListeningPort, settings.DecryptSsl);
+            explicitEndPointV6.BeforeTunnelConnectRequest += OnBeforeTunnelConnectRequest;
             proxyServer.AddEndPoint(explicitEndPointV6);
         }
 
@@ -118,9 +134,10 @@ internal sealed class ProxyWorker : BackgroundService
         {
             try
             {
-                proxyServer.SetAsSystemProxy(explicitEndPointV4, ProxyProtocolType.AllHttp);
+                proxyServer.SetAsSystemProxy(explicitEndPointV4, ProxyProtocolType.AllHttp,
+                    KnownMitmExclusions.CreateSystemProxySettings());
                 logger.LogInformation(
-                    "Registered as Windows system proxy on port {ListeningPort} (cleared on stop)",
+                    "Registered as Windows system proxy on port {ListeningPort} with identity host bypass (cleared on stop)",
                     settings.ListeningPort);
             }
             catch (NotSupportedException ex)
@@ -132,6 +149,14 @@ internal sealed class ProxyWorker : BackgroundService
         logger.LogInformation("Service listening on port {ListeningPort}", settings.ListeningPort);
 
         return base.StartAsync(cancellationToken);
+    }
+
+    private static Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)
+    {
+        if (KnownMitmExclusions.ShouldDisableSslDecrypt(e.HttpClient.Request.RequestUri.Host))
+            e.DecryptSsl = false;
+
+        return Task.CompletedTask;
     }
 
     private Task OnBeforeResponse(object sender, SessionEventArgs e)
@@ -205,6 +230,17 @@ internal sealed class ProxyWorker : BackgroundService
             {
                 logger.LogWarning(restoreEx, "Failed to restore system proxy settings");
             }
+        }
+
+        try
+        {
+            if ((settings.TrustRootCertificate || settings.TrustRootCertificateMachine) && proxyServer != null)
+                proxyServer.CertificateManager.RemoveTrustedRootCertificate(
+                    machineTrusted: settings.TrustRootCertificateMachine);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to remove trusted MITM root certificate");
         }
 
         // clean up here since we make a new instance every time the service starts

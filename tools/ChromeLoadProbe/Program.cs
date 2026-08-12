@@ -93,6 +93,19 @@ async Task<ProbeResult> RunAsync(ProbeOptions opt)
         await cdp.SendAsync("Page.enable", new JsonObject(), sessionId);
         await cdp.SendAsync("Network.enable", new JsonObject(), sessionId);
 
+        // Diagnostic: isolate document TTFB from H3 multiplexing by blocking common subresources.
+        if (string.Equals(Environment.GetEnvironmentVariable("TWP_BLOCK_SUBRESOURCES"), "1",
+                StringComparison.Ordinal))
+        {
+            await cdp.SendAsync("Network.setBlockedURLs", new JsonObject
+            {
+                ["urls"] = new JsonArray(
+                    "*.js", "*.css", "*.svg", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp",
+                    "*.woff", "*.woff2", "*.ttf", "*google*", "*doubleclick*", "*facebook*",
+                    "*googletagmanager*", "*cloudflareinsights*")
+            }, sessionId);
+        }
+
         var loadFired = cdp.WaitForEventAsync("Page.loadEventFired", sessionId);
 
         var sw = Stopwatch.StartNew();

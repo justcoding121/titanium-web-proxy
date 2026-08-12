@@ -3,7 +3,7 @@
 #
 #   direct      Chrome straight to the origin, the baseline.
 #   proxy_rsa   Through the Basic example issuing RSA-2048 leaves.
-#   proxy_ec    Through the Basic example issuing P-256 leaves (TWP_LEAF_KEY unset / 'ec').
+#   proxy_ec    Through the Basic example issuing P-256 leaves (TWP_LEAF_KEY=ec).
 #
 # Every proxy measurement starts from an empty leaf-certificate cache and a freshly started proxy, so
 # each load pays for a certificate per distinct host exactly as a first-ever visit would. The root

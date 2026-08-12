@@ -17,17 +17,21 @@ const LogEventLevel minimumLevel = LogEventLevel.Verbose;
 const LogEventLevel minimumLevel = LogEventLevel.Information;
 #endif
 
+const string timestampedTemplate =
+    "{Timestamp:yyyy-MM-dd h:mm:ss.fff tt} [{Level:u3}] {Message:lj}{NewLine}{Exception}";
+
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Is(minimumLevel)
     .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
     .Enrich.FromLogContext()
-    .WriteTo.Console()
+    .WriteTo.Console(outputTemplate: timestampedTemplate)
     .WriteTo.File(
         path: Path.Combine(logDirectory, "proxy-service.log"),
         rollingInterval: RollingInterval.Day,
         fileSizeLimitBytes: 10 * 1024 * 1024,
         retainedFileCountLimit: 5,
-        shared: true)
+        shared: true,
+        outputTemplate: timestampedTemplate)
     .WriteTo.EventLog(
         source: "Titanium Web Proxy",
         logName: "Application",

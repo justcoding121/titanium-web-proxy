@@ -59,6 +59,8 @@ function Start-Proxy([bool] $EnableHttp3) {
     $env:TWP_SET_SYSTEM_PROXY = '0'
     $env:TWP_TRUST_ROOT       = '0'
     $env:TWP_ENABLE_HTTP3     = if ($EnableHttp3) { '1' } else { '0' }
+    # Returning-user warm leaf cache (Basic Balanced default is SaveFakeCertificates=false).
+    $env:TWP_SAVE_FAKE_CERTS  = '1'
 
     $stdinFile = Join-Path $env:TEMP 'twp-ab-stdin.txt'
     if (-not (Test-Path $stdinFile)) { New-Item -ItemType File -Path $stdinFile -Force | Out-Null }
@@ -216,7 +218,8 @@ if ($WarmProxy) {
     }
 }
 
-Remove-Item Env:TWP_SET_SYSTEM_PROXY, Env:TWP_TRUST_ROOT, Env:TWP_ENABLE_HTTP3 -ErrorAction SilentlyContinue
+Remove-Item Env:TWP_SET_SYSTEM_PROXY, Env:TWP_TRUST_ROOT, Env:TWP_ENABLE_HTTP3, Env:TWP_SAVE_FAKE_CERTS `
+    -ErrorAction SilentlyContinue
 
 # --- summary ---------------------------------------------------------------------------------
 
