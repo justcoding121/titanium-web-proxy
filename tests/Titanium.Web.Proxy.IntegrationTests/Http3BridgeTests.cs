@@ -220,6 +220,43 @@ public class Http3BridgeTests
     }
 
     [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task Http2Client_ColdForcedHttp3_LargeBody_ExceedsDefaultStreamWindow()
+    {
+        RequireQuic();
+
+        // Larger than the RFC default 65535-byte stream send window. Synthetic/bridge streams must
+        // still apply client stream WINDOW_UPDATE (and reserve credit outside the write lock) or
+        // HttpClient stalls once the initial window is exhausted.
+        var expectedBody = new string('z', 200_000);
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleRequest(_ => Task.FromResult(new QuicHttp3Response(200, expectedBody)));
+
+        using var testSuite = new TestSuite();
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableHttp3 = true;
+        proxy.EnableHttpsSvcbDnsDiscovery = false;
+
+        var endpoint = (ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endpoint.BeforeTunnelConnectRequest += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var client = TestHelper.GetHttp2Client(proxy);
+        client.Timeout = TimeSpan.FromSeconds(25);
+        var response = await client.GetAsync($"https://localhost:{origin.Port}/large");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+        Assert.AreEqual(expectedBody.Length, body.Length);
+        Assert.AreEqual(expectedBody, body);
+    }
+
+    [TestMethod]
     public async Task Http2Client_ColdH3Miss_FallsBackToTcpWithoutHang()
     {
         RequireQuic();
