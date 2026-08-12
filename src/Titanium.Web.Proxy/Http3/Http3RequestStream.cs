@@ -1,6 +1,7 @@
 #pragma warning disable CA1416
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net.Quic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -415,16 +416,77 @@ internal static class Http3RequestStream
             headers.Add((name, header.Value));
         }
 
+        // HTTP/3 frames the body with DATA; Transfer-Encoding is never used on the wire.
+        response.Headers.RemoveHeader("transfer-encoding");
+
         var qpackHeaders = QpackEncoder.Encode(headers, qpackContext);
         await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
 
-        // Send body if present. Ok()/Respond assign Body without setting IsBodyRead (H1 uses
-        // BodyAvailable); requiring IsBodyRead alone dropped every synthetic H3 response body.
-        var body = response.BodyAvailable || response.IsBodyRead ? response.Body : null;
-        if (body is { Length: > 0 })
-            await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct);
+        if (response.StreamBodyWriter != null && !response.IsBodySent)
+        {
+            // Http3OriginBridge streams the origin body; drain it as DATA frames (same contract as
+            // H1 BodyStreamWriter / H2 EmitSyntheticResponseAsync).
+            var bodyWriter = new Http3DataBodyWriter(stream);
+            await response.StreamBodyWriter(bodyWriter, ct);
+            response.IsBodySent = true;
+        }
+        else
+        {
+            // Send body if present. Ok()/Respond assign Body without setting IsBodyRead (H1 uses
+            // BodyAvailable); requiring IsBodyRead alone dropped every synthetic H3 response body.
+            var body = response.BodyAvailable || response.IsBodyRead ? response.Body : null;
+            if (body is { Length: > 0 })
+                await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct);
+        }
 
         await stream.FlushAsync(ct);
+    }
+
+    /// <summary>
+    ///     Adapts <see cref="Response.StreamBodyWriter"/> writes into HTTP/3 DATA frames on a request stream.
+    /// </summary>
+    private sealed class Http3DataBodyWriter : Stream
+    {
+        private readonly QuicStream _stream;
+
+        public Http3DataBodyWriter(QuicStream stream) => _stream = stream;
+
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() { }
+
+        public override Task FlushAsync(CancellationToken cancellationToken) =>
+            _stream.FlushAsync(cancellationToken);
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException("Use WriteAsync.");
+
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            if (buffer.IsEmpty) return;
+            await Http3Frame.WriteAsync(_stream, Http3FrameType.Data, buffer, cancellationToken);
+        }
     }
 
     /// <summary>
