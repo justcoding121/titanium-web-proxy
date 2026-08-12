@@ -2212,9 +2212,14 @@ namespace Titanium.Web.Proxy.Http2
                         }
                     }
 
-                    // NO_ERROR (0) from the origin is a normal post-response cleanup; only report
-                    // genuine error codes so the server log is not flooded with false-positive errors.
-                    if (errorCode != (int)Http2ErrorCode.NoError && errorCode != (int)Http2ErrorCode.Cancel)
+                    // NO_ERROR (0) from the origin is a normal post-response cleanup; CANCEL is the usual
+                    // client abort. REFUSED_STREAM is also expected under origin load-shedding / GOAWAY
+                    // races (observed live from github.com/Fastly both direct and via this proxy) - the
+                    // RST is still forwarded to the peer so browsers/HttpClient can retry, but it must
+                    // not flood server logs as a proxy defect.
+                    if (errorCode != (int)Http2ErrorCode.NoError &&
+                        errorCode != (int)Http2ErrorCode.Cancel &&
+                        errorCode != (int)Http2ErrorCode.RefusedStream)
                     {
                         var direction = isClient ? "client→proxy" : "origin→proxy";
                         var requestUrl = args?.HttpClient.Request.Url ?? "(unknown)";
