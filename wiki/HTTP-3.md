@@ -72,12 +72,13 @@ proxy.Start();
 ## Protocol auto-selection (default behaviour)
 
 When `UpstreamHttpProtocol.Auto` (the default) is in effect, the proxy selects the outbound protocol
-for each request as follows:
+as follows (evaluated at CONNECT / new TCP request setup — not by flipping streams on an already-open
+H2↔H2 MITM session):
 
 1. **HTTP/3** — if `EnableHttp3 == true`, the origin is already in `Http3OriginCapabilityCache` (from a
    prior `Alt-Svc` response and/or a completed background HTTPS/SVCB lookup), **and** that origin has
    completed QUIC warm-up (`Http3WarmOrigins`). A cache hit alone only arms background warm-up; the
-   current request stays on TCP until the origin is warm. SVCB discovery never blocks the first
+   current connection stays on TCP until the origin is warm. SVCB discovery never blocks the first
    connection.
 2. **HTTP/2** — if the origin has been probed and supports HTTP/2 (via ALPN).
 3. **HTTP/1.1** — fallback.
@@ -94,9 +95,13 @@ automatically caches the capability:
 Alt-Svc: h3=":443"; ma=86400
 ```
 
-Once the origin is warm, subsequent Auto-mode requests to the same host:port use HTTP/3 transparently
-(when `EnableHttp3 == true`). The cache entry expires after the advertised `ma` (max-age) duration and
-is trimmed periodically. There is no public eviction API; to force a protocol for a given request or
+Once the origin is warm, **new** Auto-mode connections to the same host:port use HTTP/3 transparently
+(when `EnableHttp3 == true`) — for example a later CONNECT that selects the cold H2→H3 bridge, or an
+HTTP/1.1 request that routes through `Http3OriginBridge`. An already-open H2↔H2 MITM session does
+**not** upgrade individual multiplexed streams to H3 mid-connection (that mix has been observed to
+trigger client `ERR_HTTP2_PROTOCOL_ERROR`); those streams stay on the attached H2 origin until the
+tunnel ends. The cache entry expires after the advertised `ma` (max-age) duration and is trimmed
+periodically. There is no public eviction API; to force a protocol for a given request or
 connection, set `SessionEventArgs.UpstreamHttpProtocol` or `BeforeQuicAuthenticateEventArgs.UpstreamHttpProtocol`.
 
 ## HTTPS/SVCB DNS discovery (opt-in)
@@ -144,7 +149,7 @@ All five bridge directions are implemented:
 | HTTP/3 (QUIC) | HTTP/2 (TCP) | `TcpConnectionFactory` with h2 ALPN |
 | HTTP/3 (QUIC) | HTTP/1.1 (TCP) | `TcpConnectionFactory` with default ALPN |
 | HTTP/1.1 (TCP) | HTTP/3 (QUIC) | `Http3OriginBridge.ForwardAsync` when capability cached |
-| HTTP/2 (TCP) | HTTP/3 (QUIC) | `Http3OriginBridge.ForwardAsync` when capability cached |
+| HTTP/2 (TCP) | HTTP/3 (QUIC) | Cold path only: CONNECT-time `SendHttp2ToHttp3Bridge` + `Http3OriginBridge.ForwardAsync` when H3 is selected. Mid-connection Alt-Svc upgrades on an existing H2↔H2 MITM relay are not taken. |
 
 ## Per-request overrides
 

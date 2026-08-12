@@ -2821,6 +2821,15 @@ namespace Titanium.Web.Proxy.Http2
                 // HTTP/2 does not use chunked transfer-encoding; body framing is done via DATA frames + END_STREAM.
                 response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
 
+                // Streamed bridge bodies (notably H2↔H3) are delimited by END_STREAM. Relaying the
+                // origin Content-Length is unsafe: if the QUIC/H3 copy finishes short (or is
+                // cancelled) and we still END_STREAM, Chrome fails with ERR_HTTP2_PROTOCOL_ERROR
+                // (RST PROTOCOL_ERROR) and can poison the whole client H2 connection — which is
+                // what left YouTube as a blank page after new-tab navigation.
+                var advertisedLength = response.ContentLength;
+                if (advertisedLength >= 0)
+                    response.Headers.RemoveHeader(KnownHeaders.ContentLength);
+
                 // send the headers first; the body follows as DATA frames produced by the consumer's
                 // delegate as it runs, so it is never buffered.
                 await clientWriteLock.WaitAsync(cancellationToken);
@@ -2838,7 +2847,27 @@ namespace Titanium.Web.Proxy.Http2
                     cancellationToken);
 
                 await response.StreamBodyWriter(bodyWriter, cancellationToken);
-                await bodyWriter.CompleteAsync();
+
+                // Origin advertised a length but delivered a different amount. Prefer RST over a
+                // successful-looking END_STREAM so the browser retries instead of caching/executing
+                // a truncated body.
+                if (advertisedLength >= 0 && bodyWriter.BytesWritten != advertisedLength)
+                {
+                    await clientWriteLock.WaitAsync(cancellationToken);
+                    try
+                    {
+                        await SendRstStreamAsync(frameHeader, frameHeaderBuffer, streamId,
+                            Http2ErrorCode.InternalError, clientStream);
+                    }
+                    finally
+                    {
+                        clientWriteLock.Release();
+                    }
+                }
+                else
+                {
+                    await bodyWriter.CompleteAsync();
+                }
             }
             else
             {
@@ -2966,6 +2995,9 @@ namespace Titanium.Web.Proxy.Http2
                 this.cancellationToken = cancellationToken;
             }
 
+            /// <summary>Total body octets written as DATA (excludes the empty END_STREAM frame).</summary>
+            internal long BytesWritten { get; private set; }
+
             public override bool CanRead => false;
 
             public override bool CanSeek => false;
@@ -3026,6 +3058,7 @@ namespace Titanium.Web.Proxy.Http2
                 {
                     await SendData(frameHeader, frameHeaderBuffer, streamId, data, false, SafeMaxFrameSize, flow,
                         clientStream, cancellationToken);
+                    BytesWritten += data.Length;
                 }
                 finally
                 {

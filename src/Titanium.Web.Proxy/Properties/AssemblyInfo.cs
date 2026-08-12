@@ -59,5 +59,5 @@ using System.Runtime.InteropServices;
 // file-properties version disagreed with the package it was published in. Keep both of the values
 // below equal to <VersionPrefix> (as Major.Minor.Build.0) whenever that property changes.
 
-[assembly: AssemblyVersion("5.3.0.0")]
-[assembly: AssemblyFileVersion("5.3.0.0")]
+[assembly: AssemblyVersion("5.4.0.0")]
+[assembly: AssemblyFileVersion("5.4.0.0")]
