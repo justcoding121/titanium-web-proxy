@@ -138,36 +138,33 @@ internal static class Http3RequestStream
                 streamState = new Http3StreamState(stream.Id, sessionArgs, cts);
                 onSessionCreated(sessionArgs, streamState);
 
-                // 5. Read any request DATA frames into the body (if present).
-                byte[] bodyBytes;
-                try
+                // 5. Leave the inbound QuicStream readable. BeforeRequest runs on headers only
+                // (matching HTTP/1.1 / HTTP/2). GetRequestBody() buffers remaining DATA; otherwise
+                // the origin bridge streams DATA frames as they arrive.
+                sessionArgs.Http3BufferedBodyReader = async ct =>
                 {
-                    bodyBytes = await ReadRequestBodyAsync(stream, sessionArgs.HttpClient.Request, server, sessionArgs, cancellationToken);
-                }
-                catch (BodySizeLimitExceededException)
-                {
-                    // Request-side breach: the response has not been committed yet, so (matching the
-                    // H1/H2 behavior in RequestHandler.cs) a 413 can still be returned instead of just
-                    // closing the connection. Per-frame length checks alone are not a cumulative limit
-                    // (Http3Frame.ReadAsync's maxPayloadBytes only bounds one DATA frame at a time) -
-                    // ReadRequestBodyAsync wraps its MemoryStream in a BoundedWriteStream so many small
-                    // frames cannot together exceed the configured budget either.
-                    await SendSimpleStatusResponseAsync(stream, 413, qpackContext, cancellationToken);
-                    stream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.ExcessiveLoad);
-                    return;
-                }
-
-                if (bodyBytes.Length > 0)
-                {
-                sessionArgs.HttpClient.Request.Body = bodyBytes;
-                // BodyAvailable is read-only (computed from Body != null); setting Body is sufficient.
-                }
-                sessionArgs.HttpClient.Request.IsBodyRead = true;
-                streamState.RequestClosed = true;
+                    var bytes = await BufferRequestBodyAsync(
+                        stream, sessionArgs.HttpClient.Request, server, sessionArgs, ct);
+                    streamState.RequestClosed = true;
+                    sessionArgs.Http3BufferedBodyReader = null;
+                    return bytes;
+                };
 
                 // 6. Fire BeforeRequest (stamp timing milestone just before).
                 sessionArgs.Timing?.MarkRequestHeadersReceived();
-                await onBeforeRequest(sessionArgs);
+                try
+                {
+                    await onBeforeRequest(sessionArgs);
+                }
+                catch (BodySizeLimitExceededException)
+                {
+                    // GetRequestBody() during BeforeRequest hit MaxBufferedBodyBytes.
+                    await SendSimpleStatusResponseAsync(stream, 413, qpackContext, cancellationToken);
+                    stream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.ExcessiveLoad);
+                    streamState.RequestClosed = true;
+                    sessionArgs.Http3BufferedBodyReader = null;
+                    return;
+                }
 
                 // Inject Via header (RFC 9110 §7.6.3) on the request before forwarding.
                 if (!string.IsNullOrEmpty(server.ViaHeaderPseudonym))
@@ -176,7 +173,15 @@ internal static class Http3RequestStream
 
                 if (sessionArgs.HttpClient.Response.Locked)
                 {
-                    // Developer set a synthetic response in BeforeRequest.
+                    // Synthetic response: abort unread request DATA rather than draining an
+                    // endless upload (matches RespondStreaming closeServerConnection guidance).
+                    sessionArgs.Http3BufferedBodyReader = null;
+                    if (!streamState.RequestClosed)
+                    {
+                        stream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
+                        streamState.RequestClosed = true;
+                    }
+
                     await onBeforeResponse(sessionArgs);
                     if (!string.IsNullOrEmpty(server.ViaHeaderPseudonym))
                         sessionArgs.HttpClient.Response.Headers.AddHeader(
@@ -189,11 +194,29 @@ internal static class Http3RequestStream
                     // agree the request has been committed to the origin pipeline.
                     sessionArgs.HttpClient.Request.Locked = true;
 
+                    // Stream unread client DATA to the origin when the body was not buffered
+                    // during BeforeRequest. Always consume until FIN (zero DATA frames for GET).
+                    Func<QuicStream, CancellationToken, Task>? copyRequestBody = null;
+                    if (!sessionArgs.HttpClient.Request.IsBodyRead)
+                    {
+                        copyRequestBody = async (originStream, ct) =>
+                        {
+                            sessionArgs.Http3BufferedBodyReader = null;
+                            await StreamRequestBodyToOriginAsync(
+                                stream, originStream, server, sessionArgs, ct);
+                            streamState.RequestClosed = true;
+                        };
+                    }
+
                     // 7. Forward to origin using the appropriate protocol bridge (H3→H3, H3→H2, or H3→H1.1).
-                    // Pass a relay callback so that 1xx interim responses are forwarded to the client before
-                    // the final response arrives.
                     await Http3OriginBridge.ForwardAsync(sessionArgs, server, logger, cancellationToken,
-                        onInterimResponse: (interim, ct) => SendInterimResponseAsync(stream, interim, qpackContext, ct));
+                        onInterimResponse: (interim, ct) => SendInterimResponseAsync(stream, interim, qpackContext, ct),
+                        copyRequestBody: copyRequestBody);
+
+                    // If the TCP fallback buffered via GetRequestBody / drain, RequestClosed may
+                    // already be set; otherwise the copy callback set it.
+                    if (!streamState.RequestClosed && sessionArgs.HttpClient.Request.IsBodyReceived)
+                        streamState.RequestClosed = true;
 
                     await onBeforeResponse(sessionArgs);
 
@@ -268,94 +291,123 @@ internal static class Http3RequestStream
     }
 
     /// <summary>
-    ///     Reads DATA frames from the request stream until END_STREAM, assembling the body bytes.
-    ///     Non-DATA frames (e.g. trailers HEADERS frame) are recognized and handled per RFC 9114.
-    ///     When <see cref="ProxyServer.OnRequestBodyWrite" /> has subscribers, fires
-    ///     <see cref="EventArguments.BeforeBodyWriteEventArgs" /> for each DATA frame using a one-frame
-    ///     read-ahead so that <c>IsLastChunk</c> is accurate. A handler may set <c>IsLastChunk = true</c>
-    ///     to terminate reading early; the stream read side is then aborted to release flow-control credit.
+    ///     Reads DATA frames from the client stream until END_STREAM into a bounded buffer (wire bytes).
+    ///     Used by <see cref="SessionEventArgs.GetRequestBody" />; does <b>not</b> fire
+    ///     <c>OnRequestBodyWrite</c> (whole-body read bypasses the streaming hook, matching HTTP/1.1).
     /// </summary>
-    private static async ValueTask<byte[]> ReadRequestBodyAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    private static async Task<byte[]> BufferRequestBodyAsync(
         QuicStream stream,
         Request request,
         ProxyServer server,
         SessionEventArgs sessionArgs,
         CancellationToken ct)
     {
-        var body = new System.IO.MemoryStream();
-        // Http3Frame.ReadAsync's maxPayloadBytes only bounds a single DATA frame; a client sending
-        // many small frames could otherwise accumulate an unbounded body in memory before this method
-        // returns. BoundedWriteStream gives the cumulative guarantee the plan calls for.
+        var body = new MemoryStream();
         var maxBufferedBodyBytes = sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes;
         var boundedBody = new BoundedWriteStream(body, maxBufferedBodyBytes, server.PolicyModes[PolicyFamily.BodyBudget]);
         try
         {
-            if (!server.HasOnRequestBodyWriteSubscribers)
+            while (true)
             {
-                // Fast path: no subscriber — read all frames without creating hook args.
-                while (true)
+                var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0, ct);
+                if (frame is null) break;
+                switch (frame.Type)
                 {
-                    var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0, ct);
-                    if (frame is null) break;
-                    switch (frame.Type)
-                    {
-                        case Http3FrameType.Data:
-                            await boundedBody.WriteAsync(frame.Payload, ct);
-                            break;
-                        case Http3FrameType.Headers:
-                            var trailers = QpackDecoder.Decode(frame.Payload.Span);
-                            foreach (var (name, value) in trailers)
-                                request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
-                            break;
-                    }
-                }
-            }
-            else
-            {
-                // Hooked path: one-frame read-ahead so IsLastChunk is accurate.
-                var current = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0, ct);
-                while (current != null)
-                {
-                    var next = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0, ct);
-                    // A trailing HEADERS frame or null (END_STREAM) marks the end of DATA.
-                    bool isLast = next == null || next.Type == Http3FrameType.Headers;
-
-                    if (current.Type == Http3FrameType.Data)
-                    {
-                        var hookArgs = new BeforeBodyWriteEventArgs(
-                            sessionArgs, current.Payload.ToArray(), isChunked: true, isLastChunk: isLast);
-                        await server.OnBeforeRequestBodyWrite(hookArgs);
-
-                        // Null guard: developer may have set BodyBytes = null.
-                        if (hookArgs.BodyBytes?.Length > 0)
-                            await boundedBody.WriteAsync(hookArgs.BodyBytes, ct);
-
-                        if (hookArgs.IsLastChunk && !isLast)
-                        {
-                            // Developer requested early termination on a non-terminal frame.
-                            // Abort the read side to release the QUIC flow-control window.
-                            stream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
-                            break;
-                        }
-                    }
-                    else if (current.Type == Http3FrameType.Headers)
-                    {
-                        // Trailing headers — always process, regardless of hook subscription.
-                        var trailerList = QpackDecoder.Decode(current.Payload.Span);
-                        foreach (var (name, value) in trailerList)
+                    case Http3FrameType.Data:
+                        await boundedBody.WriteAsync(frame.Payload, ct);
+                        break;
+                    case Http3FrameType.Headers:
+                        var trailers = QpackDecoder.Decode(frame.Payload.Span);
+                        foreach (var (name, value) in trailers)
                             request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
-                    }
-
-                    current = next;
+                        break;
                 }
             }
 
+            request.IsBodyReceived = true;
             return body.ToArray();
         }
         finally
         {
             await body.DisposeAsync();
         }
+    }
+
+    /// <summary>
+    ///     Streams client DATA frames to the origin QUIC stream as they arrive, optionally firing
+    ///     <c>OnRequestBodyWrite</c> per frame (one-frame lookahead for accurate <c>IsLastChunk</c>).
+    ///     Wire bytes are passed through without decompression/recompression. Consumes until FIN
+    ///     even when there are zero DATA frames (GET).
+    /// </summary>
+    private static async Task StreamRequestBodyToOriginAsync( // NOSONAR S3776 -- Protocol/state-machine path; splitting further creates disproportionate regression risk.
+        QuicStream clientStream,
+        QuicStream originStream,
+        ProxyServer server,
+        SessionEventArgs sessionArgs,
+        CancellationToken ct)
+    {
+        var request = sessionArgs.HttpClient.Request;
+        var hasHook = server.HasOnRequestBodyWriteSubscribers;
+
+        if (!hasHook)
+        {
+            while (true)
+            {
+                var frame = await Http3Frame.ReadAsync(clientStream, maxPayloadBytes: 0, ct);
+                if (frame is null) break;
+                switch (frame.Type)
+                {
+                    case Http3FrameType.Data:
+                        if (frame.Payload.Length > 0)
+                            await Http3Frame.WriteAsync(originStream, Http3FrameType.Data, frame.Payload, ct);
+                        break;
+                    case Http3FrameType.Headers:
+                        // Forward trailing HEADERS as-is (already QPACK-encoded).
+                        await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, frame.Payload, ct);
+                        var trailers = QpackDecoder.Decode(frame.Payload.Span);
+                        foreach (var (name, value) in trailers)
+                            request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
+                        break;
+                }
+            }
+        }
+        else
+        {
+            var current = await Http3Frame.ReadAsync(clientStream, maxPayloadBytes: 0, ct);
+            while (current != null)
+            {
+                var next = await Http3Frame.ReadAsync(clientStream, maxPayloadBytes: 0, ct);
+                var isLast = next == null || next.Type == Http3FrameType.Headers;
+
+                if (current.Type == Http3FrameType.Data)
+                {
+                    var hookArgs = new BeforeBodyWriteEventArgs(
+                        sessionArgs, current.Payload.ToArray(), isChunked: true, isLastChunk: isLast);
+                    await server.OnBeforeRequestBodyWrite(hookArgs);
+
+                    if (hookArgs.BodyBytes is { Length: > 0 })
+                        await Http3Frame.WriteAsync(originStream, Http3FrameType.Data, hookArgs.BodyBytes, ct);
+
+                    if (hookArgs.IsLastChunk && !isLast)
+                    {
+                        clientStream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
+                        break;
+                    }
+                }
+                else if (current.Type == Http3FrameType.Headers)
+                {
+                    await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, current.Payload, ct);
+                    var trailerList = QpackDecoder.Decode(current.Payload.Span);
+                    foreach (var (name, value) in trailerList)
+                        request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
+                }
+
+                current = next;
+            }
+        }
+
+        request.IsBodyReceived = true;
+        await originStream.FlushAsync(ct);
     }
 
     /// <summary>

@@ -362,6 +362,84 @@ public class StreamingBodyTests
         Assert.IsFalse(serverCalled, "Server should not be contacted for a synthetic streamed response.");
     }
 
+    [TestMethod]
+    public async Task RespondStreaming_Http2_DelayedBody_DoesNotBlock_SiblingStream()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+
+        var server = testSuite.GetServer();
+        server.HandleRequest(context =>
+        {
+            if (context.Request.Path == "/fast")
+                return context.Response.WriteAsync("fast-ok");
+            return context.Response.WriteAsync("should-not-reach");
+        });
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        var slowStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSlow = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var afterResponseCount = 0;
+
+        proxy.BeforeRequest += (sender, e) =>
+        {
+            if (e.HttpClient.Request.RequestUri.AbsolutePath != "/slow")
+                return Task.CompletedTask;
+
+            var response = new Response
+            {
+                StatusCode = 200,
+                StatusDescription = "OK",
+                HttpVersion = e.HttpClient.Request.HttpVersion
+            };
+
+            e.RespondStreaming(response, async (stream, ct) =>
+            {
+                slowStarted.TrySetResult();
+                await releaseSlow.Task.WaitAsync(ct);
+                var bytes = Encoding.ASCII.GetBytes("slow-done");
+                await stream.WriteAsync(bytes, ct);
+            }, closeServerConnection: true);
+
+            return Task.CompletedTask;
+        };
+
+        proxy.AfterResponse += (_, _) =>
+        {
+            Interlocked.Increment(ref afterResponseCount);
+            return Task.CompletedTask;
+        };
+
+        using var client = CreateHttp2Client(proxy);
+
+        var slowTask = client.GetAsync(new Uri(new Uri(server.ListeningHttpsUrl), "/slow"));
+        await slowStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // While /slow is still streaming, a sibling multiplexed request must complete.
+        using var fastCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var fastResponse = await client.GetAsync(new Uri(new Uri(server.ListeningHttpsUrl), "/fast"),
+            fastCts.Token);
+        var fastBody = await fastResponse.Content.ReadAsStringAsync(fastCts.Token);
+
+        Assert.AreEqual(HttpStatusCode.OK, fastResponse.StatusCode);
+        Assert.AreEqual(new Version(2, 0), fastResponse.Version);
+        Assert.AreEqual("fast-ok", fastBody);
+
+        releaseSlow.TrySetResult();
+        var slowResponse = await slowTask;
+        var slowBody = await slowResponse.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.OK, slowResponse.StatusCode);
+        Assert.AreEqual("slow-done", slowBody);
+
+        // AfterResponse should run once per completed stream (not wait for connection teardown).
+        for (var i = 0; i < 50 && Volatile.Read(ref afterResponseCount) < 2; i++)
+            await Task.Delay(50);
+        Assert.IsTrue(Volatile.Read(ref afterResponseCount) >= 2,
+            "AfterResponse should fire for each stream once synthetic END_STREAM completes.");
+    }
+
     private static HttpClient CreateHttp2Client(ProxyServer proxy)
     {
         var handler = new SocketsHttpHandler

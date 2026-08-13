@@ -780,7 +780,7 @@ namespace Titanium.Web.Proxy.Http2
                             // we are inside the `if (isClient)` branch, so `input` is always the client
                             // stream here (see the isClient=true call in SendHttp2).
                             var synthTask = EmitSyntheticResponseAsync(sessionArgs, hbStreamId, connectionState,
-                                    input, streamToken)
+                                    input, streamToken, onAfterResponse, logger)
                                 .ContinueWith(t =>
                                 {
                                     linkedCts694?.Dispose();
@@ -845,7 +845,7 @@ namespace Titanium.Web.Proxy.Http2
                                         : null;
                                     var unknProtoToken = linkedCts751?.Token ?? cancellationToken;
                                     var synthTask501 = EmitSyntheticResponseAsync(sessionArgs, hbStreamId,
-                                            connectionState, input, unknProtoToken)
+                                            connectionState, input, unknProtoToken, onAfterResponse, logger)
                                         .ContinueWith(t =>
                                         {
                                             linkedCts751?.Dispose();
@@ -997,7 +997,7 @@ namespace Titanium.Web.Proxy.Http2
                                 // we are inside the isClient=false branch, so `output` is the client stream
                                 // here (see the isClient=false call in SendHttp2).
                                 var synthTask = EmitSyntheticResponseAsync(sessionArgs, hbStreamId, connectionState,
-                                        output, streamToken)
+                                        output, streamToken, onAfterResponse, logger)
                                     .ContinueWith(t =>
                                     {
                                         linkedCts893?.Dispose();
@@ -2842,7 +2842,8 @@ namespace Titanium.Web.Proxy.Http2
         ///     chunked header is always stripped regardless of which shape applies.
         /// </summary>
         internal static async Task EmitSyntheticResponseAsync(SessionEventArgs args, int streamId,
-            Http2ConnectionState connectionState, Stream clientStream, CancellationToken cancellationToken)
+            Http2ConnectionState connectionState, Stream clientStream, CancellationToken cancellationToken,
+            Func<SessionEventArgs, Task>? onAfterResponse = null, ILogger? logger = null)
         {
             var response = args.HttpClient.Response;
 
@@ -2949,6 +2950,20 @@ namespace Titanium.Web.Proxy.Http2
             }
 
             response.IsBodySent = true;
+
+            // Synthetic writes never produce an inbound END_STREAM for the response half, so mark
+            // ResponseClosed here. Finalize only when the request half is already done — do not force
+            // RequestClosed while the client may still be uploading (would race Dispose with the frame loop).
+            if (connectionState.Streams.TryGetValue(streamId, out var streamState))
+            {
+                streamState.ResponseClosed = true;
+                if (streamState.IsClosed && onAfterResponse != null && logger != null)
+                {
+                    connectionState.RemoveStream(streamId);
+                    connectionState.PendingFinalizations.Add(
+                        FinalizeStreamAsync(streamState, onAfterResponse, logger));
+                }
+            }
         }
 
         private static async Task<int> ForceRead(Stream input, byte[] buffer, int offset, int bytesToRead,

@@ -43,7 +43,7 @@ proxyServer.OnResponseBodyWrite += (sender, e) =>
 - **Transport support:**
   - HTTP/1.x: the per-piece hook runs for plain and TLS-decrypted connections (any `NetworkStream` / `SslStream`-backed transport).
   - HTTP/2: the hook runs per DATA frame, including over TLS (on by default via `ProxyServer.EnableHttp2`; set `false` to force HTTP/1.1 only).
-  - HTTP/3: the hook runs per DATA frame when `EnableHttp3` is on (see [Protocol Support](Protocol-Support)).
+  - HTTP/3: native H3→H3 fires `OnRequestBodyWrite` / `OnResponseBodyWrite` per DATA frame after `BeforeRequest` (see [Protocol Support](Protocol-Support)). H3→TCP fallback still buffers the request body up to `MaxBufferedBodyBytes`. For endless H3 uploads that you short-circuit with `Ok`/`Respond`, the unread request half is aborted rather than drained.
 
 ---
 
@@ -113,7 +113,11 @@ proxyServer.BeforeRequest += (sender, e) =>
 
 The delegate receives a write-only `Stream`; only one buffer is in flight at a time, so memory stays bounded regardless of total size.
 
-> **HTTP/2 note:** an *endless* synthetic body occupies the client connection while it streams; other multiplexed requests on that same connection wait until it completes. HTTP/2 flow control for very large synthetic bodies is best-effort. For finite bodies this is not a concern.
+> **HTTP/2 note:** `RespondStreaming` runs on a background task so other multiplexed streams on the same
+> connection keep making progress. An *endless* synthetic body can still starve the **connection-level**
+> flow-control window (inherent to HTTP/2); reservation waits are best-effort (timeout). For finite bodies
+> this is not a concern. Do not await the body itself inside `BeforeRequest` — return after calling
+> `RespondStreaming` so the handler does not block header dispatch.
 
 ---
 

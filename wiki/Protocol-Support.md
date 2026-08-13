@@ -81,8 +81,8 @@ tunnel). See [RFC 8441](#http2-safety-and-frame-validation) below. QUIC endpoint
 |---|---|---|---|---|---|
 | Buffered body read/modify (`GetRequestBody`/`SetResponseBodyString`, etc.) | Yes | Yes | Yes | Yes | Body bytes buffered up to `MaxBufferedBodyBytes` (default 4 MiB); larger bodies are rejected. |
 | Per-chunk streaming hooks (`OnRequestBodyWrite`/`OnResponseBodyWrite`) - plain HTTP | Yes | Yes | Yes | N/A | HTTP/3 is always TLS-encrypted (QUIC mandates TLS 1.3). |
-| Per-chunk streaming hooks - TLS-decrypted connections | Yes | Yes | Yes | Yes | `Http3RequestStream` fires `OnRequestBodyWrite` and `Http3OriginBridge` fires `OnResponseBodyWrite` for each DATA frame, using a one-frame lookahead so `IsLastChunk` is accurate. The fast path (no subscribers) skips all hook allocations. |
-| Synthetic streamed responses (`RespondStreaming`) | Yes | Yes | Yes | Yes | Chunked or fixed-length framing chosen automatically from the response headers you set. |
+| Per-chunk streaming hooks - TLS-decrypted connections | Yes | Yes | Yes | Yes | Native H3→H3: `OnRequestBodyWrite` fires per DATA frame during live origin relay (after `BeforeRequest`); `Http3OriginBridge` fires `OnResponseBodyWrite` per origin DATA frame. One-frame lookahead keeps `IsLastChunk` accurate. H1→H3 / H2→H3 translation bridges still buffer the request body before forwarding. |
+| Synthetic streamed responses (`RespondStreaming`) | Yes | Yes | Yes | Yes | Chunked or fixed-length framing chosen automatically from the response headers you set. HTTP/2 runs the body on a background task so sibling multiplexed streams keep progressing. |
 | Automatic decompression for body inspection (gzip/deflate/brotli) | Yes | Yes | Yes | Yes | Stacked encodings (e.g. `gzip, deflate`) are unwrapped layer-by-layer. |
 | Multipart/form-data boundary-aware streaming | Yes | Yes | Yes | Yes | Multipart request bodies are observed incrementally without buffering the full body. |
 | Bounded body streaming | Yes | Yes | Yes | Yes | `BoundedBodyPipe` wraps the underlying pipe; reads beyond `MaxBufferedBodyBytes` fail fast rather than OOM-ing the process. |
@@ -92,7 +92,7 @@ tunnel). See [RFC 8441](#http2-safety-and-frame-validation) below. QUIC endpoint
 | Feature | HTTP/1.0 | HTTP/1.1 | HTTP/2 | HTTP/3 | Notes |
 |---|---|---|---|---|---|
 | Header/body modification in `BeforeRequest`/`BeforeResponse` | Yes | Yes | Yes | Yes | Every HEADERS block is fully decoded/transcoded (HPACK for h2, QPACK for h3), so mutations made in the event handler are re-encoded and relayed rather than passed through opaquely. |
-| Synthetic responses (`Ok`, `Respond`, `Redirect`, `GenericResponse`) from `BeforeRequest` | Yes | Yes | Yes | Yes | The request is never forwarded upstream; any unfinished client request body already in flight is drained. |
+| Synthetic responses (`Ok`, `Respond`, `Redirect`, `GenericResponse`) from `BeforeRequest` | Yes | Yes | Yes | Yes | The request is never forwarded upstream. HTTP/1.x drains an unread body for keep-alive reuse; native HTTP/3 aborts the unread request half (avoids hanging on endless uploads). |
 | `Respond` replacing an already-received response from `BeforeResponse` | Yes | Yes | Yes | Yes | The origin's own response body, if still arriving, is discarded in favor of the replacement. |
 | `RespondStreaming` (synthetic streamed body) | Yes | Yes | Yes | Yes | See "Synthetic streamed responses" above for framing details. |
 | `AfterResponse` / per-request disposal | Yes | Yes | Yes | Yes | Every HTTP/3 stream — whether it completes normally, is reset, or is still open when the QUIC connection tears down — gets exactly one `AfterResponse` invocation and one `SessionEventArgs.Dispose()`, guaranteed by an atomic `FinalizedFlag`. |

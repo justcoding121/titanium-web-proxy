@@ -47,6 +47,13 @@ public class SessionEventArgs : SessionEventArgsBase
     public bool IsPromise { get; internal set; }
 
     /// <summary>
+    ///     Native HTTP/3 only: reads remaining client DATA frames into a bounded buffer (wire bytes).
+    ///     Set by <c>Http3RequestStream</c> before <c>BeforeRequest</c>; cleared once the body is
+    ///     buffered or streamed to the origin. Used by <see cref="GetRequestBody" /> and TCP fallback.
+    /// </summary>
+    internal Func<CancellationToken, Task<byte[]>>? Http3BufferedBodyReader { get; set; }
+
+    /// <summary>
     ///     Per-session override for <see cref="ProxyServer.ResponseHeaderTimeoutSeconds" />.
     ///     <see langword="null" /> uses the server default; <see cref="TimeSpan.Zero" /> or negative disables.
     /// </summary>
@@ -214,6 +221,23 @@ public class SessionEventArgs : SessionEventArgsBase
 
                 // Now set the flag to true
                 // So that next time we can deliver body from cache
+                request.IsBodyRead = true;
+                request.IsBodyReceived = true;
+            }
+            else if (request.HttpVersion == HttpHeader.Version30)
+            {
+                // Native HTTP/3: ClientStream is Stream.Null; body bytes live on the inbound QuicStream
+                // until BeforeRequest either buffers them here or the origin bridge streams them.
+                // Returns wire bytes (no decompression) — same as the former pre-BeforeRequest buffer.
+                if (Http3BufferedBodyReader == null)
+                    throw new InvalidOperationException(
+                        "HTTP/3 request body is no longer available. It may already have been " +
+                        "streamed to the origin; call GetRequestBody() during BeforeRequest.");
+
+                var body = await Http3BufferedBodyReader(cancellationToken);
+                Http3BufferedBodyReader = null;
+                if (!request.BodyAvailable) request.Body = body;
+
                 request.IsBodyRead = true;
                 request.IsBodyReceived = true;
             }
