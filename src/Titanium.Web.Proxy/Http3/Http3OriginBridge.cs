@@ -194,26 +194,27 @@ internal static class Http3OriginBridge
             originStream = await quicConn.OpenRequestStreamAsync(cancellationToken);
 
             // Do not start reading client DATA until the origin stream is open (stale-pool retry).
-            var streamBody = copyRequestBody != null && !request.IsBodyRead && !request.BodyAvailable;
+            Func<QuicStream, CancellationToken, Task>? pendingCopy = null;
             byte[]? body = null;
-            if (!streamBody)
+            if (copyRequestBody != null && !request.IsBodyRead && !request.BodyAvailable)
             {
-                if (request.HttpVersion.Major >= 3)
-                {
-                    // Native HTTP/3 GetRequestBody() stores wire bytes matching Content-Encoding.
-                    // CompressBodyAndUpdateContentLength assumes decompressed bytes and would
-                    // double-compress — same rule as ForwardOverTcpAsync.
-                    body = request.BodyAvailable ? request.Body : null;
-                    if (body != null && !request.IsChunked && request.ContentLength < 0)
-                        request.UpdateContentLength();
-                }
-                else
-                {
-                    // H1→H3 / H2→H3: GetRequestBody() decompressed; re-apply Content-Encoding for the wire.
-                    body = request.HasBody || request.BodyAvailable
-                        ? request.CompressBodyAndUpdateContentLength()
-                        : null;
-                }
+                pendingCopy = copyRequestBody;
+            }
+            else if (request.HttpVersion.Major >= 3)
+            {
+                // Native HTTP/3 GetRequestBody() stores wire bytes matching Content-Encoding.
+                // CompressBodyAndUpdateContentLength assumes decompressed bytes and would
+                // double-compress — same rule as ForwardOverTcpAsync.
+                body = request.BodyAvailable ? request.Body : null;
+                if (body != null && !request.IsChunked && request.ContentLength < 0)
+                    request.UpdateContentLength();
+            }
+            else
+            {
+                // H1→H3 / H2→H3: GetRequestBody() decompressed; re-apply Content-Encoding for the wire.
+                body = request.HasBody || request.BodyAvailable
+                    ? request.CompressBodyAndUpdateContentLength()
+                    : null;
             }
 
             // Use the origin authority (sniHost) for the :authority pseudo-header, not the connect host.
@@ -223,9 +224,9 @@ internal static class Http3OriginBridge
             // HEADERS are on the wire — client DATA may be consumed next; retry is no longer safe.
             requestSent = true;
 
-            if (streamBody)
+            if (pendingCopy != null)
             {
-                await copyRequestBody!(originStream, cancellationToken);
+                await pendingCopy(originStream, cancellationToken);
             }
             else if (body is { Length: > 0 })
             {

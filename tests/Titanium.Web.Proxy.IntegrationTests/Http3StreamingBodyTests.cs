@@ -22,6 +22,8 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Http3StreamingBodyTests
 {
+    private static readonly string[] StreamingChunks = ["chunk1", "chunk2", "chunk3"];
+
     private static void RequireQuic()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
@@ -120,7 +122,7 @@ public class Http3StreamingBodyTests
             };
             e.RespondStreaming(response, async (stream, ct) =>
             {
-                foreach (var part in new[] { "chunk1", "chunk2", "chunk3" })
+                foreach (var part in StreamingChunks)
                 {
                     var bytes = Encoding.ASCII.GetBytes(part);
                     await stream.WriteAsync(bytes, ct);
@@ -260,7 +262,7 @@ public class Http3StreamingBodyTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var payload = Encoding.UTF8.GetBytes(new string('x', 64 * 1024));
         var response = await client.SendAsync("POST", $"localhost:{origin.Port}", "/abort", payload,
-            cts.Token);
+            cancellationToken: cts.Token);
 
         Assert.AreEqual(200, response.StatusCode);
         Assert.AreEqual("synthetic-post", response.TextBody);

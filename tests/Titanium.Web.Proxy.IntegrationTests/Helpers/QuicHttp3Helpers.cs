@@ -292,9 +292,9 @@ internal sealed class QuicHttp3Client : IAsyncDisposable
         string authority,
         string path,
         byte[]? body = null,
-        CancellationToken cancellationToken = default,
         int? requestDataFrameSize = null,
-        IReadOnlyList<(string Name, string Value)>? extraRequestHeaders = null)
+        IReadOnlyList<(string Name, string Value)>? extraRequestHeaders = null,
+        CancellationToken cancellationToken = default)
     {
         await using var stream = await connection.OpenOutboundStreamAsync(
             QuicStreamType.Bidirectional, cancellationToken);
