@@ -24,7 +24,7 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET. This wiki documents t
 - [Breaking changes: unified logging and timing](#breaking-changes-unified-logging-and-timing)
 - [Migrating from 4.x to 5.0](Migration-4.x-to-5.0)
 - [Security considerations](Security-Considerations)
-- [Protocol feature support](Protocol-Support)
+- [Protocol feature support](Protocol-Support) ([bridges](Protocol-Support#protocol-bridges))
 
 ## Getting started
 
@@ -273,12 +273,14 @@ the synthetic-response APIs (`Ok`/`Respond`/`Redirect`/`GenericResponse`/`Respon
 HTTP/2 the same as over HTTP/1.x — see [Streaming Bodies](Streaming-Bodies). WebSocket over HTTP/2
 (RFC 8441), including HTTP/1.1 Upgrade → h2 origin on the translation bridge, is opt-in via
 `EnableRfc8441`. Not supported: HTTP/2 server push and cleartext h2c upgrade. See
-[Protocol Feature Support](Protocol-Support) for the full breakdown.
+[Protocol Feature Support](Protocol-Support) for the full breakdown, including
+[protocol bridges](Protocol-Support#protocol-bridges).
 
 ## HTTP/3
 
 HTTP/3 support is available as an opt-in feature.  See the **[HTTP/3](HTTP-3)** page for the full
-setup guide.  Quick start:
+setup guide, and [Protocol Support — Protocol bridges](Protocol-Support#protocol-bridges) for every
+client→origin direction (including TCP HTTP/1.1 ↔ HTTP/2 translation).  Quick start:
 
 ```csharp
 proxy.EnableHttp3 = true;
@@ -522,6 +524,6 @@ and remedy.
 ## Protocol feature support
 
 Wondering whether a specific HTTP/1.x, HTTP/2, or HTTP/3 feature (trailers, interim 1xx responses, HPACK,
-QPACK, Alt-Svc, server push, ...) is supported? See the **[Protocol Feature Support](Protocol-Support)** page
-for a full
-Yes/No/Partial breakdown.
+QPACK, Alt-Svc, server push, protocol translation, ...) is supported? See the
+**[Protocol Feature Support](Protocol-Support)** page for a full Yes/No/Partial breakdown, including the
+[protocol bridge matrix](Protocol-Support#protocol-bridges).

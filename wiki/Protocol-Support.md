@@ -21,6 +21,35 @@ default** (`ProxyServer.EnableHttp2 = true`); set it to `false` to force HTTP/1.
 `[Experimental("TWP001")]` and opt-in (`ProxyServer.EnableHttp3 = true`). If you find something inaccurate,
 please open an issue.
 
+## Protocol bridges
+
+The proxy can keep the client and origin on the same HTTP version, or translate between versions when
+`UpstreamHttpProtocol` and (for TCP HTTP/1.1 ↔ HTTP/2) `AllowHttpProtocolTranslation` require it.
+HTTP/1.0 is not a separate bridge: `OriginHttpVersionPolicy` only changes the request-line version on a
+TCP HTTP/1 origin.
+
+| Client | Origin | Kind | How |
+|--------|--------|------|-----|
+| HTTP/1.x | HTTP/1.x | Native | Default TCP pipeline. |
+| HTTP/2 | HTTP/2 | Native | TLS ALPN MITM (`EnableHttp2`, on by default). |
+| HTTP/3 | HTTP/3 | Native | `QuicConnectionPool` + QPACK when `EnableHttp3` is on. |
+| HTTP/1.1 | HTTP/2 | Bridge | `Http11ToHttp2BridgeHandler` when `UpstreamHttpProtocol.Http2` and `AllowHttpProtocolTranslation` are set. |
+| HTTP/2 | HTTP/1.1 | Bridge | `Http2ToHttp11BridgeHandler` when `UpstreamHttpProtocol.Http11` and `AllowHttpProtocolTranslation` are set. |
+| HTTP/1.1 | HTTP/3 | Bridge | `Http3OriginBridge.ForwardAsync` when H3 is selected. |
+| HTTP/2 | HTTP/3 | Bridge | Cold CONNECT-time `SendHttp2ToHttp3Bridge` + `Http3OriginBridge.ForwardAsync` when H3 is selected. Mid-connection Alt-Svc upgrades on an existing H2↔H2 MITM relay are not taken. |
+| HTTP/3 | HTTP/2 | Bridge | `TcpConnectionFactory` with h2 ALPN when `UpstreamHttpProtocol.Http2` is set. |
+| HTTP/3 | HTTP/1.1 | Bridge | `TcpConnectionFactory` with default ALPN negotiation. |
+
+Not supported:
+
+- Mid-connection HTTP/2 → HTTP/3 on an already-open H2↔H2 MITM session.
+- WebSocket over HTTP/3 (RFC 9220).
+- Explicit QUIC proxying (inbound HTTP/3 is `TransparentQuicProxyEndPoint` only).
+
+WebSocket over HTTP/2 (`EnableRfc8441`) reuses the HTTP/1.1 ↔ HTTP/2 bridges (plus a native h2↔h2 DATA
+tunnel). See [RFC 8441](#http2-safety-and-frame-validation) below. QUIC endpoint setup is on
+[HTTP/3](HTTP-3).
+
 ## Connections and framing
 
 | Feature | HTTP/1.0 | HTTP/1.1 | HTTP/2 | HTTP/3 | Notes |
@@ -110,6 +139,7 @@ HTTP/3 support is gated behind `ProxyServer.EnableHttp3 = true` (marked `[Experi
 It requires the MsQuic native library and `System.Net.Quic.QuicListener.IsSupported == true` at runtime
 (available on Windows 11/Server 2022+ and Linux with a recent `libmsquic` package; on macOS, bundle
 `libmsquic`, `libssl`, and `libcrypto` with `@loader_path` RPATH — see [HTTP-3](HTTP-3) for details).
+The H3-related rows below are the HTTP/3 legs of the [protocol bridges](#protocol-bridges) matrix.
 
 | Feature | Support | Notes |
 |---------|---------|-------|
@@ -147,5 +177,5 @@ It requires the MsQuic native library and `System.Net.Quic.QuicListener.IsSuppor
 ## Where to look for more detail
 
 - [Streaming Bodies](Streaming-Bodies) - the `OnRequestBodyWrite`/`OnResponseBodyWrite`/`RespondStreaming` APIs in depth.
-- [HTTP/3](HTTP-3) - HTTP/3 and QUIC support, `TransparentQuicProxyEndPoint`, protocol bridges, and `EnableHttp3`.
+- [HTTP/3](HTTP-3) - HTTP/3 and QUIC setup, `TransparentQuicProxyEndPoint`, and `EnableHttp3`.
 - [Home](Home) - general usage and the rest of the public API surface.
