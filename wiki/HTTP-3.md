@@ -141,15 +141,18 @@ First-connection adoption also still comes from `Alt-Svc` on the first response.
 
 ## Protocol bridges
 
-All five bridge directions are implemented:
+HTTP/3 participates in four of the seven translation pairs (plus native H3↔H3). The full client→origin
+matrix, including TCP HTTP/1.1 ↔ HTTP/2 translation, is on
+[Protocol Support — Protocol bridges](Protocol-Support#protocol-bridges).
 
-| Inbound | Outbound | How |
-|---------|----------|-----|
-| HTTP/3 (QUIC) | HTTP/3 (QUIC) | `QuicConnectionPool` + QPACK framing |
-| HTTP/3 (QUIC) | HTTP/2 (TCP) | `TcpConnectionFactory` with h2 ALPN |
-| HTTP/3 (QUIC) | HTTP/1.1 (TCP) | `TcpConnectionFactory` with default ALPN |
-| HTTP/1.1 (TCP) | HTTP/3 (QUIC) | `Http3OriginBridge.ForwardAsync` when capability cached |
-| HTTP/2 (TCP) | HTTP/3 (QUIC) | Cold path only: CONNECT-time `SendHttp2ToHttp3Bridge` + `Http3OriginBridge.ForwardAsync` when H3 is selected. Mid-connection Alt-Svc upgrades on an existing H2↔H2 MITM relay are not taken. |
+HTTP/3-specific limits:
+
+- **H2 → H3** is cold CONNECT only (`SendHttp2ToHttp3Bridge`). Mid-connection Alt-Svc upgrades on an
+  existing H2↔H2 MITM relay are not taken.
+- A configured upstream proxy cannot speak QUIC CONNECT or SOCKS UDP ASSOCIATE; those requests fall
+  back to `ForwardOverTcpAsync`.
+- Inbound HTTP/3 is transparent-only (`TransparentQuicProxyEndPoint`); there is no explicit QUIC
+  proxy endpoint.
 
 ## Per-request overrides
 
@@ -345,7 +348,7 @@ cached `h3` via Alt-Svc, they will fall back to TCP on the next request cycle. T
 
 ## See also
 
-- [Protocol Support](Protocol-Support) — feature matrix for all protocols.
+- [Protocol Support](Protocol-Support) — feature matrix for all protocols, including [protocol bridges](Protocol-Support#protocol-bridges).
 - [Home](Home) — general usage and the rest of the public API surface.
 - RFC 9114 — HTTP/3
 - RFC 9204 — QPACK

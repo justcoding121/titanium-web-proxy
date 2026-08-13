@@ -53,7 +53,8 @@ internal static class Http3OriginBridge
         Http3OriginRoute route,
         ILogger logger,
         CancellationToken cancellationToken,
-        Func<Response, CancellationToken, Task>? onInterimResponse = null)
+        Func<Response, CancellationToken, Task>? onInterimResponse = null,
+        Func<QuicStream, CancellationToken, Task>? copyRequestBody = null)
     {
         var request = sessionArgs.HttpClient.Request;
         var sniHost = request.RequestUri?.Host ?? string.Empty;
@@ -64,7 +65,7 @@ internal static class Http3OriginBridge
             await ForwardOverQuicAsync(
                 sessionArgs, server,
                 connectHost, sniHost, route.QuicPort, route.ForcedH3,
-                logger, cancellationToken, onInterimResponse);
+                logger, cancellationToken, onInterimResponse, copyRequestBody);
             return;
         }
 
@@ -80,12 +81,18 @@ internal static class Http3OriginBridge
     /// <param name="onInterimResponse">
     ///     Optional callback invoked for each 1xx interim response.
     /// </param>
+    /// <param name="copyRequestBody">
+    ///     Native HTTP/3 only: when the request body was not buffered during BeforeRequest, copies
+    ///     remaining client DATA frames onto the origin request stream. Owned by
+    ///     <c>Http3RequestStream</c>; not used by H1→H3 / H2→H3 bridges.
+    /// </param>
     internal static async Task ForwardAsync(
         SessionEventArgs sessionArgs,
         ProxyServer server,
         ILogger logger,
         CancellationToken cancellationToken,
-        Func<Response, CancellationToken, Task>? onInterimResponse = null)
+        Func<Response, CancellationToken, Task>? onInterimResponse = null,
+        Func<QuicStream, CancellationToken, Task>? copyRequestBody = null)
     {
         var request = sessionArgs.HttpClient.Request;
         var host = request.RequestUri?.Host ?? string.Empty;
@@ -96,7 +103,8 @@ internal static class Http3OriginBridge
         var route = server.ResolveHttp3Origin(
             host, port, sessionArgs.UpstreamHttpProtocol, allowDnsProbe: true);
 
-        await ForwardAsync(sessionArgs, server, route, logger, cancellationToken, onInterimResponse);
+        await ForwardAsync(sessionArgs, server, route, logger, cancellationToken, onInterimResponse,
+            copyRequestBody);
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────
@@ -127,7 +135,8 @@ internal static class Http3OriginBridge
         bool isForcedH3,
         ILogger logger,
         CancellationToken cancellationToken,
-        Func<Response, CancellationToken, Task>? onInterimResponse = null)
+        Func<Response, CancellationToken, Task>? onInterimResponse = null,
+        Func<QuicStream, CancellationToken, Task>? copyRequestBody = null)
     {
         var request = sessionArgs.HttpClient.Request;
         var upStreamEndPoint = sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint;
@@ -184,32 +193,50 @@ internal static class Http3OriginBridge
 
             originStream = await quicConn.OpenRequestStreamAsync(cancellationToken);
 
-            // GetRequestBody() (called unconditionally by BridgeOnBeforeRequestForH3 as part of its
-            // H2 frame-reading handshake, regardless of whether any user handler wants the body)
-            // decompresses on read but leaves Content-Encoding/Content-Length on the request headers
-            // untouched - same as the H1 GetRequestBody() path (see ForwardOverTcpAsync's remarks).
-            // Every other forwarding path (H1 SendRequest, native H2 relay, H2->H1.1 bridge) re-applies
-            // compression via CompressBodyAndUpdateContentLength() before writing the request; this is
-            // the H3/QUIC equivalent. Without it, any request whose body was buffered (e.g. a gzip'd
-            // POST body such as play.google.com/log) is sent to the origin still declaring
-            // Content-Encoding: gzip and the original compressed Content-Length while actually carrying
-            // decompressed bytes - producing a "malformed request" 400 from the origin. Must run before
-            // BuildRequestHeaders so the encoded :headers frame reflects the refreshed Content-Length.
-            var body = request.HasBody ? request.CompressBodyAndUpdateContentLength() : null;
+            // Do not start reading client DATA until the origin stream is open (stale-pool retry).
+            Func<QuicStream, CancellationToken, Task>? pendingCopy = null;
+            byte[]? body = null;
+            if (copyRequestBody != null && !request.IsBodyRead && !request.BodyAvailable)
+            {
+                pendingCopy = copyRequestBody;
+            }
+            else if (request.HttpVersion.Major >= 3)
+            {
+                // Native HTTP/3 GetRequestBody() stores wire bytes matching Content-Encoding.
+                // CompressBodyAndUpdateContentLength assumes decompressed bytes and would
+                // double-compress — same rule as ForwardOverTcpAsync.
+                body = request.BodyAvailable ? request.Body : null;
+                if (body != null && !request.IsChunked && request.ContentLength < 0)
+                    request.UpdateContentLength();
+            }
+            else
+            {
+                // H1→H3 / H2→H3: GetRequestBody() decompressed; re-apply Content-Encoding for the wire.
+                body = request.HasBody || request.BodyAvailable
+                    ? request.CompressBodyAndUpdateContentLength()
+                    : null;
+            }
 
             // Use the origin authority (sniHost) for the :authority pseudo-header, not the connect host.
             var reqHeaders = BuildRequestHeaders(request, sniHost);
             var encodedHeaders = QpackEncoder.Encode(reqHeaders);
             await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, encodedHeaders, cancellationToken);
+            // HEADERS are on the wire — client DATA may be consumed next; retry is no longer safe.
+            requestSent = true;
 
-            if (body is { Length: > 0 })
+            if (pendingCopy != null)
+            {
+                await pendingCopy(originStream, cancellationToken);
+            }
+            else if (body is { Length: > 0 })
+            {
                 await Http3Frame.WriteAsync(originStream, Http3FrameType.Data, body, cancellationToken);
+            }
 
             // QuicStream WriteAsync may buffer; without Flush the peer can see the request hundreds of
             // ms late (observed ~450ms Cloudflare HTML TTFB with inFlight=1 after request "sent").
             await originStream.FlushAsync(cancellationToken);
             originStream.CompleteWrites();
-            requestSent = true; // request fully on the wire — no longer safe to silently retry
             sessionArgs.Timing?.MarkRequestSent();
 
             const int maxInterimResponses = 20;
@@ -500,6 +527,23 @@ internal static class Http3OriginBridge
     {
         var request = sessionArgs.HttpClient.Request;
 
+        // Native H3→TCP: unbounded uploads still hit MaxBufferedBodyBytes (no streaming to H1/H2
+        // origins in this change). Buffer or drain the inbound QuicStream before SendRequest.
+        if (!request.IsBodyReceived && sessionArgs.Http3BufferedBodyReader != null)
+        {
+            if (request.HasBody)
+            {
+                await sessionArgs.GetRequestBody(cancellationToken);
+            }
+            else
+            {
+                // Consume FIN for bodiless requests (GET) without exposing a body.
+                _ = await sessionArgs.Http3BufferedBodyReader(cancellationToken);
+                sessionArgs.Http3BufferedBodyReader = null;
+                request.IsBodyReceived = true;
+            }
+        }
+
         // SendRequest uses HTTP/1.x framing. Translate H2/H3-shaped requests the same way
         // Http2ToHttp11BridgeHandler does before hitting the wire.
         var needsHttp11Wire = request.HttpVersion.Major >= 2;
@@ -521,7 +565,7 @@ internal static class Http3OriginBridge
 
             // Unlike the H1 GetRequestBody() and native-H2 body-completion paths (both of which
             // decompress on read - see SessionEventArgs.ReadBodyAsync / Http2Helper's END_STREAM
-            // handling), Http3RequestStream.ReadRequestBodyAsync stores DATA-frame payloads verbatim:
+            // handling), native HTTP/3 BufferRequestBodyAsync stores DATA-frame payloads verbatim:
             // Body already IS the wire-compressed representation matching Content-Encoding.
             // CompressBodyAndUpdateContentLength() assumes the opposite (decompressed Body, to be
             // compressed for the wire) and would double-compress it here, corrupting the payload sent

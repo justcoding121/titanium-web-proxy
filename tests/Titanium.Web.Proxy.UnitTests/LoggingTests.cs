@@ -142,7 +142,10 @@ public partial class LoggingTests
             using (var provider = new RollingFileLoggerProvider(options))
             {
                 var logger = provider.CreateLogger("test");
-                for (var i = 0; i < 200; i++)
+                // Keep the write volume small: under coverage CI, hundreds of roll File.Move cycles can
+                // exceed ChannelLoggerProviderBase's 3s dispose drain and leak the marker entry.
+                // ~40 lines at MaxFileSizeBytes=1024 is still enough to force at least one roll.
+                for (var i = 0; i < 40; i++)
                     logger.LogError("this is a reasonably long log line to help exceed the byte threshold {Index}", i);
 
                 // The loop above may (deterministically, depending on exact byte counts) end precisely on a

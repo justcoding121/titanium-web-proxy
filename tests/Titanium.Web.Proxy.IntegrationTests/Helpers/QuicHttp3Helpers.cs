@@ -147,17 +147,22 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
                 }
 
                 var body = new List<byte>();
+                var dataFrameCount = 0;
                 while (true)
                 {
                     var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0, cts.Token);
                     if (frame is null) break;
                     if (frame.Type == Http3FrameType.Data)
+                    {
+                        dataFrameCount++;
                         body.AddRange(frame.Payload.ToArray());
+                    }
                     else if (frame.Type == Http3FrameType.Headers)
                         break;
                 }
 
-                var response = await handler(new QuicHttp3Request(method, path, authority, body.ToArray()));
+                var response = await handler(new QuicHttp3Request(method, path, authority, body.ToArray(),
+                    dataFrameCount));
                 var headerList = new List<(string, string)>
                 {
                     (":status", response.StatusCode.ToString()),
@@ -168,7 +173,19 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
                 var responseHeaders = QpackEncoder.Encode(headerList);
                 await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, responseHeaders, cts.Token);
                 if (response.Body is { Length: > 0 })
-                    await Http3Frame.WriteAsync(stream, Http3FrameType.Data, response.Body, cts.Token);
+                {
+                    // Optional multi-frame emit for streaming-hook tests; default remains one DATA frame.
+                    var frameSize = response.DataFrameSize ?? 0;
+                    var chunkSize = frameSize > 0 && frameSize < response.Body.Length
+                        ? frameSize
+                        : response.Body.Length;
+                    for (var offset = 0; offset < response.Body.Length; offset += chunkSize)
+                    {
+                        var len = Math.Min(chunkSize, response.Body.Length - offset);
+                        await Http3Frame.WriteAsync(stream, Http3FrameType.Data,
+                            response.Body.AsMemory(offset, len), cts.Token);
+                    }
+                }
                 stream.CompleteWrites();
             }
             catch (OperationCanceledException) { }
@@ -275,6 +292,8 @@ internal sealed class QuicHttp3Client : IAsyncDisposable
         string authority,
         string path,
         byte[]? body = null,
+        int? requestDataFrameSize = null,
+        IReadOnlyList<(string Name, string Value)>? extraRequestHeaders = null,
         CancellationToken cancellationToken = default)
     {
         await using var stream = await connection.OpenOutboundStreamAsync(
@@ -289,10 +308,23 @@ internal sealed class QuicHttp3Client : IAsyncDisposable
         };
         if (body is { Length: > 0 })
             headers.Add(("content-length", body.Length.ToString()));
+        if (extraRequestHeaders != null)
+            headers.AddRange(extraRequestHeaders);
 
         await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, QpackEncoder.Encode(headers), cancellationToken);
         if (body is { Length: > 0 })
-            await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, cancellationToken);
+        {
+            var frameSize = requestDataFrameSize ?? 0;
+            var chunkSize = frameSize > 0 && frameSize < body.Length
+                ? frameSize
+                : body.Length;
+            for (var offset = 0; offset < body.Length; offset += chunkSize)
+            {
+                var len = Math.Min(chunkSize, body.Length - offset);
+                await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body.AsMemory(offset, len),
+                    cancellationToken);
+            }
+        }
         stream.CompleteWrites();
 
         var headersFrame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 64 * 1024, cancellationToken);
@@ -308,17 +340,22 @@ internal sealed class QuicHttp3Client : IAsyncDisposable
         }
 
         var responseBody = new List<byte>();
+        var responseDataFrames = 0;
         while (true)
         {
             var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0, cancellationToken);
             if (frame is null) break;
             if (frame.Type == Http3FrameType.Data)
+            {
+                responseDataFrames++;
                 responseBody.AddRange(frame.Payload.ToArray());
+            }
             else if (frame.Type == Http3FrameType.Headers)
                 break;
         }
 
-        return new QuicHttp3Response(status, Encoding.UTF8.GetString(responseBody.ToArray()), responseBody.ToArray());
+        return new QuicHttp3Response(status, Encoding.UTF8.GetString(responseBody.ToArray()),
+            responseBody.ToArray(), dataFrameCount: responseDataFrames);
     }
 
     public async ValueTask DisposeAsync()
@@ -331,7 +368,8 @@ internal sealed class QuicHttp3Client : IAsyncDisposable
     }
 }
 
-internal readonly record struct QuicHttp3Request(string Method, string Path, string Authority, byte[] Body);
+internal readonly record struct QuicHttp3Request(
+    string Method, string Path, string Authority, byte[] Body, int DataFrameCount = 0);
 
 internal sealed class QuicHttp3Response
 {
@@ -341,13 +379,16 @@ internal sealed class QuicHttp3Response
     }
 
     public QuicHttp3Response(int statusCode, string textBody, byte[] body,
-        IReadOnlyList<(string Name, string Value)>? extraHeaders = null, string? contentType = null)
+        IReadOnlyList<(string Name, string Value)>? extraHeaders = null, string? contentType = null,
+        int? dataFrameSize = null, int dataFrameCount = 0)
     {
         StatusCode = statusCode;
         TextBody = textBody;
         Body = body;
         ExtraHeaders = extraHeaders;
         ContentType = contentType;
+        DataFrameSize = dataFrameSize;
+        DataFrameCount = dataFrameCount;
     }
 
     public int StatusCode { get; }
@@ -355,6 +396,12 @@ internal sealed class QuicHttp3Response
     public byte[] Body { get; }
     public IReadOnlyList<(string Name, string Value)>? ExtraHeaders { get; }
     public string? ContentType { get; }
+
+    /// <summary>When set, the origin writes <see cref="Body"/> as multiple DATA frames of this size.</summary>
+    public int? DataFrameSize { get; }
+
+    /// <summary>Number of DATA frames observed when this object is a client-parsed response.</summary>
+    public int DataFrameCount { get; }
 }
 
 #pragma warning restore TWP001

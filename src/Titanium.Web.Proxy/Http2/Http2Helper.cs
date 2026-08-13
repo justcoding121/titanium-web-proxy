@@ -780,7 +780,7 @@ namespace Titanium.Web.Proxy.Http2
                             // we are inside the `if (isClient)` branch, so `input` is always the client
                             // stream here (see the isClient=true call in SendHttp2).
                             var synthTask = EmitSyntheticResponseAsync(sessionArgs, hbStreamId, connectionState,
-                                    input, streamToken)
+                                    input, streamToken, onAfterResponse, logger)
                                 .ContinueWith(t =>
                                 {
                                     linkedCts694?.Dispose();
@@ -845,7 +845,7 @@ namespace Titanium.Web.Proxy.Http2
                                         : null;
                                     var unknProtoToken = linkedCts751?.Token ?? cancellationToken;
                                     var synthTask501 = EmitSyntheticResponseAsync(sessionArgs, hbStreamId,
-                                            connectionState, input, unknProtoToken)
+                                            connectionState, input, unknProtoToken, onAfterResponse, logger)
                                         .ContinueWith(t =>
                                         {
                                             linkedCts751?.Dispose();
@@ -997,7 +997,7 @@ namespace Titanium.Web.Proxy.Http2
                                 // we are inside the isClient=false branch, so `output` is the client stream
                                 // here (see the isClient=false call in SendHttp2).
                                 var synthTask = EmitSyntheticResponseAsync(sessionArgs, hbStreamId, connectionState,
-                                        output, streamToken)
+                                        output, streamToken, onAfterResponse, logger)
                                     .ContinueWith(t =>
                                     {
                                         linkedCts893?.Dispose();
@@ -2842,7 +2842,8 @@ namespace Titanium.Web.Proxy.Http2
         ///     chunked header is always stripped regardless of which shape applies.
         /// </summary>
         internal static async Task EmitSyntheticResponseAsync(SessionEventArgs args, int streamId,
-            Http2ConnectionState connectionState, Stream clientStream, CancellationToken cancellationToken)
+            Http2ConnectionState connectionState, Stream clientStream, CancellationToken cancellationToken,
+            Func<SessionEventArgs, Task>? onAfterResponse = null, ILogger? logger = null)
         {
             var response = args.HttpClient.Response;
 
@@ -2854,101 +2855,141 @@ namespace Titanium.Web.Proxy.Http2
             // but honor cancellation so we never hang if the server never sends SETTINGS / closes early.
             await connectionState.ServerSettingsRelayed.Task.WaitAsync(cancellationToken);
 
+            var streamBodyWriter = response.StreamBodyWriter;
+            if (streamBodyWriter != null)
+            {
+                await EmitStreamedSyntheticResponseAsync(response, streamBodyWriter, streamId, connectionState,
+                    frameHeader, frameHeaderBuffer, clientStream, cancellationToken);
+            }
+            else
+            {
+                await EmitBufferedSyntheticResponseAsync(response, streamId, connectionState, frameHeader,
+                    frameHeaderBuffer, clientStream, cancellationToken);
+            }
+
+            response.IsBodySent = true;
+            MarkSyntheticResponseClosed(streamId, connectionState, onAfterResponse, logger);
+        }
+
+        private static async Task EmitStreamedSyntheticResponseAsync(Response response,
+            Func<Stream, CancellationToken, Task> streamBodyWriter, int streamId,
+            Http2ConnectionState connectionState, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
+            Stream clientStream, CancellationToken cancellationToken)
+        {
             var clientWriteLock = connectionState.ClientWriteLock;
             var clientSendFlow = connectionState.ClientSendFlow;
 
-            if (response.StreamBodyWriter != null)
+            // HTTP/2 does not use chunked transfer-encoding; body framing is done via DATA frames + END_STREAM.
+            response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+
+            // Streamed bridge bodies (notably H2↔H3) are delimited by END_STREAM. Relaying the
+            // origin Content-Length is unsafe: if the QUIC/H3 copy finishes short (or is
+            // cancelled) and we still END_STREAM, Chrome fails with ERR_HTTP2_PROTOCOL_ERROR
+            // (RST PROTOCOL_ERROR) and can poison the whole client H2 connection — which is
+            // what left YouTube as a blank page after new-tab navigation.
+            var advertisedLength = response.ContentLength;
+            if (advertisedLength >= 0)
+                response.Headers.RemoveHeader(KnownHeaders.ContentLength);
+
+            // send the headers first; the body follows as DATA frames produced by the consumer's
+            // delegate as it runs, so it is never buffered.
+            await clientWriteLock.WaitAsync(cancellationToken);
+            try
             {
-                // HTTP/2 does not use chunked transfer-encoding; body framing is done via DATA frames + END_STREAM.
-                response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+                await SendHeader(connectionState.ClientSettings, frameHeader, frameHeaderBuffer, response,
+                    false, clientStream, false);
+            }
+            finally
+            {
+                clientWriteLock.Release();
+            }
 
-                // Streamed bridge bodies (notably H2↔H3) are delimited by END_STREAM. Relaying the
-                // origin Content-Length is unsafe: if the QUIC/H3 copy finishes short (or is
-                // cancelled) and we still END_STREAM, Chrome fails with ERR_HTTP2_PROTOCOL_ERROR
-                // (RST PROTOCOL_ERROR) and can poison the whole client H2 connection — which is
-                // what left YouTube as a blank page after new-tab navigation.
-                var advertisedLength = response.ContentLength;
-                if (advertisedLength >= 0)
-                    response.Headers.RemoveHeader(KnownHeaders.ContentLength);
+            var bodyWriter = new Http2BodyStreamWriter(streamId, clientStream, clientWriteLock, clientSendFlow,
+                cancellationToken);
 
-                // send the headers first; the body follows as DATA frames produced by the consumer's
-                // delegate as it runs, so it is never buffered.
+            await streamBodyWriter(bodyWriter, cancellationToken);
+
+            // Origin advertised a length but delivered a different amount. Prefer RST over a
+            // successful-looking END_STREAM so the browser retries instead of caching/executing
+            // a truncated body.
+            if (advertisedLength >= 0 && bodyWriter.BytesWritten != advertisedLength)
+            {
                 await clientWriteLock.WaitAsync(cancellationToken);
                 try
                 {
-                    await SendHeader(connectionState.ClientSettings, frameHeader, frameHeaderBuffer, response,
-                        false, clientStream, false);
+                    await SendRstStreamAsync(frameHeader, frameHeaderBuffer, streamId,
+                        Http2ErrorCode.InternalError, clientStream);
                 }
                 finally
                 {
                     clientWriteLock.Release();
-                }
-
-                var bodyWriter = new Http2BodyStreamWriter(streamId, clientStream, clientWriteLock, clientSendFlow,
-                    cancellationToken);
-
-                await response.StreamBodyWriter(bodyWriter, cancellationToken);
-
-                // Origin advertised a length but delivered a different amount. Prefer RST over a
-                // successful-looking END_STREAM so the browser retries instead of caching/executing
-                // a truncated body.
-                if (advertisedLength >= 0 && bodyWriter.BytesWritten != advertisedLength)
-                {
-                    await clientWriteLock.WaitAsync(cancellationToken);
-                    try
-                    {
-                        await SendRstStreamAsync(frameHeader, frameHeaderBuffer, streamId,
-                            Http2ErrorCode.InternalError, clientStream);
-                    }
-                    finally
-                    {
-                        clientWriteLock.Release();
-                    }
-                }
-                else
-                {
-                    await bodyWriter.CompleteAsync();
                 }
             }
             else
             {
-                // buffered case (Ok/GenericResponse/Redirect/buffered Respond / H2→H3 bridge) - the whole
-                // body, if any, is already in memory. Compress WHILE Transfer-Encoding: chunked may still
-                // be present: Response.HasBody treats CL=-1 + chunked as "has body", and stripping TE
-                // first made HasBody false so CompressBodyAndUpdateContentLength zeroed Content-Length
-                // and dropped the buffered bytes (empty CDN JS/CSS through the H2→H3 bridge).
-                var body = response.CompressBodyAndUpdateContentLength();
+                await bodyWriter.CompleteAsync();
+            }
+        }
 
-                // HTTP/2 does not use chunked transfer-encoding; body framing is done via DATA frames.
-                response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
-                if (body is { Length: > 0 } && response.ContentLength < 0)
-                    response.ContentLength = body.Length;
+        private static async Task EmitBufferedSyntheticResponseAsync(Response response, int streamId,
+            Http2ConnectionState connectionState, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
+            Stream clientStream, CancellationToken cancellationToken)
+        {
+            var clientWriteLock = connectionState.ClientWriteLock;
+            var clientSendFlow = connectionState.ClientSendFlow;
 
-                var hasBody = body is { Length: > 0 };
+            // buffered case (Ok/GenericResponse/Redirect/buffered Respond / H2→H3 bridge) - the whole
+            // body, if any, is already in memory. Compress WHILE Transfer-Encoding: chunked may still
+            // be present: Response.HasBody treats CL=-1 + chunked as "has body", and stripping TE
+            // first made HasBody false so CompressBodyAndUpdateContentLength zeroed Content-Length
+            // and dropped the buffered bytes (empty CDN JS/CSS through the H2→H3 bridge).
+            var body = response.CompressBodyAndUpdateContentLength();
 
-                await clientWriteLock.WaitAsync(cancellationToken);
-                try
-                {
-                    // no body at all: END_STREAM belongs on the HEADERS frame itself, there is no DATA frame
-                    // to carry it.
-                    await SendHeader(connectionState.ClientSettings, frameHeader, frameHeaderBuffer, response,
-                        !hasBody, clientStream, false);
-                }
-                finally
-                {
-                    clientWriteLock.Release();
-                }
+            // HTTP/2 does not use chunked transfer-encoding; body framing is done via DATA frames.
+            response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+            if (body is { Length: > 0 } && response.ContentLength < 0)
+                response.ContentLength = body.Length;
 
-                if (hasBody)
-                {
-                    // Reserve flow-control credit outside the write lock (SendData + writeLock).
-                    await SendData(frameHeader, frameHeaderBuffer, streamId, body!, true,
-                        connectionState.ClientSettings.MaxFrameSize, clientSendFlow, clientStream,
-                        cancellationToken, clientWriteLock);
-                }
+            var hasBody = body is { Length: > 0 };
+
+            await clientWriteLock.WaitAsync(cancellationToken);
+            try
+            {
+                // no body at all: END_STREAM belongs on the HEADERS frame itself, there is no DATA frame
+                // to carry it.
+                await SendHeader(connectionState.ClientSettings, frameHeader, frameHeaderBuffer, response,
+                    !hasBody, clientStream, false);
+            }
+            finally
+            {
+                clientWriteLock.Release();
             }
 
-            response.IsBodySent = true;
+            if (hasBody)
+            {
+                // Reserve flow-control credit outside the write lock (SendData + writeLock).
+                await SendData(frameHeader, frameHeaderBuffer, streamId, body!, true,
+                    connectionState.ClientSettings.MaxFrameSize, clientSendFlow, clientStream,
+                    cancellationToken, clientWriteLock);
+            }
+        }
+
+        private static void MarkSyntheticResponseClosed(int streamId, Http2ConnectionState connectionState,
+            Func<SessionEventArgs, Task>? onAfterResponse, ILogger? logger)
+        {
+            // Synthetic writes never produce an inbound END_STREAM for the response half, so mark
+            // ResponseClosed here. Finalize only when the request half is already done — do not force
+            // RequestClosed while the client may still be uploading (would race Dispose with the frame loop).
+            if (!connectionState.Streams.TryGetValue(streamId, out var streamState))
+                return;
+
+            streamState.ResponseClosed = true;
+            if (!streamState.IsClosed || onAfterResponse == null || logger == null)
+                return;
+
+            connectionState.RemoveStream(streamId);
+            connectionState.PendingFinalizations.Add(
+                FinalizeStreamAsync(streamState, onAfterResponse, logger));
         }
 
         private static async Task<int> ForceRead(Stream input, byte[] buffer, int offset, int bytesToRead,

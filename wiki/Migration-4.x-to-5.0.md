@@ -235,6 +235,12 @@ only affect you if you've already opted in:
 - **Cumulative body budgets** apply to H3 request/response bodies the same way as H1/H2 (see
   [above](#cumulative-body-budgets-are-now-enforced-end-to-end)); a breach maps to
   `Http3ErrorCode.ExcessiveLoad`.
+- **`BeforeRequest` runs on headers only (like HTTP/1.1 / HTTP/2):** native HTTP/3 previously buffered
+  the entire request body before `BeforeRequest`. Handlers that read `Request.Body` in `BeforeRequest`
+  **without** calling `GetRequestBody()` will now throw `InvalidOperationException`, matching HTTP/1.1.
+  Call `await e.GetRequestBody()` to buffer (wire bytes, still no decompression on native H3), or use
+  `OnRequestBodyWrite` to inspect/modify DATA frames while they stream to an H3 origin. H1→H3 / H2→H3
+  bridges still buffer before forwarding; H3→TCP fallback also buffers up to `MaxBufferedBodyBytes`.
 - **Background task ownership:** all per-connection background tasks (QPACK encoder/decoder
   readers/writers, unidirectional stream handlers) are now tracked and joined on teardown, so a
   connection close no longer leaves orphaned tasks or produces unobserved-exception noise in your

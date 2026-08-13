@@ -47,6 +47,13 @@ public class SessionEventArgs : SessionEventArgsBase
     public bool IsPromise { get; internal set; }
 
     /// <summary>
+    ///     Native HTTP/3 only: reads remaining client DATA frames into a bounded buffer (wire bytes).
+    ///     Set by <c>Http3RequestStream</c> before <c>BeforeRequest</c>; cleared once the body is
+    ///     buffered or streamed to the origin. Used by <see cref="GetRequestBody" /> and TCP fallback.
+    /// </summary>
+    internal Func<CancellationToken, Task<byte[]>>? Http3BufferedBodyReader { get; set; }
+
+    /// <summary>
     ///     Per-session override for <see cref="ProxyServer.ResponseHeaderTimeoutSeconds" />.
     ///     <see langword="null" /> uses the server default; <see cref="TimeSpan.Zero" /> or negative disables.
     /// </summary>
@@ -191,43 +198,64 @@ public class SessionEventArgs : SessionEventArgsBase
         HttpClient.Request.EnsureBodyAvailable(false);
 
         var request = HttpClient.Request;
+        if (request.IsBodyRead)
+            return;
 
-        // If not already read (not cached yet)
-        if (!request.IsBodyRead)
-        {
-            if (request.IsBodyReceived) throw new InvalidOperationException("Request body was already received.");
+        if (request.IsBodyReceived)
+            throw new InvalidOperationException("Request body was already received.");
 
-            if (request.HttpVersion == HttpHeader.Version20)
-            {
-                // do not send to the remote endpoint
-                request.Http2IgnoreBodyFrames = true;
+        if (request.HttpVersion == HttpHeader.Version20)
+            await ReadHttp2RequestBodyAsync(request);
+        else if (request.HttpVersion == HttpHeader.Version30)
+            await ReadHttp3RequestBodyAsync(request, cancellationToken);
+        else
+            await BufferHttp11RequestBodyAsync(request, cancellationToken);
+    }
 
-                request.Http2BodyData = new MemoryStream();
+    private static async Task ReadHttp2RequestBodyAsync(Request request)
+    {
+        // do not send to the remote endpoint
+        request.Http2IgnoreBodyFrames = true;
 
-                var tcs = new TaskCompletionSource<bool>();
-                request.ReadHttp2BodyTaskCompletionSource = tcs;
+        request.Http2BodyData = new MemoryStream();
 
-                // signal to HTTP/2 copy frame method to continue
-                request.ReadHttp2BeforeHandlerTaskCompletionSource!.SetResult(true);
+        var tcs = new TaskCompletionSource<bool>();
+        request.ReadHttp2BodyTaskCompletionSource = tcs;
 
-                await tcs.Task;
+        // signal to HTTP/2 copy frame method to continue
+        request.ReadHttp2BeforeHandlerTaskCompletionSource!.SetResult(true);
 
-                // Now set the flag to true
-                // So that next time we can deliver body from cache
-                request.IsBodyRead = true;
-                request.IsBodyReceived = true;
-            }
-            else
-            {
-                var body = await ReadBodyAsync(true, cancellationToken);
-                if (!request.BodyAvailable) request.Body = body;
+        await tcs.Task;
 
-                // Now set the flag to true
-                // So that next time we can deliver body from cache
-                request.IsBodyRead = true;
-                request.IsBodyReceived = true;
-            }
-        }
+        request.IsBodyRead = true;
+        request.IsBodyReceived = true;
+    }
+
+    private async Task ReadHttp3RequestBodyAsync(Request request, CancellationToken cancellationToken)
+    {
+        // Native HTTP/3: ClientStream is Stream.Null; body bytes live on the inbound QuicStream
+        // until BeforeRequest either buffers them here or the origin bridge streams them.
+        // Returns wire bytes (no decompression) — same as the former pre-BeforeRequest buffer.
+        if (Http3BufferedBodyReader == null)
+            throw new InvalidOperationException(
+                "HTTP/3 request body is no longer available. It may already have been " +
+                "streamed to the origin; call GetRequestBody() during BeforeRequest.");
+
+        var body = await Http3BufferedBodyReader(cancellationToken);
+        Http3BufferedBodyReader = null;
+        if (!request.BodyAvailable) request.Body = body;
+
+        request.IsBodyRead = true;
+        request.IsBodyReceived = true;
+    }
+
+    private async Task BufferHttp11RequestBodyAsync(Request request, CancellationToken cancellationToken)
+    {
+        var body = await ReadBodyAsync(true, cancellationToken);
+        if (!request.BodyAvailable) request.Body = body;
+
+        request.IsBodyRead = true;
+        request.IsBodyReceived = true;
     }
 
     /// <summary>
