@@ -152,7 +152,7 @@ public class StreamingContentEncodingTests
         CollectionAssert.AreEqual(expectedPlain, GzipDecompress(originWire));
     }
 
-    private async Task RunHttp11OrHttp2ResponseGzipTransformAsync(bool http2)
+    private static async Task RunHttp11OrHttp2ResponseGzipTransformAsync(bool http2)
     {
         using var testSuite = new TestSuite(sharedServer);
 
@@ -163,7 +163,7 @@ public class StreamingContentEncodingTests
         var server = testSuite.GetServer();
         server.HandleRequest(async context =>
         {
-            context.Response.Headers["Content-Encoding"] = "gzip";
+            context.Response.Headers.ContentEncoding = "gzip";
             context.Response.ContentLength = gzipped.Length;
             // Small writes so HTTP/2 origin DATA frames (and H1 buffer pieces for large bodies) stream.
             const int piece = 1024;
@@ -197,7 +197,7 @@ public class StreamingContentEncodingTests
         CollectionAssert.AreEqual(expectedPlain, GzipDecompress(wire));
     }
 
-    private async Task RunHttp11OrHttp2RequestGzipTransformAsync(bool http2)
+    private static async Task RunHttp11OrHttp2RequestGzipTransformAsync(bool http2)
     {
         using var testSuite = new TestSuite(sharedServer);
 
