@@ -2858,7 +2858,7 @@ namespace Titanium.Web.Proxy.Http2
             var streamBodyWriter = response.StreamBodyWriter;
             if (streamBodyWriter != null)
             {
-                await EmitStreamedSyntheticResponseAsync(response, streamBodyWriter, streamId, connectionState,
+                await EmitStreamedSyntheticResponseAsync(response, streamBodyWriter, connectionState,
                     frameHeader, frameHeaderBuffer, clientStream, cancellationToken);
             }
             else
@@ -2872,10 +2872,11 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         private static async Task EmitStreamedSyntheticResponseAsync(Response response,
-            Func<Stream, CancellationToken, Task> streamBodyWriter, int streamId,
+            Func<Stream, CancellationToken, Task> streamBodyWriter,
             Http2ConnectionState connectionState, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             Stream clientStream, CancellationToken cancellationToken)
         {
+            var streamId = frameHeader.StreamId;
             var clientWriteLock = connectionState.ClientWriteLock;
             var clientSendFlow = connectionState.ClientSendFlow;
 
