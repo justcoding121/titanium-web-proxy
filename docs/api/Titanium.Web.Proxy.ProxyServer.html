@@ -903,7 +903,7 @@ public bool EnableHttpsSvcbDnsDiscovery { get; set; }</code></pre>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_EnableIpv6UnreachableSoftSkip_" data-uid="Titanium.Web.Proxy.ProxyServer.EnableIpv6UnreachableSoftSkip*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_EnableIpv6UnreachableSoftSkip" data-uid="Titanium.Web.Proxy.ProxyServer.EnableIpv6UnreachableSoftSkip">EnableIpv6UnreachableSoftSkip</h4>
-  <div class="markdown level1 summary"><p>When true (default), after two consecutive IPv6 connect failures with
+  <div class="markdown level1 summary"><p>When true (default), after one IPv6 connect failure with
 <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.net.sockets.socketerror#system-net-sockets-socketerror-networkunreachable">NetworkUnreachable</a> (or equivalent), temporarily
 omit IPv6 addresses from the Happy Eyeballs race for 30 seconds. Reduces first-chance
 <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.net.sockets.socketexception">SocketException</a> noise on dual-stack hosts with a broken IPv6
