@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy;
@@ -49,9 +50,11 @@ internal static class WebSocketInterceptRelay
             await Task.WhenAll(clientToServer, serverToClient).ConfigureAwait(false);
             closeCode = clientToServer.Result ?? serverToClient.Result;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException oce)
         {
             // Expected when either relay direction completes and cancels its peer.
+            ProxyDiagnostics.ReportCaught(ProxyDiagnostics.Logger,
+                "WebSocketInterceptRelay coordinated shutdown cancelled a peer direction", oce);
         }
         finally
         {
@@ -114,6 +117,8 @@ internal static class WebSocketInterceptRelay
         {
             // Best-effort - the underlying connection is closed unconditionally after this regardless of
             // whether the peer was still reachable to receive the Close frame.
+            ProxyDiagnostics.ReportCaught(ProxyDiagnostics.Logger,
+                "WebSocketInterceptRelay best-effort Close frame send failed", ex);
         }
     }
 
@@ -205,13 +210,17 @@ internal static class WebSocketInterceptRelay
                 }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException oce)
         {
             // Expected during coordinated relay shutdown.
+            ProxyDiagnostics.ReportCaught(ProxyDiagnostics.Logger,
+                "WebSocketInterceptRelay direction cancelled during shutdown", oce);
         }
-        catch (IOException)
+        catch (IOException ioEx)
         {
             // The peer closed the transport while the relay was shutting down.
+            ProxyDiagnostics.ReportCaught(ProxyDiagnostics.Logger,
+                "WebSocketInterceptRelay peer closed transport during relay", ioEx);
         }
         finally
         {

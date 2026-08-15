@@ -1504,11 +1504,13 @@ public partial class ProxyServer : IDisposable
                 startedTcpEndPoints.Add(endPoint);
             }
         }
-        catch (Exception)
+        catch (Exception startEx)
         {
             // Roll back, in reverse dependency order, everything this call already started.
             // QuitListen/QuitListenQuic tolerate a listener that never started (no-op), so it is
             // safe to call them uniformly rather than re-deriving exactly how far each one got.
+            ProxyDiagnostics.ReportCaught(logger,
+                "ProxyServer.Start failed; rolling back and rethrowing", startEx);
             foreach (var quicEndPoint in startedQuicEndPoints) SafeRollback(() => QuitListenQuic(quicEndPoint));
             foreach (var endPoint in startedTcpEndPoints) SafeRollback(() => QuitListen(endPoint));
 

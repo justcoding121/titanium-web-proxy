@@ -25,7 +25,7 @@ internal static class FuncExtensions
         {
             await callback(sender, args);
         }
-        catch (BodySizeLimitExceededException)
+        catch (BodySizeLimitExceededException bodyLimitEx)
         {
             // Not a user-handler bug: a handler that calls GetRequestBody()/GetResponseBody() from
             // inside BeforeRequest/BeforeResponse surfaces this the moment MaxBufferedBodyBytes is
@@ -34,6 +34,8 @@ internal static class FuncExtensions
             // propagate to the request/response pipeline so it can produce a 413 (request side) or
             // close the connection (response side) - swallowing it here would let the pipeline carry on
             // as if the body had been read in full.
+            ProxyDiagnostics.ReportCaught(logger,
+                "User event hit body size limit; rethrowing for pipeline 413/close handling", bodyLimitEx);
             throw;
         }
         catch (Exception e)

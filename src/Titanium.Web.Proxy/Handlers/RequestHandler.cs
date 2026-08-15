@@ -11,6 +11,7 @@ using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Streams;
@@ -89,6 +90,8 @@ public partial class ProxyServer
                         // Host/Method to safely answer with) and no OnAfterResponse subscriber should see a
                         // session that never had a request - dispose directly rather than falling through
                         // to the try/finally below that pairs a real attempt with AfterResponse.
+                        ProxyDiagnostics.ReportCaught(logger,
+                            "RequestHandler header read cancelled; rethrowing after timeout check", ex);
                         args?.Dispose();
                         headerDeadline.ThrowIfTimedOut(ex);
                         throw; // unreachable: ThrowIfTimedOut always throws; satisfies definite-assignment analysis.
@@ -126,6 +129,8 @@ public partial class ProxyServer
                         catch (Http1FramingException framingEx)
                         {
                             ProxyMetrics.ParserError("framing");
+                            ProxyDiagnostics.ReportCaught(logger,
+                                "Request framing rejected; returning client error response", framingEx);
                             args.HttpClient.Response = new GenericResponse(framingEx.StatusCode)
                             {
                                 HttpVersion = request.HttpVersion
@@ -160,13 +165,15 @@ public partial class ProxyServer
                         {
                             await OnBeforeRequest(args);
                         }
-                        catch (BodySizeLimitExceededException)
+                        catch (BodySizeLimitExceededException bodyLimitEx)
                         {
                             // A request-body breach is caught here, before anything has been sent to
                             // the origin: nothing has committed the response yet, so unlike a response
                             // breach (which can only close the connection - see the catch-all further
                             // down and DowngradeChunkedFramingForHttp10OriginIfNeeded's caller) this one
                             // can still produce a normal 413 to the client.
+                            ProxyDiagnostics.ReportCaught(logger,
+                                "Request body size limit exceeded in BeforeRequest; returning 413", bodyLimitEx);
                             args.HttpClient.Response = new GenericResponse(System.Net.HttpStatusCode.RequestEntityTooLarge)
                             {
                                 HttpVersion = request.HttpVersion
@@ -235,10 +242,13 @@ public partial class ProxyServer
                                 {
                                     await args.GetRequestBody(requestToken);
                                 }
-                                catch (BodySizeLimitExceededException)
+                                catch (BodySizeLimitExceededException bodyLimitEx)
                                 {
                                     // Still request-side and still nothing sent to the origin yet, same
                                     // as the BeforeRequest breach above.
+                                    ProxyDiagnostics.ReportCaught(logger,
+                                        "Request body size limit exceeded buffering for WinAuth; returning 413",
+                                        bodyLimitEx);
                                     args.HttpClient.Response =
                                         new GenericResponse(System.Net.HttpStatusCode.RequestEntityTooLarge)
                                         {
@@ -281,7 +291,15 @@ public partial class ProxyServer
                                 }
                                 catch (SocketException e)
                                 {
-                                    if (e.SocketErrorCode != SocketError.HostNotFound) throw;
+                                    if (e.SocketErrorCode != SocketError.HostNotFound)
+                                    {
+                                        ProxyDiagnostics.ReportCaught(logger,
+                                            "RequestHandler prefetch connection failed; rethrowing", e);
+                                        throw;
+                                    }
+
+                                    ProxyDiagnostics.ReportCaught(logger,
+                                        "RequestHandler prefetch HostNotFound; continuing without prefetch", e);
                                 }
 
                                 prefetchTask = null;
@@ -380,6 +398,8 @@ public partial class ProxyServer
                                 return;
                             }
 
+                            ProxyDiagnostics.ReportCaught(logger,
+                                "RequestHandler session cancelled; rethrowing", ex);
                             throw;
                         }
                     }
@@ -391,11 +411,15 @@ public partial class ProxyServer
                                               && !(e is OperationCanceledException)
                                               && !(e is RetryableServerConnectionException))
                     {
+                        ProxyDiagnostics.ReportCaught(logger,
+                            "RequestHandler wrapping unexpected failure as ProxyHttpException", e);
                         throw new ProxyHttpException("Error occured whilst handling session request", e, args);
                     }
                 }
                 catch (Exception e)
                 {
+                    ProxyDiagnostics.ReportCaught(logger,
+                        "RequestHandler session failed; rethrowing", e);
                     args.Exception = e;
                     closeServerConnection = true;
                     throw;
@@ -633,6 +657,8 @@ public partial class ProxyServer
             }
             catch (OperationCanceledException ex)
             {
+                ProxyDiagnostics.ReportCaught(logger,
+                    "RequestHandler idle-write cancelled; rethrowing after timeout check", ex);
                 idleWriteDeadline.ThrowIfTimedOut(ex);
             }
         }

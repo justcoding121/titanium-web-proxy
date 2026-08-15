@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Diagnostics;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy.Network;
@@ -43,6 +44,8 @@ internal class RetryPolicy<T> where T : Exception
             }
             catch (Exception ex)
             {
+                ProxyDiagnostics.ReportCaught(ProxyDiagnostics.Logger,
+                    "RetryPolicy caught candidate for retry", ex);
                 exception = ex;
             }
 

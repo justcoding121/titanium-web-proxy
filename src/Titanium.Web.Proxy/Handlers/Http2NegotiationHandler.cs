@@ -333,10 +333,14 @@ public partial class ProxyServer
         }
         catch (SocketException e) when (e.SocketErrorCode == SocketError.HostNotFound)
         {
+            ProxyDiagnostics.ReportCaught(logger,
+                "Http2Negotiation retained connection HostNotFound; opening a fresh connection", e);
             return null;
         }
-        catch
+        catch (Exception adoptEx)
         {
+            ProxyDiagnostics.ReportCaught(logger,
+                "Http2Negotiation retained connection failed; opening a fresh connection", adoptEx);
             return null;
         }
 

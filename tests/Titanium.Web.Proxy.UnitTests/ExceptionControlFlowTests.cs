@@ -151,6 +151,34 @@ public class ExceptionControlFlowTests
     }
 
     [TestMethod]
+    public void ProxyDiagnostics_ReportCaught_LogsAtDebug_NotError()
+    {
+        var capturing = new CapturingLogger();
+        var ex = new InvalidOperationException("intermediate hop");
+
+        ProxyDiagnostics.ReportCaught(capturing, "RequestHandler session failed; rethrowing", ex);
+
+        Assert.AreEqual(0, capturing.ErrorCount);
+        Assert.AreEqual(1, capturing.DebugCount);
+        Assert.AreSame(ex, capturing.Entries[0].Exception);
+        StringAssert.Contains(capturing.LastMessage!, "RequestHandler session failed; rethrowing");
+    }
+
+    [TestMethod]
+    public void ProxyDiagnostics_ReportCaught_DoesNotLog_WhenDebugDisabled()
+    {
+        var capturing = new CapturingLogger { EnabledMinimum = LogLevel.Error };
+        var ex = new InvalidOperationException("should not format");
+
+        ProxyDiagnostics.ReportCaught(capturing, "RetryPolicy caught candidate for retry", ex);
+
+        Assert.AreEqual(0, capturing.DebugCount);
+        Assert.AreEqual(0, capturing.ErrorCount);
+        Assert.AreEqual(0, capturing.Entries.Count);
+        Assert.AreEqual(0, capturing.LogCallCount);
+    }
+
+    [TestMethod]
     public void ProxyDiagnostics_ReportCritical_WithAndWithoutException()
     {
         var capturing = new CapturingLogger();
@@ -254,16 +282,24 @@ public class ExceptionControlFlowTests
         public int WarningCount { get; private set; }
         public int InformationCount { get; private set; }
         public int CriticalCount { get; private set; }
+        public int LogCallCount { get; private set; }
         public string? LastMessage { get; private set; }
         public List<(LogLevel Level, Exception? Exception)> Entries { get; } = new();
 
+        /// <summary>
+        ///     Minimum level for which <see cref="IsEnabled" /> returns true. Defaults to Trace so all
+        ///     levels are enabled; raise to Error to verify Debug-gated methods become no-ops.
+        /// </summary>
+        public LogLevel EnabledMinimum { get; set; } = LogLevel.Trace;
+
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
-        public bool IsEnabled(LogLevel logLevel) => true;
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= EnabledMinimum;
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
+            LogCallCount++;
             LastMessage = formatter(state, exception);
             Entries.Add((logLevel, exception));
             switch (logLevel)

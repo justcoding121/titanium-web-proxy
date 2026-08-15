@@ -113,6 +113,18 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     }
 
     /// <summary>
+    ///     Debug breadcrumb for a non-network stream failure that is about to be rethrown (buffered /
+    ///     memory streams where an IO error is unexpected). Returns <paramref name="ex" /> so callers
+    ///     can <c>throw ReportRethrownFailure(ex)</c> without an extra local.
+    /// </summary>
+    private static Exception ReportRethrownFailure(Exception ex)
+    {
+        ProxyDiagnostics.ReportCaught(ProxyDiagnostics.Logger,
+            "HttpStream read/write failed; rethrowing (non-network stream)", ex);
+        return ex;
+    }
+
+    /// <summary>
     ///     When overridden in a derived class, clears all buffers for this stream and causes any buffered data to be written
     ///     to the underlying device.
     /// </summary>
@@ -128,7 +140,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             closedWrite = true;
             if (!IsNetworkStream)
-                throw;
+                throw ReportRethrownFailure(ex);
             ReportSuppressedFailure(ex);
         }
     }
@@ -215,7 +227,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             closedWrite = true;
             if (!IsNetworkStream)
-                throw;
+                throw ReportRethrownFailure(ex);
             ReportSuppressedFailure(ex);
         }
     }
@@ -271,7 +283,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             closedWrite = true;
             if (!IsNetworkStream)
-                throw;
+                throw ReportRethrownFailure(ex);
             ReportSuppressedFailure(ex);
         }
     }
@@ -476,7 +488,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             closedWrite = true;
             if (!IsNetworkStream)
-                throw;
+                throw ReportRethrownFailure(ex);
             ReportSuppressedFailure(ex);
         }
     }
@@ -500,7 +512,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             closedWrite = true;
             if (!IsNetworkStream)
-                throw;
+                throw ReportRethrownFailure(ex);
             ReportSuppressedFailure(ex);
         }
         finally
@@ -643,7 +655,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         catch (Exception ex)
         {
             if (!IsNetworkStream)
-                throw;
+                throw ReportRethrownFailure(ex);
             ReportSuppressedFailure(ex);
         }
         finally
@@ -707,15 +719,17 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 Available += readBytes;
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException oce)
         {
             cancelled = true;
+            ProxyDiagnostics.ReportCaught(ProxyDiagnostics.Logger,
+                "HttpStream FillBufferAsync cancelled; rethrowing", oce);
             throw;
         }
         catch (Exception ex)
         {
             if (!IsNetworkStream)
-                throw;
+                throw ReportRethrownFailure(ex);
             ReportSuppressedFailure(ex);
         }
         finally
@@ -923,7 +937,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             {
                 closedWrite = true;
                 if (!IsNetworkStream)
-                    throw;
+                throw ReportRethrownFailure(ex);
                 ReportSuppressedFailure(ex);
             }
             finally
@@ -949,7 +963,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             {
                 closedWrite = true;
                 if (!IsNetworkStream)
-                    throw;
+                throw ReportRethrownFailure(ex);
                 ReportSuppressedFailure(ex);
             }
         }
@@ -975,9 +989,15 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             //throw this as ServerConnectionException so that RetryPolicy can retry with a new server connection.
             if (IsRetryableHeaderWriteFailure)
+            {
+                ProxyDiagnostics.ReportCaught(ProxyDiagnostics.Logger,
+                    "HttpStream header write failed; wrapping as RetryableServerConnectionException", e);
                 throw new RetryableServerConnectionException(
                     "Server connection was closed. Exception while sending request line and headers.", e);
+            }
 
+            ProxyDiagnostics.ReportCaught(ProxyDiagnostics.Logger,
+                "HttpStream header write failed; rethrowing", e);
             throw;
         }
     }
@@ -1001,7 +1021,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             closedWrite = true;
             if (!IsNetworkStream)
-                throw;
+                throw ReportRethrownFailure(ex);
             ReportSuppressedFailure(ex);
         }
     }
@@ -1020,7 +1040,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             closedWrite = true;
             if (!IsNetworkStream)
-                throw;
+                throw ReportRethrownFailure(ex);
             ReportSuppressedFailure(ex);
         }
     }
@@ -1498,7 +1518,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             {
                 closedWrite = true;
                 if (!IsNetworkStream)
-                    throw;
+                throw ReportRethrownFailure(ex);
                 ReportSuppressedFailure(ex);
             }
         }

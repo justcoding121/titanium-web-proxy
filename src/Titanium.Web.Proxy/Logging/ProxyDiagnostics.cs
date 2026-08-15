@@ -31,6 +31,19 @@ internal static class ProxyDiagnostics
     }
 
     /// <summary>
+    ///     Debug-only breadcrumb for a catch site that rethrows, wraps, swallows, or otherwise continues
+    ///     without making a terminal severity decision. Never writes at <see cref="LogLevel.Error" />;
+    ///     use <see cref="ReportException" />, <see cref="ReportBenign" />, or
+    ///     <see cref="ReportUnexpected" /> at the site that owns the final outcome. When Debug is
+    ///     disabled this is a single <see cref="ILogger.IsEnabled" /> virtual call.
+    /// </summary>
+    public static void ReportCaught(ILogger logger, string context, Exception exception)
+    {
+        if (!logger.IsEnabled(LogLevel.Debug)) return;
+        logger.LogDebug(exception, ContextTemplate, context);
+    }
+
+    /// <summary>
     ///     Reports very low-level tracing (e.g. a benign event that is not even exception-worthy).
     /// </summary>
     public static void ReportTrace(ILogger logger, string context)

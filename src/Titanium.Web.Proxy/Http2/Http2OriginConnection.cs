@@ -135,6 +135,8 @@ internal sealed class Http2OriginConnection : IDisposable
                 }
                 catch (Exception ex)
                 {
+                    ProxyDiagnostics.ReportCaught(logger,
+                        "Http2OriginConnection settings wait failed; failing connection and rethrowing", ex);
                     instance.Fail(ex);
                     throw;
                 }
@@ -203,8 +205,11 @@ internal sealed class Http2OriginConnection : IDisposable
                 writeLock.Release();
             }
         }
-        catch
+        catch (Exception sendEx)
         {
+            ProxyDiagnostics.ReportCaught(logger,
+                "Http2OriginConnection SendAsync failed before response; cleaning up stream and rethrowing",
+                sendEx);
             streams.TryRemove(streamId, out _);
             pending.Dispose();
             sendFlow.RemoveStream(streamId);
@@ -305,8 +310,11 @@ internal sealed class Http2OriginConnection : IDisposable
                 writeLock.Release();
             }
         }
-        catch
+        catch (Exception connectHeadersEx)
         {
+            ProxyDiagnostics.ReportCaught(logger,
+                "Http2OriginConnection CONNECT headers send failed; cleaning up stream and rethrowing",
+                connectHeadersEx);
             streams.TryRemove(streamId, out _);
             pending.Dispose();
             sendFlow.RemoveStream(streamId);
@@ -347,15 +355,19 @@ internal sealed class Http2OriginConnection : IDisposable
             // Ownership of gate/sendFlow/pending transfers to the tunnel stream until Dispose.
             return new Http2OriginTunnelResult(response, tunnelStream);
         }
-        catch
+        catch (Exception tunnelEx)
         {
+            ProxyDiagnostics.ReportCaught(logger,
+                "Http2OriginConnection CONNECT tunnel setup failed; resetting stream and rethrowing",
+                tunnelEx);
             try
             {
                 await ResetStreamAsync(streamId, Http2ErrorCode.Cancel, CancellationToken.None);
             }
-            catch
+            catch (Exception resetEx)
             {
-                // best-effort
+                ProxyDiagnostics.ReportCaught(logger,
+                    "Http2OriginConnection best-effort RST_STREAM after tunnel failure", resetEx);
             }
 
             ReleaseTunnelBookkeeping(streamId, pending, gate);

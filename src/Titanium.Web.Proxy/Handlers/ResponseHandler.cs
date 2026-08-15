@@ -232,6 +232,8 @@ public partial class ProxyServer
                     }
                     catch (OperationCanceledException ex)
                     {
+                        ProxyDiagnostics.ReportCaught(logger,
+                            "ResponseHandler idle-read cancelled; rethrowing after timeout check", ex);
                         idleDeadline.ThrowIfTimedOut(ex);
                     }
                 }
@@ -264,6 +266,8 @@ public partial class ProxyServer
         }
         catch (OperationCanceledException ex)
         {
+            ProxyDiagnostics.ReportCaught(logger,
+                "ResponseHandler origin response wait cancelled; rethrowing after timeout check", ex);
             deadline.ThrowIfTimedOut(ex);
         }
     }

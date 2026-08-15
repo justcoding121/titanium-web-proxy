@@ -760,8 +760,11 @@ internal class TcpConnectionFactory : IDisposable
 
                     return (attemptSocket, resolvedBind);
                 }
-                catch
+                catch (Exception connectAttemptEx)
                 {
+                    ProxyDiagnostics.ReportCaught(proxyServer.Logger,
+                        "TcpConnectionFactory connect attempt failed; disposing socket and rethrowing",
+                        connectAttemptEx);
                     attemptSocket.Dispose();
                     throw;
                 }
@@ -822,6 +825,8 @@ internal class TcpConnectionFactory : IDisposable
                         }
                         catch (Exception attemptEx)
                         {
+                            ProxyDiagnostics.ReportCaught(proxyServer.Logger,
+                                "TcpConnectionFactory Happy Eyeballs address attempt failed", attemptEx);
                             lastException = attemptEx;
                         }
 
@@ -950,7 +955,12 @@ internal class TcpConnectionFactory : IDisposable
             // https://docs.microsoft.com/en-us/dotnet/api/system.servicemodel.tcptransportsecurity.sslprotocols?view=dotnet-plat-ext-3.1
             enabledSslProtocols = proxyServer.SupportedSslProtocols & (SslProtocols)0xff;
 
-            if (enabledSslProtocols == SslProtocols.None) throw;
+            if (enabledSslProtocols == SslProtocols.None)
+            {
+                ProxyDiagnostics.ReportCaught(proxyServer.Logger,
+                    "TcpConnectionFactory TLS downgrade exhausted after IOException; rethrowing", ex);
+                throw;
+            }
 
             retry = false;
             ProxyMetrics.PoolDowngraded();
@@ -966,7 +976,12 @@ internal class TcpConnectionFactory : IDisposable
             // https://docs.microsoft.com/en-us/dotnet/api/system.servicemodel.tcptransportsecurity.sslprotocols?view=dotnet-plat-ext-3.1
             enabledSslProtocols = proxyServer.SupportedSslProtocols & (SslProtocols)0xff;
 
-            if (enabledSslProtocols == SslProtocols.None) throw;
+            if (enabledSslProtocols == SslProtocols.None)
+            {
+                ProxyDiagnostics.ReportCaught(proxyServer.Logger,
+                    "TcpConnectionFactory TLS downgrade exhausted after AuthenticationException; rethrowing", ex);
+                throw;
+            }
 
             retry = false;
             ProxyMetrics.PoolDowngraded();

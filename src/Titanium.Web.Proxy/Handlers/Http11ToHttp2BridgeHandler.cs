@@ -262,12 +262,16 @@ public partial class ProxyServer
                     }
                     catch (Exception e) when (!(e is ProxyHttpException) && !(e is OperationCanceledException))
                     {
+                        ProxyDiagnostics.ReportCaught(logger,
+                            "Http11ToHttp2Bridge wrapping unexpected failure as ProxyHttpException", e);
                         throw new ProxyHttpException(
                             "Error occured whilst handling HTTP/1.1-to-HTTP/2 bridge session request", e, args);
                     }
                 }
                 catch (Exception e)
                 {
+                    ProxyDiagnostics.ReportCaught(logger,
+                        "Http11ToHttp2Bridge session failed; rethrowing", e);
                     args.Exception = e;
                     closeConnection = true;
                     throw;
@@ -305,8 +309,10 @@ public partial class ProxyServer
             {
                 seedConnection = await retainedConnectionTask;
             }
-            catch
+            catch (Exception seedEx)
             {
+                ProxyDiagnostics.ReportCaught(logger,
+                    "Http11ToHttp2Bridge seed connection failed; opening a fresh origin connection", seedEx);
                 seedConnection = null;
             }
 

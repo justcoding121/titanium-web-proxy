@@ -425,10 +425,12 @@ public partial class ProxyServer
                         }
                     }
                 }
-                catch
+                catch (Exception clientErrorFrameEx)
                 {
                     // best-effort error reporting only - if the client connection itself is already gone
                     // there is nothing further to do; Http2Helper.SendHttp2's own teardown handles cleanup.
+                    ProxyDiagnostics.ReportCaught(logger,
+                        "Http2ToHttp11Bridge best-effort client error frame failed", clientErrorFrameEx);
                 }
             }
         }
@@ -650,9 +652,11 @@ public partial class ProxyServer
                 // toClientTask immediately rather than relying on the cancellation-token
                 // callback chain, which HttpStream can be slow to propagate.
                 try { originStreamForRelay.Close(); }
-                catch
+                catch (Exception closeEx)
                 {
                     // Best-effort close used only to unblock the pending relay read.
+                    ProxyDiagnostics.ReportCaught(logger,
+                        "Http2ToHttp11Bridge best-effort origin stream close during WebSocket relay", closeEx);
                 }
 
                 await Task.WhenAll(
@@ -694,9 +698,11 @@ public partial class ProxyServer
                         }
                     }
                 }
-                catch
+                catch (Exception rstEx)
                 {
                     // best-effort only
+                    ProxyDiagnostics.ReportCaught(logger,
+                        "Http2ToHttp11Bridge best-effort RST_STREAM after WebSocket relay failure", rstEx);
                 }
             }
         }
@@ -765,8 +771,10 @@ public partial class ProxyServer
             {
                 read = await source.ReadAsync(buf.AsMemory(), CancellationToken.None);
             }
-            catch (Exception)
+            catch (Exception readEx)
             {
+                ProxyDiagnostics.ReportCaught(ProxyDiagnostics.Logger,
+                    "Http2ToHttp11Bridge relay read ended (socket closed or disposed)", readEx);
                 break; // socket closed or disposed while the read was pending
             }
 
@@ -778,8 +786,10 @@ public partial class ProxyServer
                 await destination.FlushAsync(writeCancellationToken);
                 sessionArgs.OnDataReceived(buf, 0, read);
             }
-            catch (Exception)
+            catch (Exception writeEx)
             {
+                ProxyDiagnostics.ReportCaught(ProxyDiagnostics.Logger,
+                    "Http2ToHttp11Bridge relay write ended (client disconnected or cancelled)", writeEx);
                 break; // h2 client disconnected or write was cancelled
             }
         }
