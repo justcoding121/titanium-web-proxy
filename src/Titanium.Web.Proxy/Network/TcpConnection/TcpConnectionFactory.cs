@@ -638,12 +638,13 @@ internal class TcpConnectionFactory : IDisposable
                 ? $"{sessionArgs.ConnectTimeout.Value.TotalSeconds:0.#}s"
                 : $"{proxyServer.ConnectTimeOutSeconds}s";
 
-            // Attempts one resolved address end to end (socket creation through connect) and either
-            // returns the connected socket or throws. Cancelling attemptToken (either the caller's own
-            // cancellationToken, or the race below abandoning this attempt because another address
-            // already won) aborts the in-flight connect rather than leaving it to run to its own timeout.
-            async Task<(Socket Socket, IPEndPoint? BoundEndPoint)> ConnectToAddressAsync(IPAddress ipAddress,
-                CancellationToken attemptToken)
+            // Attempts one resolved address end to end (socket creation through connect). Returns a
+            // non-faulting result so Happy Eyeballs can observe address failures without a second
+            // throw via GetResult() on a faulted Task (NetworkUnreachable on dead IPv6 is the hot path).
+            // Cancelling attemptToken (caller cancel, or the race abandoning this attempt because another
+            // address already won) aborts the in-flight connect; that surfaces as Ok=false with OCE.
+            async Task<(bool Ok, Socket? Socket, IPEndPoint? Bound, Exception? Error)> ConnectToAddressAsync(
+                IPAddress ipAddress, CancellationToken attemptToken)
             {
                 // externalProxy == null here means this attempt's target is the real destination
                 // (connectHostName), not an operator-configured upstream proxy address, which is
@@ -653,7 +654,8 @@ internal class TcpConnectionFactory : IDisposable
                 // answer that changes between validation and use (rebinding).
                 if (proxyServer.BlockPrivateNetworkDestinations && externalProxy == null &&
                     PrivateNetworkGuard.IsBlocked(ipAddress))
-                    throw new OutboundDestinationBlockedException(hostname, ipAddress.ToString());
+                    return (false, null, null,
+                        new OutboundDestinationBlockedException(hostname, ipAddress.ToString()));
 
                 // Select local bind after destination resolution so IPv4/IPv6 adapters can coexist (#951).
                 var resolvedBind = UpStreamEndPointSelector.Resolve(ipAddress.AddressFamily,
@@ -733,7 +735,11 @@ internal class TcpConnectionFactory : IDisposable
                         {
                             try { connectTask.Dispose(); } catch { /* ignore */ }
 
-                            if (attemptToken.IsCancellationRequested) attemptToken.ThrowIfCancellationRequested();
+                            if (attemptToken.IsCancellationRequested)
+                            {
+                                attemptSocket.Dispose();
+                                return (false, null, null, new OperationCanceledException(attemptToken));
+                            }
 
                             throw new ProxyTimeoutException(
                                 $"Timed out connecting to {hostname}:{port} after {effectiveTimeoutSecs}.",
@@ -756,17 +762,19 @@ internal class TcpConnectionFactory : IDisposable
                                 $"Timed out connecting to {hostname}:{port} after {effectiveTimeoutSecs}.",
                                 ProxyTimeoutKind.Connect);
                         }
+                        catch (OperationCanceledException oce)
+                        {
+                            attemptSocket.Dispose();
+                            return (false, null, null, oce);
+                        }
                     }
 
-                    return (attemptSocket, resolvedBind);
+                    return (true, attemptSocket, resolvedBind, null);
                 }
                 catch (Exception connectAttemptEx)
                 {
-                    ProxyDiagnostics.ReportCaught(proxyServer.Logger,
-                        "TcpConnectionFactory connect attempt failed; disposing socket and rethrowing",
-                        connectAttemptEx);
                     attemptSocket.Dispose();
-                    throw;
+                    return (false, null, null, connectAttemptEx);
                 }
             }
 
@@ -780,7 +788,9 @@ internal class TcpConnectionFactory : IDisposable
             Exception? lastException = null;
             using (var raceCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
             {
-                var inFlight = new List<Task<(Socket Socket, IPEndPoint? BoundEndPoint)>>(ipAddresses.Length);
+                var inFlight =
+                    new List<Task<(bool Ok, Socket? Socket, IPEndPoint? Bound, Exception? Error)>>(
+                        ipAddresses.Length);
 
                 for (var i = 0; i < ipAddresses.Length; i++)
                 {
@@ -793,7 +803,7 @@ internal class TcpConnectionFactory : IDisposable
                     while (inFlight.Count > 0)
                     {
                         var pending = Task.WhenAny(inFlight);
-                        Task<(Socket Socket, IPEndPoint? BoundEndPoint)> doneTask;
+                        Task<(bool Ok, Socket? Socket, IPEndPoint? Bound, Exception? Error)> doneTask;
                         if (stagger == null)
                         {
                             doneTask = await pending;
@@ -807,27 +817,40 @@ internal class TcpConnectionFactory : IDisposable
 
                         inFlight.Remove(doneTask);
 
-                        if (doneTask.IsCompletedSuccessfully)
+                        if (!doneTask.IsCompletedSuccessfully)
                         {
-                            (tcpServerSocket, boundEndPoint) = doneTask.Result;
+                            // Unexpected fault (should be rare now that ConnectToAddressAsync returns
+                            // failures as Ok=false). Observe once for lastException / metrics.
+                            try
+                            {
+                                doneTask.GetAwaiter().GetResult();
+                            }
+                            catch (Exception attemptEx)
+                            {
+                                ProxyDiagnostics.ReportBenign(proxyServer.Logger,
+                                    "TcpConnectionFactory Happy Eyeballs address attempt failed", attemptEx);
+                                lastException = attemptEx;
+                            }
+
+                            if (timing != null) timing.FailedAddressAttempts++;
+                            continue;
+                        }
+
+                        var attempt = doneTask.Result;
+                        if (attempt.Ok && attempt.Socket != null)
+                        {
+                            tcpServerSocket = attempt.Socket;
+                            boundEndPoint = attempt.Bound;
                             await raceCts.CancelAsync();
                             AbandonLosingAttempts(inFlight);
                             goto raceDecided; // NOSONAR S907 -- Exits both nested Happy Eyeballs loops after selecting a winner.
                         }
 
-                        try
+                        if (attempt.Error != null)
                         {
-                            // Already completed (faulted or canceled) - GetResult() synchronously
-                            // rethrows the single original exception, unwrapped exactly as `await`
-                            // would, unlike poking .Exception (null when canceled) or
-                            // .Exception.InnerException (AggregateException when faulted).
-                            doneTask.GetAwaiter().GetResult();
-                        }
-                        catch (Exception attemptEx)
-                        {
-                            ProxyDiagnostics.ReportCaught(proxyServer.Logger,
-                                "TcpConnectionFactory Happy Eyeballs address attempt failed", attemptEx);
-                            lastException = attemptEx;
+                            ProxyDiagnostics.ReportBenign(proxyServer.Logger,
+                                "TcpConnectionFactory Happy Eyeballs address attempt failed", attempt.Error);
+                            lastException = attempt.Error;
                         }
 
                         if (timing != null) timing.FailedAddressAttempts++;
@@ -1010,20 +1033,19 @@ internal class TcpConnectionFactory : IDisposable
     /// <summary>
     ///     Attaches a fire-and-forget continuation to each still-in-flight Happy Eyeballs attempt after
     ///     a race has already been decided by a different, faster address, so that a straggler which
-    ///     later connects anyway has its socket disposed instead of leaking, and neither its result nor
-    ///     its exception is ever otherwise observed (the caller has already moved on with the winner).
+    ///     later connects anyway has its socket disposed instead of leaking. Failed attempts
+    ///     (<c>Ok=false</c>) already disposed their sockets inside <c>ConnectToAddressAsync</c>.
     /// </summary>
     private static void AbandonLosingAttempts(
-        IReadOnlyCollection<Task<(Socket Socket, IPEndPoint? BoundEndPoint)>> losingAttempts)
+        IReadOnlyCollection<Task<(bool Ok, Socket? Socket, IPEndPoint? Bound, Exception? Error)>> losingAttempts)
     {
         foreach (var attempt in losingAttempts)
             _ = attempt.ContinueWith(
                 static completed =>
                 {
-                    if (completed.IsCompletedSuccessfully) completed.Result.Socket.Dispose();
-                    // Faulted/canceled: ConnectToAddressAsync's own catch already disposed its socket
-                    // before rethrowing, and the exception itself belongs to an abandoned attempt, not
-                    // a real failure, so it is intentionally left unobserved beyond this continuation.
+                    if (!completed.IsCompletedSuccessfully) return;
+                    var result = completed.Result;
+                    if (result.Ok && result.Socket != null) result.Socket.Dispose();
                 },
                 CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }

@@ -719,11 +719,9 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 Available += readBytes;
             }
         }
-        catch (OperationCanceledException oce)
+        catch (OperationCanceledException)
         {
             cancelled = true;
-            ProxyDiagnostics.ReportCaught(ProxyDiagnostics.Logger,
-                "HttpStream FillBufferAsync cancelled; rethrowing", oce);
             throw;
         }
         catch (Exception ex)
