@@ -137,9 +137,19 @@ internal class WinCertificateMaker : ICertificateMaker
 
         var x500RootCertDn = CreateComObject(typeX500Dn);
 
-        if (signingCertificate != null) typeValue[0] = signingCertificate.Subject;
-
-        typeX500Dn.InvokeMember("Encode", BindingFlags.InvokeMethod, null, x500RootCertDn, typeValue);
+        if (signingCertificate != null)
+        {
+            // Preserve the signing certificate's exact DER-encoded subject (RDN order, escaping,
+            // non-ASCII) the same way the BouncyCastle makers do via SubjectName.RawData.
+            var subjectRawBase64 = Convert.ToBase64String(signingCertificate.SubjectName.RawData);
+            typeX500Dn.InvokeMember("Decode", BindingFlags.InvokeMethod, null, x500RootCertDn,
+                new object?[] { subjectRawBase64, EncodingType.XcnCryptStringBase64 });
+        }
+        else
+        {
+            typeValue[0] = fullSubject;
+            typeX500Dn.InvokeMember("Encode", BindingFlags.InvokeMethod, null, x500RootCertDn, typeValue);
+        }
 
         object? certificatePrivateKey = null;
         if (signingCertificate != null) certificatePrivateKey = sharedPrivateKey;

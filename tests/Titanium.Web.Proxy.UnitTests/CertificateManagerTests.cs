@@ -127,6 +127,10 @@ namespace Titanium.Web.Proxy.UnitTests
         /// curve spelled out instead of named, and Windows CNG rejects exactly that when the PKCS#12 blob
         /// is imported - the certificate is produced, then fails to load. Assert on a usable private key
         /// rather than merely on a certificate coming back.
+        /// <para>
+        /// Also locks down the documented contract that the root stays RSA while leaves are ECDSA, and
+        /// that Fast+ECDSA must not fall through to a self-signed leaf when the root is minted.
+        /// </para>
         /// </summary>
         [TestMethod]
         public void BC_Engines_Issue_Usable_EcdsaP256_Leaves()
@@ -139,15 +143,26 @@ namespace Titanium.Web.Proxy.UnitTests
                     LeafCertificateKeyAlgorithm = CertificateKeyAlgorithm.EcdsaP256
                 };
 
+                Assert.IsTrue(mgr.CreateRootCertificate(false), $"{engine} must mint an RSA root for ECDSA leaves");
+                var root = mgr.RootCertificate;
+                Assert.IsNotNull(root);
+                using (var rootRsa = root!.GetRSAPrivateKey())
+                    Assert.IsNotNull(rootRsa, $"{engine} root must stay RSA when leaves are ECDSA");
+                Assert.IsNull(root.GetECDsaPrivateKey(), $"{engine} root must not be ECDSA");
+
                 using var cert = mgr.CreateCertificate(hostNames[0], false);
 
                 Assert.IsNotNull(cert, $"No certificate produced by {engine}");
-                Assert.AreEqual("1.2.840.10045.2.1", cert.PublicKey.Oid.Value,
+                Assert.AreEqual("1.2.840.10045.2.1", cert!.PublicKey.Oid.Value,
                     $"{engine} did not issue an EC leaf.");
+                Assert.IsFalse(cert.SubjectName.RawData.SequenceEqual(cert.IssuerName.RawData),
+                    $"{engine} must not fall through to a self-signed ECDSA leaf");
+                CollectionAssert.AreEqual(root.SubjectName.RawData, cert.IssuerName.RawData,
+                    $"{engine} leaf issuer DN must match the RSA root subject DN");
 
                 using var ecdsa = cert.GetECDsaPrivateKey();
                 Assert.IsNotNull(ecdsa, $"{engine} produced an EC leaf whose private key cannot be loaded.");
-                Assert.AreEqual(256, ecdsa.KeySize);
+                Assert.AreEqual(256, ecdsa!.KeySize);
             }
         }
 
@@ -718,6 +733,215 @@ namespace Titanium.Web.Proxy.UnitTests
             };
             mgr.RemoveTrustedRootCertificate(machineTrusted: false);
             Assert.IsNull(mgr.RootCertificate);
+        }
+
+        /// <summary>
+        /// Only DefaultWindows is rewritten off Windows; BouncyCastleFast must remain selectable
+        /// on Linux/macOS (it is fully managed BouncyCastle).
+        /// </summary>
+        [TestMethod]
+        public void CoerceEngineForPlatform_OnlyRewritesDefaultWindowsOffWindows()
+        {
+            Assert.AreEqual(CertificateEngine.BouncyCastle,
+                CertificateManager.CoerceEngineForPlatform(CertificateEngine.DefaultWindows, isWindows: false));
+            Assert.AreEqual(CertificateEngine.BouncyCastleFast,
+                CertificateManager.CoerceEngineForPlatform(CertificateEngine.BouncyCastleFast, isWindows: false));
+            Assert.AreEqual(CertificateEngine.BouncyCastle,
+                CertificateManager.CoerceEngineForPlatform(CertificateEngine.BouncyCastle, isWindows: false));
+
+            Assert.AreEqual(CertificateEngine.DefaultWindows,
+                CertificateManager.CoerceEngineForPlatform(CertificateEngine.DefaultWindows, isWindows: true));
+            Assert.AreEqual(CertificateEngine.BouncyCastleFast,
+                CertificateManager.CoerceEngineForPlatform(CertificateEngine.BouncyCastleFast, isWindows: true));
+        }
+
+        /// <summary>
+        /// On the current platform the setter must keep BouncyCastleFast (not silently downgrade it).
+        /// </summary>
+        [TestMethod]
+        public void CertificateEngine_Setter_PreservesBouncyCastleFast()
+        {
+            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance);
+            mgr.CertificateEngine = CertificateEngine.BouncyCastleFast;
+            Assert.AreEqual(CertificateEngine.BouncyCastleFast, mgr.CertificateEngine);
+        }
+
+        /// <summary>
+        /// When root creation fails, CreateCertificate must return null rather than minting a
+        /// self-signed leaf (the previous Fast+ECDSA fall-through).
+        /// </summary>
+        [TestMethod]
+        public void CreateCertificate_WhenRootCreationFails_ReturnsNullNotSelfSignedLeaf()
+        {
+            var expiredRoot = CreateExpiredSelfSigned("expired-root-for-leaf");
+            var cache = new RootOnlyExpiredCache(expiredRoot);
+
+            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastleFast,
+                LeafCertificateKeyAlgorithm = CertificateKeyAlgorithm.EcdsaP256,
+                CertificateStorage = cache,
+                OverwritePfxFile = false
+            };
+
+            var leaf = mgr.CreateCertificate("no-root-fallthrough.example", false);
+            Assert.IsNull(leaf, "Must not return a self-signed leaf when the root cannot be created");
+            Assert.IsNull(mgr.RootCertificate);
+        }
+
+        /// <summary>
+        /// BC roots and leaves must advertise RFC-aligned KeyUsage (parity with WinCertificateMaker).
+        /// </summary>
+        [DataTestMethod]
+        [DataRow(CertificateEngine.BouncyCastle)]
+        [DataRow(CertificateEngine.BouncyCastleFast)]
+        public void BC_Certificates_Include_RfcAligned_KeyUsage(CertificateEngine engineType)
+        {
+            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = engineType
+            };
+            Assert.IsTrue(mgr.CreateRootCertificate(false));
+            var root = mgr.RootCertificate!;
+            var rootKu = root.Extensions.OfType<X509KeyUsageExtension>().SingleOrDefault();
+            Assert.IsNotNull(rootKu, "Root must include KeyUsage");
+            Assert.AreEqual(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, rootKu!.KeyUsages);
+
+            using var rsaLeaf = mgr.CreateCertificate("ku-rsa.example", false);
+            Assert.IsNotNull(rsaLeaf);
+            var rsaKu = rsaLeaf!.Extensions.OfType<X509KeyUsageExtension>().SingleOrDefault();
+            Assert.IsNotNull(rsaKu, "RSA leaf must include KeyUsage");
+            Assert.AreEqual(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment,
+                rsaKu!.KeyUsages);
+
+            mgr.LeafCertificateKeyAlgorithm = CertificateKeyAlgorithm.EcdsaP256;
+            using var ecLeaf = mgr.CreateCertificate("ku-ecdsa.example", false);
+            Assert.IsNotNull(ecLeaf);
+            var ecKu = ecLeaf!.Extensions.OfType<X509KeyUsageExtension>().SingleOrDefault();
+            Assert.IsNotNull(ecKu, "ECDSA leaf must include KeyUsage");
+            Assert.AreEqual(X509KeyUsageFlags.DigitalSignature, ecKu!.KeyUsages);
+            Assert.IsFalse(ecKu.KeyUsages.HasFlag(X509KeyUsageFlags.KeyEncipherment));
+        }
+
+        /// <summary>
+        /// Custom ECDSA signing roots must work via SHA256WithECDSA (issuer-key helper).
+        /// </summary>
+        [TestMethod]
+        public void BC_Makers_Sign_Leaves_With_Custom_Ecdsa_Root()
+        {
+            X509Certificate2 ecdsaRoot;
+            using (var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256))
+            {
+                var req = new CertificateRequest("CN=ECDSA Test Root", ecdsa, HashAlgorithmName.SHA256);
+                req.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+                req.CertificateExtensions.Add(new X509KeyUsageExtension(
+                    X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
+                ecdsaRoot = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(365));
+            }
+
+            try
+            {
+                var maker = new BcCertificateMaker(365, 2);
+                using var leaf = maker.MakeCertificate("ecdsa-issuer.example", ecdsaRoot);
+                CollectionAssert.AreEqual(ecdsaRoot.SubjectName.RawData, leaf.IssuerName.RawData);
+                Assert.IsTrue(leaf.HasPrivateKey);
+
+                var makerFast = new BcCertificateMakerFast(365, 2);
+                using var leafFast = makerFast.MakeCertificate("ecdsa-issuer-fast.example", ecdsaRoot);
+                CollectionAssert.AreEqual(ecdsaRoot.SubjectName.RawData, leafFast.IssuerName.RawData);
+                Assert.IsTrue(leafFast.HasPrivateKey);
+            }
+            finally
+            {
+                ecdsaRoot.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Fast+ECDSA must keep sharing one leaf key across hosts while the RSA root uses a
+        /// distinct key (the shared KeyPair must not leak into root generation).
+        /// </summary>
+        [TestMethod]
+        public void BC_Fast_Ecdsa_Leaves_Share_Key_Distinct_From_Rsa_Root()
+        {
+            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastleFast,
+                LeafCertificateKeyAlgorithm = CertificateKeyAlgorithm.EcdsaP256
+            };
+            Assert.IsTrue(mgr.CreateRootCertificate(false));
+            var root = mgr.RootCertificate!;
+            var rootKey = Convert.ToBase64String(root.PublicKey.EncodedKeyValue.RawData);
+
+            var leafKeys = new List<string>();
+            foreach (var host in hostNames)
+            {
+                using var leaf = mgr.CreateCertificate(host, false);
+                Assert.IsNotNull(leaf);
+                leafKeys.Add(Convert.ToBase64String(leaf!.PublicKey.EncodedKeyValue.RawData));
+            }
+
+            Assert.AreEqual(1, leafKeys.Distinct().Count(),
+                "BouncyCastleFast must reuse one leaf key pair across hosts");
+            Assert.AreNotEqual(rootKey, leafKeys[0],
+                "RSA root key must not be the shared ECDSA leaf key");
+        }
+
+        /// <summary>
+        /// Issuer-key helper must fail clearly when the signing certificate has no usable private key.
+        /// </summary>
+        [TestMethod]
+        public void BcCertificateIssuer_Throws_When_SigningCert_Has_No_Private_Key()
+        {
+            using var rsa = RSA.Create(2048);
+            var req = new CertificateRequest("CN=PublicOnly", rsa, HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+            using var withKey = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1),
+                DateTimeOffset.UtcNow.AddDays(30));
+            // Strip the private key: export public cert bytes and reload.
+            using var publicOnly = CertificateLoader.LoadCertificate(withKey.Export(X509ContentType.Cert));
+
+            var ex = Assert.ThrowsExactly<InvalidOperationException>(() =>
+                BcCertificateIssuer.FromSigningCertificate(publicOnly));
+            StringAssert.Contains(ex.Message, "neither an RSA nor an ECDSA");
+        }
+
+        private static X509Certificate2 CreateExpiredSelfSigned(string cn)
+        {
+            using var rsa = RSA.Create(2048);
+            var request = new CertificateRequest("CN=" + cn, rsa, HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+            return request.CreateSelfSigned(DateTimeOffset.Now.AddDays(-10), DateTimeOffset.Now.AddDays(-1));
+        }
+
+        /// <summary>
+        /// Minimal cache that only serves an expired root (for root-creation-failure paths).
+        /// </summary>
+        private sealed class RootOnlyExpiredCache : ICertificateCache
+        {
+            private readonly X509Certificate2 expiredRoot;
+
+            public RootOnlyExpiredCache(X509Certificate2 expiredRoot) => this.expiredRoot = expiredRoot;
+
+            public X509Certificate2? LoadRootCertificate(string pathOrName, string password,
+                X509KeyStorageFlags storageFlags) =>
+                // Return a fresh copy so callers can Dispose without breaking subsequent loads.
+                CertificateLoader.LoadPkcs12(expiredRoot.Export(X509ContentType.Pkcs12), string.Empty,
+                    storageFlags);
+
+            public void SaveRootCertificate(string pathOrName, string password, X509Certificate2 certificate)
+            {
+            }
+
+            public X509Certificate2? LoadCertificate(string subjectName, X509KeyStorageFlags storageFlags) => null;
+
+            public void SaveCertificate(string subjectName, X509Certificate2 certificate)
+            {
+            }
+
+            public void Clear()
+            {
+            }
         }
     }
 }

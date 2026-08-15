@@ -7,7 +7,6 @@ using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Operators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Prng;
@@ -74,7 +73,7 @@ internal class BcCertificateMaker : ICertificateMaker
         string subjectName,
         X509Name issuerDn, DateTime validFrom,
         DateTime validTo, int keyStrength = 2048,
-        string signatureAlgorithm = "SHA256WithRSA",
+        string signatureAlgorithm = BcCertificateIssuer.Sha256WithRsa,
         AsymmetricKeyParameter? issuerPrivateKey = null,
         CertificateKeyAlgorithm keyAlgorithm = CertificateKeyAlgorithm.Rsa2048)
     {
@@ -123,7 +122,19 @@ internal class BcCertificateMaker : ICertificateMaker
         certificateGenerator.AddExtension(X509Extensions.ExtendedKeyUsage.Id, false,
             new ExtendedKeyUsage(KeyPurposeID.id_kp_serverAuth));
         if (issuerPrivateKey == null)
+        {
             certificateGenerator.AddExtension(X509Extensions.BasicConstraints.Id, true, new BasicConstraints(true));
+            certificateGenerator.AddExtension(X509Extensions.KeyUsage.Id, true,
+                new KeyUsage(KeyUsage.KeyCertSign | KeyUsage.CrlSign));
+        }
+        else
+        {
+            // ECDSA leaves must not advertise keyEncipherment; RSA leaves need it for legacy TLS suites.
+            var leafUsage = keyAlgorithm == CertificateKeyAlgorithm.EcdsaP256
+                ? KeyUsage.DigitalSignature
+                : KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment;
+            certificateGenerator.AddExtension(X509Extensions.KeyUsage.Id, false, new KeyUsage(leafUsage));
+        }
 
         var signatureFactory = new Asn1SignatureFactory(signatureAlgorithm,
             issuerPrivateKey ?? subjectKeyPair.Private, secureRandom);
@@ -235,11 +246,14 @@ internal class BcCertificateMaker : ICertificateMaker
         // RDN order, multi-valued RDNs, escaped characters, and non-ASCII values are preserved exactly.
         var issuerDn = X509Name.GetInstance(Asn1Object.FromByteArray(signingCertificate.SubjectName.RawData));
 
-        using var privateKey = signingCertificate.GetRSAPrivateKey()
-                               ?? throw new InvalidOperationException("The signing certificate has no RSA private key.");
-        var kp = DotNetUtilities.GetKeyPair(privateKey);
-        return GenerateCertificate(hostName, subjectName, issuerDn, validFrom, validTo,
-            issuerPrivateKey: kp.Private, keyAlgorithm: leafKeyAlgorithm);
+        var (issuerPrivateKey, signatureAlgorithm, disposable) =
+            BcCertificateIssuer.FromSigningCertificate(signingCertificate);
+        using (disposable)
+        {
+            return GenerateCertificate(hostName, subjectName, issuerDn, validFrom, validTo,
+                signatureAlgorithm: signatureAlgorithm, issuerPrivateKey: issuerPrivateKey,
+                keyAlgorithm: leafKeyAlgorithm);
+        }
     }
 
     /// <summary>

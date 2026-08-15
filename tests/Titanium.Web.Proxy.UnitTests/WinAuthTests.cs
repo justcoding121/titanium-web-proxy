@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -311,6 +314,80 @@ namespace Titanium.Web.Proxy.UnitTests
             catch (COMException ex)
             {
                 Assert.Inconclusive($"COM enrollment unavailable headless (may need UI/elevation): {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Custom multi-RDN roots must preserve SubjectName.RawData as the leaf issuer DN
+        /// (parity with BouncyCastle #965), using CX500DistinguishedName.Decode rather than
+        /// re-encoding the display string. The custom root must be present in CurrentUser\My
+        /// so CSignerCertificate can resolve it by thumbprint (same requirement as any Win
+        /// enrollment signing cert).
+        /// </summary>
+        [TestMethod]
+        [SupportedOSPlatform("windows")]
+        public void WinCertificateMaker_Leaf_IssuerDN_Matches_CustomRoot_SubjectDN_RawBytes()
+        {
+            if (!OperatingSystem.IsWindows())
+                Assert.Inconclusive("WinCertificateMaker requires Windows X509Enrollment COM.");
+
+            X509Certificate2 customRoot;
+            using (var rsa = RSA.Create(2048))
+            {
+                var req = new CertificateRequest(
+                    "C=AU, ST=Victoria, L=Melbourne, O=Acme Corp, OU=Proxy, CN=Acme Root CA",
+                    rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                req.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+                req.CertificateExtensions.Add(new X509KeyUsageExtension(
+                    X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
+                customRoot = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1),
+                    DateTimeOffset.UtcNow.AddDays(365));
+            }
+
+            // Re-import via PKCS#12 with PersistKeySet so CertEnroll's CSignerCertificate can
+            // resolve a private-key property by thumbprint (ephemeral CertificateRequest keys
+            // are invisible to the enrollment COM API after a plain store.Add).
+            const string pfxPassword = "twp-dn-test";
+            var pfxBytes = customRoot.Export(X509ContentType.Pkcs12, pfxPassword);
+            customRoot.Dispose();
+            customRoot = CertificateLoader.LoadPkcs12(pfxBytes, pfxPassword,
+                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+
+            using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
+            try
+            {
+                store.Open(OpenFlags.ReadWrite);
+                store.Add(customRoot);
+
+                var maker = new WinCertificateMaker(30, 7);
+                using var leaf = maker.MakeCertificate($"twp-dn-{Guid.NewGuid():N}.local", customRoot);
+                CollectionAssert.AreEqual(customRoot.SubjectName.RawData, leaf.IssuerName.RawData,
+                    "WinCertificateMaker: leaf IssuerName.RawData must equal signing root SubjectName.RawData");
+            }
+            catch (PlatformNotSupportedException ex)
+            {
+                Assert.Inconclusive($"X509Enrollment COM unavailable: {ex.Message}");
+            }
+            catch (COMException ex)
+            {
+                Assert.Inconclusive($"COM enrollment unavailable headless (may need UI/elevation): {ex.Message}");
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException is COMException com)
+            {
+                Assert.Inconclusive($"COM enrollment unavailable headless (may need UI/elevation): {com.Message}");
+            }
+            finally
+            {
+                try
+                {
+                    if (store.IsOpen) store.Remove(customRoot);
+                }
+                catch
+                {
+                    // best-effort cleanup
+                }
+
+                customRoot.Dispose();
             }
         }
     }

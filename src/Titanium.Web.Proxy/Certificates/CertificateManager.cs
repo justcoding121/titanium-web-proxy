@@ -332,16 +332,16 @@ public sealed class CertificateManager : IDisposable
 
     /// <summary>
     ///     Selects the certificate generation engine. Default is <see cref="CertificateEngine.BouncyCastle" />
-    ///     on all platforms. On non-Windows runtimes, only BouncyCastle is supported; other values are
-    ///     coerced to BouncyCastle.
+    ///     on all platforms. On non-Windows runtimes, <see cref="CertificateEngine.DefaultWindows" /> is
+    ///     coerced to <see cref="CertificateEngine.BouncyCastle" />; both BouncyCastle engines are supported.
     /// </summary>
     public CertificateEngine CertificateEngine
     {
         get => engine;
         set
         {
-            // Non-Windows runtimes only support BouncyCastle.
-            if (!RunTime.IsWindows) value = CertificateEngine.BouncyCastle;
+            // Non-Windows runtimes cannot use Windows X509Enrollment; Fast is fully managed BC.
+            value = CoerceEngineForPlatform(value, RunTime.IsWindows);
 
             if (value != engine)
             {
@@ -635,7 +635,13 @@ public sealed class CertificateManager : IDisposable
 
     private X509Certificate2 MakeCertificate(string certificateName, bool isRootCertificate)
     {
-        if (!isRootCertificate && RootCertificate == null) CreateRootCertificate();
+        if (!isRootCertificate && RootCertificate == null)
+        {
+            CreateRootCertificate();
+            if (RootCertificate == null)
+                throw new InvalidOperationException(
+                    "A root certificate is required to create leaf certificates, but root creation failed.");
+        }
 
         var certificate = CertEngine.MakeCertificate(certificateName, isRootCertificate ? null : RootCertificate);
 
@@ -1015,6 +1021,17 @@ public sealed class CertificateManager : IDisposable
         {
             // Permission or store issues - Create may still succeed via custom trust alone.
         }
+    }
+
+    /// <summary>
+    ///     Coerces an engine selection for the current platform. Extracted so unit tests can verify
+    ///     that only <see cref="CertificateEngine.DefaultWindows" /> is rewritten off Windows.
+    /// </summary>
+    internal static CertificateEngine CoerceEngineForPlatform(CertificateEngine value, bool isWindows)
+    {
+        if (!isWindows && value == CertificateEngine.DefaultWindows)
+            return CertificateEngine.BouncyCastle;
+        return value;
     }
 
     private static bool IsSelfSigned(X509Certificate2 cert) =>

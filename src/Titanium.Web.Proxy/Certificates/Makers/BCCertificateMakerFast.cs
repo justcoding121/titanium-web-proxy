@@ -7,7 +7,6 @@ using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Operators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Prng;
@@ -35,17 +34,21 @@ internal class BcCertificateMakerFast : ICertificateMaker
     private readonly int certificateValidDays;
     private readonly int certificateGraceDays;
 
+    /// <summary>
+    ///     Shared key pair used for every leaf. Roots always get a fresh RSA-2048 pair so the
+    ///     documented "root stays RSA" contract holds when leaves are ECDSA.
+    /// </summary>
+    private readonly AsymmetricCipherKeyPair leafKeyPair;
+
     internal BcCertificateMakerFast(int certificateValidDays, int certificateGraceDays,
         CertificateKeyAlgorithm leafKeyAlgorithm = CertificateKeyAlgorithm.Rsa2048)
     {
         this.certificateValidDays = certificateValidDays;
         this.certificateGraceDays = certificateGraceDays;
-        KeyPair = leafKeyAlgorithm == CertificateKeyAlgorithm.EcdsaP256
+        leafKeyPair = leafKeyAlgorithm == CertificateKeyAlgorithm.EcdsaP256
             ? LeafKeyPairSource.GenerateEcdsaP256()
-            : GenerateKeyPair();
+            : LeafKeyPairSource.GenerateRsa(LeafKeyPairSource.BufferedRsaKeyStrength);
     }
-
-    public AsymmetricCipherKeyPair KeyPair { get; set; }
 
     /// <summary>
     ///     Makes the certificate.
@@ -78,7 +81,7 @@ internal class BcCertificateMakerFast : ICertificateMaker
         string subjectName,
         X509Name issuerDn, DateTime validFrom,
         DateTime validTo, AsymmetricCipherKeyPair subjectKeyPair,
-        string signatureAlgorithm = "SHA256WithRSA",
+        string signatureAlgorithm = BcCertificateIssuer.Sha256WithRsa,
         AsymmetricKeyParameter? issuerPrivateKey = null)
     {
         // Generating Random Numbers
@@ -123,7 +126,19 @@ internal class BcCertificateMakerFast : ICertificateMaker
         certificateGenerator.AddExtension(X509Extensions.ExtendedKeyUsage.Id, false,
             new ExtendedKeyUsage(KeyPurposeID.id_kp_serverAuth));
         if (issuerPrivateKey == null)
+        {
             certificateGenerator.AddExtension(X509Extensions.BasicConstraints.Id, true, new BasicConstraints(true));
+            certificateGenerator.AddExtension(X509Extensions.KeyUsage.Id, true,
+                new KeyUsage(KeyUsage.KeyCertSign | KeyUsage.CrlSign));
+        }
+        else
+        {
+            // ECDSA leaves must not advertise keyEncipherment; RSA leaves need it for legacy TLS suites.
+            var leafUsage = subjectKeyPair.Private is ECPrivateKeyParameters
+                ? KeyUsage.DigitalSignature
+                : KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment;
+            certificateGenerator.AddExtension(X509Extensions.KeyUsage.Id, false, new KeyUsage(leafUsage));
+        }
 
         var signatureFactory = new Asn1SignatureFactory(signatureAlgorithm,
             issuerPrivateKey ?? subjectKeyPair.Private, secureRandom);
@@ -162,17 +177,6 @@ internal class BcCertificateMakerFast : ICertificateMaker
             }
 
         return x509Certificate;
-    }
-
-    public static AsymmetricCipherKeyPair GenerateKeyPair(int keyStrength = 2048)
-    {
-        var randomGenerator = new CryptoApiRandomGenerator();
-        var secureRandom = new SecureRandom(randomGenerator);
-
-        var keyGenerationParameters = new KeyGenerationParameters(secureRandom, keyStrength);
-        var keyPairGenerator = new RsaKeyPairGenerator();
-        keyPairGenerator.Init(keyGenerationParameters);
-        return keyPairGenerator.GenerateKeyPair();
     }
 
     private static X509Certificate2 WithPrivateKey(X509Certificate certificate, AsymmetricKeyParameter privateKey)
@@ -237,18 +241,26 @@ internal class BcCertificateMakerFast : ICertificateMaker
     private X509Certificate2 MakeCertificateInternal(string hostName, string subjectName,
         DateTime validFrom, DateTime validTo, X509Certificate2? signingCertificate)
     {
+        // Self-signed here is the root CA. Always RSA-2048 regardless of leaf algorithm so an
+        // already-trusted product root keeps working when leaves switch to ECDSA.
         if (signingCertificate == null)
-            return GenerateCertificate(null, subjectName, new X509Name(subjectName), validFrom, validTo, KeyPair);
+        {
+            var rootKeyPair = LeafKeyPairSource.GenerateRsa(LeafKeyPairSource.BufferedRsaKeyStrength);
+            return GenerateCertificate(null, subjectName, new X509Name(subjectName), validFrom, validTo,
+                rootKeyPair, BcCertificateIssuer.Sha256WithRsa);
+        }
 
         // Derive the issuer DN directly from the signing certificate's raw DER-encoded subject so that
         // RDN order, multi-valued RDNs, escaped characters, and non-ASCII values are preserved exactly.
         var issuerDn = X509Name.GetInstance(Asn1Object.FromByteArray(signingCertificate.SubjectName.RawData));
 
-        using var privateKey = signingCertificate.GetRSAPrivateKey()
-                               ?? throw new InvalidOperationException("The signing certificate has no RSA private key.");
-        var kp = DotNetUtilities.GetKeyPair(privateKey);
-        return GenerateCertificate(hostName, subjectName, issuerDn, validFrom, validTo, KeyPair,
-            issuerPrivateKey: kp.Private);
+        var (issuerPrivateKey, signatureAlgorithm, disposable) =
+            BcCertificateIssuer.FromSigningCertificate(signingCertificate);
+        using (disposable)
+        {
+            return GenerateCertificate(hostName, subjectName, issuerDn, validFrom, validTo, leafKeyPair,
+                signatureAlgorithm, issuerPrivateKey);
+        }
     }
 
     /// <summary>
