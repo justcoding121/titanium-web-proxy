@@ -78,10 +78,13 @@ public class SslExtension
             case 0:
                 var stringBuilder = new StringBuilder();
                 var index = 2;
-                while (index < data.Length)
+                while (index + 3 <= data.Length)
                 {
                     int nameType = data[index];
                     var count = (data[index + 1] << 8) + data[index + 2];
+                    if (index + 3 + count > data.Length)
+                        break;
+
                     var str = Encoding.ASCII.GetString(data.Slice(index + 3, count));
                     if (nameType == 0)
                     {
@@ -310,11 +313,11 @@ public class SslExtension
         int i = 0;
         if (data.Length > 2)
         {
-            // client hello contains a list
+            // client hello contains a list (1-byte length prefix)
             i = 1;
         }
 
-        for (; i < data.Length; i += 2)
+        for (; i + 1 < data.Length; i += 2)
         {
             int val = (data[i] << 8) | data[i + 1];
             switch (val)
@@ -356,10 +359,14 @@ public class SslExtension
     private static string GetSignatureAlgorithms(ReadOnlySpan<byte> data) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml
+        if (data.Length < 2)
+            return string.Empty;
+
         var num = (data[0] << 8) + data[1];
         var sb = new StringBuilder();
         var index = 2;
-        while (index < num + 2)
+        var end = Math.Min(num + 2, data.Length);
+        while (index + 1 < end)
         {
             int val0 = data[index];
             int val1 = data[index + 1];
@@ -513,6 +520,9 @@ public class SslExtension
         while (index < data.Length)
         {
             int count = data[index];
+            if (index + 1 + count > data.Length)
+                break;
+
             var protocol = data.Slice(index + 1, count);
             if (Http11Utf8.AsSpan().SequenceEqual(protocol))
             {
@@ -599,9 +609,9 @@ public class SslExtension
                 return "quic_transports_parameters"; // Not yet assigned by IANA (QUIC-TLS Draft04)
             case 35:
                 return "SessionTicket TLS";
-            // TLS 1.3 draft: https://tools.ietf.org/html/draft-ietf-tls-tls13
+            // TLS 1.3 draft ids (pre-RFC 8446); kept for display of older ClientHellos
             case 40:
-                return "key_share";
+                return "key_share_draft";
             case 41:
                 return "pre_shared_key";
             case 42:
@@ -620,6 +630,10 @@ public class SslExtension
                 return "oid_filters";
             case 49:
                 return "post_handshake_auth";
+            case 51:
+                return "key_share"; // RFC 8446
+            case 57:
+                return "quic_transport_parameters"; // RFC 9001
             case 2570: // 0a0a
             case 6682: // 1a1a
             case 10794: // 2a2a

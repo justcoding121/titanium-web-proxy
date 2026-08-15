@@ -38,11 +38,19 @@ public class SslExtensionTests
     [DataRow(16, "ALPN")]
     [DataRow(21, "padding")]
     [DataRow(43, "supported_versions")]
+    [DataRow(51, "key_share")]
+    [DataRow(57, "quic_transport_parameters")]
     [DataRow(0x0a0a, "Reserved (GREASE)")]
     [DataRow(65281, "renegotiation_info")]
     public void Name_KnownExtensionTypes(int type, string expected)
     {
         Assert.AreEqual(expected, new SslExtension(type, ReadOnlyMemory<byte>.Empty, 0).Name);
+    }
+
+    [TestMethod]
+    public void Name_DraftKeyShare_MapsSeparately()
+    {
+        Assert.AreEqual("key_share_draft", new SslExtension(40, ReadOnlyMemory<byte>.Empty, 0).Name);
     }
 
     [TestMethod]
@@ -199,5 +207,59 @@ public class SslExtensionTests
         var data = new SslExtension(9999, new byte[] { 0xAB, 0xCD }, 0).Data;
         Assert.IsTrue(data.Contains("AB", StringComparison.OrdinalIgnoreCase) ||
                       data.Contains("ab", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
+    public void Data_TruncatedServerName_DoesNotThrow()
+    {
+        // Claims a host longer than remaining bytes.
+        var payload = new byte[] { 0, 8, 0, 0, 5, (byte)'a', (byte)'b' };
+        string data = null!;
+        try
+        {
+            data = new SslExtension(0, payload, 0).Data;
+        }
+        catch (Exception ex)
+        {
+            Assert.Fail($"SNI Data must not throw on truncated payload: {ex}");
+        }
+
+        Assert.IsNotNull(data);
+    }
+
+    [TestMethod]
+    public void Alpns_TruncatedPayload_DoesNotThrow()
+    {
+        // ALPN list length claims more than available; protocol length overruns.
+        var payload = new byte[] { 0, 10, 5, (byte)'h', (byte)'2' };
+        System.Collections.Generic.List<SslApplicationProtocol> alpns = null!;
+        try
+        {
+            alpns = new SslExtension(16, payload, 0).Alpns;
+        }
+        catch (Exception ex)
+        {
+            Assert.Fail($"Alpns must not throw on truncated payload: {ex}");
+        }
+
+        Assert.IsNotNull(alpns);
+        Assert.AreEqual(0, alpns.Count);
+    }
+
+    [TestMethod]
+    public void Data_TruncatedSignatureAlgorithms_DoesNotThrow()
+    {
+        var payload = new byte[] { 0, 8, 0x04 }; // length 8, only 1 data byte
+        string data = null!;
+        try
+        {
+            data = new SslExtension(13, payload, 0).Data;
+        }
+        catch (Exception ex)
+        {
+            Assert.Fail($"Signature algorithms Data must not throw: {ex}");
+        }
+
+        Assert.IsNotNull(data);
     }
 }

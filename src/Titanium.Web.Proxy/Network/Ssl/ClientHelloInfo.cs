@@ -46,8 +46,9 @@ public class ClientHelloInfo
         {
             var time = DateTime.MinValue;
             if (Random.Length > 3)
+                // RFC 5246: gmt_unix_time is the first 4 bytes of Random, big-endian.
                 time = DateTime.UnixEpoch
-                    .AddSeconds(((uint)Random[3] << 24) + ((uint)Random[2] << 16) + ((uint)Random[1] << 8) + Random[0])
+                    .AddSeconds(((uint)Random[0] << 24) + ((uint)Random[1] << 16) + ((uint)Random[2] << 8) + Random[3])
                     .ToLocalTime();
 
             return time;

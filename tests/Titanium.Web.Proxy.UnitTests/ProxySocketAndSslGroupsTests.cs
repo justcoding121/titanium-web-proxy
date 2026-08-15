@@ -266,7 +266,8 @@ public class ProxySocketAndSslGroupsTests
         Assert.AreEqual("Reserved (GREASE)", new SslExtension(0x1a1a, ReadOnlyMemory<byte>.Empty, 0).Name);
         Assert.AreEqual("channel_id", new SslExtension(30032, ReadOnlyMemory<byte>.Empty, 0).Name);
         Assert.AreEqual("next_protocol_negotiation", new SslExtension(13172, ReadOnlyMemory<byte>.Empty, 0).Name);
-        Assert.AreEqual("key_share", new SslExtension(40, ReadOnlyMemory<byte>.Empty, 0).Name);
+        Assert.AreEqual("key_share_draft", new SslExtension(40, ReadOnlyMemory<byte>.Empty, 0).Name);
+        Assert.AreEqual("key_share", new SslExtension(51, ReadOnlyMemory<byte>.Empty, 0).Name);
         Assert.AreEqual("SessionTicket TLS", new SslExtension(35, ReadOnlyMemory<byte>.Empty, 0).Name);
     }
 }
