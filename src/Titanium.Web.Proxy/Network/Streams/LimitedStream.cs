@@ -135,18 +135,31 @@ internal class LimitedStream : Stream
         if (bytesRemaining == -1) return 0;
 
         var toRead = (int)Math.Min(buffer.Length, bytesRemaining);
-        var rented = bufferPool.GetBuffer();
-        var temporary = toRead <= rented.Length ? rented : new byte[toRead];
         int res;
-        try
+
+        // Prefer reading straight into an array-backed destination to avoid a rent+copy.
+        // When the destination is not array-backed, rent a pool buffer and copy — never allocate
+        // a temporary larger than the pool size; slice the read instead.
+        if (System.Runtime.InteropServices.MemoryMarshal.TryGetArray((ReadOnlyMemory<byte>)buffer, out var segment) &&
+            segment.Array != null)
         {
-            res = await baseReader.ReadAsync(temporary, 0, toRead, cancellationToken);
-            temporary.AsMemory(0, res).CopyTo(buffer);
+            res = await baseReader.ReadAsync(segment.Array, segment.Offset, toRead, cancellationToken);
         }
-        finally
+        else
         {
-            bufferPool.ReturnBuffer(rented);
+            var rented = bufferPool.GetBuffer();
+            try
+            {
+                var slice = Math.Min(toRead, rented.Length);
+                res = await baseReader.ReadAsync(rented, 0, slice, cancellationToken);
+                rented.AsMemory(0, res).CopyTo(buffer);
+            }
+            finally
+            {
+                bufferPool.ReturnBuffer(rented);
+            }
         }
+
         bytesRemaining -= res;
 
         if (res == 0) bytesRemaining = -1;

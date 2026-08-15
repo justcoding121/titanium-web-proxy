@@ -11,6 +11,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 using Titanium.Web.Proxy.StreamExtended.Network;
 using System.Net.Sockets;
@@ -93,6 +94,83 @@ public class HttpStreamCoverageTests
         var one = new byte[1];
         Assert.AreEqual(1, await stream.ReadAsync(one.AsMemory(0, 1)));
         Assert.AreEqual((byte)'h', one[0]);
+    }
+
+    [TestMethod]
+    public async Task PeekBytesAsync_AfterPartialConsume_CopiesUnreadWindow()
+    {
+        using var stream = MakeReader(Encoding.ASCII.GetBytes("hello"));
+        var one = new byte[1];
+        Assert.AreEqual(1, await stream.ReadAsync(one.AsMemory(0, 1)));
+        Assert.AreEqual((byte)'h', one[0]);
+
+        // bufferPos > 0: peek must use the unread window, not absolute streamBuffer indices.
+        var buf = new byte[3];
+        var n = await stream.PeekBytesAsync(buf, 0, 0, 3);
+        Assert.AreEqual(3, n);
+        CollectionAssert.AreEqual(Encoding.ASCII.GetBytes("ell"), buf);
+    }
+
+    [TestMethod]
+    public async Task FillBufferAsync_Cancel_DoesNotPoisonStream_AndAllowsFurtherWrite()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var baseStream = new GatedReadStream(gate.Task, Encoding.ASCII.GetBytes("xy"));
+        var proxy = new ProxyServer(false, false, false);
+        using var stream = new HttpStream(proxy, baseStream, new DefaultBufferPool(), CancellationToken.None, true);
+
+        using var cts = new CancellationTokenSource();
+        var fillTask = stream.FillBufferAsync(cts.Token).AsTask();
+        // Let the pending read start waiting on the gate.
+        await Task.Delay(20);
+        await cts.CancelAsync();
+
+        try
+        {
+            await fillTask;
+            Assert.Fail("Expected cancellation.");
+        }
+        catch (OperationCanceledException)
+        {
+            // TaskCanceledException derives from OperationCanceledException; either is fine.
+        }
+        Assert.IsFalse(stream.IsClosed);
+
+        // Cancel must leave the write side usable (WebSocket close-frame path).
+        await stream.WriteAsync(new byte[] { 1, 2, 3 }, CancellationToken.None);
+        Assert.IsTrue(baseStream.Wrote);
+
+        // Complete the abandoned read so it cannot race with dispose.
+        gate.TrySetResult();
+        await Task.Delay(20);
+    }
+
+    [TestMethod]
+    public async Task ReadLineAsync_ExceedingMaxHeaderLineBytes_Throws()
+    {
+        var proxy = new ProxyServer(false, false, false);
+        proxy.ResourceLimits = ProxyResourceLimits.Create(
+            maxHeaderLineBytes: 16,
+            maxHeaderCount: ProxyResourceLimits.Default.MaxHeaderCount,
+            maxHeaderAggregateBytes: ProxyResourceLimits.Default.MaxHeaderAggregateBytes,
+            maxEncodedBodyBytes: ProxyResourceLimits.Default.MaxEncodedBodyBytes,
+            maxDecodedBodyBytes: ProxyResourceLimits.Default.MaxDecodedBodyBytes,
+            maxDecompressionRatio: ProxyResourceLimits.Default.MaxDecompressionRatio,
+            maxConcurrentClients: ProxyResourceLimits.Default.MaxConcurrentClients,
+            maxConcurrentStreamsPerConnection: ProxyResourceLimits.Default.MaxConcurrentStreamsPerConnection,
+            maxPeerInitiatedIncompleteStreamResets: ProxyResourceLimits.Default.MaxPeerInitiatedIncompleteStreamResets,
+            maxOpenHeaderBlockFrames: ProxyResourceLimits.Default.MaxOpenHeaderBlockFrames,
+            maxOpenHeaderBlockDuration: ProxyResourceLimits.Default.MaxOpenHeaderBlockDuration,
+            connectionPoolingEnabled: ProxyResourceLimits.Default.ConnectionPoolingEnabled,
+            maxCachedConnectionsPerHost: ProxyResourceLimits.Default.MaxCachedConnectionsPerHost,
+            maxCertificateCacheEntries: ProxyResourceLimits.Default.MaxCertificateCacheEntries);
+
+        var line = new string('a', 32) + "\r\n";
+        using var stream = new HttpStream(proxy, new MemoryStream(Encoding.ASCII.GetBytes(line)),
+            new DefaultBufferPool(), CancellationToken.None, false);
+
+        var ex = await Assert.ThrowsExactlyAsync<ProxyHttpException>(async () => await stream.ReadLineAsync());
+        StringAssert.Contains(ex.Message, "maximum");
     }
 
     [TestMethod]
@@ -760,6 +838,61 @@ public class HttpStreamCoverageTests
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) { }
+    }
+
+    private sealed class GatedReadStream : Stream
+    {
+        private readonly Task gate;
+        private readonly byte[] payload;
+        private int offset;
+        public bool Wrote { get; private set; }
+
+        public GatedReadStream(Task gate, byte[] payload)
+        {
+            this.gate = gate;
+            this.payload = payload;
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() { }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException("Use ReadAsync.");
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            await gate.WaitAsync(cancellationToken);
+            if (offset >= payload.Length) return 0;
+            var toCopy = Math.Min(buffer.Length, payload.Length - offset);
+            payload.AsMemory(offset, toCopy).CopyTo(buffer);
+            offset += toCopy;
+            return toCopy;
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            Wrote = true;
+        }
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            Wrote = true;
+            return ValueTask.CompletedTask;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
     }
 
     private sealed class TinyBufferPool : IBufferPool

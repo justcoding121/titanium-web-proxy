@@ -2674,7 +2674,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     the main <see cref="CopyHttp2FrameAsync" /> DATA relay.
         /// </param>
         internal static async Task SendData(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, int streamId, // NOSONAR S107 -- Frame-writing state is kept explicit for this low-level helper.
-            byte[] data, bool endStream, int maxFrameSize, Http2FlowController flow, Stream output,
+            ReadOnlyMemory<byte> data, bool endStream, int maxFrameSize, Http2FlowController flow, Stream output,
             CancellationToken cancellationToken, SemaphoreSlim? writeLock = null)
         {
             if (maxFrameSize <= 0) maxFrameSize = 16384;
@@ -2716,7 +2716,7 @@ namespace Titanium.Web.Proxy.Http2
                     frameHeader.Flags = isLastFrame && endStream ? Http2FrameFlag.EndStream : (Http2FrameFlag)0;
                     frameHeader.CopyToBuffer(frameHeaderBuffer);
                     await output.WriteAsync(frameHeaderBuffer.AsMemory(), cancellationToken);
-                    await output.WriteAsync(data.AsMemory(pos, frameLength), cancellationToken);
+                    await output.WriteAsync(data.Slice(pos, frameLength), cancellationToken);
                 }
                 finally
                 {
@@ -3135,11 +3135,11 @@ namespace Titanium.Web.Proxy.Http2
             {
                 if (buffer.IsEmpty) return;
 
-                var data = buffer.ToArray();
                 // Pass writeLock into SendData so ReserveAsync runs before the lock (see SendData remarks).
-                await SendData(frameHeader, frameHeaderBuffer, streamId, data, false, SafeMaxFrameSize, flow,
+                // Avoid ToArray: SendData accepts ReadOnlyMemory and writes slices directly.
+                await SendData(frameHeader, frameHeaderBuffer, streamId, buffer, false, SafeMaxFrameSize, flow,
                     clientStream, cancellationToken, clientWriteLock);
-                BytesWritten += data.Length;
+                BytesWritten += buffer.Length;
             }
 
             internal async Task CompleteAsync()

@@ -16,6 +16,7 @@ using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.Shared;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 using Titanium.Web.Proxy.StreamExtended.Network;
@@ -415,7 +416,10 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
         if (Available - index < count) count = Available - index;
 
-        Buffer.BlockCopy(streamBuffer, index, buffer, offset, count);
+        // Peek is relative to the unread window (bufferPos), same as PeekByteAsync /
+        // PeekByteFromBuffer. Copying from absolute index would return already-consumed bytes
+        // when bufferPos > 0 (keep-alive leftover or a prior Read).
+        Buffer.BlockCopy(streamBuffer, bufferPos + index, buffer, offset, count);
         return count;
     }
 
@@ -685,16 +689,16 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         var cancelled = false;
         try
         {
-            var readTask = BaseStream.ReadAsync(streamBuffer.AsMemory(Available, bytesToRead), cancellationToken).AsTask();
-            if (IsNetworkStream) readTask = readTask.WithCancellation(cancellationToken);
-
-            var readBytes = await readTask;
-
-            // WithCancellation returns default(int)=0 when the token fires rather than throwing,
-            // because socket ReadAsync cannot be cancelled on all platforms. Re-surface as
-            // OperationCanceledException so timeout/cancellation callers (e.g. DeadlineRegistry)
-            // can distinguish a deliberate deadline from a genuine server EOF or socket error.
-            if (IsNetworkStream) cancellationToken.ThrowIfCancellationRequested();
+            // Await ReadAsync with the real cancellation token directly. Do not wrap with
+            // WithCancellation: that races the socket read against a cancel-triggered TCS and,
+            // on cancel, returns 0 without awaiting the real read — abandoning it mid-flight while
+            // it still writes into streamBuffer. A later FillBufferAsync/Dispose could then reuse
+            // or return that buffer while the abandoned read is still writing (same class of bug
+            // StreamExtensions.CopyToAsync already fixed). Modern NetworkStream/SslStream observe
+            // cancellation themselves; OperationCanceledException is handled below so cancel does
+            // not poison IsClosed/closedWrite.
+            var readBytes = await BaseStream.ReadAsync(
+                streamBuffer.AsMemory(Available, bytesToRead), cancellationToken);
 
             result = readBytes > 0;
             if (result)
@@ -732,16 +736,28 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// <returns></returns>
     public ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken = default)
     {
-        return ReadLineInternalAsync(this, bufferPool, cancellationToken);
+        return ReadLineInternalAsync(this, bufferPool, cancellationToken,
+            server.ResourceLimits.MaxHeaderLineBytes);
     }
 
     /// <summary>
     ///     Read a line from the byte stream
     /// </summary>
+    /// <param name="reader">Line source.</param>
+    /// <param name="bufferPool">Buffer pool for the scratch line buffer.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="maxLineBytes">
+    ///     Maximum accepted line length in bytes (excluding the terminating LF). Defaults to
+    ///     <see cref="ProxyResourceLimits.Default" />.<c>MaxHeaderLineBytes</c> when omitted.
+    ///     Exceeding the cap throws <see cref="ProxyHttpException" /> rather than growing without bound.
+    /// </param>
     /// <returns></returns>
     internal static async ValueTask<string?> ReadLineInternalAsync(ILineStream reader, IBufferPool bufferPool,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, long maxLineBytes = -1)
     {
+        if (maxLineBytes < 0)
+            maxLineBytes = ProxyResourceLimits.Default.MaxHeaderLineBytes;
+
         byte lastChar = default;
 
         var bufferDataLength = 0;
@@ -770,7 +786,23 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 // store last char for new line comparison
                 lastChar = newChar;
 
-                if (bufferDataLength == buffer.Length) Array.Resize(ref buffer, bufferDataLength * 2);
+                if (bufferDataLength > maxLineBytes)
+                    throw new ProxyHttpException(
+                        $"HTTP header/request line exceeded the configured maximum of {maxLineBytes:N0} bytes.",
+                        null, null);
+
+                if (bufferDataLength == buffer.Length)
+                {
+                    if (bufferDataLength >= maxLineBytes)
+                        throw new ProxyHttpException(
+                            $"HTTP header/request line exceeded the configured maximum of {maxLineBytes:N0} bytes.",
+                            null, null);
+
+                    var newSize = (int)Math.Min(bufferDataLength * 2L, maxLineBytes);
+                    if (newSize <= bufferDataLength)
+                        newSize = bufferDataLength + 1;
+                    Array.Resize(ref buffer, newSize);
+                }
             }
 
             // reached end of stream without a trailing '\n'.
@@ -1164,6 +1196,10 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         }
 
         var buffer = bufferPool.GetBuffer();
+        // Reused across emit calls when chunk sizes match (typical for buffer-sized reads). Valid
+        // only for the duration of the BeforeBodyWrite handler + writeFramed; handlers must not
+        // retain BodyBytes across callbacks.
+        byte[]? reusablePiece = null;
 
         // The handler ended the message before the source's real end (isLastChunk / handler-driven stop).
         // Drain (read and discard) everything still remaining on the source - the rest of the chunk in
@@ -1250,10 +1286,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                         if (isRequest) args.OnDataSent(buffer, 0, bytesRead);
                         else args.OnDataReceived(buffer, 0, bytesRead);
 
-                        var piece = new byte[bytesRead];
-                        Buffer.BlockCopy(buffer, 0, piece, 0, bytesRead);
+                        if (reusablePiece == null || reusablePiece.Length != bytesRead)
+                            reusablePiece = new byte[bytesRead];
+                        Buffer.BlockCopy(buffer, 0, reusablePiece, 0, bytesRead);
 
-                        if (await emit(piece, false))
+                        if (await emit(reusablePiece, false))
                         {
                             stop = true;
                             break;
@@ -1287,10 +1324,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                     if (isRequest) args.OnDataSent(buffer, 0, bytesRead);
                     else args.OnDataReceived(buffer, 0, bytesRead);
 
-                    var piece = new byte[bytesRead];
-                    Buffer.BlockCopy(buffer, 0, piece, 0, bytesRead);
+                    if (reusablePiece == null || reusablePiece.Length != bytesRead)
+                        reusablePiece = new byte[bytesRead];
+                    Buffer.BlockCopy(buffer, 0, reusablePiece, 0, bytesRead);
 
-                    if (await emit(piece, remaining == 0)) break;
+                    if (await emit(reusablePiece, remaining == 0)) break;
                 }
 
                 await writeTerminator();

@@ -636,13 +636,11 @@ public partial class ProxyServer
                     streamState.InboundTunnelChannel!.Reader, originStreamForRelay, sessionArgs, relayCt);
 
                 // Task B: reads the origin's raw TCP bytes and forwards them to the h2 client.
-                // Uses CancellationToken.None for the source read: HttpStream.FillBufferAsync
-                // wraps the underlying socket read in WithCancellation, which returns 0 rather
-                // than throwing on cancellation — making token-based cancellation unreliable
-                // here (the task could complete as Canceled before the echo is relayed).
-                // Instead we close the socket explicitly below, which forces ReadAsync to
-                // return 0 (or throw an IOException that is swallowed by HttpStream), giving
-                // toClientTask a reliable, synchronous exit signal.
+                // Uses CancellationToken.None for the source read and closes the socket below to
+                // unblock a pending ReadAsync immediately. Token cancellation alone would throw
+                // OperationCanceledException from HttpStream.FillBufferAsync without poisoning the
+                // stream, but closing the socket is a more reliable exit signal for this relay
+                // (avoids racing cancel against data that still needs to be echoed).
                 var toClientTask = RelayStreamToClientAsync(originStreamForRelay, bodyStream, sessionArgs, ct);
 
                 await Task.WhenAny(toOriginTask, toClientTask);
@@ -748,12 +746,9 @@ public partial class ProxyServer
     ///     read returns 0) and writes each chunk to <paramref name="destination"/> as h2 DATA frames.
     ///     <para>
     ///         <see cref="CancellationToken.None"/> is intentionally passed to
-    ///         <see cref="Stream.ReadAsync(byte[], int, int, CancellationToken)"/>: the underlying
-    ///         <see cref="HttpStream.FillBufferAsync"/> wraps the socket read with
-    ///         <see cref="StreamExtensions.WithCancellation{T}"/> and returns 0 (rather than
-    ///         throwing <see cref="OperationCanceledException"/>) when the token fires, which can
-    ///         race with arriving data and prematurely exit the loop before the echo is relayed.
-    ///         The caller closes the socket explicitly to unblock the pending read instead.
+    ///         <see cref="Stream.ReadAsync(System.Memory{byte}, CancellationToken)"/>: the caller
+    ///         closes the socket explicitly to unblock the pending read. Relying on token
+    ///         cancellation alone can race with arriving data that still needs to be echoed.
     ///     </para>
     /// </summary>
     private static async Task RelayStreamToClientAsync(

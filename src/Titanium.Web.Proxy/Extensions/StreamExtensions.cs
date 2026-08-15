@@ -43,12 +43,8 @@ internal static class StreamExtensions
                 int bytesRead;
                 try
                 {
-                    // Read directly with the real cancellation token instead of the old
-                    // Task<T>.WithCancellation(...) workaround (for "cancellation is not working on
-                    // Socket ReadAsync", https://github.com/dotnet/corefx/issues/15033 - fixed upstream
-                    // years ago, and HttpStream.ReadAsync/FillBufferAsync already carries its own
-                    // narrower, still-needed workaround for that historical NetworkStream limitation).
-                    // WithCancellation races the real read against a cancellation-triggered
+                    // Read directly with the real cancellation token. Do not wrap with
+                    // WithCancellation: that races the real read against a cancellation-triggered
                     // TaskCompletionSource and, the instant the token fires, returns 0 without ever
                     // awaiting the real read - abandoning it mid-flight rather than cancelling it. That
                     // read keeps running against this same `buffer` array in the background, so the
@@ -56,7 +52,7 @@ internal static class StreamExtensions
                     // could immediately reuse it - while the abandoned read was still writing into it,
                     // corrupting whichever connection borrowed it next. Awaiting the read directly lets
                     // it observe cancellation itself and actually stop before this method reuses its
-                    // buffer.
+                    // buffer. HttpStream.FillBufferAsync uses the same direct-await pattern.
                     bytesRead = await input.ReadAsync(buffer.AsMemory(), cancellationToken);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -66,7 +62,15 @@ internal static class StreamExtensions
 
                 if (bytesRead == 0) break;
 
-                await output.WriteAsync(buffer.AsMemory(0, bytesRead), CancellationToken.None);
+                try
+                {
+                    await output.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
                 onCopy?.Invoke(buffer, 0, bytesRead);
             }
         }

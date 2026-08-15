@@ -92,9 +92,16 @@ internal sealed class BodyStreamWriter : Stream
     private async Task WriteToWriterAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
     {
         if (System.Runtime.InteropServices.MemoryMarshal.TryGetArray(buffer, out var segment) && segment.Array != null)
+        {
             await writer.WriteAsync(segment.Array, segment.Offset, segment.Count, cancellationToken);
-        else
-            await writer.WriteAsync(buffer.ToArray(), 0, buffer.Length, cancellationToken);
+            return;
+        }
+
+        // Non-array memory (e.g. NativeMemory): copy through a short-lived heap array sized to the
+        // write. Callers of RespondStreaming almost always pass array-backed Memory from the pool.
+        var rented = new byte[buffer.Length];
+        buffer.CopyTo(rented);
+        await writer.WriteAsync(rented, 0, rented.Length, cancellationToken);
     }
 
     /// <summary>
