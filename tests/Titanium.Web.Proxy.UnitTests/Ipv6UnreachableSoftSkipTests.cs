@@ -21,17 +21,15 @@ public class Ipv6UnreachableSoftSkipTests
     }
 
     [TestMethod]
-    public void TwoIpv6UnreachableStrikes_ThenFiltersIpv6()
+    public void OneIpv6UnreachableStrike_ThenFiltersIpv6()
     {
         var v6 = IPAddress.Parse("2001:db8::1");
         var v4 = IPAddress.Parse("192.0.2.1");
         var unreachable = new SocketException((int)SocketError.NetworkUnreachable);
 
         Ipv6UnreachableSoftSkip.RecordAttemptFailure(v6, unreachable, enabled: true);
-        Assert.IsFalse(Ipv6UnreachableSoftSkip.IsSkipping());
-
-        Ipv6UnreachableSoftSkip.RecordAttemptFailure(v6, unreachable, enabled: true);
-        Assert.IsTrue(Ipv6UnreachableSoftSkip.IsSkipping());
+        Assert.IsTrue(Ipv6UnreachableSoftSkip.IsSkipping(),
+            "one NetworkUnreachable on broken dual-stack should arm soft-skip immediately");
 
         var filtered = Ipv6UnreachableSoftSkip.FilterIfSkipping(new[] { v6, v4 }, enabled: true);
         CollectionAssert.AreEqual(new[] { v4 }, filtered);
@@ -43,7 +41,6 @@ public class Ipv6UnreachableSoftSkipTests
         var v6a = IPAddress.Parse("2001:db8::1");
         var v6b = IPAddress.Parse("2001:db8::2");
         var unreachable = new SocketException((int)SocketError.NetworkUnreachable);
-        Ipv6UnreachableSoftSkip.RecordAttemptFailure(v6a, unreachable, enabled: true);
         Ipv6UnreachableSoftSkip.RecordAttemptFailure(v6a, unreachable, enabled: true);
 
         var input = new[] { v6a, v6b };
@@ -57,7 +54,6 @@ public class Ipv6UnreachableSoftSkipTests
         var v6 = IPAddress.Parse("2001:db8::1");
         var unreachable = new SocketException((int)SocketError.NetworkUnreachable);
         Ipv6UnreachableSoftSkip.RecordAttemptFailure(v6, unreachable, enabled: true);
-        Ipv6UnreachableSoftSkip.RecordAttemptFailure(v6, unreachable, enabled: true);
         Assert.IsTrue(Ipv6UnreachableSoftSkip.IsSkipping());
 
         Ipv6UnreachableSoftSkip.RecordAttemptSuccess(v6, enabled: true);
@@ -70,7 +66,6 @@ public class Ipv6UnreachableSoftSkipTests
         var v6 = IPAddress.Parse("2001:db8::1");
         var v4 = IPAddress.Parse("192.0.2.1");
         var unreachable = new SocketException((int)SocketError.NetworkUnreachable);
-        Ipv6UnreachableSoftSkip.RecordAttemptFailure(v6, unreachable, enabled: false);
         Ipv6UnreachableSoftSkip.RecordAttemptFailure(v6, unreachable, enabled: false);
         Assert.IsFalse(Ipv6UnreachableSoftSkip.IsSkipping());
 

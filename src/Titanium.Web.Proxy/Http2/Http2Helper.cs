@@ -138,6 +138,19 @@ namespace Titanium.Web.Proxy.Http2
             ProxyDiagnostics.ReportException(logger, ex.Message, ex);
         }
 
+        /// <summary>
+        ///     Bind multiplexed origin metadata and attribute
+        ///     <see cref="HttpRequestTiming.UpstreamConnectionReused" /> via <see cref="TcpServerConnection.ClaimFirstUse" />
+        ///     so the first stream on a connection records fresh, later streams record reused.
+        /// </summary>
+        private static void BindOriginForHttp2Stream(SessionEventArgs sessionArgs, TcpServerConnection originConnection)
+        {
+            sessionArgs.HttpClient.BindUpstreamConnection(originConnection);
+            var reused = !originConnection.ClaimFirstUse();
+            if (sessionArgs.Timing != null)
+                sessionArgs.Timing.MarkConnectionReady(originConnection.Id, reused);
+        }
+
         private static bool IsAsciiDigit(byte b) => b is >= (byte)'0' and <= (byte)'9';
 
         /// <summary>
@@ -875,7 +888,7 @@ namespace Titanium.Web.Proxy.Http2
                                 {
                                     // Origin supports RFC 8441 - forward the extended CONNECT HEADERS.
                                     if (originConnection != null)
-                                        sessionArgs.HttpClient.BindUpstreamConnection(originConnection);
+                                        BindOriginForHttp2Stream(sessionArgs, originConnection);
                                     await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                         request, endStreamFlag, output, isPromise));
                                 }
@@ -885,7 +898,7 @@ namespace Titanium.Web.Proxy.Http2
                                 // Bind shared origin metadata without SetConnection so HasConnection stays
                                 // false (H1 syphon/drain must not touch the multiplexed H2 socket).
                                 if (originConnection != null)
-                                    sessionArgs.HttpClient.BindUpstreamConnection(originConnection);
+                                    BindOriginForHttp2Stream(sessionArgs, originConnection);
                                 await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                     request, endStreamFlag, output, isPromise));
                             }

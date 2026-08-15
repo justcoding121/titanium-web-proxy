@@ -359,7 +359,7 @@ QUIC endpoint is visible without extra config.
 | Knob | Balanced default | Speed opt-in | Notes |
 |---|---|---|---|
 | `EnableConnectionPool` | `true` | — | Live pool switch; prefer this over unused `ProxyResourceLimits.ConnectionPoolingEnabled`. |
-| `EnableIpv6UnreachableSoftSkip` | `true` | disable for strict IPv6 preference | After two consecutive IPv6 `NetworkUnreachable`-class Happy Eyeballs failures, skip IPv6 addresses for 30s (filter after address-family interleave). |
+| `EnableIpv6UnreachableSoftSkip` | `true` | disable for strict IPv6 preference | After one IPv6 `NetworkUnreachable`-class Happy Eyeballs failure, skip IPv6 addresses for 30s (filter after address-family interleave). |
 | `MaxCachedConnections` | `4` | raise for high fan-out per origin | Same: live knob is on `ProxyServer`, not `ResourceLimits.MaxCachedConnectionsPerHost`. |
 | `EnableTcpServerConnectionPrefetch` | `true` | — | Overlaps origin connect with client work. |
 | `NoDelay` | `true` | — | Disables Nagle. |

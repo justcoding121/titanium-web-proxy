@@ -591,7 +591,7 @@ public partial class ProxyServer : IDisposable
     public bool EnableTcpServerConnectionPrefetch { get; set; } = true;
 
     /// <summary>
-    ///     When true (default), after two consecutive IPv6 connect failures with
+    ///     When true (default), after one IPv6 connect failure with
     ///     <see cref="System.Net.Sockets.SocketError.NetworkUnreachable" /> (or equivalent), temporarily
     ///     omit IPv6 addresses from the Happy Eyeballs race for 30 seconds. Reduces first-chance
     ///     <see cref="System.Net.Sockets.SocketException" /> noise on dual-stack hosts with a broken IPv6

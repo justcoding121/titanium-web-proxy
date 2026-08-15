@@ -526,12 +526,12 @@ public partial class ProxyServer
                     }
 
                     // The whole h2 client connection multiplexes every request-carrying stream over this
-                    // one shared origin connection, so - unlike HTTP/1.1's per-request pool acquisition -
-                    // its establishment timing is attributed to the tunnel/CONNECT session rather than any
-                    // individual per-stream SessionEventArgs. Streams BindUpstreamConnection only (no
-                    // SetConnection) so HasConnection stays false on the multiplexed socket.
+                    // one shared origin connection, so tunnel-level timing records establishment here.
+                    // Do NOT ClaimFirstUse: per-stream SessionEventArgs in SendHttp2 claim it so
+                    // UpstreamConnectionReused is false on the first stream and true on later streams
+                    // (multiplex / pool reuse), matching HTTP/1.1 keep-alive semantics.
                     if (connectArgs.Timing != null)
-                        connectArgs.Timing.MarkConnectionReady(connection.Id, !connection.ClaimFirstUse());
+                        connectArgs.Timing.MarkConnectionReady(connection.Id, reused: false);
                     connectArgs.HttpClient.BindUpstreamConnection(connection);
                     try
                     {
