@@ -7293,6 +7293,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.EnableHttpsSvcbDnsDiscovery
   nameWithType: ProxyServer.EnableHttpsSvcbDnsDiscovery
+- uid: Titanium.Web.Proxy.ProxyServer.EnableIpv6UnreachableSoftSkip
+  name: EnableIpv6UnreachableSoftSkip
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableIpv6UnreachableSoftSkip
+  commentId: P:Titanium.Web.Proxy.ProxyServer.EnableIpv6UnreachableSoftSkip
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableIpv6UnreachableSoftSkip
+  nameWithType: ProxyServer.EnableIpv6UnreachableSoftSkip
+- uid: Titanium.Web.Proxy.ProxyServer.EnableIpv6UnreachableSoftSkip*
+  name: EnableIpv6UnreachableSoftSkip
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableIpv6UnreachableSoftSkip_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.EnableIpv6UnreachableSoftSkip
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableIpv6UnreachableSoftSkip
+  nameWithType: ProxyServer.EnableIpv6UnreachableSoftSkip
 - uid: Titanium.Web.Proxy.ProxyServer.EnableQpackDynamicTable
   name: EnableQpackDynamicTable
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableQpackDynamicTable
