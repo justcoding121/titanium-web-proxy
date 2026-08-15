@@ -70,8 +70,16 @@ public partial class ProxyServer
                 {
                     try
                     {
-                        // read the request line
-                        requestLine = await clientStream.ReadRequestLine(headerDeadline.Token);
+                        // read the request line (cancel returns a value; deadline timeout still throws)
+                        var requestLineRead =
+                            await clientStream.ReadRequestLineWithResultAsync(headerDeadline.Token);
+                        if (requestLineRead.Cancelled)
+                        {
+                            ThrowIfHeaderDeadlineTimedOut(headerDeadline);
+                            return;
+                        }
+
+                        requestLine = requestLineRead.Status;
                         if (requestLine.IsEmpty()) return;
 
                         args = new SessionEventArgs(this, endPoint, clientStream, connectRequest,
@@ -81,8 +89,14 @@ public partial class ProxyServer
                         };
 
                         // Read the request headers in to unique and non-unique header collections
-                        await HeaderParser.ReadHeaders(clientStream, args.HttpClient.Request.Headers,
-                            headerDeadline.Token);
+                        if (!await HeaderParser.TryReadHeadersAsync(clientStream, args.HttpClient.Request.Headers,
+                                headerDeadline.Token))
+                        {
+                            args.Dispose();
+                            args = null;
+                            ThrowIfHeaderDeadlineTimedOut(headerDeadline);
+                            return;
+                        }
                     }
                     catch (OperationCanceledException ex)
                     {
@@ -90,8 +104,7 @@ public partial class ProxyServer
                         // Host/Method to safely answer with) and no OnAfterResponse subscriber should see a
                         // session that never had a request - dispose directly rather than falling through
                         // to the try/finally below that pairs a real attempt with AfterResponse.
-                        ProxyDiagnostics.ReportCaught(logger,
-                            "RequestHandler header read cancelled; rethrowing after timeout check", ex);
+                        // Terminal Explicit/Transparent handlers already log session cancel at Debug.
                         args?.Dispose();
                         headerDeadline.ThrowIfTimedOut(ex);
                         throw; // unreachable: ThrowIfTimedOut always throws; satisfies definite-assignment analysis.
@@ -363,8 +376,10 @@ public partial class ProxyServer
                             }
 
                             if (cancellationTokenSource.IsCancellationRequested)
-                                throw new OperationCanceledException("Session was terminated by user.",
-                                    cancellationTokenSource.Token);
+                            {
+                                closeServerConnection = true;
+                                return;
+                            }
 
                             // Release the server connection back to the shared pool after each HTTP session
                             // (rather than holding it for the whole client connection). This is more efficient
@@ -398,8 +413,6 @@ public partial class ProxyServer
                                 return;
                             }
 
-                            ProxyDiagnostics.ReportCaught(logger,
-                                "RequestHandler session cancelled; rethrowing", ex);
                             throw;
                         }
                     }
@@ -657,8 +670,6 @@ public partial class ProxyServer
             }
             catch (OperationCanceledException ex)
             {
-                ProxyDiagnostics.ReportCaught(logger,
-                    "RequestHandler idle-write cancelled; rethrowing after timeout check", ex);
                 idleWriteDeadline.ThrowIfTimedOut(ex);
             }
         }
@@ -918,6 +929,17 @@ public partial class ProxyServer
         if (args.IsSocks) return FramingSource.Http1WireSocks;
         if (args.IsTransparent) return FramingSource.Http1WireTransparent;
         return FramingSource.Http1Wire;
+    }
+
+    /// <summary>
+    ///     When a cancel-shaped buffer fill returns without throwing, still promote a fired client-header
+    ///     deadline to <see cref="ProxyTimeoutException" />. User cancel returns to the caller.
+    /// </summary>
+    private static void ThrowIfHeaderDeadlineTimedOut(DeadlineRegistry.Deadline headerDeadline)
+    {
+        var synthetic = new OperationCanceledException();
+        if (headerDeadline.TryGetTimeoutException(synthetic, out var timeoutException))
+            throw timeoutException!;
     }
 
     /// <summary>

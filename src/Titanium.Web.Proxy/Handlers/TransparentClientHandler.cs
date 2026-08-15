@@ -65,8 +65,7 @@ public partial class ProxyServer
                 await endPoint.InvokeBeforeSslAuthenticate(this, args, logger);
 
                 if (cancellationTokenSource.IsCancellationRequested)
-                    throw new OperationCanceledException("Session was terminated by user.",
-                        cancellationTokenSource.Token);
+                    return;
 
                 if (endPoint.DecryptSsl && args.DecryptSsl)
                 {

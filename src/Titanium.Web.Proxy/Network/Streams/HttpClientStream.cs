@@ -45,12 +45,24 @@ internal sealed class HttpClientStream : HttpStream
 
     internal async ValueTask<RequestStatusInfo> ReadRequestLine(CancellationToken cancellationToken = default)
     {
-        // read the first line HTTP command
-        var httpCmd = await ReadLineAsync(cancellationToken);
-        if (string.IsNullOrEmpty(httpCmd)) return default;
+        var result = await ReadRequestLineWithResultAsync(cancellationToken);
+        if (result.Cancelled)
+            cancellationToken.ThrowIfCancellationRequested();
+        return result.Status;
+    }
+
+    /// <summary>
+    ///     Reads the request line without throwing on cancellation (HTTP/1 session cancel hygiene).
+    /// </summary>
+    internal async ValueTask<(RequestStatusInfo Status, bool Cancelled)> ReadRequestLineWithResultAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var (httpCmd, cancelled) = await ReadLineWithResultAsync(cancellationToken);
+        if (cancelled) return (default, true);
+        if (string.IsNullOrEmpty(httpCmd)) return (default, false);
 
         Request.ParseRequestLine(httpCmd, out var method, out var requestUri, out var version);
 
-        return new RequestStatusInfo { Method = method, RequestUri = requestUri, Version = version };
+        return (new RequestStatusInfo { Method = method, RequestUri = requestUri, Version = version }, false);
     }
 }

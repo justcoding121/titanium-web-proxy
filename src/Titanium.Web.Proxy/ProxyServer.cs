@@ -591,6 +591,15 @@ public partial class ProxyServer : IDisposable
     public bool EnableTcpServerConnectionPrefetch { get; set; } = true;
 
     /// <summary>
+    ///     When true (default), after two consecutive IPv6 connect failures with
+    ///     <see cref="System.Net.Sockets.SocketError.NetworkUnreachable" /> (or equivalent), temporarily
+    ///     omit IPv6 addresses from the Happy Eyeballs race for 30 seconds. Reduces first-chance
+    ///     <see cref="System.Net.Sockets.SocketException" /> noise on dual-stack hosts with a broken IPv6
+    ///     path. Disable if operators require strict IPv6 preference even when the path is unreachable.
+    /// </summary>
+    public bool EnableIpv6UnreachableSoftSkip { get; set; } = true;
+
+    /// <summary>
     ///     Gets or sets a Boolean value that specifies whether server and client stream Sockets are using the Nagle algorithm.
     ///     Defaults to true, no nagle algorithm is used.
     /// </summary>

@@ -359,6 +359,7 @@ QUIC endpoint is visible without extra config.
 | Knob | Balanced default | Speed opt-in | Notes |
 |---|---|---|---|
 | `EnableConnectionPool` | `true` | — | Live pool switch; prefer this over unused `ProxyResourceLimits.ConnectionPoolingEnabled`. |
+| `EnableIpv6UnreachableSoftSkip` | `true` | disable for strict IPv6 preference | After two consecutive IPv6 `NetworkUnreachable`-class Happy Eyeballs failures, skip IPv6 addresses for 30s (filter after address-family interleave). |
 | `MaxCachedConnections` | `4` | raise for high fan-out per origin | Same: live knob is on `ProxyServer`, not `ResourceLimits.MaxCachedConnectionsPerHost`. |
 | `EnableTcpServerConnectionPrefetch` | `true` | — | Overlaps origin connect with client work. |
 | `NoDelay` | `true` | — | Disables Nagle. |
@@ -432,6 +433,11 @@ proxyServer.Logging.MaxRolledFiles = 5;
 // automatically, but call it yourself to change configuration while already running:
 proxyServer.ApplyLoggingConfiguration();
 ```
+
+When the active file reaches `MaxFileSizeBytes`, it is moved to `<FilePath>.1` and older siblings shift to
+`.2` … `.N` (up to `MaxRolledFiles`). Grep / metrics over only the active file undercount history after a
+roll — include the rolled siblings. A process restart appends to the same path; an oversized file left
+behind by a force-kill is rolled on the next open rather than silently growing forever.
 
 To bridge into an existing logging pipeline (Serilog, NLog, an ASP.NET Core host's `ILoggerFactory`, etc.)
 instead of the built-in Console/File sinks, set `LoggerFactory` — this disables the built-in sinks entirely

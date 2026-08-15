@@ -6,6 +6,13 @@ using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy.Network;
 
+/// <summary>
+///     Retries an action on a fresh server connection when a typed failure is thrown.
+///     Exception-performance Ship 4 gate: do not result-shape this path until an origin/stale-pool
+///     load repro shows <c>RetryPolicy caught candidate for retry</c> / first-chance
+///     <c>RetryableServerConnectionException</c> volume is hot. Closing the browser is the wrong
+///     stimulus; use forced origin idle-close (see StaleKeepAliveTests) instead.
+/// </summary>
 internal class RetryPolicy<T> where T : Exception
 {
     private readonly int retries;

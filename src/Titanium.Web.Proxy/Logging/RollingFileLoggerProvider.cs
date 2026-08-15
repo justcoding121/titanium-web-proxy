@@ -10,8 +10,10 @@ namespace Titanium.Web.Proxy.Logging;
 ///     reaches <see cref="ProxyLoggingOptions.MaxFileSizeBytes" />, shifting older rolled files up to
 ///     <c>&lt;path&gt;.N</c> and deleting anything beyond <see cref="ProxyLoggingOptions.MaxRolledFiles" />.
 ///     All file I/O happens on the single background writer thread owned by
-///     <see cref="ChannelLoggerProviderBase" />; a locked/unwritable path disables the sink for the rest
-///     of the run instead of retrying (and logging about) every entry.
+///     <see cref="ChannelLoggerProviderBase" />; a locked/unwritable path backs off briefly and retries
+///     rather than disabling the sink for the rest of the process (so a force-killed previous instance
+///     still holding the handle, or a diagnostic reader briefly locking a rolled file, cannot silently
+///     truncate the visible active-file history for the remainder of a run).
 /// </summary>
 internal sealed class RollingFileLoggerProvider : ChannelLoggerProviderBase
 {
@@ -21,7 +23,9 @@ internal sealed class RollingFileLoggerProvider : ChannelLoggerProviderBase
 
     private StreamWriter? writer;
     private long currentSize;
-    private bool unavailable;
+    /// <summary>UTC ticks after which a transient open/write failure should be retried; 0 = healthy.</summary>
+    private long retryAfterUtcTicks;
+    private bool permanentlyUnavailable;
 
     public RollingFileLoggerProvider(ProxyLoggingOptions options) : base(options.QueueCapacity)
     {
@@ -32,7 +36,8 @@ internal sealed class RollingFileLoggerProvider : ChannelLoggerProviderBase
 
     protected override async Task WriteEntryAsync(LogEntry entry)
     {
-        if (unavailable) return;
+        if (permanentlyUnavailable) return;
+        if (retryAfterUtcTicks != 0 && DateTime.UtcNow.Ticks < retryAfterUtcTicks) return;
 
         try
         {
@@ -41,18 +46,23 @@ internal sealed class RollingFileLoggerProvider : ChannelLoggerProviderBase
             var line = ProxyLog.FormatLine(entry);
             await currentWriter.WriteLineAsync(line).ConfigureAwait(false);
             currentSize += Encoding.UTF8.GetByteCount(line) + Environment.NewLine.Length;
+            retryAfterUtcTicks = 0;
 
             if (currentSize >= maxFileSizeBytes) Roll();
         }
         catch (IOException)
         {
-            // Locked/missing directory/unwritable path: stop trying for the rest of the run rather than
-            // retrying (and potentially recursively logging about) every subsequent entry.
-            unavailable = true;
+            // Transient: previous process still releasing the handle after a force-kill, AV scan,
+            // or another reader briefly locking a file during roll. Drop this entry, close the
+            // handle, and retry on a later write — do not permanently disable the sink (that made
+            // active-file HE/cancel counts look like they "went backwards" after restarts).
+            CloseWriterSilent();
+            retryAfterUtcTicks = DateTime.UtcNow.AddSeconds(1).Ticks;
         }
         catch (UnauthorizedAccessException)
         {
-            unavailable = true;
+            permanentlyUnavailable = true;
+            CloseWriterSilent();
         }
     }
 
@@ -60,6 +70,22 @@ internal sealed class RollingFileLoggerProvider : ChannelLoggerProviderBase
     {
         if (writer != null) return writer;
 
+        OpenWriter();
+
+        // A killed previous process (or a failed mid-roll) can leave an oversized active file.
+        // Roll before accepting more writes so counts don't appear to "reset" while history is only
+        // in sibling rolled files that metrics forgot to include.
+        if (currentSize >= maxFileSizeBytes)
+        {
+            Roll();
+            if (writer == null) OpenWriter();
+        }
+
+        return writer!;
+    }
+
+    private void OpenWriter()
+    {
         var directory = Path.GetDirectoryName(filePath);
         if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
             Directory.CreateDirectory(directory);
@@ -67,13 +93,11 @@ internal sealed class RollingFileLoggerProvider : ChannelLoggerProviderBase
         var stream = new FileStream(filePath, FileMode.Append, FileAccess.Write, FileShare.Read);
         currentSize = stream.Length;
         writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
-        return writer;
     }
 
     private void Roll()
     {
-        writer?.Dispose();
-        writer = null;
+        CloseWriterSilent();
 
         try
         {
@@ -81,6 +105,7 @@ internal sealed class RollingFileLoggerProvider : ChannelLoggerProviderBase
             {
                 // Rolling is disabled: start the active file fresh rather than letting it grow forever.
                 if (File.Exists(filePath)) File.Delete(filePath);
+                currentSize = 0;
                 return;
             }
 
@@ -94,14 +119,36 @@ internal sealed class RollingFileLoggerProvider : ChannelLoggerProviderBase
                 if (File.Exists(destination)) File.Delete(destination);
                 File.Move(source, destination);
             }
+
+            // Only clear size after the active file was successfully moved/deleted above.
+            currentSize = 0;
         }
         catch (IOException)
         {
-            // Best effort: if rolling itself fails (e.g. a rolled file is open elsewhere), keep appending
-            // to the current file rather than losing entries.
+            // Best effort: if rolling itself fails (e.g. a rolled file is open elsewhere), leave
+            // currentSize alone so the next EnsureWriter() re-reads Length and retries the roll.
+            // Do not pretend the file is empty — that skipped rolls and made active-file greps
+            // under-count history that still lived only in *.N siblings.
         }
+    }
 
-        currentSize = 0;
+    private void CloseWriterSilent()
+    {
+        try
+        {
+            writer?.Flush();
+            writer?.Dispose();
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (IOException)
+        {
+        }
+        finally
+        {
+            writer = null;
+        }
     }
 
     protected override void DisposeSink()

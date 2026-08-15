@@ -601,6 +601,8 @@ internal class TcpConnectionFactory : IDisposable
             // position. Relative order *within* each family (the resolver's own preference, e.g. RFC 6724
             // destination-address ordering) is preserved; only the interleaving across families is added.
             ipAddresses = InterleaveByAddressFamily(ipAddresses);
+            ipAddresses = Ipv6UnreachableSoftSkip.FilterIfSkipping(ipAddresses,
+                proxyServer.EnableIpv6UnreachableSoftSkip);
 
             // Resolved once up front rather than inside the per-address race below: this is the SOCKS
             // *origin* address embedded in the ATYP payload, which does not depend on which of the
@@ -643,8 +645,8 @@ internal class TcpConnectionFactory : IDisposable
             // throw via GetResult() on a faulted Task (NetworkUnreachable on dead IPv6 is the hot path).
             // Cancelling attemptToken (caller cancel, or the race abandoning this attempt because another
             // address already won) aborts the in-flight connect; that surfaces as Ok=false with OCE.
-            async Task<(bool Ok, Socket? Socket, IPEndPoint? Bound, Exception? Error)> ConnectToAddressAsync(
-                IPAddress ipAddress, CancellationToken attemptToken)
+            async Task<(bool Ok, Socket? Socket, IPEndPoint? Bound, Exception? Error, IPAddress Address)>
+                ConnectToAddressAsync(IPAddress ipAddress, CancellationToken attemptToken)
             {
                 // externalProxy == null here means this attempt's target is the real destination
                 // (connectHostName), not an operator-configured upstream proxy address, which is
@@ -655,7 +657,7 @@ internal class TcpConnectionFactory : IDisposable
                 if (proxyServer.BlockPrivateNetworkDestinations && externalProxy == null &&
                     PrivateNetworkGuard.IsBlocked(ipAddress))
                     return (false, null, null,
-                        new OutboundDestinationBlockedException(hostname, ipAddress.ToString()));
+                        new OutboundDestinationBlockedException(hostname, ipAddress.ToString()), ipAddress);
 
                 // Select local bind after destination resolution so IPv4/IPv6 adapters can coexist (#951).
                 var resolvedBind = UpStreamEndPointSelector.Resolve(ipAddress.AddressFamily,
@@ -738,7 +740,8 @@ internal class TcpConnectionFactory : IDisposable
                             if (attemptToken.IsCancellationRequested)
                             {
                                 attemptSocket.Dispose();
-                                return (false, null, null, new OperationCanceledException(attemptToken));
+                                return (false, null, null, new OperationCanceledException(attemptToken),
+                                    ipAddress);
                             }
 
                             throw new ProxyTimeoutException(
@@ -765,16 +768,16 @@ internal class TcpConnectionFactory : IDisposable
                         catch (OperationCanceledException oce)
                         {
                             attemptSocket.Dispose();
-                            return (false, null, null, oce);
+                            return (false, null, null, oce, ipAddress);
                         }
                     }
 
-                    return (true, attemptSocket, resolvedBind, null);
+                    return (true, attemptSocket, resolvedBind, null, ipAddress);
                 }
                 catch (Exception connectAttemptEx)
                 {
                     attemptSocket.Dispose();
-                    return (false, null, null, connectAttemptEx);
+                    return (false, null, null, connectAttemptEx, ipAddress);
                 }
             }
 
@@ -789,7 +792,7 @@ internal class TcpConnectionFactory : IDisposable
             using (var raceCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
             {
                 var inFlight =
-                    new List<Task<(bool Ok, Socket? Socket, IPEndPoint? Bound, Exception? Error)>>(
+                    new List<Task<(bool Ok, Socket? Socket, IPEndPoint? Bound, Exception? Error, IPAddress Address)>>(
                         ipAddresses.Length);
 
                 for (var i = 0; i < ipAddresses.Length; i++)
@@ -803,7 +806,8 @@ internal class TcpConnectionFactory : IDisposable
                     while (inFlight.Count > 0)
                     {
                         var pending = Task.WhenAny(inFlight);
-                        Task<(bool Ok, Socket? Socket, IPEndPoint? Bound, Exception? Error)> doneTask;
+                        Task<(bool Ok, Socket? Socket, IPEndPoint? Bound, Exception? Error, IPAddress Address)>
+                            doneTask;
                         if (stagger == null)
                         {
                             doneTask = await pending;
@@ -839,6 +843,8 @@ internal class TcpConnectionFactory : IDisposable
                         var attempt = doneTask.Result;
                         if (attempt.Ok && attempt.Socket != null)
                         {
+                            Ipv6UnreachableSoftSkip.RecordAttemptSuccess(attempt.Address,
+                                proxyServer.EnableIpv6UnreachableSoftSkip);
                             tcpServerSocket = attempt.Socket;
                             boundEndPoint = attempt.Bound;
                             await raceCts.CancelAsync();
@@ -848,6 +854,8 @@ internal class TcpConnectionFactory : IDisposable
 
                         if (attempt.Error != null)
                         {
+                            Ipv6UnreachableSoftSkip.RecordAttemptFailure(attempt.Address, attempt.Error,
+                                proxyServer.EnableIpv6UnreachableSoftSkip);
                             ProxyDiagnostics.ReportBenign(proxyServer.Logger,
                                 "TcpConnectionFactory Happy Eyeballs address attempt failed", attempt.Error);
                             lastException = attempt.Error;
@@ -1037,7 +1045,8 @@ internal class TcpConnectionFactory : IDisposable
     ///     (<c>Ok=false</c>) already disposed their sockets inside <c>ConnectToAddressAsync</c>.
     /// </summary>
     private static void AbandonLosingAttempts(
-        IReadOnlyCollection<Task<(bool Ok, Socket? Socket, IPEndPoint? Bound, Exception? Error)>> losingAttempts)
+        IReadOnlyCollection<Task<(bool Ok, Socket? Socket, IPEndPoint? Bound, Exception? Error, IPAddress Address)>>
+            losingAttempts)
     {
         foreach (var attempt in losingAttempts)
             _ = attempt.ContinueWith(

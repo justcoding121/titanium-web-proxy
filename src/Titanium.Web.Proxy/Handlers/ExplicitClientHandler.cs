@@ -365,8 +365,7 @@ public partial class ProxyServer
                 }
 
                 if (cancellationTokenSource.IsCancellationRequested)
-                    throw new OperationCanceledException("Session was terminated by user.",
-                        cancellationTokenSource.Token);
+                    return;
 
                 if (method == KnownMethod.Invalid) sendRawData = true;
 

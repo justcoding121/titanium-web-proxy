@@ -146,6 +146,29 @@ public class HttpStreamCoverageTests
     }
 
     [TestMethod]
+    public async Task FillBufferWithResultAsync_Cancel_ReturnsCancelled_WithoutThrowing()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var baseStream = new GatedReadStream(gate.Task, Encoding.ASCII.GetBytes("xy"));
+        var proxy = new ProxyServer(false, false, false);
+        using var stream = new HttpStream(proxy, baseStream, new DefaultBufferPool(), CancellationToken.None, true);
+
+        using var cts = new CancellationTokenSource();
+        var fillTask = stream.FillBufferWithResultAsync(cts.Token).AsTask();
+        await Task.Delay(20);
+        await cts.CancelAsync();
+
+        Assert.AreEqual(BufferFillResult.Cancelled, await fillTask);
+        Assert.IsFalse(stream.IsClosed);
+
+        await stream.WriteAsync(new byte[] { 1, 2, 3 }, CancellationToken.None);
+        Assert.IsTrue(baseStream.Wrote);
+
+        gate.TrySetResult();
+        await Task.Delay(20);
+    }
+
+    [TestMethod]
     public async Task ReadLineAsync_ExceedingMaxHeaderLineBytes_Throws()
     {
         var proxy = new ProxyServer(false, false, false);

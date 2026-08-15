@@ -417,9 +417,11 @@ that entire timeout on every single connection to that host, not just the first.
 starve the healthy one behind several same-family attempts) and raced with a 250ms staggered start
 per address (RFC 8305's Connection Attempt Delay) rather than tried one at a time. The first address
 to complete a TCP (or SOCKS) connect wins; every other in-flight attempt is cancelled and its socket
-disposed. This is a pure latency improvement with no configuration surface and no behavior visible
-to callers beyond faster connects on affected networks — nothing to change in your code.
-
+disposed. Failed attempts are result-shaped (one Debug breadcrumb each) rather than faulting the race
+task. When `EnableIpv6UnreachableSoftSkip` is `true` (the default), two consecutive IPv6
+`NetworkUnreachable`-class failures temporarily omit IPv6 from the race for 30 seconds — operators who
+need strict IPv6 preference on healthy dual-stack can set the knob to `false`. This is a pure latency /
+exception-overhead improvement with no behavior change for successful connects.
 ## Connection IDs are monotonic `long` counters, not `Guid`
 
 **Before:** `SessionEventArgsBase.ClientConnectionId`, `SessionEventArgsBase.ServerConnectionId`, and

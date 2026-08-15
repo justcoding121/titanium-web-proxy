@@ -76,7 +76,9 @@ public partial class ProxyServer
             {
                 if (clientStream.IsClosed) return;
 
-                var requestLine = await clientStream.ReadRequestLine(cancellationToken);
+                var requestLineRead = await clientStream.ReadRequestLineWithResultAsync(cancellationToken);
+                if (requestLineRead.Cancelled) return;
+                var requestLine = requestLineRead.Status;
                 if (requestLine.IsEmpty()) return;
 
                 var args = new SessionEventArgs(this, endPoint, clientStream, connectRequest, cancellationTokenSource)
@@ -92,7 +94,11 @@ public partial class ProxyServer
                 {
                     try
                     {
-                        await HeaderParser.ReadHeaders(clientStream, request.Headers, cancellationToken);
+                        if (!await HeaderParser.TryReadHeadersAsync(clientStream, request.Headers, cancellationToken))
+                        {
+                            closeConnection = true;
+                            return;
+                        }
 
                         if (connectRequest != null)
                         {
@@ -257,8 +263,10 @@ public partial class ProxyServer
                         }
 
                         if (cancellationTokenSource.IsCancellationRequested)
-                            throw new OperationCanceledException("Session was terminated by user.",
-                                cancellationTokenSource.Token);
+                        {
+                            closeConnection = true;
+                            return;
+                        }
                     }
                     catch (Exception e) when (!(e is ProxyHttpException) && !(e is OperationCanceledException))
                     {

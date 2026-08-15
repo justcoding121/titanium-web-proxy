@@ -674,15 +674,33 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     ///     Fills the buffer asynchronous.
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns></returns>
+    /// <returns><see langword="true" /> when data was read; <see langword="false" /> on EOF.</returns>
+    /// <remarks>
+    ///     Cancellation still throws <see cref="OperationCanceledException" /> to preserve the public
+    ///     <see cref="StreamExtended.Network.ILineStream" /> contract. Prefer
+    ///     <see cref="FillBufferWithResultAsync" /> on HTTP/1 session paths that must avoid cancel unwind.
+    /// </remarks>
     public async ValueTask<bool> FillBufferAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await FillBufferWithResultAsync(cancellationToken);
+        if (result == BufferFillResult.Cancelled)
+            cancellationToken.ThrowIfCancellationRequested();
+        return result == BufferFillResult.GotData;
+    }
+
+    /// <summary>
+    ///     Fills the buffer without throwing on cancellation. Used by HTTP/1 session paths that treat
+    ///     cancel as a value (timeout discrimination happens at the deadline catch site).
+    /// </summary>
+    internal async ValueTask<BufferFillResult> FillBufferWithResultAsync(
+        CancellationToken cancellationToken = default)
     {
         // See the remarks on the synchronous FillBuffer() above for why this is a graceful no-op rather
         // than a thrown exception once EOF has already been observed.
-        if (IsClosed) return false;
+        if (IsClosed) return BufferFillResult.EndOfStream;
 
         var bytesToRead = streamBuffer.Length - Available;
-        if (bytesToRead == 0) return false;
+        if (bytesToRead == 0) return BufferFillResult.EndOfStream;
 
         if (Available > 0)
             // normally we fill the buffer only when it is empty, but sometimes we need more data
@@ -691,7 +709,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
         bufferPos = 0;
 
-        var result = false;
+        var result = BufferFillResult.EndOfStream;
         // A cancelled/timed-out wait is not evidence the connection is dead - the read simply never
         // got the chance to observe EOF or a transport error. Unlike a genuine EOF or I/O failure
         // (which correctly poison the stream below via IsClosed/closedWrite), an operation-cancelled
@@ -712,27 +730,28 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             var readBytes = await BaseStream.ReadAsync(
                 streamBuffer.AsMemory(Available, bytesToRead), cancellationToken);
 
-            result = readBytes > 0;
-            if (result)
+            if (readBytes > 0)
             {
                 OnDataRead(streamBuffer, Available, readBytes);
                 Available += readBytes;
+                result = BufferFillResult.GotData;
             }
         }
         catch (OperationCanceledException)
         {
             cancelled = true;
-            throw;
+            result = BufferFillResult.Cancelled;
         }
         catch (Exception ex)
         {
             if (!IsNetworkStream)
                 throw ReportRethrownFailure(ex);
             ReportSuppressedFailure(ex);
+            result = BufferFillResult.EndOfStream;
         }
         finally
         {
-            if (!result && !cancelled)
+            if (result == BufferFillResult.EndOfStream && !cancelled)
             {
                 IsClosed = true;
                 closedWrite = true;
@@ -750,6 +769,72 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     {
         return ReadLineInternalAsync(this, bufferPool, cancellationToken,
             server.ResourceLimits.MaxHeaderLineBytes);
+    }
+
+    /// <summary>
+    ///     Reads a line without throwing on cancellation. Used by HTTP/1 session loops that treat
+    ///     cancel as a value and discriminate timeout at the deadline site.
+    /// </summary>
+    internal async ValueTask<(string? Line, bool Cancelled)> ReadLineWithResultAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var maxLineBytes = server.ResourceLimits.MaxHeaderLineBytes;
+        byte lastChar = default;
+        var bufferDataLength = 0;
+        var bufferPoolBuffer = bufferPool.GetBuffer();
+        var buffer = bufferPoolBuffer;
+
+        try
+        {
+            while (true)
+            {
+                if (!DataAvailable)
+                {
+                    var fill = await FillBufferWithResultAsync(cancellationToken);
+                    if (fill == BufferFillResult.Cancelled) return (null, true);
+                    if (fill != BufferFillResult.GotData) break;
+                }
+
+                var newChar = ReadByteFromBuffer();
+                buffer[bufferDataLength] = newChar;
+
+                if (newChar == '\n')
+                {
+                    if (lastChar == '\r')
+                        return (Encoding.GetString(buffer, 0, bufferDataLength - 1), false);
+
+                    return (Encoding.GetString(buffer, 0, bufferDataLength), false);
+                }
+
+                bufferDataLength++;
+                lastChar = newChar;
+
+                if (bufferDataLength > maxLineBytes)
+                    throw new ProxyHttpException(
+                        $"HTTP header/request line exceeded the configured maximum of {maxLineBytes:N0} bytes.",
+                        null, null);
+
+                if (bufferDataLength == buffer.Length)
+                {
+                    if (bufferDataLength >= maxLineBytes)
+                        throw new ProxyHttpException(
+                            $"HTTP header/request line exceeded the configured maximum of {maxLineBytes:N0} bytes.",
+                            null, null);
+
+                    var newSize = (int)Math.Min(bufferDataLength * 2L, maxLineBytes);
+                    if (newSize <= bufferDataLength)
+                        newSize = bufferDataLength + 1;
+                    Array.Resize(ref buffer, newSize);
+                }
+            }
+
+            if (bufferDataLength == 0) return (null, false);
+            return (Encoding.GetString(buffer, 0, bufferDataLength), false);
+        }
+        finally
+        {
+            bufferPool.ReturnBuffer(bufferPoolBuffer);
+        }
     }
 
     /// <summary>

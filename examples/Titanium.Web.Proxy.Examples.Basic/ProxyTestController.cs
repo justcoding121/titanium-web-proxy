@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Examples.Shared;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Options;
@@ -426,6 +427,13 @@ namespace Titanium.Web.Proxy.Examples.Basic
                         $"{request.Method,-7} {FormatUrlForConsole(request.Url)} ⇢ connect failed  {FormatHttpProtocolShort(request.HttpVersion)}↔?  {elapsedMs}ms";
                     level = LogLevel.Warning;
                     break;
+                case IncompleteSessionKind.NoResponse:
+                    // Status 0 with no classified exception (aborted beacon, force-killed proxy,
+                    // idle teardown). Keep Warning — never paint these red as proxy defects.
+                    line =
+                        $"{request.Method,-7} {FormatUrlForConsole(request.Url)} ⇢ no response  {FormatHttpProtocolShort(request.HttpVersion)}↔?  {elapsedMs}ms";
+                    level = LogLevel.Warning;
+                    break;
                 default:
                     line =
                         $"{request.Method,-7} {FormatUrlForConsole(request.Url)} → {statusCode,3}  {FormatHttpProtocolShort(request.HttpVersion)}↔{FormatHttpProtocolShort(response?.HttpVersion)}  {elapsedMs}ms";
@@ -452,18 +460,28 @@ namespace Titanium.Web.Proxy.Examples.Basic
             None,
             ClientCancelled,
             OriginReset,
-            ConnectFailed
+            ConnectFailed,
+            NoResponse
         }
 
         /// <summary>
         ///     Maps status-0 sessions to traffic-tape presentation. Client aborts and origin
-        ///     connect/DNS/TLS failures are expected under heavy browsing; only unclassified
-        ///     status-0 (and real 5xx responses) stay red.
+        ///     connect/DNS/TLS failures are expected under heavy browsing; only real 5xx
+        ///     responses stay red. Status-0 with no attached exception (telemetry aborts,
+        ///     force-killed proxy mid-request) is Warning via <see cref="IncompleteSessionKind.NoResponse" />,
+        ///     not Error.
         /// </summary>
         private static IncompleteSessionKind ClassifyIncompleteSession(int statusCode, Exception exception)
         {
-            if (statusCode != 0 || exception == null)
+            if (statusCode != 0)
                 return IncompleteSessionKind.None;
+
+            if (exception == null)
+                return IncompleteSessionKind.NoResponse;
+
+            if (exception is ProxyTimeoutException ||
+                GetInnermostException(exception) is ProxyTimeoutException)
+                return IncompleteSessionKind.NoResponse;
 
             var oce = exception as OperationCanceledException
                       ?? GetInnermostException(exception) as OperationCanceledException;
@@ -480,7 +498,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             if (IsOriginConnectFailure(exception))
                 return IncompleteSessionKind.ConnectFailed;
 
-            return IncompleteSessionKind.None;
+            // Unknown exception with no response — still not a confirmed proxy defect.
+            return IncompleteSessionKind.NoResponse;
         }
 
         private static bool IsOriginConnectFailure(Exception exception)
@@ -532,9 +551,11 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         private static LogLevel LevelForStatusCode(int statusCode)
         {
-            if (statusCode >= 500 || statusCode == 0)
+            // Status 0 must not reach here for incomplete sessions (ClassifyIncompleteSession
+            // handles those). Keep Error only for genuine 5xx wire responses.
+            if (statusCode >= 500)
                 return LogLevel.Error;
-            if (statusCode >= 400)
+            if (statusCode >= 400 || statusCode == 0)
                 return LogLevel.Warning;
             return LogLevel.Information;
         }

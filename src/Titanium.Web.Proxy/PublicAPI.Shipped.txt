@@ -758,6 +758,8 @@ Titanium.Web.Proxy.ProxyServer.EnableConnectionPool.get -> bool
 Titanium.Web.Proxy.ProxyServer.EnableConnectionPool.set -> void
 Titanium.Web.Proxy.ProxyServer.EnableHttp2.get -> bool
 Titanium.Web.Proxy.ProxyServer.EnableHttp2.set -> void
+Titanium.Web.Proxy.ProxyServer.EnableIpv6UnreachableSoftSkip.get -> bool
+Titanium.Web.Proxy.ProxyServer.EnableIpv6UnreachableSoftSkip.set -> void
 Titanium.Web.Proxy.ProxyServer.EnableRequestTimingCapture.get -> bool
 Titanium.Web.Proxy.ProxyServer.EnableRequestTimingCapture.set -> void
 Titanium.Web.Proxy.ProxyServer.EnableRfc8441.get -> bool

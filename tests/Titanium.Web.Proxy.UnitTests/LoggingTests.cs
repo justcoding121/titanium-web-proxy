@@ -181,6 +181,44 @@ public partial class LoggingTests
 
     [TestMethod]
     [Timeout(30 * 1000)]
+    public void RollingFileLoggerProvider_OversizedActiveFile_RollsOnOpen()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "titanium-log-tests-" + Guid.NewGuid());
+        Directory.CreateDirectory(directory);
+        var filePath = Path.Combine(directory, "proxy.log");
+
+        try
+        {
+            // Simulate a force-killed process that left an oversized active file behind.
+            File.WriteAllText(filePath, new string('x', 2048));
+
+            var options = new ProxyLoggingOptions
+            {
+                FilePath = filePath,
+                MaxFileSizeBytes = 1024,
+                MaxRolledFiles = 2,
+                QueueCapacity = 4096
+            };
+
+            using (var provider = new RollingFileLoggerProvider(options))
+            {
+                var logger = provider.CreateLogger("test");
+                logger.LogError("after-oversized-open");
+            }
+
+            Assert.IsTrue(File.Exists(filePath + ".1"),
+                "oversized active file left by a previous process must roll on reopen");
+            StringAssert.Contains(File.ReadAllText(filePath), "after-oversized-open");
+        }
+        finally
+        {
+            try { Directory.Delete(directory, true); }
+            catch { /* best-effort */ }
+        }
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
     public void RollingFileLoggerProvider_Disabled_Rolling_Still_Writes_Without_Rolled_Files()
     {
         var directory = Path.Combine(Path.GetTempPath(), "titanium-log-tests-" + Guid.NewGuid());
