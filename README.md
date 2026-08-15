@@ -35,42 +35,57 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET.
 
 ## Performance
 
-Titanium is built for **low overhead MITM proxying**: connection pooling, HTTP/2 multiplexing, buffer reuse, and Happy Eyeballs soft-skip on broken IPv6. Numbers below are **measured on one Windows 11 / .NET 10 machine** — use them as orientation, not a guarantee. Re-run the harnesses on your hardware.
+Titanium targets **low-overhead MITM proxying**: connection pooling, HTTP/2 multiplexing, and buffer reuse. Figures below were measured on one Windows 11 / .NET 10 machine with the **Basic example built and run in Release**. Treat them as orientation, not a guarantee—re-run on your hardware.
 
-### Real-world HTTPS A/B (direct vs local MITM)
+### At a glance
 
-Warm/cold curl against 14 public HTTPS hosts, comparing direct TLS to `http://127.0.0.1:8000` with decrypt on (2026-08-15):
+| What | Result |
+|---|---|
+| HTTPS TTFB vs direct (median, 14 hosts) | Cold **≈ parity** (−1 ms); warm **−25 ms** (proxy faster) |
+| HTTP/1 loopback GET (no body intercept) | **~186 µs**, **~17.5 KB** allocated / request |
+| HTTP/2 loopback (10 multiplexed streams) | **~3.0 ms** / batch (**~14 KB** / request) |
+| Basic example footprint (Release, after load) | **~74 MB** working set · **~24–29 MB** private bytes |
 
-| Scenario | Median Δ TTFB (proxy − direct) | Notes |
-|---|---:|---|
-| Cold | **−13 ms** | Proxy often matches or beats direct once DNS/TCP are in flight |
-| Warm | **−40 ms** | Warm upstream pool + H2 reuse amortizes the MITM hop |
+### HTTPS latency (direct vs MITM proxy)
 
-During the same browse soak (Chrome via system proxy): upstream session reuse **~79%**, H2 stream-bind reuse **~84%**, upstream DNS/TCP/TLS p50 about **3 / 9 / 18 ms**. Browser cold start is dominated by the client TLS hop to localhost (~30–70 ms), not DNS. See [wiki Performance and pooling](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#performance-and-pooling) for knobs.
+Curl against 14 public HTTPS sites: direct TLS vs `http://127.0.0.1:8000` with decrypt enabled (Release Basic, HTTP/1.1 client):
 
-### Loopback microbenchmarks (allocations + latency)
+| Scenario | Median Δ TTFB (proxy − direct) |
+|---|---:|
+| Cold | **−1 ms** |
+| Warm | **−25 ms** |
 
-[BenchmarkDotNet](benchmarks/Titanium.Web.Proxy.Benchmarks) `ShortRun` (Release, .NET 10) against a local origin — isolates proxy cost from the public internet:
+Warm paths benefit from a hot upstream pool. Absolute times vary with the public internet; the delta is what matters for proxy overhead. Tuning knobs: [Performance and pooling](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#performance-and-pooling).
+
+### Loopback throughput and allocations
+
+[BenchmarkDotNet](benchmarks/Titanium.Web.Proxy.Benchmarks) `ShortRun` (Release) against a local origin isolates proxy cost from the network:
 
 | Benchmark | Setup | Mean | Allocated / op |
 |---|---|---:|---:|
-| HTTP/1 GET through proxy | No body intercept | **186 µs** | **17.5 KB** |
-| HTTP/1 GET through proxy | Buffer request/response body | ~260 µs median* | **18.9 KB** |
+| HTTP/1 GET through proxy | Passthrough | **186 µs** | **17.5 KB** |
+| HTTP/1 GET through proxy | Buffer request/response body | ~260 µs median | **18.9 KB** |
 | HTTP/2 multiplexed GETs | 1 stream | **561 µs** | **15.7 KB** |
-| HTTP/2 multiplexed GETs | 10 concurrent streams | **3.0 ms** batch (~0.3 ms/req wall) | **137 KB** (~14 KB/req) |
-| HTTP/2 multiplexed GETs | 50 concurrent streams | **12.7 ms** batch (~0.25 ms/req wall) | **682 KB** (~14 KB/req) |
+| HTTP/2 multiplexed GETs | 10 concurrent streams | **3.0 ms** / batch | **~14 KB** / request |
+| HTTP/2 multiplexed GETs | 50 concurrent streams | **12.7 ms** / batch | **~14 KB** / request |
 
-\*Short-run variance was high with body interception; prefer the median and re-run with a longer job locally.
-
-Rough HTTP/1 passthrough rate on that machine: on the order of **~5k req/s** per core-ish loopback path (`1 / 186 µs`). Run yourself:
+On this machine that is on the order of **~5k HTTP/1 requests/s** on the loopback passthrough path (`1 / 186 µs`).
 
 ```powershell
 dotnet run -c Release --project benchmarks/Titanium.Web.Proxy.Benchmarks -- --filter '*Throughput*'
 ```
 
-### Footprint under browse load
+### Process footprint (Basic example)
 
-After an extended multi-tab HTTPS soak through the Basic Debug example (same session as the A/B matrix), process working set was about **~128 MB** (private bytes ~68 MB). That includes the example host, logging, and cached certificates — not a stripped library-only process.
+Release Basic after the HTTPS A/B pass and repeated proxy load:
+
+| Metric | Approx. value |
+|---|---:|
+| Working set | **~74 MB** |
+| Private bytes | **~24–29 MB** |
+| CPU while idle / light load | Near **0%**; brief spikes under concurrent curl |
+
+Includes the example host process, logging, and certificate cache—not a stripped library-only process. Idle right after start was about **~70 MB** working set / **~26 MB** private.
 
 ## Installation
 
