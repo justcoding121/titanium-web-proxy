@@ -351,13 +351,6 @@ public partial class ProxyServer
                     AddViaHeader(response.Headers, response.HttpVersion, ViaHeaderPseudonym);
                 }
 
-                // RFC 7540 §8.1.2: header field names MUST be lowercase in HTTP/2. An HTTP/1.1 origin has no
-                // such requirement (field names are case-insensitive on the wire), so the mixed-case names it
-                // actually sent (e.g. "Content-Type") must be normalized here before Http2Helper.SendHeader
-                // (invoked by EmitSyntheticResponseAsync below) HPACK-encodes them verbatim.
-                LowercaseHeaderNames(response.Headers);
-                if (response.HasTrailingHeaders) LowercaseHeaderNames(response.TrailingHeaders);
-
                 var originConnection = connection;
 
                 // Prefer Original* snapshots taken at SetOriginalHeaders (before any Respond* mutation).
@@ -374,31 +367,63 @@ public partial class ProxyServer
                     IHttpStreamReader reader = originConnection.Stream;
                     using var limited = new LimitedStream(reader, BufferPool, originIsChunked,
                         originContentLength, response.TrailingHeaders);
-                    using var ms = new System.IO.MemoryStream(
-                        originContentLength > 0 && originContentLength <= int.MaxValue
-                            ? (int)originContentLength
-                            : 256);
-                    var buffer = BufferPool.GetBuffer();
-                    try
-                    {
-                        int read;
-                        while ((read = await limited.ReadAsync(buffer.AsMemory(), cancellationToken).AsTask()) > 0)
-                            await ms.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
-                        await limited.Finish();
-                    }
-                    finally
-                    {
-                        BufferPool.ReturnBuffer(buffer);
-                    }
 
-                    bodyBytes = ms.ToArray();
+                    // Fixed Content-Length: read straight into the final array (one alloc). Chunked /
+                    // unknown length still uses a growable MemoryStream.
+                    if (!originIsChunked && originContentLength > 0 && originContentLength <= int.MaxValue)
+                    {
+                        bodyBytes = new byte[(int)originContentLength];
+                        var offset = 0;
+                        while (offset < bodyBytes.Length)
+                        {
+                            var read = await limited.ReadAsync(
+                                bodyBytes.AsMemory(offset, bodyBytes.Length - offset), cancellationToken).AsTask();
+                            if (read == 0)
+                                break;
+                            offset += read;
+                        }
+
+                        await limited.Finish();
+                        if (offset != bodyBytes.Length)
+                            Array.Resize(ref bodyBytes, offset);
+                    }
+                    else
+                    {
+                        using var ms = new System.IO.MemoryStream(256);
+                        var buffer = BufferPool.GetBuffer();
+                        try
+                        {
+                            int read;
+                            while ((read = await limited.ReadAsync(buffer.AsMemory(), cancellationToken).AsTask()) > 0)
+                                await ms.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                            await limited.Finish();
+                        }
+                        finally
+                        {
+                            BufferPool.ReturnBuffer(buffer);
+                        }
+
+                        bodyBytes = ms.ToArray();
+                    }
                 }
 
+                // Emit onto the client H2 leg: briefly use HTTP/2 so ContentLength publishes the
+                // lowercase "content-length" name (avoids undoing LowercaseHeaderNames + SendHeader
+                // ToLowerInvariant). Restore HTTP/1.1 afterward so AfterResponse / traffic tape still
+                // report the origin protocol (H2↔H1.1), not H2↔H2.
+                response.HttpVersion = clientHttpVersion;
                 response.Body = bodyBytes;
                 response.IsBodyRead = true;
                 response.ContentLength = bodyBytes.Length;
+                response.HttpVersion = HttpHeader.Version11;
                 response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
                 response.StreamBodyWriter = null;
+
+                // RFC 7540 §8.1.2: header field names MUST be lowercase in HTTP/2. An HTTP/1.1 origin
+                // may send mixed-case names; normalize after any ContentLength mutation above.
+                LowercaseHeaderNames(response.Headers);
+                if (response.HasTrailingHeaders) LowercaseHeaderNames(response.TrailingHeaders);
+
                 response.Locked = true;
             }
 
@@ -900,11 +925,31 @@ public partial class ProxyServer
     /// </summary>
     private static void LowercaseHeaderNames(HeaderCollection headers)
     {
+        // Fast path: origin already sent lowercase names (common for Kestrel / modern stacks).
+        var needsRename = false;
+        foreach (var header in headers)
+        {
+            var name = header.Name;
+            for (var i = 0; i < name.Length; i++)
+            {
+                var c = name[i];
+                if (c is >= 'A' and <= 'Z')
+                {
+                    needsRename = true;
+                    break;
+                }
+            }
+
+            if (needsRename)
+                break;
+        }
+
+        if (!needsRename)
+            return;
+
         var originalHeaders = headers.ToList();
         headers.Clear();
         foreach (var header in originalHeaders)
-        {
             headers.AddHeader(header.Name.ToLowerInvariant(), header.Value);
-        }
     }
 }

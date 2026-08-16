@@ -112,6 +112,9 @@ jobs:
         committer_email: actions@github.com
         # Only commit DocFX output — never Sonar/coverage/tool install artifacts
         add: 'docs'
+        # DocFX often races another develop push; rebase + retry instead of failing the job.
+        pull: '--rebase --autostash'
+        push_attempts: 5
 
   publish:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')

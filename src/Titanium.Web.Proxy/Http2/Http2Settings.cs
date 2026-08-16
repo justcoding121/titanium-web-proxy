@@ -1,3 +1,4 @@
+using System.IO;
 using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
 
 namespace Titanium.Web.Proxy.Http2;
@@ -76,4 +77,21 @@ internal class Http2Settings
     ///     connection - see the comment in <c>Http2Helper.SendHeader</c>.
     /// </summary>
     public Encoder? Encoder { get; set; }
+
+    /// <summary>
+    ///     Scratch buffer for HPACK encoding on this direction. Only touched under the connection write
+    ///     lock for this peer, so reuse is race-free and avoids per-HEADERS <c>MemoryStream</c> allocs.
+    /// </summary>
+    private MemoryStream? encodeStream;
+
+    /// <summary>Returns a zeroed encode scratch stream for the next header block on this direction.</summary>
+    public MemoryStream GetEncodeStream()
+    {
+        if (encodeStream == null)
+            encodeStream = new MemoryStream(256);
+        else
+            encodeStream.SetLength(0);
+
+        return encodeStream;
+    }
 }

@@ -181,10 +181,20 @@ public class Http2InboundCleartextTests
             Array.Empty<(string, string)>());
         await rawClient.Connection.WriteHeaderBlockAsync(1, requestHeaders, true);
 
-        await Assert.ThrowsExceptionAsync<System.IO.EndOfStreamException>(async () =>
+        // Proxy closes the socket after rejecting the preface; the client may see EOF or a reset.
+        Exception? caught = null;
+        try
         {
             await rawClient.Connection.ReadHeaderBlockAsync();
-        });
+        }
+        catch (Exception ex)
+        {
+            caught = ex;
+        }
+
+        Assert.IsNotNull(caught, "Expected the cleartext HTTP/2 client read to fail when EnableHttp2 is false.");
+        Assert.IsTrue(caught is System.IO.EndOfStreamException or System.IO.IOException,
+            $"Expected EndOfStreamException or IOException, got {caught!.GetType().FullName}: {caught.Message}");
     }
 
     private static async Task<byte[]> ReadNextDataFrameAsync(Http2RawFrame.Connection connection)

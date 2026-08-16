@@ -277,12 +277,19 @@ public class HttpWebClient
         }
 
         // prepare the request & headers
-        var headerBuilder = new HeaderBuilder();
-        headerBuilder.WriteRequestLine(Request.Method, url, originHttpVersion);
-        headerBuilder.WriteHeaders(Request.Headers, !isTransparent, upstreamProxyUserName, upstreamProxyPassword);
+        var headerBuilder = HeaderBuilder.Rent();
+        try
+        {
+            headerBuilder.WriteRequestLine(Request.Method, url, originHttpVersion);
+            headerBuilder.WriteHeaders(Request.Headers, !isTransparent, upstreamProxyUserName, upstreamProxyPassword);
 
-        // write request headers
-        await serverStream.WriteHeadersAsync(headerBuilder, cancellationToken);
+            // write request headers
+            await serverStream.WriteHeadersAsync(headerBuilder, cancellationToken);
+        }
+        finally
+        {
+            HeaderBuilder.Return(headerBuilder);
+        }
 
         if (enable100ContinueBehaviour && Request.ExpectContinue)
         {

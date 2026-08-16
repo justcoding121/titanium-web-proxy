@@ -1,7 +1,6 @@
 using System;
 using System.Buffers;
 using System.IO;
-using System.Linq;
 using System.Text;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Shared;
@@ -10,7 +9,31 @@ namespace Titanium.Web.Proxy.Http;
 
 internal class HeaderBuilder
 {
-    private readonly MemoryStream stream = new();
+    [ThreadStatic]
+    private static HeaderBuilder? cached;
+
+    private readonly MemoryStream stream = new(256);
+
+    /// <summary>Rents a thread-local builder (cleared). Caller must <see cref="Return"/> it.</summary>
+    public static HeaderBuilder Rent()
+    {
+        var builder = cached;
+        if (builder != null)
+        {
+            cached = null;
+            builder.stream.SetLength(0);
+            return builder;
+        }
+
+        return new HeaderBuilder();
+    }
+
+    /// <summary>Returns a builder to the thread-local cache.</summary>
+    public static void Return(HeaderBuilder builder)
+    {
+        if (cached == null)
+            cached = builder;
+    }
 
     public void WriteRequestLine(string httpMethod, string httpUrl, Version version)
     {
@@ -46,9 +69,12 @@ internal class HeaderBuilder
             WriteHeader(HttpHeader.GetProxyAuthorizationHeader(upstreamProxyUserName, upstreamProxyPassword));
         }
 
-        foreach (var header in headers.Where(header =>
-                     sendProxyAuthorization || !KnownHeaders.ProxyAuthorization.Equals(header.Name)))
+        foreach (var header in headers)
+        {
+            if (!sendProxyAuthorization && KnownHeaders.ProxyAuthorization.Equals(header.Name))
+                continue;
             WriteHeader(header);
+        }
 
         WriteLine();
     }

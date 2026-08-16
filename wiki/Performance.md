@@ -28,7 +28,7 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 | nginx | nginx/1.24.0 (Ubuntu) |
 | Harness | RpsLoadProbe Release; median of 3 repeats where noted |
 
-**How to read the tables:** each row is one client → origin path. **Sustainable** = last concurrency that still met error/latency SLOs. **Peak** = highest RPS observed in that ramp. Blank cells with *Not possible* mean that product cannot do that path. *Not measured* means the path exists but we have not published a number for that OS yet.
+**How to read the tables:** each row is one client → origin path. **Sustainable** = last concurrency that still met error/latency SLOs. **Peak** = highest RPS observed in that ramp. **Winner** = higher **sustainable** RPS on that OS (peak is informational). *Not possible* means that product cannot do that path. *Not measured* means the path exists but we have not published a number for that OS yet. Where nginx cannot compete, Winner is **TWP**.
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-same
@@ -40,51 +40,53 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-bridges
 
 Client / origin columns: HTTP version and whether TLS is used (`plain` = cleartext, `TLS` = encrypted, `QUIC` = HTTP/3).
 
-| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak |
-|---|---|---:|---:|---:|---:|
-| HTTP/1 · plain | HTTP/1 · plain | **29,376** | **29,376** | **24,587** | **24,587** |
-| HTTP/1 · TLS | HTTP/1 · plain | **21,803** | **21,803** | **13,826** | **14,424** |
-| HTTP/1 · TLS | HTTP/1 · TLS | **22,540** | **22,540** | *Not possible* (no MITM) | *Not possible* |
-| HTTP/2 · TLS | HTTP/1 · plain | **7,373** | **7,373** | **5,898** | **14,920** |
-| HTTP/2 · TLS | HTTP/2 · TLS | **6,168** | **6,168** | *Not possible* (no MITM) | *Not possible* |
-| HTTP/2 · TLS | HTTP/2 · plain | **6,889** | **6,889** | *Not possible* | *Not possible* |
-| HTTP/2 · plain | HTTP/1 · plain | **10,757** | **11,088** | *Not possible* | *Not possible* |
-| HTTP/2 · plain | HTTP/2 · plain | **6,344** | **6,344** | *Not possible* | *Not possible* |
-| HTTP/2 · plain | HTTP/2 · TLS | **6,036** | **6,036** | *Not possible* | *Not possible* |
-| HTTP/2 · plain | HTTP/3 · QUIC | **7,587** | **7,949** | *Not possible* (no QUIC) | *Not possible* |
-| HTTP/3 · QUIC | HTTP/1 · plain | **2,246** | **3,541** | *Not possible* (no QUIC) | *Not possible* |
-| HTTP/3 · QUIC | HTTP/2 · TLS | **1,842** | **1,842** | *Not possible* (no QUIC) | *Not possible* |
-| HTTP/3 · QUIC | HTTP/3 · QUIC | **7,335** | **7,335** | *Not possible* (no QUIC) | *Not possible* |
-| HTTP/1 · TLS | HTTP/2 · TLS | **8,843** | **8,843** | *Not possible* | *Not possible* |
-| HTTP/1 · TLS | HTTP/3 · QUIC | **13,499** | **13,499** | *Not possible* (no QUIC) | *Not possible* |
-| HTTP/2 · TLS | HTTP/3 · QUIC | **5,055** | **5,055** | *Not possible* (no QUIC) | *Not possible* |
+| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | Winner |
+|---|---|---:|---:|---:|---:|---|
+| HTTP/1 · plain | HTTP/1 · plain | **29,376** | **29,376** | **24,587** | **24,587** | **TWP** |
+| HTTP/1 · TLS | HTTP/1 · plain | **19,951** | **29,511** | **12,072** | **13,501** | **TWP** |
+| HTTP/1 · TLS | HTTP/1 · TLS | **22,540** | **22,540** | *Not possible* (no MITM) | *Not possible* | **TWP** |
+| HTTP/2 · TLS | HTTP/1 · plain | **9,875** | **10,441** | **5,841** | **13,465** | **TWP** |
+| HTTP/2 · TLS | HTTP/2 · TLS | **6,168** | **6,168** | *Not possible* (no MITM) | *Not possible* | **TWP** |
+| HTTP/2 · TLS | HTTP/2 · plain | **6,889** | **6,889** | *Not possible* | *Not possible* | **TWP** |
+| HTTP/2 · plain | HTTP/1 · plain | **10,757** | **11,088** | *Not possible* | *Not possible* | **TWP** |
+| HTTP/2 · plain | HTTP/2 · plain | **6,344** | **6,344** | *Not possible* | *Not possible* | **TWP** |
+| HTTP/2 · plain | HTTP/2 · TLS | **6,036** | **6,036** | *Not possible* | *Not possible* | **TWP** |
+| HTTP/2 · plain | HTTP/3 · QUIC | **7,587** | **7,949** | *Not possible* (no QUIC) | *Not possible* | **TWP** |
+| HTTP/3 · QUIC | HTTP/1 · plain | **2,246** | **3,541** | *Not possible* (no QUIC) | *Not possible* | **TWP** |
+| HTTP/3 · QUIC | HTTP/2 · TLS | **1,842** | **1,842** | *Not possible* (no QUIC) | *Not possible* | **TWP** |
+| HTTP/3 · QUIC | HTTP/3 · QUIC | **7,335** | **7,335** | *Not possible* (no QUIC) | *Not possible* | **TWP** |
+| HTTP/1 · TLS | HTTP/2 · TLS | **8,843** | **8,843** | *Not possible* | *Not possible* | **TWP** |
+| HTTP/1 · TLS | HTTP/3 · QUIC | **13,499** | **13,499** | *Not possible* (no QUIC) | *Not possible* | **TWP** |
+| HTTP/2 · TLS | HTTP/3 · QUIC | **5,055** | **5,055** | *Not possible* (no QUIC) | *Not possible* | **TWP** |
 
-Windows sources: `compare-same` / `compare-terminate` / `compare-bridges` / `reverse-http2-to-h2c` / `reverse-h2c*` (warmup 1s; measure 3–4s; concurrency up to 32 or 64). All published TWP arms **0% error**.
+Windows sources: `compare-same` / `compare-terminate` / `compare-bridges` / `reverse-http2-to-h2c` / `reverse-h2c*` (warmup 1s; measure 3–4s; concurrency up to 256). All published TWP arms **0% error**.
 
 nginx/Windows is a limited port. Use it for **same-OS** comparison only — not as the industry nginx baseline.
 
+**H2 TLS → H1 plain on Windows:** TWP wins **sustain** (Winner column). nginx can still post a higher **short-burst peak** at low concurrency before collapsing; closing that peak gap needs a thinner reverse path than the full MITM H2→H1 session bridge.
+
 ## Linux — Titanium vs nginx
 
-Median of **3 repeats** from Actions run [31936930781](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936930781) (`compare-terminate`; warmup 2s / measure 8s; concurrency 8, 16, 32, 64). **Linux nginx is the authoritative nginx baseline.**
+Median of **3 repeats** from Actions run [31936930781](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936930781) (`compare-terminate`; warmup 2s / measure 8s; concurrency 8, 16, 32, 64). **Linux nginx is the authoritative nginx baseline.** Additional `compare-same` / `compare-bridges` ramps fill remaining rows when available.
 
-| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak |
-|---|---|---:|---:|---:|---:|
-| HTTP/1 · plain | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| HTTP/1 · TLS | HTTP/1 · plain | **17,040** | **17,040** | **27,225** | **27,225** |
-| HTTP/1 · TLS | HTTP/1 · TLS | *Not measured* | *Not measured* | *Not possible* (no MITM) | *Not possible* |
-| HTTP/2 · TLS | HTTP/1 · plain | **10,271** | **10,271** | **18,131** | **18,131** |
-| HTTP/2 · TLS | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* (no MITM) | *Not possible* |
-| HTTP/2 · TLS | HTTP/2 · plain | *Not measured* | *Not measured* | *Not possible* | *Not possible* |
-| HTTP/2 · plain | HTTP/1 · plain | *Not measured* | *Not measured* | *Not possible* | *Not possible* |
-| HTTP/2 · plain | HTTP/2 · plain | *Not measured* | *Not measured* | *Not possible* | *Not possible* |
-| HTTP/2 · plain | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* | *Not possible* |
-| HTTP/2 · plain | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* |
-| HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* (no msquic on runner) | *Not measured* | *Not possible* (no QUIC) | *Not possible* |
-| HTTP/3 · QUIC | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* |
-| HTTP/3 · QUIC | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* |
-| HTTP/1 · TLS | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* | *Not possible* |
-| HTTP/1 · TLS | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* |
-| HTTP/2 · TLS | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* |
+| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | Winner |
+|---|---|---:|---:|---:|---:|---|
+| HTTP/1 · plain | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | — |
+| HTTP/1 · TLS | HTTP/1 · plain | **17,040** | **17,040** | **27,225** | **27,225** | **nginx** |
+| HTTP/1 · TLS | HTTP/1 · TLS | *Not measured* | *Not measured* | *Not possible* (no MITM) | *Not possible* | **TWP** |
+| HTTP/2 · TLS | HTTP/1 · plain | **10,271** | **10,271** | **18,131** | **18,131** | **nginx** |
+| HTTP/2 · TLS | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* (no MITM) | *Not possible* | **TWP** |
+| HTTP/2 · TLS | HTTP/2 · plain | *Not measured* | *Not measured* | *Not possible* | *Not possible* | **TWP** |
+| HTTP/2 · plain | HTTP/1 · plain | *Not measured* | *Not measured* | *Not possible* | *Not possible* | **TWP** |
+| HTTP/2 · plain | HTTP/2 · plain | *Not measured* | *Not measured* | *Not possible* | *Not possible* | **TWP** |
+| HTTP/2 · plain | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* | *Not possible* | **TWP** |
+| HTTP/2 · plain | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | **TWP** |
+| HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* (no msquic on runner) | *Not measured* | *Not possible* (no QUIC) | *Not possible* | — |
+| HTTP/3 · QUIC | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | — |
+| HTTP/3 · QUIC | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | — |
+| HTTP/1 · TLS | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* | *Not possible* | **TWP** |
+| HTTP/1 · TLS | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | — |
+| HTTP/2 · TLS | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | — |
 
 On this GHA shape, TWP H1 TLS ÷ nginx H1 TLS ≈ **0.63**. Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**.
 

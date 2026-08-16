@@ -87,6 +87,7 @@ internal sealed class TwpProxyHost : IDisposable
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
+        WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
         // #region agent log
         DebugSessionLog.Write("H2H1", "TwpProxyHost.StartReverseHttp2Cleartext", "started",
             new { listenPort = endPoint.Port, originHttpPort, maxCached = proxy.MaxCachedConnections,

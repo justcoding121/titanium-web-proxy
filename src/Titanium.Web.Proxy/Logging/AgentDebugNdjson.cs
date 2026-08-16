@@ -5,35 +5,20 @@ using System.Text.Json;
 namespace Titanium.Web.Proxy;
 
 /// <summary>
-/// Session debug NDJSON sink (debug mode). Writes to workspace <c>debug-4b08c5.log</c>.
+/// Optional session debug NDJSON sink. Writes only when <c>TWP_RPS_DEBUG_LOG</c> is set to a file path.
+/// Hot paths must stay silent in Release ramps — unconditional file I/O collapsed H2→H1 RPS.
 /// </summary>
 internal static class AgentDebugNdjson
 {
     private static readonly object Gate = new();
-    private static readonly string LogPath = ResolveLogPath();
-
-    private static string ResolveLogPath()
-    {
-        var env = Environment.GetEnvironmentVariable("TWP_RPS_DEBUG_LOG");
-        if (!string.IsNullOrWhiteSpace(env))
-            return env;
-
-        // Prefer repo-root when running from tools/RpsLoadProbe bin/
-        var dir = AppContext.BaseDirectory;
-        for (var i = 0; i < 8 && !string.IsNullOrEmpty(dir); i++)
-        {
-            var candidate = Path.Combine(dir, "debug-4b08c5.log");
-            if (File.Exists(Path.Combine(dir, "Titanium.Web.Proxy.sln")) ||
-                File.Exists(Path.Combine(dir, "src", "Titanium.Web.Proxy", "Titanium.Web.Proxy.csproj")))
-                return candidate;
-            dir = Path.GetDirectoryName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        }
-
-        return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "debug-4b08c5.log"));
-    }
+    private static readonly string? LogPath = Environment.GetEnvironmentVariable("TWP_RPS_DEBUG_LOG");
+    private static readonly bool Enabled = !string.IsNullOrWhiteSpace(LogPath);
 
     public static void Write(string hypothesisId, string location, string message, object data)
     {
+        if (!Enabled)
+            return;
+
         // #region agent log
         try
         {
@@ -50,7 +35,7 @@ internal static class AgentDebugNdjson
             var line = JsonSerializer.Serialize(payload);
             lock (Gate)
             {
-                File.AppendAllText(LogPath, line + Environment.NewLine);
+                File.AppendAllText(LogPath!, line + Environment.NewLine);
             }
         }
         catch
