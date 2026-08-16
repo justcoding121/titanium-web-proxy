@@ -3,6 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.RpsLoadProbe.Support;
@@ -18,38 +19,62 @@ internal sealed class OriginServer : IAsyncDisposable
 
     private readonly IHost host;
     private readonly X509Certificate2? serverCertificate;
+    private readonly List<X509Certificate2> extraCertificates = new();
 
     public int HttpPort { get; }
     public int HttpsPort { get; }
+    public IReadOnlyList<int> ExtraHttpsPorts { get; }
     public string HttpUrl => $"http://127.0.0.1:{HttpPort}/";
     public string HttpsUrl => $"https://127.0.0.1:{HttpsPort}/";
 
-    private OriginServer(IHost host, int httpPort, int httpsPort, X509Certificate2? serverCertificate)
+    private OriginServer(IHost host, int httpPort, int httpsPort, IReadOnlyList<int> extraHttpsPorts,
+        X509Certificate2? serverCertificate)
     {
         this.host = host;
         HttpPort = httpPort;
         HttpsPort = httpsPort;
+        ExtraHttpsPorts = extraHttpsPorts;
         this.serverCertificate = serverCertificate;
     }
 
-    public static async Task<OriginServer> StartAsync(bool enableHttps, CancellationToken cancellationToken = default)
+    public static async Task<OriginServer> StartAsync(OriginListenOptions options,
+        CancellationToken cancellationToken = default)
     {
-        var httpPort = GetFreeTcpPort();
-        var httpsPort = enableHttps ? GetFreeTcpPort() : 0;
-        X509Certificate2? cert = enableHttps ? LoopbackCertificateAuthority.ServerCertificate : null;
+        var httpPort = options.EnableHttp ? GetFreeTcpPort() : 0;
+        var httpsPort = options.EnableHttps ? GetFreeTcpPort() : 0;
+        var extraHttpsPorts = new List<int>();
+        for (var i = 0; i < options.ExtraHttpsOriginCount; i++)
+            extraHttpsPorts.Add(GetFreeTcpPort());
 
+        X509Certificate2? cert = options.EnableHttps || options.ExtraHttpsOriginCount > 0
+            ? LoopbackCertificateAuthority.ServerCertificate
+            : null;
+
+        var protocols = options.HttpsProtocols;
         var builder = Host.CreateDefaultBuilder()
             .ConfigureLogging(logging => logging.ClearProviders())
             .ConfigureWebHostDefaults(webBuilder =>
             {
-                webBuilder.ConfigureKestrel(options =>
+                webBuilder.ConfigureKestrel(kestrel =>
                 {
-                    options.Listen(IPAddress.Loopback, httpPort);
-                    if (cert != null)
+                    if (options.EnableHttp)
+                        kestrel.Listen(IPAddress.Loopback, httpPort);
+
+                    if (cert != null && httpsPort > 0)
                     {
-                        options.Listen(IPAddress.Loopback, httpsPort, listenOptions =>
+                        kestrel.Listen(IPAddress.Loopback, httpsPort, listenOptions =>
                         {
+                            listenOptions.Protocols = protocols;
                             listenOptions.UseHttps(cert);
+                        });
+                    }
+
+                    foreach (var port in extraHttpsPorts)
+                    {
+                        kestrel.Listen(IPAddress.Loopback, port, listenOptions =>
+                        {
+                            listenOptions.Protocols = protocols;
+                            listenOptions.UseHttps(cert!);
                         });
                     }
                 });
@@ -65,14 +90,25 @@ internal sealed class OriginServer : IAsyncDisposable
 
         var host = builder.Build();
         await host.StartAsync(cancellationToken);
-        return new OriginServer(host, httpPort, httpsPort, cert);
+        return new OriginServer(host, httpPort, httpsPort, extraHttpsPorts, cert);
     }
+
+    /// <summary>Backward-compatible helper used by HTTP/1 arms. </summary>
+    public static Task<OriginServer> StartAsync(bool enableHttps, CancellationToken cancellationToken = default) =>
+        StartAsync(new OriginListenOptions
+        {
+            EnableHttp = true,
+            EnableHttps = enableHttps,
+            HttpsProtocols = HttpProtocols.Http1AndHttp2
+        }, cancellationToken);
 
     public async ValueTask DisposeAsync()
     {
         await host.StopAsync(TimeSpan.FromSeconds(5));
         host.Dispose();
         serverCertificate?.Dispose();
+        foreach (var c in extraCertificates)
+            c.Dispose();
     }
 
     private static int GetFreeTcpPort()
@@ -83,4 +119,12 @@ internal sealed class OriginServer : IAsyncDisposable
         listener.Stop();
         return port;
     }
+}
+
+internal sealed class OriginListenOptions
+{
+    public bool EnableHttp { get; init; } = true;
+    public bool EnableHttps { get; init; }
+    public int ExtraHttpsOriginCount { get; init; }
+    public HttpProtocols HttpsProtocols { get; init; } = HttpProtocols.Http1AndHttp2;
 }

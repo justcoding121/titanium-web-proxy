@@ -2,7 +2,10 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using Titanium.Web.Proxy.RpsLoadProbe.Support;
 
 namespace Titanium.Web.Proxy.RpsLoadProbe;
 
@@ -16,18 +19,39 @@ internal sealed class NginxHost : IDisposable
     private readonly string prefixDir;
 
     public int Port { get; }
-    public string ListenUrl => $"http://127.0.0.1:{Port}/";
+    public string ListenUrl { get; }
     public string Version { get; }
 
-    private NginxHost(Process process, string prefixDir, int port, string version)
+    private NginxHost(Process process, string prefixDir, int port, string listenUrl, string version)
     {
         this.process = process;
         this.prefixDir = prefixDir;
         Port = port;
+        ListenUrl = listenUrl;
         Version = version;
     }
 
-    public static NginxHost? TryStart(int originHttpPort, string? nginxPath)
+    public static NginxHost? TryStartHttp1(int originHttpPort, string? nginxPath) =>
+        TryStart(BuildHttp1Conf(originHttpPort), listenScheme: "http", nginxPath);
+
+    public static NginxHost? TryStartHttp2(int originHttpsPort, string? nginxPath)
+    {
+        // nginx/Windows has http_v2 + ssl but no QUIC/UDP. Client TLS+h2 → HTTPS origin.
+        var prefixProbe = Path.Combine(Path.GetTempPath(), "twp-rps-nginx-certs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(prefixProbe);
+        try
+        {
+            var (certPem, keyPem) = ExportLoopbackPem(prefixProbe);
+            return TryStart(BuildHttp2Conf(originHttpsPort, certPem, keyPem), listenScheme: "https", nginxPath);
+        }
+        finally
+        {
+            // conf generator copies paths into the real prefix; probe dir only needed for export helpers
+            TryDeleteDir(prefixProbe);
+        }
+    }
+
+    private static NginxHost? TryStart(Func<string, int, string> confBuilder, string listenScheme, string? nginxPath)
     {
         var exe = ResolveNginxExecutable(nginxPath);
         if (exe == null)
@@ -40,35 +64,10 @@ internal sealed class NginxHost : IDisposable
         Directory.CreateDirectory(Path.Combine(prefixDir, "logs"));
         Directory.CreateDirectory(Path.Combine(prefixDir, "temp"));
         Directory.CreateDirectory(Path.Combine(prefixDir, "conf"));
+        Directory.CreateDirectory(Path.Combine(prefixDir, "certs"));
 
         var confPath = Path.Combine(prefixDir, "conf", "nginx.conf");
-        var conf = $$"""
-            worker_processes auto;
-            daemon off;
-            error_log logs/error.log error;
-            pid nginx.pid;
-            events {
-                worker_connections 4096;
-            }
-            http {
-                access_log off;
-                sendfile on;
-                keepalive_timeout 65;
-                upstream origin {
-                    server 127.0.0.1:{{originHttpPort}};
-                    keepalive 32;
-                }
-                server {
-                    listen 127.0.0.1:{{port}};
-                    location / {
-                        proxy_http_version 1.1;
-                        proxy_set_header Connection "";
-                        proxy_set_header Host $host;
-                        proxy_pass http://origin;
-                    }
-                }
-            }
-            """;
+        var conf = confBuilder(prefixDir, port);
         File.WriteAllText(confPath, conf, Encoding.ASCII);
 
         var startInfo = new ProcessStartInfo
@@ -85,12 +84,11 @@ internal sealed class NginxHost : IDisposable
         var process = Process.Start(startInfo)
                       ?? throw new InvalidOperationException("Failed to start nginx.");
 
-        // nginx master may daemonize on Linux; give the listen socket a moment.
         var deadline = DateTime.UtcNow.AddSeconds(10);
         while (DateTime.UtcNow < deadline)
         {
             if (IsPortOpen(port))
-                return new NginxHost(process, prefixDir, port, version);
+                return new NginxHost(process, prefixDir, port, $"{listenScheme}://127.0.0.1:{port}/", version);
             if (process.HasExited)
             {
                 var err = process.StandardError.ReadToEnd();
@@ -105,6 +103,111 @@ internal sealed class NginxHost : IDisposable
         TryStop(process, exe, prefixDir);
         TryDeleteDir(prefixDir);
         throw new TimeoutException($"nginx did not open port {port} in time.");
+    }
+
+    private static Func<string, int, string> BuildHttp1Conf(int originHttpPort) => (_, port) => $$"""
+        worker_processes auto;
+        daemon off;
+        error_log logs/error.log error;
+        pid nginx.pid;
+        events {
+            worker_connections 4096;
+        }
+        http {
+            access_log off;
+            sendfile on;
+            keepalive_timeout 65;
+            upstream origin {
+                server 127.0.0.1:{{originHttpPort}};
+                keepalive 32;
+            }
+            server {
+                listen 127.0.0.1:{{port}};
+                location / {
+                    proxy_http_version 1.1;
+                    proxy_set_header Connection "";
+                    proxy_set_header Host $host;
+                    proxy_pass http://origin;
+                }
+            }
+        }
+        """;
+
+    private static Func<string, int, string> BuildHttp2Conf(int originHttpsPort, string certPem, string keyPem) =>
+        (prefixDir, port) =>
+        {
+            var certDest = Path.Combine(prefixDir, "certs", "server.crt");
+            var keyDest = Path.Combine(prefixDir, "certs", "server.key");
+            File.Copy(certPem, certDest, overwrite: true);
+            File.Copy(keyPem, keyDest, overwrite: true);
+            // Normalize paths for nginx on Windows (forward slashes).
+            certDest = certDest.Replace('\\', '/');
+            keyDest = keyDest.Replace('\\', '/');
+            return $$"""
+                worker_processes auto;
+                daemon off;
+                error_log logs/error.log error;
+                pid nginx.pid;
+                events {
+                    worker_connections 4096;
+                }
+                http {
+                    access_log off;
+                    sendfile on;
+                    keepalive_timeout 65;
+                    upstream origin {
+                        server 127.0.0.1:{{originHttpsPort}};
+                        keepalive 32;
+                    }
+                    server {
+                        listen 127.0.0.1:{{port}} ssl;
+                        http2 on;
+                        ssl_certificate {{certDest}};
+                        ssl_certificate_key {{keyDest}};
+                        ssl_protocols TLSv1.2 TLSv1.3;
+                        location / {
+                            proxy_http_version 1.1;
+                            proxy_set_header Connection "";
+                            proxy_set_header Host $host;
+                            proxy_ssl_verify off;
+                            proxy_ssl_server_name on;
+                            proxy_ssl_name localhost;
+                            proxy_pass https://origin;
+                        }
+                    }
+                }
+                """;
+        };
+
+    private static (string CertPem, string KeyPem) ExportLoopbackPem(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        using var cert = LoopbackCertificateAuthority.ServerCertificate;
+        var certPath = Path.Combine(dir, "server.crt");
+        var keyPath = Path.Combine(dir, "server.key");
+
+        var certPem = PemEncoding.Write("CERTIFICATE", cert.RawData);
+        File.WriteAllText(certPath, new string(certPem));
+
+        // Export private key — certificate was created with exportable key.
+        using var rsa = cert.GetRSAPrivateKey();
+        using var ecdsa = cert.GetECDsaPrivateKey();
+        if (rsa != null)
+        {
+            var keyPem = PemEncoding.Write("PRIVATE KEY", rsa.ExportPkcs8PrivateKey());
+            File.WriteAllText(keyPath, new string(keyPem));
+        }
+        else if (ecdsa != null)
+        {
+            var keyPem = PemEncoding.Write("PRIVATE KEY", ecdsa.ExportPkcs8PrivateKey());
+            File.WriteAllText(keyPath, new string(keyPem));
+        }
+        else
+        {
+            throw new InvalidOperationException("Loopback server certificate has no exportable private key.");
+        }
+
+        return (certPath, keyPath);
     }
 
     public void Dispose()
@@ -145,6 +248,7 @@ internal sealed class NginxHost : IDisposable
                    or run: scoop install nginx   /   choco install nginx
           Linux:   sudo apt-get install -y nginx
         Then re-run with nginx on PATH, or pass --nginx-path <path-to-nginx[.exe]>.
+        Note: nginx/Windows has HTTP/2 (ssl) but not HTTP/3/QUIC (UDP unsupported).
         """;
 
     private static string ReadVersion(string exe)

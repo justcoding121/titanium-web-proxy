@@ -104,14 +104,14 @@ internal static class CsvWriter
     public static void WriteHeader(StreamWriter writer)
     {
         writer.WriteLine(
-            "timestamp_utc,arm,generator,concurrency,duration_s,ok,errors,rps,error_rate_pct,p50_ms,p99_ms,max_ms,meets_slo,nginx_version");
+            "timestamp_utc,arm,generator,concurrency,duration_s,ok,errors,rps,error_rate_pct,p50_ms,p99_ms,max_ms,meets_slo,nginx_version,http_versions,max_cached_connections");
     }
 
     public static void WriteRow(StreamWriter writer, string arm, LoadResult result, bool meetsSlo,
-        string? nginxVersion)
+        string? nginxVersion, int? maxCachedConnections = null)
     {
         writer.WriteLine(string.Create(CultureInfo.InvariantCulture,
-            $"{DateTime.UtcNow:O},{arm},{result.Generator},{result.Concurrency},{result.DurationSeconds:F3},{result.Ok},{result.Errors},{result.Rps:F1},{result.ErrorRatePercent:F4},{result.P50Ms:F2},{result.P99Ms:F2},{result.MaxMs:F2},{(meetsSlo ? 1 : 0)},{Escape(nginxVersion)}"));
+            $"{DateTime.UtcNow:O},{arm},{result.Generator},{result.Concurrency},{result.DurationSeconds:F3},{result.Ok},{result.Errors},{result.Rps:F1},{result.ErrorRatePercent:F4},{result.P50Ms:F2},{result.P99Ms:F2},{result.MaxMs:F2},{(meetsSlo ? 1 : 0)},{Escape(nginxVersion)},{Escape(result.NegotiatedVersionHint)},{(maxCachedConnections?.ToString(CultureInfo.InvariantCulture) ?? "")}"));
     }
 
     private static string Escape(string? value)

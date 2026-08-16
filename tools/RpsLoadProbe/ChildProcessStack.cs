@@ -17,31 +17,45 @@ internal sealed class ChildProcessStack : IAsyncDisposable
 
     public Uri TargetUri { get; }
     public string TargetUrl => TargetUri.ToString();
+    public IReadOnlyList<Uri> TargetUris { get; }
     public string? ExplicitProxyUrl { get; }
     public string? NginxVersion { get; }
+    public Version RequestHttpVersion { get; }
+    public HttpVersionPolicy VersionPolicy { get; }
+    public string? LoadGenerator { get; }
+    public int? QuicPort { get; }
+    public int? OriginQuicPort { get; }
 
     private ChildProcessStack(Process? originProcess, StreamReader originStdout, Process proxyProcess,
-        StreamReader proxyStdout, Uri targetUri, string? explicitProxyUrl, string? nginxVersion)
+        StreamReader proxyStdout, Uri targetUri, IReadOnlyList<Uri> targetUris, string? explicitProxyUrl,
+        string? nginxVersion, Version requestHttpVersion, HttpVersionPolicy versionPolicy,
+        string? loadGenerator = null, int? quicPort = null, int? originQuicPort = null)
     {
         this.originProcess = originProcess;
         this.originStdout = originStdout;
         this.proxyProcess = proxyProcess;
         this.proxyStdout = proxyStdout;
         TargetUri = targetUri;
+        TargetUris = targetUris;
         ExplicitProxyUrl = explicitProxyUrl;
         NginxVersion = nginxVersion;
+        RequestHttpVersion = requestHttpVersion;
+        VersionPolicy = versionPolicy;
+        LoadGenerator = loadGenerator;
+        QuicPort = quicPort;
+        OriginQuicPort = originQuicPort;
     }
 
-    public static async Task<ChildProcessStack> StartAsync(string arm, string? nginxPath,
-        CancellationToken cancellationToken)
+    public static async Task<ChildProcessStack> StartAsync(ProbeMode mode, string? nginxPath,
+        int? maxCachedConnections, CancellationToken cancellationToken)
     {
         var exe = Environment.ProcessPath
                   ?? throw new InvalidOperationException("Cannot locate current process path for child spawn.");
 
-        // HTTPS MITM needs a shared in-process CA between origin and proxy, so that arm uses a
-        // single --serve child. Reverse-HTTP/1 arms keep a 3-process split (origin / proxy / load).
-        if (arm == "twp-https-mitm")
-            return await StartCombinedServeAsync(exe, "https-mitm", nginxPath, cancellationToken);
+        // Combined --serve whenever origin and proxy must share the in-process test CA, or when
+        // the arm is TLS-facing (HTTP/2, HTTP/3, MITM, multi-origin explicit).
+        if (mode is not (ProbeMode.ReverseHttp1 or ProbeMode.NginxReverseHttp1))
+            return await StartCombinedServeAsync(exe, mode, nginxPath, maxCachedConnections, cancellationToken);
 
         var originArgs = "--serve-origin";
         var origin = StartChild(exe, originArgs);
@@ -49,17 +63,13 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         var originHttp = Require(originLines, "origin_http");
         var originHttpPort = new Uri(originHttp).Port;
 
-        var mode = arm switch
-        {
-            "twp-reverse-http1" => "reverse-http1",
-            "nginx-reverse-http1" => "nginx-reverse-http1",
-            _ => throw new ArgumentOutOfRangeException(nameof(arm), arm, null)
-        };
-
+        var modeName = ServeProxyHost.ModeName(mode);
         var proxyArgs = new StringBuilder()
-            .Append(CultureInfo.InvariantCulture, $"--serve-proxy --mode {mode} --origin-http-port {originHttpPort}");
+            .Append(CultureInfo.InvariantCulture, $"--serve-proxy --mode {modeName} --origin-http-port {originHttpPort}");
         if (!string.IsNullOrWhiteSpace(nginxPath))
             proxyArgs.Append(CultureInfo.InvariantCulture, $" --nginx-path \"{nginxPath}\"");
+        if (maxCachedConnections is { } m)
+            proxyArgs.Append(CultureInfo.InvariantCulture, $" --max-cached-connections {m}");
 
         var proxy = StartChild(exe, proxyArgs.ToString());
         Dictionary<string, string> proxyLines;
@@ -79,15 +89,20 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         proxyLines.TryGetValue("nginx", out var nginxVersion);
 
         return new ChildProcessStack(origin, origin.StandardOutput, proxy, proxy.StandardOutput,
-            new Uri(target), string.IsNullOrWhiteSpace(explicitProxy) ? null : explicitProxy, nginxVersion);
+            new Uri(target), [new Uri(target)],
+            string.IsNullOrWhiteSpace(explicitProxy) ? null : explicitProxy, nginxVersion,
+            System.Net.HttpVersion.Version11, HttpVersionPolicy.RequestVersionOrLower);
     }
 
-    private static async Task<ChildProcessStack> StartCombinedServeAsync(string exe, string mode, string? nginxPath,
-        CancellationToken cancellationToken)
+    private static async Task<ChildProcessStack> StartCombinedServeAsync(string exe, ProbeMode mode,
+        string? nginxPath, int? maxCachedConnections, CancellationToken cancellationToken)
     {
-        var args = new StringBuilder().Append(CultureInfo.InvariantCulture, $"--serve --mode {mode}");
+        var modeName = ServeProxyHost.ModeName(mode);
+        var args = new StringBuilder().Append(CultureInfo.InvariantCulture, $"--serve --mode {modeName}");
         if (!string.IsNullOrWhiteSpace(nginxPath))
             args.Append(CultureInfo.InvariantCulture, $" --nginx-path \"{nginxPath}\"");
+        if (maxCachedConnections is { } m)
+            args.Append(CultureInfo.InvariantCulture, $" --max-cached-connections {m}");
 
         var serve = StartChild(exe, args.ToString());
         Dictionary<string, string> lines;
@@ -103,9 +118,39 @@ internal sealed class ChildProcessStack : IAsyncDisposable
 
         var target = Require(lines, "target_for_client");
         lines.TryGetValue("explicit_proxy", out var explicitProxy);
+        lines.TryGetValue("nginx", out var nginxVersion);
+        lines.TryGetValue("http_version", out var httpVersionText);
+
+        var targets = new List<Uri> { new(target) };
+        foreach (var kv in lines)
+        {
+            if (kv.Key.StartsWith("target_for_client_extra", StringComparison.OrdinalIgnoreCase))
+                targets.Add(new Uri(kv.Value));
+        }
+
+        var (httpVersion, policy) = ParseHttpVersion(httpVersionText);
+        lines.TryGetValue("load_generator", out var loadGenerator);
+        int? quicPort = null;
+        if (lines.TryGetValue("quic_port", out var quicPortText) &&
+            int.TryParse(quicPortText, out var qp))
+            quicPort = qp;
+        int? originQuicPort = null;
+        if (lines.TryGetValue("origin_quic_port", out var originQuicText) &&
+            int.TryParse(originQuicText, out var oqp))
+            originQuicPort = oqp;
+
         return new ChildProcessStack(null, serve.StandardOutput, serve, serve.StandardOutput,
-            new Uri(target), string.IsNullOrWhiteSpace(explicitProxy) ? null : explicitProxy, null);
+            new Uri(target), targets,
+            string.IsNullOrWhiteSpace(explicitProxy) ? null : explicitProxy, nginxVersion,
+            httpVersion, policy, loadGenerator, quicPort, originQuicPort);
     }
+
+    private static (Version Version, HttpVersionPolicy Policy) ParseHttpVersion(string? text) => text switch
+    {
+        "2.0" => (System.Net.HttpVersion.Version20, HttpVersionPolicy.RequestVersionExact),
+        "3.0" => (System.Net.HttpVersion.Version30, HttpVersionPolicy.RequestVersionExact),
+        _ => (System.Net.HttpVersion.Version11, HttpVersionPolicy.RequestVersionOrLower)
+    };
 
     public async ValueTask DisposeAsync()
     {
@@ -123,7 +168,6 @@ internal sealed class ChildProcessStack : IAsyncDisposable
 
     private static Process StartChild(string exe, string args)
     {
-        // Use cmd-style single Arguments string carefully; prefer ArgumentList when we can.
         var psi = new ProcessStartInfo
         {
             FileName = exe,
@@ -144,7 +188,6 @@ internal sealed class ChildProcessStack : IAsyncDisposable
 
     private static IEnumerable<string> SplitArgs(string args)
     {
-        // Minimal splitter: respects double-quoted segments.
         var list = new List<string>();
         var current = new StringBuilder();
         var inQuotes = false;
@@ -179,7 +222,8 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var deadline = DateTime.UtcNow.AddSeconds(30);
+        var deadline = DateTime.UtcNow.AddSeconds(45);
+        var extraIndex = 0;
 
         while (DateTime.UtcNow < deadline)
         {
@@ -204,7 +248,15 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             {
                 var key = line[..eq].Trim();
                 var value = line[(eq + 1)..].Trim();
-                map[key] = value;
+                if (key.Equals("target_for_client_extra", StringComparison.OrdinalIgnoreCase) ||
+                    key.Equals("origin_https_extra", StringComparison.OrdinalIgnoreCase))
+                {
+                    map[$"{key}_{extraIndex++}"] = value;
+                }
+                else
+                {
+                    map[key] = value;
+                }
             }
 
             if (line.Equals("READY", StringComparison.Ordinal))

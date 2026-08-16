@@ -12,6 +12,8 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 | HTTP/1 loopback GET (no body intercept) | **~186 µs**, **~17.5 KB** allocated / request |
 | HTTP/2 loopback (10 multiplexed streams) | **~3.0 ms** / batch (**~14 KB** / request) |
 | Reverse HTTP/1 saturation (peak) | **~22.7k RPS** (TWP) vs **~18.1k RPS** (nginx/Windows) |
+| Reverse HTTP/2 saturation (sustainable) | **~6.2k RPS** (TWP) vs **~5.2k RPS** (nginx/Windows) |
+| Reverse HTTP/3 saturation (peak) | **~4.3k RPS** (TWP only; nginx/Windows has no QUIC) |
 | HTTPS MITM saturation (peak) | **~14.1k RPS** |
 | Basic example footprint (Release, after load) | **~74 MB** working set · **~24–29 MB** private bytes |
 
@@ -52,15 +54,17 @@ Measured with [tools/RpsLoadProbe](https://github.com/justcoding121/titanium-web
 
 **Methodology:**
 
-- Body: ~64-byte JSON from Kestrel
-- Generator: embedded `dotnet-httpclient` (not bombardier/wrk)
-- Concurrency steps: 8 → 128 (3 s warmup / 12 s measure; MITM 10 s measure)
-- Sustainable = last step with error rate &lt; 0.1% and p99 ≤ 50 ms (HTTP/1) or 100 ms (HTTPS MITM)
+- Body: ~64-byte JSON from Kestrel (HTTP/3 uses a QuicListener origin with the same body)
+- Generator: embedded `dotnet-httpclient` for TCP arms; `quic-http3` native Quic client for UDP-only `TransparentQuicProxyEndPoint` (HttpClient cannot drive that endpoint)
+- Concurrency steps vary by arm (see CSV stamps below)
+- Sustainable = last step with error rate &lt; 0.1% and p99 ≤ SLO (50 ms HTTP/1, 100 ms HTTP/2/MITM, 150 ms HTTP/3)
 - Peak = maximum observed RPS in the ramp
-- Library defaults used for the win: `MaxCachedConnections=128`, `ListenerBackLog=1024`, `ThreadPoolWorkerThread=max(2×cores, 16)`; reverse path skips TLS peek when `DecryptSsl` is false and uses `ForwardHost` (no per-request rewrite)
+- Library defaults: `MaxCachedConnections=128` (**per upstream host**), `ListenerBackLog=1024`, `ThreadPoolWorkerThread=max(2×cores, 16)`
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-http2
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode explicit-pool-sweep
 ```
 
 ### Reverse HTTP/1 — TWP vs nginx/Windows
@@ -74,6 +78,29 @@ Same Kestrel origin, same flags, sequential full-machine runs. Control is **ngin
 
 CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-035548.csv` (TWP), `…-035704.csv` (nginx)
 
+### Reverse HTTP/2 — TWP vs nginx/Windows
+
+Client TLS+h2 → proxy → HTTPS origin (Kestrel `Http1AndHttp2`). nginx uses `listen ssl` + `http2 on` and `proxy_pass https://origin`.
+
+| Arm | Sustainable RPS | @ concurrency | Peak RPS | @ concurrency |
+|---|---:|---:|---:|---:|
+| TWP reverse HTTP/2 | **6,169** | 64 | **6,169** | 64 |
+| nginx/Windows 1.31.3 ssl+http2 | **5,191** | 32 | **6,826** | 16 |
+
+nginx peaked slightly higher at low concurrency, then collapsed at c=64 (p99 SLO fail). TWP held throughput through c=64.
+
+CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-040607.csv`
+
+### Reverse HTTP/3 — TWP only
+
+`TransparentQuicProxyEndPoint` → Quic HTTP/3 origin. **nginx/Windows does not support UDP/QUIC**, so there is no same-machine nginx control arm.
+
+| Arm | Sustainable RPS | @ concurrency | Peak RPS | @ concurrency |
+|---|---:|---:|---:|---:|
+| TWP reverse HTTP/3 | **4,032** | 128 | **4,301** | 16 |
+
+CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-041406.csv`
+
 ### TWP HTTPS MITM (no nginx equivalent)
 
 | Arm | Sustainable RPS | @ concurrency | Peak RPS | @ concurrency |
@@ -83,6 +110,20 @@ CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-035548.csv` (TWP), `…-03570
 CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-035820.csv`
 
 Do **not** put this row in the vs-nginx table.
+
+### Explicit multi-origin pool depth (`MaxCachedConnections`)
+
+Explicit MITM across **16** loopback HTTPS origins (fan-out). `MaxCachedConnections` is already **per host**, not a process-wide cap.
+
+| MaxCachedConnections | Peak RPS | Notes |
+|---:|---:|---|
+| 4 | **10,223** @ c=32 | Fails p99 SLO at c=64 |
+| 32 | **12,977** @ c=64 | Best of the sweep |
+| 128 (default) | **12,488** @ c=64 | Within noise of 32 |
+
+**Conclusion:** keep the global default at **128** (needed for reverse single-origin saturation). Explicit multi-origin does not need a lower default or a per-endpoint override — depth is already scoped per host, and idle connections expire via `ConnectionTimeOutSeconds` (60s). Raise further only for pathological single-origin fan-in; lower via `ProxyServer.MaxCachedConnections` if you want tighter idle FD/memory bounds across thousands of hosts.
+
+CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-041115.csv`
 
 ## Saturation RPS (GitHub `ubuntu-latest`)
 

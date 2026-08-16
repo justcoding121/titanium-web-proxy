@@ -7,11 +7,13 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <IsPackable>false</IsPackable>
+    <SignAssembly>True</SignAssembly>
+    <AssemblyOriginatorKeyFile>..\..\src\Titanium.Web.Proxy\StrongNameKey.snk</AssemblyOriginatorKeyFile>
     <!--
       Measurement harness only: kept in the solution so it compiles under warnaserror,
       but never executed from the per-PR workflow (see rps-saturation.yml for manual Linux runs).
     -->
-    <NoWarn>$(NoWarn);TWP001</NoWarn>
+    <NoWarn>$(NoWarn);TWP001;CA1416</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

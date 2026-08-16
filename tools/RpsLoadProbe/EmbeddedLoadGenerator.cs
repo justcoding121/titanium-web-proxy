@@ -15,7 +15,17 @@ internal sealed record LoadResult(
     double ErrorRatePercent,
     double P50Ms,
     double P99Ms,
-    double MaxMs);
+    double MaxMs,
+    string NegotiatedVersionHint);
+
+internal sealed class LoadRequestOptions
+{
+    public Uri? Target { get; init; }
+    public IReadOnlyList<Uri>? Targets { get; init; }
+    public string? ExplicitProxyUrl { get; init; }
+    public Version HttpVersion { get; init; } = System.Net.HttpVersion.Version11;
+    public HttpVersionPolicy VersionPolicy { get; init; } = HttpVersionPolicy.RequestVersionOrLower;
+}
 
 /// <summary>
 /// Embedded SocketsHttpHandler worker pool. Used when bombardier/wrk is not on PATH.
@@ -23,30 +33,41 @@ internal sealed record LoadResult(
 /// </summary>
 internal static class EmbeddedLoadGenerator
 {
-    public static async Task WarmupAsync(Uri target, string? explicitProxyUrl, int concurrency, TimeSpan duration,
-        CancellationToken cancellationToken)
-    {
-        await RunAsync(target, explicitProxyUrl, concurrency, duration, collectLatency: false, cancellationToken);
-    }
+    public static Task WarmupAsync(LoadRequestOptions options, int concurrency, TimeSpan duration,
+        CancellationToken cancellationToken) =>
+        RunAsync(options, concurrency, duration, collectLatency: false, cancellationToken);
 
-    public static async Task<LoadResult> RunAsync(Uri target, string? explicitProxyUrl, int concurrency,
-        TimeSpan duration, CancellationToken cancellationToken = default)
-    {
-        return await RunAsync(target, explicitProxyUrl, concurrency, duration, collectLatency: true, cancellationToken);
-    }
+    public static Task<LoadResult> RunAsync(LoadRequestOptions options, int concurrency, TimeSpan duration,
+        CancellationToken cancellationToken = default) =>
+        RunAsync(options, concurrency, duration, collectLatency: true, cancellationToken);
 
-    private static async Task<LoadResult> RunAsync(Uri target, string? explicitProxyUrl, int concurrency,
+    public static Task WarmupAsync(Uri target, string? explicitProxyUrl, int concurrency, TimeSpan duration,
+        CancellationToken cancellationToken) =>
+        WarmupAsync(new LoadRequestOptions { Target = target, ExplicitProxyUrl = explicitProxyUrl }, concurrency,
+            duration, cancellationToken);
+
+    public static Task<LoadResult> RunAsync(Uri target, string? explicitProxyUrl, int concurrency, TimeSpan duration,
+        CancellationToken cancellationToken = default) =>
+        RunAsync(new LoadRequestOptions { Target = target, ExplicitProxyUrl = explicitProxyUrl }, concurrency,
+            duration, cancellationToken);
+
+    private static async Task<LoadResult> RunAsync(LoadRequestOptions options, int concurrency,
         TimeSpan duration, bool collectLatency, CancellationToken cancellationToken)
     {
-        using var handler = CreateHandler(explicitProxyUrl);
+        var targets = ResolveTargets(options);
+        using var handler = CreateHandler(options.ExplicitProxyUrl);
         using var client = new HttpClient(handler)
         {
-            Timeout = TimeSpan.FromSeconds(30)
+            Timeout = TimeSpan.FromSeconds(30),
+            DefaultRequestVersion = options.HttpVersion,
+            DefaultVersionPolicy = options.VersionPolicy
         };
 
         var ok = 0L;
         var errors = 0L;
+        var versionHits = new ConcurrentDictionary<string, long>();
         var latencies = collectLatency ? new ConcurrentBag<double>() : null;
+        string? firstError = null;
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(duration);
 
@@ -54,16 +75,25 @@ internal static class EmbeddedLoadGenerator
         var workers = new Task[concurrency];
         for (var i = 0; i < concurrency; i++)
         {
+            var workerId = i;
             workers[i] = Task.Run(async () =>
             {
+                var rr = workerId;
                 while (!cts.IsCancellationRequested)
                 {
+                    var target = targets[rr++ % targets.Count];
                     var requestSw = collectLatency ? Stopwatch.StartNew() : null;
                     try
                     {
-                        using var response = await client.GetAsync(target, HttpCompletionOption.ResponseContentRead,
+                        using var request = new HttpRequestMessage(HttpMethod.Get, target)
+                        {
+                            Version = options.HttpVersion,
+                            VersionPolicy = options.VersionPolicy
+                        };
+                        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead,
                             cts.Token);
                         await response.Content.CopyToAsync(Stream.Null, cts.Token);
+                        versionHits.AddOrUpdate(response.Version.ToString(), 1, static (_, n) => n + 1);
                         if (response.IsSuccessStatusCode)
                             Interlocked.Increment(ref ok);
                         else
@@ -79,8 +109,17 @@ internal static class EmbeddedLoadGenerator
                     {
                         break;
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        if (firstError == null)
+                        {
+                            firstError = ex.GetType().Name + ": " + ex.Message;
+                            // #region agent log
+                            DebugSessionLog.Write("C", "EmbeddedLoadGenerator", "first-error",
+                                new { error = firstError, target = target.ToString(), version = options.HttpVersion.ToString() });
+                            // #endregion
+                        }
+
                         Interlocked.Increment(ref errors);
                         if (requestSw != null)
                         {
@@ -99,6 +138,7 @@ internal static class EmbeddedLoadGenerator
         var total = ok + errors;
         var samples = latencies?.ToArray() ?? Array.Empty<double>();
         Array.Sort(samples);
+        var versionHint = string.Join(',', versionHits.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key}:{kv.Value}"));
 
         return new LoadResult(
             Generator: "dotnet-httpclient",
@@ -110,21 +150,27 @@ internal static class EmbeddedLoadGenerator
             ErrorRatePercent: total == 0 ? 100 : 100.0 * errors / total,
             P50Ms: Percentile(samples, 0.50),
             P99Ms: Percentile(samples, 0.99),
-            MaxMs: samples.Length == 0 ? 0 : samples[^1]);
+            MaxMs: samples.Length == 0 ? 0 : samples[^1],
+            NegotiatedVersionHint: versionHint);
+    }
+
+    private static IReadOnlyList<Uri> ResolveTargets(LoadRequestOptions options)
+    {
+        if (options.Targets is { Count: > 0 } list)
+            return list;
+        if (options.Target != null)
+            return [options.Target];
+        throw new ArgumentException("LoadRequestOptions requires Target or Targets.");
     }
 
     private static SocketsHttpHandler CreateHandler(string? explicitProxyUrl)
     {
         var handler = new SocketsHttpHandler
         {
-            // Bound concurrency to avoid Windows ephemeral-port exhaustion when the proxy
-            // closes connections under load. Still high enough for the saturation ramp.
             MaxConnectionsPerServer = 256,
             PooledConnectionLifetime = TimeSpan.FromMinutes(10),
             PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
             EnableMultipleHttp2Connections = true,
-            // Probe-only: MITM leaves are minted in a child whose root is not shared with this
-            // load-gen process, so we accept any cert (never copy this into product code).
             SslOptions = new SslClientAuthenticationOptions
             {
                 RemoteCertificateValidationCallback = static (_, _, _, _) => true

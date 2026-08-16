@@ -1,6 +1,6 @@
 # RpsLoadProbe
 
-Saturation RPS harness for Titanium.Web.Proxy. Measures the **breaking point** (last concurrency that still meets error/latency SLOs) and **peak RPS**, with an optional same-machine **nginx** control arm on the reverse-HTTP/1 path.
+Saturation RPS harness for Titanium.Web.Proxy. Measures the **breaking point** (last concurrency that still meets error/latency SLOs) and **peak RPS**, with optional same-machine **nginx** control arms on reverse HTTP/1 and HTTP/2.
 
 This is **not** run from the per-PR build. Run it manually in Release (local Windows or via the `rps-saturation` GitHub Actions workflow on `ubuntu-latest`).
 
@@ -8,35 +8,44 @@ This is **not** run from the per-PR build. Run it manually in Release (local Win
 
 | Arm | Topology |
 |---|---|
-| `twp-reverse-http1` | Client → TWP `TransparentProxyEndPoint` → Kestrel HTTP origin |
+| `twp-reverse-http1` | Client → TWP `TransparentProxyEndPoint` → Kestrel HTTP |
 | `nginx-reverse-http1` | Client → nginx `proxy_pass` → **the same** Kestrel origin |
-| `twp-https-mitm` | Client → TWP explicit MITM → Kestrel HTTPS origin (no nginx equivalent) |
+| `twp-reverse-http2` | Client TLS+h2 → TWP transparent MITM → Kestrel HTTPS |
+| `nginx-reverse-http2` | Client TLS+h2 → nginx ssl+http2 → same Kestrel HTTPS |
+| `twp-reverse-http3` | Client QUIC/h3 → TWP `TransparentQuicProxyEndPoint` → Quic HTTP/3 origin (**no nginx/Windows**) |
+| `twp-https-mitm` | Client → TWP explicit MITM → Kestrel HTTPS |
+| `twp-explicit-http1-multi` | Explicit MITM across 16 HTTPS origins (pool-depth study) |
+| `explicit-pool-sweep` | Same fan-out at `MaxCachedConnections` 4 / 32 / 128 |
 
 Arms always run **one after another** so each proxy gets the full machine.
 
 **Breaking-point SLOs (defaults):**
 
 - error rate &lt; 0.1%
-- p99 ≤ 50 ms (HTTP/1) or 100 ms (HTTPS MITM)
+- p99 ≤ 50 ms (HTTP/1), 100 ms (HTTP/2 / MITM), 150 ms (HTTP/3)
 
-The load generator is an embedded `SocketsHttpHandler` pool labeled `dotnet-httpclient` in the CSV. Prefer bombardier/wrk against `--serve` when publishing industry-style numbers.
+TCP arms use embedded `SocketsHttpHandler` (`dotnet-httpclient`). HTTP/3 uses a native Quic load generator (`quic-http3`) because HttpClient cannot drive a UDP-only transparent QUIC endpoint.
 
 ## Quick start
 
 ```powershell
-# Full compare (TWP reverse, nginx if present, TWP MITM)
+# HTTP/1 compare (TWP reverse, nginx if present, TWP MITM)
 dotnet run -c Release --project tools/RpsLoadProbe -- --ramp --mode compare
 
-# Or use the orchestrator script (builds, prints machine info, optional bombardier check)
-pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare
+# HTTP/2 + HTTP/3
+dotnet run -c Release --project tools/RpsLoadProbe -- --ramp --mode compare-http2
+
+# Explicit multi-origin MaxCachedConnections sweep
+dotnet run -c Release --project tools/RpsLoadProbe -- --ramp --mode explicit-pool-sweep
+
+# Or use the orchestrator script
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-http2
 ```
 
 Serve a single arm for an external tool:
 
 ```powershell
-dotnet run -c Release --project tools/RpsLoadProbe -- --serve --mode reverse-http1
-# then, in another terminal:
-bombardier -c 256 -d 30s -l http://127.0.0.1:<listen-port>/
+dotnet run -c Release --project tools/RpsLoadProbe -- --serve --mode reverse-http2
 ```
 
 ## Installing nginx (control arm)
@@ -49,13 +58,9 @@ The harness does **not** download nginx. If `nginx` / `nginx.exe` is missing, TW
 2. `scoop install nginx`, **or**
 3. `choco install nginx`
 
-Then either ensure `nginx.exe` is on `PATH`, or pass:
+Then either ensure `nginx.exe` is on `PATH`, or pass `--nginx-path "C:\path\to\nginx.exe"`.
 
-```powershell
---nginx-path "C:\path\to\nginx.exe"
-```
-
-Label results as **nginx/Windows**. The Windows port is not the Linux epoll binary from nginx blog posts.
+Label results as **nginx/Windows**. The Windows port is not the Linux epoll binary from nginx blog posts. **HTTP/3/QUIC is not available on nginx/Windows** (UDP unsupported).
 
 ### Linux (apt — closer to published nginx methodology)
 
@@ -67,10 +72,9 @@ On GitHub Actions, prefer the dedicated `rps-saturation.yml` workflow (`workflow
 
 ## Honesty rules
 
-- Compare TWP and nginx only on **reverse HTTP/1** with the same origin, same flags, sequential runs.
-- Do **not** compare TWP HTTPS MITM to nginx.
+- Compare TWP and nginx only on reverse HTTP/1 or HTTP/2 with the same origin, same flags, sequential runs.
+- Do **not** compare TWP HTTPS MITM or HTTP/3 to nginx on Windows.
 - Do **not** mix Windows-local numbers and GitHub `ubuntu-latest` numbers into one winner row.
 - Do **not** claim a single GHA run is a stable breaking point (shared runners are noisy).
 - Close browsers and heavy apps before a publishable local run.
-- `--ramp` uses a **process split**: origin + proxy as children, load generator in the parent (HTTPS MITM keeps origin+proxy together so they share one test CA).
-
+- `--ramp` uses a **process split** where possible; TLS arms keep origin+proxy together so they share one test CA.

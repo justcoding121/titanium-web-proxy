@@ -22,6 +22,7 @@ internal static class Cli
         var enableHttps = false;
         var originHttpPort = 0;
         var originHttpsPort = 0;
+        int? maxCachedConnections = null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -59,6 +60,10 @@ internal static class Cli
                 case "--results-dir":
                     resultsDir = RequireValue(args, ref i, "--results-dir");
                     break;
+                case "--max-cached-connections":
+                    maxCachedConnections = int.Parse(RequireValue(args, ref i, "--max-cached-connections"),
+                        CultureInfo.InvariantCulture);
+                    break;
                 case "--concurrency":
                     foreach (var part in RequireValue(args, ref i, "--concurrency")
                                  .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -92,9 +97,11 @@ internal static class Cli
             return command switch
             {
                 "serve-origin" => ServeOriginHost.RunAsync(enableHttps, cts.Token).GetAwaiter().GetResult(),
-                "serve-proxy" => RunServeProxy(modeText, originHttpPort, originHttpsPort, nginxPath, cts.Token),
-                "serve" => RunServe(modeText, nginxPath, cts.Token),
-                "ramp" => RunRamp(modeText, nginxPath, resultsDir, concurrency, warmupSec, durationSec, cts.Token),
+                "serve-proxy" => RunServeProxy(modeText, originHttpPort, originHttpsPort, nginxPath,
+                    maxCachedConnections, cts.Token),
+                "serve" => RunServe(modeText, nginxPath, maxCachedConnections, cts.Token),
+                "ramp" => RunRamp(modeText, nginxPath, resultsDir, concurrency, warmupSec, durationSec,
+                    maxCachedConnections, cts.Token),
                 _ => Fail("Required: --serve | --serve-origin | --serve-proxy | --ramp")
             };
         }
@@ -109,26 +116,28 @@ internal static class Cli
         }
     }
 
-    private static int RunServe(string? modeText, string? nginxPath, CancellationToken ct)
+    private static int RunServe(string? modeText, string? nginxPath, int? maxCachedConnections, CancellationToken ct)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode))
-            return Fail("Required: --serve --mode <reverse-http1|nginx-reverse-http1|https-mitm>");
-        return ServeHost.RunAsync(mode, nginxPath, ct).GetAwaiter().GetResult();
+            return Fail("Required: --serve --mode <see --help>");
+        return ServeHost.RunAsync(mode, nginxPath, maxCachedConnections, ct).GetAwaiter().GetResult();
     }
 
     private static int RunServeProxy(string? modeText, int originHttpPort, int originHttpsPort, string? nginxPath,
-        CancellationToken ct)
+        int? maxCachedConnections, CancellationToken ct)
     {
-        if (modeText == null || !TryParseMode(modeText, out var mode) || mode == ProbeMode.Compare)
-            return Fail("Required: --serve-proxy --mode <reverse-http1|nginx-reverse-http1|https-mitm>");
-        return ServeProxyHost.RunAsync(mode, originHttpPort, originHttpsPort, nginxPath, ct).GetAwaiter().GetResult();
+        if (modeText == null || !TryParseMode(modeText, out var mode) ||
+            mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.ExplicitPoolSweep)
+            return Fail("Required: --serve-proxy --mode <single arm>");
+        return ServeProxyHost.RunAsync(mode, originHttpPort, originHttpsPort, nginxPath, maxCachedConnections, ct)
+            .GetAwaiter().GetResult();
     }
 
     private static int RunRamp(string? modeText, string? nginxPath, string? resultsDir, List<int> concurrency,
-        int warmupSec, int durationSec, CancellationToken ct)
+        int warmupSec, int durationSec, int? maxCachedConnections, CancellationToken ct)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode))
-            return Fail("Required: --ramp --mode <reverse-http1|nginx-reverse-http1|https-mitm|compare>");
+            return Fail("Required: --ramp --mode <see --help>");
 
         var options = new RampOptions
         {
@@ -137,6 +146,7 @@ internal static class Cli
             ResultsDir = resultsDir ?? Path.Combine(AppContext.BaseDirectory, "results"),
             Warmup = TimeSpan.FromSeconds(warmupSec),
             StepDuration = TimeSpan.FromSeconds(durationSec),
+            MaxCachedConnections = maxCachedConnections,
             ConcurrencySteps = concurrency.Count > 0
                 ? concurrency.ToArray()
                 : [8, 16, 24, 32, 48, 64, 128, 256, 512]
@@ -171,8 +181,29 @@ internal static class Cli
             case "https-mitm":
                 mode = ProbeMode.HttpsMitm;
                 return true;
+            case "reverse-http2":
+                mode = ProbeMode.ReverseHttp2;
+                return true;
+            case "nginx-reverse-http2":
+                mode = ProbeMode.NginxReverseHttp2;
+                return true;
+            case "reverse-http3":
+                mode = ProbeMode.ReverseHttp3;
+                return true;
+            case "explicit-http1-multi":
+                mode = ProbeMode.ExplicitHttp1Multi;
+                return true;
+            case "explicit-http2-multi":
+                mode = ProbeMode.ExplicitHttp2Multi;
+                return true;
             case "compare":
                 mode = ProbeMode.Compare;
+                return true;
+            case "compare-http2":
+                mode = ProbeMode.CompareHttp2;
+                return true;
+            case "explicit-pool-sweep":
+                mode = ProbeMode.ExplicitPoolSweep;
                 return true;
             default:
                 mode = default;
@@ -187,29 +218,31 @@ internal static class Cli
             RpsLoadProbe — saturation RPS harness for Titanium.Web.Proxy (and nginx control arm)
 
             Usage:
-              RpsLoadProbe --serve --mode <reverse-http1|nginx-reverse-http1|https-mitm> [--nginx-path PATH]
+              RpsLoadProbe --serve --mode <mode> [--nginx-path PATH] [--max-cached-connections N]
               RpsLoadProbe --serve-origin [--https]
-              RpsLoadProbe --serve-proxy --mode <...> --origin-http-port N [--origin-https-port N]
-              RpsLoadProbe --ramp  --mode <reverse-http1|nginx-reverse-http1|https-mitm|compare> [options]
-
-            --ramp spawns origin and proxy as separate processes; the parent only generates load.
-
-            Options:
-              --nginx-path PATH       Path to nginx[.exe] (otherwise PATH is searched)
-              --results-dir DIR       CSV output directory (ramp only)
-              --concurrency LIST      Default: 8,16,24,32,48,64,128,256,512
-              --warmup-sec N          Warmup seconds per step (default: 5)
-              --duration-sec N        Measure seconds per step (default: 20)
+              RpsLoadProbe --serve-proxy --mode <http1 mode> --origin-http-port N
+              RpsLoadProbe --ramp  --mode <mode> [options]
 
             Modes:
-              reverse-http1           TWP TransparentProxyEndPoint -> Kestrel HTTP
-              nginx-reverse-http1     nginx proxy_pass -> same Kestrel origin
-              https-mitm              TWP ExplicitProxyEndPoint MITM -> Kestrel HTTPS
-              compare                 Sequential: TWP reverse, nginx (if present), TWP MITM
+              reverse-http1           TWP TransparentProxyEndPoint -> Kestrel HTTP/1
+              nginx-reverse-http1     nginx proxy_pass -> same Kestrel HTTP/1 origin
+              https-mitm              TWP Explicit MITM -> Kestrel HTTPS
+              reverse-http2           TWP Transparent TLS+h2 -> Kestrel HTTPS (h2)
+              nginx-reverse-http2     nginx ssl+http2 -> same Kestrel HTTPS origin
+              reverse-http3           TWP TransparentQuic (h3) -> Kestrel HTTPS/h3 (no nginx/Windows)
+              explicit-http1-multi    Explicit MITM across 16 HTTPS origins (fan-out)
+              explicit-http2-multi    Same fan-out forcing HTTP/2
+              compare                 Sequential HTTP/1 compare (+ MITM)
+              compare-http2           Sequential: TWP h2, nginx h2, TWP h3
+              explicit-pool-sweep     Fan-out with MaxCachedConnections 4 / 32 / 128
 
-            SLO defaults (breaking point = last concurrency meeting all):
-              error rate < 0.1%
-              p99 <= 50 ms (HTTP/1) or 100 ms (HTTPS MITM)
+            Options:
+              --nginx-path PATH
+              --results-dir DIR
+              --concurrency LIST      Default: 8,16,24,32,48,64,128,256,512
+              --warmup-sec N
+              --duration-sec N
+              --max-cached-connections N   Override ProxyServer.MaxCachedConnections for TWP arms
             """);
     }
 }

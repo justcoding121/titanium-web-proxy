@@ -364,7 +364,7 @@ QUIC endpoint is visible without extra config.
 |---|---|---|---|
 | `EnableConnectionPool` | `true` | — | Live pool switch; prefer this over unused `ProxyResourceLimits.ConnectionPoolingEnabled`. |
 | `EnableIpv6UnreachableSoftSkip` | `true` | disable for strict IPv6 preference | After one IPv6 `NetworkUnreachable`-class Happy Eyeballs failure, skip IPv6 addresses for 30s (filter after address-family interleave). |
-| `MaxCachedConnections` | `128` | raise for high fan-out per origin | Same: live knob is on `ProxyServer`, not `ResourceLimits.MaxCachedConnectionsPerHost`. |
+| `MaxCachedConnections` | `128` | raise for high fan-out **per origin** | Live knob on `ProxyServer`. Cap is **per upstream host**, not process-wide — reverse (one hot origin) and explicit (many origins) share the same default safely. Idle entries expire with `ConnectionTimeOutSeconds`. |
 | `EnableTcpServerConnectionPrefetch` | `true` | — | Overlaps origin connect with client work. |
 | `NoDelay` | `true` | — | Disables Nagle. |
 | `EnableTcpKeepAlive` | `true` | — | NAT-friendly for long tunnels. |
