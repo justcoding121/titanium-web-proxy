@@ -578,7 +578,8 @@ internal static class Http3OriginBridge
         {
             var on1xx = CreateInterimResponseAdapter(onInterimResponse);
             var exchange = await SendHttp2OriginWithGoAwayRetryAsync(
-                server, logger, sessionArgs, host, port, connectHost, connectPort, poolKey,
+                server, logger, sessionArgs,
+                new Http2OriginTarget(host, port, connectHost, connectPort, poolKey),
                 on1xx, cancellationToken);
 
             var response = exchange.Response;
@@ -667,17 +668,16 @@ internal static class Http3OriginBridge
 
     private static async Task<Http2OriginExchange> SendHttp2OriginWithGoAwayRetryAsync(
         ProxyServer server, ILogger logger, SessionEventArgs sessionArgs,
-        string host, int port, string? connectHost, int? connectPort, string poolKey,
+        Http2OriginTarget target,
         Func<int, HeaderCollection, CancellationToken, Task>? on1xx,
         CancellationToken cancellationToken)
     {
-        var target = new Http2OriginTarget(host, port, connectHost, connectPort, poolKey);
         try
         {
             var h2 = await LeaseHttp2OriginAsync(server, logger, sessionArgs, target, cancellationToken);
             sessionArgs.HttpClient.BindUpstreamConnection(h2.ServerConnection);
             var exchange = await h2.SendAsync(sessionArgs.HttpClient.Request, on1xx, cancellationToken);
-            ReturnHttp2Origin(poolKey, h2);
+            ReturnHttp2Origin(target.PoolKey, h2);
             return exchange;
         }
         catch (Exception ex) when (ex is Http2OriginGoAwayException or ObjectDisposedException or IOException)
@@ -686,7 +686,7 @@ internal static class Http3OriginBridge
             var h2 = await LeaseHttp2OriginAsync(server, logger, sessionArgs, target, cancellationToken);
             sessionArgs.HttpClient.BindUpstreamConnection(h2.ServerConnection);
             var exchange = await h2.SendAsync(sessionArgs.HttpClient.Request, on1xx, cancellationToken);
-            ReturnHttp2Origin(poolKey, h2);
+            ReturnHttp2Origin(target.PoolKey, h2);
             return exchange;
         }
     }
@@ -845,6 +845,8 @@ internal static class Http3OriginBridge
 
         // SendRequest always writes HTTP/1.x framing — never negotiate h2/h3 on this path.
 
+        TcpServerConnection? connection = null;
+        var closeConnection = true;
         try
         {
             var isHttps = sessionArgs.IsHttps;
@@ -877,7 +879,7 @@ internal static class Http3OriginBridge
 
             var (connectHost, connectPort) = ResolveTransparentForwardTarget(sessionArgs);
 
-            var connection = await server.TcpConnectionFactory.GetServerConnection(
+            connection = await server.TcpConnectionFactory.GetServerConnection(
                 server, host, port, HttpHeader.Version11, isHttps, SslExtensions.Http11ProtocolAsList,
                 false, sessionArgs, sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
                 sessionArgs.CustomUpStreamProxyUsed ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy),
@@ -909,9 +911,15 @@ internal static class Http3OriginBridge
             // Without this, HasBody && !IsBodyRead leaves the H2 stream without END_STREAM.
             if (sessionArgs.HttpClient.Response.HasBody && !sessionArgs.HttpClient.Response.IsBodyRead)
                 await sessionArgs.GetResponseBody(cancellationToken);
+
+            closeConnection = !sessionArgs.HttpClient.Response.KeepAlive;
         }
         finally
         {
+            // FinishSession only nulls the HttpClient reference. Without Release, every H3→H1
+            // GET paid a new origin TLS handshake (Windows ~300 ms / tens of RPS).
+            if (connection != null)
+                await server.TcpConnectionFactory.Release(connection, closeConnection);
             // Translation is wire-local. Preserve the protocol observed from the client for
             // downstream response handling, callbacks, and the traffic tape.
             request.HttpVersion = clientHttpVersion;

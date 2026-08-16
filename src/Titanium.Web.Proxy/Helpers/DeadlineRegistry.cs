@@ -59,6 +59,19 @@ internal sealed class DeadlineRegistry
     }
 
     /// <summary>
+    ///     Clears a prior firing so this registry can be reused for the next keep-alive request
+    ///     on the same client connection (avoids allocating a new registry per GET).
+    /// </summary>
+    internal void Reset()
+    {
+        lock (gate)
+        {
+            firedKind = null;
+            firedTimestamp = 0;
+        }
+    }
+
+    /// <summary>
     ///     True if any deadline owned by this registry has already been attributed (via
     ///     <see cref="Deadline.TryGetTimeoutException" /> or <see cref="Deadline.Dispose" />), and if so,
     ///     the earliest one by actual elapsed-wall-clock order.

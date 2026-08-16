@@ -51,6 +51,10 @@ public partial class ProxyServer
         {
             var cancellationToken = cancellationTokenSource.Token;
 
+            // One registry for every keep-alive request on this client socket. Reset() clears a
+            // prior firing so we do not allocate a new registry per GET.
+            var headerDeadlineRegistry = new DeadlineRegistry();
+
             // Loop through each subsequent request on this particular client connection
             // (assuming HTTP connection is kept alive by client)
             while (true)
@@ -65,7 +69,7 @@ public partial class ProxyServer
                 // connection" case below, which must stay silent and args-free exactly as before.
                 RequestStatusInfo requestLine;
                 SessionEventArgs? args = null;
-                var headerDeadlineRegistry = new DeadlineRegistry();
+                headerDeadlineRegistry.Reset();
                 using (var headerDeadline = headerDeadlineRegistry.Start(cancellationToken,
                            ResolveClientHeaderTimeout(), ProxyTimeoutKind.ClientHeader))
                 {
@@ -605,6 +609,26 @@ public partial class ProxyServer
 
         args.HttpClient.Request.Locked = true;
 
+        // Sticky keep-alive (already leased): skip RetryPolicy + two closures per GET.
+        // On a typed stale-socket failure, drop the connection and fall through to retry.
+        if (serverConnection != null && !args.HttpClient.Request.UpgradeToWebSocket)
+        {
+            args.HttpClient.SetConnection(serverConnection);
+            if (args.Timing != null)
+                args.Timing.MarkConnectionReady(serverConnection.Id, !serverConnection.ClaimFirstUse());
+
+            try
+            {
+                await HandleHttpSessionRequest(args);
+                return new RetryResult(serverConnection, null, true);
+            }
+            catch (RetryableServerConnectionException)
+            {
+                await TcpConnectionFactory.Release(serverConnection, true);
+                serverConnection = null;
+            }
+        }
+
         // a connection generator task with captured parameters via closure.
         var generator = () =>
             TcpConnectionFactory.GetServerConnection(this,
@@ -753,11 +777,13 @@ public partial class ProxyServer
     /// </summary>
     /// <param name="args">The session event arguments.</param>
     /// <returns></returns>
-    private async Task OnBeforeRequest(SessionEventArgs args)
+    private Task OnBeforeRequest(SessionEventArgs args)
     {
         args.Timing?.MarkRequestHeadersReceived();
 
-        if (BeforeRequest != null) await BeforeRequest.InvokeAsync(this, args, logger);
+        return BeforeRequest != null
+            ? BeforeRequest.InvokeAsync(this, args, logger)
+            : Task.CompletedTask;
     }
 
     /// <summary>
@@ -992,16 +1018,22 @@ public partial class ProxyServer
     ///         share this single call site.
     ///     </para>
     /// </summary>
-    private static async Task DowngradeChunkedFramingForHttp10OriginIfNeeded(SessionEventArgs args,
+    private static Task DowngradeChunkedFramingForHttp10OriginIfNeeded(SessionEventArgs args,
         CancellationToken cancellationToken)
     {
         var request = args.HttpClient.Request;
-        if (!request.IsChunked) return;
+        if (!request.IsChunked) return Task.CompletedTask;
 
         var originHttpVersion = HttpWebClient.ResolveOriginHttpVersion(request.HttpVersion,
             args.OriginHttpVersionPolicy ?? args.Server.OriginHttpVersionPolicy);
-        if (originHttpVersion != HttpHeader.Version10) return;
+        if (originHttpVersion != HttpHeader.Version10) return Task.CompletedTask;
 
+        return DowngradeChunkedFramingForHttp10OriginAsync(args, request, cancellationToken);
+    }
+
+    private static async Task DowngradeChunkedFramingForHttp10OriginAsync(SessionEventArgs args, Request request,
+        CancellationToken cancellationToken)
+    {
         if (!request.IsBodyRead) await args.GetRequestBody(cancellationToken);
 
         // The ContentLength setter also clears IsChunked (removes Transfer-Encoding), so this single

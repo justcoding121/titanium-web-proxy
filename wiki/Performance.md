@@ -60,14 +60,14 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 | Reverse | HTTP/2 · plain | HTTP/2 · TLS | **6,036** | **6,036** | *Not possible* | *Not possible* | |
 | Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **7,587** | **7,949** | *Not possible* (no QUIC) | *Not possible* | |
 | Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **2,246** | **3,541** | *Not possible* (no QUIC) | *Not possible* | |
-| MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **0** | **85** | *Not possible* (no QUIC) | *Not possible* | |
+| MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **10,416** | **10,416** | *Not possible* (no QUIC) | *Not possible* | |
 | MITM | HTTP/3 · QUIC | HTTP/2 · TLS | **2,127** | **7,779** | *Not possible* (no QUIC) | *Not possible* | |
 | MITM | HTTP/3 · QUIC | HTTP/3 · QUIC | **6,479** | **7,430** | *Not possible* (no QUIC) | *Not possible* | |
 | MITM | HTTP/1 · TLS | HTTP/2 · TLS | **16,423** | **16,709** | *Not possible* | *Not possible* | |
 | MITM | HTTP/1 · TLS | HTTP/3 · QUIC | **16,524** | **16,524** | *Not possible* (no QUIC) | *Not possible* | |
 | MITM | HTTP/2 · TLS | HTTP/3 · QUIC | **7,151** | **7,151** | *Not possible* (no QUIC) | *Not possible* | |
 
-Windows sources: `compare-same` / `compare-terminate` / `compare-bridges` / local `compare-mitm` (`rps-ramp-20260816-123409`, warmup 1s; measure 3s; concurrency 8–64). H3→H1 TLS MITM is **unsustainable** (p50 hundreds of ms; no concurrency met SLO). All other published TWP arms **0% error**.
+Windows sources: `compare-same` / `compare-terminate` / `compare-bridges` / local `compare-mitm` (`rps-ramp-20260816-123409`, warmup 1s; measure 3s; concurrency 8–64). H3→H1 TLS MITM from `rps-ramp-20260816-132745` after origin TCP pool release. All published TWP arms **0% error**.
 
 nginx/Windows is a limited port. Use it for **same-OS** comparison only — not as the industry nginx baseline.
 
@@ -100,7 +100,7 @@ Median of **3 repeats** from Actions runs [31947404658](https://github.com/justc
 | MITM | HTTP/1 · TLS | HTTP/3 · QUIC | **19,352** | **19,352** | *Not possible* (no QUIC) | *Not possible* | |
 | MITM | HTTP/2 · TLS | HTTP/3 · QUIC | **17,758** | **17,758** | *Not possible* (no QUIC) | *Not possible* | |
 
-On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.66** (25,492 / 38,505). Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**. H3→H1 TLS MITM meets SLO only through concurrency 32 (~12–39 ms p50) and is far behind other MITM arms.
+On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.66** (25,492 / 38,505). Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**. Linux H3→H1 TLS MITM **768 / 778** is pre-fix (origin TCP was not returned to the pool); Windows after the fix is **10,416**. Re-ramp `compare-mitm` on Linux to replace this row.
 
 ### Why isn’t HTTP/3 > HTTP/2 > HTTP/1 in raw RPS?
 

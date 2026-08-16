@@ -363,7 +363,7 @@ internal sealed class TwpProxyHost : IDisposable
 
         var endPoint = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
         {
-            ForwardHost = "localhost",
+            ForwardHost = "127.0.0.1",
             ForwardPort = originHttpsPort,
             GenericCertificateName = "localhost",
             MaxInboundBidirectionalStreams = 256,

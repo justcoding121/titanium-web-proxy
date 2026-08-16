@@ -315,9 +315,11 @@ public partial class ProxyServer
     /// </summary>
     /// <param name="args"></param>
     /// <returns></returns>
-    private async Task OnBeforeResponse(SessionEventArgs args)
+    private Task OnBeforeResponse(SessionEventArgs args)
     {
-        if (BeforeResponse != null) await BeforeResponse.InvokeAsync(this, args, logger);
+        return BeforeResponse != null
+            ? BeforeResponse.InvokeAsync(this, args, logger)
+            : Task.CompletedTask;
     }
 
     /// <summary>
@@ -329,9 +331,19 @@ public partial class ProxyServer
     /// </summary>
     /// <param name="args"></param>
     /// <returns></returns>
-    private async Task OnAfterResponse(SessionEventArgs args)
+    private Task OnAfterResponse(SessionEventArgs args)
     {
-        if (AfterResponse != null) await AfterResponse.InvokeAsync(this, args, logger);
+        if (AfterResponse != null)
+            return OnAfterResponseWithHandlerAsync(args);
+
+        TryUpdateHttp3CapabilityFromResponse(args);
+        args.Timing?.MarkComplete();
+        return Task.CompletedTask;
+    }
+
+    private async Task OnAfterResponseWithHandlerAsync(SessionEventArgs args)
+    {
+        await AfterResponse!.InvokeAsync(this, args, logger);
 
         // Process Alt-Svc header to cache HTTP/3 capability for future requests.
         TryUpdateHttp3CapabilityFromResponse(args);
