@@ -132,10 +132,12 @@ HTTP/1.1, which requires bridging client h2 streams onto HTTP/1.1 origin request
       </tr>
       <tr>
         <td id="Titanium_Web_Proxy_Models_UpstreamHttpProtocol_Http2">Http2</td>
-        <td><p>Always use HTTP/2 on the connection to the origin, failing the connection outright if the origin
-does not negotiate &quot;h2&quot; via ALPN - a translation bridge cannot fabricate HTTP/2 support at an
-origin that genuinely lacks it. When the client itself does not negotiate HTTP/2, reconciling that
-with a confirmed HTTP/2 origin connection requires
+        <td><p>Always use HTTP/2 on the connection to the origin. Without
+<a class="xref" href="Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardCleartext">ForwardCleartext</a>, the origin must negotiate
+<code>h2</code> via TLS ALPN. With <code>ForwardCleartext</code>, the origin connection is cleartext HTTP/2
+prior-knowledge (h2c) instead. A translation bridge cannot fabricate HTTP/2 at an origin that
+lacks it. When the client itself does not negotiate HTTP/2, reconciling that with a confirmed
+HTTP/2 origin connection requires
 <a class="xref" href="Titanium.Web.Proxy.EventArguments.TunnelConnectSessionEventArgs.html#Titanium_Web_Proxy_EventArguments_TunnelConnectSessionEventArgs_AllowHttpProtocolTranslation">AllowHttpProtocolTranslation</a>/
 <a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeSslAuthenticateEventArgs_AllowHttpProtocolTranslation">AllowHttpProtocolTranslation</a> to bridge
 HTTP/1.1 client requests onto the HTTP/2 origin connection.</p>

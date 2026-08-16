@@ -87,6 +87,11 @@ Classes
 </h3>
       <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeBodyWriteEventArgs.html">BeforeBodyWriteEventArgs</a></h4>
       <section></section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.html">BeforeHttpAuthenticateEventArgs</a></h4>
+      <section><p>Fired on a transparent reverse endpoint before handling a cleartext (non-TLS) client session,
+including prior-knowledge HTTP/2 (h2c). Mirrors the policy knobs on
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html">BeforeSslAuthenticateEventArgs</a> without a TLS handshake.</p>
+</section>
       <h4><a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.html">BeforeQuicAuthenticateEventArgs</a></h4>
       <section><p>Event arguments raised on a <code>TransparentQuicProxyEndPoint</code> before the QUIC TLS handshake
 completes, analogous to <a class="xref" href="Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs.html">BeforeSslAuthenticateEventArgs</a> for transparent TCP endpoints.</p>

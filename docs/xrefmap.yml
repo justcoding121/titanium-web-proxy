@@ -708,6 +708,77 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.BeforeBodyWriteEventArgs.Session
   nameWithType: BeforeBodyWriteEventArgs.Session
+- uid: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs
+  name: BeforeHttpAuthenticateEventArgs
+  href: api/Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.html
+  commentId: T:Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs
+  fullName: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs
+  nameWithType: BeforeHttpAuthenticateEventArgs
+- uid: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.AllowHttpProtocolTranslation
+  name: AllowHttpProtocolTranslation
+  href: api/Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeHttpAuthenticateEventArgs_AllowHttpProtocolTranslation
+  commentId: P:Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.AllowHttpProtocolTranslation
+  fullName: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.AllowHttpProtocolTranslation
+  nameWithType: BeforeHttpAuthenticateEventArgs.AllowHttpProtocolTranslation
+- uid: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.AllowHttpProtocolTranslation*
+  name: AllowHttpProtocolTranslation
+  href: api/Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeHttpAuthenticateEventArgs_AllowHttpProtocolTranslation_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.AllowHttpProtocolTranslation
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.AllowHttpProtocolTranslation
+  nameWithType: BeforeHttpAuthenticateEventArgs.AllowHttpProtocolTranslation
+- uid: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardHostName
+  name: ForwardHostName
+  href: api/Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeHttpAuthenticateEventArgs_ForwardHostName
+  commentId: P:Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardHostName
+  fullName: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardHostName
+  nameWithType: BeforeHttpAuthenticateEventArgs.ForwardHostName
+- uid: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardHostName*
+  name: ForwardHostName
+  href: api/Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeHttpAuthenticateEventArgs_ForwardHostName_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardHostName
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardHostName
+  nameWithType: BeforeHttpAuthenticateEventArgs.ForwardHostName
+- uid: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardPort
+  name: ForwardPort
+  href: api/Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeHttpAuthenticateEventArgs_ForwardPort
+  commentId: P:Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardPort
+  fullName: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardPort
+  nameWithType: BeforeHttpAuthenticateEventArgs.ForwardPort
+- uid: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardPort*
+  name: ForwardPort
+  href: api/Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeHttpAuthenticateEventArgs_ForwardPort_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardPort
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardPort
+  nameWithType: BeforeHttpAuthenticateEventArgs.ForwardPort
+- uid: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.TerminateSession
+  name: TerminateSession()
+  href: api/Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeHttpAuthenticateEventArgs_TerminateSession
+  commentId: M:Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.TerminateSession
+  fullName: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.TerminateSession()
+  nameWithType: BeforeHttpAuthenticateEventArgs.TerminateSession()
+- uid: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.TerminateSession*
+  name: TerminateSession
+  href: api/Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeHttpAuthenticateEventArgs_TerminateSession_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.TerminateSession
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.TerminateSession
+  nameWithType: BeforeHttpAuthenticateEventArgs.TerminateSession
+- uid: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.UpstreamHttpProtocol
+  name: UpstreamHttpProtocol
+  href: api/Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeHttpAuthenticateEventArgs_UpstreamHttpProtocol
+  commentId: P:Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.UpstreamHttpProtocol
+  fullName: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.UpstreamHttpProtocol
+  nameWithType: BeforeHttpAuthenticateEventArgs.UpstreamHttpProtocol
+- uid: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.UpstreamHttpProtocol*
+  name: UpstreamHttpProtocol
+  href: api/Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.html#Titanium_Web_Proxy_EventArguments_BeforeHttpAuthenticateEventArgs_UpstreamHttpProtocol_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.UpstreamHttpProtocol
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.UpstreamHttpProtocol
+  nameWithType: BeforeHttpAuthenticateEventArgs.UpstreamHttpProtocol
 - uid: Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs
   name: BeforeQuicAuthenticateEventArgs
   href: api/Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs.html
@@ -5131,6 +5202,12 @@ references:
   fullName.vb: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.New
   nameWithType: TransparentProxyEndPoint.TransparentProxyEndPoint
   nameWithType.vb: TransparentProxyEndPoint.New
+- uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeHttpAuthenticate
+  name: BeforeHttpAuthenticate
+  href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_BeforeHttpAuthenticate
+  commentId: E:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeHttpAuthenticate
+  fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeHttpAuthenticate
+  nameWithType: TransparentProxyEndPoint.BeforeHttpAuthenticate
 - uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeSslAuthenticate
   name: BeforeSslAuthenticate
   href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_BeforeSslAuthenticate
