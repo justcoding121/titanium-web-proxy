@@ -80,7 +80,9 @@ jobs:
       - name: Install bombardier (optional external generator)
         run: |
           set -euo pipefail
-          curl -sL "https://github.com/codesenberg/bombardier/releases/download/v1.2.6/bombardier-linux-amd64" \
+          # Force HTTPS-only (including redirects) for Sonar githubactions:S6506.
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            "https://github.com/codesenberg/bombardier/releases/download/v1.2.6/bombardier-linux-amd64" \
             -o /usr/local/bin/bombardier
           chmod +x /usr/local/bin/bombardier
           bombardier --version || true
@@ -90,15 +92,23 @@ jobs:
           ulimit -n 65535 || true
           ulimit -n
 
+      # Pass workflow_dispatch inputs via env (not ${{ }} in the script) to avoid
+      # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
         shell: pwsh
+        env:
+          RPS_MODE: ${{ inputs.mode }}
+          RPS_CONCURRENCY: ${{ inputs.concurrency }}
+          RPS_WARMUP_SEC: ${{ inputs.warmup_sec }}
+          RPS_DURATION_SEC: ${{ inputs.duration_sec }}
+          RPS_REPEATS: ${{ inputs.repeats }}
         run: |
           pwsh tools/RpsLoadProbe/run-rps.ps1 `
-            -Mode '${{ inputs.mode }}' `
-            -Concurrency '${{ inputs.concurrency }}' `
-            -WarmupSec ${{ inputs.warmup_sec }} `
-            -DurationSec ${{ inputs.duration_sec }} `
-            -Repeats ${{ inputs.repeats }} `
+            -Mode $env:RPS_MODE `
+            -Concurrency $env:RPS_CONCURRENCY `
+            -WarmupSec ([int]$env:RPS_WARMUP_SEC) `
+            -DurationSec ([int]$env:RPS_DURATION_SEC) `
+            -Repeats ([int]$env:RPS_REPEATS) `
             -ResultsDir tools/RpsLoadProbe/results `
             -BombardierCheck
 
