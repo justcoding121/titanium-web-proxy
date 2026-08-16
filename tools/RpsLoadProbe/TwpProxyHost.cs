@@ -474,6 +474,8 @@ internal sealed class TwpProxyHost : IDisposable
     private static ProxyServer CreateBaseProxy(bool enableHttp2, bool enableHttp3, int? maxCachedConnections = null)
     {
         var proxy = new ProxyServer(false, false, false);
+        // Saturation runs must not format or enqueue diagnostics on session threads.
+        proxy.Logging.Enabled = false;
         proxy.CertificateManager.SaveFakeCertificates = false;
         // Opt-in for compare-tls-cost handshake arms (child process via env).
         proxy.EnableRequestTimingCapture =

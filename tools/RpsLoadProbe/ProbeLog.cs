@@ -1,5 +1,4 @@
 using System.Threading.Channels;
-using Microsoft.Extensions.Logging;
 
 namespace Titanium.Web.Proxy.RpsLoadProbe;
 
@@ -12,10 +11,6 @@ internal static class ProbeLog
 {
     private static readonly Channel<string> StatusChannel = Channel.CreateUnbounded<string>(
         new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
-
-    private static readonly ILogger Logger = LoggerFactory
-        .Create(b => b.SetMinimumLevel(LogLevel.Information))
-        .CreateLogger("RpsLoadProbe");
 
     private static int started;
 
@@ -43,14 +38,12 @@ internal static class ProbeLog
     {
         EnsureStarted();
         StatusChannel.Writer.TryWrite(message);
-        Logger.LogInformation("{Message}", message);
     }
 
     public static void Error(string message)
     {
         EnsureStarted();
         StatusChannel.Writer.TryWrite(message);
-        Logger.LogError("{Message}", message);
     }
 
     /// <summary>
@@ -62,7 +55,4 @@ internal static class ProbeLog
         await Console.Out.WriteLineAsync(line.AsMemory(), cancellationToken).ConfigureAwait(false);
         await Console.Out.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
-
-    public static void WriteProtocolLine(string line) =>
-        WriteProtocolLineAsync(line).GetAwaiter().GetResult();
 }

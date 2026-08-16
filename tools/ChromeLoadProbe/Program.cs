@@ -56,7 +56,7 @@ await Console.Out.WriteLineAsync(
     $"res_max_ms={result.ResourceMaxMs,7:F0}{(result.Error is null ? "" : "  err=" + result.Error)}");
 
 if (options.CsvPath is not null)
-    AppendCsv(options, result);
+    await AppendCsvAsync(options, result);
 
 return result.Ok ? 0 : 1;
 
@@ -283,7 +283,7 @@ static void TryDeleteDirectory(string path)
     }
 }
 
-static void AppendCsv(ProbeOptions opt, ProbeResult r)
+static async Task AppendCsvAsync(ProbeOptions opt, ProbeResult r)
 {
     var directory = Path.GetDirectoryName(opt.CsvPath!);
     if (!string.IsNullOrEmpty(directory))
@@ -291,12 +291,12 @@ static void AppendCsv(ProbeOptions opt, ProbeResult r)
 
     if (!File.Exists(opt.CsvPath!))
     {
-        File.WriteAllText(opt.CsvPath!,
+        await File.WriteAllTextAsync(opt.CsvPath!,
             "timestamp,arm,site,trial,ok,wall_ms,ttfb_ms,dcl_ms,load_ms," +
             "res_count,res_p50_ms,res_p95_ms,res_max_ms,res_over1s,res_over3s,error\n");
     }
 
-    File.AppendAllText(opt.CsvPath!,
+    await File.AppendAllTextAsync(opt.CsvPath!,
         $"{DateTime.UtcNow:o},{opt.Arm},{opt.Site},{opt.Trial},{(r.Ok ? 1 : 0)}," +
         $"{r.WallMs:F1},{r.TtfbMs:F1},{r.DclMs:F1},{r.LoadMs:F1}," +
         $"{r.ResourceCount},{r.ResourceP50Ms:F1},{r.ResourceP95Ms:F1},{r.ResourceMaxMs:F1}," +

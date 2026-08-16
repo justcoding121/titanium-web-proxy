@@ -111,7 +111,7 @@ internal static class RampOrchestrator
         ProbeLog.Info(string.Empty);
 
         await using var csv = new StreamWriter(csvPath);
-        CsvWriter.WriteHeader(csv);
+        await CsvWriter.WriteHeaderAsync(csv);
 
         var arms = ResolveArms(options.Mode, nginxExe != null).ToList();
         if (!System.Net.Quic.QuicListener.IsSupported)
@@ -537,7 +537,7 @@ internal static class RampOrchestrator
                 }
 
                 var meetsSlo = result.ErrorRatePercent < options.MaxErrorRatePercent && result.P99Ms <= p99Slo;
-                CsvWriter.WriteRow(csv, arm.Name, result, meetsSlo, nginxVersion, maxCached, workload);
+                await CsvWriter.WriteRowAsync(csv, arm.Name, result, meetsSlo, nginxVersion, maxCached, workload);
                 await csv.FlushAsync(cancellationToken);
 
                 ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,

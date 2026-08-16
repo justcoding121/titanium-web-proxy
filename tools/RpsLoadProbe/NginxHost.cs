@@ -31,17 +31,18 @@ internal sealed class NginxHost : IDisposable
         Version = version;
     }
 
-    public static NginxHost? TryStartHttp1(int originHttpPort, string? nginxPath) =>
-        TryStart(BuildHttp1Conf(originHttpPort), listenScheme: "http", nginxPath);
+    public static Task<NginxHost?> TryStartHttp1Async(int originHttpPort, string? nginxPath) =>
+        TryStartAsync(BuildHttp1Conf(originHttpPort), listenScheme: "http", nginxPath);
 
-    public static NginxHost? TryStartHttp1Tls(int originHttpPort, string? nginxPath)
+    public static async Task<NginxHost?> TryStartHttp1TlsAsync(int originHttpPort, string? nginxPath)
     {
         var prefixProbe = Path.Combine(Path.GetTempPath(), "twp-rps-nginx-certs-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(prefixProbe);
         try
         {
-            var (certPem, keyPem) = ExportLoopbackPem(prefixProbe);
-            return TryStart(BuildHttp1TlsConf(originHttpPort, certPem, keyPem), listenScheme: "https", nginxPath);
+            var (certPem, keyPem) = await ExportLoopbackPemAsync(prefixProbe);
+            return await TryStartAsync(BuildHttp1TlsConf(originHttpPort, certPem, keyPem), listenScheme: "https",
+                nginxPath);
         }
         finally
         {
@@ -49,7 +50,7 @@ internal sealed class NginxHost : IDisposable
         }
     }
 
-    public static NginxHost? TryStartHttp2(int originHttpPort, string? nginxPath)
+    public static async Task<NginxHost?> TryStartHttp2Async(int originHttpPort, string? nginxPath)
     {
         // nginx/Windows has http_v2 + ssl but no QUIC/UDP. Client TLS+h2 → cleartext HTTP origin.
         var exe = ResolveNginxExecutable(nginxPath);
@@ -64,8 +65,8 @@ internal sealed class NginxHost : IDisposable
         Directory.CreateDirectory(prefixProbe);
         try
         {
-            var (certPem, keyPem) = ExportLoopbackPem(prefixProbe);
-            return TryStart(BuildHttp2Conf(originHttpPort, certPem, keyPem, useHttp2OnDirective),
+            var (certPem, keyPem) = await ExportLoopbackPemAsync(prefixProbe);
+            return await TryStartAsync(BuildHttp2Conf(originHttpPort, certPem, keyPem, useHttp2OnDirective),
                 listenScheme: "https", nginxPath);
         }
         finally
@@ -75,7 +76,8 @@ internal sealed class NginxHost : IDisposable
         }
     }
 
-    private static NginxHost? TryStart(Func<string, int, string> confBuilder, string listenScheme, string? nginxPath)
+    private static async Task<NginxHost?> TryStartAsync(Func<string, int, string> confBuilder, string listenScheme,
+        string? nginxPath)
     {
         var exe = ResolveNginxExecutable(nginxPath);
         if (exe == null)
@@ -92,7 +94,7 @@ internal sealed class NginxHost : IDisposable
 
         var confPath = Path.Combine(prefixDir, "conf", "nginx.conf");
         var conf = confBuilder(prefixDir, port);
-        File.WriteAllText(confPath, conf, Encoding.ASCII);
+        await File.WriteAllTextAsync(confPath, conf, Encoding.ASCII);
 
         var startInfo = new ProcessStartInfo
         {
@@ -115,7 +117,7 @@ internal sealed class NginxHost : IDisposable
                 return new NginxHost(process, prefixDir, port, $"{listenScheme}://127.0.0.1:{port}/", version);
             if (process.HasExited)
             {
-                var err = process.StandardError.ReadToEnd();
+                var err = await process.StandardError.ReadToEndAsync();
                 TryDeleteDir(prefixDir);
                 throw new InvalidOperationException(
                     $"nginx exited early (code {process.ExitCode}). stderr: {err}");
@@ -263,7 +265,7 @@ internal sealed class NginxHost : IDisposable
                || (major == 1 && minor == 25 && patch >= 1);
     }
 
-    private static (string CertPem, string KeyPem) ExportLoopbackPem(string dir)
+    private static async Task<(string CertPem, string KeyPem)> ExportLoopbackPemAsync(string dir)
     {
         Directory.CreateDirectory(dir);
         using var cert = LoopbackCertificateAuthority.ServerCertificate;
@@ -271,7 +273,7 @@ internal sealed class NginxHost : IDisposable
         var keyPath = Path.Combine(dir, "server.key");
 
         var certPem = PemEncoding.Write("CERTIFICATE", cert.RawData);
-        File.WriteAllText(certPath, new string(certPem));
+        await File.WriteAllTextAsync(certPath, new string(certPem));
 
         // Export private key — certificate was created with exportable key.
         using var rsa = cert.GetRSAPrivateKey();
@@ -279,12 +281,12 @@ internal sealed class NginxHost : IDisposable
         if (rsa != null)
         {
             var keyPem = PemEncoding.Write("PRIVATE KEY", rsa.ExportPkcs8PrivateKey());
-            File.WriteAllText(keyPath, new string(keyPem));
+            await File.WriteAllTextAsync(keyPath, new string(keyPem));
         }
         else if (ecdsa != null)
         {
             var keyPem = PemEncoding.Write("PRIVATE KEY", ecdsa.ExportPkcs8PrivateKey());
-            File.WriteAllText(keyPath, new string(keyPem));
+            await File.WriteAllTextAsync(keyPath, new string(keyPem));
         }
         else
         {

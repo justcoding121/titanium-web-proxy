@@ -98,7 +98,7 @@ internal static class ServeProxyHost
             case ProbeMode.NginxReverseHttp1:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
-                var nginx = NginxHost.TryStartHttp1(originHttpPort, nginxPath)
+                var nginx = await NginxHost.TryStartHttp1Async(originHttpPort, nginxPath)
                             ?? throw new InvalidOperationException(NginxHost.NginxMissingMessage());
                 proxy = nginx;
                 listenUrl = nginx.ListenUrl;
@@ -127,7 +127,7 @@ internal static class ServeProxyHost
             case ProbeMode.NginxReverseHttp1Tls:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
-                var nginx = NginxHost.TryStartHttp1Tls(originHttpPort, nginxPath)
+                var nginx = await NginxHost.TryStartHttp1TlsAsync(originHttpPort, nginxPath)
                             ?? throw new InvalidOperationException(NginxHost.NginxMissingMessage());
                 proxy = nginx;
                 listenUrl = nginx.ListenUrl;
@@ -174,7 +174,7 @@ internal static class ServeProxyHost
             case ProbeMode.NginxReverseHttp2:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
-                var nginx = NginxHost.TryStartHttp2(originHttpPort, nginxPath)
+                var nginx = await NginxHost.TryStartHttp2Async(originHttpPort, nginxPath)
                             ?? throw new InvalidOperationException(NginxHost.NginxMissingMessage());
                 proxy = nginx;
                 listenUrl = nginx.ListenUrl;
@@ -313,7 +313,7 @@ internal static class ServeHost
         catch (Exception ex)
         {
             // Surface to parent ChildProcessStack (stderr was empty when nginx conf failed on Linux).
-            Console.Error.WriteLine(ex.ToString());
+            await Console.Error.WriteLineAsync(ex.ToString());
             ProbeLog.Error(ex.Message);
             return 1;
         }
@@ -436,7 +436,7 @@ internal static class ServeHost
                 case ProbeMode.NginxReverseHttp1:
                 {
                     var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
-                    var nginx = NginxHost.TryStartHttp1(origin.HttpPort, nginxPath)
+                    var nginx = await NginxHost.TryStartHttp1Async(origin.HttpPort, nginxPath)
                                 ?? throw new InvalidOperationException("nginx not available.");
                     return new ServeStack(origin, nginx, null, origin.HttpUrl, null, [], nginx.ListenUrl, null,
                         nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "1.1");
@@ -465,7 +465,7 @@ internal static class ServeHost
                 case ProbeMode.NginxReverseHttp1Tls:
                 {
                     var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
-                    var nginx = NginxHost.TryStartHttp1Tls(origin.HttpPort, nginxPath)
+                    var nginx = await NginxHost.TryStartHttp1TlsAsync(origin.HttpPort, nginxPath)
                                 ?? throw new InvalidOperationException("nginx not available.");
                     return new ServeStack(origin, nginx, null, origin.HttpUrl, null, [], nginx.ListenUrl,
                         null, nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "1.1");
@@ -566,7 +566,7 @@ internal static class ServeHost
                 {
                     // nginx: client TLS+h2 → cleartext HTTP/1.1 origin (same as TryStartHttp2 conf).
                     var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
-                    var nginx = NginxHost.TryStartHttp2(origin.HttpPort, nginxPath)
+                    var nginx = await NginxHost.TryStartHttp2Async(origin.HttpPort, nginxPath)
                                 ?? throw new InvalidOperationException("nginx not available.");
                     return new ServeStack(origin, nginx, null, origin.HttpUrl, null, [], nginx.ListenUrl,
                         null, nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "2.0");

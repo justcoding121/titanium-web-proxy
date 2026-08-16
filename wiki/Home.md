@@ -41,11 +41,16 @@ Start an explicit proxy that logs every requested URL:
 using System;
 using System.Net;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
 
 using var proxyServer = new ProxyServer();
+
+// Built-in console sink is a bounded channel + background writer, so LogInformation
+// never blocks a session thread on Console I/O.
+proxyServer.Logging.MinimumLevel = LogLevel.Information;
 
 proxyServer.BeforeRequest += OnRequest;
 
@@ -58,13 +63,13 @@ proxyServer.CertificateManager.EnsureRootCertificate(
     machineTrustRootCertificate: false);
 
 proxyServer.Start();
-Console.WriteLine("Proxy listening on 127.0.0.1:8000. Press Enter to stop.");
+proxyServer.Logger.LogInformation("Proxy listening on 127.0.0.1:8000. Press Enter to stop.");
 Console.ReadLine();
 proxyServer.Stop();
 
-static Task OnRequest(object sender, SessionEventArgs e)
+Task OnRequest(object sender, SessionEventArgs e)
 {
-    Console.WriteLine(e.HttpClient.Request.Url);
+    proxyServer.Logger.LogInformation("{Url}", e.HttpClient.Request.Url);
     return Task.CompletedTask;
 }
 ```
@@ -480,17 +485,15 @@ unused.
 ```csharp
 proxyServer.EnableRequestTimingCapture = true;
 
-proxyServer.AfterResponse += (sender, e) =>
+proxyServer.AfterResponse += async (sender, e) =>
 {
     var timing = e.Timing; // HttpRequestTiming, or null if capture is disabled
     if (timing != null)
     {
-        Console.WriteLine($"Time to first byte: {timing.TimeToFirstByte}");
-        Console.WriteLine($"Total duration: {timing.TotalDuration}");
-        Console.WriteLine($"Upstream connection reused: {timing.UpstreamConnectionReused}");
+        await Console.Out.WriteLineAsync($"Time to first byte: {timing.TimeToFirstByte}");
+        await Console.Out.WriteLineAsync($"Total duration: {timing.TotalDuration}");
+        await Console.Out.WriteLineAsync($"Upstream connection reused: {timing.UpstreamConnectionReused}");
     }
-
-    return Task.CompletedTask;
 };
 ```
 

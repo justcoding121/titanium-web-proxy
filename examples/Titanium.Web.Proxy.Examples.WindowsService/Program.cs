@@ -33,11 +33,11 @@ Log.Logger = new LoggerConfiguration()
         retainedFileCountLimit: 5,
         shared: true,
         outputTemplate: timestampedTemplate))
-    .WriteTo.EventLog(
+    .WriteTo.Async(a => a.EventLog(
         source: "Titanium Web Proxy",
         logName: "Application",
         manageEventSource: false,
-        restrictedToMinimumLevel: LogEventLevel.Warning)
+        restrictedToMinimumLevel: LogEventLevel.Warning))
     .CreateLogger();
 
 try
