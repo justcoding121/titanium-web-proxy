@@ -1516,8 +1516,14 @@ public partial class ProxyServer : IDisposable
                     "Add a TransparentQuicProxyEndPoint to ProxyEndPoints before calling Start().");
             }
 
+            // TransparentQuicProxyEndPoint is UDP-only (ListenQuic). Do not also TcpListener.Start on
+            // the same port number — ListenQuic may have assigned an ephemeral Port that is free for
+            // UDP but already taken for TCP, which aborted H3 reverse arms on Linux RPS runners.
             foreach (var endPoint in ProxyEndPoints)
             {
+                if (endPoint is TransparentQuicProxyEndPoint)
+                    continue;
+
                 Listen(endPoint);
                 startedTcpEndPoints.Add(endPoint);
             }
@@ -1642,7 +1648,12 @@ public partial class ProxyServer : IDisposable
 
         if (cancelSessions) CancelActiveSessions();
 
-        foreach (var endPoint in ProxyEndPoints) QuitListen(endPoint);
+        foreach (var endPoint in ProxyEndPoints)
+        {
+            if (endPoint is TransparentQuicProxyEndPoint)
+                continue;
+            QuitListen(endPoint);
+        }
 
         // Cancel and wait for QUIC accept loops to exit.
         quicListenerCts?.Cancel();

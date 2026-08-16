@@ -42,8 +42,9 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     ///     handler several layers up with no <see cref="Helpers.DeadlineRegistry.Deadline" /> of its own
     ///     in between - see <see cref="Helpers.DeadlineRegistry" />'s remarks for why that matters.
     /// </summary>
-    internal DeadlineRegistry Deadlines { get; } = new();
+    internal DeadlineRegistry Deadlines => deadlines ??= new();
 
+    private DeadlineRegistry? deadlines;
     private bool disposed;
     private bool enableWinAuth;
 

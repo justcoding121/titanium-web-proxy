@@ -1066,7 +1066,9 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
         try
         {
-            await WriteAsync(array, buffer.Offset, buffer.Count, true, cancellationToken);
+            // NetworkStream.FlushAsync is a no-op but still pays async machinery. Flush only when the
+            // base stream may buffer (SslStream / custom) so cleartext reverse keep-alive stays hot.
+            await WriteAsync(array, buffer.Offset, buffer.Count, flush: !IsNetworkStream, cancellationToken);
         }
         catch (IOException e)
         {

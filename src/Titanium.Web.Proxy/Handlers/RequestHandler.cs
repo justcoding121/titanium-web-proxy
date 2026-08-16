@@ -479,7 +479,8 @@ public partial class ProxyServer
 
         // H1.1 client → H3 origin bridge: resolve route from cache, warming SVCB in the background.
         // Body must be buffered before Locked=true — GetRequestBody throws once the request is locked.
-        if (!args.HttpClient.Request.UpgradeToWebSocket)
+        // Skip when HTTP/3 is off so plain H1 reverse does not pay ResolveHttp3Origin every GET.
+        if (EnableHttp3 && !args.HttpClient.Request.UpgradeToWebSocket)
         {
             string reqHost;
             int reqPort;
