@@ -79,61 +79,60 @@ public static class KnownHeaders
         switch (name.Length)
         {
             case 3:
-                if (Via.Equals(name)) { header = Via; return true; }
-                return false;
+                return TryAssign(name, Via, out header);
             case 4:
-                if (Host.Equals(name)) { header = Host; return true; }
-                if (Date.Equals(name)) { header = Date; return true; }
-                return false;
+                return TryAssign(name, Host, Date, out header);
             case 6:
-                if (Accept.Equals(name)) { header = Accept; return true; }
-                if (Cookie.Equals(name)) { header = Cookie; return true; }
-                if (Expect.Equals(name)) { header = Expect; return true; }
-                if (Server.Equals(name)) { header = Server; return true; }
-                return false;
+                return TryAssign(name, Accept, Cookie, Expect, Server, out header);
             case 7:
-                if (Upgrade.Equals(name)) { header = Upgrade; return true; }
-                if (Trailer.Equals(name)) { header = Trailer; return true; }
-                return false;
+                return TryAssign(name, Upgrade, Trailer, out header);
             case 8:
-                if (Location.Equals(name)) { header = Location; return true; }
-                return false;
+                return TryAssign(name, Location, out header);
             case 10:
-                if (Connection.Equals(name)) { header = Connection; return true; }
-                if (UserAgent.Equals(name)) { header = UserAgent; return true; }
-                if (KeepAlive.Equals(name)) { header = KeepAlive; return true; }
-                return false;
+                return TryAssign(name, Connection, UserAgent, KeepAlive, out header);
             case 12:
-                if (ContentType.Equals(name)) { header = ContentType; return true; }
-                return false;
+                return TryAssign(name, ContentType, out header);
             case 13:
-                if (Authorization.Equals(name)) { header = Authorization; return true; }
-                return false;
+                return TryAssign(name, Authorization, out header);
             case 14:
-                if (ContentLength.Equals(name)) { header = ContentLength; return true; }
-                if (ContentLengthHttp2.Equals(name)) { header = ContentLengthHttp2; return true; }
-                return false;
+                return TryAssign(name, ContentLength, ContentLengthHttp2, out header);
             case 15:
-                if (AcceptEncoding.Equals(name)) { header = AcceptEncoding; return true; }
-                if (AcceptLanguage.Equals(name)) { header = AcceptLanguage; return true; }
-                return false;
+                return TryAssign(name, AcceptEncoding, AcceptLanguage, out header);
             case 16:
-                if (ContentEncoding.Equals(name)) { header = ContentEncoding; return true; }
-                if (ProxyConnection.Equals(name)) { header = ProxyConnection; return true; }
-                return false;
+                return TryAssign(name, ContentEncoding, ProxyConnection, out header);
             case 17:
-                if (TransferEncoding.Equals(name)) { header = TransferEncoding; return true; }
-                return false;
+                return TryAssign(name, TransferEncoding, out header);
             case 18:
-                if (ProxyAuthenticate.Equals(name)) { header = ProxyAuthenticate; return true; }
-                return false;
+                return TryAssign(name, ProxyAuthenticate, out header);
             case 19:
-                if (ProxyAuthorization.Equals(name)) { header = ProxyAuthorization; return true; }
-                return false;
+                return TryAssign(name, ProxyAuthorization, out header);
             default:
                 return false;
         }
     }
+
+    private static bool TryAssign(ReadOnlySpan<char> name, KnownHeader candidate, out KnownHeader header)
+    {
+        if (candidate.Equals(name))
+        {
+            header = candidate;
+            return true;
+        }
+
+        header = null!;
+        return false;
+    }
+
+    private static bool TryAssign(ReadOnlySpan<char> name, KnownHeader first, KnownHeader second, out KnownHeader header)
+        => TryAssign(name, first, out header) || TryAssign(name, second, out header);
+
+    private static bool TryAssign(ReadOnlySpan<char> name, KnownHeader first, KnownHeader second, KnownHeader third,
+        out KnownHeader header)
+        => TryAssign(name, first, out header) || TryAssign(name, second, third, out header);
+
+    private static bool TryAssign(ReadOnlySpan<char> name, KnownHeader first, KnownHeader second, KnownHeader third,
+        KnownHeader fourth, out KnownHeader header)
+        => TryAssign(name, first, out header) || TryAssign(name, second, third, fourth, out header);
 
     /// <summary>
     ///     Interns frequent header values (<c>keep-alive</c>, <c>close</c>, <c>chunked</c>, …).

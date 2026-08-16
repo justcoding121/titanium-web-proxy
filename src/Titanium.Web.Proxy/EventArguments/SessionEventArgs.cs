@@ -125,8 +125,7 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     internal override void ResetForNextRequest(object? userData, Models.UpstreamHttpProtocol? upstreamHttpProtocol)
     {
-        if (disposed)
-            throw new ObjectDisposedException(nameof(SessionEventArgs));
+        ObjectDisposedException.ThrowIf(disposed, this);
 
         base.ResetForNextRequest(userData, upstreamHttpProtocol);
 
