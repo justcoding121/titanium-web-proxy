@@ -19,11 +19,14 @@ on:
           - compare-terminate
           - compare-same
           - compare-bridges
+          - compare-mitm
           - compare
           - compare-tls
           - reverse-http1
           - nginx-reverse-http1
           - https-mitm
+          - mitm-http2-to-http1
+          - mitm-http3-to-http1
           - reverse-http2
           - reverse-http2-cleartext
           - reverse-http2-to-h2c

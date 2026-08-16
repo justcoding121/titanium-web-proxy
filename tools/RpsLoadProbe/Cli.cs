@@ -137,7 +137,7 @@ internal static class Cli
         if (modeText == null || !TryParseMode(modeText, out var mode) ||
             mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
                 or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
-                or ProbeMode.ExplicitPoolSweep)
+                or ProbeMode.CompareMitm or ProbeMode.ExplicitPoolSweep)
             return Fail("Required: --serve-proxy --mode <single arm>");
         return ServeProxyHost.RunAsync(mode, originHttpPort, originHttpsPort, nginxPath, maxCachedConnections, ct)
             .GetAwaiter().GetResult();
@@ -264,6 +264,15 @@ internal static class Cli
             case "compare-bridges":
                 mode = ProbeMode.CompareBridges;
                 return true;
+            case "compare-mitm":
+                mode = ProbeMode.CompareMitm;
+                return true;
+            case "mitm-http2-to-http1":
+                mode = ProbeMode.MitmHttp2ToHttp1;
+                return true;
+            case "mitm-http3-to-http1":
+                mode = ProbeMode.MitmHttp3ToHttp1;
+                return true;
             case "explicit-pool-sweep":
                 mode = ProbeMode.ExplicitPoolSweep;
                 return true;
@@ -291,6 +300,8 @@ internal static class Cli
               reverse-http1-tls       TWP TLS-terminating reverse -> Kestrel HTTPS (h1)
               nginx-reverse-http1-tls nginx TLS reverse -> same Kestrel HTTPS origin (h1)
               https-mitm              TWP Explicit MITM -> Kestrel HTTPS
+              mitm-http2-to-http1     TWP H2 TLS MITM -> H2→H1 bridge -> Kestrel HTTPS/h1
+              mitm-http3-to-http1     TWP H3 MITM -> bridge -> Kestrel HTTPS/h1
               reverse-http2           TWP Transparent TLS+h2 MITM -> Kestrel HTTPS (h2)
               reverse-http2-cleartext TWP TLS+h2 terminate -> H2→H1 bridge -> Kestrel HTTP/1 (nginx parity)
               reverse-http2-to-h2c     TWP TLS+h2 terminate -> prior-knowledge h2c -> Kestrel HTTP/2 cleartext
@@ -313,6 +324,7 @@ internal static class Cli
               compare-terminate       Fair terminate: H1 TLS, H2→H1, H3→H1 (+ nginx H1/H2)
               compare-same            Same-protocol: H1 cleartext, H1 TLS, H1 MITM, H2 MITM, H3 MITM (+ nginx)
               compare-bridges         Cross-version bridges only (H1↔H2↔H3; no nginx)
+              compare-mitm            MITM matrix: explicit H1, H2/H3 direct, dual-crypto bridges
               explicit-pool-sweep     Fan-out with MaxCachedConnections 4 / 32 / 128
 
             Options:

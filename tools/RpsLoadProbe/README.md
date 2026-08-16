@@ -29,6 +29,14 @@ Client TLS → cleartext origin: TWP/nginx H1 TLS, TWP H2→H1, TWP h2c→H1, ng
 
 Cleartext-origin terminate arms run **origin and proxy in separate processes** so TWP is not sharing a ThreadPool/GC with Kestrel the way a separate nginx process does not.
 
+## MITM matrix (dual-crypto)
+
+```powershell
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-mitm
+```
+
+Explicit H1 MITM, transparent H2/H3 MITM, H2→H1 / H3→H1 MITM to HTTPS origins, and dual-crypto bridges (H1↔H2↔H3). nginx cannot MITM — these arms are TWP-only.
+
 ## Bridge matrix (cross-version)
 
 ```powershell

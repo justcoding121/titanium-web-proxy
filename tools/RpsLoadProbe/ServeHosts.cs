@@ -53,6 +53,7 @@ internal static class ServeProxyHost
             or ProbeMode.ReverseHttp11ToHttp2 or ProbeMode.ReverseHttp1ToHttp3
             or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.ReverseHttp3ToHttp2
             or ProbeMode.ReverseH2c or ProbeMode.ReverseH2cToH3
+            or ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1
             or ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi)
         {
             ProbeLog.Error(
@@ -232,6 +233,8 @@ internal static class ServeProxyHost
         ProbeMode.ReverseHttp1ToHttp3 => "reverse-http1-to-http3",
         ProbeMode.ReverseHttp2ToHttp3 => "reverse-http2-to-http3",
         ProbeMode.ReverseHttp3ToHttp2 => "reverse-http3-to-http2",
+        ProbeMode.MitmHttp2ToHttp1 => "mitm-http2-to-http1",
+        ProbeMode.MitmHttp3ToHttp1 => "mitm-http3-to-http1",
         ProbeMode.ExplicitHttp1Multi => "explicit-http1-multi",
         ProbeMode.ExplicitHttp2Multi => "explicit-http2-multi",
         ProbeMode.Compare => "compare",
@@ -240,6 +243,7 @@ internal static class ServeProxyHost
         ProbeMode.CompareTerminate => "compare-terminate",
         ProbeMode.CompareSame => "compare-same",
         ProbeMode.CompareBridges => "compare-bridges",
+        ProbeMode.CompareMitm => "compare-mitm",
         ProbeMode.ExplicitPoolSweep => "explicit-pool-sweep",
         _ => mode.ToString()
     };
@@ -426,6 +430,18 @@ internal static class ServeHost
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, [], twp.ListenUrl, null,
                         twp.ListenUrl, [twp.ListenUrl], null, "2.0");
                 }
+                case ProbeMode.MitmHttp2ToHttp1:
+                {
+                    var origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = false,
+                        EnableHttps = true,
+                        HttpsProtocols = HttpProtocols.Http1
+                    }, cancellationToken);
+                    var twp = TwpProxyHost.StartMitmHttp2ToHttp1(origin.HttpsPort);
+                    return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, [], twp.ListenUrl, null,
+                        twp.ListenUrl, [twp.ListenUrl], null, "2.0");
+                }
                 case ProbeMode.ReverseHttp2Cleartext:
                 {
                     // nginx parity: client TLS+h2 → terminate → cleartext HTTP/1 origin via H2→H1 bridge.
@@ -508,6 +524,22 @@ internal static class ServeHost
                     return new ServeStack(origin, twp, twp, $"quic://localhost:{origin.Port}/",
                         $"quic://localhost:{origin.Port}/", [], twp.ListenUrl, null, twp.ListenUrl, [twp.ListenUrl],
                         null, "3.0", loadGenerator: "quic-http3", quicPort: twp.Port, originQuicPort: origin.Port);
+                }
+                case ProbeMode.MitmHttp3ToHttp1:
+                {
+                    if (!System.Net.Quic.QuicListener.IsSupported)
+                        throw new PlatformNotSupportedException("QuicListener is not supported.");
+
+                    var origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = false,
+                        EnableHttps = true,
+                        HttpsProtocols = HttpProtocols.Http1
+                    }, cancellationToken);
+                    var twp = TwpProxyHost.StartMitmHttp3ToHttp1(origin.HttpsPort);
+                    return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, [], twp.ListenUrl, null,
+                        twp.ListenUrl, [twp.ListenUrl], null, "3.0", loadGenerator: "quic-http3",
+                        quicPort: twp.Port);
                 }
                 case ProbeMode.ReverseHttp3Cleartext:
                 {

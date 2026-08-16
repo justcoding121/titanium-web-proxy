@@ -113,6 +113,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         or ProbeMode.ReverseHttp11ToHttp2 or ProbeMode.ReverseHttp1ToHttp3
         or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.ReverseHttp3ToHttp2
         or ProbeMode.ReverseH2c or ProbeMode.ReverseH2cToH3
+        or ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1
         or ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi;
 
     private static async Task<ChildProcessStack> StartCombinedServeAsync(string exe, ProbeMode mode,

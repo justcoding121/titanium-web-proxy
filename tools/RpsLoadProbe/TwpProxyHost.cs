@@ -323,6 +323,63 @@ internal sealed class TwpProxyHost : IDisposable
         return new TwpProxyHost(proxy, endPoint.Port, $"https://localhost:{endPoint.Port}/", isExplicitProxy: false);
     }
 
+    /// <summary>
+    /// Client H2 TLS → H2→H1 bridge → origin HTTPS HTTP/1 (MITM: decrypt client, TLS to origin).
+    /// </summary>
+    public static TwpProxyHost StartMitmHttp2ToHttp1(int originHttpsPort)
+    {
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpsPort,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeSslAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
+        return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
+    /// <summary>
+    /// Client H3 QUIC → bridge → origin HTTPS HTTP/1 (MITM: decrypt client, TLS to origin).
+    /// </summary>
+    public static TwpProxyHost StartMitmHttp3ToHttp1(int originHttpsPort)
+    {
+        if (!QuicListener.IsSupported)
+            throw new PlatformNotSupportedException("QuicListener is not supported on this platform.");
+
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: true);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = originHttpsPort,
+            GenericCertificateName = "localhost",
+            MaxInboundBidirectionalStreams = 256,
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeQuicAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        return new TwpProxyHost(proxy, endPoint.Port, $"https://localhost:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
     public static TwpProxyHost StartHttpsMitm(int? maxCachedConnections = null)
     {
         var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false, maxCachedConnections);

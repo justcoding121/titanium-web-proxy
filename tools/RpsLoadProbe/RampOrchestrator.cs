@@ -34,6 +34,10 @@ internal enum ProbeMode
     ReverseHttp2ToHttp3,
     /// <summary>Client H3 → H3→H2 bridge → origin HTTPS h2.</summary>
     ReverseHttp3ToHttp2,
+    /// <summary>Client H2 TLS → H2→H1 bridge → origin HTTPS HTTP/1 (MITM, both sides TLS).</summary>
+    MitmHttp2ToHttp1,
+    /// <summary>Client H3 QUIC → bridge → origin HTTPS HTTP/1 (MITM, both sides crypto).</summary>
+    MitmHttp3ToHttp1,
     ExplicitHttp1Multi,
     ExplicitHttp2Multi,
     Compare,
@@ -47,6 +51,10 @@ internal enum ProbeMode
     CompareSame,
     /// <summary>All implemented cross-version bridges under load (no nginx).</summary>
     CompareBridges,
+    /// <summary>
+    /// MITM-only matrix: explicit H1 MITM, transparent H2/H3 MITM, and dual-crypto bridges (no nginx).
+    /// </summary>
+    CompareMitm,
     ExplicitPoolSweep
 }
 
@@ -97,7 +105,8 @@ internal static class RampOrchestrator
             var removed = arms.RemoveAll(a =>
                 a.Mode is ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext
                     or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.ReverseHttp2ToHttp3
-                    or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.ReverseH2cToH3);
+                    or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.ReverseH2cToH3
+                    or ProbeMode.MitmHttp3ToHttp1);
             if (removed > 0)
                 ProbeLog.Info("QuicListener is not supported on this host — skipping HTTP/3 arms.");
         }
@@ -315,6 +324,22 @@ internal static class RampOrchestrator
                 new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null, "H3H1"),
                 new("twp-reverse-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null, "H3H2")
             ],
+            ProbeMode.CompareMitm =>
+            [
+                new("twp-https-mitm", ProbeMode.HttpsMitm, null, "MITM"),
+                new("twp-reverse-http2", ProbeMode.ReverseHttp2, null, "H2H2"),
+                new("twp-mitm-http2-to-http1", ProbeMode.MitmHttp2ToHttp1, null, "H2H1M"),
+                new("twp-reverse-http3", ProbeMode.ReverseHttp3, null, "H3H3"),
+                new("twp-mitm-http3-to-http1", ProbeMode.MitmHttp3ToHttp1, null, "H3H1M"),
+                new("twp-reverse-http11-to-http2", ProbeMode.ReverseHttp11ToHttp2, null, "H1H2"),
+                new("twp-reverse-http1-to-http3", ProbeMode.ReverseHttp1ToHttp3, null, "H1H3"),
+                new("twp-reverse-http2-to-http3", ProbeMode.ReverseHttp2ToHttp3, null, "H2H3"),
+                new("twp-reverse-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null, "H3H2")
+            ],
+            ProbeMode.MitmHttp2ToHttp1 =>
+                [new("twp-mitm-http2-to-http1", ProbeMode.MitmHttp2ToHttp1, null, "H2H1M")],
+            ProbeMode.MitmHttp3ToHttp1 =>
+                [new("twp-mitm-http3-to-http1", ProbeMode.MitmHttp3ToHttp1, null, "H3H1M")],
             ProbeMode.ExplicitPoolSweep =>
             [
                 new("twp-explicit-http1-multi-c4", ProbeMode.ExplicitHttp1Multi, 4, "A"),
@@ -437,10 +462,11 @@ internal static class RampOrchestrator
             options.HttpsMitmP99MsSlo,
         ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c
             or ProbeMode.ReverseH2c or ProbeMode.ReverseH2cToH2c or ProbeMode.ReverseH2cToH1
-            or ProbeMode.NginxReverseHttp2 or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.ReverseH2cToH3 =>
+            or ProbeMode.NginxReverseHttp2 or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.ReverseH2cToH3
+            or ProbeMode.MitmHttp2ToHttp1 =>
             options.Http2P99MsSlo,
         ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext or ProbeMode.ReverseHttp3ToHttp2
-            or ProbeMode.ReverseHttp1ToHttp3 => options.Http3P99MsSlo,
+            or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.MitmHttp3ToHttp1 => options.Http3P99MsSlo,
         _ => options.Http1P99MsSlo
     };
 
