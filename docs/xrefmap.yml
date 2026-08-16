@@ -5041,6 +5041,19 @@ references:
   fullName.vb: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.New
   nameWithType: TransparentBaseProxyEndPoint.TransparentBaseProxyEndPoint
   nameWithType.vb: TransparentBaseProxyEndPoint.New
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardCleartext
+  name: ForwardCleartext
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardCleartext
+  commentId: P:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardCleartext
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardCleartext
+  nameWithType: TransparentBaseProxyEndPoint.ForwardCleartext
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardCleartext*
+  name: ForwardCleartext
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardCleartext_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardCleartext
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardCleartext
+  nameWithType: TransparentBaseProxyEndPoint.ForwardCleartext
 - uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardHost
   name: ForwardHost
   href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_ForwardHost
