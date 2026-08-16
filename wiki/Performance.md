@@ -75,32 +75,32 @@ nginx/Windows is a limited port. Use it for **same-OS** comparison only — not 
 
 ## Linux — Titanium vs nginx
 
-Median of **3 repeats** from Actions runs [31947404658](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31947404658) (`compare-same`), [31950003407](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31950003407) (`compare-mitm`, post H3→H1 pool fix), [31944381620](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31944381620) (`compare-terminate`), [31944382877](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31944382877) (`compare-bridges`). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** The RPS workflow installs `libmsquic` (`QuicListener.IsSupported=true` on `ubuntu-latest`).
+Median of **3 repeats** from Actions runs [31954143134](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31954143134) (`compare-same`), [31954144794](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31954144794) (`compare-terminate`), [31955723330](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31955723330) (`compare-mitm`), [31955725199](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31955725199) (`compare-bridges`). Ceiling control: [31954146336](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31954146336) (`compare-ceiling`). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. All published TWP arms **0% error**. **Linux nginx is the authoritative nginx baseline.** The RPS workflow installs `libmsquic` (`QuicListener.IsSupported=true` on `ubuntu-latest`).
 
-**Why nginx still leads on H1 plain reverse (~0.66×):** fair harness (split processes, same Kestrel origin). Absolute RPS swings by GHA VM; prefer the **ratio**. TWP reverse cleartext still runs the full MITM session pipeline per keep-alive GET — nginx `proxy_pass` is a thin C reverse path.
+**Why nginx still leads on H1 plain reverse (~0.71×):** fair harness (split processes, same Kestrel origin). Absolute RPS swings by GHA VM; prefer the **ratio**. A bare C# HTTP/1 reverse on the same job is ~**0.81×** nginx (`compare-ceiling`) — most of the gap is managed runtime vs nginx’s thin C `proxy_pass`, not remaining TWP session work.
 
 | Mode | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | Winner |
 |---|---|---|---:|---:|---:|---:|---|
-| Reverse | HTTP/1 · plain | HTTP/1 · plain | **25,492** | **25,492** | **38,505** | **38,505** | **nginx** |
-| Reverse | HTTP/1 · TLS | HTTP/1 · plain | **18,345** | **18,345** | **27,565** | **27,565** | **nginx** |
-| MITM | HTTP/1 · TLS | HTTP/1 · TLS | **19,080** | **19,080** | *Not possible* (no MITM) | *Not possible* | |
-| Reverse | HTTP/2 · TLS | HTTP/1 · plain | **11,233** | **11,233** | **13,545** | **19,079** | **nginx** |
-| MITM | HTTP/2 · TLS | HTTP/1 · TLS | **13,679** | **13,679** | *Not possible* (no MITM) | *Not possible* | |
-| MITM | HTTP/2 · TLS | HTTP/2 · TLS | **6,375** | **6,375** | *Not possible* (no MITM) | *Not possible* | |
-| Reverse | HTTP/2 · TLS | HTTP/2 · plain | **12,744** | **12,897** | *Not possible* | *Not possible* | |
-| Reverse | HTTP/2 · plain | HTTP/1 · plain | **32,381** | **32,381** | *Not possible* | *Not possible* | |
-| Reverse | HTTP/2 · plain | HTTP/2 · plain | **7,735** | **7,747** | *Not possible* | *Not possible* | |
-| Reverse | HTTP/2 · plain | HTTP/2 · TLS | **5,715** | **5,731** | *Not possible* | *Not possible* | |
-| Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **19,796** | **19,796** | *Not possible* (no QUIC) | *Not possible* | |
-| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **7,225** | **7,225** | *Not possible* (no QUIC) | *Not possible* | |
-| MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **13,519** | **13,519** | *Not possible* (no QUIC) | *Not possible* | |
-| MITM | HTTP/3 · QUIC | HTTP/2 · TLS | **2,339** | **7,421** | *Not possible* (no QUIC) | *Not possible* | |
-| MITM | HTTP/3 · QUIC | HTTP/3 · QUIC | **10,243** | **10,243** | *Not possible* (no QUIC) | *Not possible* | |
-| MITM | HTTP/1 · TLS | HTTP/2 · TLS | **12,659** | **12,659** | *Not possible* | *Not possible* | |
-| MITM | HTTP/1 · TLS | HTTP/3 · QUIC | **15,367** | **15,367** | *Not possible* (no QUIC) | *Not possible* | |
-| MITM | HTTP/2 · TLS | HTTP/3 · QUIC | **10,491** | **10,491** | *Not possible* (no QUIC) | *Not possible* | |
+| Reverse | HTTP/1 · plain | HTTP/1 · plain | **27,826** | **27,826** | **39,254** | **39,254** | **nginx** |
+| Reverse | HTTP/1 · TLS | HTTP/1 · plain | **29,808** | **29,808** | **44,200** | **44,200** | **nginx** |
+| MITM | HTTP/1 · TLS | HTTP/1 · TLS | **25,493** | **25,493** | *Not possible* (no MITM) | *Not possible* | |
+| Reverse | HTTP/2 · TLS | HTTP/1 · plain | **18,583** | **18,726** | **21,177** | **29,330** | **nginx** |
+| MITM | HTTP/2 · TLS | HTTP/1 · TLS | **17,868** | **17,868** | *Not possible* (no MITM) | *Not possible* | |
+| MITM | HTTP/2 · TLS | HTTP/2 · TLS | **8,508** | **8,508** | *Not possible* (no MITM) | *Not possible* | |
+| Reverse | HTTP/2 · TLS | HTTP/2 · plain | **7,345** | **7,546** | *Not possible* | *Not possible* | |
+| Reverse | HTTP/2 · plain | HTTP/1 · plain | **18,324** | **18,324** | *Not possible* | *Not possible* | |
+| Reverse | HTTP/2 · plain | HTTP/2 · plain | **9,108** | **9,108** | *Not possible* | *Not possible* | |
+| Reverse | HTTP/2 · plain | HTTP/2 · TLS | **5,846** | **5,846** | *Not possible* | *Not possible* | |
+| Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **13,910** | **13,910** | *Not possible* (no QUIC) | *Not possible* | |
+| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **19,981** | **19,981** | *Not possible* (no QUIC) | *Not possible* | |
+| MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **18,153** | **18,153** | *Not possible* (no QUIC) | *Not possible* | |
+| MITM | HTTP/3 · QUIC | HTTP/2 · TLS | **3,049** | **9,909** | *Not possible* (no QUIC) | *Not possible* | |
+| MITM | HTTP/3 · QUIC | HTTP/3 · QUIC | **11,027** | **11,027** | *Not possible* (no QUIC) | *Not possible* | |
+| MITM | HTTP/1 · TLS | HTTP/2 · TLS | **16,783** | **16,783** | *Not possible* | *Not possible* | |
+| MITM | HTTP/1 · TLS | HTTP/3 · QUIC | **19,233** | **19,233** | *Not possible* (no QUIC) | *Not possible* | |
+| MITM | HTTP/2 · TLS | HTTP/3 · QUIC | **13,803** | **13,803** | *Not possible* (no QUIC) | *Not possible* | |
 
-On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.66** (25,492 / 38,505). Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**.
+On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.71** (27,826 / 39,254). H1 TLS terminate ≈ **0.67** (29,808 / 44,200). Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**.
 
 ### Why isn’t HTTP/3 > HTTP/2 > HTTP/1 in raw RPS?
 
