@@ -7,6 +7,8 @@ internal enum ProbeMode
     ReverseHttp1,
     NginxReverseHttp1,
     HttpsMitm,
+    ReverseHttp1Tls,
+    NginxReverseHttp1Tls,
     ReverseHttp2,
     NginxReverseHttp2,
     ReverseHttp3,
@@ -14,6 +16,7 @@ internal enum ProbeMode
     ExplicitHttp2Multi,
     Compare,
     CompareHttp2,
+    CompareTls,
     ExplicitPoolSweep
 }
 
@@ -46,32 +49,33 @@ internal static class RampOrchestrator
         if (nginxExe != null)
             nginxVersion = ProbeNginxVersion(nginxExe);
 
-        Console.WriteLine(MachineInfo.FormatReport(nginxVersion));
-        Console.WriteLine("Close browsers and other heavy apps before a publishable run.");
-        Console.WriteLine("Process split: origin/proxy as children when possible; TLS arms use combined --serve.");
-        Console.WriteLine();
+        ProbeLog.Info(MachineInfo.FormatReport(nginxVersion));
+        ProbeLog.Info("Close browsers and other heavy apps before a publishable run.");
+        ProbeLog.Info("Process split: origin/proxy as children when possible; TLS arms use combined --serve.");
+        ProbeLog.Info(string.Empty);
 
         await using var csv = new StreamWriter(csvPath);
         CsvWriter.WriteHeader(csv);
 
         var arms = ResolveArms(options.Mode, nginxExe != null);
-        if ((options.Mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp2 or ProbeMode.Compare
-                or ProbeMode.CompareHttp2)
+        if ((options.Mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp1Tls
+                or ProbeMode.NginxReverseHttp2 or ProbeMode.Compare or ProbeMode.CompareHttp2
+                or ProbeMode.CompareTls)
             && nginxExe == null)
         {
-            Console.WriteLine(NginxHost.NginxMissingMessage());
-            Console.WriteLine();
+            ProbeLog.Info(NginxHost.NginxMissingMessage());
+            ProbeLog.Info(string.Empty);
         }
 
         foreach (var arm in arms)
         {
-            Console.WriteLine($"--- arm {arm.Name} ---");
+            ProbeLog.Info($"--- arm {arm.Name} ---");
             await RunArmAsync(arm, options, csv, nginxVersion, cancellationToken);
-            Console.WriteLine();
+            ProbeLog.Info(string.Empty);
         }
 
         await csv.FlushAsync(cancellationToken);
-        Console.WriteLine($"CSV: {Path.GetFullPath(csvPath)}");
+        ProbeLog.Info($"CSV: {Path.GetFullPath(csvPath)}");
         return 0;
     }
 
@@ -86,6 +90,10 @@ internal static class RampOrchestrator
                 ? [new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null, "H1")]
                 : [],
             ProbeMode.HttpsMitm => [new("twp-https-mitm", ProbeMode.HttpsMitm, null, "MITM")],
+            ProbeMode.ReverseHttp1Tls => [new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null, "H1TLS")],
+            ProbeMode.NginxReverseHttp1Tls => nginxAvailable
+                ? [new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null, "H1TLS")]
+                : [],
             ProbeMode.ReverseHttp2 => [new("twp-reverse-http2", ProbeMode.ReverseHttp2, null, "B")],
             ProbeMode.NginxReverseHttp2 => nginxAvailable
                 ? [new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null, "B")]
@@ -116,6 +124,21 @@ internal static class RampOrchestrator
                 ]
                 :
                 [
+                    new("twp-reverse-http2", ProbeMode.ReverseHttp2, null, "B"),
+                    new("twp-reverse-http3", ProbeMode.ReverseHttp3, null, "C")
+                ],
+            ProbeMode.CompareTls => nginxAvailable
+                ?
+                [
+                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null, "H1TLS"),
+                    new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null, "H1TLS"),
+                    new("twp-reverse-http2", ProbeMode.ReverseHttp2, null, "B"),
+                    new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null, "B"),
+                    new("twp-reverse-http3", ProbeMode.ReverseHttp3, null, "C")
+                ]
+                :
+                [
+                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null, "H1TLS"),
                     new("twp-reverse-http2", ProbeMode.ReverseHttp2, null, "B"),
                     new("twp-reverse-http3", ProbeMode.ReverseHttp3, null, "C")
                 ],
@@ -153,12 +176,12 @@ internal static class RampOrchestrator
             VersionPolicy = stack.VersionPolicy
         };
 
-        Console.WriteLine(
+        ProbeLog.Info(
             $"  target={stack.TargetUrl} targets={stack.TargetUris.Count} proxy={(stack.ExplicitProxyUrl ?? "(direct-to-listen)")} http={stack.RequestHttpVersion} generator={(useQuic ? "quic-http3" : "dotnet-httpclient")} maxCached={(maxCached?.ToString() ?? "default")}");
 
         foreach (var concurrency in options.ConcurrencySteps)
         {
-            Console.WriteLine($"  warmup c={concurrency} for {options.Warmup.TotalSeconds:F0}s...");
+            ProbeLog.Info($"  warmup c={concurrency} for {options.Warmup.TotalSeconds:F0}s...");
             if (useQuic)
             {
                 var ep = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, stack.QuicPort!.Value);
@@ -173,7 +196,7 @@ internal static class RampOrchestrator
                 await EmbeddedLoadGenerator.WarmupAsync(loadOptions, concurrency, options.Warmup, cancellationToken);
             }
 
-            Console.WriteLine($"  measure c={concurrency} for {options.StepDuration.TotalSeconds:F0}s...");
+            ProbeLog.Info($"  measure c={concurrency} for {options.StepDuration.TotalSeconds:F0}s...");
             LoadResult result;
             if (useQuic)
             {
@@ -194,7 +217,7 @@ internal static class RampOrchestrator
             CsvWriter.WriteRow(csv, arm.Name, result, meetsSlo, nginxVersion, maxCached);
             await csv.FlushAsync(cancellationToken);
 
-            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
                 $"    rps={result.Rps:F0} err%={result.ErrorRatePercent:F3} p50={result.P50Ms:F1}ms p99={result.P99Ms:F1}ms max={result.MaxMs:F1}ms ver={result.NegotiatedVersionHint} slo={(meetsSlo ? "PASS" : "FAIL")}"));
 
             // #region agent log
@@ -212,11 +235,11 @@ internal static class RampOrchestrator
             }
             else if (lastGood != null)
             {
-                Console.WriteLine($"    (breaking-point candidate at c={lastGoodConcurrency})");
+                ProbeLog.Info($"    (breaking-point candidate at c={lastGoodConcurrency})");
             }
         }
 
-        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+        ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
             $"  summary arm={arm.Name} sustainable_rps={(lastGood?.Rps ?? 0):F0} @ c={lastGoodConcurrency} peak_rps={(peak?.Rps ?? 0):F0} @ c={peak?.Concurrency ?? 0} p99_slo_ms={p99Slo:F0}"));
 
         // #region agent log

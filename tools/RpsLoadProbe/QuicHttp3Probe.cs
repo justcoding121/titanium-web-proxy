@@ -177,21 +177,62 @@ internal static class QuicHttp3LoadGenerator
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(duration);
 
-        var sw = Stopwatch.StartNew();
-        var workers = new Task[concurrency];
-        for (var i = 0; i < concurrency; i++)
-        {
-            workers[i] = Task.Run(async () =>
-            {
-                QuicConnection? connection = null;
-                try
-                {
-                    connection = await ConnectAsync(proxyEndPoint, sniHost, cts.Token);
-                    await OpenControlAsync(connection, cts.Token);
-                    DrainInbound(connection, cts.Token);
+        var connectionCount = Math.Clamp(concurrency / 8, 1, 8);
+        var connections = new QuicConnection?[connectionCount];
+        var connectionLocks = new object[connectionCount];
+        for (var i = 0; i < connectionCount; i++)
+            connectionLocks[i] = new object();
 
+        try
+        {
+            for (var c = 0; c < connectionCount; c++)
+            {
+                connections[c] = await ConnectAsync(proxyEndPoint, sniHost, cts.Token);
+                await OpenControlAsync(connections[c]!, cts.Token);
+                DrainInbound(connections[c]!, cts.Token);
+            }
+
+            var sw = Stopwatch.StartNew();
+            var workers = new Task[concurrency];
+            for (var i = 0; i < concurrency; i++)
+            {
+                var workerId = i;
+                workers[i] = Task.Run(async () =>
+                {
+                    var slot = workerId % connectionCount;
                     while (!cts.IsCancellationRequested)
                     {
+                        QuicConnection? connection;
+                        lock (connectionLocks[slot])
+                            connection = connections[slot];
+
+                        if (connection == null)
+                        {
+                            try
+                            {
+                                connection = await ConnectAsync(proxyEndPoint, sniHost, cts.Token);
+                                await OpenControlAsync(connection, cts.Token);
+                                DrainInbound(connection, cts.Token);
+                                lock (connectionLocks[slot])
+                                    connections[slot] = connection;
+                            }
+                            catch (OperationCanceledException) when (cts.IsCancellationRequested)
+                            {
+                                break;
+                            }
+                            catch (Exception ex)
+                            {
+                                if (firstError == null)
+                                {
+                                    firstError = ex.GetType().Name + ": " + ex.Message;
+                                    ProbeLog.Error($"  [quic-h3] {firstError}");
+                                }
+
+                                Interlocked.Increment(ref errors);
+                                break;
+                            }
+                        }
+
                         var requestSw = collectLatency ? Stopwatch.StartNew() : null;
                         try
                         {
@@ -204,7 +245,7 @@ internal static class QuicHttp3LoadGenerator
                                 if (firstError == null)
                                 {
                                     firstError = "non-2xx status=" + status;
-                                    Console.Error.WriteLine($"  [quic-h3] {firstError}");
+                                    ProbeLog.Error($"  [quic-h3] {firstError}");
                                     // #region agent log
                                     DebugSessionLog.Write("C", "QuicHttp3LoadGenerator", "first-error",
                                         new { error = firstError, endpoint = proxyEndPoint.ToString(), authority });
@@ -228,7 +269,7 @@ internal static class QuicHttp3LoadGenerator
                             if (firstError == null)
                             {
                                 firstError = msg;
-                                Console.Error.WriteLine($"  [quic-h3] {firstError}");
+                                ProbeLog.Error($"  [quic-h3] {firstError}");
                                 // #region agent log
                                 DebugSessionLog.Write("C", "QuicHttp3LoadGenerator", "first-error",
                                     new { error = firstError, endpoint = proxyEndPoint.ToString() });
@@ -242,66 +283,67 @@ internal static class QuicHttp3LoadGenerator
                                 latencies!.Add(requestSw.Elapsed.TotalMilliseconds);
                             }
 
-                            try
+                            QuicConnection? dead;
+                            lock (connectionLocks[slot])
                             {
-                                if (connection != null)
-                                    await connection.DisposeAsync();
+                                dead = connections[slot];
+                                connections[slot] = null;
                             }
-                            catch { /* ignore */ }
 
-                            try
+                            if (dead != null)
                             {
-                                connection = await ConnectAsync(proxyEndPoint, sniHost, cts.Token);
-                                await OpenControlAsync(connection, cts.Token);
-                                DrainInbound(connection, cts.Token);
-                            }
-                            catch
-                            {
-                                break;
+                                try
+                                {
+                                    await dead.DisposeAsync();
+                                }
+                                catch
+                                {
+                                    // ignore
+                                }
                             }
                         }
                     }
-                }
-                catch (OperationCanceledException) when (cts.IsCancellationRequested) { }
-                catch (Exception ex)
+                }, CancellationToken.None);
+            }
+
+            await Task.WhenAll(workers);
+            sw.Stop();
+
+            var elapsed = Math.Max(sw.Elapsed.TotalSeconds, 0.001);
+            var total = ok + errors;
+            var samples = latencies?.ToArray() ?? Array.Empty<double>();
+            Array.Sort(samples);
+
+            return new LoadResult(
+                Generator: "quic-http3",
+                Concurrency: concurrency,
+                DurationSeconds: elapsed,
+                Ok: ok,
+                Errors: errors,
+                Rps: ok / elapsed,
+                ErrorRatePercent: total == 0 ? 100 : 100.0 * errors / total,
+                P50Ms: Percentile(samples, 0.50),
+                P99Ms: Percentile(samples, 0.99),
+                MaxMs: samples.Length == 0 ? 0 : samples[^1],
+                NegotiatedVersionHint: "3.0");
+        }
+        finally
+        {
+            for (var c = 0; c < connectionCount; c++)
+            {
+                if (connections[c] != null)
                 {
-                    if (firstError == null)
+                    try
                     {
-                        firstError = ex.GetType().Name + ": " + ex.Message;
-                        // #region agent log
-                        DebugSessionLog.Write("C", "QuicHttp3LoadGenerator", "connect-error",
-                            new { error = firstError });
-                        // #endregion
+                        await connections[c]!.DisposeAsync();
+                    }
+                    catch
+                    {
+                        // ignore
                     }
                 }
-                finally
-                {
-                    if (connection != null)
-                        await connection.DisposeAsync();
-                }
-            }, CancellationToken.None);
+            }
         }
-
-        await Task.WhenAll(workers);
-        sw.Stop();
-
-        var elapsed = Math.Max(sw.Elapsed.TotalSeconds, 0.001);
-        var total = ok + errors;
-        var samples = latencies?.ToArray() ?? Array.Empty<double>();
-        Array.Sort(samples);
-
-        return new LoadResult(
-            Generator: "quic-http3",
-            Concurrency: concurrency,
-            DurationSeconds: elapsed,
-            Ok: ok,
-            Errors: errors,
-            Rps: ok / elapsed,
-            ErrorRatePercent: total == 0 ? 100 : 100.0 * errors / total,
-            P50Ms: Percentile(samples, 0.50),
-            P99Ms: Percentile(samples, 0.99),
-            MaxMs: samples.Length == 0 ? 0 : samples[^1],
-            NegotiatedVersionHint: "3.0");
     }
 
     private static async Task<QuicConnection> ConnectAsync(IPEndPoint endpoint, string sniHost,

@@ -43,13 +43,13 @@ const string TimingScript =
 var options = ProbeOptions.Parse(args);
 if (options is null)
 {
-    ProbeOptions.PrintUsage();
+    await ProbeOptions.PrintUsageAsync();
     return 2;
 }
 
 var result = await RunAsync(options);
 
-Console.WriteLine(
+await Console.Out.WriteLineAsync(
     $"{options.Arm,-12} {options.Site,-34} trial={options.Trial} ok={result.Ok,-5} " +
     $"wall_ms={result.WallMs,7:F0} ttfb_ms={result.TtfbMs,7:F0} load_ms={result.LoadMs,7:F0} " +
     $"res={result.ResourceCount,3} >1s={result.ResourcesOver1S,2} >3s={result.ResourcesOver3S,2} " +
@@ -369,9 +369,8 @@ internal sealed record ProbeOptions(
             new Uri(url).Host, trial, timeout, settle, headless, csv);
     }
 
-    public static void PrintUsage()
-    {
-        Console.Error.WriteLine(
+    public static Task PrintUsageAsync() =>
+        Console.Error.WriteLineAsync(
             """
             Usage: ChromeLoadProbe --url <url> [options]
 
@@ -385,7 +384,6 @@ internal sealed record ProbeOptions(
               --csv <path>         Append one row per run, creating the header if needed.
               --headful            Launch a visible window instead of headless.
             """);
-    }
 }
 
 /// <summary>

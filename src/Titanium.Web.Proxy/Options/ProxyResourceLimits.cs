@@ -160,7 +160,7 @@ public sealed class ProxyResourceLimits
         maxDecodedBodyBytes: null,
         maxDecompressionRatio: 200,
         maxConcurrentClients: null,
-        maxConcurrentStreamsPerConnection: 100,
+        maxConcurrentStreamsPerConnection: 256,
         maxPeerInitiatedIncompleteStreamResets: 100,
         maxOpenHeaderBlockFrames: 128,
         maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(10),

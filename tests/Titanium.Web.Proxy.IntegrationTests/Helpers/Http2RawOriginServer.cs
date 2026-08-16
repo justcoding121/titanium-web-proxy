@@ -123,7 +123,7 @@ internal sealed class Http2RawOriginServer : IDisposable
                 {
                     // swallow - test assertions on the client/proxy side will surface the failure, but log
                     // for diagnostics since an exception here otherwise fails silently.
-                    Console.WriteLine("Http2RawOriginServer connection handler failed: " + ex);
+                    System.Diagnostics.Debug.WriteLine("Http2RawOriginServer connection handler failed: " + ex);
                 }
                 finally
                 {

@@ -61,9 +61,9 @@ public class CertificateStoreIsolationTests
         // Product root may be in CurrentUser\Root (from the Basic example), and WinINET may point
         // at a live example on :8000. GetReverseProxyClient must still reach the in-process reverse
         // proxy and accept its test-CA-signed leaf.
-        Console.WriteLine(
+        System.Diagnostics.Debug.WriteLine(
             $"Product default root in user store: {UserStoreContainsProductDefaultRoot()}");
-        Console.WriteLine(
+        System.Diagnostics.Debug.WriteLine(
             $"DefaultProxy for localhost: {HttpClient.DefaultProxy.GetProxy(new Uri("https://localhost:9/"))}");
 
         using var testSuite = new TestSuite(sharedServer);

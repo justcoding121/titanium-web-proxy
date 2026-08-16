@@ -188,7 +188,8 @@ public partial class ProxyServer
                         clientStream = new HttpClientStream(this, clientStream.Connection, sslStream, BufferPool,
                             cancellationToken);
                         sslStream = null; // clientStream was created, no need to keep SSL stream reference
-                        isHttps = true;
+                        // Classic reverse-proxy TLS termination: decrypt for the client, cleartext to origin.
+                        isHttps = !endPoint.ForwardCleartext;
                     }
                     catch (Exception e)
                     {

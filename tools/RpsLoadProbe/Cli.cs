@@ -79,7 +79,7 @@ internal static class Cli
                     durationSec = int.Parse(RequireValue(args, ref i, "--duration-sec"), CultureInfo.InvariantCulture);
                     break;
                 default:
-                    Console.Error.WriteLine($"Unknown argument: {args[i]}");
+                    ProbeLog.Error($"Unknown argument: {args[i]}");
                     PrintHelp();
                     return 2;
             }
@@ -111,7 +111,7 @@ internal static class Cli
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine(ex);
+            ProbeLog.Error(ex.ToString());
             return 1;
         }
     }
@@ -127,7 +127,7 @@ internal static class Cli
         int? maxCachedConnections, CancellationToken ct)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode) ||
-            mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.ExplicitPoolSweep)
+            mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls or ProbeMode.ExplicitPoolSweep)
             return Fail("Required: --serve-proxy --mode <single arm>");
         return ServeProxyHost.RunAsync(mode, originHttpPort, originHttpsPort, nginxPath, maxCachedConnections, ct)
             .GetAwaiter().GetResult();
@@ -156,7 +156,7 @@ internal static class Cli
 
     private static int Fail(string message)
     {
-        Console.Error.WriteLine(message);
+        ProbeLog.Error(message);
         PrintHelp();
         return 2;
     }
@@ -181,6 +181,12 @@ internal static class Cli
             case "https-mitm":
                 mode = ProbeMode.HttpsMitm;
                 return true;
+            case "reverse-http1-tls":
+                mode = ProbeMode.ReverseHttp1Tls;
+                return true;
+            case "nginx-reverse-http1-tls":
+                mode = ProbeMode.NginxReverseHttp1Tls;
+                return true;
             case "reverse-http2":
                 mode = ProbeMode.ReverseHttp2;
                 return true;
@@ -202,6 +208,9 @@ internal static class Cli
             case "compare-http2":
                 mode = ProbeMode.CompareHttp2;
                 return true;
+            case "compare-tls":
+                mode = ProbeMode.CompareTls;
+                return true;
             case "explicit-pool-sweep":
                 mode = ProbeMode.ExplicitPoolSweep;
                 return true;
@@ -213,7 +222,7 @@ internal static class Cli
 
     private static void PrintHelp()
     {
-        Console.WriteLine(
+        ProbeLog.Info(
             """
             RpsLoadProbe — saturation RPS harness for Titanium.Web.Proxy (and nginx control arm)
 
@@ -226,6 +235,8 @@ internal static class Cli
             Modes:
               reverse-http1           TWP TransparentProxyEndPoint -> Kestrel HTTP/1
               nginx-reverse-http1     nginx proxy_pass -> same Kestrel HTTP/1 origin
+              reverse-http1-tls       TWP TLS-terminating reverse -> Kestrel HTTPS (h1)
+              nginx-reverse-http1-tls nginx TLS reverse -> same Kestrel HTTPS origin (h1)
               https-mitm              TWP Explicit MITM -> Kestrel HTTPS
               reverse-http2           TWP Transparent TLS+h2 -> Kestrel HTTPS (h2)
               nginx-reverse-http2     nginx ssl+http2 -> same Kestrel HTTPS origin
@@ -234,6 +245,7 @@ internal static class Cli
               explicit-http2-multi    Same fan-out forcing HTTP/2
               compare                 Sequential HTTP/1 compare (+ MITM)
               compare-http2           Sequential: TWP h2, nginx h2, TWP h3
+              compare-tls             Sequential: TWP h1-tls, nginx h1-tls, TWP h2, nginx h2, TWP h3
               explicit-pool-sweep     Fan-out with MaxCachedConnections 4 / 32 / 128
 
             Options:

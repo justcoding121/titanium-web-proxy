@@ -269,11 +269,15 @@ public partial class ProxyServer
                 customUpStreamProxy = await GetCustomUpStreamProxyFunc(sessionArgs);
             sessionArgs.CustomUpStreamProxyUsed = customUpStreamProxy;
 
+            var upstreamIsHttps = sessionArgs.HttpClient.Request.IsHttps;
+            if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
+                upstreamIsHttps = false;
+
             var newConnection = await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
-                HttpHeader.Version11, true, SslExtensions.Http11ProtocolAsList, false, sessionArgs,
+                HttpHeader.Version11, upstreamIsHttps, SslExtensions.Http11ProtocolAsList, false, sessionArgs,
                 sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint,
-                customUpStreamProxy ?? UpStreamHttpsProxy, false, false, cancellationToken, connectHost,
-                connectPort)
+                customUpStreamProxy ?? (upstreamIsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy), false, false,
+                cancellationToken, connectHost, connectPort)
                 ?? throw new InvalidOperationException($"Failed to establish an HTTP/1.1 origin connection to '{remoteHostName}:{remotePort}'.");
             connection = newConnection;
 

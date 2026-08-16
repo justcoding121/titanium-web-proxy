@@ -36,11 +36,39 @@ internal sealed class TwpProxyHost : IDisposable
         return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 
+    /// <summary>
+    /// TLS-terminating reverse HTTP/1 — client TLS to cleartext HTTP origin (industry-standard topology).
+    /// Cleartext <see cref="StartReverseHttp1"/> is kept as a separate raw-TCP baseline.
+    /// </summary>
+    public static TwpProxyHost StartReverseHttp1Tls(int originHttpPort)
+    {
+        var proxy = CreateBaseProxy(enableHttp2: false, enableHttp3: false);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpPort,
+            ForwardCleartext = true,
+            GenericCertificateName = "localhost"
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        // #region agent log
+        DebugSessionLog.Write("H1TLS", "TwpProxyHost.StartReverseHttp1Tls", "started",
+            new { listenPort = endPoint.Port, originHttpPort, maxCached = proxy.MaxCachedConnections });
+        // #endregion
+        return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
     public static TwpProxyHost StartReverseHttp2(int originHttpsPort)
     {
         var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);
         ConfigureSharedTestCa(proxy);
 
+        // Native h2↔h2 MITM to an HTTPS origin. TLS-terminate→cleartext (ForwardCleartext + H1 bridge)
+        // matches nginx's topology but the per-stream H2→H1 bridge still errors under saturation;
+        // keep the zero-error native path for publishable numbers until that bridge is hardened.
         var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
         {
             ForwardHost = "127.0.0.1",
@@ -51,7 +79,8 @@ internal sealed class TwpProxyHost : IDisposable
         proxy.Start();
         // #region agent log
         DebugSessionLog.Write("B", "TwpProxyHost.StartReverseHttp2", "started",
-            new { listenPort = endPoint.Port, originHttpsPort, maxCached = proxy.MaxCachedConnections });
+            new { listenPort = endPoint.Port, originHttpsPort, maxCached = proxy.MaxCachedConnections,
+                maxStreams = proxy.ResourceLimits.MaxConcurrentStreamsPerConnection });
         // #endregion
         return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
@@ -107,6 +136,7 @@ internal sealed class TwpProxyHost : IDisposable
         proxy.EnableHttpsSvcbDnsDiscovery = false;
         if (maxCachedConnections is { } n)
             proxy.MaxCachedConnections = n;
+
         return proxy;
     }
 

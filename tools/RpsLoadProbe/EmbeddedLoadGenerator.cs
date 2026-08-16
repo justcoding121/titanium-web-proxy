@@ -55,7 +55,7 @@ internal static class EmbeddedLoadGenerator
         TimeSpan duration, bool collectLatency, CancellationToken cancellationToken)
     {
         var targets = ResolveTargets(options);
-        using var handler = CreateHandler(options.ExplicitProxyUrl);
+        using var handler = CreateHandler(options.ExplicitProxyUrl, options.HttpVersion);
         using var client = new HttpClient(handler)
         {
             Timeout = TimeSpan.FromSeconds(30),
@@ -163,14 +163,14 @@ internal static class EmbeddedLoadGenerator
         throw new ArgumentException("LoadRequestOptions requires Target or Targets.");
     }
 
-    private static SocketsHttpHandler CreateHandler(string? explicitProxyUrl)
+    private static SocketsHttpHandler CreateHandler(string? explicitProxyUrl, Version httpVersion)
     {
         var handler = new SocketsHttpHandler
         {
             MaxConnectionsPerServer = 256,
             PooledConnectionLifetime = TimeSpan.FromMinutes(10),
             PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
-            EnableMultipleHttp2Connections = true,
+            EnableMultipleHttp2Connections = httpVersion.Major < 2,
             SslOptions = new SslClientAuthenticationOptions
             {
                 RemoteCertificateValidationCallback = static (_, _, _, _) => true

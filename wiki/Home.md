@@ -364,7 +364,9 @@ QUIC endpoint is visible without extra config.
 |---|---|---|---|
 | `EnableConnectionPool` | `true` | — | Live pool switch; prefer this over unused `ProxyResourceLimits.ConnectionPoolingEnabled`. |
 | `EnableIpv6UnreachableSoftSkip` | `true` | disable for strict IPv6 preference | After one IPv6 `NetworkUnreachable`-class Happy Eyeballs failure, skip IPv6 addresses for 30s (filter after address-family interleave). |
-| `MaxCachedConnections` | `128` | raise for high fan-out **per origin** | Live knob on `ProxyServer`. Cap is **per upstream host**, not process-wide — reverse (one hot origin) and explicit (many origins) share the same default safely. Idle entries expire with `ConnectionTimeOutSeconds`. |
+| `MaxCachedConnections` | `128` | raise for high fan-out **per origin** | Live knob on `ProxyServer`. Cap is **per upstream host**, not process-wide. No upper clamp — set `512`/`1024` on large hosts. Keep in sync with `ResourceLimits.MaxCachedConnectionsPerHost` when you replace the snapshot. |
+| `ResourceLimits.MaxConcurrentStreamsPerConnection` | `256` | raise for heavy H2 fan-in | Replace via `ProxyResourceLimits.Create(...)` — validated positive only, no max ceiling. |
+| `ForwardCleartext` (transparent) | `false` | `true` for TLS-terminating reverse proxy | With `DecryptSsl`, terminate client TLS and open **cleartext** TCP to `ForwardHost`/`ForwardPort`. |
 | `EnableTcpServerConnectionPrefetch` | `true` | — | Overlaps origin connect with client work. |
 | `NoDelay` | `true` | — | Disables Nagle. |
 | `EnableTcpKeepAlive` | `true` | — | NAT-friendly for long tunnels. |

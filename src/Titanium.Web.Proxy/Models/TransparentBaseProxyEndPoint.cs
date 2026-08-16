@@ -31,6 +31,14 @@ public abstract class TransparentBaseProxyEndPoint : ProxyEndPoint
     /// </summary>
     public int? ForwardPort { get; set; }
 
+    /// <summary>
+    ///     When <see langword="true" /> together with <see cref="ProxyEndPoint.DecryptSsl" />, the proxy
+    ///     terminates client TLS and opens a <b>cleartext</b> upstream TCP connection to
+    ///     <see cref="ForwardHost" />/<see cref="ForwardPort" /> (classic TLS-terminating reverse proxy).
+    ///     Defaults to <see langword="false" /> (re-encrypt to the origin when the client spoke HTTPS).
+    /// </summary>
+    public bool ForwardCleartext { get; set; }
+
     internal abstract Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
         BeforeSslAuthenticateEventArgs connectArgs, ILogger logger);
 }

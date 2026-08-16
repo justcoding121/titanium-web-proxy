@@ -517,7 +517,10 @@ public partial class ProxyServer : IDisposable
     ///     to each peer, rather than admitting purely against whatever the origin advertised.
     ///     Assign a new <see cref="ProxyResourceLimits" /> (constructed via
     ///     <see cref="ProxyResourceLimits.Create" />) to override the <see cref="ProxyResourceLimits.Default" />
-    ///     values used otherwise.
+    ///     snapshot. There is no artificial upper clamp: high-CPU/RAM hosts may pass larger
+    ///     <c>maxCachedConnectionsPerHost</c>, <c>maxConcurrentStreamsPerConnection</c>, etc. as needed.
+    ///     The live TCP pool depth knob <see cref="MaxCachedConnections" /> remains independently settable
+    ///     and should usually be kept in sync with <see cref="ProxyResourceLimits.MaxCachedConnectionsPerHost" />.
     /// </summary>
     public ProxyResourceLimits ResourceLimits { get; set; } = ProxyResourceLimits.Default;
 

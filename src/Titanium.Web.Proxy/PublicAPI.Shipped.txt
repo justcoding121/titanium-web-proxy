@@ -572,6 +572,8 @@ Titanium.Web.Proxy.Models.SocksProxyEndPoint.AuthenticateUserFunc.set -> void
 Titanium.Web.Proxy.Models.SocksProxyEndPoint.BeforeSslAuthenticate -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.BeforeSslAuthenticateEventArgs!>?
 Titanium.Web.Proxy.Models.SocksProxyEndPoint.SocksProxyEndPoint(System.Net.IPAddress! ipAddress, int port, bool decryptSsl = true) -> void
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardCleartext.get -> bool
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardCleartext.set -> void
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardHost.get -> string?
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardHost.set -> void
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.ForwardPort.get -> int?

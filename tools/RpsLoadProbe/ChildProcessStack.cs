@@ -242,7 +242,6 @@ internal sealed class ChildProcessStack : IAsyncDisposable
                 continue;
             }
 
-            Console.WriteLine($"  [child] {line}");
             var eq = line.IndexOf('=');
             if (eq > 0)
             {
@@ -264,6 +263,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         }
 
         TryKill(process);
+        ProbeLog.Error("Timed out waiting for child READY marker.");
         throw new TimeoutException("Timed out waiting for child READY marker.");
     }
 

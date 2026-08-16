@@ -8,11 +8,10 @@ internal static class ServeOriginHost
     public static async Task<int> RunAsync(bool enableHttps, CancellationToken cancellationToken)
     {
         await using var origin = await OriginServer.StartAsync(enableHttps, cancellationToken);
-        Console.WriteLine($"origin_http={origin.HttpUrl}");
+        await ProbeLog.WriteProtocolLineAsync($"origin_http={origin.HttpUrl}", cancellationToken);
         if (enableHttps)
-            Console.WriteLine($"origin_https={origin.HttpsUrl}");
-        Console.WriteLine("READY");
-        Console.Out.Flush();
+            await ProbeLog.WriteProtocolLineAsync($"origin_https={origin.HttpsUrl}", cancellationToken);
+        await ProbeLog.WriteProtocolLineAsync("READY", cancellationToken);
 
         try
         {
@@ -31,17 +30,18 @@ internal static class ServeProxyHost
     public static async Task<int> RunAsync(ProbeMode mode, int originHttpPort, int originHttpsPort,
         string? nginxPath, int? maxCachedConnections, CancellationToken cancellationToken)
     {
-        if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.ExplicitPoolSweep)
+        if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls or ProbeMode.ExplicitPoolSweep)
         {
-            Console.Error.WriteLine("--serve-proxy requires a single arm mode");
+            ProbeLog.Error("--serve-proxy requires a single arm mode");
             return 2;
         }
 
         // TLS arms need shared CA with origin — use --serve combined instead.
-        if (mode is ProbeMode.ReverseHttp2 or ProbeMode.NginxReverseHttp2 or ProbeMode.ReverseHttp3
+        if (mode is ProbeMode.ReverseHttp1Tls or ProbeMode.NginxReverseHttp1Tls
+            or ProbeMode.ReverseHttp2 or ProbeMode.NginxReverseHttp2 or ProbeMode.ReverseHttp3
             or ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi)
         {
-            Console.Error.WriteLine(
+            ProbeLog.Error(
                 $"Mode {mode} requires --serve (combined origin+proxy) so the test CA is shared.");
             return 2;
         }
@@ -80,17 +80,16 @@ internal static class ServeProxyHost
 
         using (proxy)
         {
-            Console.WriteLine($"mode={ModeName(mode)}");
-            Console.WriteLine($"listen={listenUrl}");
+            await ProbeLog.WriteProtocolLineAsync($"mode={ModeName(mode)}", cancellationToken);
+            await ProbeLog.WriteProtocolLineAsync($"listen={listenUrl}", cancellationToken);
             if (explicitProxy != null)
-                Console.WriteLine($"explicit_proxy={explicitProxy}");
-            Console.WriteLine($"target_for_client={targetForClient}");
+                await ProbeLog.WriteProtocolLineAsync($"explicit_proxy={explicitProxy}", cancellationToken);
+            await ProbeLog.WriteProtocolLineAsync($"target_for_client={targetForClient}", cancellationToken);
             if (nginxVersion != null)
-                Console.WriteLine($"nginx={nginxVersion}");
+                await ProbeLog.WriteProtocolLineAsync($"nginx={nginxVersion}", cancellationToken);
             if (maxCachedConnections is { } m)
-                Console.WriteLine($"max_cached_connections={m}");
-            Console.WriteLine("READY");
-            Console.Out.Flush();
+                await ProbeLog.WriteProtocolLineAsync($"max_cached_connections={m}", cancellationToken);
+            await ProbeLog.WriteProtocolLineAsync("READY", cancellationToken);
 
             try
             {
@@ -108,6 +107,8 @@ internal static class ServeProxyHost
     {
         ProbeMode.ReverseHttp1 => "reverse-http1",
         ProbeMode.NginxReverseHttp1 => "nginx-reverse-http1",
+        ProbeMode.ReverseHttp1Tls => "reverse-http1-tls",
+        ProbeMode.NginxReverseHttp1Tls => "nginx-reverse-http1-tls",
         ProbeMode.HttpsMitm => "https-mitm",
         ProbeMode.ReverseHttp2 => "reverse-http2",
         ProbeMode.NginxReverseHttp2 => "nginx-reverse-http2",
@@ -116,6 +117,7 @@ internal static class ServeProxyHost
         ProbeMode.ExplicitHttp2Multi => "explicit-http2-multi",
         ProbeMode.Compare => "compare",
         ProbeMode.CompareHttp2 => "compare-http2",
+        ProbeMode.CompareTls => "compare-tls",
         ProbeMode.ExplicitPoolSweep => "explicit-pool-sweep",
         _ => mode.ToString()
     };
@@ -126,55 +128,55 @@ internal static class ServeHost
     public static async Task<int> RunAsync(ProbeMode mode, string? nginxPath, int? maxCachedConnections,
         CancellationToken cancellationToken)
     {
-        if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.ExplicitPoolSweep)
+        if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls or ProbeMode.ExplicitPoolSweep)
         {
-            Console.Error.WriteLine("--serve requires a single mode");
+            ProbeLog.Error("--serve requires a single mode");
             return 2;
         }
 
-        if ((mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp2)
+        if ((mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp1Tls or ProbeMode.NginxReverseHttp2)
             && NginxHost.ResolveNginxExecutable(nginxPath) == null)
         {
-            Console.Error.WriteLine(NginxHost.NginxMissingMessage());
+            ProbeLog.Error(NginxHost.NginxMissingMessage());
             return 3;
         }
 
         await using var stack = await ServeStack.StartAsync(mode, nginxPath, maxCachedConnections, cancellationToken);
-        Console.WriteLine(MachineInfo.FormatReport(stack.NginxVersion));
-        Console.WriteLine($"mode={ServeProxyHost.ModeName(mode)}");
-        Console.WriteLine($"origin_http={stack.OriginHttpUrl}");
+        ProbeLog.Info(MachineInfo.FormatReport(stack.NginxVersion));
+        await ProbeLog.WriteProtocolLineAsync($"mode={ServeProxyHost.ModeName(mode)}", cancellationToken);
+        await ProbeLog.WriteProtocolLineAsync($"origin_http={stack.OriginHttpUrl}", cancellationToken);
         if (stack.OriginHttpsUrl != null)
-            Console.WriteLine($"origin_https={stack.OriginHttpsUrl}");
+            await ProbeLog.WriteProtocolLineAsync($"origin_https={stack.OriginHttpsUrl}", cancellationToken);
         foreach (var url in stack.ExtraOriginHttpsUrls)
-            Console.WriteLine($"origin_https_extra={url}");
-        Console.WriteLine($"listen={stack.ListenUrl}");
+            await ProbeLog.WriteProtocolLineAsync($"origin_https_extra={url}", cancellationToken);
+        await ProbeLog.WriteProtocolLineAsync($"listen={stack.ListenUrl}", cancellationToken);
         if (stack.ExplicitProxyUrl != null)
-            Console.WriteLine($"explicit_proxy={stack.ExplicitProxyUrl}");
-        Console.WriteLine($"target_for_client={stack.ClientTargetUrl}");
+            await ProbeLog.WriteProtocolLineAsync($"explicit_proxy={stack.ExplicitProxyUrl}", cancellationToken);
+        await ProbeLog.WriteProtocolLineAsync($"target_for_client={stack.ClientTargetUrl}", cancellationToken);
         foreach (var url in stack.ClientTargetUrls.Skip(1))
-            Console.WriteLine($"target_for_client_extra={url}");
+            await ProbeLog.WriteProtocolLineAsync($"target_for_client_extra={url}", cancellationToken);
         if (stack.HttpVersion != null)
-            Console.WriteLine($"http_version={stack.HttpVersion}");
+            await ProbeLog.WriteProtocolLineAsync($"http_version={stack.HttpVersion}", cancellationToken);
         if (stack.LoadGenerator != null)
-            Console.WriteLine($"load_generator={stack.LoadGenerator}");
+            await ProbeLog.WriteProtocolLineAsync($"load_generator={stack.LoadGenerator}", cancellationToken);
         if (stack.QuicPort is { } qp)
-            Console.WriteLine($"quic_port={qp}");
+            await ProbeLog.WriteProtocolLineAsync($"quic_port={qp}", cancellationToken);
         if (stack.OriginQuicPort is { } oqp)
-            Console.WriteLine($"origin_quic_port={oqp}");
+            await ProbeLog.WriteProtocolLineAsync($"origin_quic_port={oqp}", cancellationToken);
         if (maxCachedConnections is { } m)
-            Console.WriteLine($"max_cached_connections={m}");
+            await ProbeLog.WriteProtocolLineAsync($"max_cached_connections={m}", cancellationToken);
         if (stack.ServerConnectionProbe != null)
-            Console.WriteLine("server_connection_probe=1");
-        Console.WriteLine("READY");
-        Console.WriteLine();
-        Console.WriteLine("Ready. Example:");
+            await ProbeLog.WriteProtocolLineAsync("server_connection_probe=1", cancellationToken);
+        await ProbeLog.WriteProtocolLineAsync("READY", cancellationToken);
+        ProbeLog.Info(string.Empty);
+        ProbeLog.Info("Ready. Example:");
         if (stack.ExplicitProxyUrl != null)
-            Console.WriteLine($"  bombardier -c 256 -d 30s -l -x {stack.ExplicitProxyUrl} {stack.ClientTargetUrl}");
+            ProbeLog.Info($"  bombardier -c 256 -d 30s -l -x {stack.ExplicitProxyUrl} {stack.ClientTargetUrl}");
         else
-            Console.WriteLine($"  bombardier -c 256 -d 30s -l {stack.ClientTargetUrl}");
+            ProbeLog.Info($"  bombardier -c 256 -d 30s -l {stack.ClientTargetUrl}");
 
-        Console.WriteLine();
-        Console.WriteLine("Press Ctrl+C to stop.");
+        ProbeLog.Info(string.Empty);
+        ProbeLog.Info("Press Ctrl+C to stop.");
 
         try
         {
@@ -258,6 +260,21 @@ internal static class ServeHost
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, [], twp.ListenUrl,
                         twp.ListenUrl, origin.HttpsUrl, [origin.HttpsUrl], null, "1.1");
                 }
+                case ProbeMode.ReverseHttp1Tls:
+                {
+                    var origin = await OriginServer.StartAsync(false, cancellationToken);
+                    var twp = TwpProxyHost.StartReverseHttp1Tls(origin.HttpPort);
+                    return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
+                        twp.ListenUrl, [twp.ListenUrl], null, "1.1");
+                }
+                case ProbeMode.NginxReverseHttp1Tls:
+                {
+                    var origin = await OriginServer.StartAsync(false, cancellationToken);
+                    var nginx = NginxHost.TryStartHttp1Tls(origin.HttpPort, nginxPath)
+                                ?? throw new InvalidOperationException("nginx not available.");
+                    return new ServeStack(origin, nginx, null, origin.HttpUrl, null, [], nginx.ListenUrl,
+                        null, nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "1.1");
+                }
                 case ProbeMode.ReverseHttp2:
                 {
                     var origin = await OriginServer.StartAsync(new OriginListenOptions
@@ -272,15 +289,11 @@ internal static class ServeHost
                 }
                 case ProbeMode.NginxReverseHttp2:
                 {
-                    var origin = await OriginServer.StartAsync(new OriginListenOptions
-                    {
-                        EnableHttp = false,
-                        EnableHttps = true,
-                        HttpsProtocols = HttpProtocols.Http1AndHttp2
-                    }, cancellationToken);
-                    var nginx = NginxHost.TryStartHttp2(origin.HttpsPort, nginxPath)
+                    // nginx: client TLS+h2 → cleartext HTTP/1.1 origin (same as TryStartHttp2 conf).
+                    var origin = await OriginServer.StartAsync(false, cancellationToken);
+                    var nginx = NginxHost.TryStartHttp2(origin.HttpPort, nginxPath)
                                 ?? throw new InvalidOperationException("nginx not available.");
-                    return new ServeStack(origin, nginx, null, origin.HttpUrl, origin.HttpsUrl, [], nginx.ListenUrl,
+                    return new ServeStack(origin, nginx, null, origin.HttpUrl, null, [], nginx.ListenUrl,
                         null, nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "2.0");
                 }
                 case ProbeMode.ReverseHttp3:

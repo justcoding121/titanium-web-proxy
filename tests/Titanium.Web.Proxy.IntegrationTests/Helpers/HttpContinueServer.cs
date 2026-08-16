@@ -76,7 +76,7 @@ internal class HttpContinueServer
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"{ex.GetType()}: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"{ex.GetType()}: {ex.Message}");
         }
 
         return request;
@@ -100,7 +100,7 @@ internal class HttpContinueServer
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"{ex.GetType()}: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"{ex.GetType()}: {ex.Message}");
         }
 
         return request;

@@ -20,7 +20,7 @@ using System.Text;
 
 if (args.Length < 3)
 {
-    Console.Error.WriteLine("Usage: ColdStartProbe <proxyHost> <proxyPort> <httpsUrl> [--warmup <url>]");
+    await Console.Error.WriteLineAsync("Usage: ColdStartProbe <proxyHost> <proxyPort> <httpsUrl> [--warmup <url>]");
     return 2;
 }
 
@@ -38,7 +38,7 @@ if (warmupUrl != null)
     await FetchThroughProxyAsync(proxyHost, proxyPort, new Uri(warmupUrl), discard: true);
 
 var result = await FetchThroughProxyAsync(proxyHost, proxyPort, url, discard: false);
-Console.WriteLine(
+await Console.Out.WriteLineAsync(
     $"code={result.StatusCode} connect_ms={result.ConnectMs:F1} tls_ms={result.TlsMs:F1} " +
     $"ttfb_ms={result.TtfbMs:F1} total_ms={result.TotalMs:F1} alpn={result.Alpn} measured={result.Measured}");
 return result.StatusCode is >= 200 and < 500 ? 0 : 1;

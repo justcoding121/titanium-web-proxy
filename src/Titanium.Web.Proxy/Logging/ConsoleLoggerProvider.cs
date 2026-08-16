@@ -39,27 +39,14 @@ internal sealed class ConsoleLoggerProvider : ChannelLoggerProviderBase
         return enableConsoleColors && !streamIsRedirected && string.IsNullOrEmpty(noColorEnvValue);
     }
 
-    protected override Task WriteEntryAsync(LogEntry entry)
-    {
-        WriteLine(entry);
-        return Task.CompletedTask;
-    }
-
-    /// <summary>
-    ///     Console I/O is cheap enough to do synchronously; only ever called from the single
-    ///     background writer task owned by <see cref="ChannelLoggerProviderBase" />.
-    /// </summary>
-    private void WriteLine(LogEntry entry)
+    protected override async Task WriteEntryAsync(LogEntry entry)
     {
         var line = ProxyLog.FormatLine(entry);
         var toStderr = entry.Level >= LogLevel.Warning;
         var writer = toStderr ? Console.Error : Console.Out;
         var colorize = toStderr ? colorizeStderr : colorizeStdout;
-
-        // A single Console.Out/Error write call is used (rather than separate WriteLine calls for the
-        // message and exception) so interleaved log lines from concurrent sessions cannot split a
-        // single entry - or its color escape codes - across two unrelated lines.
-        writer.WriteLine(colorize ? Colorize(entry.Level, line) : line);
+        var text = colorize ? Colorize(entry.Level, line) : line;
+        await writer.WriteLineAsync(text).ConfigureAwait(false);
     }
 
     internal static string Colorize(LogLevel level, string line)

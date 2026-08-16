@@ -10,14 +10,16 @@ This is **not** run from the per-PR build. Run it manually in Release (local Win
 |---|---|
 | `twp-reverse-http1` | Client → TWP `TransparentProxyEndPoint` → Kestrel HTTP |
 | `nginx-reverse-http1` | Client → nginx `proxy_pass` → **the same** Kestrel origin |
-| `twp-reverse-http2` | Client TLS+h2 → TWP transparent MITM → Kestrel HTTPS |
-| `nginx-reverse-http2` | Client TLS+h2 → nginx ssl+http2 → same Kestrel HTTPS |
+| `twp-reverse-http1-tls` | Client TLS → TWP terminate (`ForwardCleartext`) → cleartext origin |
+| `nginx-reverse-http1-tls` | Client TLS → nginx ssl → cleartext origin |
+| `twp-reverse-http2` | Client TLS+h2 → TWP transparent MITM → Kestrel **HTTPS h2** |
+| `nginx-reverse-http2` | Client TLS+h2 → nginx ssl+http2 → **cleartext** HTTP origin |
 | `twp-reverse-http3` | Client QUIC/h3 → TWP `TransparentQuicProxyEndPoint` → Quic HTTP/3 origin (**no nginx/Windows**) |
 | `twp-https-mitm` | Client → TWP explicit MITM → Kestrel HTTPS |
 | `twp-explicit-http1-multi` | Explicit MITM across 16 HTTPS origins (pool-depth study) |
 | `explicit-pool-sweep` | Same fan-out at `MaxCachedConnections` 4 / 32 / 128 |
 
-Arms always run **one after another** so each proxy gets the full machine.
+Arms always run **one after another** so each proxy gets the full machine. Status lines use a non-blocking `ProbeLog` channel (not sync `Console.WriteLine` on worker threads).
 
 **Breaking-point SLOs (defaults):**
 
@@ -29,17 +31,14 @@ TCP arms use embedded `SocketsHttpHandler` (`dotnet-httpclient`). HTTP/3 uses a 
 ## Quick start
 
 ```powershell
-# HTTP/1 compare (TWP reverse, nginx if present, TWP MITM)
-dotnet run -c Release --project tools/RpsLoadProbe -- --ramp --mode compare
+# Cleartext HTTP/1 compare (TWP reverse, nginx if present, TWP MITM)
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare
 
-# HTTP/2 + HTTP/3
-dotnet run -c Release --project tools/RpsLoadProbe -- --ramp --mode compare-http2
+# Fair TLS-terminate HTTP/1 + HTTP/2 + HTTP/3
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-tls
 
 # Explicit multi-origin MaxCachedConnections sweep
-dotnet run -c Release --project tools/RpsLoadProbe -- --ramp --mode explicit-pool-sweep
-
-# Or use the orchestrator script
-pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-http2
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode explicit-pool-sweep
 ```
 
 Serve a single arm for an external tool:
@@ -72,7 +71,8 @@ On GitHub Actions, prefer the dedicated `rps-saturation.yml` workflow (`workflow
 
 ## Honesty rules
 
-- Compare TWP and nginx only on reverse HTTP/1 or HTTP/2 with the same origin, same flags, sequential runs.
+- Compare TWP and nginx only when the **crypto hop count and upstream protocol** match (or call out the gap in the topology column).
+- Tiny-payload loopback RPS often favors HTTP/1.1 keepalive over H2/H3; do not expect H3 > H2 > H1 from RPS alone.
 - Do **not** compare TWP HTTPS MITM or HTTP/3 to nginx on Windows.
 - Do **not** mix Windows-local numbers and GitHub `ubuntu-latest` numbers into one winner row.
 - Do **not** claim a single GHA run is a stable breaking point (shared runners are noisy).

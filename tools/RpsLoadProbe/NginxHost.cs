@@ -34,15 +34,30 @@ internal sealed class NginxHost : IDisposable
     public static NginxHost? TryStartHttp1(int originHttpPort, string? nginxPath) =>
         TryStart(BuildHttp1Conf(originHttpPort), listenScheme: "http", nginxPath);
 
-    public static NginxHost? TryStartHttp2(int originHttpsPort, string? nginxPath)
+    public static NginxHost? TryStartHttp1Tls(int originHttpPort, string? nginxPath)
     {
-        // nginx/Windows has http_v2 + ssl but no QUIC/UDP. Client TLS+h2 → HTTPS origin.
         var prefixProbe = Path.Combine(Path.GetTempPath(), "twp-rps-nginx-certs-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(prefixProbe);
         try
         {
             var (certPem, keyPem) = ExportLoopbackPem(prefixProbe);
-            return TryStart(BuildHttp2Conf(originHttpsPort, certPem, keyPem), listenScheme: "https", nginxPath);
+            return TryStart(BuildHttp1TlsConf(originHttpPort, certPem, keyPem), listenScheme: "https", nginxPath);
+        }
+        finally
+        {
+            TryDeleteDir(prefixProbe);
+        }
+    }
+
+    public static NginxHost? TryStartHttp2(int originHttpPort, string? nginxPath)
+    {
+        // nginx/Windows has http_v2 + ssl but no QUIC/UDP. Client TLS+h2 → cleartext HTTP origin.
+        var prefixProbe = Path.Combine(Path.GetTempPath(), "twp-rps-nginx-certs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(prefixProbe);
+        try
+        {
+            var (certPem, keyPem) = ExportLoopbackPem(prefixProbe);
+            return TryStart(BuildHttp2Conf(originHttpPort, certPem, keyPem), listenScheme: "https", nginxPath);
         }
         finally
         {
@@ -133,7 +148,48 @@ internal sealed class NginxHost : IDisposable
         }
         """;
 
-    private static Func<string, int, string> BuildHttp2Conf(int originHttpsPort, string certPem, string keyPem) =>
+    private static Func<string, int, string> BuildHttp1TlsConf(int originHttpPort, string certPem, string keyPem) =>
+        (prefixDir, port) =>
+        {
+            var certDest = Path.Combine(prefixDir, "certs", "server.crt");
+            var keyDest = Path.Combine(prefixDir, "certs", "server.key");
+            File.Copy(certPem, certDest, overwrite: true);
+            File.Copy(keyPem, keyDest, overwrite: true);
+            certDest = certDest.Replace('\\', '/');
+            keyDest = keyDest.Replace('\\', '/');
+            return $$"""
+                worker_processes auto;
+                daemon off;
+                error_log logs/error.log error;
+                pid nginx.pid;
+                events {
+                    worker_connections 4096;
+                }
+                http {
+                    access_log off;
+                    sendfile on;
+                    keepalive_timeout 65;
+                    upstream origin {
+                        server 127.0.0.1:{{originHttpPort}};
+                        keepalive 32;
+                    }
+                    server {
+                        listen 127.0.0.1:{{port}} ssl;
+                        ssl_certificate {{certDest}};
+                        ssl_certificate_key {{keyDest}};
+                        ssl_protocols TLSv1.2 TLSv1.3;
+                        location / {
+                            proxy_http_version 1.1;
+                            proxy_set_header Connection "";
+                            proxy_set_header Host $host;
+                            proxy_pass http://origin;
+                        }
+                    }
+                }
+                """;
+        };
+
+    private static Func<string, int, string> BuildHttp2Conf(int originHttpPort, string certPem, string keyPem) =>
         (prefixDir, port) =>
         {
             var certDest = Path.Combine(prefixDir, "certs", "server.crt");
@@ -156,7 +212,7 @@ internal sealed class NginxHost : IDisposable
                     sendfile on;
                     keepalive_timeout 65;
                     upstream origin {
-                        server 127.0.0.1:{{originHttpsPort}};
+                        server 127.0.0.1:{{originHttpPort}};
                         keepalive 32;
                     }
                     server {
@@ -169,10 +225,7 @@ internal sealed class NginxHost : IDisposable
                             proxy_http_version 1.1;
                             proxy_set_header Connection "";
                             proxy_set_header Host $host;
-                            proxy_ssl_verify off;
-                            proxy_ssl_server_name on;
-                            proxy_ssl_name localhost;
-                            proxy_pass https://origin;
+                            proxy_pass http://origin;
                         }
                     }
                 }
