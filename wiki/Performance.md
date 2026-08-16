@@ -42,7 +42,7 @@ Fair TLS-terminate numbers in [Linux saturation](#fair-tls-terminate-compare--li
 | H1 TLS terminate (Windows) | **~30.3k RPS** (TWP) vs **~17.6k RPS** (nginx/Windows) @ c=32 |
 | H2 TLS MITM / H3 QUIC MITM (Windows) | H2 **~6.2k** · H3 **~7.3k** @ c=32 — see [Same-protocol](#same-protocol-compare-same--windows) |
 | Cross-version bridges (Windows) | See [Bridge matrix](#bridge-matrix-compare-bridges--windows) |
-| H1 TLS terminate (Linux GHA) | **~18–37k RPS** (TWP) vs **~28–61k** (nginx); **TWP÷nginx ≈ 0.61** |
+| TLS-terminate reverse HTTP/1 peak (Linux GHA) | **median ~17.0k** (TWP) vs **~27.2k** (nginx); **TWP÷nginx ≈ 0.63** (3 repeats) |
 | Explicit HTTPS MITM peak | **~22.5k RPS** @ c=32 |
 | Basic example footprint (Release, after load) | **~74 MB** working set · **~24–29 MB** private bytes |
 
@@ -111,20 +111,20 @@ Cross-version translation only (warmup 1s / measure 3s; concurrency 8, 32). All 
 | Host | TWP H1 TLS | nginx H1 TLS | Ranking |
 |---|---:|---:|---|
 | Windows laptop | ahead of nginx/Windows | slow vs Linux nginx | TWP leads **same-OS** |
-| Linux GHA | ~61% of nginx | native epoll nginx | nginx leads |
+| Linux GHA | ~63% of nginx | native epoll nginx | nginx leads |
 
-Absolute GHA RPS swings ~2× by VM (**runner noise**). Publish **median across repeats** and the **TWP÷nginx ratio** (~0.61 historically). Residual Linux gap is managed SslStream + proxy pipeline vs nginx C.
+Absolute GHA RPS swings ~2× by VM (**runner noise**). Publish **median across repeats** (`--repeats 3`) and the **TWP÷nginx ratio**. Residual Linux gap is managed SslStream + proxy pipeline vs nginx C (handshake context is now cached per leaf).
 
 ### Fair TLS-terminate compare — Linux (GitHub-hosted `ubuntu-latest`)
 
-Prefer `workflow_dispatch` with `repeats=3` so median peaks dampen runner noise. Latest single-run CSV: `rps-ramp-20260816-082447.csv` (Actions artifact `rps-csv` from run [31936352891](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936352891); warmup 2s / measure 8s; concurrency 8, 16, 32, 64). Host: [Linux (GitHub-hosted)](#linux-github-hosted-ubuntu-latest). HTTP/3 arms skipped (no QuicListener / msquic). A quieter VM the same day hit ~37k / ~61k at the same ~0.61 ratio ([31936116039](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936116039)).
+Median of **3 repeats** from run [31936930781](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936930781) @ `f1ca03ed` (`compare-terminate`; warmup 2s / measure 8s; concurrency 8, 16, 32, 64). CSV: `rps-ramp-20260816-083829.csv`. Host: [Linux (GitHub-hosted)](#linux-github-hosted-ubuntu-latest). HTTP/3 arms skipped (no QuicListener / msquic).
 
-| Arm | Topology | Sustainable | Peak | Notes |
-|---|---|---:|---:|---|
-| TWP H1 TLS | Client TLS → cleartext H1 | **20,734** @ 64 | **20,734** | ≈61% of nginx |
-| nginx H1 TLS | ssl → cleartext H1 | **34,104** @ 64 | **34,104** | 0% err |
-| TWP H2→H1 | Client h2 TLS → H2→H1 → cleartext H1 | **13,886** @ 64 | **13,886** | 0% err |
-| nginx H2 | Client h2 TLS → cleartext H1 | **16,235** @ 64 | **22,267** @ 32 | ~0% err |
+| Arm | Topology | Median peak | Notes |
+|---|---|---:|---|
+| TWP H1 TLS | Client TLS → cleartext H1 | **17,040** | ≈63% of nginx |
+| nginx H1 TLS | ssl → cleartext H1 | **27,225** | authoritative nginx baseline |
+| TWP H2→H1 | Client h2 TLS → H2→H1 → cleartext H1 | **10,271** | 0% err |
+| nginx H2 | Client h2 TLS → cleartext H1 | **18,131** | peak across conc. steps |
 
 ### Protocol / topology matrix
 
