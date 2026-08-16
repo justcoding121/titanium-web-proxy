@@ -393,8 +393,19 @@ public partial class ProxyServer
                             // they are authenticated to a specific identity and are connection-oriented, so they stay
                             // bound to this client session (reused for its subsequent requests) and are closed when
                             // the client connection ends, never shared with another client.
+                            //
+                            // Transparent reverse with a fixed ForwardHost mirrors nginx's upstream keepalive:
+                            // keep the origin socket sticky on this client connection instead of pool Get/Release
+                            // (and IsGoodConnection) on every tiny keep-alive GET — that round-trip was a major
+                            // share of the Linux H1-plain RPS gap vs nginx.
+                            var stickyForwardUpstream = args.ProxyEndPoint is TransparentBaseProxyEndPoint
+                            {
+                                ForwardHost: { Length: > 0 }
+                            };
+
                             if (EnableConnectionPool && connection != null
-                                                     && !connection.IsWinAuthenticated)
+                                                     && !connection.IsWinAuthenticated
+                                                     && !stickyForwardUpstream)
                             {
                                 await TcpConnectionFactory.Release(connection);
                                 connection = null;

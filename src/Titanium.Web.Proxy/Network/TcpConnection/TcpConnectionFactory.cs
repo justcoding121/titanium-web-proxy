@@ -1378,7 +1378,9 @@ internal class TcpConnectionFactory : IDisposable
                         if (staleConnection.TryScheduleDisposal())
                             disposalBag.Add(staleConnection);
 
-                    if (!queue.Contains(connection)) queue.Enqueue(connection);
+                    // Lease exclusivity (TryEnterLease / ExitLease) already prevents concurrent use.
+                    // Skipping ConcurrentQueue.Contains avoids an O(n) scan under high pool depth.
+                    queue.Enqueue(connection);
                     return Task.CompletedTask;
                 }
             }

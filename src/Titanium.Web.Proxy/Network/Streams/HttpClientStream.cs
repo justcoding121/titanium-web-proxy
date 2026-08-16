@@ -26,21 +26,27 @@ internal sealed class HttpClientStream : HttpStream
     /// <returns>The Task.</returns>
     internal async ValueTask WriteResponseAsync(Response response, CancellationToken cancellationToken = default)
     {
-        var headerBuilder = new HeaderBuilder();
-
-        // Write back response status to client
-        headerBuilder.WriteResponseLine(response.HttpVersion, response.StatusCode, response.StatusDescription);
-
-        // RFC 7231 §4.3.6: a successful (2xx) response to CONNECT establishes a tunnel and MUST NOT
-        // include Content-Length or Transfer-Encoding — the byte stream that follows the header
-        // terminator belongs to the tunnel, not to the response body.
-        if (response is ConnectResponse && response.StatusCode >= 200 && response.StatusCode < 300)
+        var headerBuilder = HeaderBuilder.Rent();
+        try
         {
-            response.Headers.RemoveHeader(KnownHeaders.ContentLength);
-            response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
-        }
+            // Write back response status to client
+            headerBuilder.WriteResponseLine(response.HttpVersion, response.StatusCode, response.StatusDescription);
 
-        await WriteAsync(response, headerBuilder, cancellationToken);
+            // RFC 7231 §4.3.6: a successful (2xx) response to CONNECT establishes a tunnel and MUST NOT
+            // include Content-Length or Transfer-Encoding — the byte stream that follows the header
+            // terminator belongs to the tunnel, not to the response body.
+            if (response is ConnectResponse && response.StatusCode >= 200 && response.StatusCode < 300)
+            {
+                response.Headers.RemoveHeader(KnownHeaders.ContentLength);
+                response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+            }
+
+            await WriteAsync(response, headerBuilder, cancellationToken);
+        }
+        finally
+        {
+            HeaderBuilder.Return(headerBuilder);
+        }
     }
 
     internal async ValueTask<RequestStatusInfo> ReadRequestLine(CancellationToken cancellationToken = default)

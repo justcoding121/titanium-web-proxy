@@ -77,6 +77,20 @@ jobs:
           sudo systemctl stop nginx || true
           nginx -v
 
+      # .NET System.Net.Quic on Linux requires native libmsquic (shipped in-box on Windows only).
+      - name: Install libmsquic (HTTP/3)
+        run: |
+          set -euo pipefail
+          . /etc/os-release
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb" \
+            -o packages-microsoft-prod.deb
+          sudo dpkg -i packages-microsoft-prod.deb
+          rm -f packages-microsoft-prod.deb
+          sudo apt-get update
+          sudo apt-get install -y libmsquic
+          pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { throw "QuicListener.IsSupported is false after libmsquic install" }; Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"'
+
       - name: Install bombardier (optional external generator)
         run: |
           set -euo pipefail

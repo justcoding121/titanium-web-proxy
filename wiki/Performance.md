@@ -67,7 +67,9 @@ nginx/Windows is a limited port. Use it for **same-OS** comparison only — not 
 
 ## Linux — Titanium vs nginx
 
-Median of **3 repeats** from Actions runs [31940116289](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31940116289) (`compare-same`), [31940118740](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31940118740) (`compare-terminate`), [31940117559](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31940117559) (`compare-bridges`); warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** HTTP/3 arms are skipped on `ubuntu-latest` when `QuicListener` is unavailable (no msquic).
+Median of **3 repeats** from Actions runs [31940116289](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31940116289) (`compare-same`), [31940118740](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31940118740) (`compare-terminate`), [31940117559](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31940117559) (`compare-bridges`); warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** The RPS workflow installs `libmsquic` so HTTP/3 arms can run when the package is available for the runner distro.
+
+**H1 plain gap (why nginx led ~0.63×):** the harness is fair (split processes, same Kestrel origin). TWP was paying per keep-alive GET for shared-pool Get/Release + `IsGoodConnection` and header-rebuild churn. Transparent reverse with fixed `ForwardHost` now keeps the origin socket sticky on the client connection (nginx-like upstream keepalive); `HeaderBuilder` status-line encoding and response write paths were also tightened. Re-measure `compare-same` after that change before treating the H1 plain row as final.
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | Winner |
 |---|---|---:|---:|---:|---:|---|

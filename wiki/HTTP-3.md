@@ -15,12 +15,23 @@ Titanium Web Proxy supports HTTP/3 as an **opt-in experimental** feature built o
 ## Prerequisites
 
 - .NET 10 or later.
-- MsQuic native library: bundled with the .NET runtime on Windows and Linux.
-  - **Windows**: Windows 11 or Windows Server 2022 or later.
-  - **Linux**: install `libmsquic` (e.g. `apt install libmsquic`).
+- MsQuic native library:
+  - **Windows**: shipped with the .NET runtime (Windows 11 / Server 2022 or later).
+  - **Linux**: install `libmsquic` from [packages.microsoft.com](https://packages.microsoft.com) (not bundled with the runtime). Example on Ubuntu:
+
+```bash
+curl -fsSL --proto '=https' --tlsv1.2 \
+  "https://packages.microsoft.com/config/ubuntu/$(. /etc/os-release; echo $VERSION_ID)/packages-microsoft-prod.deb" \
+  -o packages-microsoft-prod.deb
+sudo dpkg -i packages-microsoft-prod.deb && rm packages-microsoft-prod.deb
+sudo apt-get update && sudo apt-get install -y libmsquic
+```
+
   - **macOS**: not bundled by the .NET runtime. See [macOS](#macos) below for the bundling workaround.
 - At runtime: `System.Net.Quic.QuicListener.IsSupported == true` — check this before enabling HTTP/3.
 - A `TransparentQuicProxyEndPoint` added to `ProxyServer.ProxyEndPoints`.
+
+The Linux [RPS saturation](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/rps-saturation.yml) workflow installs `libmsquic` so HTTP/3 probe arms run on `ubuntu-latest`.
 
 ## Quick start
 

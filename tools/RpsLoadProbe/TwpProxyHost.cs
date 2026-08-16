@@ -29,7 +29,8 @@ internal sealed class TwpProxyHost : IDisposable
         var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false)
         {
             ForwardHost = "127.0.0.1",
-            ForwardPort = originHttpPort
+            ForwardPort = originHttpPort,
+            MaxCachedConnections = 256
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();

@@ -24,9 +24,16 @@ internal sealed class HttpServerStream : HttpStream
     /// <returns></returns>
     internal async ValueTask WriteRequestAsync(Request request, CancellationToken cancellationToken = default)
     {
-        var headerBuilder = new HeaderBuilder();
-        headerBuilder.WriteRequestLine(request.Method, request.RequestUriString, request.HttpVersion);
-        await WriteAsync(request, headerBuilder, cancellationToken);
+        var headerBuilder = HeaderBuilder.Rent();
+        try
+        {
+            headerBuilder.WriteRequestLine(request.Method, request.RequestUriString, request.HttpVersion);
+            await WriteAsync(request, headerBuilder, cancellationToken);
+        }
+        finally
+        {
+            HeaderBuilder.Return(headerBuilder);
+        }
     }
 
     /// <summary>
