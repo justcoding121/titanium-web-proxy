@@ -36,11 +36,15 @@ internal static class ProxyDiagnostics
     ///     use <see cref="ReportException" />, <see cref="ReportBenign" />, or
     ///     <see cref="ReportUnexpected" /> at the site that owns the final outcome. When Debug is
     ///     disabled this is a single <see cref="ILogger.IsEnabled" /> virtual call.
+    ///     <para>
+    ///         Same Debug sink as <see cref="ReportBenign" />; kept as a distinct API so call sites can
+    ///         document intent (intermediate catch vs. classified-benign outcome) without duplicating
+    ///         formatting logic.
+    ///     </para>
     /// </summary>
     public static void ReportCaught(ILogger logger, string context, Exception exception)
     {
-        if (!logger.IsEnabled(LogLevel.Debug)) return;
-        logger.LogDebug(exception, ContextTemplate, context);
+        ReportBenign(logger, context, exception);
     }
 
     /// <summary>

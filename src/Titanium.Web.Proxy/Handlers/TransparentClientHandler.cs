@@ -527,33 +527,14 @@ public partial class ProxyServer
                 null, null);
         }
 
-        var httpCmd = await clientStream.ReadLineAsync(cancellationToken);
-        if (httpCmd != "PRI * HTTP/2.0")
-        {
-            throw new InvalidDataException(
-                $"HTTP/2 Protocol violation. Expected 'PRI * HTTP/2.0', got '{httpCmd}'.");
-        }
-
-        var line = await clientStream.ReadLineAsync(cancellationToken);
-        if (line != string.Empty)
-            throw new InvalidDataException($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
-
-        line = await clientStream.ReadLineAsync(cancellationToken);
-        if (line != "SM")
-            throw new InvalidDataException($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
-
-        line = await clientStream.ReadLineAsync(cancellationToken);
-        if (line != string.Empty)
-            throw new InvalidDataException($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
+        await ConsumeHttp2ConnectionPrefaceAsync(clientStream, cancellationToken);
 
         clientConnection.Http2CleartextClient = true;
         clientConnection.NegotiatedApplicationProtocol = SslApplicationProtocol.Http2;
 
         var identityHost = endPoint.GenericCertificateName;
         var seededHost = socksTargetHost ?? endPoint.ForwardHost ?? identityHost;
-        var seededPort = socksTargetHost != null
-            ? port
-            : endPoint.ForwardPort ?? (endPoint.ForwardCleartext ? 80 : 443);
+        var seededPort = ResolveInboundHttp2CleartextPort(socksTargetHost, port, endPoint);
 
         var httpArgs = new BeforeHttpAuthenticateEventArgs(this, clientConnection, cancellationTokenSource,
             seededHost, seededPort);
@@ -656,5 +637,40 @@ public partial class ProxyServer
         {
             await TcpConnectionFactory.Release(connection, true);
         }
+    }
+
+    private static async Task ConsumeHttp2ConnectionPrefaceAsync(
+        HttpClientStream clientStream, CancellationToken cancellationToken)
+    {
+        var httpCmd = await clientStream.ReadLineAsync(cancellationToken);
+        if (httpCmd != "PRI * HTTP/2.0")
+        {
+            throw new InvalidDataException(
+                $"HTTP/2 Protocol violation. Expected 'PRI * HTTP/2.0', got '{httpCmd}'.");
+        }
+
+        var line = await clientStream.ReadLineAsync(cancellationToken);
+        if (line != string.Empty)
+            throw new InvalidDataException($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
+
+        line = await clientStream.ReadLineAsync(cancellationToken);
+        if (line != "SM")
+            throw new InvalidDataException($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
+
+        line = await clientStream.ReadLineAsync(cancellationToken);
+        if (line != string.Empty)
+            throw new InvalidDataException($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
+    }
+
+    private static int ResolveInboundHttp2CleartextPort(
+        string? socksTargetHost, int port, TransparentBaseProxyEndPoint endPoint)
+    {
+        if (socksTargetHost != null)
+            return port;
+
+        if (endPoint.ForwardPort is { } forwardPort)
+            return forwardPort;
+
+        return endPoint.ForwardCleartext ? 80 : 443;
     }
 }

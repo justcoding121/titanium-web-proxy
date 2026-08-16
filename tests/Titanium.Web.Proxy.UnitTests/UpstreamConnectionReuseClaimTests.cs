@@ -24,8 +24,8 @@ public class UpstreamConnectionReuseClaimTests
         var connection = new TcpServerConnection(proxy, client, stream, "origin.test", 443, true,
             SslApplicationProtocol.Http2, HttpHeader.Version20, null, null, "cache-key");
 
-        Assert.IsFalse(!connection.ClaimFirstUse(), "first claim must record fresh (not reused)");
-        Assert.IsTrue(!connection.ClaimFirstUse(), "second claim must record reused (H2 multiplex / pool)");
+        Assert.IsTrue(connection.ClaimFirstUse(), "first claim must record fresh (not reused)");
+        Assert.IsFalse(connection.ClaimFirstUse(), "second claim must record reused (H2 multiplex / pool)");
 
         var timing = new HttpRequestTiming(DateTime.UtcNow);
         timing.MarkConnectionReady(connection.Id, reused: true);

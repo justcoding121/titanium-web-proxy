@@ -154,7 +154,7 @@ public class Http2CleartextOriginTests
             Array.Empty<(string, string)>());
         await rawClient.Connection.WriteHeaderBlockAsync(1, requestHeaders, true);
 
-        await Assert.ThrowsExceptionAsync<System.IO.EndOfStreamException>(async () =>
+        await Assert.ThrowsExactlyAsync<System.IO.EndOfStreamException>(async () =>
         {
             await rawClient.Connection.ReadHeaderBlockAsync();
         });

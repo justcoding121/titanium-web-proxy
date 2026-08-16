@@ -119,26 +119,7 @@ public partial class ProxyServer
         if (!coldH3Bridge)
             return;
 
-        // Synchronous (cache-only) H3 route resolution — DNS I/O must never block the H2 frame reader.
-        // Prefer CONNECT-time remote identity (ForwardHttpsHost/Port) over the client request URI:
-        // reverse proxies rewrite Host to the listen address, which must not become the QUIC target.
-        string reqHost;
-        int reqPort;
-        if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint
-            {
-                ForwardHost: { Length: > 0 } forwardHost,
-                ForwardPort: { } forwardPort
-            })
-        {
-            reqHost = forwardHost;
-            reqPort = forwardPort;
-        }
-        else
-        {
-            reqHost = sessionArgs.HttpClient.Request.RequestUri?.Host ?? remoteHostName;
-            reqPort = sessionArgs.HttpClient.Request.RequestUri?.Port ?? remotePort;
-        }
-
+        var (reqHost, reqPort) = ResolveH3BridgeOriginIdentity(sessionArgs, remoteHostName, remotePort);
         var h3Route = ResolveHttp3Origin(reqHost, reqPort, sessionArgs.UpstreamHttpProtocol,
             allowDnsProbe: false);
 
@@ -149,19 +130,8 @@ public partial class ProxyServer
             h3Route = Http3OriginRoute.None;
         }
 
-        // Via loop detection and injection before launching background origin I/O, while the
-        // request headers are still mutable and the HTTP version is still the inbound h2 one.
-        if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
-            !string.IsNullOrEmpty(ViaHeaderPseudonym))
-        {
-            if (HasLoopedVia(sessionArgs.HttpClient.Request.Headers, ViaHeaderPseudonym))
-            {
-                sessionArgs.GenericResponse(string.Empty, (HttpStatusCode)508);
-                return;
-            }
-            AddViaHeader(sessionArgs.HttpClient.Request.Headers,
-                sessionArgs.HttpClient.Request.HttpVersion, ViaHeaderPseudonym);
-        }
+        if (TryRejectLoopedVia(sessionArgs))
+            return;
 
         // Normalize headers before the background origin task starts so Http2Helper cannot race
         // a header mutation against the parallel origin send.
@@ -179,15 +149,7 @@ public partial class ProxyServer
         if (!ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var streamState))
             return;
 
-        // RFC 7540 section 8.1.2.5 permits multiple Cookie fields over HTTP/2; consolidate before
-        // forwarding to avoid confusing origins or middleware.
-        var cookieHeaders = sessionArgs.HttpClient.Request.Headers.GetHeaders("Cookie");
-        if (cookieHeaders is { Count: > 1 })
-        {
-            var combined = string.Join("; ", cookieHeaders.Select(h => h.Value));
-            sessionArgs.HttpClient.Request.Headers.RemoveHeader("Cookie");
-            sessionArgs.HttpClient.Request.Headers.AddHeader("Cookie", combined);
-        }
+        ConsolidateCookieHeaders(sessionArgs.HttpClient.Request.Headers);
 
         var bridgeTask = RunHttp2ToHttp3BridgeRoundTripAsync(
                 sessionArgs, ctx.StreamId, ctx.ConnectionState, ctx.ClientStream,
@@ -208,6 +170,53 @@ public partial class ProxyServer
         streamState.SyntheticTask = bridgeTask;
         streamState.IsExternalBridge = true;
         ctx.ConnectionState.PendingSynthetics.Add(bridgeTask);
+    }
+
+    private static (string Host, int Port) ResolveH3BridgeOriginIdentity(
+        SessionEventArgs sessionArgs, string remoteHostName, int remotePort)
+    {
+        // Prefer CONNECT-time remote identity (ForwardHttpsHost/Port) over the client request URI:
+        // reverse proxies rewrite Host to the listen address, which must not become the QUIC target.
+        if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint
+            {
+                ForwardHost: { Length: > 0 } forwardHost,
+                ForwardPort: { } forwardPort
+            })
+            return (forwardHost, forwardPort);
+
+        return (sessionArgs.HttpClient.Request.RequestUri?.Host ?? remoteHostName,
+            sessionArgs.HttpClient.Request.RequestUri?.Port ?? remotePort);
+    }
+
+    /// <returns><see langword="true"/> when a Via loop was detected and a 508 response was synthesized.</returns>
+    private bool TryRejectLoopedVia(SessionEventArgs sessionArgs)
+    {
+        if (sessionArgs.IsTransparent || sessionArgs.IsSocks ||
+            string.IsNullOrEmpty(ViaHeaderPseudonym))
+            return false;
+
+        if (HasLoopedVia(sessionArgs.HttpClient.Request.Headers, ViaHeaderPseudonym))
+        {
+            sessionArgs.GenericResponse(string.Empty, (HttpStatusCode)508);
+            return true;
+        }
+
+        AddViaHeader(sessionArgs.HttpClient.Request.Headers,
+            sessionArgs.HttpClient.Request.HttpVersion, ViaHeaderPseudonym);
+        return false;
+    }
+
+    private static void ConsolidateCookieHeaders(HeaderCollection headers)
+    {
+        // RFC 7540 section 8.1.2.5 permits multiple Cookie fields over HTTP/2; consolidate before
+        // forwarding to avoid confusing origins or middleware.
+        var cookieHeaders = headers.GetHeaders("Cookie");
+        if (cookieHeaders is not { Count: > 1 })
+            return;
+
+        var combined = string.Join("; ", cookieHeaders.Select(h => h.Value));
+        headers.RemoveHeader("Cookie");
+        headers.AddHeader("Cookie", combined);
     }
 
     /// <summary>

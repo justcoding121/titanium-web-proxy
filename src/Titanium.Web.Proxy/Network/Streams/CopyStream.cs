@@ -66,8 +66,9 @@ internal class CopyStream : ILineStream, IDisposable
     public async ValueTask<bool> FillBufferAsync(CancellationToken cancellationToken = default)
     {
         // Flush before pulling more source data. ArrayPool may rent a larger array for the
-        // underlying HttpStream than for this copy buffer, so Available can exceed buffer.Length;
-        // FlushAsync also runs whenever the copy buffer is full (see ReadByteFromBuffer).
+        // underlying HttpStream than for this copy buffer, so Available can exceed the copy
+        // buffer capacity. FlushAsync also runs whenever the copy buffer is full
+        // (see ReadByteFromBuffer).
         await FlushAsync(cancellationToken);
 
         // If the source still has buffered bytes, we are ready to read again without filling.

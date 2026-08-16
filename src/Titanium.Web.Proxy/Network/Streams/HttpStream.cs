@@ -140,8 +140,13 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             closedWrite = true;
             if (!IsNetworkStream)
-                throw ReportRethrownFailure(ex);
-            ReportSuppressedFailure(ex);
+                {
+                    throw ReportRethrownFailure(ex);
+                }
+                else
+                {
+                    ReportSuppressedFailure(ex);
+                }
         }
     }
 
@@ -227,8 +232,13 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             closedWrite = true;
             if (!IsNetworkStream)
-                throw ReportRethrownFailure(ex);
-            ReportSuppressedFailure(ex);
+                {
+                    throw ReportRethrownFailure(ex);
+                }
+                else
+                {
+                    ReportSuppressedFailure(ex);
+                }
         }
     }
 
@@ -283,8 +293,13 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             closedWrite = true;
             if (!IsNetworkStream)
-                throw ReportRethrownFailure(ex);
-            ReportSuppressedFailure(ex);
+                {
+                    throw ReportRethrownFailure(ex);
+                }
+                else
+                {
+                    ReportSuppressedFailure(ex);
+                }
         }
     }
 
@@ -488,8 +503,13 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             closedWrite = true;
             if (!IsNetworkStream)
-                throw ReportRethrownFailure(ex);
-            ReportSuppressedFailure(ex);
+                {
+                    throw ReportRethrownFailure(ex);
+                }
+                else
+                {
+                    ReportSuppressedFailure(ex);
+                }
         }
     }
 
@@ -512,8 +532,13 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             closedWrite = true;
             if (!IsNetworkStream)
-                throw ReportRethrownFailure(ex);
-            ReportSuppressedFailure(ex);
+                {
+                    throw ReportRethrownFailure(ex);
+                }
+                else
+                {
+                    ReportSuppressedFailure(ex);
+                }
         }
         finally
         {
@@ -655,8 +680,13 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         catch (Exception ex)
         {
             if (!IsNetworkStream)
-                throw ReportRethrownFailure(ex);
-            ReportSuppressedFailure(ex);
+                {
+                    throw ReportRethrownFailure(ex);
+                }
+                else
+                {
+                    ReportSuppressedFailure(ex);
+                }
         }
         finally
         {
@@ -716,7 +746,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         // read must leave the stream's write side usable: callers (e.g. WebSocketInterceptRelay
         // cancelling the "losing" direction's pending read after the other leg finds a protocol
         // violation) still need to write a conformant close frame on this same stream afterwards.
-        var cancelled = false;
+        // Cancel sets result to Cancelled (not EndOfStream), so the finally poison check is enough.
         try
         {
             // Await ReadAsync with the real cancellation token directly. Do not wrap with
@@ -739,19 +769,23 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         }
         catch (OperationCanceledException)
         {
-            cancelled = true;
             result = BufferFillResult.Cancelled;
         }
         catch (Exception ex)
         {
             if (!IsNetworkStream)
-                throw ReportRethrownFailure(ex);
-            ReportSuppressedFailure(ex);
+                {
+                    throw ReportRethrownFailure(ex);
+                }
+                else
+                {
+                    ReportSuppressedFailure(ex);
+                }
             result = BufferFillResult.EndOfStream;
         }
         finally
         {
-            if (result == BufferFillResult.EndOfStream && !cancelled)
+            if (result == BufferFillResult.EndOfStream)
             {
                 IsClosed = true;
                 closedWrite = true;
@@ -799,33 +833,11 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 buffer[bufferDataLength] = newChar;
 
                 if (newChar == '\n')
-                {
-                    if (lastChar == '\r')
-                        return (Encoding.GetString(buffer, 0, bufferDataLength - 1), false);
-
-                    return (Encoding.GetString(buffer, 0, bufferDataLength), false);
-                }
+                    return (DecodeCompletedLine(buffer, bufferDataLength, lastChar), false);
 
                 bufferDataLength++;
                 lastChar = newChar;
-
-                if (bufferDataLength > maxLineBytes)
-                    throw new ProxyHttpException(
-                        $"HTTP header/request line exceeded the configured maximum of {maxLineBytes:N0} bytes.",
-                        null, null);
-
-                if (bufferDataLength == buffer.Length)
-                {
-                    if (bufferDataLength >= maxLineBytes)
-                        throw new ProxyHttpException(
-                            $"HTTP header/request line exceeded the configured maximum of {maxLineBytes:N0} bytes.",
-                            null, null);
-
-                    var newSize = (int)Math.Min(bufferDataLength * 2L, maxLineBytes);
-                    if (newSize <= bufferDataLength)
-                        newSize = bufferDataLength + 1;
-                    Array.Resize(ref buffer, newSize);
-                }
+                EnsureLineBufferCapacity(ref buffer, bufferDataLength, maxLineBytes);
             }
 
             if (bufferDataLength == 0) return (null, false);
@@ -870,36 +882,12 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
                 var newChar = reader.ReadByteFromBuffer();
                 buffer[bufferDataLength] = newChar;
 
-                // if new line
                 if (newChar == '\n')
-                {
-                    if (lastChar == '\r') return Encoding.GetString(buffer, 0, bufferDataLength - 1);
-
-                    return Encoding.GetString(buffer, 0, bufferDataLength);
-                }
+                    return DecodeCompletedLine(buffer, bufferDataLength, lastChar);
 
                 bufferDataLength++;
-
-                // store last char for new line comparison
                 lastChar = newChar;
-
-                if (bufferDataLength > maxLineBytes)
-                    throw new ProxyHttpException(
-                        $"HTTP header/request line exceeded the configured maximum of {maxLineBytes:N0} bytes.",
-                        null, null);
-
-                if (bufferDataLength == buffer.Length)
-                {
-                    if (bufferDataLength >= maxLineBytes)
-                        throw new ProxyHttpException(
-                            $"HTTP header/request line exceeded the configured maximum of {maxLineBytes:N0} bytes.",
-                            null, null);
-
-                    var newSize = (int)Math.Min(bufferDataLength * 2L, maxLineBytes);
-                    if (newSize <= bufferDataLength)
-                        newSize = bufferDataLength + 1;
-                    Array.Resize(ref buffer, newSize);
-                }
+                EnsureLineBufferCapacity(ref buffer, bufferDataLength, maxLineBytes);
             }
 
             // reached end of stream without a trailing '\n'.
@@ -913,6 +901,40 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             bufferPool.ReturnBuffer(bufferPoolBuffer);
         }
+    }
+
+    /// <summary>
+    ///     Decodes bytes accumulated up to (but not including) a terminating LF.
+    ///     When the previous byte was CR, both CR and LF are excluded (CRLF line ending).
+    /// </summary>
+    private static string DecodeCompletedLine(byte[] buffer, int lfIndex, byte charBeforeLf)
+    {
+        var length = charBeforeLf == '\r' ? lfIndex - 1 : lfIndex;
+        return Encoding.GetString(buffer, 0, length);
+    }
+
+    /// <summary>
+    ///     Enforces <paramref name="maxLineBytes" /> and grows the scratch buffer when full.
+    /// </summary>
+    private static void EnsureLineBufferCapacity(ref byte[] buffer, int bufferDataLength, long maxLineBytes)
+    {
+        if (bufferDataLength > maxLineBytes)
+            throw new ProxyHttpException(
+                $"HTTP header/request line exceeded the configured maximum of {maxLineBytes:N0} bytes.",
+                null, null);
+
+        if (bufferDataLength != buffer.Length)
+            return;
+
+        if (bufferDataLength >= maxLineBytes)
+            throw new ProxyHttpException(
+                $"HTTP header/request line exceeded the configured maximum of {maxLineBytes:N0} bytes.",
+                null, null);
+
+        var newSize = (int)Math.Min(bufferDataLength * 2L, maxLineBytes);
+        if (newSize <= bufferDataLength)
+            newSize = bufferDataLength + 1;
+        Array.Resize(ref buffer, newSize);
     }
 
     /// <summary>
@@ -1020,7 +1042,10 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             {
                 closedWrite = true;
                 if (!IsNetworkStream)
-                throw ReportRethrownFailure(ex);
+                {
+                    throw ReportRethrownFailure(ex);
+                }
+
                 ReportSuppressedFailure(ex);
             }
             finally
@@ -1046,7 +1071,10 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             {
                 closedWrite = true;
                 if (!IsNetworkStream)
-                throw ReportRethrownFailure(ex);
+                {
+                    throw ReportRethrownFailure(ex);
+                }
+
                 ReportSuppressedFailure(ex);
             }
         }
@@ -1106,8 +1134,13 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             closedWrite = true;
             if (!IsNetworkStream)
-                throw ReportRethrownFailure(ex);
-            ReportSuppressedFailure(ex);
+                {
+                    throw ReportRethrownFailure(ex);
+                }
+                else
+                {
+                    ReportSuppressedFailure(ex);
+                }
         }
     }
 
@@ -1125,8 +1158,13 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             closedWrite = true;
             if (!IsNetworkStream)
-                throw ReportRethrownFailure(ex);
-            ReportSuppressedFailure(ex);
+                {
+                    throw ReportRethrownFailure(ex);
+                }
+                else
+                {
+                    ReportSuppressedFailure(ex);
+                }
         }
     }
 
@@ -1603,7 +1641,10 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             {
                 closedWrite = true;
                 if (!IsNetworkStream)
-                throw ReportRethrownFailure(ex);
+                {
+                    throw ReportRethrownFailure(ex);
+                }
+
                 ReportSuppressedFailure(ex);
             }
         }

@@ -377,7 +377,7 @@ public partial class ProxyServer
                         while (offset < bodyBytes.Length)
                         {
                             var read = await limited.ReadAsync(
-                                bodyBytes.AsMemory(offset, bodyBytes.Length - offset), cancellationToken).AsTask();
+                                bodyBytes.AsMemory(offset, bodyBytes.Length - offset), cancellationToken);
                             if (read == 0)
                                 break;
                             offset += read;
@@ -394,7 +394,7 @@ public partial class ProxyServer
                         try
                         {
                             int read;
-                            while ((read = await limited.ReadAsync(buffer.AsMemory(), cancellationToken).AsTask()) > 0)
+                            while ((read = await limited.ReadAsync(buffer.AsMemory(), cancellationToken)) > 0)
                                 await ms.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
                             await limited.Finish();
                         }
@@ -926,30 +926,26 @@ public partial class ProxyServer
     private static void LowercaseHeaderNames(HeaderCollection headers)
     {
         // Fast path: origin already sent lowercase names (common for Kestrel / modern stacks).
-        var needsRename = false;
-        foreach (var header in headers)
-        {
-            var name = header.Name;
-            for (var i = 0; i < name.Length; i++)
-            {
-                var c = name[i];
-                if (c is >= 'A' and <= 'Z')
-                {
-                    needsRename = true;
-                    break;
-                }
-            }
-
-            if (needsRename)
-                break;
-        }
-
-        if (!needsRename)
+        if (!headers.Any(header => HeaderNameHasUpperCaseAscii(header.Name)))
             return;
 
-        var originalHeaders = headers.ToList();
+        var renamed = headers
+            .Select(header => (Name: header.Name.ToLowerInvariant(), header.Value))
+            .ToList();
         headers.Clear();
-        foreach (var header in originalHeaders)
-            headers.AddHeader(header.Name.ToLowerInvariant(), header.Value);
+        foreach (var (name, value) in renamed)
+            headers.AddHeader(name, value);
+    }
+
+    private static bool HeaderNameHasUpperCaseAscii(string name)
+    {
+        for (var i = 0; i < name.Length; i++)
+        {
+            var c = name[i];
+            if (c is >= 'A' and <= 'Z')
+                return true;
+        }
+
+        return false;
     }
 }

@@ -98,7 +98,6 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     private readonly ConcurrentDictionary<string, System.Net.Security.SslStreamCertificateContext>
         sslCertificateContexts = new();
-    private int sslContextCacheHitSample;
 
     /// <summary>
     ///     Certificates removed from <see cref="cachedCertificates" /> by <see cref="EnforceCertificateCacheBound" />
@@ -981,20 +980,18 @@ public sealed class CertificateManager : IDisposable
     {
         var key = leaf.Thumbprint;
         if (key != null && sslCertificateContexts.TryGetValue(key, out var cached))
-        {
-            // #region agent log
-            if ((Interlocked.Increment(ref sslContextCacheHitSample) & 1023) == 1)
-            {
-                global::Titanium.Web.Proxy.AgentDebugNdjson.Write("L4", "CertificateManager.CreateSslCertificateContext", "ssl-context-cache-hit",
-                    new { thumb = key.Length >= 8 ? key[..8] : key });
-            }
-            // #endregion
             return cached;
-        }
 
-        // #region agent log
-        var sw = Stopwatch.StartNew();
-        // #endregion
+        var created = BuildSslCertificateContext(leaf);
+
+        if (key == null)
+            return created;
+
+        return sslCertificateContexts.GetOrAdd(key, created);
+    }
+
+    private System.Net.Security.SslStreamCertificateContext BuildSslCertificateContext(X509Certificate2 leaf)
+    {
         var extras = new X509Certificate2Collection();
         System.Net.Security.SslCertificateTrust? trust = null;
 
@@ -1016,28 +1013,16 @@ public sealed class CertificateManager : IDisposable
             foreach (X509Certificate2 cert in IntermediateCertificates)
                 extras.Add(cert);
 
-        System.Net.Security.SslStreamCertificateContext created;
         try
         {
-            created = System.Net.Security.SslStreamCertificateContext.Create(
+            return System.Net.Security.SslStreamCertificateContext.Create(
                 leaf, extras.Count > 0 ? extras : null, offline: true, trust);
         }
         catch (CryptographicException) when (trust != null)
         {
-            created = System.Net.Security.SslStreamCertificateContext.Create(
+            return System.Net.Security.SslStreamCertificateContext.Create(
                 leaf, null, offline: true, trust);
         }
-
-        // #region agent log
-        sw.Stop();
-        global::Titanium.Web.Proxy.AgentDebugNdjson.Write("L4", "CertificateManager.CreateSslCertificateContext", "ssl-context-cache-miss",
-            new { thumb = key is { Length: >= 8 } ? key[..8] : key, ms = sw.Elapsed.TotalMilliseconds });
-        // #endregion
-
-        if (key == null)
-            return created;
-
-        return sslCertificateContexts.GetOrAdd(key, created);
     }
 
     /// <summary>

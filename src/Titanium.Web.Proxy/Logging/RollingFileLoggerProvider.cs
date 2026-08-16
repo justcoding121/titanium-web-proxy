@@ -141,9 +141,11 @@ internal sealed class RollingFileLoggerProvider : ChannelLoggerProviderBase
         }
         catch (InvalidOperationException)
         {
+            // Best-effort close during roll/teardown; stream may already be disposed or in use.
         }
         catch (IOException)
         {
+            // Best-effort close during roll/teardown; ignore sink I/O failures.
         }
         finally
         {
