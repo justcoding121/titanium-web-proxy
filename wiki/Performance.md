@@ -75,7 +75,7 @@ nginx/Windows is a limited port. Use it for **same-OS** comparison only — not 
 
 ## Linux — Titanium vs nginx
 
-Median of **3 repeats** from Actions runs [31947404658](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31947404658) (`compare-same`), [31947403546](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31947403546) (`compare-mitm`), [31944381620](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31944381620) (`compare-terminate`), [31944382877](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31944382877) (`compare-bridges`). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** The RPS workflow installs `libmsquic` (`QuicListener.IsSupported=true` on `ubuntu-latest`).
+Median of **3 repeats** from Actions runs [31947404658](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31947404658) (`compare-same`), [31950003407](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31950003407) (`compare-mitm`, post H3→H1 pool fix), [31944381620](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31944381620) (`compare-terminate`), [31944382877](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31944382877) (`compare-bridges`). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** The RPS workflow installs `libmsquic` (`QuicListener.IsSupported=true` on `ubuntu-latest`).
 
 **Why nginx still leads on H1 plain reverse (~0.66×):** fair harness (split processes, same Kestrel origin). Absolute RPS swings by GHA VM; prefer the **ratio**. TWP reverse cleartext still runs the full MITM session pipeline per keep-alive GET — nginx `proxy_pass` is a thin C reverse path.
 
@@ -83,24 +83,24 @@ Median of **3 repeats** from Actions runs [31947404658](https://github.com/justc
 |---|---|---|---:|---:|---:|---:|---|
 | Reverse | HTTP/1 · plain | HTTP/1 · plain | **25,492** | **25,492** | **38,505** | **38,505** | **nginx** |
 | Reverse | HTTP/1 · TLS | HTTP/1 · plain | **18,345** | **18,345** | **27,565** | **27,565** | **nginx** |
-| MITM | HTTP/1 · TLS | HTTP/1 · TLS | **15,566** | **15,566** | *Not possible* (no MITM) | *Not possible* | |
+| MITM | HTTP/1 · TLS | HTTP/1 · TLS | **19,080** | **19,080** | *Not possible* (no MITM) | *Not possible* | |
 | Reverse | HTTP/2 · TLS | HTTP/1 · plain | **11,233** | **11,233** | **13,545** | **19,079** | **nginx** |
-| MITM | HTTP/2 · TLS | HTTP/1 · TLS | **10,905** | **10,905** | *Not possible* (no MITM) | *Not possible* | |
-| MITM | HTTP/2 · TLS | HTTP/2 · TLS | **5,050** | **5,143** | *Not possible* (no MITM) | *Not possible* | |
+| MITM | HTTP/2 · TLS | HTTP/1 · TLS | **13,679** | **13,679** | *Not possible* (no MITM) | *Not possible* | |
+| MITM | HTTP/2 · TLS | HTTP/2 · TLS | **6,375** | **6,375** | *Not possible* (no MITM) | *Not possible* | |
 | Reverse | HTTP/2 · TLS | HTTP/2 · plain | **12,744** | **12,897** | *Not possible* | *Not possible* | |
 | Reverse | HTTP/2 · plain | HTTP/1 · plain | **32,381** | **32,381** | *Not possible* | *Not possible* | |
 | Reverse | HTTP/2 · plain | HTTP/2 · plain | **7,735** | **7,747** | *Not possible* | *Not possible* | |
 | Reverse | HTTP/2 · plain | HTTP/2 · TLS | **5,715** | **5,731** | *Not possible* | *Not possible* | |
 | Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **19,796** | **19,796** | *Not possible* (no QUIC) | *Not possible* | |
 | Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **7,225** | **7,225** | *Not possible* (no QUIC) | *Not possible* | |
-| MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **768** | **778** | *Not possible* (no QUIC) | *Not possible* | |
-| MITM | HTTP/3 · QUIC | HTTP/2 · TLS | **3,050** | **10,322** | *Not possible* (no QUIC) | *Not possible* | |
-| MITM | HTTP/3 · QUIC | HTTP/3 · QUIC | **9,790** | **9,790** | *Not possible* (no QUIC) | *Not possible* | |
-| MITM | HTTP/1 · TLS | HTTP/2 · TLS | **19,244** | **19,244** | *Not possible* | *Not possible* | |
-| MITM | HTTP/1 · TLS | HTTP/3 · QUIC | **19,352** | **19,352** | *Not possible* (no QUIC) | *Not possible* | |
-| MITM | HTTP/2 · TLS | HTTP/3 · QUIC | **17,758** | **17,758** | *Not possible* (no QUIC) | *Not possible* | |
+| MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **13,519** | **13,519** | *Not possible* (no QUIC) | *Not possible* | |
+| MITM | HTTP/3 · QUIC | HTTP/2 · TLS | **2,339** | **7,421** | *Not possible* (no QUIC) | *Not possible* | |
+| MITM | HTTP/3 · QUIC | HTTP/3 · QUIC | **10,243** | **10,243** | *Not possible* (no QUIC) | *Not possible* | |
+| MITM | HTTP/1 · TLS | HTTP/2 · TLS | **12,659** | **12,659** | *Not possible* | *Not possible* | |
+| MITM | HTTP/1 · TLS | HTTP/3 · QUIC | **15,367** | **15,367** | *Not possible* (no QUIC) | *Not possible* | |
+| MITM | HTTP/2 · TLS | HTTP/3 · QUIC | **10,491** | **10,491** | *Not possible* (no QUIC) | *Not possible* | |
 
-On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.66** (25,492 / 38,505). Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**. Linux H3→H1 TLS MITM **768 / 778** is pre-fix (origin TCP was not returned to the pool); Windows after the fix is **10,416**. Re-ramp `compare-mitm` on Linux to replace this row.
+On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.66** (25,492 / 38,505). Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**.
 
 ### Why isn’t HTTP/3 > HTTP/2 > HTTP/1 in raw RPS?
 
