@@ -132,7 +132,10 @@ public static class KnownHeaders
 
     private static bool TryAssign(ReadOnlySpan<char> name, KnownHeader first, KnownHeader second, KnownHeader third,
         KnownHeader fourth, out KnownHeader header)
-        => TryAssign(name, first, out header) || TryAssign(name, second, third, fourth, out header);
+        => TryAssign(name, first, out header)
+           || TryAssign(name, second, out header)
+           || TryAssign(name, third, out header)
+           || TryAssign(name, fourth, out header);
 
     /// <summary>
     ///     Interns frequent header values (<c>keep-alive</c>, <c>close</c>, <c>chunked</c>, …).
