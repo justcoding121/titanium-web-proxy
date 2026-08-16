@@ -40,6 +40,10 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-same
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-terminate
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-bridges
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-mitm
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-bodies
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-post
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-lossy
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-tls-cost
 ```
 
 ## Windows — Titanium vs nginx
@@ -102,9 +106,123 @@ Median of **3 repeats** from Actions runs [31954143134](https://github.com/justc
 
 On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.71** (27,826 / 39,254). H1 TLS terminate ≈ **0.67** (29,808 / 44,200). Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**.
 
+### Tiny JSON is nginx’s best case (and TWP’s worst)
+
+The tables above use **~64 B keep-alive GET** on loopback. That is a thin reverse `proxy_pass` workload: nginx’s C path wins on Linux, and TWP still pays for a full session pipeline per request. **“Comparable” on reverse only shows up when the work gets heavier** — larger bodies, mutating methods, TLS handshake cost, or delay/loss that exposes HTTP/2 head-of-line blocking. Tiny JSON is the wrong target if the question is whether TWP can keep up with nginx as a reverse proxy under real traffic.
+
+nginx still cannot MITM or speak QUIC in this harness; those paths remain TWP-only.
+
 ### Why isn’t HTTP/3 > HTTP/2 > HTTP/1 in raw RPS?
 
-For **tiny JSON responses** (~64 B) on loopback, that ordering is **not** expected: topology (TLS hop count, terminate vs MITM) dominates; HTTP/2 and HTTP/3 help multiplexing, not single-origin tiny-GET RPS.
+For **tiny JSON responses** (~64 B) on loopback, that ordering is **not** expected: topology (TLS hop count, terminate vs MITM) dominates; HTTP/2 and HTTP/3 help multiplexing, not single-origin tiny-GET RPS. See the **lossy** tables below for a workload where protocol design matters.
+
+## Heavier reverse workloads
+
+Separate from the tiny-GET matrix. Same measurement environments. Modes: `compare-bodies`, `compare-post`, `compare-lossy`, `compare-tls-cost` in [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe). **PUT with the same body is the same proxy work as POST; DELETE with no body matches GET** — only POST is published.
+
+Lossy link = **userspace** shim (not kernel `netem`): TCP gets per-buffer delay + occasional whole-connection stalls (honest HOL for multiplexed H2); UDP datagram drop exists in the harness but H3 lossy arms are not published yet (MsQuic + multi-connection load hangs through the shim).
+
+### Windows — heavier reverse GET (64 KiB / 256 KiB)
+
+Warmup 1s / measure 3s; concurrency 8–64. Source: local `compare-bodies` (`rps-ramp-20260816-160548`).
+
+| Body | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | Winner |
+|---|---|---|---:|---:|---:|---:|---|
+| 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | **10,473** | **10,692** | **926** | **1,016** | **TWP** |
+| 64 KiB | HTTP/2 · TLS | HTTP/1 · plain | **3,600** | **3,656** | **877** | **941** | **TWP** |
+| 64 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **4,567** | **4,567** | *Not possible* (no QUIC) | *Not possible* | |
+| 256 KiB | HTTP/1 · TLS | HTTP/1 · plain | **3,246** | **3,266** | **217** | **254** | **TWP** |
+| 256 KiB | HTTP/2 · TLS | HTTP/1 · plain | **1,032** | **1,048** | **169** | **205** | **TWP** |
+| 256 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **1,048** | **1,145** | *Not possible* (no QUIC) | *Not possible* | |
+
+nginx/Windows collapses on large reverse bodies in this harness; treat as same-OS only.
+
+### Linux — heavier reverse GET (64 KiB / 256 KiB)
+
+Median of **3** repeats. Source: Actions [31958194269](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31958194269) (`compare-bodies`). Warmup 2s / measure 8s.
+
+| Body | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | Winner |
+|---|---|---|---:|---:|---:|---:|---|
+| 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | **6,565** | **6,565** | **8,375** | **8,375** | **nginx** |
+| 64 KiB | HTTP/2 · TLS | HTTP/1 · plain | **3,342** | **3,408** | **3,498** | **3,499** | **nginx** |
+| 64 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **3,631** | **3,631** | *Not possible* (no QUIC) | *Not possible* | |
+| 256 KiB | HTTP/1 · TLS | HTTP/1 · plain | **2,154** | **2,154** | **2,728** | **2,728** | **nginx** |
+| 256 KiB | HTTP/2 · TLS | HTTP/1 · plain | **1,015** | **1,015** | **0** | **4** | **TWP** |
+| 256 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **1,117** | **1,117** | *Not possible* (no QUIC) | *Not possible* | |
+
+On Linux H1 TLS, TWP÷nginx ≈ **0.78** at 64 KiB and ≈ **0.79** at 256 KiB — better than the tiny-GET ≈0.66–0.71 ratio, but nginx still leads sustain when both stay healthy. nginx H2 at 256 KiB failed this harness (~100% errors); TWP H2/H3 completed.
+
+### Windows — POST 64 KiB request + 64 KiB response
+
+Source: local `compare-post` (`rps-ramp-20260816-160844`).
+
+| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | Winner |
+|---|---|---:|---:|---:|---:|---|
+| HTTP/1 · TLS | HTTP/1 · plain | **5,070** | **5,070** | **210** | **212** | **TWP** |
+| HTTP/2 · TLS | HTTP/1 · plain | **88** | **124** | **294** | **294** | **nginx** |
+| HTTP/3 · QUIC | HTTP/1 · plain | **0** | **0** | *Not possible* | *Not possible* | |
+
+H3 POST reverse-terminate hit stream aborts in the probe (not published as a capability claim).
+
+### Linux — POST 64 KiB request + 64 KiB response
+
+Median of **3** repeats. Source: Actions [31958195358](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31958195358) (`compare-post`).
+
+| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | Winner |
+|---|---|---:|---:|---:|---:|---|
+| HTTP/1 · TLS | HTTP/1 · plain | **3,942** | **3,942** | **0** | **0** | **TWP** |
+| HTTP/2 · TLS | HTTP/1 · plain | **120** | **242** | **0** | **0** | **TWP** |
+| HTTP/3 · QUIC | HTTP/1 · plain | **0** | **0** | *Not possible* | *Not possible* | |
+
+Linux nginx returned **100% errors** on 64 KiB POST in this harness (Windows nginx did complete). Prefer TWP H1 POST as a working reverse path; do not read the nginx zero as a fair peak contest until the nginx POST arm is healthy on Ubuntu.
+
+### Windows — lossy / high-RTT (H2 HOL)
+
+Userspace **5 ms** one-way delay + **1%** connection stall; **64 KiB** GET. Source: local `compare-lossy` (`rps-ramp-20260816-161416`).
+
+| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | Winner |
+|---|---|---:|---:|---:|---:|---|
+| HTTP/1 · TLS | HTTP/1 · plain | **576** | **576** | **633** | **633** | **nginx** |
+| HTTP/2 · TLS | HTTP/1 · plain | **15** | **15** | **11** | **13** | **TWP** |
+
+H1 scales with concurrency; H2 collapses under connection stalls (HOL). Absolute RPS is low because the shim delays every buffer — the point is the **protocol shape**, not competing with the tiny-GET table.
+
+### Linux — lossy / high-RTT (H2 HOL)
+
+Median of **3** repeats. Source: Actions [31958196755](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31958196755) (`compare-lossy`).
+
+| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | Winner |
+|---|---|---:|---:|---:|---:|---|
+| HTTP/1 · TLS | HTTP/1 · plain | **1,122** | **1,122** | **1,210** | **1,210** | **nginx** |
+| HTTP/2 · TLS | HTTP/1 · plain | **44** | **46** | **44** | **45** | **(tie)** |
+
+Same story as Windows: H1 stays usable; H2 falls to tens of RPS for both products. TWP and nginx are **comparable** here; tiny-GET H1 leadership does not carry over.
+
+### TLS termination cost (H1 TLS → cleartext origin)
+
+Isolates keep-alive tiny GET vs **new connection per request** (handshake-dominated) vs keep-alive **256 KiB**. Product comparison uses RPS and end-to-end latency; TWP can also capture `ClientTlsTiming` when `TWP_RPS_CAPTURE_TLS=1` (child process) — nginx has no equivalent hook.
+
+#### Windows
+
+Source: local `compare-tls-cost` (`rps-ramp-20260816-161528`).
+
+| Workload | TWP sustain | TWP peak | nginx sustain | nginx peak | Winner | TWP÷nginx |
+|---|---:|---:|---:|---:|---|---:|
+| Keep-alive · tiny GET | **32,224** | **32,224** | **14,228** | **14,994** | **TWP** | **2.26** |
+| New-connection · tiny GET | **899** | **899** | **663** | **704** | **TWP** | **1.36** |
+| Keep-alive · 256 KiB GET | **2,842** | **2,956** | **202** | **252** | **TWP** | **14.1** |
+
+#### Linux
+
+Median of **3** repeats. Source: Actions [31958198072](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31958198072) (`compare-tls-cost`).
+
+| Workload | TWP sustain | TWP peak | nginx sustain | nginx peak | Winner | TWP÷nginx |
+|---|---:|---:|---:|---:|---|---:|
+| Keep-alive · tiny GET | **23,040** | **23,040** | **35,619** | **35,619** | **nginx** | **0.65** |
+| New-connection · tiny GET | **1,236** | **1,239** | **1,039** | **1,039** | **TWP** | **1.19** |
+| Keep-alive · 256 KiB GET | **2,232** | **2,232** | **2,798** | **2,798** | **nginx** | **0.80** |
+
+**Verdict (Linux, authoritative nginx):** On keep-alive tiny terminate, TWP is still ~**0.65×** nginx (same story as the main table). On **new-connection** terminate, TWP is **ahead** (~1.19×) — handshake-dominated work is in the same league and can favor TWP. With **256 KiB** bodies, the ratio improves to ~**0.80×** vs tiny-GET’s ~0.65–0.71×, but nginx still leads sustain when both are healthy.
 
 ## Other measurements
 
