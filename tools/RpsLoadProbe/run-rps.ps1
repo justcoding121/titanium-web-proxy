@@ -29,7 +29,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $project  = Join-Path $PSScriptRoot 'RpsLoadProbe.csproj'
-$exe      = Join-Path $PSScriptRoot 'bin\Release\net10.0\RpsLoadProbe.exe'
+$outDir   = Join-Path $PSScriptRoot 'bin/Release/net10.0'
+$exeWin   = Join-Path $outDir 'RpsLoadProbe.exe'
+$exeUnix  = Join-Path $outDir 'RpsLoadProbe'
 if (-not $ResultsDir) {
     $ResultsDir = Join-Path $PSScriptRoot 'results'
 }
@@ -45,11 +47,25 @@ if (-not $SkipBuild) {
     if ($LASTEXITCODE -ne 0) { throw 'RpsLoadProbe build failed' }
 }
 
-if (-not (Test-Path $exe)) { throw "Executable not found at $exe" }
+$probeCmd = $null
+$probePrefix = @()
+if (Test-Path $exeWin) {
+    $probeCmd = $exeWin
+}
+elseif (Test-Path $exeUnix) {
+    $probeCmd = $exeUnix
+}
+else {
+    # Fallback: run the built DLL via the host (covers some RID-less publish layouts).
+    $dll = Join-Path $outDir 'RpsLoadProbe.dll'
+    if (-not (Test-Path $dll)) { throw "RpsLoadProbe binary not found under $outDir" }
+    $probeCmd = 'dotnet'
+    $probePrefix = @($dll)
+}
 
 New-Item -ItemType Directory -Path $ResultsDir -Force | Out-Null
 
-$probeArgs = @(
+$probeArgs = $probePrefix + @(
     '--ramp',
     '--mode', $Mode,
     '--concurrency', $Concurrency,
@@ -61,7 +77,7 @@ if ($NginxPath) {
     $probeArgs += @('--nginx-path', $NginxPath)
 }
 
-& $exe @probeArgs
+& $probeCmd @probeArgs
 if ($LASTEXITCODE -ne 0) { throw "RpsLoadProbe exited with code $LASTEXITCODE" }
 
 if ($BombardierCheck) {
