@@ -116,10 +116,6 @@ internal static class EmbeddedLoadGenerator
                             var detail = ex.ToString();
                             if (detail.Length > 500) detail = detail[..500];
                             firstError = detail;
-                            // #region agent log
-                            DebugSessionLog.Write("C", "EmbeddedLoadGenerator", "first-error",
-                                new { error = firstError, target = target.ToString(), version = options.HttpVersion.ToString() });
-                            // #endregion
                         }
 
                         Interlocked.Increment(ref errors);

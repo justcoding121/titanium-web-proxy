@@ -295,12 +295,6 @@ public partial class ProxyServer
             if (sessionArgs.Timing != null)
                 sessionArgs.Timing.MarkConnectionReady(newConnection.Id, !firstUse);
 
-            // #region agent log
-            if (firstUse || (streamId & 0x7F) == 1)
-                AgentDebugNdjson.Write("H2H1", "Http2ToHttp11Bridge.lease", "origin-leased",
-                    new { streamId, connId = newConnection.Id, firstUse, upstreamIsHttps, forwardCleartext = sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true }, noCache = false });
-            // #endregion
-
             // Matches HandleHttpSessionRequest's HTTP/1.1 send sequence: compute the (possibly re-compressed)
             // body and its Content-Length *before* SendRequest writes the request line/headers, then stream
             // the already-buffered bytes (GetRequestBody above guarantees IsBodyRead is always true here,
@@ -433,21 +427,7 @@ public partial class ProxyServer
             // Refuse to pool a socket that still has unread bytes in HttpStream's buffer — that is the
             // residual-framing failure mode observed under H2 multiplex (Invalid chunk length / header parse).
             if (connection?.Stream is Helpers.HttpStream httpStream && httpStream.DataAvailable)
-            {
-                // #region agent log
-                AgentDebugNdjson.Write("H2H1", "Http2ToHttp11Bridge.residual", "data-available-after-body",
-                    new { streamId, connId = connection.Id, available = httpStream.Available, keepAlive = response.KeepAlive });
-                // #endregion
                 closeConnection = true;
-            }
-
-            // #region agent log
-            if ((streamId & 0xFF) == 1 || closeConnection)
-                AgentDebugNdjson.Write("H2H1", "Http2ToHttp11Bridge.release-plan", "keep-alive-decision",
-                    new { streamId, connId = connection!.Id, firstUse, keepAlive = response.KeepAlive, closeConnection,
-                        origHasBody = response.OriginalHasBody, origChunked = response.OriginalIsChunked,
-                        origCl = response.OriginalContentLength });
-            // #endregion
         }
         catch (Exception ex)
         {
@@ -459,23 +439,6 @@ public partial class ProxyServer
             // Debug while unexpected failures remain Error.
             if (!cancellationToken.IsCancellationRequested)
             {
-                // #region agent log
-                AgentDebugNdjson.Write("H2H1", "Http2ToHttp11Bridge.catch", "origin-roundtrip-failed",
-                    new
-                    {
-                        streamId,
-                        exType = ex.GetType().FullName,
-                        exMsg = ex.Message,
-                        innerType = ex.InnerException?.GetType().FullName,
-                        innerMsg = ex.InnerException?.Message,
-                        headersLocked = sessionArgs.HttpClient.Response.Locked,
-                        hasConn = connection != null,
-                        origHasBody = sessionArgs.HttpClient.Response.OriginalHasBody,
-                        origChunked = sessionArgs.HttpClient.Response.OriginalIsChunked,
-                        origCl = sessionArgs.HttpClient.Response.OriginalContentLength
-                    });
-                // #endregion
-
                 ProxyDiagnostics.ReportException(logger,
                     $"HTTP/2-to-HTTP/1.1 bridge origin round trip failed for stream {streamId}",
                     new ProxyHttpException(

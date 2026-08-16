@@ -57,10 +57,6 @@ internal sealed class TwpProxyHost : IDisposable
         proxy.AddEndPoint(endPoint);
         proxy.Start();
         WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
-        // #region agent log
-        DebugSessionLog.Write("H1TLS", "TwpProxyHost.StartReverseHttp1Tls", "started",
-            new { listenPort = endPoint.Port, originHttpPort, maxCached = proxy.MaxCachedConnections });
-        // #endregion
         return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 
@@ -89,11 +85,6 @@ internal sealed class TwpProxyHost : IDisposable
         proxy.AddEndPoint(endPoint);
         proxy.Start();
         WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
-        // #region agent log
-        DebugSessionLog.Write("H2H1", "TwpProxyHost.StartReverseHttp2Cleartext", "started",
-            new { listenPort = endPoint.Port, originHttpPort, maxCached = proxy.MaxCachedConnections,
-                maxStreams = proxy.ResourceLimits.MaxConcurrentStreamsPerConnection });
-        // #endregion
         return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 
@@ -120,9 +111,6 @@ internal sealed class TwpProxyHost : IDisposable
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
-        DebugSessionLog.Write("H2H2C", "TwpProxyHost.StartReverseHttp2ToH2c", "started",
-            new { listenPort = endPoint.Port, originHttpPort, maxCached = proxy.MaxCachedConnections,
-                maxStreams = proxy.ResourceLimits.MaxConcurrentStreamsPerConnection });
         return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 
@@ -147,8 +135,6 @@ internal sealed class TwpProxyHost : IDisposable
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
-        DebugSessionLog.Write("H2CH2C", "TwpProxyHost.StartReverseH2cToH2c", "started",
-            new { listenPort = endPoint.Port, originHttpPort });
         return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 
@@ -174,8 +160,6 @@ internal sealed class TwpProxyHost : IDisposable
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
-        DebugSessionLog.Write("H2CH1", "TwpProxyHost.StartReverseH2cToH1", "started",
-            new { listenPort = endPoint.Port, originHttpPort });
         return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 
@@ -200,8 +184,6 @@ internal sealed class TwpProxyHost : IDisposable
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
-        DebugSessionLog.Write("H2CH2", "TwpProxyHost.StartReverseH2c", "started",
-            new { listenPort = endPoint.Port, originHttpsPort });
         return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 
@@ -230,8 +212,6 @@ internal sealed class TwpProxyHost : IDisposable
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
-        DebugSessionLog.Write("H2CH3", "TwpProxyHost.StartReverseH2cToH3", "started",
-            new { listenPort = endPoint.Port, originQuicPort });
         return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 
@@ -251,11 +231,6 @@ internal sealed class TwpProxyHost : IDisposable
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
-        // #region agent log
-        DebugSessionLog.Write("B", "TwpProxyHost.StartReverseHttp2", "started",
-            new { listenPort = endPoint.Port, originHttpsPort, maxCached = proxy.MaxCachedConnections,
-                maxStreams = proxy.ResourceLimits.MaxConcurrentStreamsPerConnection });
-        // #endregion
         return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 
@@ -282,10 +257,6 @@ internal sealed class TwpProxyHost : IDisposable
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
-        // #region agent log
-        DebugSessionLog.Write("C", "TwpProxyHost.StartReverseHttp3", "started",
-            new { listenPort = endPoint.Port, originHttpsPort, maxCached = proxy.MaxCachedConnections });
-        // #endregion
         return new TwpProxyHost(proxy, endPoint.Port, $"https://localhost:{endPoint.Port}/", isExplicitProxy: false);
     }
 
@@ -316,10 +287,6 @@ internal sealed class TwpProxyHost : IDisposable
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
-        // #region agent log
-        DebugSessionLog.Write("H3H1", "TwpProxyHost.StartReverseHttp3Cleartext", "started",
-            new { listenPort = endPoint.Port, originHttpPort, maxCached = endPoint.MaxCachedConnections });
-        // #endregion
         return new TwpProxyHost(proxy, endPoint.Port, $"https://localhost:{endPoint.Port}/", isExplicitProxy: false);
     }
 
@@ -414,8 +381,6 @@ internal sealed class TwpProxyHost : IDisposable
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
-        DebugSessionLog.Write("H1H2", "TwpProxyHost.StartReverseHttp11ToHttp2", "started",
-            new { listenPort = endPoint.Port, originHttpsPort });
         return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 
@@ -445,8 +410,6 @@ internal sealed class TwpProxyHost : IDisposable
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
-        DebugSessionLog.Write("H2H3", "TwpProxyHost.StartReverseHttp2ToHttp3", "started",
-            new { listenPort = endPoint.Port, originQuicPort });
         return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 
@@ -476,8 +439,6 @@ internal sealed class TwpProxyHost : IDisposable
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
-        DebugSessionLog.Write("H3H2", "TwpProxyHost.StartReverseHttp3ToHttp2", "started",
-            new { listenPort = endPoint.Port, originHttpsPort });
         return new TwpProxyHost(proxy, endPoint.Port, $"https://localhost:{endPoint.Port}/", isExplicitProxy: false);
     }
 
@@ -507,8 +468,6 @@ internal sealed class TwpProxyHost : IDisposable
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
-        DebugSessionLog.Write("H1H3", "TwpProxyHost.StartReverseHttp1ToHttp3", "started",
-            new { listenPort = endPoint.Port, originQuicPort });
         return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 

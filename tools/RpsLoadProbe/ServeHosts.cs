@@ -618,15 +618,6 @@ internal static class ServeHost
                     var targets = new List<string> { origin.HttpsUrl };
                     targets.AddRange(origin.ExtraHttpsPorts.Select(p => $"https://127.0.0.1:{p}/"));
                     var extras = origin.ExtraHttpsPorts.Select(p => $"https://127.0.0.1:{p}/").ToList();
-                    // #region agent log
-                    DebugSessionLog.Write("A", "ServeStack.ExplicitMulti", "started",
-                        new
-                        {
-                            hostCount = targets.Count,
-                            maxCached = maxCachedConnections ?? twp.Server.MaxCachedConnections,
-                            httpVersion
-                        });
-                    // #endregion
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, extras, twp.ListenUrl,
                         twp.ListenUrl, targets[0], targets, null, httpVersion);
                 }

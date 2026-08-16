@@ -59,14 +59,6 @@ internal sealed class NginxHost : IDisposable
         var version = ReadVersion(exe);
         // nginx 1.25.1+ uses `http2 on;`; Ubuntu 24.04 ships 1.24 which needs `listen ... ssl http2`.
         var useHttp2OnDirective = SupportsHttp2OnDirective(version);
-        // #region agent log
-        DebugSessionLog.Write("nginx-h2", "NginxHost.TryStartHttp2", "http2-directive-choice",
-            new Dictionary<string, object?>
-            {
-                ["version"] = version,
-                ["useHttp2OnDirective"] = useHttp2OnDirective
-            });
-        // #endregion
 
         var prefixProbe = Path.Combine(Path.GetTempPath(), "twp-rps-nginx-certs-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(prefixProbe);

@@ -246,10 +246,6 @@ internal static class QuicHttp3LoadGenerator
                                 {
                                     firstError = "non-2xx status=" + status;
                                     ProbeLog.Error($"  [quic-h3] {firstError}");
-                                    // #region agent log
-                                    DebugSessionLog.Write("C", "QuicHttp3LoadGenerator", "first-error",
-                                        new { error = firstError, endpoint = proxyEndPoint.ToString(), authority });
-                                    // #endregion
                                 }
                             }
 
@@ -270,10 +266,6 @@ internal static class QuicHttp3LoadGenerator
                             {
                                 firstError = msg;
                                 ProbeLog.Error($"  [quic-h3] {firstError}");
-                                // #region agent log
-                                DebugSessionLog.Write("C", "QuicHttp3LoadGenerator", "first-error",
-                                    new { error = firstError, endpoint = proxyEndPoint.ToString() });
-                                // #endregion
                             }
 
                             Interlocked.Increment(ref errors);

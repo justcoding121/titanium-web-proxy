@@ -470,13 +470,7 @@ internal class TcpConnectionFactory : IDisposable
                             && IsNegotiatedProtocolCompatible(recentConnection, applicationProtocols))
                         {
                             if (!recentConnection.TryEnterLease())
-                            {
-                                // #region agent log
-                                AgentDebugNdjson.Write("H2H1", "TcpConnectionFactory.Get", "double-lease-skipped",
-                                    new { connId = recentConnection.Id, cacheKey });
-                                // #endregion
                                 continue;
-                            }
 
                             ProxyMetrics.PoolReused();
                             return recentConnection;
