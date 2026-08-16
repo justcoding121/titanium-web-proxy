@@ -67,28 +67,28 @@ nginx/Windows is a limited port. Use it for **same-OS** comparison only — not 
 
 ## Linux — Titanium vs nginx
 
-Median of **3 repeats** from Actions run [31936930781](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936930781) (`compare-terminate`; warmup 2s / measure 8s; concurrency 8, 16, 32, 64). **Linux nginx is the authoritative nginx baseline.** Additional `compare-same` / `compare-bridges` ramps fill remaining rows when available.
+Median of **3 repeats** from Actions runs [31940116289](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31940116289) (`compare-same`), [31940118740](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31940118740) (`compare-terminate`), [31940117559](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31940117559) (`compare-bridges`); warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** HTTP/3 arms are skipped on `ubuntu-latest` when `QuicListener` is unavailable (no msquic).
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | Winner |
 |---|---|---:|---:|---:|---:|---|
-| HTTP/1 · plain | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | — |
-| HTTP/1 · TLS | HTTP/1 · plain | **17,040** | **17,040** | **27,225** | **27,225** | **nginx** |
-| HTTP/1 · TLS | HTTP/1 · TLS | *Not measured* | *Not measured* | *Not possible* (no MITM) | *Not possible* | **TWP** |
-| HTTP/2 · TLS | HTTP/1 · plain | **10,271** | **10,271** | **18,131** | **18,131** | **nginx** |
-| HTTP/2 · TLS | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* (no MITM) | *Not possible* | **TWP** |
-| HTTP/2 · TLS | HTTP/2 · plain | *Not measured* | *Not measured* | *Not possible* | *Not possible* | **TWP** |
-| HTTP/2 · plain | HTTP/1 · plain | *Not measured* | *Not measured* | *Not possible* | *Not possible* | **TWP** |
-| HTTP/2 · plain | HTTP/2 · plain | *Not measured* | *Not measured* | *Not possible* | *Not possible* | **TWP** |
-| HTTP/2 · plain | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* | *Not possible* | **TWP** |
-| HTTP/2 · plain | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | **TWP** |
+| HTTP/1 · plain | HTTP/1 · plain | **35,393** | **35,393** | **56,358** | **56,358** | **nginx** |
+| HTTP/1 · TLS | HTTP/1 · plain | **27,353** | **27,353** | **43,973** | **43,973** | **nginx** |
+| HTTP/1 · TLS | HTTP/1 · TLS | **24,183** | **24,183** | *Not possible* (no MITM) | *Not possible* | **TWP** |
+| HTTP/2 · TLS | HTTP/1 · plain | **11,167** | **11,813** | **13,326** | **18,428** | **nginx** |
+| HTTP/2 · TLS | HTTP/2 · TLS | **8,593** | **8,593** | *Not possible* (no MITM) | *Not possible* | **TWP** |
+| HTTP/2 · TLS | HTTP/2 · plain | **12,363** | **12,363** | *Not possible* | *Not possible* | **TWP** |
+| HTTP/2 · plain | HTTP/1 · plain | **29,930** | **29,930** | *Not possible* | *Not possible* | **TWP** |
+| HTTP/2 · plain | HTTP/2 · plain | **11,409** | **11,523** | *Not possible* | *Not possible* | **TWP** |
+| HTTP/2 · plain | HTTP/2 · TLS | **9,524** | **9,524** | *Not possible* | *Not possible* | **TWP** |
+| HTTP/2 · plain | HTTP/3 · QUIC | *Not measured* (no msquic on runner) | *Not measured* | *Not possible* (no QUIC) | *Not possible* | — |
 | HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* (no msquic on runner) | *Not measured* | *Not possible* (no QUIC) | *Not possible* | — |
-| HTTP/3 · QUIC | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | — |
-| HTTP/3 · QUIC | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | — |
-| HTTP/1 · TLS | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* | *Not possible* | **TWP** |
-| HTTP/1 · TLS | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | — |
-| HTTP/2 · TLS | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | — |
+| HTTP/3 · QUIC | HTTP/2 · TLS | *Not measured* (no msquic on runner) | *Not measured* | *Not possible* (no QUIC) | *Not possible* | — |
+| HTTP/3 · QUIC | HTTP/3 · QUIC | *Not measured* (no msquic on runner) | *Not measured* | *Not possible* (no QUIC) | *Not possible* | — |
+| HTTP/1 · TLS | HTTP/2 · TLS | **18,363** | **18,363** | *Not possible* | *Not possible* | **TWP** |
+| HTTP/1 · TLS | HTTP/3 · QUIC | *Not measured* (no msquic on runner) | *Not measured* | *Not possible* (no QUIC) | *Not possible* | — |
+| HTTP/2 · TLS | HTTP/3 · QUIC | *Not measured* (no msquic on runner) | *Not measured* | *Not possible* (no QUIC) | *Not possible* | — |
 
-On this GHA shape, TWP H1 TLS ÷ nginx H1 TLS ≈ **0.63**. Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**.
+On this GHA shape, TWP H1 TLS ÷ nginx H1 TLS ≈ **0.62**. Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**.
 
 ### Why isn’t HTTP/3 > HTTP/2 > HTTP/1 in raw RPS?
 
