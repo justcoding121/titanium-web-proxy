@@ -119,6 +119,37 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     public Models.UpstreamHttpProtocol? UpstreamHttpProtocol { get; set; }
 
+    /// <summary>
+    ///     Reset per-request fields after AfterResponse so this instance can serve the next
+    ///     keep-alive GET on the same client socket.
+    /// </summary>
+    internal override void ResetForNextRequest(object? userData, Models.UpstreamHttpProtocol? upstreamHttpProtocol)
+    {
+        if (disposed)
+            throw new ObjectDisposedException(nameof(SessionEventArgs));
+
+        base.ResetForNextRequest(userData, upstreamHttpProtocol);
+
+        reRequest = false;
+        webSocketDecoderReceive = null;
+        webSocketDecoderSend = null;
+        Http3BufferedBodyReader = null;
+        ResponseHeaderTimeout = null;
+        IdleReadTimeout = null;
+        IdleWriteTimeout = null;
+        RequestTimeout = null;
+        MaxBufferedBodyBytes = null;
+        NetworkFailureRetryAttempts = null;
+        MaxWebSocketFramePayloadBytes = null;
+        OriginHttpVersionPolicy = null;
+        UpstreamHttpProtocol = upstreamHttpProtocol;
+        IsPromise = false;
+        WebSocketServerWriter = null;
+        WebSocketClientWriter = null;
+        MultipartRequestPartSent = null;
+        BeforeWebSocketFrame = null;
+    }
+
     internal bool HasMulipartEventSubscribers => MultipartRequestPartSent != null;
 
     /// <summary>

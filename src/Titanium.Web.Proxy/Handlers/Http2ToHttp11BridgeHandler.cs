@@ -92,7 +92,12 @@ public partial class ProxyServer
             // CopyHttp2FrameAsync's isClient=false direction to decode.
             (sessionArgs, ctx) => Task.CompletedTask,
             async sessionArgs => { await OnAfterResponse(sessionArgs); },
-            headers => PrepareRequestHeaders(headers),
+            // Transparent reverse matches the H1 path: do not rewrite Accept-Encoding / proxy headers.
+            headers =>
+            {
+                if (endPoint is not TransparentBaseProxyEndPoint)
+                    PrepareRequestHeaders(headers);
+            },
             cancellationTokenSource, clientStream.Connection.Id, logger,
             MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits);
     }
@@ -137,7 +142,9 @@ public partial class ProxyServer
 
         // This bridge launches origin work in the background. Normalize headers before
         // launching that task so Http2Helper cannot race a later mutation against the send.
-        PrepareRequestHeaders(sessionArgs.HttpClient.Request.Headers);
+        // Transparent reverse matches the H1 path (PrepareRequestHeaders is explicit-only).
+        if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks)
+            PrepareRequestHeaders(sessionArgs.HttpClient.Request.Headers);
 
         // RFC 8441 extended CONNECT: the stream was opened as a tunnel (e.g. WebSocket-over-HTTP/2).
         // For the websocket protocol, translate to an HTTP/1.1 WebSocket upgrade on the origin.

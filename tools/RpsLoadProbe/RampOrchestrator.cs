@@ -5,9 +5,11 @@ namespace Titanium.Web.Proxy.RpsLoadProbe;
 internal enum ProbeMode
 {
     ReverseHttp1,
+    BareReverseHttp1,
     NginxReverseHttp1,
     HttpsMitm,
     ReverseHttp1Tls,
+    BareReverseHttp1Tls,
     NginxReverseHttp1Tls,
     ReverseHttp2,
     /// <summary>TWP client TLS+h2 → ForwardCleartext H2→H1 bridge → cleartext HTTP/1 origin.</summary>
@@ -55,6 +57,8 @@ internal enum ProbeMode
     /// MITM-only matrix: explicit H1 MITM, transparent H2/H3 MITM, and dual-crypto bridges (no nginx).
     /// </summary>
     CompareMitm,
+    /// <summary>TWP vs bare C# reverse vs nginx on the three Linux nginx-winning reverse rows.</summary>
+    CompareCeiling,
     ExplicitPoolSweep
 }
 
@@ -193,11 +197,13 @@ internal static class RampOrchestrator
         return mode switch
         {
             ProbeMode.ReverseHttp1 => [new("twp-reverse-http1", ProbeMode.ReverseHttp1, null)],
+            ProbeMode.BareReverseHttp1 => [new("bare-reverse-http1", ProbeMode.BareReverseHttp1, null)],
             ProbeMode.NginxReverseHttp1 => nginxAvailable
                 ? [new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null)]
                 : [],
             ProbeMode.HttpsMitm => [new("twp-https-mitm", ProbeMode.HttpsMitm, null)],
             ProbeMode.ReverseHttp1Tls => [new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null)],
+            ProbeMode.BareReverseHttp1Tls => [new("bare-reverse-http1-tls", ProbeMode.BareReverseHttp1Tls, null)],
             ProbeMode.NginxReverseHttp1Tls => nginxAvailable
                 ? [new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null)]
                 : [],
@@ -340,6 +346,26 @@ internal static class RampOrchestrator
                 [new("twp-mitm-http2-to-http1", ProbeMode.MitmHttp2ToHttp1, null)],
             ProbeMode.MitmHttp3ToHttp1 =>
                 [new("twp-mitm-http3-to-http1", ProbeMode.MitmHttp3ToHttp1, null)],
+            ProbeMode.CompareCeiling => nginxAvailable
+                ?
+                [
+                    new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
+                    new("bare-reverse-http1", ProbeMode.BareReverseHttp1, null),
+                    new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null),
+                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
+                    new("bare-reverse-http1-tls", ProbeMode.BareReverseHttp1Tls, null),
+                    new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null),
+                    new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
+                    new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null)
+                ]
+                :
+                [
+                    new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
+                    new("bare-reverse-http1", ProbeMode.BareReverseHttp1, null),
+                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
+                    new("bare-reverse-http1-tls", ProbeMode.BareReverseHttp1Tls, null),
+                    new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null)
+                ],
             ProbeMode.ExplicitPoolSweep =>
             [
                 new("twp-explicit-http1-multi-c4", ProbeMode.ExplicitHttp1Multi, 4),

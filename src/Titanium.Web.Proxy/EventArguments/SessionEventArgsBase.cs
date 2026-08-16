@@ -101,7 +101,7 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     ///     <see cref="ProxyServer.EnableRequestTimingCapture" /> is enabled (otherwise <see langword="null" />
     ///     and no timing overhead is incurred anywhere in the proxy). See <see cref="HttpRequestTiming" />.
     /// </summary>
-    public HttpRequestTiming? Timing { get; }
+    public HttpRequestTiming? Timing { get; private set; }
 
     /// <summary>
     ///     Structured timing for the upstream connection currently used by this session, populated only
@@ -317,5 +317,28 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     public void TerminateSession()
     {
         CancellationTokenSource.Cancel();
+    }
+
+    /// <summary>
+    ///     Prepare this session object for the next keep-alive request on the same client
+    ///     connection. AfterResponse has already run; callers must not observe this instance
+    ///     until the next request line is applied (same contract as Dispose after AfterResponse).
+    /// </summary>
+    internal virtual void ResetForNextRequest(object? userData, UpstreamHttpProtocol? upstreamHttpProtocol)
+    {
+        _ = upstreamHttpProtocol;
+        OperationCancellationToken = null;
+        deadlines?.Reset();
+        enableWinAuth = Server.EnableWinAuth && IsWindowsAuthenticationSupported;
+        Timing = Server.EnableRequestTimingCapture ? new HttpRequestTiming(DateTime.UtcNow) : null;
+        UserData = userData;
+        ConnectTimeout = null;
+        CustomUpStreamProxy = null;
+        CustomUpStreamProxyUsed = null;
+        Exception = null;
+        IsClientResponseCommitted = false;
+        DataSent = null;
+        DataReceived = null;
+        HttpClient.ResetForReuse();
     }
 }

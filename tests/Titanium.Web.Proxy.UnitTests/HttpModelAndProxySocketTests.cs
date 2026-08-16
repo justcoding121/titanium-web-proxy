@@ -151,6 +151,16 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         [TestMethod]
+        public void ParseRequestLine_InternsGetAndRootTarget()
+        {
+            Request.ParseRequestLine("GET / HTTP/1.1", out var method, out var target, out var version);
+
+            Assert.AreSame("GET", method);
+            Assert.AreEqual(Request.OriginFormRoot, target);
+            Assert.AreEqual(HttpHeader.Version11, version);
+        }
+
+        [TestMethod]
         public void ParseRequestLine_WithoutSpaces_ThrowsFormatException()
         {
             var exception = Assert.ThrowsExactly<FormatException>(() =>

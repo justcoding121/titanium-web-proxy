@@ -42,7 +42,7 @@ internal static class ServeProxyHost
     {
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
             or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
-            or ProbeMode.ExplicitPoolSweep)
+            or ProbeMode.CompareMitm or ProbeMode.CompareCeiling or ProbeMode.ExplicitPoolSweep)
         {
             ProbeLog.Error("--serve-proxy requires a single arm mode");
             return 2;
@@ -78,6 +78,15 @@ internal static class ServeProxyHost
                 targetForClient = twp.ListenUrl;
                 break;
             }
+            case ProbeMode.BareReverseHttp1:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var bare = BareHttp1ReverseProxy.Start(originHttpPort);
+                proxy = bare;
+                listenUrl = bare.ListenUrl;
+                targetForClient = bare.ListenUrl;
+                break;
+            }
             case ProbeMode.NginxReverseHttp1:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
@@ -96,6 +105,15 @@ internal static class ServeProxyHost
                 proxy = twp;
                 listenUrl = twp.ListenUrl;
                 targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.BareReverseHttp1Tls:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var bare = BareHttp1ReverseProxy.Start(originHttpPort, tlsTerminate: true);
+                proxy = bare;
+                listenUrl = bare.ListenUrl;
+                targetForClient = bare.ListenUrl;
                 break;
             }
             case ProbeMode.NginxReverseHttp1Tls:
@@ -215,8 +233,10 @@ internal static class ServeProxyHost
     internal static string ModeName(ProbeMode mode) => mode switch
     {
         ProbeMode.ReverseHttp1 => "reverse-http1",
+        ProbeMode.BareReverseHttp1 => "bare-reverse-http1",
         ProbeMode.NginxReverseHttp1 => "nginx-reverse-http1",
         ProbeMode.ReverseHttp1Tls => "reverse-http1-tls",
+        ProbeMode.BareReverseHttp1Tls => "bare-reverse-http1-tls",
         ProbeMode.NginxReverseHttp1Tls => "nginx-reverse-http1-tls",
         ProbeMode.HttpsMitm => "https-mitm",
         ProbeMode.ReverseHttp2 => "reverse-http2",
@@ -244,6 +264,7 @@ internal static class ServeProxyHost
         ProbeMode.CompareSame => "compare-same",
         ProbeMode.CompareBridges => "compare-bridges",
         ProbeMode.CompareMitm => "compare-mitm",
+        ProbeMode.CompareCeiling => "compare-ceiling",
         ProbeMode.ExplicitPoolSweep => "explicit-pool-sweep",
         _ => mode.ToString()
     };
@@ -256,7 +277,7 @@ internal static class ServeHost
     {
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
             or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
-            or ProbeMode.ExplicitPoolSweep)
+            or ProbeMode.CompareMitm or ProbeMode.CompareCeiling or ProbeMode.ExplicitPoolSweep)
         {
             ProbeLog.Error("--serve requires a single mode");
             return 2;
@@ -388,6 +409,13 @@ internal static class ServeHost
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
                         twp.ListenUrl, [twp.ListenUrl], null, "1.1");
                 }
+                case ProbeMode.BareReverseHttp1:
+                {
+                    var origin = await OriginServer.StartAsync(false, cancellationToken);
+                    var bare = BareHttp1ReverseProxy.Start(origin.HttpPort);
+                    return new ServeStack(origin, bare, null, origin.HttpUrl, null, [], bare.ListenUrl, null,
+                        bare.ListenUrl, [bare.ListenUrl], null, "1.1");
+                }
                 case ProbeMode.NginxReverseHttp1:
                 {
                     var origin = await OriginServer.StartAsync(false, cancellationToken);
@@ -409,6 +437,13 @@ internal static class ServeHost
                     var twp = TwpProxyHost.StartReverseHttp1Tls(origin.HttpPort);
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
                         twp.ListenUrl, [twp.ListenUrl], null, "1.1");
+                }
+                case ProbeMode.BareReverseHttp1Tls:
+                {
+                    var origin = await OriginServer.StartAsync(false, cancellationToken);
+                    var bare = BareHttp1ReverseProxy.Start(origin.HttpPort, tlsTerminate: true);
+                    return new ServeStack(origin, bare, null, origin.HttpUrl, null, [], bare.ListenUrl, null,
+                        bare.ListenUrl, [bare.ListenUrl], null, "1.1");
                 }
                 case ProbeMode.NginxReverseHttp1Tls:
                 {

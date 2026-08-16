@@ -148,6 +148,19 @@ public class Request : RequestResponseBase
     /// </summary>
     internal bool CancelRequest { get; set; }
 
+    internal override void ResetState()
+    {
+        base.ResetState();
+        Method = string.Empty;
+        IsHttps = false;
+        requestUriString8 = ByteString.Empty;
+        Authority = ByteString.Empty;
+        CancelRequest = false;
+        ExtendedConnectProtocol = null;
+        ExpectationSucceeded = false;
+        ExpectationFailed = false;
+    }
+
     /// <summary>
     ///     RFC 8441: the value of the <c>:protocol</c> pseudo-header for HTTP/2 extended CONNECT
     ///     requests (e.g. <c>"websocket"</c>). <see langword="null"/> for all other requests.
@@ -223,6 +236,9 @@ public class Request : RequestResponseBase
         }
     }
 
+    internal static readonly ByteString OriginFormRoot = (ByteString)"/";
+    internal static readonly ByteString AsteriskForm = (ByteString)"*";
+
     internal static void ParseRequestLine(string httpCmd, out string method, out ByteString requestUri,
         out Version version)
     {
@@ -235,25 +251,49 @@ public class Request : RequestResponseBase
 
         // break up the line into three components (method, remote URL & Http Version)
 
-        // Find the request Verb
-        method = httpCmd.Substring(0, firstSpace);
-        if (!IsAllUpper(method)) method = method.ToUpper();
+        method = InternMethod(httpCmd.AsSpan(0, firstSpace));
 
         version = HttpHeader.Version11;
 
         if (firstSpace == lastSpace)
         {
-            requestUri = (ByteString)httpCmd.AsSpan(firstSpace + 1).ToString();
+            requestUri = InternTarget(httpCmd.AsSpan(firstSpace + 1));
         }
         else
         {
-            requestUri = (ByteString)httpCmd.AsSpan(firstSpace + 1, lastSpace - firstSpace - 1).ToString();
+            requestUri = InternTarget(httpCmd.AsSpan(firstSpace + 1, lastSpace - firstSpace - 1));
 
             // parse the HTTP version
             var httpVersion = httpCmd.AsSpan(lastSpace + 1);
 
             if (httpVersion.EqualsIgnoreCase("HTTP/1.0".AsSpan(0))) version = HttpHeader.Version10;
         }
+    }
+
+    private static string InternMethod(ReadOnlySpan<char> method)
+    {
+        if (method.Equals("GET", StringComparison.OrdinalIgnoreCase)) return "GET";
+        if (method.Equals("POST", StringComparison.OrdinalIgnoreCase)) return "POST";
+        if (method.Equals("HEAD", StringComparison.OrdinalIgnoreCase)) return "HEAD";
+        if (method.Equals("PUT", StringComparison.OrdinalIgnoreCase)) return "PUT";
+        if (method.Equals("DELETE", StringComparison.OrdinalIgnoreCase)) return "DELETE";
+        if (method.Equals("OPTIONS", StringComparison.OrdinalIgnoreCase)) return "OPTIONS";
+        if (method.Equals("PATCH", StringComparison.OrdinalIgnoreCase)) return "PATCH";
+        if (method.Equals("CONNECT", StringComparison.OrdinalIgnoreCase)) return "CONNECT";
+
+        var allocated = method.ToString();
+        return IsAllUpper(allocated) ? allocated : allocated.ToUpperInvariant();
+    }
+
+    private static ByteString InternTarget(ReadOnlySpan<char> target)
+    {
+        if (target.Length == 1)
+        {
+            if (target[0] == '/') return OriginFormRoot;
+            if (target[0] == '*') return AsteriskForm;
+        }
+
+        return (ByteString)target.ToString();
     }
 
     private static bool IsAllUpper(string input)

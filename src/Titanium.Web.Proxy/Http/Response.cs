@@ -49,6 +49,15 @@ public class Response : RequestResponseBase
     /// </summary>
     internal Func<Stream, CancellationToken, Task>? StreamBodyWriter { get; set; }
 
+    internal override void ResetState()
+    {
+        base.ResetState();
+        StatusCode = 0;
+        StatusDescription = string.Empty;
+        RequestMethod = string.Empty;
+        StreamBodyWriter = null;
+    }
+
     /// <summary>
     ///     Has response body?
     /// </summary>
@@ -156,7 +165,8 @@ public class Response : RequestResponseBase
         if (secondSpace != -1)
         {
             statusCode = int.Parse(httpStatus.AsSpan(firstSpace + 1, secondSpace - firstSpace - 1));
-            statusDescription = httpStatus.AsSpan(secondSpace + 1).ToString();
+            var description = httpStatus.AsSpan(secondSpace + 1);
+            statusDescription = description.Equals("OK", StringComparison.Ordinal) ? "OK" : description.ToString();
         }
         else
         {

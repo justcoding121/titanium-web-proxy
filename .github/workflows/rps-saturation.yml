@@ -20,10 +20,15 @@ on:
           - compare-same
           - compare-bridges
           - compare-mitm
+          - compare-ceiling
           - compare
           - compare-tls
           - reverse-http1
+          - bare-reverse-http1
           - nginx-reverse-http1
+          - reverse-http1-tls
+          - bare-reverse-http1-tls
+          - nginx-reverse-http1-tls
           - https-mitm
           - mitm-http2-to-http1
           - mitm-http3-to-http1

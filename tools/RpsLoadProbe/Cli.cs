@@ -137,7 +137,7 @@ internal static class Cli
         if (modeText == null || !TryParseMode(modeText, out var mode) ||
             mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
                 or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
-                or ProbeMode.CompareMitm or ProbeMode.ExplicitPoolSweep)
+                or ProbeMode.CompareMitm or ProbeMode.CompareCeiling or ProbeMode.ExplicitPoolSweep)
             return Fail("Required: --serve-proxy --mode <single arm>");
         return ServeProxyHost.RunAsync(mode, originHttpPort, originHttpsPort, nginxPath, maxCachedConnections, ct)
             .GetAwaiter().GetResult();
@@ -186,6 +186,9 @@ internal static class Cli
             case "reverse-http1":
                 mode = ProbeMode.ReverseHttp1;
                 return true;
+            case "bare-reverse-http1":
+                mode = ProbeMode.BareReverseHttp1;
+                return true;
             case "nginx-reverse-http1":
                 mode = ProbeMode.NginxReverseHttp1;
                 return true;
@@ -194,6 +197,9 @@ internal static class Cli
                 return true;
             case "reverse-http1-tls":
                 mode = ProbeMode.ReverseHttp1Tls;
+                return true;
+            case "bare-reverse-http1-tls":
+                mode = ProbeMode.BareReverseHttp1Tls;
                 return true;
             case "nginx-reverse-http1-tls":
                 mode = ProbeMode.NginxReverseHttp1Tls;
@@ -267,6 +273,9 @@ internal static class Cli
             case "compare-mitm":
                 mode = ProbeMode.CompareMitm;
                 return true;
+            case "compare-ceiling":
+                mode = ProbeMode.CompareCeiling;
+                return true;
             case "mitm-http2-to-http1":
                 mode = ProbeMode.MitmHttp2ToHttp1;
                 return true;
@@ -296,8 +305,10 @@ internal static class Cli
 
             Modes:
               reverse-http1           TWP TransparentProxyEndPoint -> Kestrel HTTP/1
+              bare-reverse-http1      Thin C# HTTP/1 reverse (runtime-ceiling control)
               nginx-reverse-http1     nginx proxy_pass -> same Kestrel HTTP/1 origin
               reverse-http1-tls       TWP TLS-terminating reverse -> Kestrel HTTPS (h1)
+              bare-reverse-http1-tls  Thin C# TLS-terminate HTTP/1 reverse
               nginx-reverse-http1-tls nginx TLS reverse -> same Kestrel HTTPS origin (h1)
               https-mitm              TWP Explicit MITM -> Kestrel HTTPS
               mitm-http2-to-http1     TWP H2 TLS MITM -> H2→H1 bridge -> Kestrel HTTPS/h1
@@ -325,6 +336,7 @@ internal static class Cli
               compare-same            Same-protocol: H1 cleartext, H1 TLS, H1 MITM, H2 MITM, H3 MITM (+ nginx)
               compare-bridges         Cross-version bridges only (H1↔H2↔H3; no nginx)
               compare-mitm            MITM matrix: explicit H1, H2/H3 direct, dual-crypto bridges
+              compare-ceiling         TWP vs bare C# vs nginx on H1 / H1 TLS / H2→H1 reverse
               explicit-pool-sweep     Fan-out with MaxCachedConnections 4 / 32 / 128
 
             Options:

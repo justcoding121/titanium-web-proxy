@@ -222,7 +222,7 @@ public class HttpWebClient
         string? upstreamProxyUserName = null;
         string? upstreamProxyPassword = null;
 
-        string url;
+        string? url = null;
         if (useUpstreamProxy)
         {
             // Upstream HTTP proxies require absolute-form targets and may need Proxy-Authorization.
@@ -244,11 +244,7 @@ public class HttpWebClient
                 upstreamProxyPassword = upstreamProxy.Password;
             }
         }
-        else if (isTransparent)
-        {
-            url = Request.RequestUriString;
-        }
-        else
+        else if (!isTransparent)
         {
             if (UriExtensions.GetScheme(Request.RequestUriString8).Length == 0)
                 url = Request.RequestUriString;
@@ -280,7 +276,10 @@ public class HttpWebClient
         var headerBuilder = HeaderBuilder.Rent();
         try
         {
-            headerBuilder.WriteRequestLine(Request.Method, url, originHttpVersion);
+            if (url != null)
+                headerBuilder.WriteRequestLine(Request.Method, url, originHttpVersion);
+            else
+                headerBuilder.WriteRequestLine(Request.Method, Request.RequestUriString8, originHttpVersion);
             headerBuilder.WriteHeaders(Request.Headers, !isTransparent, upstreamProxyUserName, upstreamProxyPassword);
 
             // write request headers
@@ -351,5 +350,31 @@ public class HttpWebClient
 
         Data.Clear();
         UserData = null;
+    }
+
+    /// <summary>
+    ///     Reset for the next keep-alive request on the same client socket. Drops the upstream
+    ///     binding (the handler re-applies the sticky connection) and clears request/response
+    ///     objects in place.
+    /// </summary>
+    internal void ResetForReuse()
+    {
+        connection = null;
+        upstreamConnectionId = null;
+        upstreamRemoteEndPoint = null;
+        upstreamConnectionTiming = null;
+        CloseServerConnection = false;
+
+        Request.ResetState();
+        if (Response.GetType() != typeof(Response))
+            Response = new Response();
+        else
+            Response.ResetState();
+
+        Data.Clear();
+        UserData = null;
+        UpStreamEndPoint = null;
+        UpStreamEndPointIPv4 = null;
+        UpStreamEndPointIPv6 = null;
     }
 }

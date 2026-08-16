@@ -1,4 +1,6 @@
-﻿namespace Titanium.Web.Proxy.Http;
+﻿using System;
+
+namespace Titanium.Web.Proxy.Http;
 
 /// <summary>
 ///     Well known http headers.
@@ -56,4 +58,103 @@ public static class KnownHeaders
 
     public static readonly KnownHeader TransferEncoding = "Transfer-Encoding";
     public static readonly KnownHeader TransferEncodingChunked = "chunked";
+
+    // Common wire names not part of the historical public surface — interned on the parse path.
+    internal static readonly KnownHeader UserAgent = "User-Agent";
+    internal static readonly KnownHeader Date = "Date";
+    internal static readonly KnownHeader Server = "Server";
+    internal static readonly KnownHeader Cookie = "Cookie";
+    internal static readonly KnownHeader KeepAlive = "Keep-Alive";
+    internal static readonly KnownHeader AcceptLanguage = "Accept-Language";
+    internal static readonly KnownHeader Via = "Via";
+
+    /// <summary>
+    ///     Maps a header name span to a shared <see cref="KnownHeader" /> so parse/serialize reuse
+    ///     interned name strings and <see cref="Models.ByteString" /> bytes.
+    /// </summary>
+    internal static bool TryMatchName(ReadOnlySpan<char> name, out KnownHeader header)
+    {
+        name = name.Trim();
+        header = null!;
+        switch (name.Length)
+        {
+            case 3:
+                if (Via.Equals(name)) { header = Via; return true; }
+                return false;
+            case 4:
+                if (Host.Equals(name)) { header = Host; return true; }
+                if (Date.Equals(name)) { header = Date; return true; }
+                return false;
+            case 6:
+                if (Accept.Equals(name)) { header = Accept; return true; }
+                if (Cookie.Equals(name)) { header = Cookie; return true; }
+                if (Expect.Equals(name)) { header = Expect; return true; }
+                if (Server.Equals(name)) { header = Server; return true; }
+                return false;
+            case 7:
+                if (Upgrade.Equals(name)) { header = Upgrade; return true; }
+                if (Trailer.Equals(name)) { header = Trailer; return true; }
+                return false;
+            case 8:
+                if (Location.Equals(name)) { header = Location; return true; }
+                return false;
+            case 10:
+                if (Connection.Equals(name)) { header = Connection; return true; }
+                if (UserAgent.Equals(name)) { header = UserAgent; return true; }
+                if (KeepAlive.Equals(name)) { header = KeepAlive; return true; }
+                return false;
+            case 12:
+                if (ContentType.Equals(name)) { header = ContentType; return true; }
+                return false;
+            case 13:
+                if (Authorization.Equals(name)) { header = Authorization; return true; }
+                return false;
+            case 14:
+                if (ContentLength.Equals(name)) { header = ContentLength; return true; }
+                if (ContentLengthHttp2.Equals(name)) { header = ContentLengthHttp2; return true; }
+                return false;
+            case 15:
+                if (AcceptEncoding.Equals(name)) { header = AcceptEncoding; return true; }
+                if (AcceptLanguage.Equals(name)) { header = AcceptLanguage; return true; }
+                return false;
+            case 16:
+                if (ContentEncoding.Equals(name)) { header = ContentEncoding; return true; }
+                if (ProxyConnection.Equals(name)) { header = ProxyConnection; return true; }
+                return false;
+            case 17:
+                if (TransferEncoding.Equals(name)) { header = TransferEncoding; return true; }
+                return false;
+            case 18:
+                if (ProxyAuthenticate.Equals(name)) { header = ProxyAuthenticate; return true; }
+                return false;
+            case 19:
+                if (ProxyAuthorization.Equals(name)) { header = ProxyAuthorization; return true; }
+                return false;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    ///     Interns frequent header values (<c>keep-alive</c>, <c>close</c>, <c>chunked</c>, …).
+    /// </summary>
+    internal static bool TryMatchValue(ReadOnlySpan<char> value, out KnownHeader header)
+    {
+        value = value.Trim();
+        header = null!;
+        switch (value.Length)
+        {
+            case 5:
+                if (ConnectionClose.Equals(value)) { header = ConnectionClose; return true; }
+                return false;
+            case 7:
+                if (TransferEncodingChunked.Equals(value)) { header = TransferEncodingChunked; return true; }
+                return false;
+            case 10:
+                if (ConnectionKeepAlive.Equals(value)) { header = ConnectionKeepAlive; return true; }
+                return false;
+            default:
+                return false;
+        }
+    }
 }

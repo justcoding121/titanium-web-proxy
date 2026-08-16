@@ -39,8 +39,18 @@ internal static class HeaderParser
         var colonIndex = tmpLine.IndexOf(':');
         if (colonIndex == -1) throw new FormatException("Header line should contain a colon character.");
 
-        var headerName = tmpLine.AsSpan(0, colonIndex).ToString();
-        var headerValue = tmpLine.AsSpan(colonIndex + 1).TrimStart().ToString();
-        headerCollection.AddHeader(headerName, headerValue);
+        var nameSpan = tmpLine.AsSpan(0, colonIndex);
+        var valueSpan = tmpLine.AsSpan(colonIndex + 1).TrimStart();
+
+        if (KnownHeaders.TryMatchName(nameSpan, out var knownName))
+        {
+            if (KnownHeaders.TryMatchValue(valueSpan, out var knownValue))
+                headerCollection.AddHeader(knownName, knownValue);
+            else
+                headerCollection.AddHeader(knownName, valueSpan.ToString());
+            return;
+        }
+
+        headerCollection.AddHeader(nameSpan.ToString(), valueSpan.ToString());
     }
 }

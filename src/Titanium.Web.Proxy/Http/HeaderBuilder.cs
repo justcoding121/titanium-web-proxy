@@ -40,7 +40,32 @@ internal class HeaderBuilder
     {
         Write(httpMethod);
         WriteAscii(" ");
-        Write(httpUrl);
+        if (httpUrl.Length == 0)
+            WriteAscii("/");
+        else
+            Write(httpUrl);
+        WriteHttpVersion(version);
+        WriteLine();
+    }
+
+    /// <summary>
+    ///     Transparent reverse: write the origin-form target from the already-decoded request-line
+    ///     bytes instead of allocating <see cref="Request.RequestUriString" />.
+    /// </summary>
+    public void WriteRequestLine(string httpMethod, ByteString httpUrl, Version version)
+    {
+        Write(httpMethod);
+        WriteAscii(" ");
+        if (httpUrl.Length == 0)
+            WriteAscii("/");
+        else
+            Write(httpUrl);
+        WriteHttpVersion(version);
+        WriteLine();
+    }
+
+    private void WriteHttpVersion(Version version)
+    {
         if (version.Major == 1 && version.Minor == 1)
             WriteAscii(" HTTP/1.1");
         else if (version.Major == 1 && version.Minor == 0)
@@ -52,8 +77,6 @@ internal class HeaderBuilder
             WriteAscii(".");
             WriteDecimal(version.Minor);
         }
-
-        WriteLine();
     }
 
     public void WriteResponseLine(Version version, int statusCode, string statusDescription)
@@ -98,9 +121,10 @@ internal class HeaderBuilder
 
     public void WriteHeader(HttpHeader header)
     {
-        Write(header.Name);
+        // NameData/ValueData are already ISO-8859-1 bytes — do not force string + GetBytes.
+        Write(header.NameData);
         WriteAscii(": ");
-        Write(header.Value);
+        Write(header.ValueData);
         WriteLine();
     }
 
@@ -112,9 +136,19 @@ internal class HeaderBuilder
 
     public void Write(string str)
     {
-        var encoding = HttpHeader.Encoding;
+        if (str.Length == 0) return;
 
-        var buf = ArrayPool<byte>.Shared.Rent(encoding.GetMaxByteCount(str.Length));
+        var encoding = HttpHeader.Encoding;
+        var max = encoding.GetMaxByteCount(str.Length);
+        if (max <= 256)
+        {
+            Span<byte> stack = stackalloc byte[max];
+            var bytes = encoding.GetBytes(str.AsSpan(), stack);
+            stream.Write(stack.Slice(0, bytes));
+            return;
+        }
+
+        var buf = ArrayPool<byte>.Shared.Rent(max);
         try
         {
             var span = new Span<byte>(buf);
@@ -125,6 +159,13 @@ internal class HeaderBuilder
         {
             ArrayPool<byte>.Shared.Return(buf);
         }
+    }
+
+    private void Write(ByteString data)
+    {
+        var span = data.Span;
+        if (span.Length == 0) return;
+        stream.Write(span);
     }
 
     /// <summary>Writes an ASCII literal without ArrayPool rent (status lines / separators).</summary>
