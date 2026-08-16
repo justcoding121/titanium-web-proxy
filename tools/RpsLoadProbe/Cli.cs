@@ -128,7 +128,8 @@ internal static class Cli
     {
         if (modeText == null || !TryParseMode(modeText, out var mode) ||
             mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
-                or ProbeMode.CompareTerminate or ProbeMode.ExplicitPoolSweep)
+                or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
+                or ProbeMode.ExplicitPoolSweep)
             return Fail("Required: --serve-proxy --mode <single arm>");
         return ServeProxyHost.RunAsync(mode, originHttpPort, originHttpsPort, nginxPath, maxCachedConnections, ct)
             .GetAwaiter().GetResult();
@@ -233,6 +234,9 @@ internal static class Cli
             case "compare-terminate":
                 mode = ProbeMode.CompareTerminate;
                 return true;
+            case "compare-same":
+                mode = ProbeMode.CompareSame;
+                return true;
             case "compare-bridges":
                 mode = ProbeMode.CompareBridges;
                 return true;
@@ -278,7 +282,8 @@ internal static class Cli
               compare-http2           Sequential: TWP h2 MITM, nginx h2, TWP h3
               compare-tls             Sequential: TWP h1-tls, nginx h1-tls, TWP h2 MITM, nginx h2, TWP h3
               compare-terminate       Fair terminate: H1 TLS, H2→H1, H3→H1 (+ nginx H1/H2)
-              compare-bridges         All cross-version bridges + native H2/H3 (no nginx)
+              compare-same            Same-protocol: H1 cleartext, H1 TLS, H1 MITM, H2 MITM, H3 MITM (+ nginx)
+              compare-bridges         Cross-version bridges only (H1↔H2↔H3; no nginx)
               explicit-pool-sweep     Fan-out with MaxCachedConnections 4 / 32 / 128
 
             Options:

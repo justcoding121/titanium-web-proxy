@@ -31,6 +31,10 @@ internal enum ProbeMode
     CompareTls,
     /// <summary>Fair TLS-terminate compare: H1 TLS, H2→H1 cleartext, H3→H1 cleartext vs nginx where available.</summary>
     CompareTerminate,
+    /// <summary>
+    /// Same-protocol matrix: H1 cleartext, H1 TLS terminate, H2 MITM, H3 MITM (+ nginx where comparable).
+    /// </summary>
+    CompareSame,
     /// <summary>All implemented cross-version bridges under load (no nginx).</summary>
     CompareBridges,
     ExplicitPoolSweep
@@ -92,7 +96,7 @@ internal static class RampOrchestrator
 
         if ((options.Mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp1Tls
                 or ProbeMode.NginxReverseHttp2 or ProbeMode.Compare or ProbeMode.CompareHttp2
-                or ProbeMode.CompareTls or ProbeMode.CompareTerminate)
+                or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame)
             && nginxExe == null)
         {
             ProbeLog.Info(NginxHost.NginxMissingMessage());
@@ -201,6 +205,26 @@ internal static class RampOrchestrator
                     new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null, "H2H1"),
                     new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null, "H3H1")
                 ],
+            ProbeMode.CompareSame => nginxAvailable
+                ?
+                [
+                    new("twp-reverse-http1", ProbeMode.ReverseHttp1, null, "H1"),
+                    new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null, "H1"),
+                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null, "H1TLS"),
+                    new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null, "H1TLS"),
+                    new("twp-https-mitm", ProbeMode.HttpsMitm, null, "MITM"),
+                    new("twp-reverse-http2", ProbeMode.ReverseHttp2, null, "H2H2"),
+                    new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null, "H2TERM"),
+                    new("twp-reverse-http3", ProbeMode.ReverseHttp3, null, "H3H3")
+                ]
+                :
+                [
+                    new("twp-reverse-http1", ProbeMode.ReverseHttp1, null, "H1"),
+                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null, "H1TLS"),
+                    new("twp-https-mitm", ProbeMode.HttpsMitm, null, "MITM"),
+                    new("twp-reverse-http2", ProbeMode.ReverseHttp2, null, "H2H2"),
+                    new("twp-reverse-http3", ProbeMode.ReverseHttp3, null, "H3H3")
+                ],
             ProbeMode.CompareBridges =>
             [
                 new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null, "H2H1"),
@@ -208,9 +232,7 @@ internal static class RampOrchestrator
                 new("twp-reverse-http1-to-http3", ProbeMode.ReverseHttp1ToHttp3, null, "H1H3"),
                 new("twp-reverse-http2-to-http3", ProbeMode.ReverseHttp2ToHttp3, null, "H2H3"),
                 new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null, "H3H1"),
-                new("twp-reverse-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null, "H3H2"),
-                new("twp-reverse-http2", ProbeMode.ReverseHttp2, null, "H2H2"),
-                new("twp-reverse-http3", ProbeMode.ReverseHttp3, null, "H3H3")
+                new("twp-reverse-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null, "H3H2")
             ],
             ProbeMode.ExplicitPoolSweep =>
             [

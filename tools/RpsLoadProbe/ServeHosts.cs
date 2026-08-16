@@ -31,7 +31,8 @@ internal static class ServeProxyHost
         string? nginxPath, int? maxCachedConnections, CancellationToken cancellationToken)
     {
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
-            or ProbeMode.CompareTerminate or ProbeMode.CompareBridges or ProbeMode.ExplicitPoolSweep)
+            or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
+            or ProbeMode.ExplicitPoolSweep)
         {
             ProbeLog.Error("--serve-proxy requires a single arm mode");
             return 2;
@@ -192,6 +193,7 @@ internal static class ServeProxyHost
         ProbeMode.CompareHttp2 => "compare-http2",
         ProbeMode.CompareTls => "compare-tls",
         ProbeMode.CompareTerminate => "compare-terminate",
+        ProbeMode.CompareSame => "compare-same",
         ProbeMode.CompareBridges => "compare-bridges",
         ProbeMode.ExplicitPoolSweep => "explicit-pool-sweep",
         _ => mode.ToString()
@@ -204,7 +206,8 @@ internal static class ServeHost
         CancellationToken cancellationToken)
     {
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
-            or ProbeMode.CompareTerminate or ProbeMode.CompareBridges or ProbeMode.ExplicitPoolSweep)
+            or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
+            or ProbeMode.ExplicitPoolSweep)
         {
             ProbeLog.Error("--serve requires a single mode");
             return 2;
