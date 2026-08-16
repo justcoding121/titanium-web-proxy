@@ -1,8 +1,21 @@
 # Performance
 
-Titanium targets **low-overhead MITM proxying**: connection pooling, HTTP/2 multiplexing, and buffer reuse. Figures below were measured on one Windows 11 / .NET 10 machine with **RpsLoadProbe** and the Basic example in Release. Treat them as orientation, not a guarantee—re-run on your hardware.
+Titanium targets **low-overhead MITM proxying**: connection pooling, HTTP/2 multiplexing, and buffer reuse. Numbers below are **Release** measurements with [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe) (and BenchmarkDotNet / Basic example where noted). They are orientation only — absolute RPS varies by hardware, OS, and background load.
 
 For pooling knobs and certificate first-visit tuning, see [Performance and pooling](Home#performance-and-pooling).
+
+## Measurement environment
+
+Unless a section names another host, saturation RPS tables used:
+
+| | |
+|---|---|
+| OS | Windows 11 (10.0.26200) |
+| CPU | 11th Gen Intel Core i7-1185G7 @ 3.00 GHz (8 logical processors) |
+| RAM | 31.8 GiB |
+| Runtime | .NET 10.0.10 |
+| nginx | nginx/Windows **1.31.3** |
+| Harness | RpsLoadProbe Release; arms run **sequentially** |
 
 ## At a glance
 
@@ -13,7 +26,6 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 | Cleartext reverse HTTP/1 peak | **~16.0k RPS** (TWP) vs **~15.5k RPS** (nginx/Windows) |
 | TLS-terminate reverse HTTP/1 peak | **~24.7k RPS** (TWP) vs **~13.0k RPS** (nginx/Windows) |
 | TLS-terminate H2→H1 cleartext peak | **~7.6k RPS** @ c=64, **0% err** (TWP) · nginx **~14.2k** @ c=32 (fails SLO at c=64) |
-| Reverse HTTP/3 (MITM to Quic origin) | see prior compare-tls tables |
 | Explicit HTTPS MITM peak | **~13.6k RPS** |
 | Basic example footprint (Release, after load) | **~74 MB** working set · **~24–29 MB** private bytes |
 
@@ -25,15 +37,15 @@ For **tiny JSON responses** (~64 B) on loopback, that ordering is **not** expect
 2. **HTTP/2/3 shine at multiplexing**, not at maximizing single-origin tiny-GET RPS.
 3. **Fair terminate topology** (client TLS → cleartext origin) is what nginx uses for H2. TWP matches that with `ForwardCleartext` + the H2→H1 bridge (and H1 TLS terminate).
 
-### H2→H1 cleartext bridge (fixed)
+### H2→H1 cleartext bridge
 
-Under multiplexed load the bridge used `RespondStreaming` (HEADERS without `END_STREAM` + DATA). .NET `HttpClient` reported **`Received an HTTP/2 pseudo-header as a trailing header`** and error rates climbed with concurrency. The bridge also omitted `IsExternalBridge`, racing `Http2Helper` against the synthetic emitter.
+Under multiplexed load an earlier bridge path used `RespondStreaming` (HEADERS without `END_STREAM` + DATA). .NET `HttpClient` reported **`Received an HTTP/2 pseudo-header as a trailing header`** and error rates climbed with concurrency. The stream was also missing `IsExternalBridge`, racing `Http2Helper` against the synthetic emitter.
 
-**Fix:** mark the stream `IsExternalBridge`, buffer the origin body, and emit via the buffered synthetic path. Keep-alive pooling remains enabled with residual-buffer and lease guards.
+The shipped path marks `IsExternalBridge`, buffers the origin body, and emits via the buffered synthetic path. Keep-alive pooling remains enabled with residual-buffer and lease guards.
 
-## Saturation RPS (this Windows machine)
+## Saturation RPS
 
-**Machine:** Windows 11 (10.0.26200), 11th Gen Intel Core i7-1185G7 @ 3.00 GHz (8 logical), 31.8 GiB RAM, .NET 10.0.10, nginx/Windows **1.31.3**.
+Reproduce locally (Release):
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-terminate
@@ -41,7 +53,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-terminate
 
 ### Fair TLS-terminate compare (`compare-terminate`)
 
-CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-045803.csv` (warmup 2s / measure 8s, c=8,32,64).
+Source CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-045803.csv` (warmup 2s / measure 8s; concurrency 8, 32, 64).
 
 | Arm | Topology | Sustainable | Peak | Notes |
 |---|---|---:|---:|---|
@@ -49,11 +61,11 @@ CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-045803.csv` (warmup 2s / meas
 | nginx H1 TLS | ssl → cleartext H1 | **12,693** @ 64 | **13,010** | 0% err |
 | TWP H2→H1 | Client h2 TLS → H2→H1 bridge → cleartext H1 | **7,554** @ 64 | **7,554** | **0% err** (stable at c=64) |
 | nginx H2 | Client h2 TLS → cleartext H1 | **14,175** @ 32 | **14,175** | fails SLO at c=64 |
-| TWP H3→H1 | Client h3 → cleartext H1 | — | ~1.8k | **errors** (stream abort 258) — follow-up |
+| TWP H3→H1 | Client h3 → cleartext H1 | — | ~1.8k | errors (stream abort 258) — follow-up |
 
-nginx H2 still leads peak RPS on this machine; TWP H2→H1 is the first zero-error fair topology and stays within SLO at c=64 where nginx does not.
+On the hardware in [Measurement environment](#measurement-environment), nginx H2 still leads peak RPS; TWP H2→H1 is the first zero-error fair terminate topology and stays within SLO at c=64 where nginx H2 does not.
 
-### Protocol / topology matrix (what we measure)
+### Protocol / topology matrix
 
 | Client | Upstream | TWP | nginx/Windows | Mode |
 |---|---|---|---|---|
@@ -66,7 +78,7 @@ nginx H2 still leads peak RPS on this machine; TWP H2→H1 is the first zero-err
 | H3 QUIC | H2 cleartext/TLS | bridge paths exist; h2c N/A | — | — |
 | H3 QUIC | H1 cleartext | `ForwardCleartext` + Http11 | — | `reverse-http3-cleartext` (WIP) |
 
-## Raising limits on big machines
+## Raising limits on large hosts
 
 There is **no artificial upper clamp** on server defaults. Per-endpoint overrides:
 
@@ -105,11 +117,14 @@ ep.BeforeSslAuthenticate += (_, a) =>
 
 ## HTTPS latency / loopback microbenchmarks
 
-Unchanged from prior wiki revision — see curl median Δ and BenchmarkDotNet tables in git history if needed; re-run:
-
 ```powershell
 dotnet run -c Release --project benchmarks/Titanium.Web.Proxy.Benchmarks -- --filter '*Throughput*'
 ```
+
+| Benchmark | Setup | Mean | Allocated / op |
+|---|---|---:|---:|
+| HTTP/1 GET through proxy | Passthrough | **186 µs** | **17.5 KB** |
+| HTTP/2 multiplexed GETs | 10 concurrent streams | **3.0 ms** / batch | **~14 KB** / request |
 
 ## Process footprint (Basic example)
 

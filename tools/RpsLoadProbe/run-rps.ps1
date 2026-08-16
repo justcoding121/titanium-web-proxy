@@ -9,10 +9,11 @@
 [CmdletBinding()]
 param(
     [ValidateSet(
-        'compare', 'compare-http2', 'compare-tls', 'explicit-pool-sweep',
+        'compare', 'compare-http2', 'compare-tls', 'compare-terminate', 'explicit-pool-sweep',
         'reverse-http1', 'nginx-reverse-http1', 'reverse-http1-tls', 'nginx-reverse-http1-tls',
         'https-mitm',
-        'reverse-http2', 'nginx-reverse-http2', 'reverse-http3',
+        'reverse-http2', 'reverse-http2-cleartext', 'nginx-reverse-http2',
+        'reverse-http3', 'reverse-http3-cleartext',
         'explicit-http1-multi', 'explicit-http2-multi')]
     [string] $Mode = 'compare',
 

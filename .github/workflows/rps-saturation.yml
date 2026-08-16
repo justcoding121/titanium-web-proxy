@@ -1,9 +1,6 @@
 # Manual saturation RPS lab on a GitHub-hosted Ubuntu VM (not a job container).
-# Methodology is closer to typical nginx/wrk Linux benches (epoll nginx from apt).
-# Numbers are NOT a per-PR gate and are NOT comparable to dedicated-server blog posts.
-#
-# Trigger: Actions → "RPS saturation (Linux)" → Run workflow
-# Re-run 3 times and publish the median when updating the wiki.
+# Maintainers run this, then paste median numbers into wiki/Performance.md.
+# Not a per-PR gate; not comparable to dedicated-server blog posts.
 
 name: RPS saturation (Linux)
 
@@ -13,25 +10,27 @@ on:
       mode:
         description: 'Ramp mode'
         required: true
-        default: compare
+        default: compare-terminate
         type: choice
         options:
+          - compare-terminate
           - compare
+          - compare-tls
           - reverse-http1
           - nginx-reverse-http1
           - https-mitm
       concurrency:
         description: 'Comma-separated concurrency steps'
         required: true
-        default: '8,16,24,32,48,64,128,256,512'
+        default: '8,16,32,64'
       warmup_sec:
         description: 'Warmup seconds per step'
         required: true
-        default: '5'
+        default: '2'
       duration_sec:
         description: 'Measure seconds per step'
         required: true
-        default: '20'
+        default: '8'
 
 jobs:
   rps:
