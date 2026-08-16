@@ -17,6 +17,7 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET. This wiki documents t
 - [Tunnel (CONNECT) interception](#tunnel-connect-interception)
 - [Upstream proxies](#upstream-proxies)
 - [Authentication](#authentication)
+- [Performance](Performance) — measured latency, throughput, and footprint
 - [Performance and pooling](#performance-and-pooling)
 - [Logging and diagnostics](#logging-and-diagnostics)
 - [Request timing](#request-timing)
@@ -350,6 +351,9 @@ proxyServer.ForwardToUpstreamGateway = true;
 - **Mutual TLS**: provide the client certificate via `ClientCertificateSelectionCallback`, and validate server certificates with `ServerCertificateValidationCallback`.
 
 ## Performance and pooling
+
+Measured HTTPS A/B latency, loopback throughput/allocations, and Basic example footprint are on the
+dedicated [Performance](Performance) page.
 
 Shipped defaults follow `ProxyProfile.Balanced`: networking knobs that are safe for every client are
 on; certificate and experimental-protocol choices that trade compatibility or persistence stay
