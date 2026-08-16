@@ -173,7 +173,7 @@
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_ProxyEndPoint_AdmittedClientCount.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.ProxyEndPoint.AdmittedClientCount%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L72">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L80">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_ProxyEndPoint_AdmittedClientCount_" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.AdmittedClientCount*"></a>
   <h4 id="Titanium_Web_Proxy_Models_ProxyEndPoint_AdmittedClientCount" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.AdmittedClientCount">AdmittedClientCount</h4>
@@ -295,10 +295,44 @@ admission gate, not yet finished being handled).</p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_ProxyEndPoint_MaxCachedConnections.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.ProxyEndPoint.MaxCachedConnections%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L67">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Models_ProxyEndPoint_MaxCachedConnections_" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.MaxCachedConnections*"></a>
+  <h4 id="Titanium_Web_Proxy_Models_ProxyEndPoint_MaxCachedConnections" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.MaxCachedConnections">MaxCachedConnections</h4>
+  <div class="markdown level1 summary"><p>Optional override of <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_MaxCachedConnections">MaxCachedConnections</a> for upstream TCP pooling
+when this endpoint handles the session. <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> uses the server default.
+Useful for reverse-proxy endpoints that want a deeper pool toward a hot origin without
+raising the process-wide default for every explicit MITM host.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int? MaxCachedConnections { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_ProxyEndPoint_MaxConcurrentClients.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.ProxyEndPoint.MaxConcurrentClients%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L66">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L74">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_ProxyEndPoint_MaxConcurrentClients_" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.MaxConcurrentClients*"></a>
   <h4 id="Titanium_Web_Proxy_Models_ProxyEndPoint_MaxConcurrentClients" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.MaxConcurrentClients">MaxConcurrentClients</h4>
