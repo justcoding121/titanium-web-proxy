@@ -48,7 +48,7 @@ Client / origin columns: HTTP version and whether TLS is used (`plain` = clearte
 | HTTP/2 · TLS | HTTP/1 · plain | **7,373** | **7,373** | **5,898** | **14,920** |
 | HTTP/2 · TLS | HTTP/2 · TLS | **6,168** | **6,168** | *Not possible* (no MITM) | *Not possible* |
 | HTTP/2 · TLS | HTTP/2 · plain | *Not possible* (no h2c) | *Not possible* | *Not possible* | *Not possible* |
-| HTTP/3 · QUIC | HTTP/1 · plain | **2,327** | **2,423** | *Not possible* (no QUIC) | *Not possible* |
+| HTTP/3 · QUIC | HTTP/1 · plain | **2,246** | **3,541** | *Not possible* (no QUIC) | *Not possible* |
 | HTTP/3 · QUIC | HTTP/2 · TLS | **1,842** | **1,842** | *Not possible* (no QUIC) | *Not possible* |
 | HTTP/3 · QUIC | HTTP/3 · QUIC | **7,335** | **7,335** | *Not possible* (no QUIC) | *Not possible* |
 | HTTP/1 · TLS | HTTP/2 · TLS | **8,843** | **8,843** | *Not possible* | *Not possible* |
