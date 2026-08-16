@@ -1044,7 +1044,7 @@ internal class TcpConnectionFactory : IDisposable
             IsWinAuthenticated = upstreamProxyWinAuthenticated,
             UsedClientCertificate = usedClientCertificate,
             Timing = timing,
-            PoolSizeLimit = sessionArgs.ProxyEndPoint?.MaxCachedConnections
+            PoolSizeLimit = sessionArgs?.ProxyEndPoint?.MaxCachedConnections
         };
     }
 
