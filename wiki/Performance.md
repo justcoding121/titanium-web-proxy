@@ -43,8 +43,8 @@ Fair TLS-terminate numbers in [Linux saturation](#fair-tls-terminate-compare--li
 | TLS-terminate H2→H1 cleartext peak (Windows) | **~7.4k RPS** @ c=64, **0% err** (TWP) · nginx **~14.9k** @ c=32 |
 | TLS-terminate H3→H1 cleartext peak (Windows) | **~2.4k RPS** @ c=32, **0% err** (TWP) |
 | Cross-version bridges under load (Windows) | All H1↔H2↔H3 directions **0% err** — see [Bridge matrix](#bridge-matrix-compare-bridges--windows) |
-| TLS-terminate reverse HTTP/1 peak (Linux GHA) | **~37.0k RPS** (TWP) vs **~60.9k RPS** (nginx) — ~61% of nginx; see [Linux vs Windows](#linux-vs-windows-h1-tls) |
-| TLS-terminate H2→H1 cleartext peak (Linux GHA) | **~24.2k RPS** (TWP) · nginx H2 **~42.5k** peak @ c=32 |
+| TLS-terminate reverse HTTP/1 peak (Linux GHA) | **~18–37k RPS** (TWP) vs **~28–61k** (nginx); **TWP÷nginx ≈ 0.61** stable — see [Linux vs Windows](#linux-vs-windows-h1-tls) |
+| TLS-terminate H2→H1 cleartext peak (Linux GHA) | **~10–24k RPS** (TWP) · nginx H2 **~19–42k** peak |
 | Explicit HTTPS MITM peak | **~13.6k RPS** |
 | Basic example footprint (Release, after load) | **~74 MB** working set · **~24–29 MB** private bytes |
 
@@ -99,20 +99,20 @@ Local Release `compare-bridges` (warmup 1s / measure 3s; concurrency 8, 32). All
 
 ### Linux vs Windows (H1 TLS)
 
-On the Windows laptop, TWP H1 TLS **leads** nginx/Windows (~21.8k vs ~14.4k). On Linux GHA, **nginx leads** (~60.9k vs ~37.0k). Absolute GHA RPS swings ~2× between runners, but the **TWP÷nginx ratio stays ~0.60–0.63**. The ranking flip is mostly **nginx/Windows being slow** vs native Linux nginx (epoll), not a Linux-only TWP correctness bug. Harness mitigations already applied: process-split for cleartext-origin terminate arms, probe `ThreadPoolWorkerThread` / `MaxCachedConnections=256`, Server GC on the probe.
+On the Windows laptop, TWP H1 TLS **leads** nginx/Windows (~21.8k vs ~14.4k). On Linux GHA, **nginx leads**. Absolute GHA RPS swings ~2× between VMs, but the **TWP÷nginx ratio stays ≈ 0.61** across runs (including after process-split, ThreadPool floors, and Server GC on the probe). The ranking flip is **nginx/Windows being slow** vs native Linux nginx (epoll), not a Linux-only TWP correctness bug. The residual ~40% is managed SslStream + proxy pipeline vs nginx C — not closed by harness knobs.
 
 ### Fair TLS-terminate compare — Linux (GitHub-hosted `ubuntu-latest`)
 
-Source CSV: `rps-ramp-20260816-081858.csv` (Actions artifact `rps-csv` from run [31936116039](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936116039); warmup 2s / measure 8s; concurrency 8, 16, 32, 64). Host: [Linux (GitHub-hosted)](#linux-github-hosted-ubuntu-latest). HTTP/3 arms were skipped (no QuicListener / msquic on this image).
+Latest CSV: `rps-ramp-20260816-082447.csv` (Actions artifact `rps-csv` from run [31936352891](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936352891) @ `cbed2a40`; warmup 2s / measure 8s; concurrency 8, 16, 32, 64). Host: [Linux (GitHub-hosted)](#linux-github-hosted-ubuntu-latest). HTTP/3 arms skipped (no QuicListener / msquic on this image). A quieter VM earlier the same day hit ~37k / ~61k at the same ~0.61 ratio ([31936116039](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936116039)).
 
 | Arm | Topology | Sustainable | Peak | Notes |
 |---|---|---:|---:|---|
-| TWP H1 TLS | Client TLS → cleartext H1 | **36,974** @ 64 | **36,974** | 0% err |
-| nginx H1 TLS | ssl → cleartext H1 | **60,888** @ 64 | **60,888** | 0% err |
-| TWP H2→H1 | Client h2 TLS → H2→H1 bridge → cleartext H1 | **22,450** @ 64 | **24,216** @ 16 | **0% err** |
-| nginx H2 | Client h2 TLS → cleartext H1 | **30,707** @ 64 | **42,500** @ 32 | ~0.01% err |
+| TWP H1 TLS | Client TLS → cleartext H1 | **20,734** @ 64 | **20,734** | 0% err · ≈61% of nginx |
+| nginx H1 TLS | ssl → cleartext H1 | **34,104** @ 64 | **34,104** | 0% err |
+| TWP H2→H1 | Client h2 TLS → H2→H1 bridge → cleartext H1 | **13,886** @ 64 | **13,886** | **0% err** |
+| nginx H2 | Client h2 TLS → cleartext H1 | **16,235** @ 64 | **22,267** @ 32 | ~0% err |
 
-On the GHA VM (4 vCPU), nginx still leads peak RPS; TWP stays zero-error. Closing the remaining ~40% would be SslStream / managed-pipeline work, not a load-test harness bug.
+On the GHA VM (4 vCPU), nginx still leads peak RPS; TWP stays zero-error.
 
 ### Protocol / topology matrix
 
