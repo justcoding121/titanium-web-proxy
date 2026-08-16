@@ -147,49 +147,64 @@ internal static class ServeHost
             return 3;
         }
 
-        await using var stack = await ServeStack.StartAsync(mode, nginxPath, maxCachedConnections, cancellationToken);
-        ProbeLog.Info(MachineInfo.FormatReport(stack.NginxVersion));
-        await ProbeLog.WriteProtocolLineAsync($"mode={ServeProxyHost.ModeName(mode)}", cancellationToken);
-        await ProbeLog.WriteProtocolLineAsync($"origin_http={stack.OriginHttpUrl}", cancellationToken);
-        if (stack.OriginHttpsUrl != null)
-            await ProbeLog.WriteProtocolLineAsync($"origin_https={stack.OriginHttpsUrl}", cancellationToken);
-        foreach (var url in stack.ExtraOriginHttpsUrls)
-            await ProbeLog.WriteProtocolLineAsync($"origin_https_extra={url}", cancellationToken);
-        await ProbeLog.WriteProtocolLineAsync($"listen={stack.ListenUrl}", cancellationToken);
-        if (stack.ExplicitProxyUrl != null)
-            await ProbeLog.WriteProtocolLineAsync($"explicit_proxy={stack.ExplicitProxyUrl}", cancellationToken);
-        await ProbeLog.WriteProtocolLineAsync($"target_for_client={stack.ClientTargetUrl}", cancellationToken);
-        foreach (var url in stack.ClientTargetUrls.Skip(1))
-            await ProbeLog.WriteProtocolLineAsync($"target_for_client_extra={url}", cancellationToken);
-        if (stack.HttpVersion != null)
-            await ProbeLog.WriteProtocolLineAsync($"http_version={stack.HttpVersion}", cancellationToken);
-        if (stack.LoadGenerator != null)
-            await ProbeLog.WriteProtocolLineAsync($"load_generator={stack.LoadGenerator}", cancellationToken);
-        if (stack.QuicPort is { } qp)
-            await ProbeLog.WriteProtocolLineAsync($"quic_port={qp}", cancellationToken);
-        if (stack.OriginQuicPort is { } oqp)
-            await ProbeLog.WriteProtocolLineAsync($"origin_quic_port={oqp}", cancellationToken);
-        if (maxCachedConnections is { } m)
-            await ProbeLog.WriteProtocolLineAsync($"max_cached_connections={m}", cancellationToken);
-        if (stack.ServerConnectionProbe != null)
-            await ProbeLog.WriteProtocolLineAsync("server_connection_probe=1", cancellationToken);
-        await ProbeLog.WriteProtocolLineAsync("READY", cancellationToken);
-        ProbeLog.Info(string.Empty);
-        ProbeLog.Info("Ready. Example:");
-        if (stack.ExplicitProxyUrl != null)
-            ProbeLog.Info($"  bombardier -c 256 -d 30s -l -x {stack.ExplicitProxyUrl} {stack.ClientTargetUrl}");
-        else
-            ProbeLog.Info($"  bombardier -c 256 -d 30s -l {stack.ClientTargetUrl}");
-
-        ProbeLog.Info(string.Empty);
-        ProbeLog.Info("Press Ctrl+C to stop.");
-
+        ServeStack stack;
         try
         {
-            await Task.Delay(Timeout.Infinite, cancellationToken);
+            stack = await ServeStack.StartAsync(mode, nginxPath, maxCachedConnections, cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (Exception ex)
         {
+            // Surface to parent ChildProcessStack (stderr was empty when nginx conf failed on Linux).
+            Console.Error.WriteLine(ex.ToString());
+            ProbeLog.Error(ex.Message);
+            return 1;
+        }
+
+        await using (stack)
+        {
+            ProbeLog.Info(MachineInfo.FormatReport(stack.NginxVersion));
+            await ProbeLog.WriteProtocolLineAsync($"mode={ServeProxyHost.ModeName(mode)}", cancellationToken);
+            await ProbeLog.WriteProtocolLineAsync($"origin_http={stack.OriginHttpUrl}", cancellationToken);
+            if (stack.OriginHttpsUrl != null)
+                await ProbeLog.WriteProtocolLineAsync($"origin_https={stack.OriginHttpsUrl}", cancellationToken);
+            foreach (var url in stack.ExtraOriginHttpsUrls)
+                await ProbeLog.WriteProtocolLineAsync($"origin_https_extra={url}", cancellationToken);
+            await ProbeLog.WriteProtocolLineAsync($"listen={stack.ListenUrl}", cancellationToken);
+            if (stack.ExplicitProxyUrl != null)
+                await ProbeLog.WriteProtocolLineAsync($"explicit_proxy={stack.ExplicitProxyUrl}", cancellationToken);
+            await ProbeLog.WriteProtocolLineAsync($"target_for_client={stack.ClientTargetUrl}", cancellationToken);
+            foreach (var url in stack.ClientTargetUrls.Skip(1))
+                await ProbeLog.WriteProtocolLineAsync($"target_for_client_extra={url}", cancellationToken);
+            if (stack.HttpVersion != null)
+                await ProbeLog.WriteProtocolLineAsync($"http_version={stack.HttpVersion}", cancellationToken);
+            if (stack.LoadGenerator != null)
+                await ProbeLog.WriteProtocolLineAsync($"load_generator={stack.LoadGenerator}", cancellationToken);
+            if (stack.QuicPort is { } qp)
+                await ProbeLog.WriteProtocolLineAsync($"quic_port={qp}", cancellationToken);
+            if (stack.OriginQuicPort is { } oqp)
+                await ProbeLog.WriteProtocolLineAsync($"origin_quic_port={oqp}", cancellationToken);
+            if (maxCachedConnections is { } m)
+                await ProbeLog.WriteProtocolLineAsync($"max_cached_connections={m}", cancellationToken);
+            if (stack.ServerConnectionProbe != null)
+                await ProbeLog.WriteProtocolLineAsync("server_connection_probe=1", cancellationToken);
+            await ProbeLog.WriteProtocolLineAsync("READY", cancellationToken);
+            ProbeLog.Info(string.Empty);
+            ProbeLog.Info("Ready. Example:");
+            if (stack.ExplicitProxyUrl != null)
+                ProbeLog.Info($"  bombardier -c 256 -d 30s -l -x {stack.ExplicitProxyUrl} {stack.ClientTargetUrl}");
+            else
+                ProbeLog.Info($"  bombardier -c 256 -d 30s -l {stack.ClientTargetUrl}");
+
+            ProbeLog.Info(string.Empty);
+            ProbeLog.Info("Press Ctrl+C to stop.");
+
+            try
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
 
         return 0;

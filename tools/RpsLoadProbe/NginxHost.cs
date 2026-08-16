@@ -52,12 +52,29 @@ internal sealed class NginxHost : IDisposable
     public static NginxHost? TryStartHttp2(int originHttpPort, string? nginxPath)
     {
         // nginx/Windows has http_v2 + ssl but no QUIC/UDP. Client TLS+h2 → cleartext HTTP origin.
+        var exe = ResolveNginxExecutable(nginxPath);
+        if (exe == null)
+            return null;
+
+        var version = ReadVersion(exe);
+        // nginx 1.25.1+ uses `http2 on;`; Ubuntu 24.04 ships 1.24 which needs `listen ... ssl http2`.
+        var useHttp2OnDirective = SupportsHttp2OnDirective(version);
+        // #region agent log
+        DebugSessionLog.Write("nginx-h2", "NginxHost.TryStartHttp2", "http2-directive-choice",
+            new Dictionary<string, object?>
+            {
+                ["version"] = version,
+                ["useHttp2OnDirective"] = useHttp2OnDirective
+            });
+        // #endregion
+
         var prefixProbe = Path.Combine(Path.GetTempPath(), "twp-rps-nginx-certs-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(prefixProbe);
         try
         {
             var (certPem, keyPem) = ExportLoopbackPem(prefixProbe);
-            return TryStart(BuildHttp2Conf(originHttpPort, certPem, keyPem), listenScheme: "https", nginxPath);
+            return TryStart(BuildHttp2Conf(originHttpPort, certPem, keyPem, useHttp2OnDirective),
+                listenScheme: "https", nginxPath);
         }
         finally
         {
@@ -189,7 +206,8 @@ internal sealed class NginxHost : IDisposable
                 """;
         };
 
-    private static Func<string, int, string> BuildHttp2Conf(int originHttpPort, string certPem, string keyPem) =>
+    private static Func<string, int, string> BuildHttp2Conf(int originHttpPort, string certPem, string keyPem,
+        bool useHttp2OnDirective) =>
         (prefixDir, port) =>
         {
             var certDest = Path.Combine(prefixDir, "certs", "server.crt");
@@ -199,6 +217,10 @@ internal sealed class NginxHost : IDisposable
             // Normalize paths for nginx on Windows (forward slashes).
             certDest = certDest.Replace('\\', '/');
             keyDest = keyDest.Replace('\\', '/');
+            // Prefer `http2 on` when available; fall back to listen-parameter form for nginx < 1.25.1.
+            var listenAndHttp2 = useHttp2OnDirective
+                ? $"listen 127.0.0.1:{port} ssl;\n                        http2 on;"
+                : $"listen 127.0.0.1:{port} ssl http2;";
             return $$"""
                 worker_processes auto;
                 daemon off;
@@ -216,8 +238,7 @@ internal sealed class NginxHost : IDisposable
                         keepalive 32;
                     }
                     server {
-                        listen 127.0.0.1:{{port}} ssl;
-                        http2 on;
+                        {{listenAndHttp2}}
                         ssl_certificate {{certDest}};
                         ssl_certificate_key {{keyDest}};
                         ssl_protocols TLSv1.2 TLSv1.3;
@@ -231,6 +252,21 @@ internal sealed class NginxHost : IDisposable
                 }
                 """;
         };
+
+    /// <summary>True when nginx supports the <c>http2 on;</c> directive (1.25.1+).</summary>
+    internal static bool SupportsHttp2OnDirective(string versionText)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(versionText, @"nginx/(\d+)\.(\d+)\.(\d+)");
+        if (!m.Success)
+            return true; // unknown — prefer modern syntax (Windows zips are usually current)
+
+        var major = int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+        var minor = int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+        var patch = int.Parse(m.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture);
+        return major > 1
+               || (major == 1 && minor > 25)
+               || (major == 1 && minor == 25 && patch >= 1);
+    }
 
     private static (string CertPem, string KeyPem) ExportLoopbackPem(string dir)
     {
