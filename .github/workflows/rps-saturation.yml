@@ -1,6 +1,9 @@
 # Manual saturation RPS lab on a GitHub-hosted Ubuntu VM (not a job container).
 # Maintainers run this, then paste median numbers into wiki/Performance.md.
 # Not a per-PR gate; not comparable to dedicated-server blog posts.
+#
+# Prefer --repeats >= 3 for publishable Linux numbers (runner noise). Linux nginx
+# is the authoritative nginx baseline; nginx/Windows is same-OS only.
 
 name: RPS saturation (Linux)
 
@@ -14,6 +17,8 @@ on:
         type: choice
         options:
           - compare-terminate
+          - compare-same
+          - compare-bridges
           - compare
           - compare-tls
           - reverse-http1
@@ -31,12 +36,16 @@ on:
         description: 'Measure seconds per step'
         required: true
         default: '8'
+      repeats:
+        description: 'Full arm sequence repeats (median peaks)'
+        required: true
+        default: '3'
 
 jobs:
   rps:
     runs-on: ubuntu-latest
     # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
 
@@ -75,6 +84,7 @@ jobs:
             -Concurrency '${{ inputs.concurrency }}' `
             -WarmupSec ${{ inputs.warmup_sec }} `
             -DurationSec ${{ inputs.duration_sec }} `
+            -Repeats ${{ inputs.repeats }} `
             -ResultsDir tools/RpsLoadProbe/results `
             -BombardierCheck
 

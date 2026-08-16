@@ -23,6 +23,7 @@ internal static class Cli
         var originHttpPort = 0;
         var originHttpsPort = 0;
         int? maxCachedConnections = null;
+        var repeats = 1;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -78,6 +79,9 @@ internal static class Cli
                 case "--duration-sec":
                     durationSec = int.Parse(RequireValue(args, ref i, "--duration-sec"), CultureInfo.InvariantCulture);
                     break;
+                case "--repeats":
+                    repeats = int.Parse(RequireValue(args, ref i, "--repeats"), CultureInfo.InvariantCulture);
+                    break;
                 default:
                     ProbeLog.Error($"Unknown argument: {args[i]}");
                     PrintHelp();
@@ -101,7 +105,7 @@ internal static class Cli
                     maxCachedConnections, cts.Token),
                 "serve" => RunServe(modeText, nginxPath, maxCachedConnections, cts.Token),
                 "ramp" => RunRamp(modeText, nginxPath, resultsDir, concurrency, warmupSec, durationSec,
-                    maxCachedConnections, cts.Token),
+                    maxCachedConnections, repeats, cts.Token),
                 _ => Fail("Required: --serve | --serve-origin | --serve-proxy | --ramp")
             };
         }
@@ -136,7 +140,7 @@ internal static class Cli
     }
 
     private static int RunRamp(string? modeText, string? nginxPath, string? resultsDir, List<int> concurrency,
-        int warmupSec, int durationSec, int? maxCachedConnections, CancellationToken ct)
+        int warmupSec, int durationSec, int? maxCachedConnections, int repeats, CancellationToken ct)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode))
             return Fail("Required: --ramp --mode <see --help>");
@@ -149,6 +153,7 @@ internal static class Cli
             Warmup = TimeSpan.FromSeconds(warmupSec),
             StepDuration = TimeSpan.FromSeconds(durationSec),
             MaxCachedConnections = maxCachedConnections,
+            Repeats = Math.Max(1, repeats),
             ConcurrencySteps = concurrency.Count > 0
                 ? concurrency.ToArray()
                 : [8, 16, 24, 32, 48, 64, 128, 256, 512]
@@ -292,6 +297,7 @@ internal static class Cli
               --concurrency LIST      Default: 8,16,24,32,48,64,128,256,512
               --warmup-sec N
               --duration-sec N
+              --repeats N             Full arm sequence N times; print median peaks (default 1)
               --max-cached-connections N   Override ProxyServer.MaxCachedConnections for TWP arms
             """);
     }

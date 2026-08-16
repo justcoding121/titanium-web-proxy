@@ -106,11 +106,18 @@ Cross-version translation only (warmup 1s / measure 3s; concurrency 8, 32). All 
 
 ### Linux vs Windows (H1 TLS)
 
-On Windows, TWP H1 TLS leads nginx/Windows (~21.8k vs ~14.4k). On Linux GHA, nginx leads; absolute RPS swings ~2× by VM, but **TWP÷nginx stays ≈ 0.61**. nginx/Windows is a limited port; Linux nginx uses epoll. The residual gap on Linux is managed TLS + proxy pipeline vs nginx C.
+**Authoritative nginx baseline is Linux.** nginx/Windows is a limited port; same-OS Windows numbers are useful locally but must not be read as “TWP beats nginx” in general.
+
+| Host | TWP H1 TLS | nginx H1 TLS | Ranking |
+|---|---:|---:|---|
+| Windows laptop | ahead of nginx/Windows | slow vs Linux nginx | TWP leads **same-OS** |
+| Linux GHA | ~61% of nginx | native epoll nginx | nginx leads |
+
+Absolute GHA RPS swings ~2× by VM (**runner noise**). Publish **median across repeats** and the **TWP÷nginx ratio** (~0.61 historically). Residual Linux gap is managed SslStream + proxy pipeline vs nginx C.
 
 ### Fair TLS-terminate compare — Linux (GitHub-hosted `ubuntu-latest`)
 
-Latest CSV: `rps-ramp-20260816-082447.csv` (Actions artifact `rps-csv` from run [31936352891](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936352891); warmup 2s / measure 8s; concurrency 8, 16, 32, 64). Host: [Linux (GitHub-hosted)](#linux-github-hosted-ubuntu-latest). HTTP/3 arms skipped (no QuicListener / msquic). A quieter VM the same day hit ~37k / ~61k at the same ~0.61 ratio ([31936116039](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936116039)).
+Prefer `workflow_dispatch` with `repeats=3` so median peaks dampen runner noise. Latest single-run CSV: `rps-ramp-20260816-082447.csv` (Actions artifact `rps-csv` from run [31936352891](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936352891); warmup 2s / measure 8s; concurrency 8, 16, 32, 64). Host: [Linux (GitHub-hosted)](#linux-github-hosted-ubuntu-latest). HTTP/3 arms skipped (no QuicListener / msquic). A quieter VM the same day hit ~37k / ~61k at the same ~0.61 ratio ([31936116039](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936116039)).
 
 | Arm | Topology | Sustainable | Peak | Notes |
 |---|---|---:|---:|---|

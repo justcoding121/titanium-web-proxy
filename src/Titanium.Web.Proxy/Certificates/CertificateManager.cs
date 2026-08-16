@@ -93,6 +93,14 @@ public sealed class CertificateManager : IDisposable
     private readonly ConcurrentDictionary<string, CachedCertificate> cachedCertificates = new();
 
     /// <summary>
+    ///     Reused <see cref="System.Net.Security.SslStreamCertificateContext"/> per leaf thumbprint.
+    ///     Building a context every handshake re-walks the chain (expensive on Linux/OpenSSL under load).
+    /// </summary>
+    private readonly ConcurrentDictionary<string, System.Net.Security.SslStreamCertificateContext>
+        sslCertificateContexts = new();
+    private int sslContextCacheHitSample;
+
+    /// <summary>
     ///     Certificates removed from <see cref="cachedCertificates" /> by <see cref="EnforceCertificateCacheBound" />
     ///     or the idle sweep in <see cref="ClearIdleCertificates" />, awaiting disposal. Not disposed at
     ///     eviction time because the certificate object may still be held by an in-flight TLS
@@ -971,6 +979,22 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     internal System.Net.Security.SslStreamCertificateContext CreateSslCertificateContext(X509Certificate2 leaf)
     {
+        var key = leaf.Thumbprint;
+        if (key != null && sslCertificateContexts.TryGetValue(key, out var cached))
+        {
+            // #region agent log
+            if ((Interlocked.Increment(ref sslContextCacheHitSample) & 1023) == 1)
+            {
+                global::Titanium.Web.Proxy.AgentDebugNdjson.Write("L4", "CertificateManager.CreateSslCertificateContext", "ssl-context-cache-hit",
+                    new { thumb = key.Length >= 8 ? key[..8] : key });
+            }
+            // #endregion
+            return cached;
+        }
+
+        // #region agent log
+        var sw = Stopwatch.StartNew();
+        // #endregion
         var extras = new X509Certificate2Collection();
         System.Net.Security.SslCertificateTrust? trust = null;
 
@@ -992,16 +1016,28 @@ public sealed class CertificateManager : IDisposable
             foreach (X509Certificate2 cert in IntermediateCertificates)
                 extras.Add(cert);
 
+        System.Net.Security.SslStreamCertificateContext created;
         try
         {
-            return System.Net.Security.SslStreamCertificateContext.Create(
+            created = System.Net.Security.SslStreamCertificateContext.Create(
                 leaf, extras.Count > 0 ? extras : null, offline: true, trust);
         }
         catch (CryptographicException) when (trust != null)
         {
-            return System.Net.Security.SslStreamCertificateContext.Create(
+            created = System.Net.Security.SslStreamCertificateContext.Create(
                 leaf, null, offline: true, trust);
         }
+
+        // #region agent log
+        sw.Stop();
+        global::Titanium.Web.Proxy.AgentDebugNdjson.Write("L4", "CertificateManager.CreateSslCertificateContext", "ssl-context-cache-miss",
+            new { thumb = key is { Length: >= 8 } ? key[..8] : key, ms = sw.Elapsed.TotalMilliseconds });
+        // #endregion
+
+        if (key == null)
+            return created;
+
+        return sslCertificateContexts.GetOrAdd(key, created);
     }
 
     /// <summary>
@@ -1432,6 +1468,8 @@ public sealed class CertificateManager : IDisposable
                     // Best-effort cleanup; continue disposing the remaining cached certificates.
                 }
 
+        sslCertificateContexts.Clear();
+
         // Also dispose anything already evicted but still waiting out its grace period: the root is
         // changing, so leaves signed by the old root are not worth holding onto even briefly.
         while (pendingDisposals.TryDequeue(out var pending))
@@ -1472,6 +1510,8 @@ public sealed class CertificateManager : IDisposable
                 {
                     // Best-effort cleanup; continue disposing the remaining pending certificates.
                 }
+
+            sslCertificateContexts.Clear();
 
             // Do not dispose rootCertificate: ownership may belong to the caller.
             rootCertificate = null;

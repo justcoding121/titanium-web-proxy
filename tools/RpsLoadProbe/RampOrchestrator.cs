@@ -54,6 +54,8 @@ internal sealed class RampOptions
     public double Http2P99MsSlo { get; init; } = 100;
     public double Http3P99MsSlo { get; init; } = 150;
     public int? MaxCachedConnections { get; init; }
+    /// <summary>How many full arm sequences to run; peaks are median-aggregated (L1 runner noise).</summary>
+    public int Repeats { get; init; } = 1;
 }
 
 internal static class RampOrchestrator
@@ -72,6 +74,8 @@ internal static class RampOrchestrator
         ProbeLog.Info(MachineInfo.FormatReport(nginxVersion));
         ProbeLog.Info("Close browsers and other heavy apps before a publishable run.");
         ProbeLog.Info("Process split: origin/proxy as children when possible; TLS arms use combined --serve.");
+        if (options.Repeats > 1)
+            ProbeLog.Info($"Repeats={options.Repeats} (median peak RPS per arm — dampens GHA runner noise).");
         ProbeLog.Info(string.Empty);
 
         await using var csv = new StreamWriter(csvPath);
@@ -103,16 +107,64 @@ internal static class RampOrchestrator
             ProbeLog.Info(string.Empty);
         }
 
-        foreach (var arm in arms)
+        var peakByArm = new Dictionary<string, List<double>>(StringComparer.Ordinal);
+        var repeats = Math.Max(1, options.Repeats);
+        for (var rep = 1; rep <= repeats; rep++)
         {
-            ProbeLog.Info($"--- arm {arm.Name} ---");
-            await RunArmAsync(arm, options, csv, nginxVersion, cancellationToken);
-            ProbeLog.Info(string.Empty);
+            if (repeats > 1)
+                ProbeLog.Info($"=== repeat {rep}/{repeats} ===");
+
+            foreach (var arm in arms)
+            {
+                ProbeLog.Info($"--- arm {arm.Name} ---");
+                var peak = await RunArmAsync(arm, options, csv, nginxVersion, cancellationToken);
+                if (!peakByArm.TryGetValue(arm.Name, out var list))
+                {
+                    list = [];
+                    peakByArm[arm.Name] = list;
+                }
+
+                list.Add(peak);
+                ProbeLog.Info(string.Empty);
+            }
         }
+
+        if (repeats > 1)
+            WriteMedianSummary(peakByArm);
 
         await csv.FlushAsync(cancellationToken);
         ProbeLog.Info($"CSV: {Path.GetFullPath(csvPath)}");
         return 0;
+    }
+
+    private static void WriteMedianSummary(Dictionary<string, List<double>> peakByArm)
+    {
+        ProbeLog.Info("=== median peaks across repeats ===");
+        double? twpH1Tls = null, nginxH1Tls = null;
+        foreach (var (name, peaks) in peakByArm.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        {
+            var median = Median(peaks);
+            ProbeLog.Info($"  {name}: median_peak_rps={median:F1} (n={peaks.Count})");
+            if (name.Contains("twp-reverse-http1-tls", StringComparison.Ordinal))
+                twpH1Tls = median;
+            if (name.Contains("nginx-reverse-http1-tls", StringComparison.Ordinal))
+                nginxH1Tls = median;
+        }
+
+        if (twpH1Tls is > 0 && nginxH1Tls is > 0)
+        {
+            var ratio = twpH1Tls.Value / nginxH1Tls.Value;
+            ProbeLog.Info($"  TWP÷nginx H1 TLS median ratio={ratio:F3}");
+        }
+    }
+
+    private static double Median(List<double> values)
+    {
+        var sorted = values.OrderBy(x => x).ToList();
+        var mid = sorted.Count / 2;
+        return sorted.Count % 2 == 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2.0
+            : sorted[mid];
     }
 
     private sealed record ArmSpec(string Name, ProbeMode Mode, int? MaxCachedConnections, string HypothesisId);
@@ -244,7 +296,7 @@ internal static class RampOrchestrator
         };
     }
 
-    private static async Task RunArmAsync(ArmSpec arm, RampOptions options, StreamWriter csv,
+    private static async Task<double> RunArmAsync(ArmSpec arm, RampOptions options, StreamWriter csv,
         string? nginxVersionHint, CancellationToken cancellationToken)
     {
         var maxCached = arm.MaxCachedConnections ?? options.MaxCachedConnections;
@@ -346,6 +398,8 @@ internal static class RampOrchestrator
                 maxCached
             });
         // #endregion
+
+        return peak?.Rps ?? 0;
     }
 
     private static double ResolveP99Slo(ProbeMode mode, RampOptions options) => mode switch

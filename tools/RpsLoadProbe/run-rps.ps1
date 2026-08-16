@@ -22,6 +22,7 @@ param(
     [string] $Concurrency = '8,16,24,32,48,64,128,256,512',
     [int]    $WarmupSec = 5,
     [int]    $DurationSec = 20,
+    [int]    $Repeats = 1,
     [string] $ResultsDir,
     [switch] $SkipBuild,
     [switch] $BombardierCheck
@@ -39,7 +40,7 @@ if (-not $ResultsDir) {
 
 Write-Host ''
 Write-Host 'RpsLoadProbe — close browsers / heavy apps before a publishable run.' -ForegroundColor Yellow
-Write-Host "Mode=$Mode  concurrency=$Concurrency  warmup=${WarmupSec}s  duration=${DurationSec}s" -ForegroundColor Cyan
+Write-Host "Mode=$Mode  concurrency=$Concurrency  warmup=${WarmupSec}s  duration=${DurationSec}s  repeats=$Repeats" -ForegroundColor Cyan
 Write-Host ''
 
 if (-not $SkipBuild) {
@@ -72,6 +73,7 @@ $probeArgs = $probePrefix + @(
     '--concurrency', $Concurrency,
     '--warmup-sec', $WarmupSec,
     '--duration-sec', $DurationSec,
+    '--repeats', $Repeats,
     '--results-dir', $ResultsDir
 )
 if ($NginxPath) {

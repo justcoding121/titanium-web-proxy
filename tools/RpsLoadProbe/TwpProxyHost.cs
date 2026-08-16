@@ -55,6 +55,7 @@ internal sealed class TwpProxyHost : IDisposable
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
+        WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
         // #region agent log
         DebugSessionLog.Write("H1TLS", "TwpProxyHost.StartReverseHttp1Tls", "started",
             new { listenPort = endPoint.Port, originHttpPort, maxCached = proxy.MaxCachedConnections });
@@ -340,6 +341,20 @@ internal sealed class TwpProxyHost : IDisposable
             args.IsValid = LoopbackCertificateAuthority.Validate(args.Certificate);
             return Task.CompletedTask;
         };
+    }
+
+    /// <summary>
+    /// Pin a leaf + warm <see cref="System.Net.Security.SslStreamCertificateContext"/> so the first
+    /// handshake does not pay cert creation / chain build on the critical path.
+    /// </summary>
+    private static void WarmTlsTerminateCertificate(ProxyServer proxy, TransparentProxyEndPoint endPoint,
+        string certName)
+    {
+        var leaf = proxy.CertificateManager.CreateServerCertificate(certName).GetAwaiter().GetResult();
+        if (leaf == null)
+            return;
+        endPoint.GenericCertificate = leaf;
+        _ = proxy.CertificateManager.CreateSslCertificateContext(leaf);
     }
 
     public void Dispose()
