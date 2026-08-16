@@ -6,7 +6,9 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 
 ## Measurement environment
 
-Unless a section names another host, saturation RPS tables used:
+### Windows (developer laptop)
+
+Unless a subsection names another host, saturation RPS tables used:
 
 | | |
 |---|---|
@@ -17,6 +19,19 @@ Unless a section names another host, saturation RPS tables used:
 | nginx | nginx/Windows **1.31.3** |
 | Harness | RpsLoadProbe Release; arms run **sequentially** |
 
+### Linux (GitHub-hosted `ubuntu-latest`)
+
+Fair TLS-terminate numbers in [Linux saturation](#fair-tls-terminate-compare--linux-github-hosted-ubuntu-latest) were measured on a stock Actions runner (not a container job):
+
+| | |
+|---|---|
+| OS | Ubuntu 24.04.4 LTS |
+| CPU | AMD EPYC 7763 (4 logical processors on the VM) |
+| RAM | 15.6 GiB |
+| Runtime | .NET 10.0.11 |
+| nginx | nginx/1.24.0 (Ubuntu) |
+| Harness | RpsLoadProbe Release; `compare-terminate` (HTTP/3 arms skipped — no QuicListener / msquic on this image) |
+
 ## At a glance
 
 | What | Result |
@@ -24,8 +39,10 @@ Unless a section names another host, saturation RPS tables used:
 | HTTPS TTFB vs direct (median, 14 hosts) | Cold **≈ parity** (−1 ms); warm **−25 ms** (proxy faster) |
 | HTTP/1 loopback GET (no body intercept) | **~186 µs**, **~17.5 KB** allocated / request |
 | Cleartext reverse HTTP/1 peak | **~16.0k RPS** (TWP) vs **~15.5k RPS** (nginx/Windows) |
-| TLS-terminate reverse HTTP/1 peak | **~24.7k RPS** (TWP) vs **~13.0k RPS** (nginx/Windows) |
-| TLS-terminate H2→H1 cleartext peak | **~7.6k RPS** @ c=64, **0% err** (TWP) · nginx **~14.2k** @ c=32 (fails SLO at c=64) |
+| TLS-terminate reverse HTTP/1 peak (Windows) | **~24.7k RPS** (TWP) vs **~13.0k RPS** (nginx/Windows) |
+| TLS-terminate H2→H1 cleartext peak (Windows) | **~7.6k RPS** @ c=64, **0% err** (TWP) · nginx **~14.2k** @ c=32 (fails SLO at c=64) |
+| TLS-terminate reverse HTTP/1 peak (Linux GHA) | **~17.7k RPS** (TWP) vs **~28.6k RPS** (nginx) |
+| TLS-terminate H2→H1 cleartext peak (Linux GHA) | **~10.2k RPS** (TWP) · nginx H2 **~18.8k** peak @ c=32 |
 | Explicit HTTPS MITM peak | **~13.6k RPS** |
 | Basic example footprint (Release, after load) | **~74 MB** working set · **~24–29 MB** private bytes |
 
@@ -51,9 +68,9 @@ Reproduce locally (Release):
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-terminate
 ```
 
-### Fair TLS-terminate compare (`compare-terminate`)
+### Fair TLS-terminate compare (`compare-terminate`) — Windows
 
-Source CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-045803.csv` (warmup 2s / measure 8s; concurrency 8, 32, 64).
+Source CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-045803.csv` (warmup 2s / measure 8s; concurrency 8, 32, 64). Host: [Windows (developer laptop)](#windows-developer-laptop).
 
 | Arm | Topology | Sustainable | Peak | Notes |
 |---|---|---:|---:|---|
@@ -63,7 +80,20 @@ Source CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-045803.csv` (warmup 2s
 | nginx H2 | Client h2 TLS → cleartext H1 | **14,175** @ 32 | **14,175** | fails SLO at c=64 |
 | TWP H3→H1 | Client h3 → cleartext H1 | — | ~1.8k | errors (stream abort 258) — follow-up |
 
-On the hardware in [Measurement environment](#measurement-environment), nginx H2 still leads peak RPS; TWP H2→H1 is the first zero-error fair terminate topology and stays within SLO at c=64 where nginx H2 does not.
+On that Windows host, nginx H2 still leads peak RPS; TWP H2→H1 is the first zero-error fair terminate topology and stays within SLO at c=64 where nginx H2 does not.
+
+### Fair TLS-terminate compare — Linux (GitHub-hosted `ubuntu-latest`)
+
+Source CSV: `rps-ramp-20260816-051530.csv` (Actions artifact `rps-csv` from run [31928546864](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31928546864); warmup 2s / measure 8s; concurrency 8, 16, 32, 64). Host: [Linux (GitHub-hosted)](#linux-github-hosted-ubuntu-latest). HTTP/3 arms were skipped (no QuicListener on the runner image).
+
+| Arm | Topology | Sustainable | Peak | Notes |
+|---|---|---:|---:|---|
+| TWP H1 TLS | Client TLS → cleartext H1 | **17,686** @ 64 | **17,686** | 0% err |
+| nginx H1 TLS | ssl → cleartext H1 | **28,565** @ 64 | **28,565** | 0% err |
+| TWP H2→H1 | Client h2 TLS → H2→H1 bridge → cleartext H1 | **10,181** @ 64 | **10,181** | **0% err** |
+| nginx H2 | Client h2 TLS → cleartext H1 | **13,357** @ 64 | **18,774** @ 32 | 0% err |
+
+On the GHA VM (4 vCPU), nginx leads both H1 TLS and H2 peak RPS; TWP H2→H1 remains zero-error through c=64.
 
 ### Protocol / topology matrix
 
