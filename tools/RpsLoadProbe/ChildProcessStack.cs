@@ -58,7 +58,9 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         if (RequiresCombinedServe(mode))
             return await StartCombinedServeAsync(exe, mode, nginxPath, maxCachedConnections, cancellationToken);
 
-        var originArgs = mode is ProbeMode.ReverseHttp2ToH2c ? "--serve-origin --h2c" : "--serve-origin";
+        var originArgs = mode is ProbeMode.ReverseHttp2ToH2c or ProbeMode.ReverseH2cToH2c
+            ? "--serve-origin --h2c"
+            : "--serve-origin";
         var origin = StartChild(exe, originArgs);
         var originLines = await ReadUntilReadyAsync(origin, cancellationToken);
         var originHttp = Require(originLines, "origin_http");
@@ -110,6 +112,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp3
         or ProbeMode.ReverseHttp11ToHttp2 or ProbeMode.ReverseHttp1ToHttp3
         or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.ReverseHttp3ToHttp2
+        or ProbeMode.ReverseH2c or ProbeMode.ReverseH2cToH3
         or ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi;
 
     private static async Task<ChildProcessStack> StartCombinedServeAsync(string exe, ProbeMode mode,

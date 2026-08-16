@@ -17,7 +17,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-same
 | `nginx-reverse-http2` | Client H2 TLS → cleartext H1 (terminate) | yes (not MITM) |
 | `reverse-http3` | H3 QUIC MITM → H3 | — (no QUIC on nginx/Windows) |
 
-**Not supported:** inbound cleartext h2c from clients; `Upgrade: h2c`. Outbound prior-knowledge h2c is supported (`reverse-http2-to-h2c`). H3 is always QUIC/TLS.
+**Not supported:** `Upgrade: h2c`. Explicit-proxy inbound h2c is not implemented. Outbound and inbound prior-knowledge h2c on transparent reverse are supported. H3 is always QUIC/TLS.
 
 ## Fair terminate compare
 
@@ -25,7 +25,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-same
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-terminate
 ```
 
-Client TLS → cleartext origin: TWP/nginx H1 TLS, TWP H2→H1, nginx H2, TWP H3→H1.
+Client TLS → cleartext origin: TWP/nginx H1 TLS, TWP H2→H1, TWP h2c→H1, nginx H2, TWP H3→H1.
 
 Cleartext-origin terminate arms run **origin and proxy in separate processes** so TWP is not sharing a ThreadPool/GC with Kestrel the way a separate nginx process does not.
 
@@ -39,11 +39,16 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-bridges
 |---|---|
 | `reverse-http2-cleartext` | H2 TLS → H2→H1 → cleartext H1 |
 | `reverse-http2-to-h2c` | H2 TLS → prior-knowledge h2c → cleartext H2 |
+| `reverse-h2c-to-h1` | h2c → H2→H1 → cleartext H1 |
+| `reverse-h2c-to-h2c` | h2c → cleartext H2 |
+| `reverse-h2c-to-h3` | h2c → H2→H3 → QUIC/h3 |
 | `reverse-http11-to-http2` | H1 TLS → H1→H2 → HTTPS h2 |
 | `reverse-http1-to-http3` | H1 TLS → H1→H3 → QUIC/h3 |
 | `reverse-http2-to-http3` | H2 TLS → H2→H3 → QUIC/h3 |
 | `reverse-http3-cleartext` | H3 → cleartext H1 (`ForwardCleartext`) |
 | `reverse-http3-to-http2` | H3 → H3→H2 → HTTPS h2 |
+
+Also: `reverse-h2c` (h2c → HTTPS h2) in `compare-same`.
 
 Other modes: `compare`, `compare-tls`, `compare-http2`, `explicit-pool-sweep`. See `--help`.
 

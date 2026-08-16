@@ -161,4 +161,7 @@ public class TransparentQuicProxyEndPoint : TransparentBaseProxyEndPoint
     /// </summary>
     internal override Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
         BeforeSslAuthenticateEventArgs connectArgs, ILogger logger) => Task.CompletedTask;
+
+    internal override Task InvokeBeforeHttpAuthenticate(ProxyServer proxyServer,
+        BeforeHttpAuthenticateEventArgs args, ILogger logger) => Task.CompletedTask;
 }

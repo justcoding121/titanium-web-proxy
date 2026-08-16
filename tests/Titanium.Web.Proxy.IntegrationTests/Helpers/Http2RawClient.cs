@@ -80,6 +80,23 @@ internal sealed class Http2RawClient : IDisposable
         return await FromTcpAndTlsAsync(tcpClient, tcpClient.GetStream(), sniHost, null);
     }
 
+    /// <summary>
+    ///     Connects directly to a transparent/reverse cleartext endpoint and speaks prior-knowledge HTTP/2
+    ///     (h2c) — no TLS.
+    /// </summary>
+    public static async Task<Http2RawClient> ConnectCleartextDirectAsync(int proxyPort)
+    {
+        var tcpClient = new TcpClient();
+        await tcpClient.ConnectAsync("localhost", proxyPort);
+
+        var stream = tcpClient.GetStream();
+        await stream.WriteAsync(Http2Helper.ConnectionPreface);
+
+        var connection = new Http2RawFrame.Connection(stream);
+        await connection.SendInitialSettingsAsync();
+        return new Http2RawClient(tcpClient, connection);
+    }
+
     private static async Task<Http2RawClient> FromTcpAndTlsAsync(TcpClient tcpClient, Stream networkStream,
         string targetHost, int? headerTableSize)
     {

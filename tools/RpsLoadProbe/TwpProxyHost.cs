@@ -124,6 +124,115 @@ internal sealed class TwpProxyHost : IDisposable
         return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 
+    /// <summary>Cleartext reverse: client prior-knowledge h2c → cleartext HTTP/2 origin.</summary>
+    public static TwpProxyHost StartReverseH2cToH2c(int originHttpPort)
+    {
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpPort,
+            ForwardCleartext = true,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeHttpAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        DebugSessionLog.Write("H2CH2C", "TwpProxyHost.StartReverseH2cToH2c", "started",
+            new { listenPort = endPoint.Port, originHttpPort });
+        return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
+    /// <summary>Cleartext reverse: client prior-knowledge h2c → H2→H1 bridge → cleartext HTTP/1 origin.</summary>
+    public static TwpProxyHost StartReverseH2cToH1(int originHttpPort)
+    {
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpPort,
+            ForwardCleartext = true,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeHttpAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        DebugSessionLog.Write("H2CH1", "TwpProxyHost.StartReverseH2cToH1", "started",
+            new { listenPort = endPoint.Port, originHttpPort });
+        return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
+    /// <summary>Cleartext reverse: client prior-knowledge h2c → HTTPS origin with ALPN h2.</summary>
+    public static TwpProxyHost StartReverseH2c(int originHttpsPort)
+    {
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpsPort,
+            ForwardCleartext = false,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeHttpAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        DebugSessionLog.Write("H2CH2", "TwpProxyHost.StartReverseH2c", "started",
+            new { listenPort = endPoint.Port, originHttpsPort });
+        return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
+    /// <summary>Cleartext reverse: client prior-knowledge h2c → H2→H3 bridge → QUIC/h3 origin.</summary>
+    public static TwpProxyHost StartReverseH2cToH3(int originQuicPort)
+    {
+        if (!QuicListener.IsSupported)
+            throw new PlatformNotSupportedException("QuicListener is not supported on this platform.");
+
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: true);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = originQuicPort,
+            ForwardCleartext = false,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeHttpAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        DebugSessionLog.Write("H2CH3", "TwpProxyHost.StartReverseH2cToH3", "started",
+            new { listenPort = endPoint.Port, originQuicPort });
+        return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
     public static TwpProxyHost StartReverseHttp2(int originHttpsPort)
     {
         var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);

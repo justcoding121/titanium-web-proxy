@@ -48,6 +48,10 @@ Client / origin columns: HTTP version and whether TLS is used (`plain` = clearte
 | HTTP/2 · TLS | HTTP/1 · plain | **7,373** | **7,373** | **5,898** | **14,920** |
 | HTTP/2 · TLS | HTTP/2 · TLS | **6,168** | **6,168** | *Not possible* (no MITM) | *Not possible* |
 | HTTP/2 · TLS | HTTP/2 · plain | **6,889** | **6,889** | *Not possible* | *Not possible* |
+| HTTP/2 · plain | HTTP/1 · plain | **10,757** | **11,088** | *Not possible* | *Not possible* |
+| HTTP/2 · plain | HTTP/2 · plain | **6,344** | **6,344** | *Not possible* | *Not possible* |
+| HTTP/2 · plain | HTTP/2 · TLS | **6,036** | **6,036** | *Not possible* | *Not possible* |
+| HTTP/2 · plain | HTTP/3 · QUIC | **7,587** | **7,949** | *Not possible* (no QUIC) | *Not possible* |
 | HTTP/3 · QUIC | HTTP/1 · plain | **2,246** | **3,541** | *Not possible* (no QUIC) | *Not possible* |
 | HTTP/3 · QUIC | HTTP/2 · TLS | **1,842** | **1,842** | *Not possible* (no QUIC) | *Not possible* |
 | HTTP/3 · QUIC | HTTP/3 · QUIC | **7,335** | **7,335** | *Not possible* (no QUIC) | *Not possible* |
@@ -55,7 +59,7 @@ Client / origin columns: HTTP version and whether TLS is used (`plain` = clearte
 | HTTP/1 · TLS | HTTP/3 · QUIC | **13,499** | **13,499** | *Not possible* (no QUIC) | *Not possible* |
 | HTTP/2 · TLS | HTTP/3 · QUIC | **5,055** | **5,055** | *Not possible* (no QUIC) | *Not possible* |
 
-Windows sources: `compare-same` / `compare-terminate` / `compare-bridges` / `reverse-http2-to-h2c` (warmup 1s; measure 3–4s; concurrency up to 32 or 64). All published TWP arms **0% error**.
+Windows sources: `compare-same` / `compare-terminate` / `compare-bridges` / `reverse-http2-to-h2c` / `reverse-h2c*` (warmup 1s; measure 3–4s; concurrency up to 32 or 64). All published TWP arms **0% error**.
 
 nginx/Windows is a limited port. Use it for **same-OS** comparison only — not as the industry nginx baseline.
 
@@ -71,6 +75,10 @@ Median of **3 repeats** from Actions run [31936930781](https://github.com/justco
 | HTTP/2 · TLS | HTTP/1 · plain | **10,271** | **10,271** | **18,131** | **18,131** |
 | HTTP/2 · TLS | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* (no MITM) | *Not possible* |
 | HTTP/2 · TLS | HTTP/2 · plain | *Not measured* | *Not measured* | *Not possible* | *Not possible* |
+| HTTP/2 · plain | HTTP/1 · plain | *Not measured* | *Not measured* | *Not possible* | *Not possible* |
+| HTTP/2 · plain | HTTP/2 · plain | *Not measured* | *Not measured* | *Not possible* | *Not possible* |
+| HTTP/2 · plain | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* | *Not possible* |
+| HTTP/2 · plain | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* |
 | HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* (no msquic on runner) | *Not measured* | *Not possible* (no QUIC) | *Not possible* |
 | HTTP/3 · QUIC | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* |
 | HTTP/3 · QUIC | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* |

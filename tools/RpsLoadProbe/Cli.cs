@@ -207,6 +207,18 @@ internal static class Cli
             case "reverse-http2-to-h2c":
                 mode = ProbeMode.ReverseHttp2ToH2c;
                 return true;
+            case "reverse-h2c":
+                mode = ProbeMode.ReverseH2c;
+                return true;
+            case "reverse-h2c-to-h2c":
+                mode = ProbeMode.ReverseH2cToH2c;
+                return true;
+            case "reverse-h2c-to-h1":
+                mode = ProbeMode.ReverseH2cToH1;
+                return true;
+            case "reverse-h2c-to-h3":
+                mode = ProbeMode.ReverseH2cToH3;
+                return true;
             case "nginx-reverse-http2":
                 mode = ProbeMode.NginxReverseHttp2;
                 return true;
@@ -282,6 +294,10 @@ internal static class Cli
               reverse-http2           TWP Transparent TLS+h2 MITM -> Kestrel HTTPS (h2)
               reverse-http2-cleartext TWP TLS+h2 terminate -> H2→H1 bridge -> Kestrel HTTP/1 (nginx parity)
               reverse-http2-to-h2c     TWP TLS+h2 terminate -> prior-knowledge h2c -> Kestrel HTTP/2 cleartext
+              reverse-h2c             TWP cleartext h2c reverse -> Kestrel HTTPS/h2
+              reverse-h2c-to-h2c      TWP cleartext h2c reverse -> Kestrel HTTP/2 cleartext
+              reverse-h2c-to-h1       TWP cleartext h2c reverse -> H2→H1 bridge -> Kestrel HTTP/1
+              reverse-h2c-to-h3       TWP cleartext h2c reverse -> H2→H3 bridge -> Quic/h3 origin
               nginx-reverse-http2     nginx ssl+http2 -> cleartext HTTP/1 origin
               reverse-http3           TWP TransparentQuic (h3) -> Quic HTTPS/h3 origin (no nginx/Windows)
               reverse-http3-cleartext TWP QUIC/h3 terminate -> cleartext HTTP/1 origin

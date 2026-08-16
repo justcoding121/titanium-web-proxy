@@ -237,9 +237,9 @@ public partial class ProxyServer
                             var httpCmd = await clientStream.ReadLineAsync(cancellationToken);
                             if (httpCmd == "PRI * HTTP/2.0")
                             {
-                                // Route strictly by what TLS actually negotiated via ALPN - see the matching
-                                // check/rationale in the explicit CONNECT handler.
-                                if (clientStream.Connection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
+                                // Route by ALPN h2 or inbound prior-knowledge h2c.
+                                if (clientStream.Connection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2
+                                    && !clientStream.Connection.Http2CleartextClient)
                                 {
                                     await TcpConnectionFactory.Release(prefetchConnectionTask, true);
                                     throw new InvalidDataException(
@@ -455,6 +455,24 @@ public partial class ProxyServer
 
                     return;
                 }
+
+                if (method == KnownMethod.Pri)
+                {
+                    await HandleInboundHttp2CleartextAsync(endPoint, clientStream, clientConnection,
+                        cancellationTokenSource, cancellationToken, socksTargetHost, port);
+                    return;
+                }
+            }
+            else if (!isHttps)
+            {
+                // Transparent reverse cleartext: detect prior-knowledge h2c before HTTP/1 parsing.
+                var method = await HttpHelper.GetMethod(clientStream, BufferPool, cancellationToken);
+                if (method == KnownMethod.Pri)
+                {
+                    await HandleInboundHttp2CleartextAsync(endPoint, clientStream, clientConnection,
+                        cancellationTokenSource, cancellationToken, socksTargetHost: null, port);
+                    return;
+                }
             }
 
             await HandleHttpSessionRequest(endPoint, clientStream, cancellationTokenSource,
@@ -488,6 +506,153 @@ public partial class ProxyServer
             cancellationTokenSource.Dispose();
             await TcpConnectionFactory.Release(prefetchConnectionTask, true);
             await clientStream.DisposeAsync();
+        }
+    }
+
+    /// <summary>
+    ///     Transparent reverse / SOCKS cleartext: client spoke prior-knowledge HTTP/2 (h2c).
+    ///     Consumes the connection preface and routes to MITM or H2→H1 / H2→H3 bridges — no client TLS.
+    /// </summary>
+    private async Task HandleInboundHttp2CleartextAsync(TransparentBaseProxyEndPoint endPoint,
+        HttpClientStream clientStream, TcpClientConnection clientConnection,
+        CancellationTokenSource cancellationTokenSource, CancellationToken cancellationToken,
+        string? socksTargetHost, int port)
+    {
+        if (!EnableHttp2)
+        {
+            throw new ProxyHttpException(
+                "Received an HTTP/2 connection preface on a cleartext connection, but EnableHttp2 is false.",
+                null, null);
+        }
+
+        var httpCmd = await clientStream.ReadLineAsync(cancellationToken);
+        if (httpCmd != "PRI * HTTP/2.0")
+        {
+            throw new InvalidDataException(
+                $"HTTP/2 Protocol violation. Expected 'PRI * HTTP/2.0', got '{httpCmd}'.");
+        }
+
+        var line = await clientStream.ReadLineAsync(cancellationToken);
+        if (line != string.Empty)
+            throw new InvalidDataException($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
+
+        line = await clientStream.ReadLineAsync(cancellationToken);
+        if (line != "SM")
+            throw new InvalidDataException($"HTTP/2 Protocol violation. 'SM' expected, '{line}' received");
+
+        line = await clientStream.ReadLineAsync(cancellationToken);
+        if (line != string.Empty)
+            throw new InvalidDataException($"HTTP/2 Protocol violation. Empty string expected, '{line}' received");
+
+        clientConnection.Http2CleartextClient = true;
+        clientConnection.NegotiatedApplicationProtocol = SslApplicationProtocol.Http2;
+
+        var identityHost = endPoint.GenericCertificateName;
+        var seededHost = socksTargetHost ?? endPoint.ForwardHost ?? identityHost;
+        var seededPort = socksTargetHost != null
+            ? port
+            : endPoint.ForwardPort ?? (endPoint.ForwardCleartext ? 80 : 443);
+
+        var httpArgs = new BeforeHttpAuthenticateEventArgs(this, clientConnection, cancellationTokenSource,
+            seededHost, seededPort);
+        await endPoint.InvokeBeforeHttpAuthenticate(this, httpArgs, logger);
+        if (cancellationTokenSource.IsCancellationRequested)
+            return;
+
+        var remoteHostName = identityHost;
+        var remotePort = httpArgs.ForwardPort;
+        string? http2ConnectHost = null;
+        int? http2ConnectPort = null;
+        if (!string.Equals(httpArgs.ForwardHostName, identityHost, StringComparison.OrdinalIgnoreCase))
+        {
+            http2ConnectHost = httpArgs.ForwardHostName;
+            http2ConnectPort = httpArgs.ForwardPort;
+        }
+
+        var h3Route = ResolveHttp3Origin(remoteHostName, remotePort, httpArgs.UpstreamHttpProtocol,
+            allowDnsProbe: true);
+        if (h3Route.UseH3)
+        {
+            await SendHttp2ToHttp3Bridge(clientStream, endPoint, null, null,
+                remoteHostName, remotePort, cancellationTokenSource, httpArgs.UpstreamHttpProtocol);
+            return;
+        }
+
+        var negotiationSession = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
+        var negotiation = await ResolveHttp2ForClientAsync(negotiationSession, clientOffersHttp2: true,
+            remoteHostName, remotePort, http2ConnectHost, http2ConnectPort,
+            httpArgs.UpstreamHttpProtocol, httpArgs.AllowHttpProtocolTranslation,
+            EnableTcpServerConnectionPrefetch, cancellationToken,
+            originIsHttps: !endPoint.ForwardCleartext);
+
+        if (negotiation.RequiresHttp11Bridge)
+        {
+            await SendHttp2ToHttp11Bridge(clientStream, endPoint, null, null, remoteHostName,
+                remotePort, http2ConnectHost, http2ConnectPort, cancellationTokenSource);
+            return;
+        }
+
+        if (negotiation.RequiresH2OriginBridge)
+        {
+            // Client already speaks h2c; H2-origin bridge is for H1 clients — should not happen.
+            throw new ProxyHttpException(
+                "Inbound h2c negotiated an H1-client-to-H2-origin bridge, which is not applicable.",
+                null, negotiationSession);
+        }
+
+        if (!negotiation.OriginSupportsHttp2)
+        {
+            throw new ProxyHttpException(
+                $"Inbound h2c requires an HTTP/2 origin for '{remoteHostName}:{remotePort}', but the origin " +
+                "does not support HTTP/2 and AllowHttpProtocolTranslation did not select an H2→H1 bridge.",
+                null, negotiationSession);
+        }
+
+        var originIsHttps = !endPoint.ForwardCleartext;
+        var expectedCacheKey = GetHttp2ConnectionCacheKey(negotiationSession, remoteHostName, remotePort,
+            http2ConnectHost, http2ConnectPort, originIsHttps);
+        var connection = await AdoptRetainedConnectionAsync(negotiation.RetainedConnectionTask, expectedCacheKey,
+            originIsHttps ? SslExtensions.Http2ProtocolAsList : null);
+
+        connection ??= (await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
+            HttpHeader.Version20, originIsHttps,
+            originIsHttps ? SslExtensions.Http2ProtocolAsList : null,
+            true, negotiationSession, UpStreamEndPoint,
+            originIsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy, true, false,
+            cancellationToken, http2ConnectHost, http2ConnectPort))!;
+        if (connection is { Http2Cleartext: false } && !originIsHttps)
+            connection.Http2Cleartext = true;
+
+        var capabilityCacheKey = GetHttp2CapabilityCacheKey(negotiationSession, remoteHostName, remotePort,
+            http2ConnectHost, http2ConnectPort, originIsHttps);
+        connection = await EnsureHttp2OriginConnectionAsync(connection, capabilityCacheKey, negotiationSession,
+            httpArgs.AllowHttpProtocolTranslation);
+        if (connection == null)
+        {
+            await SendHttp2ToHttp11Bridge(clientStream, endPoint, null, null, remoteHostName,
+                remotePort, http2ConnectHost, http2ConnectPort, cancellationTokenSource);
+            return;
+        }
+
+        try
+        {
+            var connectionPreface = new ReadOnlyMemory<byte>(Http2Helper.ConnectionPreface);
+            connection.Http2SessionStarted = true;
+            await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
+            await Http2Helper.SendHttp2(clientStream, connection.Stream,
+                () => new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource),
+                (sessionArgs, ctx) => BridgeOnBeforeRequestForH3(sessionArgs, ctx,
+                    remoteHostName, remotePort, coldH3Bridge: false),
+                async (sessionArgs, ctx) => { await OnBeforeResponse(sessionArgs); },
+                async sessionArgs => { await OnAfterResponse(sessionArgs); },
+                headers => PrepareRequestHeaders(headers),
+                cancellationTokenSource, clientStream.Connection.Id, logger,
+                MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
+                originConnection: connection);
+        }
+        finally
+        {
+            await TcpConnectionFactory.Release(connection, true);
         }
     }
 }

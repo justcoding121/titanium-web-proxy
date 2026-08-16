@@ -302,7 +302,8 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     Enable disable HTTP/2 support.
-    ///     Client-facing HTTP/2 is negotiated via TLS ALPN only (no inbound cleartext h2c).
+    ///     Client-facing HTTP/2 is negotiated via TLS ALPN, or as prior-knowledge cleartext h2c on a
+    ///     transparent reverse endpoint (<c>DecryptSsl: false</c>). No <c>Upgrade: h2c</c>.
     ///     Origin-facing HTTP/2 uses TLS ALPN <c>h2</c> by default; with
     ///     <see cref="Models.TransparentBaseProxyEndPoint.ForwardCleartext"/> and
     ///     <see cref="Models.UpstreamHttpProtocol.Http2"/>, the origin speaks cleartext HTTP/2
@@ -312,7 +313,7 @@ public partial class ProxyServer : IDisposable
     ///     interim (1xx) responses, and the synthetic-response APIs (Ok/Respond/Redirect/GenericResponse/
     ///     RespondStreaming) are all supported over HTTP/2, the same as over HTTP/1.x.
     ///     Not supported: HTTP/2 server push (the wire frames are transcoded but there is no public API to
-    ///     originate a push) and inbound cleartext h2c.
+    ///     originate a push) and <c>Upgrade: h2c</c>. Explicit-proxy inbound h2c is not implemented.
     ///     See the protocol support matrix on the wiki for exact, up-to-date HTTP/1.x/HTTP/2 feature coverage.
     /// </summary>
     public bool EnableHttp2 { get; set; } = true;

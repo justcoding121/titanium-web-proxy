@@ -52,6 +52,7 @@ internal static class ServeProxyHost
         if (mode is ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp3
             or ProbeMode.ReverseHttp11ToHttp2 or ProbeMode.ReverseHttp1ToHttp3
             or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.ReverseHttp3ToHttp2
+            or ProbeMode.ReverseH2c or ProbeMode.ReverseH2cToH3
             or ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi)
         {
             ProbeLog.Error(
@@ -125,6 +126,24 @@ internal static class ServeProxyHost
                 targetForClient = twp.ListenUrl;
                 break;
             }
+            case ProbeMode.ReverseH2cToH2c:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var twp = TwpProxyHost.StartReverseH2cToH2c(originHttpPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.ReverseH2cToH1:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var twp = TwpProxyHost.StartReverseH2cToH1(originHttpPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
             case ProbeMode.NginxReverseHttp2:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
@@ -151,7 +170,9 @@ internal static class ServeProxyHost
 
         var httpVersion = mode switch
         {
-            ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c or ProbeMode.NginxReverseHttp2 => "2.0",
+            ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c or ProbeMode.NginxReverseHttp2
+                or ProbeMode.ReverseH2c or ProbeMode.ReverseH2cToH2c or ProbeMode.ReverseH2cToH1
+                or ProbeMode.ReverseH2cToH3 => "2.0",
             ProbeMode.ReverseHttp3Cleartext => "3.0",
             _ => "1.1"
         };
@@ -200,6 +221,10 @@ internal static class ServeProxyHost
         ProbeMode.ReverseHttp2 => "reverse-http2",
         ProbeMode.ReverseHttp2Cleartext => "reverse-http2-cleartext",
         ProbeMode.ReverseHttp2ToH2c => "reverse-http2-to-h2c",
+        ProbeMode.ReverseH2c => "reverse-h2c",
+        ProbeMode.ReverseH2cToH2c => "reverse-h2c-to-h2c",
+        ProbeMode.ReverseH2cToH1 => "reverse-h2c-to-h1",
+        ProbeMode.ReverseH2cToH3 => "reverse-h2c-to-h3",
         ProbeMode.NginxReverseHttp2 => "nginx-reverse-http2",
         ProbeMode.ReverseHttp3 => "reverse-http3",
         ProbeMode.ReverseHttp3Cleartext => "reverse-http3-cleartext",
@@ -421,6 +446,48 @@ internal static class ServeHost
                     var twp = TwpProxyHost.StartReverseHttp2ToH2c(origin.HttpPort);
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
                         twp.ListenUrl, [twp.ListenUrl], null, "2.0");
+                }
+                case ProbeMode.ReverseH2cToH2c:
+                {
+                    var origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = true,
+                        EnableHttps = false,
+                        HttpProtocols = HttpProtocols.Http2
+                    }, cancellationToken);
+                    var twp = TwpProxyHost.StartReverseH2cToH2c(origin.HttpPort);
+                    return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
+                        twp.ListenUrl, [twp.ListenUrl], null, "2.0");
+                }
+                case ProbeMode.ReverseH2cToH1:
+                {
+                    var origin = await OriginServer.StartAsync(false, cancellationToken);
+                    var twp = TwpProxyHost.StartReverseH2cToH1(origin.HttpPort);
+                    return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
+                        twp.ListenUrl, [twp.ListenUrl], null, "2.0");
+                }
+                case ProbeMode.ReverseH2c:
+                {
+                    var origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = false,
+                        EnableHttps = true,
+                        HttpsProtocols = HttpProtocols.Http1AndHttp2
+                    }, cancellationToken);
+                    var twp = TwpProxyHost.StartReverseH2c(origin.HttpsPort);
+                    return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, [], twp.ListenUrl, null,
+                        twp.ListenUrl, [twp.ListenUrl], null, "2.0");
+                }
+                case ProbeMode.ReverseH2cToH3:
+                {
+                    if (!System.Net.Quic.QuicListener.IsSupported)
+                        throw new PlatformNotSupportedException("QuicListener is not supported.");
+
+                    var origin = new QuicHttp3OriginHost();
+                    var twp = TwpProxyHost.StartReverseH2cToH3(origin.Port);
+                    return new ServeStack(origin, twp, twp, $"quic://localhost:{origin.Port}/",
+                        $"quic://localhost:{origin.Port}/", [], twp.ListenUrl, null, twp.ListenUrl, [twp.ListenUrl],
+                        null, "2.0", originQuicPort: origin.Port);
                 }
                 case ProbeMode.NginxReverseHttp2:
                 {

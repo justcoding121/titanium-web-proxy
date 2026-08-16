@@ -54,4 +54,7 @@ public class SocksProxyEndPoint : TransparentBaseProxyEndPoint
         if (BeforeSslAuthenticate != null)
             await BeforeSslAuthenticate.InvokeAsync(proxyServer, connectArgs, logger);
     }
+
+    internal override Task InvokeBeforeHttpAuthenticate(ProxyServer proxyServer,
+        BeforeHttpAuthenticateEventArgs args, ILogger logger) => Task.CompletedTask;
 }

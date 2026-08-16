@@ -152,14 +152,17 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         /// <summary>
-        ///     TLS-terminate → cleartext h2c: clients send <c>:scheme: https</c>, but a cleartext origin
-        ///     (e.g. Kestrel <c>HttpProtocols.Http2</c>) expects <c>http</c>. Align origin-facing
-        ///     <see cref="Request.IsHttps"/> before <see cref="SendHeader"/> encodes <c>:scheme</c>.
+        ///     Align origin-facing <c>:scheme</c> with the origin transport: cleartext origins expect
+        ///     <c>http</c> (TLS-terminate clients often send <c>https</c>); TLS origins expect <c>https</c>
+        ///     when the client spoke inbound h2c (<c>http</c>).
         /// </summary>
-        private static void ApplyCleartextOriginScheme(Request request, TcpServerConnection? originConnection)
+        private static void ApplyCleartextOriginScheme(Request request, TcpServerConnection? originConnection,
+            TcpClientConnection? clientConnection = null)
         {
             if (originConnection is { IsHttps: false })
                 request.IsHttps = false;
+            else if (originConnection is { IsHttps: true } && clientConnection is { Http2CleartextClient: true })
+                request.IsHttps = true;
         }
 
         private static bool IsAsciiDigit(byte b) => b is >= (byte)'0' and <= (byte)'9';
@@ -901,7 +904,8 @@ namespace Titanium.Web.Proxy.Http2
                                     // Origin supports RFC 8441 - forward the extended CONNECT HEADERS.
                                     if (originConnection != null)
                                         BindOriginForHttp2Stream(sessionArgs, originConnection);
-                                    ApplyCleartextOriginScheme(request, originConnection);
+                                    ApplyCleartextOriginScheme(request, originConnection,
+                                        sessionArgs.ClientConnection);
                                     await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                         request, endStreamFlag, output, isPromise));
                                 }
@@ -912,7 +916,8 @@ namespace Titanium.Web.Proxy.Http2
                                 // false (H1 syphon/drain must not touch the multiplexed H2 socket).
                                 if (originConnection != null)
                                     BindOriginForHttp2Stream(sessionArgs, originConnection);
-                                ApplyCleartextOriginScheme(request, originConnection);
+                                ApplyCleartextOriginScheme(request, originConnection,
+                                    sessionArgs.ClientConnection);
                                 await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                     request, endStreamFlag, output, isPromise));
                             }

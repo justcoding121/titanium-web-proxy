@@ -81,6 +81,11 @@ internal class TcpClientConnection : IDisposable
 
     internal SslApplicationProtocol NegotiatedApplicationProtocol { get; set; }
 
+    /// <summary>
+    ///     True when this client spoke prior-knowledge cleartext HTTP/2 (h2c) rather than TLS ALPN <c>h2</c>.
+    /// </summary>
+    internal bool Http2CleartextClient { get; set; }
+
     public void Dispose()
     {
         Dispose(true);

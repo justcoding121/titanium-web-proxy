@@ -12,7 +12,9 @@ param(
         'compare', 'compare-http2', 'compare-tls', 'compare-terminate', 'compare-same', 'compare-bridges', 'explicit-pool-sweep',
         'reverse-http1', 'nginx-reverse-http1', 'reverse-http1-tls', 'nginx-reverse-http1-tls',
         'https-mitm',
-        'reverse-http2', 'reverse-http2-cleartext', 'reverse-http2-to-h2c', 'nginx-reverse-http2',
+        'reverse-http2', 'reverse-http2-cleartext', 'reverse-http2-to-h2c',
+        'reverse-h2c', 'reverse-h2c-to-h2c', 'reverse-h2c-to-h1', 'reverse-h2c-to-h3',
+        'nginx-reverse-http2',
         'reverse-http3', 'reverse-http3-cleartext',
         'reverse-http11-to-http2', 'reverse-http1-to-http3', 'reverse-http2-to-http3', 'reverse-http3-to-http2',
         'explicit-http1-multi', 'explicit-http2-multi')]

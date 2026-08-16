@@ -41,4 +41,7 @@ public abstract class TransparentBaseProxyEndPoint : ProxyEndPoint
 
     internal abstract Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
         BeforeSslAuthenticateEventArgs connectArgs, ILogger logger);
+
+    internal abstract Task InvokeBeforeHttpAuthenticate(ProxyServer proxyServer,
+        BeforeHttpAuthenticateEventArgs args, ILogger logger);
 }

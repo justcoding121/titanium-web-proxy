@@ -25,3 +25,14 @@ static Titanium.Web.Proxy.Network.CertificateManager.LeafRsaKeyPairBufferSize.ge
 static Titanium.Web.Proxy.Network.CertificateManager.LeafRsaKeyPairBufferSize.set -> void
 Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCertificateDiskCacheEntries.get -> int?
 Titanium.Web.Proxy.Options.ProxyResourceLimits.WithCertificateCacheBounds(int? maxCertificateCacheEntries, int? maxCertificateDiskCacheEntries) -> Titanium.Web.Proxy.Options.ProxyResourceLimits!
+Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs
+Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.AllowHttpProtocolTranslation.get -> bool
+Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.AllowHttpProtocolTranslation.set -> void
+Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardHostName.get -> string!
+Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardHostName.set -> void
+Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardPort.get -> int
+Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardPort.set -> void
+Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.TerminateSession() -> void
+Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.UpstreamHttpProtocol.get -> Titanium.Web.Proxy.Models.UpstreamHttpProtocol
+Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.UpstreamHttpProtocol.set -> void
+Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeHttpAuthenticate -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs!>?
