@@ -321,14 +321,22 @@ public partial class ProxyServer
                                 prefetchTask = null;
                             }
 
+                            // Transparent reverse with a fixed ForwardHost keeps the origin socket sticky
+                            // (see release path below). Destination cannot change, so skip cache-key rebuild.
+                            var stickyForwardUpstream = args.ProxyEndPoint is TransparentBaseProxyEndPoint
+                            {
+                                ForwardHost: { Length: > 0 }
+                            };
+
                             if (connection != null)
                             {
+                                // Poll(0): non-blocking half-close check. Poll(1000) waited up to 1ms
+                                // whenever the origin socket was idle — catastrophic for sticky reverse
+                                // keep-alive (every GET paid that delay; Linux H1 plain dropped ~20%).
                                 var socket = connection.TcpSocket;
-                                var part1 = socket.Poll(1000, SelectMode.SelectRead);
-                                var part2 = socket.Available == 0;
-                                if (part1 && part2)
+                                if (socket.Poll(0, SelectMode.SelectRead) && socket.Available == 0)
                                 {
-                                    //connection is closed
+                                    // connection is closed
                                     await TcpConnectionFactory.Release(connection, true);
                                     connection = null;
                                 }
@@ -338,6 +346,7 @@ public partial class ProxyServer
                             // only gets hit when connection pool is disabled.
                             // or when prefetch task has a unexpectedly different connection.
                             if (connection != null
+                                && !stickyForwardUpstream
                                 && await Network.Tcp.TcpConnectionFactory.GetConnectionCacheKey(this, args,
                                     clientStream.Connection.NegotiatedApplicationProtocol)
                                 != connection.CacheKey)
@@ -394,15 +403,8 @@ public partial class ProxyServer
                             // bound to this client session (reused for its subsequent requests) and are closed when
                             // the client connection ends, never shared with another client.
                             //
-                            // Transparent reverse with a fixed ForwardHost mirrors nginx's upstream keepalive:
-                            // keep the origin socket sticky on this client connection instead of pool Get/Release
-                            // (and IsGoodConnection) on every tiny keep-alive GET — that round-trip was a major
-                            // share of the Linux H1-plain RPS gap vs nginx.
-                            var stickyForwardUpstream = args.ProxyEndPoint is TransparentBaseProxyEndPoint
-                            {
-                                ForwardHost: { Length: > 0 }
-                            };
-
+                            // Sticky ForwardHost (computed above): mirrors nginx upstream keepalive —
+                            // avoid pool Get/Release + IsGoodConnection on every tiny keep-alive GET.
                             if (EnableConnectionPool && connection != null
                                                      && !connection.IsWinAuthenticated
                                                      && !stickyForwardUpstream)
