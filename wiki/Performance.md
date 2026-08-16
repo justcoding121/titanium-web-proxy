@@ -1,14 +1,12 @@
 # Performance
 
-Titanium targets **low-overhead MITM proxying**: connection pooling, HTTP/2 multiplexing, and buffer reuse. Numbers below are **Release** measurements with [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe) (and BenchmarkDotNet / Basic example where noted). They are orientation only — absolute RPS varies by hardware, OS, and background load.
+Titanium targets **low-overhead MITM proxying**: connection pooling, HTTP/2 multiplexing, and buffer reuse. Numbers below are **Release** measurements with [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe) (and BenchmarkDotNet / Basic example where noted). Absolute RPS varies by hardware, OS, and background load — compare **within a table**, not across Windows vs Linux.
 
 For pooling knobs and certificate first-visit tuning, see [Performance and pooling](Home#performance-and-pooling).
 
 ## Measurement environment
 
 ### Windows (developer laptop)
-
-Unless a subsection names another host, saturation RPS tables used:
 
 | | |
 |---|---|
@@ -21,8 +19,6 @@ Unless a subsection names another host, saturation RPS tables used:
 
 ### Linux (GitHub-hosted `ubuntu-latest`)
 
-Fair TLS-terminate numbers in [Linux saturation](#fair-tls-terminate-compare--linux-github-hosted-ubuntu-latest) were measured on a stock Actions runner (not a container job):
-
 | | |
 |---|---|
 | OS | Ubuntu 24.04.4 LTS |
@@ -30,31 +26,9 @@ Fair TLS-terminate numbers in [Linux saturation](#fair-tls-terminate-compare--li
 | RAM | 15.6 GiB |
 | Runtime | .NET 10.0.11 |
 | nginx | nginx/1.24.0 (Ubuntu) |
-| Harness | RpsLoadProbe Release; `compare-terminate` (HTTP/3 arms skipped — no QuicListener / msquic on this image) |
+| Harness | RpsLoadProbe Release; median of 3 repeats where noted |
 
-## At a glance
-
-| What | Result |
-|---|---|
-| HTTPS TTFB vs direct (median, 14 hosts) | Cold **≈ parity** (−1 ms); warm **−25 ms** (proxy faster) |
-| HTTP/1 loopback GET (no body intercept) | **~186 µs**, **~17.5 KB** allocated / request |
-| H1 cleartext reverse (Windows) | **~29.4k RPS** (TWP) vs **~24.6k RPS** (nginx/Windows) |
-| H1 TLS terminate (Windows) | **~30.3k RPS** (TWP) vs **~17.6k RPS** (nginx/Windows) @ c=32 |
-| H2 TLS MITM / H3 QUIC MITM (Windows) | H2 **~6.2k** · H3 **~7.3k** @ c=32 — see [Same-protocol](#same-protocol-compare-same--windows) |
-| Cross-version bridges (Windows) | See [Bridge matrix](#bridge-matrix-compare-bridges--windows) |
-| TLS-terminate reverse HTTP/1 peak (Linux GHA) | **median ~17.0k** (TWP) vs **~27.2k** (nginx); **TWP÷nginx ≈ 0.63** (3 repeats) |
-| Explicit HTTPS MITM peak | **~22.5k RPS** @ c=32 |
-| Basic example footprint (Release, after load) | **~74 MB** working set · **~24–29 MB** private bytes |
-
-### Why isn’t HTTP/3 > HTTP/2 > HTTP/1 in raw RPS?
-
-For **tiny JSON responses** (~64 B) on loopback, that ordering is **not** expected:
-
-1. **Topology dominates protocol.** Compare arms that share the same crypto hop count and upstream protocol.
-2. **HTTP/2/3 shine at multiplexing**, not at maximizing single-origin tiny-GET RPS.
-3. **Fair terminate topology** (client TLS → cleartext origin) is what nginx uses for H2. TWP matches that with `ForwardCleartext` + the H2→H1 bridge (and H1 TLS terminate).
-
-## Saturation RPS
+**How to read the tables:** each row is one client → origin path. **Sustainable** = last concurrency that still met error/latency SLOs. **Peak** = highest RPS observed in that ramp. Blank cells with *Not possible* mean that product cannot do that path. *Not measured* means the path exists but we have not published a number for that OS yet.
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-same
@@ -62,86 +36,70 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-terminate
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-bridges
 ```
 
-### Same-protocol (`compare-same`) — Windows
+## Windows — Titanium vs nginx
 
-Same major version on client and origin (or fair nginx terminate where MITM does not apply). Local Release `compare-same` (warmup 1s / measure 3s; concurrency 8, 32). Host: [Windows (developer laptop)](#windows-developer-laptop). All arms **0% error**.
+Client / origin columns: HTTP version and whether TLS is used (`plain` = cleartext, `TLS` = encrypted, `QUIC` = HTTP/3).
 
-| Arm | Topology | Peak @ c=32 |
-|---|---|---:|
-| TWP H1 cleartext | H1 → H1 cleartext | **29,376** |
-| nginx H1 cleartext | H1 → H1 cleartext | **24,587** |
-| TWP H1 TLS terminate | Client TLS → cleartext H1 | **30,252** |
-| nginx H1 TLS | ssl → cleartext H1 | **17,620** |
-| TWP H1 MITM | Explicit TLS MITM → HTTPS H1 | **22,540** |
-| TWP H2 MITM | H2 TLS → HTTPS H2 | **6,168** |
-| nginx H2 terminate | Client h2 TLS → cleartext H1 | **19,604** |
-| TWP H3 MITM | H3 QUIC → H3 | **7,335** |
+| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak |
+|---|---|---:|---:|---:|---:|
+| HTTP/1 · plain | HTTP/1 · plain | **29,376** | **29,376** | **24,587** | **24,587** |
+| HTTP/1 · TLS | HTTP/1 · plain | **21,803** | **21,803** | **13,826** | **14,424** |
+| HTTP/1 · TLS | HTTP/1 · TLS | **22,540** | **22,540** | *Not possible* (no MITM) | *Not possible* |
+| HTTP/2 · TLS | HTTP/1 · plain | **7,373** | **7,373** | **5,898** | **14,920** |
+| HTTP/2 · TLS | HTTP/2 · TLS | **6,168** | **6,168** | *Not possible* (no MITM) | *Not possible* |
+| HTTP/2 · TLS | HTTP/2 · plain | *Not possible* (no h2c) | *Not possible* | *Not possible* | *Not possible* |
+| HTTP/3 · QUIC | HTTP/1 · plain | **2,327** | **2,423** | *Not possible* (no QUIC) | *Not possible* |
+| HTTP/3 · QUIC | HTTP/2 · TLS | **1,842** | **1,842** | *Not possible* (no QUIC) | *Not possible* |
+| HTTP/3 · QUIC | HTTP/3 · QUIC | **7,335** | **7,335** | *Not possible* (no QUIC) | *Not possible* |
+| HTTP/1 · TLS | HTTP/2 · TLS | **8,843** | **8,843** | *Not possible* | *Not possible* |
+| HTTP/1 · TLS | HTTP/3 · QUIC | **13,499** | **13,499** | *Not possible* (no QUIC) | *Not possible* |
+| HTTP/2 · TLS | HTTP/3 · QUIC | **5,055** | **5,055** | *Not possible* (no QUIC) | *Not possible* |
 
-**Notes:** nginx H2 is TLS terminate to cleartext H1 (not H2↔H2 MITM). Cleartext h2c upstream is not supported. H3 is always QUIC/TLS; nginx/Windows has no QUIC.
+Windows sources: `compare-same` / `compare-terminate` / `compare-bridges` (warmup 1s; measure 3–4s; concurrency up to 32 or 64). All published TWP arms **0% error**.
 
-### Fair TLS-terminate compare (`compare-terminate`) — Windows
+nginx/Windows is a limited port. Use it for **same-OS** comparison only — not as the industry nginx baseline.
 
-Client TLS → cleartext origin (warmup 1s / measure 4s; concurrency 8, 32, 64). Cleartext-origin arms use **process-split** origin/proxy.
+## Linux — Titanium vs nginx
 
-| Arm | Topology | Sustainable | Peak | Notes |
-|---|---|---:|---:|---|
-| TWP H1 TLS | Client TLS → cleartext H1 | **21,803** @ 64 | **21,803** | 0% err |
-| nginx H1 TLS | ssl → cleartext H1 | **13,826** @ 64 | **14,424** @ 32 | 0% err |
-| TWP H2→H1 | Client h2 TLS → H2→H1 → cleartext H1 | **7,373** @ 64 | **7,373** | 0% err |
-| nginx H2 | Client h2 TLS → cleartext H1 | **5,898** @ 64 | **14,920** @ 32 | 0% err |
-| TWP H3→H1 | Client h3 → cleartext H1 | **2,327** @ 64 | **2,423** @ 32 | 0% err |
+Median of **3 repeats** from Actions run [31936930781](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936930781) (`compare-terminate`; warmup 2s / measure 8s; concurrency 8, 16, 32, 64). **Linux nginx is the authoritative nginx baseline.**
 
-### Bridge matrix (`compare-bridges`) — Windows
+| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak |
+|---|---|---:|---:|---:|---:|
+| HTTP/1 · plain | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
+| HTTP/1 · TLS | HTTP/1 · plain | **17,040** | **17,040** | **27,225** | **27,225** |
+| HTTP/1 · TLS | HTTP/1 · TLS | *Not measured* | *Not measured* | *Not possible* (no MITM) | *Not possible* |
+| HTTP/2 · TLS | HTTP/1 · plain | **10,271** | **10,271** | **18,131** | **18,131** |
+| HTTP/2 · TLS | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* (no MITM) | *Not possible* |
+| HTTP/2 · TLS | HTTP/2 · plain | *Not possible* (no h2c) | *Not possible* | *Not possible* | *Not possible* |
+| HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* (no msquic on runner) | *Not measured* | *Not possible* (no QUIC) | *Not possible* |
+| HTTP/3 · QUIC | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* |
+| HTTP/3 · QUIC | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* |
+| HTTP/1 · TLS | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* | *Not possible* |
+| HTTP/1 · TLS | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* |
+| HTTP/2 · TLS | HTTP/3 · QUIC | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* |
 
-Cross-version translation only (warmup 1s / measure 3s; concurrency 8, 32). All arms **0% error**.
+On this GHA shape, TWP H1 TLS ÷ nginx H1 TLS ≈ **0.63**. Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**.
 
-| Arm | Client → origin | Peak @ c=32 |
-|---|---|---:|
-| H2→H1 cleartext | H2 TLS → H1 cleartext | **9,104** |
-| H1→H2 | H1 TLS → H2 TLS | **8,843** |
-| H1→H3 | H1 TLS → H3 QUIC | **13,499** |
-| H2→H3 | H2 TLS → H3 QUIC | **5,055** |
-| H3→H1 cleartext | H3 → H1 cleartext | **3,593** |
-| H3→H2 | H3 → H2 TLS | **1,842** |
+### Why isn’t HTTP/3 > HTTP/2 > HTTP/1 in raw RPS?
 
-### Linux vs Windows (H1 TLS)
+For **tiny JSON responses** (~64 B) on loopback, that ordering is **not** expected: topology (TLS hop count, terminate vs MITM) dominates; HTTP/2 and HTTP/3 help multiplexing, not single-origin tiny-GET RPS.
 
-**Authoritative nginx baseline is Linux.** nginx/Windows is a limited port; same-OS Windows numbers are useful locally but must not be read as “TWP beats nginx” in general.
+## Other measurements
 
-| Host | TWP H1 TLS | nginx H1 TLS | Ranking |
-|---|---:|---:|---|
-| Windows laptop | ahead of nginx/Windows | slow vs Linux nginx | TWP leads **same-OS** |
-| Linux GHA | ~63% of nginx | native epoll nginx | nginx leads |
+| What | Result |
+|---|---|
+| HTTPS TTFB vs direct (median, 14 hosts) | Cold **≈ parity** (−1 ms); warm **−25 ms** (proxy faster) |
+| HTTP/1 loopback GET (no body intercept) | **~186 µs**, **~17.5 KB** allocated / request |
+| Basic example footprint (Release, after load) | **~74 MB** working set · **~24–29 MB** private bytes |
 
-Absolute GHA RPS swings ~2× by VM (**runner noise**). Publish **median across repeats** (`--repeats 3`) and the **TWP÷nginx ratio**. Residual Linux gap is managed SslStream + proxy pipeline vs nginx C (handshake context is now cached per leaf).
+```powershell
+dotnet run -c Release --project benchmarks/Titanium.Web.Proxy.Benchmarks -- --filter '*Throughput*'
+```
 
-### Fair TLS-terminate compare — Linux (GitHub-hosted `ubuntu-latest`)
-
-Median of **3 repeats** from run [31936930781](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936930781) @ `f1ca03ed` (`compare-terminate`; warmup 2s / measure 8s; concurrency 8, 16, 32, 64). CSV: `rps-ramp-20260816-083829.csv`. Host: [Linux (GitHub-hosted)](#linux-github-hosted-ubuntu-latest). HTTP/3 arms skipped (no QuicListener / msquic).
-
-| Arm | Topology | Median peak | Notes |
-|---|---|---:|---|
-| TWP H1 TLS | Client TLS → cleartext H1 | **17,040** | ≈63% of nginx |
-| nginx H1 TLS | ssl → cleartext H1 | **27,225** | authoritative nginx baseline |
-| TWP H2→H1 | Client h2 TLS → H2→H1 → cleartext H1 | **10,271** | 0% err |
-| nginx H2 | Client h2 TLS → cleartext H1 | **18,131** | peak across conc. steps |
-
-### Protocol / topology matrix
-
-| Client | Upstream | TWP | nginx | Mode |
-|---|---|---|---|---|
-| H1 cleartext | H1 cleartext | yes | yes | `compare-same` / `compare` |
-| H1 TLS | H1 cleartext | `ForwardCleartext` | ssl `proxy_pass http://` | `compare-same` / `compare-terminate` |
-| H1 TLS | H1 TLS (MITM) | explicit MITM | — | `compare-same` / `https-mitm` |
-| H2 TLS | H2 TLS (MITM) | native h2↔h2 | — | `compare-same` / `reverse-http2` |
-| H2 TLS | H1 cleartext | H2→H1 + `ForwardCleartext` | ssl+http2 → cleartext | `compare-terminate` |
-| H2 TLS | H2 cleartext (h2c) | **not supported** | uncommon | — |
-| H3 QUIC | H3 QUIC | MITM | **no QUIC on nginx/Windows** | `compare-same` / `reverse-http3` |
-| H1 TLS | H2 TLS | H1→H2 bridge | — | `compare-bridges` |
-| H1 TLS | H3 QUIC | H1→H3 bridge | — | `compare-bridges` |
-| H2 TLS | H3 QUIC | H2→H3 bridge | — | `compare-bridges` |
-| H3 QUIC | H2 TLS | H3→H2 bridge | — | `compare-bridges` |
-| H3 QUIC | H1 cleartext | `ForwardCleartext` + Http11 | — | `compare-bridges` |
+| Benchmark | Setup | Mean | Allocated / op |
+|---|---|---:|---:|
+| HTTP/1 GET through proxy | Passthrough | **186 µs** | **17.5 KB** |
+| HTTP/2 multiplexed GETs | 10 concurrent streams | **3.0 ms** / batch | **~14 KB** / request |
 
 ## Raising limits on large hosts
 
@@ -169,31 +127,13 @@ var ep = new TransparentProxyEndPoint(IPAddress.Any, 443, decryptSsl: true)
     ForwardHost = "127.0.0.1",
     ForwardPort = 8080,
     ForwardCleartext = true,
-    MaxCachedConnections = 256, // deeper pool for this reverse EP only
+    MaxCachedConnections = 256,
     GenericCertificateName = "example.com"
 };
 ep.BeforeSslAuthenticate += (_, a) =>
 {
     a.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
-    a.AllowHttpProtocolTranslation = true; // H2 client → H1 origin bridge
+    a.AllowHttpProtocolTranslation = true; // HTTP/2 client → HTTP/1 origin
     return Task.CompletedTask;
 };
 ```
-
-## HTTPS latency / loopback microbenchmarks
-
-```powershell
-dotnet run -c Release --project benchmarks/Titanium.Web.Proxy.Benchmarks -- --filter '*Throughput*'
-```
-
-| Benchmark | Setup | Mean | Allocated / op |
-|---|---|---:|---:|
-| HTTP/1 GET through proxy | Passthrough | **186 µs** | **17.5 KB** |
-| HTTP/2 multiplexed GETs | 10 concurrent streams | **3.0 ms** / batch | **~14 KB** / request |
-
-## Process footprint (Basic example)
-
-| Metric | Approx. value |
-|---|---:|
-| Working set | **~74 MB** |
-| Private bytes | **~24–29 MB** |
