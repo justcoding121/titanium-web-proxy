@@ -63,7 +63,21 @@ internal static class RampOrchestrator
         await using var csv = new StreamWriter(csvPath);
         CsvWriter.WriteHeader(csv);
 
-        var arms = ResolveArms(options.Mode, nginxExe != null);
+        var arms = ResolveArms(options.Mode, nginxExe != null).ToList();
+        if (!System.Net.Quic.QuicListener.IsSupported)
+        {
+            var removed = arms.RemoveAll(a =>
+                a.Mode is ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext);
+            if (removed > 0)
+                ProbeLog.Info("QuicListener is not supported on this host — skipping HTTP/3 arms.");
+        }
+
+        if (arms.Count == 0)
+        {
+            ProbeLog.Error("No arms to run for this mode/host combination.");
+            return 2;
+        }
+
         if ((options.Mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp1Tls
                 or ProbeMode.NginxReverseHttp2 or ProbeMode.Compare or ProbeMode.CompareHttp2
                 or ProbeMode.CompareTls or ProbeMode.CompareTerminate)
