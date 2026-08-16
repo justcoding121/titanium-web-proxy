@@ -17,7 +17,7 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET. This wiki documents t
 - [Tunnel (CONNECT) interception](#tunnel-connect-interception)
 - [Upstream proxies](#upstream-proxies)
 - [Authentication](#authentication)
-- [Performance](Performance) — measured latency, throughput, and footprint
+- [Performance](Performance) — measured latency, throughput, saturation RPS, and footprint
 - [Performance and pooling](#performance-and-pooling)
 - [Logging and diagnostics](#logging-and-diagnostics)
 - [Request timing](#request-timing)
@@ -364,7 +364,7 @@ QUIC endpoint is visible without extra config.
 |---|---|---|---|
 | `EnableConnectionPool` | `true` | — | Live pool switch; prefer this over unused `ProxyResourceLimits.ConnectionPoolingEnabled`. |
 | `EnableIpv6UnreachableSoftSkip` | `true` | disable for strict IPv6 preference | After one IPv6 `NetworkUnreachable`-class Happy Eyeballs failure, skip IPv6 addresses for 30s (filter after address-family interleave). |
-| `MaxCachedConnections` | `4` | raise for high fan-out per origin | Same: live knob is on `ProxyServer`, not `ResourceLimits.MaxCachedConnectionsPerHost`. |
+| `MaxCachedConnections` | `128` | raise for high fan-out per origin | Same: live knob is on `ProxyServer`, not `ResourceLimits.MaxCachedConnectionsPerHost`. |
 | `EnableTcpServerConnectionPrefetch` | `true` | — | Overlaps origin connect with client work. |
 | `NoDelay` | `true` | — | Disables Nagle. |
 | `EnableTcpKeepAlive` | `true` | — | NAT-friendly for long tunnels. |

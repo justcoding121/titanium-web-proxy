@@ -47,7 +47,11 @@ public partial class ProxyServer
 
         try
         {
-            var clientHelloInfo = await SslTools.PeekClientHello(clientStream, BufferPool, cancellationToken);
+            // HTTP reverse-proxy (ForwardHost set, DecryptSsl off): skip TLS ClientHello detection.
+            // Peeking every connection was pure overhead for plain HTTP and still paid an await.
+            ClientHelloInfo? clientHelloInfo = null;
+            if (endPoint.DecryptSsl || string.IsNullOrEmpty(endPoint.ForwardHost))
+                clientHelloInfo = await SslTools.PeekClientHello(clientStream, BufferPool, cancellationToken);
 
             if (clientHelloInfo != null)
             {

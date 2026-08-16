@@ -1,0 +1,87 @@
+# Manual saturation RPS lab on a GitHub-hosted Ubuntu VM (not a job container).
+# Methodology is closer to typical nginx/wrk Linux benches (epoll nginx from apt).
+# Numbers are NOT a per-PR gate and are NOT comparable to dedicated-server blog posts.
+#
+# Trigger: Actions → "RPS saturation (Linux)" → Run workflow
+# Re-run 3 times and publish the median when updating the wiki.
+
+name: RPS saturation (Linux)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Ramp mode'
+        required: true
+        default: compare
+        type: choice
+        options:
+          - compare
+          - reverse-http1
+          - nginx-reverse-http1
+          - https-mitm
+      concurrency:
+        description: 'Comma-separated concurrency steps'
+        required: true
+        default: '8,16,24,32,48,64,128,256,512'
+      warmup_sec:
+        description: 'Warmup seconds per step'
+        required: true
+        default: '5'
+      duration_sec:
+        description: 'Measure seconds per step'
+        required: true
+        default: '20'
+
+jobs:
+  rps:
+    runs-on: ubuntu-latest
+    # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            10.0.x
+
+      - name: Install nginx
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nginx
+          # Stop the distro default site so our temp-prefix nginx owns the ports we pick.
+          sudo systemctl stop nginx || true
+          nginx -v
+
+      - name: Install bombardier (optional external generator)
+        run: |
+          set -euo pipefail
+          curl -sL "https://github.com/codesenberg/bombardier/releases/download/v1.2.6/bombardier-linux-amd64" \
+            -o /usr/local/bin/bombardier
+          chmod +x /usr/local/bin/bombardier
+          bombardier --version || true
+
+      - name: Raise open-file limit
+        run: |
+          ulimit -n 65535 || true
+          ulimit -n
+
+      - name: Run saturation ramp
+        shell: pwsh
+        run: |
+          pwsh tools/RpsLoadProbe/run-rps.ps1 `
+            -Mode '${{ inputs.mode }}' `
+            -Concurrency '${{ inputs.concurrency }}' `
+            -WarmupSec ${{ inputs.warmup_sec }} `
+            -DurationSec ${{ inputs.duration_sec }} `
+            -ResultsDir tools/RpsLoadProbe/results `
+            -BombardierCheck
+
+      - name: Upload CSV artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rps-csv
+          path: tools/RpsLoadProbe/results/rps-ramp-*.csv
+          if-no-files-found: error

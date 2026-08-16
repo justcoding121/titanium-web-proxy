@@ -16,6 +16,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{AC9AE37A
 	ProjectSection(SolutionItems) = preProject
 		..\.github\docfx.json = ..\.github\docfx.json
 		..\.github\workflows\dotnetcore.yml = ..\.github\workflows\dotnetcore.yml
+		..\.github\workflows\rps-saturation.yml = ..\.github\workflows\rps-saturation.yml
 		..\.github\install-unit-test-certificate.ps1 = ..\.github\install-unit-test-certificate.ps1
 	EndProjectSection
 EndProject
@@ -36,6 +37,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Web.Proxy.Benchmarks", "..\benchmarks\Titanium.Web.Proxy.Benchmarks\Titanium.Web.Proxy.Benchmarks.csproj", "{82F10715-E514-4F8D-815A-99E3FBC186EA}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Web.Proxy.Examples.Shared", "..\examples\Titanium.Web.Proxy.Examples.Shared\Titanium.Web.Proxy.Examples.Shared.csproj", "{73B2DB7E-959C-4981-BD23-4D24AF30DD9F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RpsLoadProbe", "..\tools\RpsLoadProbe\RpsLoadProbe.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -143,6 +146,18 @@ Global
 		{73B2DB7E-959C-4981-BD23-4D24AF30DD9F}.Release|x64.Build.0 = Release|Any CPU
 		{73B2DB7E-959C-4981-BD23-4D24AF30DD9F}.Release|x86.ActiveCfg = Release|Any CPU
 		{73B2DB7E-959C-4981-BD23-4D24AF30DD9F}.Release|x86.Build.0 = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|x64.Build.0 = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|x86.Build.0 = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|x64.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|x64.Build.0 = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|x86.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

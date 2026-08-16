@@ -104,6 +104,7 @@ Configure your client to use `127.0.0.1:8000` as its HTTP and HTTPS proxy. Trust
 - [WPF proxy application](examples/Titanium.Web.Proxy.Examples.Wpf)
 - [Windows service](examples/Titanium.Web.Proxy.Examples.WindowsService)
 - [Benchmarks](benchmarks/Titanium.Web.Proxy.Benchmarks) — loopback throughput and allocation (BenchmarkDotNet)
+- [RPS saturation probe](tools/RpsLoadProbe) — concurrent breaking-point RPS vs nginx (local Windows + manual GitHub Linux VM)
 - [API documentation](https://justcoding121.github.io/titanium-web-proxy/docs/api/Titanium.Web.Proxy.ProxyServer.html)
 
 ### Screenshots

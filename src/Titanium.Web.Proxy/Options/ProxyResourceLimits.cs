@@ -165,7 +165,7 @@ public sealed class ProxyResourceLimits
         maxOpenHeaderBlockFrames: 128,
         maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(10),
         connectionPoolingEnabled: true,
-        maxCachedConnectionsPerHost: 4,
+        maxCachedConnectionsPerHost: 128,
         maxCertificateCacheEntries: 1024);
 
     /// <summary>

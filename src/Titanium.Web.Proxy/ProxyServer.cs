@@ -676,7 +676,7 @@ public partial class ProxyServer : IDisposable
     ///     limit while holding the pool-wide lock", which spins indefinitely once the cache for that
     ///     host is empty and would stall every other connection acquire/release in the process.
     ///     Rejected outright at assignment so that state cannot be reached.
-    ///     Default value is 4.
+    ///     Default value is 128.
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">The assigned value is less than 1.</exception>
     public int MaxCachedConnections
@@ -693,7 +693,7 @@ public partial class ProxyServer : IDisposable
         }
     }
 
-    private int maxCachedConnections = 4;
+    private int maxCachedConnections = 128;
 
     /// <summary>
     ///     SO_LINGER timeout in seconds applied to client and upstream sockets via
@@ -712,9 +712,9 @@ public partial class ProxyServer : IDisposable
     public bool EnableTcpKeepAlive { get; set; } = true;
 
     /// <summary>
-    ///     TCP listener accept backlog. Default: 512 for burst connection handling.
+    ///     TCP listener accept backlog. Default: 1024 for burst connection handling.
     /// </summary>
-    public int ListenerBackLog { get; set; } = 512;
+    public int ListenerBackLog { get; set; } = 1024;
 
     /// <summary>
     ///     When true (default), SO_REUSEADDR is requested where
@@ -1160,9 +1160,11 @@ public partial class ProxyServer : IDisposable
     public event AsyncEventHandler<ConnectRequest>? BeforeUpStreamConnectRequest; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
-    ///     Customize the minimum ThreadPool size (increase it on a server)
+    ///     Customize the minimum ThreadPool size (increase it on a server).
+    ///     Defaults to <c>max(ProcessorCount * 2, 16)</c> so short loopback/proxy workloads are not
+    ///     starved while the pool is still ramping workers.
     /// </summary>
-    public int ThreadPoolWorkerThread { get; set; } = Environment.ProcessorCount;
+    public int ThreadPoolWorkerThread { get; set; } = Math.Max(Environment.ProcessorCount * 2, 16);
 
     /// <summary>
     ///     Add a proxy end point.

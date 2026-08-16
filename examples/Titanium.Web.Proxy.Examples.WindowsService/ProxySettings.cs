@@ -37,7 +37,7 @@ internal sealed class ProxySettings
     /// </summary>
     public bool ForwardToUpstreamGateway { get; set; }
 
-    public int MaxCachedConnections { get; set; } = 4;
+    public int MaxCachedConnections { get; set; } = 128;
 
     public bool ReuseSocket { get; set; } = true;
 
