@@ -32,13 +32,25 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers;
 internal sealed class Http2RawOriginServer : IDisposable
 {
     private readonly TcpListener listener;
-    private readonly X509Certificate2 certificate;
+    private readonly X509Certificate2? certificate;
+    private readonly bool cleartext;
     private Func<Http2RawFrame.Connection, Task> handler = null!;
     private bool disposed;
 
     public Http2RawOriginServer(X509Certificate2 certificate)
+        : this(certificate, cleartext: false)
+    {
+    }
+
+    /// <summary>
+    ///     Cleartext HTTP/2 prior-knowledge (h2c) origin — no TLS.
+    /// </summary>
+    public static Http2RawOriginServer CreateCleartext() => new(null, cleartext: true);
+
+    private Http2RawOriginServer(X509Certificate2? certificate, bool cleartext)
     {
         this.certificate = certificate;
+        this.cleartext = cleartext;
         listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         _ = AcceptLoopAsync();
@@ -46,7 +58,7 @@ internal sealed class Http2RawOriginServer : IDisposable
 
     public int Port => ((IPEndPoint)listener.LocalEndpoint).Port;
 
-    public string Url => $"https://localhost:{Port}/";
+    public string Url => cleartext ? $"http://127.0.0.1:{Port}/" : $"https://localhost:{Port}/";
 
     /// <summary>
     ///     The number of raw TCP connections this server has accepted so far, counted at the moment of
@@ -61,8 +73,8 @@ internal sealed class Http2RawOriginServer : IDisposable
     private int acceptedConnectionCount;
 
     /// <summary>
-    ///     Sets the handler invoked for each accepted connection, after the TLS/ALPN handshake and the
-    ///     client connection preface have already been consumed.
+    ///     Sets the handler invoked for each accepted connection, after the TLS/ALPN handshake (when
+    ///     applicable) and the client connection preface have already been consumed.
     /// </summary>
     public void HandleConnection(Func<Http2RawFrame.Connection, Task> connectionHandler)
     {
@@ -89,18 +101,27 @@ internal sealed class Http2RawOriginServer : IDisposable
             {
                 try
                 {
-                    var sslStream = new SslStream(client.GetStream(), false);
-                    await sslStream.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
+                    Stream stream;
+                    if (cleartext)
                     {
-                        ServerCertificate = certificate,
-                        ApplicationProtocols = new List<SslApplicationProtocol> { SslApplicationProtocol.Http2 },
-                        EnabledSslProtocols = System.Security.Authentication.SslProtocols.None
-                    });
+                        stream = client.GetStream();
+                    }
+                    else
+                    {
+                        var sslStream = new SslStream(client.GetStream(), false);
+                        await sslStream.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
+                        {
+                            ServerCertificate = certificate!,
+                            ApplicationProtocols = new List<SslApplicationProtocol> { SslApplicationProtocol.Http2 },
+                            EnabledSslProtocols = System.Security.Authentication.SslProtocols.None
+                        });
+                        stream = sslStream;
+                    }
 
                     var preface = new byte[Http2Helper.ConnectionPreface.Length];
-                    await Http2RawFrame.ReadExactAsync(sslStream, preface, 0, preface.Length);
+                    await Http2RawFrame.ReadExactAsync(stream, preface, 0, preface.Length);
 
-                    var connection = new Http2RawFrame.Connection(sslStream);
+                    var connection = new Http2RawFrame.Connection(stream);
                     var currentHandler = handler;
                     if (currentHandler != null)
                     {
@@ -117,7 +138,7 @@ internal sealed class Http2RawOriginServer : IDisposable
                     // user space - non-deterministically dropping frames (e.g. trailers) that were fully
                     // sent over the wire. Drain any such pending bytes with a short bounded timeout before
                     // disposing so the close is graceful.
-                    await DrainAsync(sslStream);
+                    await DrainAsync(stream);
                 }
                 catch (Exception ex)
                 {

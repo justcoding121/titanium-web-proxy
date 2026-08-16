@@ -1336,13 +1336,13 @@ internal class TcpConnectionFactory : IDisposable
         // Drop exclusive lease before pooling or disposing so the next Get can TryEnterLease.
         connection.ExitLease();
 
-        // An ALPN=h2 socket whose HTTP/2 connection preface was never written (a capability probe or an
-        // unadopted prefetch) is not a usable h2 session: the origin applies a preface timeout and tears
-        // it down - unobservably, since the pool's health check only tests writability and its TTL is
-        // refreshed on every release. Pooling one lets it be adopted many seconds later, at which point
+        // An ALPN=h2 or h2c-intent socket whose HTTP/2 connection preface was never written (a capability
+        // probe or an unadopted prefetch) is not a usable h2 session: the origin applies a preface timeout
+        // and tears it down - unobservably, since the pool's health check only tests writability and its TTL
+        // is refreshed on every release. Pooling one lets it be adopted many seconds later, at which point
         // the origin answers the belated preface with GOAWAY/INTERNAL_ERROR.
         var unstartedHttp2Connection =
-            connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2 &&
+            (connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2 || connection.Http2Cleartext) &&
             !connection.Http2SessionStarted;
 
         if (close || connection.IsWinAuthenticated || connection.UsedClientCertificate

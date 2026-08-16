@@ -539,12 +539,13 @@ internal static class Http3OriginBridge
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────
-    // H3 → H2 (TLS + ALPN h2)
+    // H3 → H2 (TLS ALPN h2, or cleartext h2c when ForwardCleartext)
     // ────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     H3 → H2: TLS origin with ALPN <c>h2</c> via <see cref="Http2OriginConnection"/>.
-    ///     TWP has no h2c; this path always uses TLS toward the origin.
+    ///     H3 → H2 via <see cref="Http2OriginConnection"/>. Uses TLS ALPN <c>h2</c> unless the
+    ///     transparent endpoint has <see cref="TransparentBaseProxyEndPoint.ForwardCleartext"/>,
+    ///     in which case the origin is cleartext HTTP/2 prior-knowledge (h2c).
     /// </summary>
     private static async Task ForwardOverHttp2Async(
         SessionEventArgs sessionArgs,
@@ -574,6 +575,10 @@ internal static class Http3OriginBridge
 
         if (string.IsNullOrEmpty(request.Host) && request.Authority.Length > 0)
             request.Host = request.Authority.GetString();
+
+        // TLS-terminate → h2c: origin expects :scheme http.
+        if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
+            request.IsHttps = false;
 
         PrepareH2OriginRequestHeaders(request);
 
@@ -757,18 +762,30 @@ internal static class Http3OriginBridge
                 return existing;
         }
 
+        var originIsHttps = sessionArgs.ProxyEndPoint is not TransparentBaseProxyEndPoint { ForwardCleartext: true };
+        var upStreamProxy = sessionArgs.CustomUpStreamProxyUsed
+                            ?? (originIsHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
+
         var tcp = await server.TcpConnectionFactory.GetServerConnection(
-            server, host, port, HttpHeader.Version20, isHttps: true, SslExtensions.Http2ProtocolAsList,
+            server, host, port, HttpHeader.Version20, originIsHttps,
+            originIsHttps ? SslExtensions.Http2ProtocolAsList : null,
             false, sessionArgs, sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
-            sessionArgs.CustomUpStreamProxyUsed ?? server.UpStreamHttpsProxy,
+            upStreamProxy,
             false, false, cancellationToken, connectHost, connectPort);
 
-        if (tcp == null || tcp.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
+        if (tcp != null && !originIsHttps)
+            tcp.Http2Cleartext = true;
+
+        if (tcp == null ||
+            (originIsHttps
+                ? tcp.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2
+                : !tcp.Http2Cleartext))
         {
             if (tcp != null)
                 await server.TcpConnectionFactory.Release(tcp, true);
+            var how = originIsHttps ? "did not negotiate HTTP/2 via ALPN" : "did not accept cleartext HTTP/2 (h2c)";
             throw new ProxyHttpException(
-                $"The origin '{host}:{port}' did not negotiate HTTP/2 via ALPN for the H3→H2 bridge.",
+                $"The origin '{host}:{port}' {how} for the H3→H2 bridge.",
                 null, sessionArgs);
         }
 

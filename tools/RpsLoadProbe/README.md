@@ -17,7 +17,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-same
 | `nginx-reverse-http2` | Client H2 TLS → cleartext H1 (terminate) | yes (not MITM) |
 | `reverse-http3` | H3 QUIC MITM → H3 | — (no QUIC on nginx/Windows) |
 
-**Not supported:** cleartext h2c (no h2c upstream). H3 is always QUIC/TLS.
+**Not supported:** inbound cleartext h2c from clients; `Upgrade: h2c`. Outbound prior-knowledge h2c is supported (`reverse-http2-to-h2c`). H3 is always QUIC/TLS.
 
 ## Fair terminate compare
 
@@ -38,6 +38,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-bridges
 | Arm | Topology |
 |---|---|
 | `reverse-http2-cleartext` | H2 TLS → H2→H1 → cleartext H1 |
+| `reverse-http2-to-h2c` | H2 TLS → prior-knowledge h2c → cleartext H2 |
 | `reverse-http11-to-http2` | H1 TLS → H1→H2 → HTTPS h2 |
 | `reverse-http1-to-http3` | H1 TLS → H1→H3 → QUIC/h3 |
 | `reverse-http2-to-http3` | H2 TLS → H2→H3 → QUIC/h3 |

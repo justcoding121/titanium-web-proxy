@@ -58,7 +58,12 @@ internal sealed class OriginServer : IAsyncDisposable
                 webBuilder.ConfigureKestrel(kestrel =>
                 {
                     if (options.EnableHttp)
-                        kestrel.Listen(IPAddress.Loopback, httpPort);
+                    {
+                        kestrel.Listen(IPAddress.Loopback, httpPort, listenOptions =>
+                        {
+                            listenOptions.Protocols = options.HttpProtocols;
+                        });
+                    }
 
                     if (cert != null && httpsPort > 0)
                     {
@@ -130,5 +135,7 @@ internal sealed class OriginListenOptions
     public bool EnableHttp { get; init; } = true;
     public bool EnableHttps { get; init; }
     public int ExtraHttpsOriginCount { get; init; }
+    /// <summary>Protocols on the cleartext HTTP listen (default HTTP/1; use <see cref="HttpProtocols.Http2"/> for prior-knowledge h2c).</summary>
+    public HttpProtocols HttpProtocols { get; init; } = HttpProtocols.Http1;
     public HttpProtocols HttpsProtocols { get; init; } = HttpProtocols.Http1AndHttp2;
 }

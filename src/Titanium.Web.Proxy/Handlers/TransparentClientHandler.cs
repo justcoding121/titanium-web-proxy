@@ -126,7 +126,8 @@ public partial class ProxyServer
                         var negotiation = await ResolveHttp2ForClientAsync(negotiationSession, clientOffersHttp2,
                             httpsHostName, args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
                             args.UpstreamHttpProtocol, args.AllowHttpProtocolTranslation,
-                            EnableTcpServerConnectionPrefetch, cancellationToken);
+                            EnableTcpServerConnectionPrefetch, cancellationToken,
+                            originIsHttps: !endPoint.ForwardCleartext);
                         requiresHttp11Bridge = negotiation.RequiresHttp11Bridge;
                         requiresH2OriginBridge = negotiation.RequiresH2OriginBridge;
                         // The client is offered "h2" both when the origin itself speaks it (and no
@@ -298,21 +299,27 @@ public partial class ProxyServer
                                 // Adopt the connection retained by NegotiateHttp2Async for this session
                                 // instead of opening a brand new one, when it is still valid/healthy/
                                 // correctly keyed - identical adoption logic to the explicit handler.
+                                var originIsHttps = !endPoint.ForwardCleartext;
                                 var sessionForCacheKey =
                                     new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
                                 var expectedCacheKey = GetHttp2ConnectionCacheKey(sessionForCacheKey, httpsHostName,
-                                    args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort);
+                                    args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort, originIsHttps);
                                 var connection = await AdoptRetainedConnectionAsync(prefetchConnectionTask,
-                                    expectedCacheKey, SslExtensions.Http2ProtocolAsList);
+                                    expectedCacheKey,
+                                    originIsHttps ? SslExtensions.Http2ProtocolAsList : null);
                                 prefetchConnectionTask = null;
 
                                 connection ??= (await TcpConnectionFactory.GetServerConnection(this, httpsHostName,
-                                    args.ForwardHttpsPort, HttpHeader.Version20, true, SslExtensions.Http2ProtocolAsList,
-                                    true, sessionForCacheKey, UpStreamEndPoint, UpStreamHttpsProxy, true, false,
+                                    args.ForwardHttpsPort, HttpHeader.Version20, originIsHttps,
+                                    originIsHttps ? SslExtensions.Http2ProtocolAsList : null,
+                                    true, sessionForCacheKey, UpStreamEndPoint,
+                                    originIsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy, true, false,
                                     cancellationToken, http2ConnectHost, http2ConnectPort))!;
+                                if (connection is { Http2Cleartext: false } && !originIsHttps)
+                                    connection.Http2Cleartext = true;
 
                                 var capabilityCacheKey = GetHttp2CapabilityCacheKey(sessionForCacheKey, httpsHostName,
-                                    args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort);
+                                    args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort, originIsHttps);
                                 connection = await EnsureHttp2OriginConnectionAsync(connection, capabilityCacheKey,
                                     sessionForCacheKey, args.AllowHttpProtocolTranslation);
                                 if (connection == null)

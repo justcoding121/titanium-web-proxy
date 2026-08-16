@@ -35,10 +35,12 @@ public enum UpstreamHttpProtocol
     Http11,
 
     /// <summary>
-    ///     Always use HTTP/2 on the connection to the origin, failing the connection outright if the origin
-    ///     does not negotiate "h2" via ALPN - a translation bridge cannot fabricate HTTP/2 support at an
-    ///     origin that genuinely lacks it. When the client itself does not negotiate HTTP/2, reconciling that
-    ///     with a confirmed HTTP/2 origin connection requires
+    ///     Always use HTTP/2 on the connection to the origin. Without
+    ///     <see cref="TransparentBaseProxyEndPoint.ForwardCleartext"/>, the origin must negotiate
+    ///     <c>h2</c> via TLS ALPN. With <c>ForwardCleartext</c>, the origin connection is cleartext HTTP/2
+    ///     prior-knowledge (h2c) instead. A translation bridge cannot fabricate HTTP/2 at an origin that
+    ///     lacks it. When the client itself does not negotiate HTTP/2, reconciling that with a confirmed
+    ///     HTTP/2 origin connection requires
     ///     <see cref="EventArguments.TunnelConnectSessionEventArgs.AllowHttpProtocolTranslation" />/
     ///     <see cref="EventArguments.BeforeSslAuthenticateEventArgs.AllowHttpProtocolTranslation" /> to bridge
     ///     HTTP/1.1 client requests onto the HTTP/2 origin connection.

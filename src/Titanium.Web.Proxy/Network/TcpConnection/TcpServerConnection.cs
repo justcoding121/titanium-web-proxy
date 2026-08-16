@@ -122,6 +122,14 @@ internal class TcpServerConnection : IDisposable
     internal bool Http2SessionStarted { get; set; }
 
     /// <summary>
+    ///     True when this connection is intended for cleartext HTTP/2 (h2c prior-knowledge): no TLS/ALPN,
+    ///     <see cref="IsHttps"/> is false, and the session starts with the connection preface. Distinct from
+    ///     TLS ALPN <c>h2</c> so pool keys and <see cref="Tcp.TcpConnectionFactory.Release"/> unstarted
+    ///     guards treat both flavors correctly.
+    /// </summary>
+    internal bool Http2Cleartext { get; set; }
+
+    /// <summary>
     ///     The cache key used to uniquely identify this connection properties
     /// </summary>
     internal string CacheKey { get; set; }

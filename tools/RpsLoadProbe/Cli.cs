@@ -20,6 +20,7 @@ internal static class Cli
         var warmupSec = 5;
         var durationSec = 20;
         var enableHttps = false;
+        var enableH2c = false;
         var originHttpPort = 0;
         var originHttpsPort = 0;
         int? maxCachedConnections = null;
@@ -46,6 +47,9 @@ internal static class Cli
                     break;
                 case "--https":
                     enableHttps = true;
+                    break;
+                case "--h2c":
+                    enableH2c = true;
                     break;
                 case "--origin-http-port":
                     originHttpPort = int.Parse(RequireValue(args, ref i, "--origin-http-port"),
@@ -100,7 +104,7 @@ internal static class Cli
         {
             return command switch
             {
-                "serve-origin" => ServeOriginHost.RunAsync(enableHttps, cts.Token).GetAwaiter().GetResult(),
+                "serve-origin" => ServeOriginHost.RunAsync(enableHttps, enableH2c, cts.Token).GetAwaiter().GetResult(),
                 "serve-proxy" => RunServeProxy(modeText, originHttpPort, originHttpsPort, nginxPath,
                     maxCachedConnections, cts.Token),
                 "serve" => RunServe(modeText, nginxPath, maxCachedConnections, cts.Token),
@@ -200,6 +204,9 @@ internal static class Cli
             case "reverse-http2-cleartext":
                 mode = ProbeMode.ReverseHttp2Cleartext;
                 return true;
+            case "reverse-http2-to-h2c":
+                mode = ProbeMode.ReverseHttp2ToH2c;
+                return true;
             case "nginx-reverse-http2":
                 mode = ProbeMode.NginxReverseHttp2;
                 return true;
@@ -262,7 +269,7 @@ internal static class Cli
 
             Usage:
               RpsLoadProbe --serve --mode <mode> [--nginx-path PATH] [--max-cached-connections N]
-              RpsLoadProbe --serve-origin [--https]
+              RpsLoadProbe --serve-origin [--https | --h2c]
               RpsLoadProbe --serve-proxy --mode <http1 mode> --origin-http-port N
               RpsLoadProbe --ramp  --mode <mode> [options]
 
@@ -274,6 +281,7 @@ internal static class Cli
               https-mitm              TWP Explicit MITM -> Kestrel HTTPS
               reverse-http2           TWP Transparent TLS+h2 MITM -> Kestrel HTTPS (h2)
               reverse-http2-cleartext TWP TLS+h2 terminate -> H2→H1 bridge -> Kestrel HTTP/1 (nginx parity)
+              reverse-http2-to-h2c     TWP TLS+h2 terminate -> prior-knowledge h2c -> Kestrel HTTP/2 cleartext
               nginx-reverse-http2     nginx ssl+http2 -> cleartext HTTP/1 origin
               reverse-http3           TWP TransparentQuic (h3) -> Quic HTTPS/h3 origin (no nginx/Windows)
               reverse-http3-cleartext TWP QUIC/h3 terminate -> cleartext HTTP/1 origin

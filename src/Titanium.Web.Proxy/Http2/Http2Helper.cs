@@ -151,6 +151,17 @@ namespace Titanium.Web.Proxy.Http2
                 sessionArgs.Timing.MarkConnectionReady(originConnection.Id, reused);
         }
 
+        /// <summary>
+        ///     TLS-terminate → cleartext h2c: clients send <c>:scheme: https</c>, but a cleartext origin
+        ///     (e.g. Kestrel <c>HttpProtocols.Http2</c>) expects <c>http</c>. Align origin-facing
+        ///     <see cref="Request.IsHttps"/> before <see cref="SendHeader"/> encodes <c>:scheme</c>.
+        /// </summary>
+        private static void ApplyCleartextOriginScheme(Request request, TcpServerConnection? originConnection)
+        {
+            if (originConnection is { IsHttps: false })
+                request.IsHttps = false;
+        }
+
         private static bool IsAsciiDigit(byte b) => b is >= (byte)'0' and <= (byte)'9';
 
         /// <summary>
@@ -890,6 +901,7 @@ namespace Titanium.Web.Proxy.Http2
                                     // Origin supports RFC 8441 - forward the extended CONNECT HEADERS.
                                     if (originConnection != null)
                                         BindOriginForHttp2Stream(sessionArgs, originConnection);
+                                    ApplyCleartextOriginScheme(request, originConnection);
                                     await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                         request, endStreamFlag, output, isPromise));
                                 }
@@ -900,6 +912,7 @@ namespace Titanium.Web.Proxy.Http2
                                 // false (H1 syphon/drain must not touch the multiplexed H2 socket).
                                 if (originConnection != null)
                                     BindOriginForHttp2Stream(sessionArgs, originConnection);
+                                ApplyCleartextOriginScheme(request, originConnection);
                                 await lockedOutputWrite(() => SendHeader(remoteSettings, frameHeader, frameHeaderBuffer,
                                     request, endStreamFlag, output, isPromise));
                             }

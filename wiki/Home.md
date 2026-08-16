@@ -262,8 +262,10 @@ See the dedicated **[Streaming Bodies](Streaming-Bodies)** page for `OnRequestBo
 
 ## HTTP/2
 
-HTTP/2 support is on by default (negotiated via TLS ALPN only — no cleartext h2c upgrade). To opt out and
-force HTTP/1.1 only:
+HTTP/2 support is on by default. Client-facing HTTP/2 is negotiated via TLS ALPN only (no inbound
+cleartext h2c). Origin-facing HTTP/2 uses TLS ALPN by default; with `ForwardCleartext` and
+`UpstreamHttpProtocol.Http2`, the origin speaks prior-knowledge cleartext h2c (outbound only). To opt out
+and force HTTP/1.1 only:
 
 ```csharp
 proxyServer.EnableHttp2 = false;
@@ -273,7 +275,7 @@ Header/body modification in `BeforeRequest`/`BeforeResponse`, chunked trailers, 
 the synthetic-response APIs (`Ok`/`Respond`/`Redirect`/`GenericResponse`/`RespondStreaming`) all work over
 HTTP/2 the same as over HTTP/1.x — see [Streaming Bodies](Streaming-Bodies). WebSocket over HTTP/2
 (RFC 8441), including HTTP/1.1 Upgrade → h2 origin on the translation bridge, is opt-in via
-`EnableRfc8441`. Not supported: HTTP/2 server push and cleartext h2c upgrade. See
+`EnableRfc8441`. Not supported: HTTP/2 server push and inbound cleartext h2c. See
 [Protocol Feature Support](Protocol-Support) for the full breakdown, including
 [protocol bridges](Protocol-Support#protocol-bridges).
 

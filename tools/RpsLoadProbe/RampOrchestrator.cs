@@ -12,6 +12,8 @@ internal enum ProbeMode
     ReverseHttp2,
     /// <summary>TWP client TLS+h2 → ForwardCleartext H2→H1 bridge → cleartext HTTP/1 origin.</summary>
     ReverseHttp2Cleartext,
+    /// <summary>TWP client TLS+h2 → ForwardCleartext prior-knowledge h2c → cleartext HTTP/2 origin.</summary>
+    ReverseHttp2ToH2c,
     NginxReverseHttp2,
     ReverseHttp3,
     /// <summary>TWP QUIC/h3 terminate → ForwardCleartext → cleartext HTTP/1 origin.</summary>
@@ -185,6 +187,8 @@ internal static class RampOrchestrator
             ProbeMode.ReverseHttp2 => [new("twp-reverse-http2", ProbeMode.ReverseHttp2, null, "B")],
             ProbeMode.ReverseHttp2Cleartext =>
                 [new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null, "H2H1")],
+            ProbeMode.ReverseHttp2ToH2c =>
+                [new("twp-reverse-http2-to-h2c", ProbeMode.ReverseHttp2ToH2c, null, "H2H2C")],
             ProbeMode.NginxReverseHttp2 => nginxAvailable
                 ? [new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null, "B")]
                 : [],
@@ -280,6 +284,7 @@ internal static class RampOrchestrator
             ProbeMode.CompareBridges =>
             [
                 new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null, "H2H1"),
+                new("twp-reverse-http2-to-h2c", ProbeMode.ReverseHttp2ToH2c, null, "H2H2C"),
                 new("twp-reverse-http11-to-http2", ProbeMode.ReverseHttp11ToHttp2, null, "H1H2"),
                 new("twp-reverse-http1-to-http3", ProbeMode.ReverseHttp1ToHttp3, null, "H1H3"),
                 new("twp-reverse-http2-to-http3", ProbeMode.ReverseHttp2ToHttp3, null, "H2H3"),
@@ -406,8 +411,8 @@ internal static class RampOrchestrator
     {
         ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi =>
             options.HttpsMitmP99MsSlo,
-        ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp2Cleartext or ProbeMode.NginxReverseHttp2
-            or ProbeMode.ReverseHttp2ToHttp3 =>
+        ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c
+            or ProbeMode.NginxReverseHttp2 or ProbeMode.ReverseHttp2ToHttp3 =>
             options.Http2P99MsSlo,
         ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext or ProbeMode.ReverseHttp3ToHttp2
             or ProbeMode.ReverseHttp1ToHttp3 => options.Http3P99MsSlo,

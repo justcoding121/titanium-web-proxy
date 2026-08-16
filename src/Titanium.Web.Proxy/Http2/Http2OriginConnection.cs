@@ -108,8 +108,9 @@ internal sealed class Http2OriginConnection : IDisposable
     internal TcpServerConnection ServerConnection => connection;
 
     /// <summary>
-    ///     Establishes a new origin h2 connection over an already TLS/ALPN=h2-negotiated <see cref="TcpServerConnection" />:
-    ///     writes the client connection preface, this proxy's own SETTINGS, and an initial
+    ///     Establishes a new origin h2 connection over an already-opened <see cref="TcpServerConnection" />
+    ///     (TLS ALPN <c>h2</c>, or cleartext h2c prior-knowledge when <see cref="TcpServerConnection.Http2Cleartext"/>
+    ///     is set): writes the client connection preface, this proxy's own SETTINGS, and an initial
     ///     connection-level WINDOW_UPDATE (matching Chrome's preface), starts the background
     ///     frame-reading loop, and waits for the origin's own initial SETTINGS frame so
     ///     <see cref="SendAsync" /> always has a real <c>MAX_CONCURRENT_STREAMS</c>/frame-size budget to honor.

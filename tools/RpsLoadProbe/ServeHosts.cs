@@ -5,9 +5,19 @@ namespace Titanium.Web.Proxy.RpsLoadProbe;
 
 internal static class ServeOriginHost
 {
-    public static async Task<int> RunAsync(bool enableHttps, CancellationToken cancellationToken)
+    public static async Task<int> RunAsync(bool enableHttps, bool enableH2c, CancellationToken cancellationToken)
     {
-        await using var origin = await OriginServer.StartAsync(enableHttps, cancellationToken);
+        if (enableHttps && enableH2c)
+            throw new ArgumentException("--https and --h2c are mutually exclusive.");
+
+        await using var origin = enableH2c
+            ? await OriginServer.StartAsync(new OriginListenOptions
+            {
+                EnableHttp = true,
+                EnableHttps = false,
+                HttpProtocols = HttpProtocols.Http2
+            }, cancellationToken)
+            : await OriginServer.StartAsync(enableHttps, cancellationToken);
         await ProbeLog.WriteProtocolLineAsync($"origin_http={origin.HttpUrl}", cancellationToken);
         if (enableHttps)
             await ProbeLog.WriteProtocolLineAsync($"origin_https={origin.HttpsUrl}", cancellationToken);
@@ -106,6 +116,15 @@ internal static class ServeProxyHost
                 targetForClient = twp.ListenUrl;
                 break;
             }
+            case ProbeMode.ReverseHttp2ToH2c:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var twp = TwpProxyHost.StartReverseHttp2ToH2c(originHttpPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
             case ProbeMode.NginxReverseHttp2:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
@@ -132,7 +151,7 @@ internal static class ServeProxyHost
 
         var httpVersion = mode switch
         {
-            ProbeMode.ReverseHttp2Cleartext or ProbeMode.NginxReverseHttp2 => "2.0",
+            ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c or ProbeMode.NginxReverseHttp2 => "2.0",
             ProbeMode.ReverseHttp3Cleartext => "3.0",
             _ => "1.1"
         };
@@ -180,6 +199,7 @@ internal static class ServeProxyHost
         ProbeMode.HttpsMitm => "https-mitm",
         ProbeMode.ReverseHttp2 => "reverse-http2",
         ProbeMode.ReverseHttp2Cleartext => "reverse-http2-cleartext",
+        ProbeMode.ReverseHttp2ToH2c => "reverse-http2-to-h2c",
         ProbeMode.NginxReverseHttp2 => "nginx-reverse-http2",
         ProbeMode.ReverseHttp3 => "reverse-http3",
         ProbeMode.ReverseHttp3Cleartext => "reverse-http3-cleartext",
@@ -386,6 +406,19 @@ internal static class ServeHost
                     // nginx parity: client TLS+h2 → terminate → cleartext HTTP/1 origin via H2→H1 bridge.
                     var origin = await OriginServer.StartAsync(false, cancellationToken);
                     var twp = TwpProxyHost.StartReverseHttp2Cleartext(origin.HttpPort);
+                    return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
+                        twp.ListenUrl, [twp.ListenUrl], null, "2.0");
+                }
+                case ProbeMode.ReverseHttp2ToH2c:
+                {
+                    // Client TLS+h2 → terminate → prior-knowledge h2c origin (Kestrel HttpProtocols.Http2).
+                    var origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = true,
+                        EnableHttps = false,
+                        HttpProtocols = HttpProtocols.Http2
+                    }, cancellationToken);
+                    var twp = TwpProxyHost.StartReverseHttp2ToH2c(origin.HttpPort);
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
                         twp.ListenUrl, [twp.ListenUrl], null, "2.0");
                 }

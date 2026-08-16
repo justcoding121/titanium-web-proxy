@@ -339,11 +339,11 @@ public partial class ProxyServer
     }
 
     /// <summary>
-    ///     Opens a fresh, correctly-policy-checked (forced h2, ALPN validated) origin connection - used both
+    ///     Opens a fresh, correctly-policy-checked (forced h2) origin connection - used both
     ///     when no connection was retained from negotiation and to replace a connection that later became
     ///     unusable (faulted or GOAWAY). Mirrors <see cref="ResolveHttp2ForClientAsync" />'s
     ///     <see cref="UpstreamHttpProtocol.Http2" /> connection-opening logic: a forced h2 origin that stops
-    ///     negotiating h2 is a hard failure, never a silent downgrade.
+    ///     speaking h2 (TLS ALPN or h2c) is a hard failure, never a silent downgrade.
     /// </summary>
     private async Task<TcpServerConnection> EstablishHttp2OriginTcpConnectionAsync(SessionEventArgs args,
         string remoteHostName, int remotePort, string? connectHost, int? connectPort,
@@ -354,13 +354,19 @@ public partial class ProxyServer
             customUpStreamProxy = await GetCustomUpStreamProxyFunc(args);
         args.CustomUpStreamProxyUsed = customUpStreamProxy;
 
+        var originIsHttps = args.ProxyEndPoint is not TransparentBaseProxyEndPoint { ForwardCleartext: true };
+        var upStreamProxy = customUpStreamProxy ?? (originIsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy);
+
         TcpServerConnection? connection;
         try
         {
             connection = await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
-                HttpHeader.Version20, true, SslExtensions.Http2ProtocolAsList, false, args,
-                args.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint, customUpStreamProxy ?? UpStreamHttpsProxy,
+                HttpHeader.Version20, originIsHttps,
+                originIsHttps ? SslExtensions.Http2ProtocolAsList : null, false, args,
+                args.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint, upStreamProxy,
                 false, false, cancellationToken, connectHost, connectPort);
+            if (connection != null && !originIsHttps)
+                connection.Http2Cleartext = true;
         }
         catch (Exception ex)
         {
@@ -369,11 +375,15 @@ public partial class ProxyServer
                 "HTTP/1.1-to-HTTP/2 translation bridge.", ex, args);
         }
 
-        if (connection == null || connection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
+        if (connection == null ||
+            (originIsHttps
+                ? connection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2
+                : !connection.Http2Cleartext))
         {
             await TcpConnectionFactory.Release(connection, true);
+            var how = originIsHttps ? "no longer negotiates HTTP/2 via ALPN" : "no longer accepts cleartext HTTP/2 (h2c)";
             throw new ProxyHttpException(
-                $"The origin '{remoteHostName}:{remotePort}' no longer negotiates HTTP/2 via ALPN; the " +
+                $"The origin '{remoteHostName}:{remotePort}' {how}; the " +
                 "HTTP/1.1-to-HTTP/2 translation bridge cannot continue. A translation bridge cannot fabricate " +
                 "HTTP/2 support at an origin that does not have it.", null, args);
         }
@@ -404,6 +414,10 @@ public partial class ProxyServer
         try
         {
             if (request.HasBody) await args.GetRequestBody(cancellationToken);
+
+            // TLS-terminate → h2c: origin expects :scheme http (Kestrel rejects https on cleartext).
+            if (args.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
+                request.IsHttps = false;
 
             PrepareRequestForOrigin(request);
 

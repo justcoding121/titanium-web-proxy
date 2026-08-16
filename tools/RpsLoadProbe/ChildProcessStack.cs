@@ -58,7 +58,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         if (RequiresCombinedServe(mode))
             return await StartCombinedServeAsync(exe, mode, nginxPath, maxCachedConnections, cancellationToken);
 
-        var originArgs = "--serve-origin";
+        var originArgs = mode is ProbeMode.ReverseHttp2ToH2c ? "--serve-origin --h2c" : "--serve-origin";
         var origin = StartChild(exe, originArgs);
         var originLines = await ReadUntilReadyAsync(origin, cancellationToken);
         var originHttp = Require(originLines, "origin_http");
@@ -104,7 +104,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
 
     /// <summary>
     /// True when the origin speaks TLS/QUIC and must share the probe's in-process test CA with the proxy.
-    /// Cleartext-origin terminate arms (H1 TLS / H2→H1 / nginx H2 / H3→H1) stay process-split.
+    /// Cleartext-origin terminate arms (H1 TLS / H2→H1 / H2→h2c / nginx H2 / H3→H1) stay process-split.
     /// </summary>
     private static bool RequiresCombinedServe(ProbeMode mode) => mode is
         ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp3

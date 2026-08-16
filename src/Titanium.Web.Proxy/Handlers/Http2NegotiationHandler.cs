@@ -136,7 +136,7 @@ public partial class ProxyServer
         bool allowHttpProtocolTranslation)
     {
         if (connection != null &&
-            connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2)
+            (connection.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2 || connection.Http2Cleartext))
             return connection;
 
         Diagnostics.ProxyMetrics.Http2CapabilityMismatch();
@@ -150,8 +150,8 @@ public partial class ProxyServer
 
         throw new ProxyConnectException(
             $"Cached HTTP/2 capability for '{capabilityCacheKey}' was stale: the origin did not " +
-            "negotiate HTTP/2 via ALPN. AllowHttpProtocolTranslation is disabled, so the tunnel " +
-            "cannot be recovered via the H2→H1.1 bridge.",
+            "speak HTTP/2 (TLS ALPN h2 or cleartext prior-knowledge h2c). AllowHttpProtocolTranslation is " +
+            "disabled, so the tunnel cannot be recovered via the H2→H1.1 bridge.",
             new NotSupportedException("Origin does not support HTTP/2."),
             sessionArgs);
     }
@@ -163,26 +163,15 @@ public partial class ProxyServer
     ///     the origin's actual capability. Shared by the explicit and transparent handlers so the policy
     ///     rules are enforced identically for both.
     /// </summary>
-    /// <param name="sessionArgs">Forwarded to <see cref="NegotiateHttp2Async" /> for the <see cref="UpstreamHttpProtocol.Auto" /> case.</param>
-    /// <param name="clientOffersHttp2">Whether the client's TLS ClientHello ALPN extension includes "h2".</param>
-    /// <param name="remoteHostName">The origin identity; see <see cref="NegotiateHttp2Async" />.</param>
-    /// <param name="remotePort">The origin identity port; see <see cref="NegotiateHttp2Async" />.</param>
-    /// <param name="connectHost">The actual TCP connect destination override; see <see cref="NegotiateHttp2Async" />.</param>
-    /// <param name="connectPort">The actual TCP connect destination override port; see <see cref="NegotiateHttp2Async" />.</param>
-    /// <param name="upstreamHttpProtocol">The connection-scoped upstream protocol policy.</param>
-    /// <param name="allowHttpProtocolTranslation">Whether a client/origin protocol mismatch may be bridged.</param>
-    /// <param name="enablePrefetch">Forwarded to <see cref="NegotiateHttp2Async" /> for the <see cref="UpstreamHttpProtocol.Auto" /> case.</param>
-    /// <param name="cancellationToken">Forwarded to <see cref="NegotiateHttp2Async" /> for the <see cref="UpstreamHttpProtocol.Auto" /> case.</param>
-    /// <exception cref="ProxyConnectException">
-    ///     The policy is unsatisfiable without a translation bridge that either is disabled
-    ///     (<paramref name="allowHttpProtocolTranslation" /> is <c>false</c>) or does not exist yet in this
-    ///     version, or <see cref="UpstreamHttpProtocol.Http2" /> was required but the origin does not support
-    ///     HTTP/2.
-    /// </exception>
+    /// <param name="originIsHttps">
+    ///     When <see langword="false"/> (transparent <c>ForwardCleartext</c>), forced
+    ///     <see cref="UpstreamHttpProtocol.Http2"/> opens cleartext h2c prior-knowledge instead of TLS ALPN.
+    ///     Auto mode always probes TLS ALPN and ignores this flag.
+    /// </param>
     private async Task<Http2NegotiationResult> ResolveHttp2ForClientAsync(SessionEventArgsBase sessionArgs, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         bool clientOffersHttp2, string remoteHostName, int remotePort, string? connectHost, int? connectPort,
         UpstreamHttpProtocol upstreamHttpProtocol, bool allowHttpProtocolTranslation, bool enablePrefetch,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool originIsHttps = true)
     {
         switch (upstreamHttpProtocol)
         {
@@ -213,35 +202,55 @@ public partial class ProxyServer
                 sessionArgs.CustomUpStreamProxyUsed = customUpStreamProxy;
 
                 var externalProxy = TcpConnectionFactory.GetEffectiveUpstreamProxy(
-                    customUpStreamProxy ?? UpStreamHttpsProxy, remoteHostName, remotePort);
+                    customUpStreamProxy ?? (originIsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy),
+                    remoteHostName, remotePort);
                 var upStreamEndPoint = sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint;
 
                 TcpServerConnection? connection;
                 try
                 {
-                    connection = await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
-                        HttpHeader.Version20, true, SslExtensions.Http2ProtocolAsList, true, sessionArgs,
-                        upStreamEndPoint, externalProxy, true, true, cancellationToken, connectHost, connectPort);
+                    if (originIsHttps)
+                    {
+                        connection = await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
+                            HttpHeader.Version20, true, SslExtensions.Http2ProtocolAsList, true, sessionArgs,
+                            upStreamEndPoint, externalProxy, true, true, cancellationToken, connectHost, connectPort);
+                    }
+                    else
+                    {
+                        // Outbound h2c: cleartext TCP; preface is written when the session starts (MITM or
+                        // Http2OriginConnection.CreateAsync). Mark Http2Cleartext so Ensure/Release treat it
+                        // as an h2-intent socket without TLS ALPN.
+                        connection = await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
+                            HttpHeader.Version20, false, null, true, sessionArgs,
+                            upStreamEndPoint, externalProxy, true, true, cancellationToken, connectHost, connectPort);
+                        if (connection != null)
+                            connection.Http2Cleartext = true;
+                    }
                 }
                 catch (Exception ex)
                 {
-                    // Some non-h2 origins actively reject an ALPN offer with no mutually acceptable protocol
-                    // (a TLS-level AuthenticationException) instead of just completing the handshake without
-                    // selecting one; either way the actionable fact for this policy is the same, so both
-                    // failure modes are reported with the same "did not negotiate HTTP/2" message.
+                    var how = originIsHttps
+                        ? "did not negotiate HTTP/2 via ALPN (the connection attempt itself failed)"
+                        : "could not open a cleartext HTTP/2 (h2c) TCP connection";
                     throw new ProxyConnectException(
                         $"UpstreamHttpProtocol.Http2 was required for '{remoteHostName}:{remotePort}' but the " +
-                        "origin server did not negotiate HTTP/2 via ALPN (the connection attempt itself failed). " +
+                        $"origin server {how}. " +
                         "A translation bridge cannot fabricate HTTP/2 support at an origin that does not have it.",
                         ex, sessionArgs);
                 }
 
-                if (connection == null || connection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
+                if (connection == null ||
+                    (originIsHttps
+                        ? connection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2
+                        : !connection.Http2Cleartext))
                 {
                     await TcpConnectionFactory.Release(connection, true);
+                    var how = originIsHttps
+                        ? "did not negotiate HTTP/2 via ALPN"
+                        : "did not accept cleartext HTTP/2 (h2c) prior-knowledge";
                     throw new ProxyConnectException(
                         $"UpstreamHttpProtocol.Http2 was required for '{remoteHostName}:{remotePort}' but the " +
-                        "origin server did not negotiate HTTP/2 via ALPN. A translation bridge cannot fabricate " +
+                        $"origin server {how}. A translation bridge cannot fabricate " +
                         "HTTP/2 support at an origin that does not have it.",
                         new NotSupportedException("Origin does not support HTTP/2."), sessionArgs);
                 }
@@ -274,7 +283,7 @@ public partial class ProxyServer
                 // Auto (and any other unvalidated value, defensively - the public setters already reject
                 // unknown enum values): existing coupled behavior, unchanged. Skip origin negotiation
                 // entirely (and thus never touch the capability cache) when the client did not even offer
-                // "h2", exactly like before this policy API existed.
+                // "h2", exactly like before this policy API existed. Auto never probes h2c.
                 if (!clientOffersHttp2) return new Http2NegotiationResult(false, null);
 
                 return await NegotiateHttp2Async(sessionArgs, remoteHostName, remotePort, connectHost, connectPort,
@@ -288,14 +297,16 @@ public partial class ProxyServer
     ///     against it before adopting that connection.
     /// </summary>
     private string GetHttp2ConnectionCacheKey(SessionEventArgsBase sessionArgs, string remoteHostName,
-        int remotePort, string? connectHost, int? connectPort)
+        int remotePort, string? connectHost, int? connectPort, bool originIsHttps = true)
     {
         var externalProxy = TcpConnectionFactory.GetEffectiveUpstreamProxy(
-            sessionArgs.CustomUpStreamProxyUsed ?? UpStreamHttpsProxy, remoteHostName, remotePort);
+            sessionArgs.CustomUpStreamProxyUsed ?? (originIsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy),
+            remoteHostName, remotePort);
         var upStreamEndPoint = sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint;
 
-        return TcpConnectionFactory.GetConnectionCacheKey(remoteHostName, remotePort, true,
-            SslExtensions.Http2ProtocolAsList, upStreamEndPoint, externalProxy, connectHost, connectPort);
+        return TcpConnectionFactory.GetConnectionCacheKey(remoteHostName, remotePort, originIsHttps,
+            originIsHttps ? SslExtensions.Http2ProtocolAsList : null, upStreamEndPoint, externalProxy, connectHost,
+            connectPort);
     }
 
     /// <summary>
@@ -303,13 +314,14 @@ public partial class ProxyServer
     ///     deliberately omitted — the capability decision is what chooses ALPN).
     /// </summary>
     private string GetHttp2CapabilityCacheKey(SessionEventArgsBase sessionArgs, string remoteHostName,
-        int remotePort, string? connectHost, int? connectPort)
+        int remotePort, string? connectHost, int? connectPort, bool originIsHttps = true)
     {
         var externalProxy = TcpConnectionFactory.GetEffectiveUpstreamProxy(
-            sessionArgs.CustomUpStreamProxyUsed ?? UpStreamHttpsProxy, remoteHostName, remotePort);
+            sessionArgs.CustomUpStreamProxyUsed ?? (originIsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy),
+            remoteHostName, remotePort);
         var upStreamEndPoint = sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint;
 
-        return TcpConnectionFactory.GetConnectionCacheKey(remoteHostName, remotePort, true,
+        return TcpConnectionFactory.GetConnectionCacheKey(remoteHostName, remotePort, originIsHttps,
             null, upStreamEndPoint, externalProxy, connectHost, connectPort);
     }
 
