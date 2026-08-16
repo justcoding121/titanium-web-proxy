@@ -559,6 +559,8 @@ Titanium.Web.Proxy.Models.ProxyEndPoint.GenericCertificate.set -> void
 Titanium.Web.Proxy.Models.ProxyEndPoint.IpAddress.get -> System.Net.IPAddress!
 Titanium.Web.Proxy.Models.ProxyEndPoint.MaxConcurrentClients.get -> int?
 Titanium.Web.Proxy.Models.ProxyEndPoint.MaxConcurrentClients.set -> void
+Titanium.Web.Proxy.Models.ProxyEndPoint.MaxCachedConnections.get -> int?
+Titanium.Web.Proxy.Models.ProxyEndPoint.MaxCachedConnections.set -> void
 Titanium.Web.Proxy.Models.ProxyEndPoint.Port.get -> int
 Titanium.Web.Proxy.Models.ProxyEndPoint.ProxyEndPoint(System.Net.IPAddress! ipAddress, int port, bool decryptSsl) -> void
 Titanium.Web.Proxy.Models.ProxyProtocolType

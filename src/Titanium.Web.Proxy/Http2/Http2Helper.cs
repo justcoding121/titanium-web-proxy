@@ -818,7 +818,8 @@ namespace Titanium.Web.Proxy.Http2
                                 && ecTunnelState.InboundTunnelChannel != null;
                             bool isNativeExtendedConnect = ecTunnelState?.IsExtendedConnect == true
                                 && ecTunnelState.InboundTunnelChannel == null;
-                            bool isExternalBridge = ecTunnelState?.IsExternalBridge == true;
+                            bool isExternalBridge = ecTunnelState?.IsExternalBridge == true
+                                || output is NullOriginStream;
 
                             if (isExtendedConnectTunnel)
                             {

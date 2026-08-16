@@ -469,6 +469,15 @@ internal class TcpConnectionFactory : IDisposable
                             && recentConnection.TcpSocket.IsGoodConnection()
                             && IsNegotiatedProtocolCompatible(recentConnection, applicationProtocols))
                         {
+                            if (!recentConnection.TryEnterLease())
+                            {
+                                // #region agent log
+                                AgentDebugNdjson.Write("H2H1", "TcpConnectionFactory.Get", "double-lease-skipped",
+                                    new { connId = recentConnection.Id, cacheKey });
+                                // #endregion
+                                continue;
+                            }
+
                             ProxyMetrics.PoolReused();
                             return recentConnection;
                         }
@@ -1034,7 +1043,8 @@ internal class TcpConnectionFactory : IDisposable
         {
             IsWinAuthenticated = upstreamProxyWinAuthenticated,
             UsedClientCertificate = usedClientCertificate,
-            Timing = timing
+            Timing = timing,
+            PoolSizeLimit = sessionArgs.ProxyEndPoint?.MaxCachedConnections
         };
     }
 
@@ -1323,6 +1333,9 @@ internal class TcpConnectionFactory : IDisposable
         // already scheduled for disposal: never pool it again.
         if (connection.IsDisposalScheduled) return Task.CompletedTask;
 
+        // Drop exclusive lease before pooling or disposing so the next Get can TryEnterLease.
+        connection.ExitLease();
+
         // An ALPN=h2 socket whose HTTP/2 connection preface was never written (a capability probe or an
         // unadopted prefetch) is not a usable h2 session: the origin applies a preface timeout and tears
         // it down - unobservably, since the pool's health check only tests writability and its TTL is
@@ -1360,7 +1373,7 @@ internal class TcpConnectionFactory : IDisposable
                     // against the dictionary instead of trusting the reference we already hold.
                     if (!cache.TryGetValue(connection.CacheKey, out var current) || current != queue) continue;
 
-                    while (queue.Count >= Server.MaxCachedConnections &&
+                    while (queue.Count >= (connection.PoolSizeLimit ?? Server.MaxCachedConnections) &&
                            queue.TryDequeue(out var staleConnection))
                         if (staleConnection.TryScheduleDisposal())
                             disposalBag.Add(staleConnection);

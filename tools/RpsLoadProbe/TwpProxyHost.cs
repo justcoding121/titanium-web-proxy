@@ -61,6 +61,38 @@ internal sealed class TwpProxyHost : IDisposable
         return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 
+    /// <summary>
+    /// TLS-terminating reverse HTTP/2 matching nginx: client h2 TLS → H2→H1 bridge → cleartext HTTP/1 origin.
+    /// </summary>
+    public static TwpProxyHost StartReverseHttp2Cleartext(int originHttpPort)
+    {
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpPort,
+            ForwardCleartext = true,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeSslAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        // #region agent log
+        DebugSessionLog.Write("H2H1", "TwpProxyHost.StartReverseHttp2Cleartext", "started",
+            new { listenPort = endPoint.Port, originHttpPort, maxCached = proxy.MaxCachedConnections,
+                maxStreams = proxy.ResourceLimits.MaxConcurrentStreamsPerConnection });
+        // #endregion
+        return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
     public static TwpProxyHost StartReverseHttp2(int originHttpsPort)
     {
         var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);
@@ -98,7 +130,8 @@ internal sealed class TwpProxyHost : IDisposable
             ForwardHost = "localhost",
             ForwardPort = originHttpsPort,
             GenericCertificateName = "localhost",
-            MaxInboundBidirectionalStreams = 256
+            MaxInboundBidirectionalStreams = 256,
+            MaxCachedConnections = 256
         };
         endPoint.BeforeQuicAuthenticate += (_, args) =>
         {
@@ -110,6 +143,40 @@ internal sealed class TwpProxyHost : IDisposable
         // #region agent log
         DebugSessionLog.Write("C", "TwpProxyHost.StartReverseHttp3", "started",
             new { listenPort = endPoint.Port, originHttpsPort, maxCached = proxy.MaxCachedConnections });
+        // #endregion
+        return new TwpProxyHost(proxy, endPoint.Port, $"https://localhost:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
+    /// <summary>
+    /// QUIC/h3 TLS terminate → cleartext HTTP/1 origin (ForwardCleartext + UpstreamHttpProtocol.Http11).
+    /// </summary>
+    public static TwpProxyHost StartReverseHttp3Cleartext(int originHttpPort)
+    {
+        if (!QuicListener.IsSupported)
+            throw new PlatformNotSupportedException("QuicListener is not supported on this platform.");
+
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: true);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpPort,
+            ForwardCleartext = true,
+            GenericCertificateName = "localhost",
+            MaxInboundBidirectionalStreams = 256,
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeQuicAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        // #region agent log
+        DebugSessionLog.Write("H3H1", "TwpProxyHost.StartReverseHttp3Cleartext", "started",
+            new { listenPort = endPoint.Port, originHttpPort, maxCached = endPoint.MaxCachedConnections });
         // #endregion
         return new TwpProxyHost(proxy, endPoint.Port, $"https://localhost:{endPoint.Port}/", isExplicitProxy: false);
     }

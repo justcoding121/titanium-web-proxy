@@ -49,11 +49,13 @@ namespace Titanium.Web.Proxy;
 ///         connection to the HTTP/1.1 origin, opened and closed within
 ///         <see cref="RunHttp2ToHttp11BridgeRoundTripAsync" />. NTLM/Kerberos authentication is
 ///         connection-bound — the full challenge-response handshake must complete within this single
-///         per-stream connection and authenticated connections must not enter the shared pool (enforced by
-///         <c>closeConnection = true</c> when <c>response.KeepAlive</c> is false and by the bridge never
-///         pooling connections at all in the current implementation). The
-///         The <c>MaxAuthChallengeRounds</c> cap in <c>WinAuthHandler</c> prevents infinite retry loops
-///         should a misbehaving origin continuously re-challenge a successfully authenticated connection.
+///         per-stream connection. Keep-alive reuse is allowed only when the origin stream buffer is
+///         empty after the body copy; residual buffered bytes force the socket closed so the shared
+///         pool cannot hand a misaligned connection to the next stream (observed as
+///         <c>Invalid chunk length</c> / header-parse failures under multiplexed load). The
+///         <c>MaxAuthChallengeRounds</c> cap in <c>WinAuthHandler</c> prevents infinite retry loops
+///         should a misbehaving origin continuously re-challenge a successfully authenticated
+///         connection.
 ///     </para>
 /// </remarks>
 public partial class ProxyServer
@@ -203,6 +205,11 @@ public partial class ProxyServer
             return;
         }
 
+        // Same ownership flag as H2→H3: without it Http2Helper forwards HEADERS to NullOriginStream and
+        // can race a second synthetic :status onto the client stream (observed as
+        // "Received an HTTP/2 pseudo-header as a trailing header" under load).
+        streamState.IsExternalBridge = true;
+
         var bridgeTask = RunHttp2ToHttp11BridgeRoundTripAsync(sessionArgs, ctx.StreamId, ctx.ConnectionState,
                 ctx.ClientStream, remoteHostName, remotePort, connectHost, connectPort, ctx.CancellationToken,
                 streamState.Cancellation.Token)
@@ -273,6 +280,8 @@ public partial class ProxyServer
             if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
                 upstreamIsHttps = false;
 
+            // Shared pool is required under multiplexed fan-out (noCache caused ephemeral-port storms).
+            // Residual framing is detected after the body copy via HttpStream.DataAvailable (below).
             var newConnection = await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
                 HttpHeader.Version11, upstreamIsHttps, SslExtensions.Http11ProtocolAsList, false, sessionArgs,
                 sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint,
@@ -282,8 +291,15 @@ public partial class ProxyServer
             connection = newConnection;
 
             sessionArgs.HttpClient.SetConnection(newConnection);
+            var firstUse = newConnection.ClaimFirstUse();
             if (sessionArgs.Timing != null)
-                sessionArgs.Timing.MarkConnectionReady(newConnection.Id, !newConnection.ClaimFirstUse());
+                sessionArgs.Timing.MarkConnectionReady(newConnection.Id, !firstUse);
+
+            // #region agent log
+            if (firstUse || (streamId & 0x7F) == 1)
+                AgentDebugNdjson.Write("H2H1", "Http2ToHttp11Bridge.lease", "origin-leased",
+                    new { streamId, connId = newConnection.Id, firstUse, upstreamIsHttps, forwardCleartext = sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true }, noCache = false });
+            // #endregion
 
             // Matches HandleHttpSessionRequest's HTTP/1.1 send sequence: compute the (possibly re-compressed)
             // body and its Content-Length *before* SendRequest writes the request line/headers, then stream
@@ -344,45 +360,69 @@ public partial class ProxyServer
 
                 var originConnection = connection;
 
-                // Snapshot the origin's actual wire framing before EmitSyntheticResponseAsync (invoked below,
-                // via RespondStreaming) strips Transfer-Encoding from response.Headers (h2 framing has no such
-                // header) - re-reading response.HasBody/IsChunked/ContentLength from inside the writeBody
-                // callback below after that point would see Transfer-Encoding already gone and (since
-                // response.HttpVersion is still HTTP/1.1, never rewritten to 2.0 for this bridged response)
-                // would wrongly conclude the response has no body at all.
-                var originHasBody = response.HasBody;
-                var originIsChunked = response.IsChunked;
-                var originContentLength = response.ContentLength;
+                // Prefer Original* snapshots taken at SetOriginalHeaders (before any Respond* mutation).
+                var originHasBody = response.OriginalHasBody;
+                var originIsChunked = response.OriginalIsChunked;
+                var originContentLength = response.OriginalContentLength;
 
-                sessionArgs.RespondStreaming(response, async (bodyStream, bodyCancellationToken) =>
+                // Buffer the origin body and use the buffered synthetic emitter. RespondStreaming left
+                // HEADERS(endStream=false)+DATA races that .NET HttpClient reports as
+                // "Received an HTTP/2 pseudo-header as a trailing header" under multiplexed load.
+                byte[] bodyBytes = Array.Empty<byte>();
+                if (originHasBody)
                 {
-                    if (!originHasBody) return;
-
-                    // Decodes the origin's actual wire framing (chunked or Content-Length-bounded) into raw
-                    // body bytes; h2 DATA frames need no framing of their own (length is implicit), and
-                    // Content-Encoding (if any) is left untouched and forwarded as-is - decoding it is the
-                    // h2 client's job, exactly as it would be for a real h2 origin.
                     IHttpStreamReader reader = originConnection.Stream;
                     using var limited = new LimitedStream(reader, BufferPool, originIsChunked,
                         originContentLength, response.TrailingHeaders);
+                    using var ms = new System.IO.MemoryStream(
+                        originContentLength > 0 && originContentLength <= int.MaxValue
+                            ? (int)originContentLength
+                            : 256);
                     var buffer = BufferPool.GetBuffer();
                     try
                     {
                         int read;
-                        while ((read = await limited.ReadAsync(buffer.AsMemory(), bodyCancellationToken).AsTask()) > 0)
-                            await bodyStream.WriteAsync(buffer.AsMemory(0, read), bodyCancellationToken);
-
+                        while ((read = await limited.ReadAsync(buffer.AsMemory(), cancellationToken).AsTask()) > 0)
+                            await ms.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
                         await limited.Finish();
                     }
                     finally
                     {
                         BufferPool.ReturnBuffer(buffer);
                     }
-                });
+
+                    bodyBytes = ms.ToArray();
+                }
+
+                response.Body = bodyBytes;
+                response.IsBodyRead = true;
+                response.ContentLength = bodyBytes.Length;
+                response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+                response.StreamBodyWriter = null;
+                response.Locked = true;
             }
 
             await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState, clientStream,
                 cancellationToken);
+
+            // Refuse to pool a socket that still has unread bytes in HttpStream's buffer — that is the
+            // residual-framing failure mode observed under H2 multiplex (Invalid chunk length / header parse).
+            if (connection?.Stream is Helpers.HttpStream httpStream && httpStream.DataAvailable)
+            {
+                // #region agent log
+                AgentDebugNdjson.Write("H2H1", "Http2ToHttp11Bridge.residual", "data-available-after-body",
+                    new { streamId, connId = connection.Id, available = httpStream.Available, keepAlive = response.KeepAlive });
+                // #endregion
+                closeConnection = true;
+            }
+
+            // #region agent log
+            if ((streamId & 0xFF) == 1 || closeConnection)
+                AgentDebugNdjson.Write("H2H1", "Http2ToHttp11Bridge.release-plan", "keep-alive-decision",
+                    new { streamId, connId = connection!.Id, firstUse, keepAlive = response.KeepAlive, closeConnection,
+                        origHasBody = response.OriginalHasBody, origChunked = response.OriginalIsChunked,
+                        origCl = response.OriginalContentLength });
+            // #endregion
         }
         catch (Exception ex)
         {
@@ -394,6 +434,23 @@ public partial class ProxyServer
             // Debug while unexpected failures remain Error.
             if (!cancellationToken.IsCancellationRequested)
             {
+                // #region agent log
+                AgentDebugNdjson.Write("H2H1", "Http2ToHttp11Bridge.catch", "origin-roundtrip-failed",
+                    new
+                    {
+                        streamId,
+                        exType = ex.GetType().FullName,
+                        exMsg = ex.Message,
+                        innerType = ex.InnerException?.GetType().FullName,
+                        innerMsg = ex.InnerException?.Message,
+                        headersLocked = sessionArgs.HttpClient.Response.Locked,
+                        hasConn = connection != null,
+                        origHasBody = sessionArgs.HttpClient.Response.OriginalHasBody,
+                        origChunked = sessionArgs.HttpClient.Response.OriginalIsChunked,
+                        origCl = sessionArgs.HttpClient.Response.OriginalContentLength
+                    });
+                // #endregion
+
                 ProxyDiagnostics.ReportException(logger,
                     $"HTTP/2-to-HTTP/1.1 bridge origin round trip failed for stream {streamId}",
                     new ProxyHttpException(

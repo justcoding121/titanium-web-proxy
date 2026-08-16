@@ -30,7 +30,8 @@ internal static class ServeProxyHost
     public static async Task<int> RunAsync(ProbeMode mode, int originHttpPort, int originHttpsPort,
         string? nginxPath, int? maxCachedConnections, CancellationToken cancellationToken)
     {
-        if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls or ProbeMode.ExplicitPoolSweep)
+        if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
+            or ProbeMode.CompareTerminate or ProbeMode.ExplicitPoolSweep)
         {
             ProbeLog.Error("--serve-proxy requires a single arm mode");
             return 2;
@@ -38,7 +39,8 @@ internal static class ServeProxyHost
 
         // TLS arms need shared CA with origin — use --serve combined instead.
         if (mode is ProbeMode.ReverseHttp1Tls or ProbeMode.NginxReverseHttp1Tls
-            or ProbeMode.ReverseHttp2 or ProbeMode.NginxReverseHttp2 or ProbeMode.ReverseHttp3
+            or ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp2Cleartext or ProbeMode.NginxReverseHttp2
+            or ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext
             or ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi)
         {
             ProbeLog.Error(
@@ -111,13 +113,16 @@ internal static class ServeProxyHost
         ProbeMode.NginxReverseHttp1Tls => "nginx-reverse-http1-tls",
         ProbeMode.HttpsMitm => "https-mitm",
         ProbeMode.ReverseHttp2 => "reverse-http2",
+        ProbeMode.ReverseHttp2Cleartext => "reverse-http2-cleartext",
         ProbeMode.NginxReverseHttp2 => "nginx-reverse-http2",
         ProbeMode.ReverseHttp3 => "reverse-http3",
+        ProbeMode.ReverseHttp3Cleartext => "reverse-http3-cleartext",
         ProbeMode.ExplicitHttp1Multi => "explicit-http1-multi",
         ProbeMode.ExplicitHttp2Multi => "explicit-http2-multi",
         ProbeMode.Compare => "compare",
         ProbeMode.CompareHttp2 => "compare-http2",
         ProbeMode.CompareTls => "compare-tls",
+        ProbeMode.CompareTerminate => "compare-terminate",
         ProbeMode.ExplicitPoolSweep => "explicit-pool-sweep",
         _ => mode.ToString()
     };
@@ -128,7 +133,8 @@ internal static class ServeHost
     public static async Task<int> RunAsync(ProbeMode mode, string? nginxPath, int? maxCachedConnections,
         CancellationToken cancellationToken)
     {
-        if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls or ProbeMode.ExplicitPoolSweep)
+        if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
+            or ProbeMode.CompareTerminate or ProbeMode.ExplicitPoolSweep)
         {
             ProbeLog.Error("--serve requires a single mode");
             return 2;
@@ -287,6 +293,14 @@ internal static class ServeHost
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, [], twp.ListenUrl, null,
                         twp.ListenUrl, [twp.ListenUrl], null, "2.0");
                 }
+                case ProbeMode.ReverseHttp2Cleartext:
+                {
+                    // nginx parity: client TLS+h2 → terminate → cleartext HTTP/1 origin via H2→H1 bridge.
+                    var origin = await OriginServer.StartAsync(false, cancellationToken);
+                    var twp = TwpProxyHost.StartReverseHttp2Cleartext(origin.HttpPort);
+                    return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
+                        twp.ListenUrl, [twp.ListenUrl], null, "2.0");
+                }
                 case ProbeMode.NginxReverseHttp2:
                 {
                     // nginx: client TLS+h2 → cleartext HTTP/1.1 origin (same as TryStartHttp2 conf).
@@ -306,6 +320,18 @@ internal static class ServeHost
                     return new ServeStack(origin, twp, twp, $"quic://localhost:{origin.Port}/",
                         $"quic://localhost:{origin.Port}/", [], twp.ListenUrl, null, twp.ListenUrl, [twp.ListenUrl],
                         null, "3.0", loadGenerator: "quic-http3", quicPort: twp.Port, originQuicPort: origin.Port);
+                }
+                case ProbeMode.ReverseHttp3Cleartext:
+                {
+                    if (!System.Net.Quic.QuicListener.IsSupported)
+                        throw new PlatformNotSupportedException("QuicListener is not supported.");
+
+                    // Client QUIC/h3 → terminate → cleartext HTTP/1 origin (ForwardCleartext + Http11).
+                    var origin = await OriginServer.StartAsync(false, cancellationToken);
+                    var twp = TwpProxyHost.StartReverseHttp3Cleartext(origin.HttpPort);
+                    return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
+                        twp.ListenUrl, [twp.ListenUrl], null, "3.0", loadGenerator: "quic-http3",
+                        quicPort: twp.Port);
                 }
                 case ProbeMode.ExplicitHttp1Multi:
                 case ProbeMode.ExplicitHttp2Multi:

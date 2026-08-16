@@ -127,7 +127,8 @@ internal static class Cli
         int? maxCachedConnections, CancellationToken ct)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode) ||
-            mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls or ProbeMode.ExplicitPoolSweep)
+            mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
+                or ProbeMode.CompareTerminate or ProbeMode.ExplicitPoolSweep)
             return Fail("Required: --serve-proxy --mode <single arm>");
         return ServeProxyHost.RunAsync(mode, originHttpPort, originHttpsPort, nginxPath, maxCachedConnections, ct)
             .GetAwaiter().GetResult();
@@ -190,11 +191,17 @@ internal static class Cli
             case "reverse-http2":
                 mode = ProbeMode.ReverseHttp2;
                 return true;
+            case "reverse-http2-cleartext":
+                mode = ProbeMode.ReverseHttp2Cleartext;
+                return true;
             case "nginx-reverse-http2":
                 mode = ProbeMode.NginxReverseHttp2;
                 return true;
             case "reverse-http3":
                 mode = ProbeMode.ReverseHttp3;
+                return true;
+            case "reverse-http3-cleartext":
+                mode = ProbeMode.ReverseHttp3Cleartext;
                 return true;
             case "explicit-http1-multi":
                 mode = ProbeMode.ExplicitHttp1Multi;
@@ -210,6 +217,9 @@ internal static class Cli
                 return true;
             case "compare-tls":
                 mode = ProbeMode.CompareTls;
+                return true;
+            case "compare-terminate":
+                mode = ProbeMode.CompareTerminate;
                 return true;
             case "explicit-pool-sweep":
                 mode = ProbeMode.ExplicitPoolSweep;
@@ -238,14 +248,17 @@ internal static class Cli
               reverse-http1-tls       TWP TLS-terminating reverse -> Kestrel HTTPS (h1)
               nginx-reverse-http1-tls nginx TLS reverse -> same Kestrel HTTPS origin (h1)
               https-mitm              TWP Explicit MITM -> Kestrel HTTPS
-              reverse-http2           TWP Transparent TLS+h2 -> Kestrel HTTPS (h2)
-              nginx-reverse-http2     nginx ssl+http2 -> same Kestrel HTTPS origin
-              reverse-http3           TWP TransparentQuic (h3) -> Kestrel HTTPS/h3 (no nginx/Windows)
+              reverse-http2           TWP Transparent TLS+h2 MITM -> Kestrel HTTPS (h2)
+              reverse-http2-cleartext TWP TLS+h2 terminate -> H2→H1 bridge -> Kestrel HTTP/1 (nginx parity)
+              nginx-reverse-http2     nginx ssl+http2 -> cleartext HTTP/1 origin
+              reverse-http3           TWP TransparentQuic (h3) -> Quic HTTPS/h3 origin (no nginx/Windows)
+              reverse-http3-cleartext TWP QUIC/h3 terminate -> cleartext HTTP/1 origin
               explicit-http1-multi    Explicit MITM across 16 HTTPS origins (fan-out)
               explicit-http2-multi    Same fan-out forcing HTTP/2
               compare                 Sequential HTTP/1 compare (+ MITM)
-              compare-http2           Sequential: TWP h2, nginx h2, TWP h3
-              compare-tls             Sequential: TWP h1-tls, nginx h1-tls, TWP h2, nginx h2, TWP h3
+              compare-http2           Sequential: TWP h2 MITM, nginx h2, TWP h3
+              compare-tls             Sequential: TWP h1-tls, nginx h1-tls, TWP h2 MITM, nginx h2, TWP h3
+              compare-terminate       Fair terminate: H1 TLS, H2→H1, H3→H1 (+ nginx H1/H2)
               explicit-pool-sweep     Fan-out with MaxCachedConnections 4 / 32 / 128
 
             Options:

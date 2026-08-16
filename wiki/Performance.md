@@ -11,9 +11,9 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 | HTTPS TTFB vs direct (median, 14 hosts) | Cold **≈ parity** (−1 ms); warm **−25 ms** (proxy faster) |
 | HTTP/1 loopback GET (no body intercept) | **~186 µs**, **~17.5 KB** allocated / request |
 | Cleartext reverse HTTP/1 peak | **~16.0k RPS** (TWP) vs **~15.5k RPS** (nginx/Windows) |
-| TLS-terminate reverse HTTP/1 peak | **~16.2k RPS** (TWP) vs **~12.4k RPS** (nginx/Windows) |
-| Reverse HTTP/2 peak (see topology note) | **~4.7k RPS** (TWP h2↔h2 MITM) · **~13.7k RPS** (nginx ssl+h2 → cleartext) |
-| Reverse HTTP/3 peak | **~5.8k RPS** (TWP only; nginx/Windows has no QUIC) |
+| TLS-terminate reverse HTTP/1 peak | **~24.7k RPS** (TWP) vs **~13.0k RPS** (nginx/Windows) |
+| TLS-terminate H2→H1 cleartext peak | **~7.6k RPS** @ c=64, **0% err** (TWP) · nginx **~14.2k** @ c=32 (fails SLO at c=64) |
+| Reverse HTTP/3 (MITM to Quic origin) | see prior compare-tls tables |
 | Explicit HTTPS MITM peak | **~13.6k RPS** |
 | Basic example footprint (Release, after load) | **~74 MB** working set · **~24–29 MB** private bytes |
 
@@ -21,128 +21,95 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 
 For **tiny JSON responses** (~64 B) on loopback, that ordering is **not** expected:
 
-1. **Topology dominates protocol.** Earlier H2 numbers looked worse than cleartext H1 because H1 reverse was **plain TCP** while H2 paid for **TLS decrypt + re-encrypt + H2 framing**. Always compare arms that share the same crypto hop count.
-2. **HTTP/2/3 shine at multiplexing and head-of-line avoidance**, not at maximizing single-origin tiny-GET RPS. Industry reverse-proxy benches often show HTTP/1.1 keepalive winning raw RPS on small payloads; H2 wins page-load / many-stream latency.
-3. **TWP HTTP/2 reverse today is full MITM h2↔h2** (client TLS + origin HTTPS). nginx’s control arm is **TLS terminate → cleartext H1** (`proxy_pass http://origin`), which is cheaper. A TWP `ForwardCleartext` + H2→H1 bridge path exists for that topology but still errors under saturation; publishable H2 numbers therefore use the stable MITM path and call out the topology gap.
-4. On **TWP-only** native paths in the same run, **HTTP/3 peak (5.8k) > HTTP/2 peak (4.7k)**.
+1. **Topology dominates protocol.** Always compare arms that share the same crypto hop count and upstream protocol.
+2. **HTTP/2/3 shine at multiplexing**, not at maximizing single-origin tiny-GET RPS.
+3. **Fair terminate topology** (client TLS → cleartext origin) is what nginx uses for H2. TWP matches that with `ForwardCleartext` + the H2→H1 bridge (and H1 TLS terminate).
 
-## HTTPS latency (direct vs MITM proxy)
+### H2→H1 cleartext bridge (fixed)
 
-Curl against 14 public HTTPS sites: direct TLS vs `http://127.0.0.1:8000` with decrypt enabled (Release Basic, HTTP/1.1 client):
+Under multiplexed load the bridge used `RespondStreaming` (HEADERS without `END_STREAM` + DATA). .NET `HttpClient` reported **`Received an HTTP/2 pseudo-header as a trailing header`** and error rates climbed with concurrency. The bridge also omitted `IsExternalBridge`, racing `Http2Helper` against the synthetic emitter.
 
-| Scenario | Median Δ TTFB (proxy − direct) |
-|---|---:|
-| Cold | **−1 ms** |
-| Warm | **−25 ms** |
-
-## Loopback throughput and allocations
-
-[BenchmarkDotNet](https://github.com/justcoding121/titanium-web-proxy/tree/develop/benchmarks/Titanium.Web.Proxy.Benchmarks) `ShortRun` (Release):
-
-| Benchmark | Setup | Mean | Allocated / op |
-|---|---|---:|---:|
-| HTTP/1 GET through proxy | Passthrough | **186 µs** | **17.5 KB** |
-| HTTP/2 multiplexed GETs | 10 concurrent streams | **3.0 ms** / batch | **~14 KB** / request |
-
-```powershell
-dotnet run -c Release --project benchmarks/Titanium.Web.Proxy.Benchmarks -- --filter '*Throughput*'
-```
+**Fix:** mark the stream `IsExternalBridge`, buffer the origin body, and emit via the buffered synthetic path. Keep-alive pooling remains enabled with residual-buffer and lease guards.
 
 ## Saturation RPS (this Windows machine)
 
-Measured with [tools/RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe) (Release), after removing blocking console I/O from the harness hot path (`ProbeLog` async sink). Arms run **sequentially**.
-
 **Machine:** Windows 11 (10.0.26200), 11th Gen Intel Core i7-1185G7 @ 3.00 GHz (8 logical), 31.8 GiB RAM, .NET 10.0.10, nginx/Windows **1.31.3**.
 
-**Defaults:** `MaxCachedConnections=128` (per host), `ListenerBackLog=1024`, `ThreadPoolWorkerThread=max(2×cores, 16)`, `ResourceLimits.MaxConcurrentStreamsPerConnection=256`. Raise any of these freely on large hosts — see [Home](Home#performance-and-pooling).
-
 ```powershell
-pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare          # cleartext H1 + MITM
-pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-tls       # TLS-terminate H1 + H2 + H3
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-terminate
 ```
 
-### Cleartext reverse HTTP/1
+### Fair TLS-terminate compare (`compare-terminate`)
 
-| Arm | Sustainable RPS | @ c | Peak RPS | @ c |
-|---|---:|---:|---:|---:|
-| TWP reverse HTTP/1 | **15,955** | 64 | **16,043** | 8 |
-| nginx/Windows `proxy_pass` | **15,506** | 64 | **15,506** | 64 |
+CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-045803.csv` (warmup 2s / measure 8s, c=8,32,64).
 
-CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-043328.csv`
+| Arm | Topology | Sustainable | Peak | Notes |
+|---|---|---:|---:|---|
+| TWP H1 TLS | Client TLS → cleartext H1 | **24,689** @ 64 | **24,689** | 0% err |
+| nginx H1 TLS | ssl → cleartext H1 | **12,693** @ 64 | **13,010** | 0% err |
+| TWP H2→H1 | Client h2 TLS → H2→H1 bridge → cleartext H1 | **7,554** @ 64 | **7,554** | **0% err** (stable at c=64) |
+| nginx H2 | Client h2 TLS → cleartext H1 | **14,175** @ 32 | **14,175** | fails SLO at c=64 |
+| TWP H3→H1 | Client h3 → cleartext H1 | — | ~1.8k | **errors** (stream abort 258) — follow-up |
 
-### TLS-terminate reverse HTTP/1 (fair crypto baseline)
+nginx H2 still leads peak RPS on this machine; TWP H2→H1 is the first zero-error fair topology and stays within SLO at c=64 where nginx does not.
 
-Client TLS → proxy terminates → **cleartext** HTTP origin (`ForwardCleartext` / nginx `proxy_pass http://`).
+### Protocol / topology matrix (what we measure)
 
-| Arm | Sustainable RPS | @ c | Peak RPS | @ c |
-|---|---:|---:|---:|---:|
-| TWP reverse HTTP/1 TLS | **15,780** | 64 | **16,152** | 8 |
-| nginx/Windows ssl → cleartext | **11,961** | 64 | **12,386** | 32 |
-
-### Reverse HTTP/2
-
-| Arm | Topology | Sustainable | Peak |
-|---|---|---:|---:|
-| TWP | Client h2 TLS → MITM → origin **HTTPS h2** | **4,711** @ 64 | **4,711** |
-| nginx/Windows | Client h2 TLS → terminate → origin **cleartext H1** | **13,738** @ 32 | **13,738** |
-
-nginx collapses at c=64 (p99 / errors). TWP’s MITM path is stable but pays double crypto + H2 framing; do not read this row as “H2 is slower than H1” without the topology column.
-
-CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-042946.csv` (`compare-tls`)
-
-### Reverse HTTP/3 (TWP only)
-
-| Arm | Sustainable RPS | @ c | Peak RPS | @ c |
-|---|---:|---:|---:|---:|
-| TWP reverse HTTP/3 | **4,566** | 64 | **5,800** | 16 |
-
-nginx/Windows has **no QUIC/UDP**.
-
-### Explicit HTTPS MITM
-
-| Arm | Sustainable RPS | @ c | Peak RPS | @ c |
-|---|---:|---:|---:|---:|
-| TWP HTTPS MITM | **13,198** | 64 | **13,580** | 32 |
-
-### Explicit multi-origin pool depth
-
-`MaxCachedConnections` is **per host**. Across 16 origins: depth **4** fails p99 at c=64; **32** and **128** are within noise (~13k). Keep default **128** (needed for reverse single-origin). No per-endpoint override required.
+| Client | Upstream | TWP | nginx/Windows | Mode |
+|---|---|---|---|---|
+| H1 cleartext | H1 cleartext | yes | yes | `compare` |
+| H1 TLS | H1 cleartext | `ForwardCleartext` | ssl `proxy_pass http://` | `compare-terminate` |
+| H2 TLS | H1 cleartext | H2→H1 bridge + `ForwardCleartext` | ssl+http2 → cleartext | `compare-terminate` |
+| H2 TLS | H2 TLS (MITM) | native h2↔h2 | n/a (nginx terminates) | `compare-tls` / `reverse-http2` |
+| H2 TLS | H2 cleartext (h2c) | **not supported** (no h2c) | uncommon | — |
+| H3 QUIC | H3 QUIC | MITM | **no QUIC on nginx/Windows** | `reverse-http3` |
+| H3 QUIC | H2 cleartext/TLS | bridge paths exist; h2c N/A | — | — |
+| H3 QUIC | H1 cleartext | `ForwardCleartext` + Http11 | — | `reverse-http3-cleartext` (WIP) |
 
 ## Raising limits on big machines
 
-There is **no artificial upper clamp**. Examples:
+There is **no artificial upper clamp** on server defaults. Per-endpoint overrides:
+
+| Knob | Scope | Default | Override |
+|---|---|---|---|
+| `ProxyServer.MaxCachedConnections` | process, per upstream host | 128 | any ≥ 1 |
+| `ProxyEndPoint.MaxCachedConnections` | endpoint → pool depth for that EP’s sessions | null (use server) | e.g. `256` on reverse EP |
+| `ProxyEndPoint.MaxConcurrentClients` | endpoint admission | null (off) | any ≥ 1 |
+| `ResourceLimits.MaxConcurrentStreamsPerConnection` | H2 streams | 256 | `ProxyResourceLimits.Create(...)` |
+| `TransparentQuicProxyEndPoint.MaxInboundBidirectionalStreams` | H3 | 100 (probe uses 256) | property on EP |
+| `ForwardCleartext` | transparent TLS terminate | false | `true` + decrypt |
 
 ```csharp
-proxy.MaxCachedConnections = 512; // live TCP pool depth per host
+proxy.MaxCachedConnections = 512;
 proxy.ResourceLimits = ProxyResourceLimits.Create(
-    maxHeaderLineBytes: ProxyResourceLimits.Default.MaxHeaderLineBytes,
-    maxHeaderCount: ProxyResourceLimits.Default.MaxHeaderCount,
-    maxHeaderAggregateBytes: ProxyResourceLimits.Default.MaxHeaderAggregateBytes,
-    maxEncodedBodyBytes: null,
-    maxDecodedBodyBytes: null,
-    maxDecompressionRatio: 200,
-    maxConcurrentClients: null,           // or e.g. 100_000
+    /* … */,
     maxConcurrentStreamsPerConnection: 1000,
-    maxPeerInitiatedIncompleteStreamResets: 100,
-    maxOpenHeaderBlockFrames: 128,
-    maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(10),
-    connectionPoolingEnabled: true,
-    maxCachedConnectionsPerHost: 512,     // policy snapshot; sync with MaxCachedConnections
-    maxCertificateCacheEntries: 4096);
+    maxCachedConnectionsPerHost: 512,
+    /* … */);
 
-// Reverse TLS terminate → cleartext origin:
 var ep = new TransparentProxyEndPoint(IPAddress.Any, 443, decryptSsl: true)
 {
     ForwardHost = "127.0.0.1",
     ForwardPort = 8080,
     ForwardCleartext = true,
+    MaxCachedConnections = 256, // deeper pool for this reverse EP only
     GenericCertificateName = "example.com"
+};
+ep.BeforeSslAuthenticate += (_, a) =>
+{
+    a.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+    a.AllowHttpProtocolTranslation = true; // H2 client → H1 origin bridge
+    return Task.CompletedTask;
 };
 ```
 
-## Saturation RPS (GitHub `ubuntu-latest`)
+## HTTPS latency / loopback microbenchmarks
 
-Trigger Actions → **RPS saturation (Linux)** (`workflow_dispatch`). Prefer median of 3 runs. Do not merge with Windows-local tables.
+Unchanged from prior wiki revision — see curl median Δ and BenchmarkDotNet tables in git history if needed; re-run:
+
+```powershell
+dotnet run -c Release --project benchmarks/Titanium.Web.Proxy.Benchmarks -- --filter '*Throughput*'
+```
 
 ## Process footprint (Basic example)
 

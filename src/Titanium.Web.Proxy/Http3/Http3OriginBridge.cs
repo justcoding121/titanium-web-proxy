@@ -13,6 +13,7 @@ using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Options;
 
@@ -581,10 +582,52 @@ internal static class Http3OriginBridge
 
         try
         {
-            var connection = await server.TcpConnectionFactory.GetServerConnection(
-                server, sessionArgs, false, alpn, false, cancellationToken);
+            var isHttps = sessionArgs.IsHttps;
+            if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
+                isHttps = false;
 
-            sessionArgs.HttpClient.SetConnection(connection);
+            string host;
+            int port;
+            var requestUri = request.RequestUri;
+            if (request.Authority.Length > 0)
+            {
+                var authority = request.Authority;
+                var idx = authority.IndexOf((byte)':');
+                if (idx == -1)
+                {
+                    host = authority.GetString();
+                    port = isHttps ? 443 : 80;
+                }
+                else
+                {
+                    host = authority.Slice(0, idx).GetString();
+                    port = int.Parse(authority.Slice(idx + 1).GetString());
+                }
+            }
+            else
+            {
+                host = requestUri?.Host ?? string.Empty;
+                port = requestUri?.Port ?? (isHttps ? 443 : 80);
+            }
+
+            string? connectHost = null;
+            int? connectPort = null;
+            if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint transparent
+                && !string.IsNullOrEmpty(transparent.ForwardHost))
+            {
+                connectHost = transparent.ForwardHost;
+                connectPort = transparent.ForwardPort;
+            }
+
+            var connection = await server.TcpConnectionFactory.GetServerConnection(
+                server, host, port, HttpHeader.Version11, isHttps, SslExtensions.Http11ProtocolAsList,
+                false, sessionArgs, sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
+                sessionArgs.CustomUpStreamProxyUsed ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy),
+                false, false, cancellationToken, connectHost, connectPort);
+
+            sessionArgs.HttpClient.SetConnection(connection
+                ?? throw new InvalidOperationException(
+                    $"Failed to establish an HTTP/1.1 origin connection to '{host}:{port}'."));
             await sessionArgs.HttpClient.SendRequest(
                 server.Enable100ContinueBehaviour, sessionArgs.IsTransparent,
                 sessionArgs.OriginHttpVersionPolicy ?? server.OriginHttpVersionPolicy, cancellationToken);

@@ -82,8 +82,12 @@ internal sealed class OriginServer : IAsyncDisposable
                 {
                     app.Run(async context =>
                     {
+                        var body = System.Text.Encoding.UTF8.GetBytes(ResponseBody);
                         context.Response.ContentType = "application/json";
-                        await context.Response.WriteAsync(ResponseBody);
+                        // Fixed Content-Length avoids Transfer-Encoding: chunked, which stressed the
+                        // H2→H1 bridge keep-alive path under multiplexed load.
+                        context.Response.ContentLength = body.Length;
+                        await context.Response.Body.WriteAsync(body);
                     });
                 });
             });

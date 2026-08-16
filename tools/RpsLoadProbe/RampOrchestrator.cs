@@ -10,13 +10,19 @@ internal enum ProbeMode
     ReverseHttp1Tls,
     NginxReverseHttp1Tls,
     ReverseHttp2,
+    /// <summary>TWP client TLS+h2 → ForwardCleartext H2→H1 bridge → cleartext HTTP/1 origin.</summary>
+    ReverseHttp2Cleartext,
     NginxReverseHttp2,
     ReverseHttp3,
+    /// <summary>TWP QUIC/h3 terminate → ForwardCleartext → cleartext HTTP/1 origin.</summary>
+    ReverseHttp3Cleartext,
     ExplicitHttp1Multi,
     ExplicitHttp2Multi,
     Compare,
     CompareHttp2,
     CompareTls,
+    /// <summary>Fair TLS-terminate compare: H1 TLS, H2→H1 cleartext, H3→H1 cleartext vs nginx where available.</summary>
+    CompareTerminate,
     ExplicitPoolSweep
 }
 
@@ -60,7 +66,7 @@ internal static class RampOrchestrator
         var arms = ResolveArms(options.Mode, nginxExe != null);
         if ((options.Mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp1Tls
                 or ProbeMode.NginxReverseHttp2 or ProbeMode.Compare or ProbeMode.CompareHttp2
-                or ProbeMode.CompareTls)
+                or ProbeMode.CompareTls or ProbeMode.CompareTerminate)
             && nginxExe == null)
         {
             ProbeLog.Info(NginxHost.NginxMissingMessage());
@@ -95,10 +101,14 @@ internal static class RampOrchestrator
                 ? [new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null, "H1TLS")]
                 : [],
             ProbeMode.ReverseHttp2 => [new("twp-reverse-http2", ProbeMode.ReverseHttp2, null, "B")],
+            ProbeMode.ReverseHttp2Cleartext =>
+                [new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null, "H2H1")],
             ProbeMode.NginxReverseHttp2 => nginxAvailable
                 ? [new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null, "B")]
                 : [],
             ProbeMode.ReverseHttp3 => [new("twp-reverse-http3", ProbeMode.ReverseHttp3, null, "C")],
+            ProbeMode.ReverseHttp3Cleartext =>
+                [new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null, "H3H1")],
             ProbeMode.ExplicitHttp1Multi =>
                 [new("twp-explicit-http1-multi", ProbeMode.ExplicitHttp1Multi, null, "A")],
             ProbeMode.ExplicitHttp2Multi =>
@@ -141,6 +151,21 @@ internal static class RampOrchestrator
                     new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null, "H1TLS"),
                     new("twp-reverse-http2", ProbeMode.ReverseHttp2, null, "B"),
                     new("twp-reverse-http3", ProbeMode.ReverseHttp3, null, "C")
+                ],
+            ProbeMode.CompareTerminate => nginxAvailable
+                ?
+                [
+                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null, "H1TLS"),
+                    new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null, "H1TLS"),
+                    new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null, "H2H1"),
+                    new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null, "B"),
+                    new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null, "H3H1")
+                ]
+                :
+                [
+                    new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null, "H1TLS"),
+                    new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null, "H2H1"),
+                    new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null, "H3H1")
                 ],
             ProbeMode.ExplicitPoolSweep =>
             [
@@ -260,8 +285,9 @@ internal static class RampOrchestrator
     {
         ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi =>
             options.HttpsMitmP99MsSlo,
-        ProbeMode.ReverseHttp2 or ProbeMode.NginxReverseHttp2 => options.Http2P99MsSlo,
-        ProbeMode.ReverseHttp3 => options.Http3P99MsSlo,
+        ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp2Cleartext or ProbeMode.NginxReverseHttp2 =>
+            options.Http2P99MsSlo,
+        ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext => options.Http3P99MsSlo,
         _ => options.Http1P99MsSlo
     };
 

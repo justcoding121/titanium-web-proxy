@@ -59,6 +59,14 @@ public abstract class ProxyEndPoint
     public X509Certificate2? GenericCertificate { get; set; }
 
     /// <summary>
+    /// Optional override of <see cref="ProxyServer.MaxCachedConnections"/> for upstream TCP pooling
+    /// when this endpoint handles the session. <see langword="null"/> uses the server default.
+    /// Useful for reverse-proxy endpoints that want a deeper pool toward a hot origin without
+    /// raising the process-wide default for every explicit MITM host.
+    /// </summary>
+    public int? MaxCachedConnections { get; set; }
+
+    /// <summary>
     ///     Maximum number of client connections admitted on this endpoint at once, layered on top of
     ///     <see cref="ProxyServer.MaxConcurrentClientConnections" />. <see langword="null" /> (the
     ///     default) disables the per-endpoint admission gate, preserving today's unbounded behavior.

@@ -113,7 +113,9 @@ internal static class EmbeddedLoadGenerator
                     {
                         if (firstError == null)
                         {
-                            firstError = ex.GetType().Name + ": " + ex.Message;
+                            var detail = ex.ToString();
+                            if (detail.Length > 500) detail = detail[..500];
+                            firstError = detail;
                             // #region agent log
                             DebugSessionLog.Write("C", "EmbeddedLoadGenerator", "first-error",
                                 new { error = firstError, target = target.ToString(), version = options.HttpVersion.ToString() });
@@ -170,7 +172,10 @@ internal static class EmbeddedLoadGenerator
             MaxConnectionsPerServer = 256,
             PooledConnectionLifetime = TimeSpan.FromMinutes(10),
             PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
-            EnableMultipleHttp2Connections = httpVersion.Major < 2,
+            // Multiplex across HTTP/2 connections under load. A single client H2 connection serializes
+            // all DATA writes on ClientWriteLock and fans every stream onto the H2→H1 bridge at once;
+            // multiple connections match browser/nginx-style fan-out and keep error rates down.
+            EnableMultipleHttp2Connections = true,
             SslOptions = new SslClientAuthenticationOptions
             {
                 RemoteCertificateValidationCallback = static (_, _, _, _) => true

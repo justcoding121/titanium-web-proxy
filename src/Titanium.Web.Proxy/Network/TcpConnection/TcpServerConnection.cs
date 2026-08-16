@@ -21,6 +21,12 @@ internal class TcpServerConnection : IDisposable
 
     private int firstUseClaimed;
 
+    /// <summary>
+    /// Exclusive lease flag for the connection pool. 0 = free / pooled, 1 = leased to a session.
+    /// Detects use-after-release and double-lease races that corrupt keep-alive framing.
+    /// </summary>
+    private int leaseState;
+
     internal TcpServerConnection(ProxyServer proxyServer, Socket tcpSocket, HttpServerStream stream, // NOSONAR S107 -- Constructor captures the established connection state without changing internal wiring.
         string hostName, int port, bool isHttps, SslApplicationProtocol negotiatedApplicationProtocol,
         Version version, IExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint, string cacheKey)
@@ -39,7 +45,15 @@ internal class TcpServerConnection : IDisposable
         UpStreamEndPoint = upStreamEndPoint;
 
         CacheKey = cacheKey;
+        // Fresh connections start leased to the creating session.
+        leaseState = 1;
     }
+
+    /// <summary>
+    /// Optional per-endpoint pool depth captured at create time from
+    /// <see cref="Models.ProxyEndPoint.MaxCachedConnections"/>. Null = use server default.
+    /// </summary>
+    internal int? PoolSizeLimit { get; set; }
 
     public long Id { get; } = ConnectionId.Next();
 
@@ -140,7 +154,18 @@ internal class TcpServerConnection : IDisposable
     }
 
     /// <summary>
-    ///     Claims this connection for use by a session, for <see cref="ProxyServer.EnableRequestTimingCapture" />'s
+    /// Marks this connection leased by a session. Returns <see langword="false" /> if it was already leased
+    /// (double-lease / use-after-free from the pool).
+    /// </summary>
+    internal bool TryEnterLease() => Interlocked.CompareExchange(ref leaseState, 1, 0) == 0;
+
+    /// <summary>
+    /// Releases the exclusive lease before the connection is returned to the pool or disposed.
+    /// </summary>
+    internal void ExitLease() => Interlocked.Exchange(ref leaseState, 0);
+
+    /// <summary>
+    /// Claims this connection for use by a session, for <see cref="ProxyServer.EnableRequestTimingCapture" />'s
     ///     "was the upstream connection reused" bookkeeping. Returns <see langword="true" /> only the very
     ///     first time it is called for this connection's entire lifetime (i.e. the caller is establishing it
     ///     fresh); every subsequent call returns <see langword="false" /> (i.e. the caller is reusing an
