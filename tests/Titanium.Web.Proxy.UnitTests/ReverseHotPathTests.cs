@@ -45,47 +45,6 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         [TestMethod]
-        public void Request_ResetState_ClearsLineAndHeaders()
-        {
-            var request = new Request
-            {
-                Method = "GET",
-                HttpVersion = HttpHeader.Version11,
-                RequestUriString = "/",
-                Host = "127.0.0.1"
-            };
-            request.Locked = true;
-            request.CancelRequest = true;
-
-            request.ResetState();
-
-            Assert.AreEqual(string.Empty, request.Method);
-            Assert.AreEqual(string.Empty, request.RequestUriString);
-            Assert.IsFalse(request.Locked);
-            Assert.IsFalse(request.CancelRequest);
-            Assert.IsNull(request.Host);
-            Assert.AreEqual(0, request.Headers.HeaderCount());
-        }
-
-        [TestMethod]
-        public void Response_ResetState_ClearsStatus()
-        {
-            var response = new Response
-            {
-                StatusCode = 200,
-                StatusDescription = "OK",
-                HttpVersion = HttpHeader.Version11
-            };
-            response.Headers.AddHeader(KnownHeaders.ContentType, "application/json");
-
-            response.ResetState();
-
-            Assert.AreEqual(0, response.StatusCode);
-            Assert.AreEqual(string.Empty, response.StatusDescription);
-            Assert.AreEqual(0, response.Headers.HeaderCount());
-        }
-
-        [TestMethod]
         public void HeaderBuilder_WriteRequestLine_FromByteString_DoesNotRequireStringUrl()
         {
             var builder = HeaderBuilder.Rent();

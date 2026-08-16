@@ -49,15 +49,6 @@ public class Response : RequestResponseBase
     /// </summary>
     internal Func<Stream, CancellationToken, Task>? StreamBodyWriter { get; set; }
 
-    internal override void ResetState()
-    {
-        base.ResetState();
-        StatusCode = 0;
-        StatusDescription = string.Empty;
-        RequestMethod = string.Empty;
-        StreamBodyWriter = null;
-    }
-
     /// <summary>
     ///     Has response body?
     /// </summary>

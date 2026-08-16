@@ -46,7 +46,6 @@ public partial class ProxyServer
         var prefetchTask = prefetchConnectionTask;
         TcpServerConnection? connection = null;
         var closeServerConnection = false;
-        SessionEventArgs? args = null;
 
         try
         {
@@ -55,10 +54,6 @@ public partial class ProxyServer
             // One registry for every keep-alive request on this client socket. Reset() clears a
             // prior firing so we do not allocate a new registry per GET.
             var headerDeadlineRegistry = new DeadlineRegistry();
-
-            // One SessionEventArgs graph per client socket — ResetForNextRequest after AfterResponse
-            // instead of new+Dispose every keep-alive GET (the dominant reverse-proxy allocation).
-            var sessionProtocol = upstreamHttpProtocol ?? connectArgs?.UpstreamHttpProtocol;
 
             // Loop through each subsequent request on this particular client connection
             // (assuming HTTP connection is kept alive by client)
@@ -73,7 +68,7 @@ public partial class ProxyServer
                 // arrives at all - the common, entirely expected "client closed its idle keep-alive
                 // connection" case below, which must stay silent and args-free exactly as before.
                 RequestStatusInfo requestLine;
-                var headersBoundToSession = false;
+                SessionEventArgs? args = null;
                 headerDeadlineRegistry.Reset();
                 using (var headerDeadline = headerDeadlineRegistry.Start(cancellationToken,
                            ResolveClientHeaderTimeout(), ProxyTimeoutKind.ClientHeader))
@@ -92,43 +87,36 @@ public partial class ProxyServer
                         requestLine = requestLineRead.Status;
                         if (requestLine.IsEmpty()) return;
 
-                        if (args == null)
+                        args = new SessionEventArgs(this, endPoint, clientStream, connectRequest,
+                            cancellationTokenSource)
                         {
-                            args = new SessionEventArgs(this, endPoint, clientStream, connectRequest,
-                                cancellationTokenSource)
-                            {
-                                UserData = connectArgs?.UserData,
-                                // Transparent BeforeSslAuthenticate / explicit CONNECT policy for H1→H3 etc.
-                                UpstreamHttpProtocol = sessionProtocol
-                            };
-                        }
-                        else
-                        {
-                            args.ResetForNextRequest(connectArgs?.UserData, sessionProtocol);
-                        }
+                            UserData = connectArgs?.UserData,
+                            // Transparent BeforeSslAuthenticate / explicit CONNECT policy for H1→H3 etc.
+                            UpstreamHttpProtocol = upstreamHttpProtocol ?? connectArgs?.UpstreamHttpProtocol
+                        };
 
                         // Read the request headers in to unique and non-unique header collections
                         if (!await HeaderParser.TryReadHeadersAsync(clientStream, args.HttpClient.Request.Headers,
                                 headerDeadline.Token))
                         {
+                            args.Dispose();
+                            args = null;
                             ThrowIfHeaderDeadlineTimedOut(headerDeadline);
                             return;
                         }
-
-                        headersBoundToSession = true;
                     }
                     catch (OperationCanceledException ex)
                     {
                         // No response was ever attempted (there may be no request line at all yet, or no
                         // Host/Method to safely answer with) and no OnAfterResponse subscriber should see a
-                        // session that never had a request - do not pair this with AfterResponse.
+                        // session that never had a request - dispose directly rather than falling through
+                        // to the try/finally below that pairs a real attempt with AfterResponse.
                         // Terminal Explicit/Transparent handlers already log session cancel at Debug.
+                        args?.Dispose();
                         headerDeadline.ThrowIfTimedOut(ex);
                         throw; // unreachable: ThrowIfTimedOut always throws; satisfies definite-assignment analysis.
                     }
                 }
-
-                if (!headersBoundToSession || args == null) return;
 
                 var request = args.HttpClient.Request;
                 if (isHttps) request.IsHttps = true;
@@ -472,13 +460,12 @@ public partial class ProxyServer
                 finally
                 {
                     await OnAfterResponse(args);
+                    args.Dispose();
                 }
             }
         }
         finally
         {
-            args?.Dispose();
-
             if (connection != null) await TcpConnectionFactory.Release(connection, closeServerConnection);
 
             await TcpConnectionFactory.Release(prefetchTask, closeServerConnection);

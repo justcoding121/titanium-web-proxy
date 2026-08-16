@@ -343,35 +343,6 @@ public abstract class RequestResponseBase
         }
     }
 
-    /// <summary>
-    ///     Clears per-message state so this instance can serve the next keep-alive exchange
-    ///     on the same client connection (avoids allocating Request/Response/HeaderCollection).
-    /// </summary>
-    internal virtual void ResetState()
-    {
-        bodyString = null;
-        trailingHeaders?.Clear();
-        Http2BeforeHandlerTask = null;
-        Http2BodyData?.Dispose();
-        Http2BodyData = null;
-        Http2IgnoreBodyFrames = false;
-        Priority = null;
-        ReadHttp2BeforeHandlerTaskCompletionSource = null;
-        ReadHttp2BodyTaskCompletionSource = null;
-        BodyInternal = null;
-        OriginalHasBody = false;
-        OriginalContentLength = 0;
-        OriginalIsChunked = false;
-        OriginalContentEncoding = null;
-        KeepBody = false;
-        HttpVersion = HttpHeader.VersionUnknown;
-        Headers.Clear();
-        IsBodyRead = false;
-        Locked = false;
-        IsBodyReceived = false;
-        IsBodySent = false;
-    }
-
     public override string ToString()
     {
         return HeaderText;

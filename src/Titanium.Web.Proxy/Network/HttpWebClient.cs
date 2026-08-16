@@ -352,29 +352,4 @@ public class HttpWebClient
         UserData = null;
     }
 
-    /// <summary>
-    ///     Reset for the next keep-alive request on the same client socket. Drops the upstream
-    ///     binding (the handler re-applies the sticky connection) and clears request/response
-    ///     objects in place.
-    /// </summary>
-    internal void ResetForReuse()
-    {
-        connection = null;
-        upstreamConnectionId = null;
-        upstreamRemoteEndPoint = null;
-        upstreamConnectionTiming = null;
-        CloseServerConnection = false;
-
-        Request.ResetState();
-        if (Response.GetType() != typeof(Response))
-            Response = new Response();
-        else
-            Response.ResetState();
-
-        Data.Clear();
-        UserData = null;
-        UpStreamEndPoint = null;
-        UpStreamEndPointIPv4 = null;
-        UpStreamEndPointIPv6 = null;
-    }
 }

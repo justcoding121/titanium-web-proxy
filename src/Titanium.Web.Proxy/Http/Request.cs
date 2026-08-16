@@ -148,19 +148,6 @@ public class Request : RequestResponseBase
     /// </summary>
     internal bool CancelRequest { get; set; }
 
-    internal override void ResetState()
-    {
-        base.ResetState();
-        Method = string.Empty;
-        IsHttps = false;
-        requestUriString8 = ByteString.Empty;
-        Authority = ByteString.Empty;
-        CancelRequest = false;
-        ExtendedConnectProtocol = null;
-        ExpectationSucceeded = false;
-        ExpectationFailed = false;
-    }
-
     /// <summary>
     ///     RFC 8441: the value of the <c>:protocol</c> pseudo-header for HTTP/2 extended CONNECT
     ///     requests (e.g. <c>"websocket"</c>). <see langword="null"/> for all other requests.
