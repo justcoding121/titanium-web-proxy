@@ -43,8 +43,8 @@ Fair TLS-terminate numbers in [Linux saturation](#fair-tls-terminate-compare--li
 | TLS-terminate H2→H1 cleartext peak (Windows) | **~7.4k RPS** @ c=64, **0% err** (TWP) · nginx **~14.9k** @ c=32 |
 | TLS-terminate H3→H1 cleartext peak (Windows) | **~2.4k RPS** @ c=32, **0% err** (TWP) |
 | Cross-version bridges under load (Windows) | All H1↔H2↔H3 directions **0% err** — see [Bridge matrix](#bridge-matrix-compare-bridges--windows) |
-| TLS-terminate reverse HTTP/1 peak (Linux GHA) | **~17.7k RPS** (TWP) vs **~28.6k RPS** (nginx) — see [Linux vs Windows](#linux-vs-windows-h1-tls) |
-| TLS-terminate H2→H1 cleartext peak (Linux GHA) | **~10.2k RPS** (TWP) · nginx H2 **~18.8k** peak @ c=32 |
+| TLS-terminate reverse HTTP/1 peak (Linux GHA) | **~37.0k RPS** (TWP) vs **~60.9k RPS** (nginx) — ~61% of nginx; see [Linux vs Windows](#linux-vs-windows-h1-tls) |
+| TLS-terminate H2→H1 cleartext peak (Linux GHA) | **~24.2k RPS** (TWP) · nginx H2 **~42.5k** peak @ c=32 |
 | Explicit HTTPS MITM peak | **~13.6k RPS** |
 | Basic example footprint (Release, after load) | **~74 MB** working set · **~24–29 MB** private bytes |
 
@@ -99,20 +99,20 @@ Local Release `compare-bridges` (warmup 1s / measure 3s; concurrency 8, 32). All
 
 ### Linux vs Windows (H1 TLS)
 
-On the Windows laptop, TWP H1 TLS leads nginx/Windows. On Linux GHA, **nginx leads** (~28.6k vs ~17.7k). Absolute TWP RPS is similar; the flip is mostly **nginx/Windows being slow** vs native Linux nginx, plus the GHA VM’s 4 vCPU. Harness mitigations: process-split for cleartext-origin terminate arms, probe ThreadPool / pool floors.
+On the Windows laptop, TWP H1 TLS **leads** nginx/Windows (~21.8k vs ~14.4k). On Linux GHA, **nginx leads** (~60.9k vs ~37.0k). Absolute GHA RPS swings ~2× between runners, but the **TWP÷nginx ratio stays ~0.60–0.63**. The ranking flip is mostly **nginx/Windows being slow** vs native Linux nginx (epoll), not a Linux-only TWP correctness bug. Harness mitigations already applied: process-split for cleartext-origin terminate arms, probe `ThreadPoolWorkerThread` / `MaxCachedConnections=256`, Server GC on the probe.
 
 ### Fair TLS-terminate compare — Linux (GitHub-hosted `ubuntu-latest`)
 
-Source CSV: `rps-ramp-20260816-051530.csv` (Actions artifact `rps-csv` from run [31928546864](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31928546864); warmup 2s / measure 8s; concurrency 8, 16, 32, 64). Host: [Linux (GitHub-hosted)](#linux-github-hosted-ubuntu-latest). HTTP/3 arms were skipped (no QuicListener on the runner image).
+Source CSV: `rps-ramp-20260816-081858.csv` (Actions artifact `rps-csv` from run [31936116039](https://github.com/justcoding121/titanium-web-proxy/actions/runs/31936116039); warmup 2s / measure 8s; concurrency 8, 16, 32, 64). Host: [Linux (GitHub-hosted)](#linux-github-hosted-ubuntu-latest). HTTP/3 arms were skipped (no QuicListener / msquic on this image).
 
 | Arm | Topology | Sustainable | Peak | Notes |
 |---|---|---:|---:|---|
-| TWP H1 TLS | Client TLS → cleartext H1 | **17,686** @ 64 | **17,686** | 0% err |
-| nginx H1 TLS | ssl → cleartext H1 | **28,565** @ 64 | **28,565** | 0% err |
-| TWP H2→H1 | Client h2 TLS → H2→H1 bridge → cleartext H1 | **10,181** @ 64 | **10,181** | **0% err** |
-| nginx H2 | Client h2 TLS → cleartext H1 | **13,357** @ 64 | **18,774** @ 32 | 0% err |
+| TWP H1 TLS | Client TLS → cleartext H1 | **36,974** @ 64 | **36,974** | 0% err |
+| nginx H1 TLS | ssl → cleartext H1 | **60,888** @ 64 | **60,888** | 0% err |
+| TWP H2→H1 | Client h2 TLS → H2→H1 bridge → cleartext H1 | **22,450** @ 64 | **24,216** @ 16 | **0% err** |
+| nginx H2 | Client h2 TLS → cleartext H1 | **30,707** @ 64 | **42,500** @ 32 | ~0.01% err |
 
-On the GHA VM (4 vCPU), nginx leads both H1 TLS and H2 peak RPS; TWP H2→H1 remains zero-error through c=64.
+On the GHA VM (4 vCPU), nginx still leads peak RPS; TWP stays zero-error. Closing the remaining ~40% would be SslStream / managed-pipeline work, not a load-test harness bug.
 
 ### Protocol / topology matrix
 
@@ -124,8 +124,12 @@ On the GHA VM (4 vCPU), nginx leads both H1 TLS and H2 peak RPS; TWP H2→H1 rem
 | H2 TLS | H2 TLS (MITM) | native h2↔h2 | n/a (nginx terminates) | `compare-tls` / `reverse-http2` |
 | H2 TLS | H2 cleartext (h2c) | **not supported** (no h2c) | uncommon | — |
 | H3 QUIC | H3 QUIC | MITM | **no QUIC on nginx/Windows** | `reverse-http3` |
-| H3 QUIC | H2 TLS | H3→H2 (`Http2OriginConnection`) | — | `reverse-http3-to-http2` |
+| H1 TLS | H2 TLS | H1→H2 bridge | — | `reverse-http11-to-http2` |
+| H1 TLS | H3 QUIC | H1→H3 bridge | — | `reverse-http1-to-http3` |
+| H2 TLS | H3 QUIC | H2→H3 bridge | — | `reverse-http2-to-http3` |
+| H3 QUIC | H2 TLS | H3→H2 (`Http2OriginConnection` pool) | — | `reverse-http3-to-http2` |
 | H3 QUIC | H1 cleartext | `ForwardCleartext` + Http11 | — | `reverse-http3-cleartext` |
+| All of above (matrix) | | | | `compare-bridges` |
 
 ## Raising limits on large hosts
 

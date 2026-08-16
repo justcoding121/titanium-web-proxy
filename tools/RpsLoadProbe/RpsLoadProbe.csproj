@@ -7,6 +7,8 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <IsPackable>false</IsPackable>
+    <!-- Server GC: console apps default to workstation GC; terminate arms need multi-core heap. -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
     <SignAssembly>True</SignAssembly>
     <AssemblyOriginatorKeyFile>..\..\src\Titanium.Web.Proxy\StrongNameKey.snk</AssemblyOriginatorKeyFile>
     <!--
