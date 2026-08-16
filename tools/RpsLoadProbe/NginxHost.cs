@@ -141,6 +141,7 @@ internal sealed class NginxHost : IDisposable
             access_log off;
             sendfile on;
             keepalive_timeout 65;
+            client_max_body_size 10m;
             upstream origin {
                 server 127.0.0.1:{{originHttpPort}};
                 keepalive 32;
@@ -178,6 +179,7 @@ internal sealed class NginxHost : IDisposable
                     access_log off;
                     sendfile on;
                     keepalive_timeout 65;
+                    client_max_body_size 10m;
                     upstream origin {
                         server 127.0.0.1:{{originHttpPort}};
                         keepalive 32;
@@ -225,6 +227,7 @@ internal sealed class NginxHost : IDisposable
                     access_log off;
                     sendfile on;
                     keepalive_timeout 65;
+                    client_max_body_size 10m;
                     upstream origin {
                         server 127.0.0.1:{{originHttpPort}};
                         keepalive 32;

@@ -59,6 +59,14 @@ internal enum ProbeMode
     CompareMitm,
     /// <summary>TWP vs bare C# reverse vs nginx on the three Linux nginx-winning reverse rows.</summary>
     CompareCeiling,
+    /// <summary>Heavier reverse GET bodies (64 KiB / 256 KiB) vs nginx where possible.</summary>
+    CompareBodies,
+    /// <summary>POST 64 KiB request+response reverse vs nginx where possible.</summary>
+    ComparePost,
+    /// <summary>64 KiB GET under userspace delay/loss (H2/H3 conditions) vs nginx where possible.</summary>
+    CompareLossy,
+    /// <summary>H1 TLS terminate cost: keep-alive tiny, new-connection tiny, keep-alive 256 KiB.</summary>
+    CompareTlsCost,
     ExplicitPoolSweep
 }
 
@@ -78,6 +86,8 @@ internal sealed class RampOptions
     public int? MaxCachedConnections { get; init; }
     /// <summary>How many full arm sequences to run; peaks are median-aggregated (L1 runner noise).</summary>
     public int Repeats { get; init; } = 1;
+    /// <summary>Default workload when an arm does not override (preserves tiny-GET matrix).</summary>
+    public WorkloadOptions Workload { get; init; } = WorkloadOptions.TinyGet;
 }
 
 internal static class RampOrchestrator
@@ -123,7 +133,9 @@ internal static class RampOrchestrator
 
         if ((options.Mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp1Tls
                 or ProbeMode.NginxReverseHttp2 or ProbeMode.Compare or ProbeMode.CompareHttp2
-                or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame)
+                or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame
+                or ProbeMode.CompareBodies or ProbeMode.ComparePost or ProbeMode.CompareLossy
+                or ProbeMode.CompareTlsCost)
             && nginxExe == null)
         {
             ProbeLog.Info(NginxHost.NginxMissingMessage());
@@ -190,7 +202,27 @@ internal static class RampOrchestrator
             : sorted[mid];
     }
 
-    private sealed record ArmSpec(string Name, ProbeMode Mode, int? MaxCachedConnections);
+    private sealed record ArmSpec(string Name, ProbeMode Mode, int? MaxCachedConnections,
+        WorkloadOptions? Workload = null);
+
+    private static IReadOnlyList<ArmSpec> HeavierReverseArms(bool nginxAvailable, WorkloadOptions workload,
+        string nameSuffix, bool includeHttp3 = true)
+    {
+        var arms = new List<ArmSpec>
+        {
+            new($"twp-reverse-http1-tls-{nameSuffix}", ProbeMode.ReverseHttp1Tls, null, workload),
+            new($"twp-reverse-http2-cleartext-{nameSuffix}", ProbeMode.ReverseHttp2Cleartext, null, workload)
+        };
+        if (includeHttp3)
+            arms.Add(new($"twp-reverse-http3-cleartext-{nameSuffix}", ProbeMode.ReverseHttp3Cleartext, null, workload));
+        if (nginxAvailable)
+        {
+            arms.Insert(1, new($"nginx-reverse-http1-tls-{nameSuffix}", ProbeMode.NginxReverseHttp1Tls, null, workload));
+            arms.Insert(3, new($"nginx-reverse-http2-{nameSuffix}", ProbeMode.NginxReverseHttp2, null, workload));
+        }
+
+        return arms;
+    }
 
     private static IReadOnlyList<ArmSpec> ResolveArms(ProbeMode mode, bool nginxAvailable)
     {
@@ -366,6 +398,18 @@ internal static class RampOrchestrator
                     new("bare-reverse-http1-tls", ProbeMode.BareReverseHttp1Tls, null),
                     new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null)
                 ],
+            ProbeMode.CompareBodies =>
+            [
+                ..HeavierReverseArms(nginxAvailable, WorkloadOptions.ForBodyGet(64 * 1024), "body64k"),
+                ..HeavierReverseArms(nginxAvailable, WorkloadOptions.ForBodyGet(256 * 1024), "body256k")
+            ],
+            ProbeMode.ComparePost =>
+                HeavierReverseArms(nginxAvailable, WorkloadOptions.ForPost(64 * 1024, 64 * 1024), "post64k"),
+            ProbeMode.CompareLossy =>
+                // Userspace UDP shim + MsQuic under multi-connection load hangs; H1/H2 TCP tell the HOL story.
+                HeavierReverseArms(nginxAvailable, WorkloadOptions.ForLossy(64 * 1024, 5, 1.0), "lossy",
+                    includeHttp3: false),
+            ProbeMode.CompareTlsCost => BuildTlsCostArms(nginxAvailable),
             ProbeMode.ExplicitPoolSweep =>
             [
                 new("twp-explicit-http1-multi-c4", ProbeMode.ExplicitHttp1Multi, 4),
@@ -376,107 +420,156 @@ internal static class RampOrchestrator
         };
     }
 
+    private static IReadOnlyList<ArmSpec> BuildTlsCostArms(bool nginxAvailable)
+    {
+        var tinyKa = WorkloadOptions.ForTlsKeepAlive(WorkloadOptions.TinyJsonBytes);
+        var tinyNc = WorkloadOptions.ForTlsNewConnection();
+        var largeKa = WorkloadOptions.ForTlsKeepAlive(256 * 1024);
+        var arms = new List<ArmSpec>
+        {
+            new("twp-reverse-http1-tls-ka-tiny", ProbeMode.ReverseHttp1Tls, null, tinyKa),
+            new("twp-reverse-http1-tls-nc-tiny", ProbeMode.ReverseHttp1Tls, null, tinyNc),
+            new("twp-reverse-http1-tls-ka-256k", ProbeMode.ReverseHttp1Tls, null, largeKa)
+        };
+        if (nginxAvailable)
+        {
+            arms.Insert(1, new("nginx-reverse-http1-tls-ka-tiny", ProbeMode.NginxReverseHttp1Tls, null, tinyKa));
+            arms.Insert(3, new("nginx-reverse-http1-tls-nc-tiny", ProbeMode.NginxReverseHttp1Tls, null, tinyNc));
+            arms.Add(new("nginx-reverse-http1-tls-ka-256k", ProbeMode.NginxReverseHttp1Tls, null, largeKa));
+        }
+
+        return arms;
+    }
+
     private static async Task<double> RunArmAsync(ArmSpec arm, RampOptions options, StreamWriter csv,
         string? nginxVersionHint, CancellationToken cancellationToken)
     {
+        var workload = arm.Workload ?? options.Workload;
         var maxCached = arm.MaxCachedConnections ?? options.MaxCachedConnections;
         await using var stack = await ChildProcessStack.StartAsync(arm.Mode, options.NginxPath, maxCached,
-            cancellationToken);
+            cancellationToken, workload);
         var nginxVersion = stack.NginxVersion ?? nginxVersionHint;
 
-        var p99Slo = ResolveP99Slo(arm.Mode, options);
-        LoadResult? lastGood = null;
-        LoadResult? peak = null;
-        var lastGoodConcurrency = 0;
+        var p99Slo = workload.ResolveP99SloMs(options.Http1P99MsSlo, options.Http2P99MsSlo,
+            options.Http3P99MsSlo, options.HttpsMitmP99MsSlo, arm.Mode);
 
-        var useQuic = string.Equals(stack.LoadGenerator, "quic-http3", StringComparison.OrdinalIgnoreCase)
-                      && stack.QuicPort is > 0;
-        var loadOptions = new LoadRequestOptions
+        LossyTcpLink? tcpLink = null;
+        LossyUdpLink? udpLink = null;
+        Uri targetUri = stack.TargetUri;
+        IReadOnlyList<Uri>? targetUris = stack.TargetUris.Count > 1 ? stack.TargetUris : null;
+        int? quicPort = stack.QuicPort;
+
+        try
         {
-            Target = stack.TargetUri,
-            Targets = stack.TargetUris.Count > 1 ? stack.TargetUris : null,
-            ExplicitProxyUrl = stack.ExplicitProxyUrl,
-            HttpVersion = stack.RequestHttpVersion,
-            VersionPolicy = stack.VersionPolicy
-        };
-
-        ProbeLog.Info(
-            $"  target={stack.TargetUrl} targets={stack.TargetUris.Count} proxy={(stack.ExplicitProxyUrl ?? "(direct-to-listen)")} http={stack.RequestHttpVersion} generator={(useQuic ? "quic-http3" : "dotnet-httpclient")} maxCached={(maxCached?.ToString() ?? "default")}");
-
-        foreach (var concurrency in options.ConcurrencySteps)
-        {
-            ProbeLog.Info($"  warmup c={concurrency} for {options.Warmup.TotalSeconds:F0}s...");
-            if (useQuic)
+            if (workload.IsLossy)
             {
-                var ep = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, stack.QuicPort!.Value);
-                var authority = stack.OriginQuicPort is { } op
-                    ? $"localhost:{op}"
-                    : "localhost";
-                await QuicHttp3LoadGenerator.WarmupAsync(ep, "localhost", authority,
-                    concurrency, options.Warmup, cancellationToken);
-            }
-            else
-            {
-                await EmbeddedLoadGenerator.WarmupAsync(loadOptions, concurrency, options.Warmup, cancellationToken);
+                var useQuicLink = string.Equals(stack.LoadGenerator, "quic-http3", StringComparison.OrdinalIgnoreCase)
+                                  && stack.QuicPort is > 0;
+                if (useQuicLink)
+                {
+                    udpLink = LossyUdpLink.Start(stack.QuicPort!.Value, workload.DelayMs, workload.LossPercent);
+                    quicPort = udpLink.Port;
+                    ProbeLog.Info(
+                        $"  lossy-udp port={udpLink.Port} -> quic={stack.QuicPort} delay={workload.DelayMs}ms loss={workload.LossPercent}%");
+                }
+                else
+                {
+                    tcpLink = LossyTcpLink.Start(stack.TargetUri, workload.DelayMs, workload.LossPercent);
+                    var scheme = stack.TargetUri.Scheme;
+                    targetUri = new Uri(tcpLink.ListenUrlForScheme(scheme));
+                    targetUris = null;
+                    ProbeLog.Info(
+                        $"  lossy-tcp port={tcpLink.Port} -> {stack.TargetUrl} delay={workload.DelayMs}ms loss={workload.LossPercent}%");
+                }
             }
 
-            ProbeLog.Info($"  measure c={concurrency} for {options.StepDuration.TotalSeconds:F0}s...");
-            LoadResult result;
-            if (useQuic)
-            {
-                var ep = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, stack.QuicPort!.Value);
-                var authority = stack.OriginQuicPort is { } op
-                    ? $"localhost:{op}"
-                    : "localhost";
-                result = await QuicHttp3LoadGenerator.RunAsync(ep, "localhost", authority,
-                    concurrency, options.StepDuration, cancellationToken);
-            }
-            else
-            {
-                result = await EmbeddedLoadGenerator.RunAsync(loadOptions, concurrency, options.StepDuration,
-                    cancellationToken);
-            }
+            LoadResult? lastGood = null;
+            LoadResult? peak = null;
+            var lastGoodConcurrency = 0;
 
-            var meetsSlo = result.ErrorRatePercent < options.MaxErrorRatePercent && result.P99Ms <= p99Slo;
-            CsvWriter.WriteRow(csv, arm.Name, result, meetsSlo, nginxVersion, maxCached);
-            await csv.FlushAsync(cancellationToken);
+            var useQuic = string.Equals(stack.LoadGenerator, "quic-http3", StringComparison.OrdinalIgnoreCase)
+                          && quicPort is > 0;
+            var loadOptions = new LoadRequestOptions
+            {
+                Target = targetUri,
+                Targets = targetUris,
+                ExplicitProxyUrl = stack.ExplicitProxyUrl,
+                HttpVersion = stack.RequestHttpVersion,
+                VersionPolicy = stack.VersionPolicy,
+                Workload = workload
+            };
+
+            ProbeLog.Info(
+                $"  target={targetUri} workload={workload.Suffix} proxy={(stack.ExplicitProxyUrl ?? "(direct-to-listen)")} http={stack.RequestHttpVersion} generator={(useQuic ? "quic-http3" : "dotnet-httpclient")} maxCached={(maxCached?.ToString() ?? "default")}");
+
+            foreach (var concurrency in options.ConcurrencySteps)
+            {
+                ProbeLog.Info($"  warmup c={concurrency} for {options.Warmup.TotalSeconds:F0}s...");
+                if (useQuic)
+                {
+                    var ep = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, quicPort!.Value);
+                    var authority = stack.OriginQuicPort is { } op
+                        ? $"localhost:{op}"
+                        : "localhost";
+                    await QuicHttp3LoadGenerator.WarmupAsync(ep, "localhost", authority,
+                        concurrency, options.Warmup, cancellationToken, workload);
+                }
+                else
+                {
+                    await EmbeddedLoadGenerator.WarmupAsync(loadOptions, concurrency, options.Warmup, cancellationToken);
+                }
+
+                ProbeLog.Info($"  measure c={concurrency} for {options.StepDuration.TotalSeconds:F0}s...");
+                LoadResult result;
+                if (useQuic)
+                {
+                    var ep = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, quicPort!.Value);
+                    var authority = stack.OriginQuicPort is { } op
+                        ? $"localhost:{op}"
+                        : "localhost";
+                    result = await QuicHttp3LoadGenerator.RunAsync(ep, "localhost", authority,
+                        concurrency, options.StepDuration, cancellationToken, workload);
+                }
+                else
+                {
+                    result = await EmbeddedLoadGenerator.RunAsync(loadOptions, concurrency, options.StepDuration,
+                        cancellationToken);
+                }
+
+                var meetsSlo = result.ErrorRatePercent < options.MaxErrorRatePercent && result.P99Ms <= p99Slo;
+                CsvWriter.WriteRow(csv, arm.Name, result, meetsSlo, nginxVersion, maxCached, workload);
+                await csv.FlushAsync(cancellationToken);
+
+                ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
+                    $"    rps={result.Rps:F0} err%={result.ErrorRatePercent:F3} p50={result.P50Ms:F1}ms p99={result.P99Ms:F1}ms max={result.MaxMs:F1}ms ver={result.NegotiatedVersionHint} slo={(meetsSlo ? "PASS" : "FAIL")}"));
+
+                if (peak == null || result.Rps > peak.Rps)
+                    peak = result;
+
+                if (meetsSlo)
+                {
+                    lastGood = result;
+                    lastGoodConcurrency = concurrency;
+                }
+                else if (lastGood != null)
+                {
+                    ProbeLog.Info($"    (breaking-point candidate at c={lastGoodConcurrency})");
+                }
+            }
 
             ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
-                $"    rps={result.Rps:F0} err%={result.ErrorRatePercent:F3} p50={result.P50Ms:F1}ms p99={result.P99Ms:F1}ms max={result.MaxMs:F1}ms ver={result.NegotiatedVersionHint} slo={(meetsSlo ? "PASS" : "FAIL")}"));
+                $"  summary arm={arm.Name} sustainable_rps={(lastGood?.Rps ?? 0):F0} @ c={lastGoodConcurrency} peak_rps={(peak?.Rps ?? 0):F0} @ c={peak?.Concurrency ?? 0} p99_slo_ms={p99Slo:F0}"));
 
-            if (peak == null || result.Rps > peak.Rps)
-                peak = result;
-
-            if (meetsSlo)
-            {
-                lastGood = result;
-                lastGoodConcurrency = concurrency;
-            }
-            else if (lastGood != null)
-            {
-                ProbeLog.Info($"    (breaking-point candidate at c={lastGoodConcurrency})");
-            }
+            return peak?.Rps ?? 0;
         }
-
-        ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
-            $"  summary arm={arm.Name} sustainable_rps={(lastGood?.Rps ?? 0):F0} @ c={lastGoodConcurrency} peak_rps={(peak?.Rps ?? 0):F0} @ c={peak?.Concurrency ?? 0} p99_slo_ms={p99Slo:F0}"));
-
-        return peak?.Rps ?? 0;
+        finally
+        {
+            if (tcpLink != null)
+                await tcpLink.DisposeAsync();
+            if (udpLink != null)
+                await udpLink.DisposeAsync();
+        }
     }
-
-    private static double ResolveP99Slo(ProbeMode mode, RampOptions options) => mode switch
-    {
-        ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi =>
-            options.HttpsMitmP99MsSlo,
-        ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c
-            or ProbeMode.ReverseH2c or ProbeMode.ReverseH2cToH2c or ProbeMode.ReverseH2cToH1
-            or ProbeMode.NginxReverseHttp2 or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.ReverseH2cToH3
-            or ProbeMode.MitmHttp2ToHttp1 =>
-            options.Http2P99MsSlo,
-        ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext or ProbeMode.ReverseHttp3ToHttp2
-            or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.MitmHttp3ToHttp1 => options.Http3P99MsSlo,
-        _ => options.Http1P99MsSlo
-    };
 
     private static string ProbeNginxVersion(string exe)
     {

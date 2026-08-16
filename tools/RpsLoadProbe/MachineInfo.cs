@@ -104,14 +104,15 @@ internal static class CsvWriter
     public static void WriteHeader(StreamWriter writer)
     {
         writer.WriteLine(
-            "timestamp_utc,arm,generator,concurrency,duration_s,ok,errors,rps,error_rate_pct,p50_ms,p99_ms,max_ms,meets_slo,nginx_version,http_versions,max_cached_connections");
+            "timestamp_utc,arm,generator,concurrency,duration_s,ok,errors,rps,error_rate_pct,p50_ms,p99_ms,max_ms,meets_slo,nginx_version,http_versions,max_cached_connections,method,response_bytes,request_bytes,delay_ms,loss_percent,keepalive");
     }
 
     public static void WriteRow(StreamWriter writer, string arm, LoadResult result, bool meetsSlo,
-        string? nginxVersion, int? maxCachedConnections = null)
+        string? nginxVersion, int? maxCachedConnections = null, WorkloadOptions? workload = null)
     {
+        workload ??= WorkloadOptions.TinyGet;
         writer.WriteLine(string.Create(CultureInfo.InvariantCulture,
-            $"{DateTime.UtcNow:O},{arm},{result.Generator},{result.Concurrency},{result.DurationSeconds:F3},{result.Ok},{result.Errors},{result.Rps:F1},{result.ErrorRatePercent:F4},{result.P50Ms:F2},{result.P99Ms:F2},{result.MaxMs:F2},{(meetsSlo ? 1 : 0)},{Escape(nginxVersion)},{Escape(result.NegotiatedVersionHint)},{(maxCachedConnections?.ToString(CultureInfo.InvariantCulture) ?? "")}"));
+            $"{DateTime.UtcNow:O},{arm},{result.Generator},{result.Concurrency},{result.DurationSeconds:F3},{result.Ok},{result.Errors},{result.Rps:F1},{result.ErrorRatePercent:F4},{result.P50Ms:F2},{result.P99Ms:F2},{result.MaxMs:F2},{(meetsSlo ? 1 : 0)},{Escape(nginxVersion)},{Escape(result.NegotiatedVersionHint)},{(maxCachedConnections?.ToString(CultureInfo.InvariantCulture) ?? "")},{workload.Method},{workload.ResponseBytes},{workload.RequestBytes},{workload.DelayMs},{workload.LossPercent:F2},{(workload.KeepAlive ? 1 : 0)}"));
     }
 
     private static string Escape(string? value)

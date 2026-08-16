@@ -24,9 +24,12 @@ internal sealed class QuicHttp3OriginHost : IAsyncDisposable
     private readonly X509Certificate2 certificate;
     private readonly QuicListener listener;
     private readonly CancellationTokenSource cts = new();
+    private readonly byte[] responseBody;
 
-    public QuicHttp3OriginHost()
+    public QuicHttp3OriginHost(int responseBytes = 0)
     {
+        responseBody = OriginServer.BuildResponseBody(
+            responseBytes > 0 ? responseBytes : WorkloadOptions.TinyJsonBytes);
         certificate = LoopbackCertificateAuthority.ServerCertificate;
         var options = new QuicListenerOptions
         {
@@ -127,15 +130,14 @@ internal sealed class QuicHttp3OriginHost : IAsyncDisposable
                         break;
                 }
 
-                var body = Encoding.UTF8.GetBytes(OriginServer.ResponseBody);
                 var responseHeaders = QpackEncoder.Encode(
                 [
                     (":status", "200"),
-                    ("content-type", "application/json"),
-                    ("content-length", body.Length.ToString())
+                    ("content-type", "application/octet-stream"),
+                    ("content-length", responseBody.Length.ToString())
                 ]);
                 await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, responseHeaders, cts.Token);
-                await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, cts.Token);
+                await Http3Frame.WriteAsync(stream, Http3FrameType.Data, responseBody, cts.Token);
                 stream.CompleteWrites();
             }
             catch (OperationCanceledException) { }
@@ -157,19 +159,29 @@ internal sealed class QuicHttp3OriginHost : IAsyncDisposable
 internal static class QuicHttp3LoadGenerator
 {
     public static async Task WarmupAsync(IPEndPoint proxyEndPoint, string sniHost, string authority,
-        int concurrency, TimeSpan duration, CancellationToken cancellationToken)
+        int concurrency, TimeSpan duration, CancellationToken cancellationToken,
+        WorkloadOptions? workload = null)
     {
         await RunAsync(proxyEndPoint, sniHost, authority, concurrency, duration, collectLatency: false,
-            cancellationToken);
+            cancellationToken, workload);
     }
 
     public static Task<LoadResult> RunAsync(IPEndPoint proxyEndPoint, string sniHost, string authority,
-        int concurrency, TimeSpan duration, CancellationToken cancellationToken = default) =>
-        RunAsync(proxyEndPoint, sniHost, authority, concurrency, duration, collectLatency: true, cancellationToken);
+        int concurrency, TimeSpan duration, CancellationToken cancellationToken = default,
+        WorkloadOptions? workload = null) =>
+        RunAsync(proxyEndPoint, sniHost, authority, concurrency, duration, collectLatency: true, cancellationToken,
+            workload);
 
     private static async Task<LoadResult> RunAsync(IPEndPoint proxyEndPoint, string sniHost, string authority,
-        int concurrency, TimeSpan duration, bool collectLatency, CancellationToken cancellationToken)
+        int concurrency, TimeSpan duration, bool collectLatency, CancellationToken cancellationToken,
+        WorkloadOptions? workload = null)
     {
+        workload ??= WorkloadOptions.TinyGet;
+        var requestBody = workload.RequestBytes > 0 ? new byte[workload.RequestBytes] : null;
+        if (requestBody != null)
+            Array.Fill(requestBody, (byte)'p');
+        var method = workload.Method.ToUpperInvariant();
+        var keepAlive = workload.KeepAlive;
         var ok = 0L;
         var errors = 0L;
         var latencies = collectLatency ? new ConcurrentBag<double>() : null;
@@ -177,7 +189,8 @@ internal static class QuicHttp3LoadGenerator
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(duration);
 
-        var connectionCount = Math.Clamp(concurrency / 8, 1, 8);
+        // New-connection mode: one QUIC connection per request. Keep-alive: multiplex across a few.
+        var connectionCount = keepAlive ? Math.Clamp(concurrency / 8, 1, 8) : concurrency;
         var connections = new QuicConnection?[connectionCount];
         var connectionLocks = new object[connectionCount];
         for (var i = 0; i < connectionCount; i++)
@@ -185,11 +198,14 @@ internal static class QuicHttp3LoadGenerator
 
         try
         {
-            for (var c = 0; c < connectionCount; c++)
+            if (keepAlive)
             {
-                connections[c] = await ConnectAsync(proxyEndPoint, sniHost, cts.Token);
-                await OpenControlAsync(connections[c]!, cts.Token);
-                DrainInbound(connections[c]!, cts.Token);
+                for (var c = 0; c < connectionCount; c++)
+                {
+                    connections[c] = await ConnectAsync(proxyEndPoint, sniHost, cts.Token);
+                    await OpenControlAsync(connections[c]!, cts.Token);
+                    DrainInbound(connections[c]!, cts.Token);
+                }
             }
 
             var sw = Stopwatch.StartNew();
@@ -202,9 +218,13 @@ internal static class QuicHttp3LoadGenerator
                     var slot = workerId % connectionCount;
                     while (!cts.IsCancellationRequested)
                     {
-                        QuicConnection? connection;
-                        lock (connectionLocks[slot])
-                            connection = connections[slot];
+                        QuicConnection? connection = null;
+                        var owned = false;
+                        if (keepAlive)
+                        {
+                            lock (connectionLocks[slot])
+                                connection = connections[slot];
+                        }
 
                         if (connection == null)
                         {
@@ -213,8 +233,15 @@ internal static class QuicHttp3LoadGenerator
                                 connection = await ConnectAsync(proxyEndPoint, sniHost, cts.Token);
                                 await OpenControlAsync(connection, cts.Token);
                                 DrainInbound(connection, cts.Token);
-                                lock (connectionLocks[slot])
-                                    connections[slot] = connection;
+                                if (keepAlive)
+                                {
+                                    lock (connectionLocks[slot])
+                                        connections[slot] = connection;
+                                }
+                                else
+                                {
+                                    owned = true;
+                                }
                             }
                             catch (OperationCanceledException) when (cts.IsCancellationRequested)
                             {
@@ -236,7 +263,8 @@ internal static class QuicHttp3LoadGenerator
                         var requestSw = collectLatency ? Stopwatch.StartNew() : null;
                         try
                         {
-                            var status = await SendGetAsync(connection, authority, "/", cts.Token);
+                            var status = await SendRequestAsync(connection, authority, "/", method, requestBody,
+                                cts.Token);
                             if (status is >= 200 and < 300)
                                 Interlocked.Increment(ref ok);
                             else
@@ -275,18 +303,35 @@ internal static class QuicHttp3LoadGenerator
                                 latencies!.Add(requestSw.Elapsed.TotalMilliseconds);
                             }
 
-                            QuicConnection? dead;
-                            lock (connectionLocks[slot])
+                            if (keepAlive)
                             {
-                                dead = connections[slot];
-                                connections[slot] = null;
-                            }
+                                QuicConnection? dead;
+                                lock (connectionLocks[slot])
+                                {
+                                    dead = connections[slot];
+                                    connections[slot] = null;
+                                }
 
-                            if (dead != null)
+                                if (dead != null)
+                                {
+                                    try
+                                    {
+                                        await dead.DisposeAsync();
+                                    }
+                                    catch
+                                    {
+                                        // ignore
+                                    }
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            if (owned && connection != null)
                             {
                                 try
                                 {
-                                    await dead.DisposeAsync();
+                                    await connection.DisposeAsync();
                                 }
                                 catch
                                 {
@@ -355,7 +400,11 @@ internal static class QuicHttp3LoadGenerator
                 RemoteCertificateValidationCallback = static (_, _, _, _) => true
             }
         };
-        return await QuicConnection.ConnectAsync(options, cancellationToken);
+        // Lossy UDP / stalled networks can hang MsQuic connect; bound it so the ramp progresses.
+        using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        connectCts.CancelAfter(TimeSpan.FromSeconds(5));
+        return await QuicConnection.ConnectAsync(options, connectCts.Token).AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(6), cancellationToken);
     }
 
     private static async Task OpenControlAsync(QuicConnection connection, CancellationToken cancellationToken)
@@ -394,20 +443,26 @@ internal static class QuicHttp3LoadGenerator
         });
     }
 
-    private static async Task<int> SendGetAsync(QuicConnection connection, string authority, string path,
-        CancellationToken cancellationToken)
+    private static async Task<int> SendRequestAsync(QuicConnection connection, string authority, string path,
+        string method, byte[]? requestBody, CancellationToken cancellationToken)
     {
         await using var stream = await connection.OpenOutboundStreamAsync(
             QuicStreamType.Bidirectional, cancellationToken);
 
-        var headers = QpackEncoder.Encode(
-        [
-            (":method", "GET"),
+        var headerList = new List<(string, string)>
+        {
+            (":method", method),
             (":scheme", "https"),
             (":authority", authority),
             (":path", path)
-        ]);
+        };
+        if (requestBody != null)
+            headerList.Add(("content-length", requestBody.Length.ToString()));
+
+        var headers = QpackEncoder.Encode(headerList);
         await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, headers, cancellationToken);
+        if (requestBody != null)
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Data, requestBody, cancellationToken);
         stream.CompleteWrites();
 
         var headersFrame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 64 * 1024, cancellationToken);
@@ -424,7 +479,8 @@ internal static class QuicHttp3LoadGenerator
 
         while (true)
         {
-            var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0, cancellationToken);
+            // Drain DATA (large bodies) — 1 MiB cap per frame is enough for our probe sizes.
+            var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 1024 * 1024, cancellationToken);
             if (frame is null) break;
             if (frame.Type == Http3FrameType.Headers)
                 break;

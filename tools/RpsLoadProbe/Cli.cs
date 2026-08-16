@@ -25,6 +25,12 @@ internal static class Cli
         var originHttpsPort = 0;
         int? maxCachedConnections = null;
         var repeats = 1;
+        var method = "GET";
+        var responseBytes = WorkloadOptions.TinyJsonBytes;
+        var requestBytes = 0;
+        var keepAlive = true;
+        var delayMs = 0;
+        var lossPercent = 0.0;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -86,12 +92,45 @@ internal static class Cli
                 case "--repeats":
                     repeats = int.Parse(RequireValue(args, ref i, "--repeats"), CultureInfo.InvariantCulture);
                     break;
+                case "--method":
+                    method = RequireValue(args, ref i, "--method").ToUpperInvariant();
+                    if (method is not ("GET" or "POST"))
+                        return Fail("--method must be GET or POST");
+                    break;
+                case "--response-bytes":
+                    responseBytes = int.Parse(RequireValue(args, ref i, "--response-bytes"),
+                        CultureInfo.InvariantCulture);
+                    break;
+                case "--request-bytes":
+                    requestBytes = int.Parse(RequireValue(args, ref i, "--request-bytes"),
+                        CultureInfo.InvariantCulture);
+                    break;
+                case "--no-keepalive":
+                    keepAlive = false;
+                    break;
+                case "--delay-ms":
+                    delayMs = int.Parse(RequireValue(args, ref i, "--delay-ms"), CultureInfo.InvariantCulture);
+                    break;
+                case "--loss-percent":
+                    lossPercent = double.Parse(RequireValue(args, ref i, "--loss-percent"),
+                        CultureInfo.InvariantCulture);
+                    break;
                 default:
                     ProbeLog.Error($"Unknown argument: {args[i]}");
                     PrintHelp();
                     return 2;
             }
         }
+
+        var workload = new WorkloadOptions
+        {
+            Method = method,
+            ResponseBytes = Math.Max(1, responseBytes),
+            RequestBytes = Math.Max(0, requestBytes),
+            KeepAlive = keepAlive,
+            DelayMs = Math.Max(0, delayMs),
+            LossPercent = Math.Clamp(lossPercent, 0, 100)
+        };
 
         using var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) =>
@@ -104,12 +143,13 @@ internal static class Cli
         {
             return command switch
             {
-                "serve-origin" => ServeOriginHost.RunAsync(enableHttps, enableH2c, cts.Token).GetAwaiter().GetResult(),
+                "serve-origin" => ServeOriginHost.RunAsync(enableHttps, enableH2c, cts.Token, workload.ResponseBytes)
+                    .GetAwaiter().GetResult(),
                 "serve-proxy" => RunServeProxy(modeText, originHttpPort, originHttpsPort, nginxPath,
                     maxCachedConnections, cts.Token),
-                "serve" => RunServe(modeText, nginxPath, maxCachedConnections, cts.Token),
+                "serve" => RunServe(modeText, nginxPath, maxCachedConnections, cts.Token, workload),
                 "ramp" => RunRamp(modeText, nginxPath, resultsDir, concurrency, warmupSec, durationSec,
-                    maxCachedConnections, repeats, cts.Token),
+                    maxCachedConnections, repeats, workload, cts.Token),
                 _ => Fail("Required: --serve | --serve-origin | --serve-proxy | --ramp")
             };
         }
@@ -124,27 +164,31 @@ internal static class Cli
         }
     }
 
-    private static int RunServe(string? modeText, string? nginxPath, int? maxCachedConnections, CancellationToken ct)
+    private static int RunServe(string? modeText, string? nginxPath, int? maxCachedConnections, CancellationToken ct,
+        WorkloadOptions workload)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode))
             return Fail("Required: --serve --mode <see --help>");
-        return ServeHost.RunAsync(mode, nginxPath, maxCachedConnections, ct).GetAwaiter().GetResult();
+        return ServeHost.RunAsync(mode, nginxPath, maxCachedConnections, ct, workload).GetAwaiter().GetResult();
     }
 
     private static int RunServeProxy(string? modeText, int originHttpPort, int originHttpsPort, string? nginxPath,
         int? maxCachedConnections, CancellationToken ct)
     {
-        if (modeText == null || !TryParseMode(modeText, out var mode) ||
-            mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
-                or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
-                or ProbeMode.CompareMitm or ProbeMode.CompareCeiling or ProbeMode.ExplicitPoolSweep)
+        if (modeText == null || !TryParseMode(modeText, out var mode) || IsMultiArmMode(mode))
             return Fail("Required: --serve-proxy --mode <single arm>");
         return ServeProxyHost.RunAsync(mode, originHttpPort, originHttpsPort, nginxPath, maxCachedConnections, ct)
             .GetAwaiter().GetResult();
     }
 
+    private static bool IsMultiArmMode(ProbeMode mode) => mode is ProbeMode.Compare or ProbeMode.CompareHttp2
+        or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
+        or ProbeMode.CompareMitm or ProbeMode.CompareCeiling or ProbeMode.CompareBodies or ProbeMode.ComparePost
+        or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost or ProbeMode.ExplicitPoolSweep;
+
     private static int RunRamp(string? modeText, string? nginxPath, string? resultsDir, List<int> concurrency,
-        int warmupSec, int durationSec, int? maxCachedConnections, int repeats, CancellationToken ct)
+        int warmupSec, int durationSec, int? maxCachedConnections, int repeats, WorkloadOptions workload,
+        CancellationToken ct)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode))
             return Fail("Required: --ramp --mode <see --help>");
@@ -160,7 +204,8 @@ internal static class Cli
             Repeats = Math.Max(1, repeats),
             ConcurrencySteps = concurrency.Count > 0
                 ? concurrency.ToArray()
-                : [8, 16, 24, 32, 48, 64, 128, 256, 512]
+                : [8, 16, 24, 32, 48, 64, 128, 256, 512],
+            Workload = workload
         };
         return RampOrchestrator.RunAsync(options, ct).GetAwaiter().GetResult();
     }
@@ -276,6 +321,18 @@ internal static class Cli
             case "compare-ceiling":
                 mode = ProbeMode.CompareCeiling;
                 return true;
+            case "compare-bodies":
+                mode = ProbeMode.CompareBodies;
+                return true;
+            case "compare-post":
+                mode = ProbeMode.ComparePost;
+                return true;
+            case "compare-lossy":
+                mode = ProbeMode.CompareLossy;
+                return true;
+            case "compare-tls-cost":
+                mode = ProbeMode.CompareTlsCost;
+                return true;
             case "mitm-http2-to-http1":
                 mode = ProbeMode.MitmHttp2ToHttp1;
                 return true;
@@ -298,8 +355,8 @@ internal static class Cli
             RpsLoadProbe — saturation RPS harness for Titanium.Web.Proxy (and nginx control arm)
 
             Usage:
-              RpsLoadProbe --serve --mode <mode> [--nginx-path PATH] [--max-cached-connections N]
-              RpsLoadProbe --serve-origin [--https | --h2c]
+              RpsLoadProbe --serve --mode <mode> [--nginx-path PATH] [--max-cached-connections N] [--response-bytes N]
+              RpsLoadProbe --serve-origin [--https | --h2c] [--response-bytes N]
               RpsLoadProbe --serve-proxy --mode <http1 mode> --origin-http-port N
               RpsLoadProbe --ramp  --mode <mode> [options]
 
@@ -337,6 +394,10 @@ internal static class Cli
               compare-bridges         Cross-version bridges only (H1↔H2↔H3; no nginx)
               compare-mitm            MITM matrix: explicit H1, H2/H3 direct, dual-crypto bridges
               compare-ceiling         TWP vs bare C# vs nginx on H1 / H1 TLS / H2→H1 reverse
+              compare-bodies          Heavier reverse GET (64 KiB + 256 KiB) vs nginx
+              compare-post            POST 64 KiB request+response reverse vs nginx
+              compare-lossy           64 KiB GET under userspace delay/loss vs nginx
+              compare-tls-cost        H1 TLS terminate: keep-alive tiny / new-conn tiny / keep-alive 256 KiB
               explicit-pool-sweep     Fan-out with MaxCachedConnections 4 / 32 / 128
 
             Options:
@@ -347,6 +408,12 @@ internal static class Cli
               --duration-sec N
               --repeats N             Full arm sequence N times; print median peaks (default 1)
               --max-cached-connections N   Override ProxyServer.MaxCachedConnections for TWP arms
+              --method GET|POST       Default GET (compare-post sets POST per arm)
+              --response-bytes N      Origin response size (default ~64 B tiny JSON)
+              --request-bytes N       POST body size (default 0)
+              --no-keepalive          New TCP/TLS connection per request (handshake cost)
+              --delay-ms N            Userspace one-way delay via lossy shim (0 = off)
+              --loss-percent P        TCP connection stall % or UDP datagram drop % (0 = off)
             """);
     }
 }

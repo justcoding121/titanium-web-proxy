@@ -9,7 +9,8 @@
 [CmdletBinding()]
 param(
     [ValidateSet(
-        'compare', 'compare-http2', 'compare-tls', 'compare-terminate', 'compare-same', 'compare-bridges', 'compare-mitm', 'compare-ceiling', 'explicit-pool-sweep',
+        'compare', 'compare-http2', 'compare-tls', 'compare-terminate', 'compare-same', 'compare-bridges', 'compare-mitm', 'compare-ceiling',
+        'compare-bodies', 'compare-post', 'compare-lossy', 'compare-tls-cost', 'explicit-pool-sweep',
         'reverse-http1', 'bare-reverse-http1', 'nginx-reverse-http1', 'reverse-http1-tls', 'bare-reverse-http1-tls', 'nginx-reverse-http1-tls',
         'https-mitm', 'mitm-http2-to-http1', 'mitm-http3-to-http1',
         'reverse-http2', 'reverse-http2-cleartext', 'reverse-http2-to-h2c',
@@ -26,6 +27,13 @@ param(
     [int]    $DurationSec = 20,
     [int]    $Repeats = 1,
     [string] $ResultsDir,
+    [ValidateSet('GET', 'POST')]
+    [string] $Method = 'GET',
+    [int]    $ResponseBytes = 0,
+    [int]    $RequestBytes = 0,
+    [switch] $NoKeepAlive,
+    [int]    $DelayMs = 0,
+    [double] $LossPercent = 0,
     [switch] $SkipBuild,
     [switch] $BombardierCheck
 )
@@ -76,8 +84,20 @@ $probeArgs = $probePrefix + @(
     '--warmup-sec', $WarmupSec,
     '--duration-sec', $DurationSec,
     '--repeats', $Repeats,
-    '--results-dir', $ResultsDir
+    '--results-dir', $ResultsDir,
+    '--method', $Method,
+    '--delay-ms', $DelayMs,
+    '--loss-percent', $LossPercent
 )
+if ($ResponseBytes -gt 0) {
+    $probeArgs += @('--response-bytes', $ResponseBytes)
+}
+if ($RequestBytes -gt 0) {
+    $probeArgs += @('--request-bytes', $RequestBytes)
+}
+if ($NoKeepAlive) {
+    $probeArgs += '--no-keepalive'
+}
 if ($NginxPath) {
     $probeArgs += @('--nginx-path', $NginxPath)
 }

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
+using System.Net.Http;
 using System.Net.Security;
 
 namespace Titanium.Web.Proxy.RpsLoadProbe;
@@ -25,6 +26,7 @@ internal sealed class LoadRequestOptions
     public string? ExplicitProxyUrl { get; init; }
     public Version HttpVersion { get; init; } = System.Net.HttpVersion.Version11;
     public HttpVersionPolicy VersionPolicy { get; init; } = HttpVersionPolicy.RequestVersionOrLower;
+    public WorkloadOptions Workload { get; init; } = WorkloadOptions.TinyGet;
 }
 
 /// <summary>
@@ -55,7 +57,12 @@ internal static class EmbeddedLoadGenerator
         TimeSpan duration, bool collectLatency, CancellationToken cancellationToken)
     {
         var targets = ResolveTargets(options);
-        using var handler = CreateHandler(options.ExplicitProxyUrl, options.HttpVersion);
+        var workload = options.Workload;
+        var requestBody = workload.RequestBytes > 0 ? new byte[workload.RequestBytes] : null;
+        if (requestBody != null)
+            Array.Fill(requestBody, (byte)'p');
+
+        using var handler = CreateHandler(options.ExplicitProxyUrl, options.HttpVersion, workload.KeepAlive);
         using var client = new HttpClient(handler)
         {
             Timeout = TimeSpan.FromSeconds(30),
@@ -85,11 +92,16 @@ internal static class EmbeddedLoadGenerator
                     var requestSw = collectLatency ? Stopwatch.StartNew() : null;
                     try
                     {
-                        using var request = new HttpRequestMessage(HttpMethod.Get, target)
+                        using var request = new HttpRequestMessage(workload.HttpMethod, target)
                         {
                             Version = options.HttpVersion,
                             VersionPolicy = options.VersionPolicy
                         };
+                        if (!workload.KeepAlive)
+                            request.Headers.ConnectionClose = true;
+                        if (requestBody != null)
+                            request.Content = new ByteArrayContent(requestBody);
+
                         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead,
                             cts.Token);
                         await response.Content.CopyToAsync(Stream.Null, cts.Token);
@@ -161,13 +173,13 @@ internal static class EmbeddedLoadGenerator
         throw new ArgumentException("LoadRequestOptions requires Target or Targets.");
     }
 
-    private static SocketsHttpHandler CreateHandler(string? explicitProxyUrl, Version httpVersion)
+    private static SocketsHttpHandler CreateHandler(string? explicitProxyUrl, Version httpVersion, bool keepAlive)
     {
         var handler = new SocketsHttpHandler
         {
-            MaxConnectionsPerServer = 256,
-            PooledConnectionLifetime = TimeSpan.FromMinutes(10),
-            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+            MaxConnectionsPerServer = keepAlive ? 256 : 1024,
+            PooledConnectionLifetime = keepAlive ? TimeSpan.FromMinutes(10) : TimeSpan.Zero,
+            PooledConnectionIdleTimeout = keepAlive ? TimeSpan.FromMinutes(2) : TimeSpan.Zero,
             // Multiplex across HTTP/2 connections under load. A single client H2 connection serializes
             // all DATA writes on ClientWriteLock and fans every stream onto the H2→H1 bridge at once;
             // multiple connections match browser/nginx-style fan-out and keep error rates down.

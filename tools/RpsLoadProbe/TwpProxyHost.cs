@@ -475,7 +475,10 @@ internal sealed class TwpProxyHost : IDisposable
     {
         var proxy = new ProxyServer(false, false, false);
         proxy.CertificateManager.SaveFakeCertificates = false;
-        proxy.EnableRequestTimingCapture = false;
+        // Opt-in for compare-tls-cost handshake arms (child process via env).
+        proxy.EnableRequestTimingCapture =
+            string.Equals(Environment.GetEnvironmentVariable("TWP_RPS_CAPTURE_TLS"), "1",
+                StringComparison.Ordinal);
         proxy.EnableConnectionPool = true;
         proxy.EnableHttp2 = enableHttp2;
         proxy.EnableHttp3 = enableHttp3;

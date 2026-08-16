@@ -21,6 +21,10 @@ on:
           - compare-bridges
           - compare-mitm
           - compare-ceiling
+          - compare-bodies
+          - compare-post
+          - compare-lossy
+          - compare-tls-cost
           - compare
           - compare-tls
           - reverse-http1

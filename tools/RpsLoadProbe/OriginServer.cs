@@ -1,5 +1,6 @@
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -11,7 +12,7 @@ using Titanium.Web.Proxy.RpsLoadProbe.Support;
 namespace Titanium.Web.Proxy.RpsLoadProbe;
 
 /// <summary>
-/// Tiny Kestrel origin that serves a fixed body. Shared by every proxy arm under test.
+/// Kestrel origin that serves a fixed-size body and drains request bodies. Shared by every proxy arm.
 /// </summary>
 internal sealed class OriginServer : IAsyncDisposable
 {
@@ -37,6 +38,19 @@ internal sealed class OriginServer : IAsyncDisposable
         this.serverCertificate = serverCertificate;
     }
 
+    public static byte[] BuildResponseBody(int responseBytes)
+    {
+        var tiny = Encoding.UTF8.GetBytes(ResponseBody);
+        if (responseBytes <= tiny.Length)
+            return tiny;
+
+        var body = new byte[responseBytes];
+        tiny.CopyTo(body, 0);
+        for (var i = tiny.Length; i < body.Length; i++)
+            body[i] = (byte)'x';
+        return body;
+    }
+
     public static async Task<OriginServer> StartAsync(OriginListenOptions options,
         CancellationToken cancellationToken = default)
     {
@@ -50,6 +64,7 @@ internal sealed class OriginServer : IAsyncDisposable
             ? LoopbackCertificateAuthority.ServerCertificate
             : null;
 
+        var responseBody = BuildResponseBody(options.ResponseBytes);
         var protocols = options.HttpsProtocols;
         var builder = Host.CreateDefaultBuilder()
             .ConfigureLogging(logging => logging.ClearProviders())
@@ -57,6 +72,8 @@ internal sealed class OriginServer : IAsyncDisposable
             {
                 webBuilder.ConfigureKestrel(kestrel =>
                 {
+                    // Large POST/GET bodies under reverse proxy load.
+                    kestrel.Limits.MaxRequestBodySize = 10 * 1024 * 1024;
                     if (options.EnableHttp)
                     {
                         kestrel.Listen(IPAddress.Loopback, httpPort, listenOptions =>
@@ -87,12 +104,15 @@ internal sealed class OriginServer : IAsyncDisposable
                 {
                     app.Run(async context =>
                     {
-                        var body = System.Text.Encoding.UTF8.GetBytes(ResponseBody);
-                        context.Response.ContentType = "application/json";
+                        // Drain request body so POST/PUT complete cleanly through proxies.
+                        if (context.Request.ContentLength is > 0 || context.Request.Headers.ContainsKey("Transfer-Encoding"))
+                            await context.Request.Body.CopyToAsync(Stream.Null);
+
+                        context.Response.ContentType = "application/octet-stream";
                         // Fixed Content-Length avoids Transfer-Encoding: chunked, which stressed the
                         // H2→H1 bridge keep-alive path under multiplexed load.
-                        context.Response.ContentLength = body.Length;
-                        await context.Response.Body.WriteAsync(body);
+                        context.Response.ContentLength = responseBody.Length;
+                        await context.Response.Body.WriteAsync(responseBody);
                     });
                 });
             });
@@ -102,13 +122,23 @@ internal sealed class OriginServer : IAsyncDisposable
         return new OriginServer(host, httpPort, httpsPort, extraHttpsPorts, cert);
     }
 
-    /// <summary>Backward-compatible helper used by HTTP/1 arms. </summary>
+    /// <summary> Backward-compatible helper used by HTTP/1 arms. </summary>
     public static Task<OriginServer> StartAsync(bool enableHttps, CancellationToken cancellationToken = default) =>
         StartAsync(new OriginListenOptions
         {
             EnableHttp = true,
             EnableHttps = enableHttps,
             HttpsProtocols = HttpProtocols.Http1AndHttp2
+        }, cancellationToken);
+
+    public static Task<OriginServer> StartAsync(bool enableHttps, int responseBytes,
+        CancellationToken cancellationToken = default) =>
+        StartAsync(new OriginListenOptions
+        {
+            EnableHttp = true,
+            EnableHttps = enableHttps,
+            HttpsProtocols = HttpProtocols.Http1AndHttp2,
+            ResponseBytes = responseBytes
         }, cancellationToken);
 
     public async ValueTask DisposeAsync()
@@ -138,4 +168,5 @@ internal sealed class OriginListenOptions
     /// <summary>Protocols on the cleartext HTTP listen (default HTTP/1; use <see cref="HttpProtocols.Http2"/> for prior-knowledge h2c).</summary>
     public HttpProtocols HttpProtocols { get; init; } = HttpProtocols.Http1;
     public HttpProtocols HttpsProtocols { get; init; } = HttpProtocols.Http1AndHttp2;
+    public int ResponseBytes { get; init; } = WorkloadOptions.TinyJsonBytes;
 }

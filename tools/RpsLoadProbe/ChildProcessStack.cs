@@ -47,8 +47,9 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     }
 
     public static async Task<ChildProcessStack> StartAsync(ProbeMode mode, string? nginxPath,
-        int? maxCachedConnections, CancellationToken cancellationToken)
+        int? maxCachedConnections, CancellationToken cancellationToken, WorkloadOptions? workload = null)
     {
+        workload ??= WorkloadOptions.TinyGet;
         var exe = Environment.ProcessPath
                   ?? throw new InvalidOperationException("Cannot locate current process path for child spawn.");
 
@@ -56,11 +57,12 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         // (HTTPS / QUIC origin). Cleartext-origin terminate arms run split so TWP is not
         // contending with Kestrel for CPU/GC the way a separate nginx process does not.
         if (RequiresCombinedServe(mode))
-            return await StartCombinedServeAsync(exe, mode, nginxPath, maxCachedConnections, cancellationToken);
+            return await StartCombinedServeAsync(exe, mode, nginxPath, maxCachedConnections, workload,
+                cancellationToken);
 
         var originArgs = mode is ProbeMode.ReverseHttp2ToH2c or ProbeMode.ReverseH2cToH2c
-            ? "--serve-origin --h2c"
-            : "--serve-origin";
+            ? $"--serve-origin --h2c --response-bytes {workload.ResponseBytes}"
+            : $"--serve-origin --response-bytes {workload.ResponseBytes}";
         var origin = StartChild(exe, originArgs);
         var originLines = await ReadUntilReadyAsync(origin, cancellationToken);
         var originHttp = Require(originLines, "origin_http");
@@ -74,7 +76,8 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         if (maxCachedConnections is { } m)
             proxyArgs.Append(CultureInfo.InvariantCulture, $" --max-cached-connections {m}");
 
-        var proxy = StartChild(exe, proxyArgs.ToString());
+        var proxy = StartChild(exe, proxyArgs.ToString(),
+            workload.CaptureTlsTiming ? new Dictionary<string, string> { ["TWP_RPS_CAPTURE_TLS"] = "1" } : null);
         Dictionary<string, string> proxyLines;
         try
         {
@@ -117,16 +120,18 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         or ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi;
 
     private static async Task<ChildProcessStack> StartCombinedServeAsync(string exe, ProbeMode mode,
-        string? nginxPath, int? maxCachedConnections, CancellationToken cancellationToken)
+        string? nginxPath, int? maxCachedConnections, WorkloadOptions workload, CancellationToken cancellationToken)
     {
         var modeName = ServeProxyHost.ModeName(mode);
-        var args = new StringBuilder().Append(CultureInfo.InvariantCulture, $"--serve --mode {modeName}");
+        var args = new StringBuilder().Append(CultureInfo.InvariantCulture,
+            $"--serve --mode {modeName} --response-bytes {workload.ResponseBytes}");
         if (!string.IsNullOrWhiteSpace(nginxPath))
             args.Append(CultureInfo.InvariantCulture, $" --nginx-path \"{nginxPath}\"");
         if (maxCachedConnections is { } m)
             args.Append(CultureInfo.InvariantCulture, $" --max-cached-connections {m}");
 
-        var serve = StartChild(exe, args.ToString());
+        var serve = StartChild(exe, args.ToString(),
+            workload.CaptureTlsTiming ? new Dictionary<string, string> { ["TWP_RPS_CAPTURE_TLS"] = "1" } : null);
         Dictionary<string, string> lines;
         try
         {
@@ -188,7 +193,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             originProcess.Dispose();
     }
 
-    private static Process StartChild(string exe, string args)
+    private static Process StartChild(string exe, string args, IReadOnlyDictionary<string, string>? extraEnv = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -202,6 +207,11 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         foreach (var part in SplitArgs(args))
             psi.ArgumentList.Add(part);
         psi.Environment["DOTNET_ENVIRONMENT"] = "Production";
+        if (extraEnv != null)
+        {
+            foreach (var kv in extraEnv)
+                psi.Environment[kv.Key] = kv.Value;
+        }
 
         var process = Process.Start(psi)
                       ?? throw new InvalidOperationException($"Failed to start child: {exe} {args}");

@@ -29,6 +29,28 @@ Client TLS → cleartext origin: TWP/nginx H1 TLS, TWP H2→H1, TWP h2c→H1, ng
 
 Cleartext-origin terminate arms run **origin and proxy in separate processes** so TWP is not sharing a ThreadPool/GC with Kestrel the way a separate nginx process does not.
 
+## Heavier reverse workloads (bodies / POST / lossy / TLS cost)
+
+Tiny keep-alive GET is nginx’s best case and TWP’s worst. These modes exercise heavier reverse paths:
+
+```powershell
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-bodies
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-post
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-lossy
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-tls-cost
+```
+
+| Mode | Workload | Arms |
+|---|---|---|
+| `compare-bodies` | GET, keep-alive, **64 KiB** and **256 KiB** responses | TWP+nginx H1 TLS, TWP+nginx H2→H1, TWP H3→H1 |
+| `compare-post` | POST **64 KiB** request + **64 KiB** response | same |
+| `compare-lossy` | GET **64 KiB**, userspace **5 ms** delay + **1%** stall/drop | same |
+| `compare-tls-cost` | H1 TLS only: keep-alive tiny, **new-connection** tiny, keep-alive **256 KiB** | TWP+nginx |
+
+Lossy link is a userspace shim (not kernel netem): TCP gets per-buffer delay + occasional whole-connection stalls (HOL for multiplexed H2); UDP gets delay + datagram drops (QUIC). PUT with the same body is the same proxy work as POST; DELETE with no body matches GET.
+
+CLI knobs (also usable on single arms): `--method`, `--response-bytes`, `--request-bytes`, `--no-keepalive`, `--delay-ms`, `--loss-percent`.
+
 ## MITM matrix (dual-crypto)
 
 ```powershell
