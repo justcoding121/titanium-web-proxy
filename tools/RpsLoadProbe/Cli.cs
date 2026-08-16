@@ -203,6 +203,18 @@ internal static class Cli
             case "reverse-http3-cleartext":
                 mode = ProbeMode.ReverseHttp3Cleartext;
                 return true;
+            case "reverse-http11-to-http2":
+                mode = ProbeMode.ReverseHttp11ToHttp2;
+                return true;
+            case "reverse-http1-to-http3":
+                mode = ProbeMode.ReverseHttp1ToHttp3;
+                return true;
+            case "reverse-http2-to-http3":
+                mode = ProbeMode.ReverseHttp2ToHttp3;
+                return true;
+            case "reverse-http3-to-http2":
+                mode = ProbeMode.ReverseHttp3ToHttp2;
+                return true;
             case "explicit-http1-multi":
                 mode = ProbeMode.ExplicitHttp1Multi;
                 return true;
@@ -220,6 +232,9 @@ internal static class Cli
                 return true;
             case "compare-terminate":
                 mode = ProbeMode.CompareTerminate;
+                return true;
+            case "compare-bridges":
+                mode = ProbeMode.CompareBridges;
                 return true;
             case "explicit-pool-sweep":
                 mode = ProbeMode.ExplicitPoolSweep;
@@ -253,12 +268,17 @@ internal static class Cli
               nginx-reverse-http2     nginx ssl+http2 -> cleartext HTTP/1 origin
               reverse-http3           TWP TransparentQuic (h3) -> Quic HTTPS/h3 origin (no nginx/Windows)
               reverse-http3-cleartext TWP QUIC/h3 terminate -> cleartext HTTP/1 origin
+              reverse-http11-to-http2 TWP H1 TLS -> H1→H2 bridge -> Kestrel HTTPS/h2
+              reverse-http1-to-http3  TWP H1 TLS -> H1→H3 bridge -> Quic/h3 origin
+              reverse-http2-to-http3  TWP H2 TLS -> H2→H3 bridge -> Quic/h3 origin
+              reverse-http3-to-http2  TWP H3 -> H3→H2 bridge -> Kestrel HTTPS/h2
               explicit-http1-multi    Explicit MITM across 16 HTTPS origins (fan-out)
               explicit-http2-multi    Same fan-out forcing HTTP/2
               compare                 Sequential HTTP/1 compare (+ MITM)
               compare-http2           Sequential: TWP h2 MITM, nginx h2, TWP h3
               compare-tls             Sequential: TWP h1-tls, nginx h1-tls, TWP h2 MITM, nginx h2, TWP h3
               compare-terminate       Fair terminate: H1 TLS, H2→H1, H3→H1 (+ nginx H1/H2)
+              compare-bridges         All cross-version bridges + native H2/H3 (no nginx)
               explicit-pool-sweep     Fan-out with MaxCachedConnections 4 / 32 / 128
 
             Options:

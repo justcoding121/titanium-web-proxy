@@ -120,8 +120,25 @@ public partial class ProxyServer
             return;
 
         // Synchronous (cache-only) H3 route resolution — DNS I/O must never block the H2 frame reader.
-        var reqHost = sessionArgs.HttpClient.Request.RequestUri?.Host ?? remoteHostName;
-        var reqPort = sessionArgs.HttpClient.Request.RequestUri?.Port ?? remotePort;
+        // Prefer CONNECT-time remote identity (ForwardHttpsHost/Port) over the client request URI:
+        // reverse proxies rewrite Host to the listen address, which must not become the QUIC target.
+        string reqHost;
+        int reqPort;
+        if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint
+            {
+                ForwardHost: { Length: > 0 } forwardHost,
+                ForwardPort: { } forwardPort
+            })
+        {
+            reqHost = forwardHost;
+            reqPort = forwardPort;
+        }
+        else
+        {
+            reqHost = sessionArgs.HttpClient.Request.RequestUri?.Host ?? remoteHostName;
+            reqPort = sessionArgs.HttpClient.Request.RequestUri?.Port ?? remotePort;
+        }
+
         var h3Route = ResolveHttp3Origin(reqHost, reqPort, sessionArgs.UpstreamHttpProtocol,
             allowDnsProbe: false);
 

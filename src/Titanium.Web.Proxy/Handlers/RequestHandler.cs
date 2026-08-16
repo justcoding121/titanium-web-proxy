@@ -38,7 +38,8 @@ public partial class ProxyServer
     /// <param name="isHttps">Is HTTPS</param>
     private async Task HandleHttpSessionRequest(ProxyEndPoint endPoint, HttpClientStream clientStream, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         CancellationTokenSource cancellationTokenSource, TunnelConnectSessionEventArgs? connectArgs = null,
-        Task<TcpServerConnection?>? prefetchConnectionTask = null, bool isHttps = false)
+        Task<TcpServerConnection?>? prefetchConnectionTask = null, bool isHttps = false,
+        UpstreamHttpProtocol? upstreamHttpProtocol = null)
     {
         var connectRequest = connectArgs?.HttpClient.ConnectRequest;
 
@@ -85,7 +86,9 @@ public partial class ProxyServer
                         args = new SessionEventArgs(this, endPoint, clientStream, connectRequest,
                             cancellationTokenSource)
                         {
-                            UserData = connectArgs?.UserData
+                            UserData = connectArgs?.UserData,
+                            // Transparent BeforeSslAuthenticate / explicit CONNECT policy for H1→H3 etc.
+                            UpstreamHttpProtocol = upstreamHttpProtocol ?? connectArgs?.UpstreamHttpProtocol
                         };
 
                         // Read the request headers in to unique and non-unique header collections
@@ -465,8 +468,23 @@ public partial class ProxyServer
         // Body must be buffered before Locked=true — GetRequestBody throws once the request is locked.
         if (!args.HttpClient.Request.UpgradeToWebSocket)
         {
-            var reqHost = args.HttpClient.Request.RequestUri?.Host ?? string.Empty;
-            var reqPort = args.HttpClient.Request.RequestUri?.Port ?? 443;
+            string reqHost;
+            int reqPort;
+            if (args.ProxyEndPoint is TransparentBaseProxyEndPoint
+                {
+                    ForwardHost: { Length: > 0 } forwardHost,
+                    ForwardPort: { } forwardPort
+                })
+            {
+                reqHost = forwardHost;
+                reqPort = forwardPort;
+            }
+            else
+            {
+                reqHost = args.HttpClient.Request.RequestUri?.Host ?? string.Empty;
+                reqPort = args.HttpClient.Request.RequestUri?.Port ?? 443;
+            }
+
             var h3Route = ResolveHttp3Origin(
                 reqHost, reqPort,
                 args.UpstreamHttpProtocol,

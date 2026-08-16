@@ -50,7 +50,8 @@ internal sealed class TwpProxyHost : IDisposable
             ForwardHost = "127.0.0.1",
             ForwardPort = originHttpPort,
             ForwardCleartext = true,
-            GenericCertificateName = "localhost"
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
@@ -192,6 +193,127 @@ internal sealed class TwpProxyHost : IDisposable
         return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: true);
     }
 
+    /// <summary>
+    /// Client H1 TLS → H1→H2 bridge → origin HTTPS with ALPN h2.
+    /// </summary>
+    public static TwpProxyHost StartReverseHttp11ToHttp2(int originHttpsPort)
+    {
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpsPort,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeSslAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        DebugSessionLog.Write("H1H2", "TwpProxyHost.StartReverseHttp11ToHttp2", "started",
+            new { listenPort = endPoint.Port, originHttpsPort });
+        return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
+    /// <summary>
+    /// Client H2 TLS → H2→H3 cold bridge → origin QUIC/h3.
+    /// </summary>
+    public static TwpProxyHost StartReverseHttp2ToHttp3(int originQuicPort)
+    {
+        if (!QuicListener.IsSupported)
+            throw new PlatformNotSupportedException("QuicListener is not supported on this platform.");
+
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: true);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = originQuicPort,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeSslAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        DebugSessionLog.Write("H2H3", "TwpProxyHost.StartReverseHttp2ToHttp3", "started",
+            new { listenPort = endPoint.Port, originQuicPort });
+        return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
+    /// <summary>
+    /// Client H3 QUIC → H3→H2 bridge → origin HTTPS with ALPN h2.
+    /// </summary>
+    public static TwpProxyHost StartReverseHttp3ToHttp2(int originHttpsPort)
+    {
+        if (!QuicListener.IsSupported)
+            throw new PlatformNotSupportedException("QuicListener is not supported on this platform.");
+
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: true);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpsPort,
+            GenericCertificateName = "localhost",
+            MaxInboundBidirectionalStreams = 256,
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeQuicAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        DebugSessionLog.Write("H3H2", "TwpProxyHost.StartReverseHttp3ToHttp2", "started",
+            new { listenPort = endPoint.Port, originHttpsPort });
+        return new TwpProxyHost(proxy, endPoint.Port, $"https://localhost:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
+    /// <summary>
+    /// Client H1 TLS → H1→H3 bridge → origin QUIC/h3.
+    /// </summary>
+    public static TwpProxyHost StartReverseHttp1ToHttp3(int originQuicPort)
+    {
+        if (!QuicListener.IsSupported)
+            throw new PlatformNotSupportedException("QuicListener is not supported on this platform.");
+
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: true);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = originQuicPort,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeSslAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        DebugSessionLog.Write("H1H3", "TwpProxyHost.StartReverseHttp1ToHttp3", "started",
+            new { listenPort = endPoint.Port, originQuicPort });
+        return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
     private static ProxyServer CreateBaseProxy(bool enableHttp2, bool enableHttp3, int? maxCachedConnections = null)
     {
         var proxy = new ProxyServer(false, false, false);
@@ -201,8 +323,9 @@ internal sealed class TwpProxyHost : IDisposable
         proxy.EnableHttp2 = enableHttp2;
         proxy.EnableHttp3 = enableHttp3;
         proxy.EnableHttpsSvcbDnsDiscovery = false;
-        if (maxCachedConnections is { } n)
-            proxy.MaxCachedConnections = n;
+        // Saturation probe: raise floor so 4-vCPU Linux hosts are not stuck at OS defaults.
+        proxy.ThreadPoolWorkerThread = Math.Max(Environment.ProcessorCount * 4, 32);
+        proxy.MaxCachedConnections = maxCachedConnections ?? 256;
 
         return proxy;
     }

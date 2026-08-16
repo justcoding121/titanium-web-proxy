@@ -39,9 +39,11 @@ Fair TLS-terminate numbers in [Linux saturation](#fair-tls-terminate-compare--li
 | HTTPS TTFB vs direct (median, 14 hosts) | Cold **≈ parity** (−1 ms); warm **−25 ms** (proxy faster) |
 | HTTP/1 loopback GET (no body intercept) | **~186 µs**, **~17.5 KB** allocated / request |
 | Cleartext reverse HTTP/1 peak | **~16.0k RPS** (TWP) vs **~15.5k RPS** (nginx/Windows) |
-| TLS-terminate reverse HTTP/1 peak (Windows) | **~24.7k RPS** (TWP) vs **~13.0k RPS** (nginx/Windows) |
-| TLS-terminate H2→H1 cleartext peak (Windows) | **~7.6k RPS** @ c=64, **0% err** (TWP) · nginx **~14.2k** @ c=32 (fails SLO at c=64) |
-| TLS-terminate reverse HTTP/1 peak (Linux GHA) | **~17.7k RPS** (TWP) vs **~28.6k RPS** (nginx) |
+| TLS-terminate reverse HTTP/1 peak (Windows) | **~21.8k RPS** (TWP) vs **~14.4k RPS** (nginx/Windows) |
+| TLS-terminate H2→H1 cleartext peak (Windows) | **~7.4k RPS** @ c=64, **0% err** (TWP) · nginx **~14.9k** @ c=32 |
+| TLS-terminate H3→H1 cleartext peak (Windows) | **~2.4k RPS** @ c=32, **0% err** (TWP) |
+| Cross-version bridges under load (Windows) | All H1↔H2↔H3 directions **0% err** — see [Bridge matrix](#bridge-matrix-compare-bridges--windows) |
+| TLS-terminate reverse HTTP/1 peak (Linux GHA) | **~17.7k RPS** (TWP) vs **~28.6k RPS** (nginx) — see [Linux vs Windows](#linux-vs-windows-h1-tls) |
 | TLS-terminate H2→H1 cleartext peak (Linux GHA) | **~10.2k RPS** (TWP) · nginx H2 **~18.8k** peak @ c=32 |
 | Explicit HTTPS MITM peak | **~13.6k RPS** |
 | Basic example footprint (Release, after load) | **~74 MB** working set · **~24–29 MB** private bytes |
@@ -70,17 +72,34 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-terminate
 
 ### Fair TLS-terminate compare (`compare-terminate`) — Windows
 
-Source CSV: `tools/RpsLoadProbe/results/rps-ramp-20260816-045803.csv` (warmup 2s / measure 8s; concurrency 8, 32, 64). Host: [Windows (developer laptop)](#windows-developer-laptop).
+Local Release (warmup 1s / measure 4s; concurrency 8, 32, 64). Host: [Windows (developer laptop)](#windows-developer-laptop). Cleartext-origin arms use **process-split** origin/proxy.
 
 | Arm | Topology | Sustainable | Peak | Notes |
 |---|---|---:|---:|---|
-| TWP H1 TLS | Client TLS → cleartext H1 | **24,689** @ 64 | **24,689** | 0% err |
-| nginx H1 TLS | ssl → cleartext H1 | **12,693** @ 64 | **13,010** | 0% err |
-| TWP H2→H1 | Client h2 TLS → H2→H1 bridge → cleartext H1 | **7,554** @ 64 | **7,554** | **0% err** (stable at c=64) |
-| nginx H2 | Client h2 TLS → cleartext H1 | **14,175** @ 32 | **14,175** | fails SLO at c=64 |
-| TWP H3→H1 | Client h3 → cleartext H1 | — | ~1.8k | errors (stream abort 258) — follow-up |
+| TWP H1 TLS | Client TLS → cleartext H1 | **21,803** @ 64 | **21,803** | 0% err |
+| nginx H1 TLS | ssl → cleartext H1 | **13,826** @ 64 | **14,424** @ 32 | 0% err |
+| TWP H2→H1 | Client h2 TLS → H2→H1 bridge → cleartext H1 | **7,373** @ 64 | **7,373** | **0% err** |
+| nginx H2 | Client h2 TLS → cleartext H1 | **5,898** @ 64 | **14,920** @ 32 | 0% err |
+| TWP H3→H1 | Client h3 → cleartext H1 | **2,327** @ 64 | **2,423** @ 32 | **0% err** |
 
-On that Windows host, nginx H2 still leads peak RPS; TWP H2→H1 is the first zero-error fair terminate topology and stays within SLO at c=64 where nginx H2 does not.
+### Bridge matrix (`compare-bridges`) — Windows
+
+Local Release `compare-bridges` (warmup 1s / measure 3s; concurrency 8, 32). All arms **0% error**.
+
+| Arm | Client → origin | Peak @ c=32 |
+|---|---|---:|
+| H2→H1 cleartext | H2 TLS → H1 cleartext | **9,104** |
+| H1→H2 | H1 TLS → H2 TLS | **8,843** |
+| H1→H3 | H1 TLS → H3 QUIC | **13,499** |
+| H2→H3 | H2 TLS → H3 QUIC | **5,055** |
+| H3→H1 cleartext | H3 → H1 cleartext | **3,593** |
+| H3→H2 | H3 → H2 TLS | **1,842** |
+| H2↔H2 MITM | H2 TLS → H2 TLS | **4,330** |
+| H3↔H3 MITM | H3 → H3 | **8,477** |
+
+### Linux vs Windows (H1 TLS)
+
+On the Windows laptop, TWP H1 TLS leads nginx/Windows. On Linux GHA, **nginx leads** (~28.6k vs ~17.7k). Absolute TWP RPS is similar; the flip is mostly **nginx/Windows being slow** vs native Linux nginx, plus the GHA VM’s 4 vCPU. Harness mitigations: process-split for cleartext-origin terminate arms, probe ThreadPool / pool floors.
 
 ### Fair TLS-terminate compare — Linux (GitHub-hosted `ubuntu-latest`)
 
@@ -105,8 +124,8 @@ On the GHA VM (4 vCPU), nginx leads both H1 TLS and H2 peak RPS; TWP H2→H1 rem
 | H2 TLS | H2 TLS (MITM) | native h2↔h2 | n/a (nginx terminates) | `compare-tls` / `reverse-http2` |
 | H2 TLS | H2 cleartext (h2c) | **not supported** (no h2c) | uncommon | — |
 | H3 QUIC | H3 QUIC | MITM | **no QUIC on nginx/Windows** | `reverse-http3` |
-| H3 QUIC | H2 cleartext/TLS | bridge paths exist; h2c N/A | — | — |
-| H3 QUIC | H1 cleartext | `ForwardCleartext` + Http11 | — | `reverse-http3-cleartext` (WIP) |
+| H3 QUIC | H2 TLS | H3→H2 (`Http2OriginConnection`) | — | `reverse-http3-to-http2` |
+| H3 QUIC | H1 cleartext | `ForwardCleartext` + Http11 | — | `reverse-http3-cleartext` |
 
 ## Raising limits on large hosts
 

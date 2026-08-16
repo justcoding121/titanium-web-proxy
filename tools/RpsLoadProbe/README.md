@@ -10,16 +10,26 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-terminate
 
 Runs sequentially: TWP/nginx H1 TLS terminate, TWP H2→H1 cleartext, nginx H2, TWP H3→H1 cleartext.
 
+Cleartext-origin terminate arms run **origin and proxy in separate processes** so TWP is not sharing a ThreadPool/GC with Kestrel the way a separate nginx process does not.
+
+## Bridge matrix
+
+```powershell
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-bridges
+```
+
 | Arm | Topology |
 |---|---|
-| `twp-reverse-http1-tls` | Client TLS → `ForwardCleartext` → Kestrel HTTP/1 |
-| `nginx-reverse-http1-tls` | nginx ssl → cleartext HTTP/1 |
-| `twp-reverse-http2-cleartext` | Client TLS+h2 → H2→H1 bridge → cleartext HTTP/1 |
-| `nginx-reverse-http2` | nginx ssl+http2 → cleartext HTTP/1 |
-| `twp-reverse-http3-cleartext` | Client QUIC/h3 → cleartext HTTP/1 (`ForwardCleartext`) |
+| `reverse-http2-cleartext` | H2 TLS → H2→H1 → cleartext H1 |
+| `reverse-http11-to-http2` | H1 TLS → H1→H2 → HTTPS h2 |
+| `reverse-http1-to-http3` | H1 TLS → H1→H3 → QUIC/h3 |
+| `reverse-http2-to-http3` | H2 TLS → H2→H3 → QUIC/h3 |
+| `reverse-http3-cleartext` | H3 → cleartext H1 (`ForwardCleartext`) |
+| `reverse-http3-to-http2` | H3 → H3→H2 → HTTPS h2 |
+| `reverse-http2` / `reverse-http3` | Native same-version MITM |
 
-**Not supported / not compared:** cleartext h2c upstream (TWP has no h2c). H3→H3 always uses QUIC/TLS. nginx/Windows has no QUIC.
+**Not supported:** cleartext h2c upstream (TWP has no h2c). nginx/Windows has no QUIC.
 
-Other modes: `compare`, `compare-tls` (includes H2 MITM), `explicit-pool-sweep`. See `--help`.
+Other modes: `compare`, `compare-tls`, `explicit-pool-sweep`. See `--help`.
 
 Status lines use non-blocking `ProbeLog` (not sync `Console.WriteLine` on workers).

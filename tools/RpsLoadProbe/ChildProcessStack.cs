@@ -52,9 +52,10 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         var exe = Environment.ProcessPath
                   ?? throw new InvalidOperationException("Cannot locate current process path for child spawn.");
 
-        // Combined --serve whenever origin and proxy must share the in-process test CA, or when
-        // the arm is TLS-facing (HTTP/2, HTTP/3, MITM, multi-origin explicit).
-        if (mode is not (ProbeMode.ReverseHttp1 or ProbeMode.NginxReverseHttp1))
+        // Combined --serve only when origin and proxy must share the in-process test CA
+        // (HTTPS / QUIC origin). Cleartext-origin terminate arms run split so TWP is not
+        // contending with Kestrel for CPU/GC the way a separate nginx process does not.
+        if (RequiresCombinedServe(mode))
             return await StartCombinedServeAsync(exe, mode, nginxPath, maxCachedConnections, cancellationToken);
 
         var originArgs = "--serve-origin";
@@ -87,12 +88,29 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         var target = Require(proxyLines, "target_for_client");
         proxyLines.TryGetValue("explicit_proxy", out var explicitProxy);
         proxyLines.TryGetValue("nginx", out var nginxVersion);
+        proxyLines.TryGetValue("http_version", out var httpVersionText);
+        proxyLines.TryGetValue("load_generator", out var loadGenerator);
+        var (httpVersion, policy) = ParseHttpVersion(httpVersionText);
+        int? quicPort = null;
+        if (proxyLines.TryGetValue("quic_port", out var quicPortText) &&
+            int.TryParse(quicPortText, out var qp))
+            quicPort = qp;
 
         return new ChildProcessStack(origin, origin.StandardOutput, proxy, proxy.StandardOutput,
             new Uri(target), [new Uri(target)],
             string.IsNullOrWhiteSpace(explicitProxy) ? null : explicitProxy, nginxVersion,
-            System.Net.HttpVersion.Version11, HttpVersionPolicy.RequestVersionOrLower);
+            httpVersion, policy, loadGenerator, quicPort);
     }
+
+    /// <summary>
+    /// True when the origin speaks TLS/QUIC and must share the probe's in-process test CA with the proxy.
+    /// Cleartext-origin terminate arms (H1 TLS / H2→H1 / nginx H2 / H3→H1) stay process-split.
+    /// </summary>
+    private static bool RequiresCombinedServe(ProbeMode mode) => mode is
+        ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp3
+        or ProbeMode.ReverseHttp11ToHttp2 or ProbeMode.ReverseHttp1ToHttp3
+        or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.ReverseHttp3ToHttp2
+        or ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi;
 
     private static async Task<ChildProcessStack> StartCombinedServeAsync(string exe, ProbeMode mode,
         string? nginxPath, int? maxCachedConnections, CancellationToken cancellationToken)

@@ -31,16 +31,16 @@ internal static class ServeProxyHost
         string? nginxPath, int? maxCachedConnections, CancellationToken cancellationToken)
     {
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
-            or ProbeMode.CompareTerminate or ProbeMode.ExplicitPoolSweep)
+            or ProbeMode.CompareTerminate or ProbeMode.CompareBridges or ProbeMode.ExplicitPoolSweep)
         {
             ProbeLog.Error("--serve-proxy requires a single arm mode");
             return 2;
         }
 
-        // TLS arms need shared CA with origin — use --serve combined instead.
-        if (mode is ProbeMode.ReverseHttp1Tls or ProbeMode.NginxReverseHttp1Tls
-            or ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp2Cleartext or ProbeMode.NginxReverseHttp2
-            or ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext
+        // Cleartext-origin terminate arms may use --serve-proxy (split). HTTPS/QUIC origin arms need --serve.
+        if (mode is ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp3
+            or ProbeMode.ReverseHttp11ToHttp2 or ProbeMode.ReverseHttp1ToHttp3
+            or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.ReverseHttp3ToHttp2
             or ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi)
         {
             ProbeLog.Error(
@@ -76,9 +76,66 @@ internal static class ServeProxyHost
                 nginxVersion = nginx.Version;
                 break;
             }
+            case ProbeMode.ReverseHttp1Tls:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var twp = TwpProxyHost.StartReverseHttp1Tls(originHttpPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.NginxReverseHttp1Tls:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var nginx = NginxHost.TryStartHttp1Tls(originHttpPort, nginxPath)
+                            ?? throw new InvalidOperationException(NginxHost.NginxMissingMessage());
+                proxy = nginx;
+                listenUrl = nginx.ListenUrl;
+                targetForClient = nginx.ListenUrl;
+                nginxVersion = nginx.Version;
+                break;
+            }
+            case ProbeMode.ReverseHttp2Cleartext:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var twp = TwpProxyHost.StartReverseHttp2Cleartext(originHttpPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.NginxReverseHttp2:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var nginx = NginxHost.TryStartHttp2(originHttpPort, nginxPath)
+                            ?? throw new InvalidOperationException(NginxHost.NginxMissingMessage());
+                proxy = nginx;
+                listenUrl = nginx.ListenUrl;
+                targetForClient = nginx.ListenUrl;
+                nginxVersion = nginx.Version;
+                break;
+            }
+            case ProbeMode.ReverseHttp3Cleartext:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var twp = TwpProxyHost.StartReverseHttp3Cleartext(originHttpPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
             default:
                 throw new ArgumentOutOfRangeException(nameof(mode));
         }
+
+        var httpVersion = mode switch
+        {
+            ProbeMode.ReverseHttp2Cleartext or ProbeMode.NginxReverseHttp2 => "2.0",
+            ProbeMode.ReverseHttp3Cleartext => "3.0",
+            _ => "1.1"
+        };
+        var loadGenerator = mode is ProbeMode.ReverseHttp3Cleartext ? "quic-http3" : null;
 
         using (proxy)
         {
@@ -87,6 +144,14 @@ internal static class ServeProxyHost
             if (explicitProxy != null)
                 await ProbeLog.WriteProtocolLineAsync($"explicit_proxy={explicitProxy}", cancellationToken);
             await ProbeLog.WriteProtocolLineAsync($"target_for_client={targetForClient}", cancellationToken);
+            await ProbeLog.WriteProtocolLineAsync($"http_version={httpVersion}", cancellationToken);
+            if (loadGenerator != null)
+                await ProbeLog.WriteProtocolLineAsync($"load_generator={loadGenerator}", cancellationToken);
+            if (mode is ProbeMode.ReverseHttp3Cleartext)
+            {
+                var quicPort = new Uri(listenUrl).Port;
+                await ProbeLog.WriteProtocolLineAsync($"quic_port={quicPort}", cancellationToken);
+            }
             if (nginxVersion != null)
                 await ProbeLog.WriteProtocolLineAsync($"nginx={nginxVersion}", cancellationToken);
             if (maxCachedConnections is { } m)
@@ -117,12 +182,17 @@ internal static class ServeProxyHost
         ProbeMode.NginxReverseHttp2 => "nginx-reverse-http2",
         ProbeMode.ReverseHttp3 => "reverse-http3",
         ProbeMode.ReverseHttp3Cleartext => "reverse-http3-cleartext",
+        ProbeMode.ReverseHttp11ToHttp2 => "reverse-http11-to-http2",
+        ProbeMode.ReverseHttp1ToHttp3 => "reverse-http1-to-http3",
+        ProbeMode.ReverseHttp2ToHttp3 => "reverse-http2-to-http3",
+        ProbeMode.ReverseHttp3ToHttp2 => "reverse-http3-to-http2",
         ProbeMode.ExplicitHttp1Multi => "explicit-http1-multi",
         ProbeMode.ExplicitHttp2Multi => "explicit-http2-multi",
         ProbeMode.Compare => "compare",
         ProbeMode.CompareHttp2 => "compare-http2",
         ProbeMode.CompareTls => "compare-tls",
         ProbeMode.CompareTerminate => "compare-terminate",
+        ProbeMode.CompareBridges => "compare-bridges",
         ProbeMode.ExplicitPoolSweep => "explicit-pool-sweep",
         _ => mode.ToString()
     };
@@ -134,7 +204,7 @@ internal static class ServeHost
         CancellationToken cancellationToken)
     {
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
-            or ProbeMode.CompareTerminate or ProbeMode.ExplicitPoolSweep)
+            or ProbeMode.CompareTerminate or ProbeMode.CompareBridges or ProbeMode.ExplicitPoolSweep)
         {
             ProbeLog.Error("--serve requires a single mode");
             return 2;
@@ -345,6 +415,56 @@ internal static class ServeHost
                     var origin = await OriginServer.StartAsync(false, cancellationToken);
                     var twp = TwpProxyHost.StartReverseHttp3Cleartext(origin.HttpPort);
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
+                        twp.ListenUrl, [twp.ListenUrl], null, "3.0", loadGenerator: "quic-http3",
+                        quicPort: twp.Port);
+                }
+                case ProbeMode.ReverseHttp11ToHttp2:
+                {
+                    var origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = false,
+                        EnableHttps = true,
+                        HttpsProtocols = HttpProtocols.Http1AndHttp2
+                    }, cancellationToken);
+                    var twp = TwpProxyHost.StartReverseHttp11ToHttp2(origin.HttpsPort);
+                    return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, [], twp.ListenUrl, null,
+                        twp.ListenUrl, [twp.ListenUrl], null, "1.1");
+                }
+                case ProbeMode.ReverseHttp1ToHttp3:
+                {
+                    if (!System.Net.Quic.QuicListener.IsSupported)
+                        throw new PlatformNotSupportedException("QuicListener is not supported.");
+
+                    var origin = new QuicHttp3OriginHost();
+                    var twp = TwpProxyHost.StartReverseHttp1ToHttp3(origin.Port);
+                    return new ServeStack(origin, twp, twp, $"quic://localhost:{origin.Port}/",
+                        $"quic://localhost:{origin.Port}/", [], twp.ListenUrl, null, twp.ListenUrl, [twp.ListenUrl],
+                        null, "1.1", originQuicPort: origin.Port);
+                }
+                case ProbeMode.ReverseHttp2ToHttp3:
+                {
+                    if (!System.Net.Quic.QuicListener.IsSupported)
+                        throw new PlatformNotSupportedException("QuicListener is not supported.");
+
+                    var origin = new QuicHttp3OriginHost();
+                    var twp = TwpProxyHost.StartReverseHttp2ToHttp3(origin.Port);
+                    return new ServeStack(origin, twp, twp, $"quic://localhost:{origin.Port}/",
+                        $"quic://localhost:{origin.Port}/", [], twp.ListenUrl, null, twp.ListenUrl, [twp.ListenUrl],
+                        null, "2.0", originQuicPort: origin.Port);
+                }
+                case ProbeMode.ReverseHttp3ToHttp2:
+                {
+                    if (!System.Net.Quic.QuicListener.IsSupported)
+                        throw new PlatformNotSupportedException("QuicListener is not supported.");
+
+                    var origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = false,
+                        EnableHttps = true,
+                        HttpsProtocols = HttpProtocols.Http1AndHttp2
+                    }, cancellationToken);
+                    var twp = TwpProxyHost.StartReverseHttp3ToHttp2(origin.HttpsPort);
+                    return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, [], twp.ListenUrl, null,
                         twp.ListenUrl, [twp.ListenUrl], null, "3.0", loadGenerator: "quic-http3",
                         quicPort: twp.Port);
                 }

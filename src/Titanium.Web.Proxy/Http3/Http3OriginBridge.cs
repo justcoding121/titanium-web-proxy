@@ -1,6 +1,8 @@
 #pragma warning disable CA1416
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Quic;
 using System.Net.Security;
@@ -11,10 +13,12 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
+using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Http3;
@@ -33,6 +37,14 @@ namespace Titanium.Web.Proxy.Http3;
 /// </summary>
 internal static class Http3OriginBridge
 {
+    /// <summary>
+    ///     Shared H3→H2 origin connections. A bag (not a single connection) so GOAWAY / stream-id
+    ///     exhaustion rotates without disposing a connection that still has in-flight SendAsync calls.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, ConcurrentBag<Http2OriginConnection>> Http2OriginBags =
+        new(StringComparer.OrdinalIgnoreCase);
+    private const int MaxHttp2OriginsPerTarget = 16;
+
     // ────────────────────────────────────────────────────────────────────────────────────────
     // Public API
     // ────────────────────────────────────────────────────────────────────────────────────────
@@ -63,14 +75,34 @@ internal static class Http3OriginBridge
         if (route.UseH3)
         {
             var connectHost = route.QuicHost ?? sniHost;
+            var quicPort = route.QuicPort;
+            // Transparent reverse / SOCKS fixed-forward: Forced-H3 routes are keyed by the
+            // *client* request authority (often 127.0.0.1:<listen>), which is not the QUIC origin.
+            // Prefer ForwardHost/ForwardPort when set — same rule as ForwardOverTcpAsync.
+            if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint
+                {
+                    ForwardHost: { Length: > 0 } forwardHost,
+                    ForwardPort: { } forwardPort
+                })
+            {
+                connectHost = forwardHost;
+                quicPort = forwardPort;
+            }
+
             await ForwardOverQuicAsync(
                 sessionArgs, server,
-                connectHost, sniHost, route.QuicPort, route.ForcedH3,
+                connectHost, sniHost, quicPort, route.ForcedH3,
                 logger, cancellationToken, onInterimResponse, copyRequestBody);
             return;
         }
 
         // Route resolved to non-H3 (forced Http2/Http11 override, or no H3 capability known).
+        if (sessionArgs.UpstreamHttpProtocol == UpstreamHttpProtocol.Http2)
+        {
+            await ForwardOverHttp2Async(sessionArgs, server, logger, cancellationToken, onInterimResponse);
+            return;
+        }
+
         await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
     }
 
@@ -507,7 +539,269 @@ internal static class Http3OriginBridge
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────
-    // H3 → TCP (H2 or H1.1)
+    // H3 → H2 (TLS + ALPN h2)
+    // ────────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     H3 → H2: TLS origin with ALPN <c>h2</c> via <see cref="Http2OriginConnection"/>.
+    ///     TWP has no h2c; this path always uses TLS toward the origin.
+    /// </summary>
+    private static async Task ForwardOverHttp2Async(
+        SessionEventArgs sessionArgs,
+        ProxyServer server,
+        ILogger logger,
+        CancellationToken cancellationToken,
+        Func<Response, CancellationToken, Task>? onInterimResponse = null)
+    {
+        var request = sessionArgs.HttpClient.Request;
+
+        if (!request.IsBodyReceived && sessionArgs.Http3BufferedBodyReader != null)
+        {
+            if (request.HasBody)
+            {
+                await sessionArgs.GetRequestBody(cancellationToken);
+            }
+            else
+            {
+                _ = await sessionArgs.Http3BufferedBodyReader(cancellationToken);
+                sessionArgs.Http3BufferedBodyReader = null;
+                request.IsBodyReceived = true;
+            }
+        }
+
+        var clientHttpVersion = request.HttpVersion;
+        request.HttpVersion = HttpHeader.Version20;
+
+        if (string.IsNullOrEmpty(request.Host) && request.Authority.Length > 0)
+            request.Host = request.Authority.GetString();
+
+        PrepareH2OriginRequestHeaders(request);
+
+        string host;
+        int port;
+        if (request.Authority.Length > 0)
+        {
+            var authority = request.Authority;
+            var idx = authority.IndexOf((byte)':');
+            if (idx == -1)
+            {
+                host = authority.GetString();
+                port = 443;
+            }
+            else
+            {
+                host = authority.Slice(0, idx).GetString();
+                port = int.Parse(authority.Slice(idx + 1).GetString());
+            }
+        }
+        else
+        {
+            host = request.RequestUri?.Host ?? string.Empty;
+            port = request.RequestUri?.Port ?? 443;
+        }
+
+        string? connectHost = null;
+        int? connectPort = null;
+        if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint transparent
+            && !string.IsNullOrEmpty(transparent.ForwardHost))
+        {
+            connectHost = transparent.ForwardHost;
+            connectPort = transparent.ForwardPort;
+        }
+
+        // #region agent log
+        try
+        {
+            var logPath = Environment.GetEnvironmentVariable("TWP_RPS_DEBUG_LOG");
+            if (!string.IsNullOrWhiteSpace(logPath))
+            {
+                var line = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+                {
+                    ["sessionId"] = "4b08c5",
+                    ["hypothesisId"] = "H3H2",
+                    ["location"] = "Http3OriginBridge.ForwardOverHttp2Async",
+                    ["message"] = "h3-to-h2-connect",
+                    ["data"] = new Dictionary<string, object?>
+                    {
+                        ["host"] = host,
+                        ["port"] = port,
+                        ["connectHost"] = connectHost,
+                        ["connectPort"] = connectPort
+                    },
+                    ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                });
+                System.IO.File.AppendAllText(logPath, line + Environment.NewLine);
+            }
+        }
+        catch
+        {
+            // probe must not fail on debug logging
+        }
+        // #endregion
+
+        var poolKey = $"{connectHost ?? host}:{connectPort ?? port}";
+        Http2OriginConnection? h2 = null;
+        try
+        {
+            Func<int, HeaderCollection, CancellationToken, Task>? on1xx = null;
+            if (onInterimResponse != null)
+            {
+                on1xx = async (status, headers, ct) =>
+                {
+                    var interim = new Response
+                    {
+                        HttpVersion = HttpHeader.Version30,
+                        StatusCode = status,
+                        IsBodyRead = true,
+                        Body = Array.Empty<byte>()
+                    };
+                    foreach (var header in headers)
+                        interim.Headers.AddHeader(header);
+                    await onInterimResponse(interim, ct);
+                };
+            }
+
+            Http2OriginExchange exchange;
+            try
+            {
+                h2 = await LeaseHttp2OriginAsync(server, logger, sessionArgs, host, port,
+                    connectHost, connectPort, poolKey, cancellationToken);
+                sessionArgs.HttpClient.BindUpstreamConnection(h2.ServerConnection);
+                exchange = await h2.SendAsync(request, on1xx, cancellationToken);
+                ReturnHttp2Origin(poolKey, h2);
+                h2 = null;
+            }
+            catch (Exception ex) when (ex is Http2OriginGoAwayException or ObjectDisposedException or IOException)
+            {
+                // Do not return a GOAWAY/closed connection; lease a fresh one and retry once.
+                h2 = await LeaseHttp2OriginAsync(server, logger, sessionArgs, host, port,
+                    connectHost, connectPort, poolKey, cancellationToken);
+                sessionArgs.HttpClient.BindUpstreamConnection(h2.ServerConnection);
+                exchange = await h2.SendAsync(request, on1xx, cancellationToken);
+                ReturnHttp2Origin(poolKey, h2);
+                h2 = null;
+            }
+
+            var response = exchange.Response;
+            response.HttpVersion = HttpHeader.Version30;
+            response.RequestMethod = request.Method;
+            response.IsBodyRead = true;
+            response.Body = exchange.Body;
+            if (exchange.TrailingHeaders != null)
+            {
+                foreach (var header in exchange.TrailingHeaders)
+                    response.TrailingHeaders.AddHeader(header);
+            }
+
+            sessionArgs.HttpClient.Response = response;
+        }
+        catch (Exception ex)
+        {
+            // #region agent log
+            try
+            {
+                var logPath = Environment.GetEnvironmentVariable("TWP_RPS_DEBUG_LOG");
+                if (!string.IsNullOrWhiteSpace(logPath))
+                {
+                    var line = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+                    {
+                        ["sessionId"] = "4b08c5",
+                        ["hypothesisId"] = "H3H2",
+                        ["location"] = "Http3OriginBridge.ForwardOverHttp2Async",
+                        ["message"] = "h3-to-h2-error",
+                        ["data"] = new Dictionary<string, object?>
+                        {
+                            ["type"] = ex.GetType().Name,
+                            ["error"] = ex.Message,
+                            ["poolKey"] = poolKey
+                        },
+                        ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                    });
+                    System.IO.File.AppendAllText(logPath, line + Environment.NewLine);
+                }
+            }
+            catch { /* ignore */ }
+            // #endregion
+
+            // Drop failed lease; avoid Dispose while siblings may still be mid-SendAsync.
+            h2 = null;
+            throw;
+        }
+        finally
+        {
+            request.HttpVersion = clientHttpVersion;
+        }
+    }
+
+    private static void ReturnHttp2Origin(string poolKey, Http2OriginConnection connection)
+    {
+        if (!connection.IsUsable)
+            return;
+
+        var bag = Http2OriginBags.GetOrAdd(poolKey, static _ => new ConcurrentBag<Http2OriginConnection>());
+        if (bag.Count >= MaxHttp2OriginsPerTarget)
+            return;
+
+        bag.Add(connection);
+    }
+
+    private static async Task<Http2OriginConnection> LeaseHttp2OriginAsync(
+        ProxyServer server, ILogger logger, SessionEventArgs sessionArgs,
+        string host, int port, string? connectHost, int? connectPort, string poolKey,
+        CancellationToken cancellationToken)
+    {
+        var bag = Http2OriginBags.GetOrAdd(poolKey, static _ => new ConcurrentBag<Http2OriginConnection>());
+        while (bag.TryTake(out var existing))
+        {
+            if (existing.IsUsable)
+                return existing;
+        }
+
+        var tcp = await server.TcpConnectionFactory.GetServerConnection(
+            server, host, port, HttpHeader.Version20, isHttps: true, SslExtensions.Http2ProtocolAsList,
+            false, sessionArgs, sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
+            sessionArgs.CustomUpStreamProxyUsed ?? server.UpStreamHttpsProxy,
+            false, false, cancellationToken, connectHost, connectPort);
+
+        if (tcp == null || tcp.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
+        {
+            if (tcp != null)
+                await server.TcpConnectionFactory.Release(tcp, true);
+            throw new ProxyHttpException(
+                $"The origin '{host}:{port}' did not negotiate HTTP/2 via ALPN for the H3→H2 bridge.",
+                null, sessionArgs);
+        }
+
+        return await Http2OriginConnection.CreateAsync(tcp, logger,
+            sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes, cancellationToken,
+            server.ResourceLimits);
+    }
+
+    private static void PrepareH2OriginRequestHeaders(Request request)
+    {
+        if (request.Authority.Length == 0)
+        {
+            var hostHeader = request.Host;
+            if (!string.IsNullOrEmpty(hostHeader))
+                request.Authority = hostHeader.GetByteString();
+        }
+
+        request.Headers.RemoveHeader(KnownHeaders.Connection);
+        request.Headers.RemoveHeader("Keep-Alive");
+        request.Headers.RemoveHeader(KnownHeaders.ProxyConnection);
+        request.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+        request.Headers.RemoveHeader(KnownHeaders.Upgrade);
+        request.Headers.RemoveHeader("TE");
+        request.Headers.RemoveHeader(KnownHeaders.Host);
+
+        var snapshot = request.Headers.GetAllHeaders();
+        request.Headers.Clear();
+        foreach (var header in snapshot)
+            request.Headers.AddHeader(header.Name.ToLowerInvariant(), header.Value);
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────────────────
+    // H3 → TCP (H1.1)
     // ────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>

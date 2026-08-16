@@ -53,6 +53,8 @@ public partial class ProxyServer
             if (endPoint.DecryptSsl || string.IsNullOrEmpty(endPoint.ForwardHost))
                 clientHelloInfo = await SslTools.PeekClientHello(clientStream, BufferPool, cancellationToken);
 
+            UpstreamHttpProtocol? transparentUpstreamProtocol = null;
+
             if (clientHelloInfo != null)
             {
                 var httpsHostName = clientHelloInfo.GetServerName() ?? endPoint.GenericCertificateName;
@@ -67,6 +69,7 @@ public partial class ProxyServer
                     args.ForwardHttpsPort = forwardPort;
 
                 await endPoint.InvokeBeforeSslAuthenticate(this, args, logger);
+                transparentUpstreamProtocol = args.UpstreamHttpProtocol;
 
                 if (cancellationTokenSource.IsCancellationRequested)
                     return;
@@ -448,7 +451,8 @@ public partial class ProxyServer
             }
 
             await HandleHttpSessionRequest(endPoint, clientStream, cancellationTokenSource,
-                prefetchConnectionTask: prefetchTask, isHttps: isHttps);
+                prefetchConnectionTask: prefetchTask, isHttps: isHttps,
+                upstreamHttpProtocol: transparentUpstreamProtocol);
         }
         catch (ProxyException e)
         {

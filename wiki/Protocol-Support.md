@@ -37,7 +37,7 @@ TCP HTTP/1 origin.
 | HTTP/2 | HTTP/1.1 | Bridge | `Http2ToHttp11BridgeHandler` when `UpstreamHttpProtocol.Http11` and `AllowHttpProtocolTranslation` are set. |
 | HTTP/1.1 | HTTP/3 | Bridge | `Http3OriginBridge.ForwardAsync` when H3 is selected. |
 | HTTP/2 | HTTP/3 | Bridge | Cold CONNECT-time `SendHttp2ToHttp3Bridge` + `Http3OriginBridge.ForwardAsync` when H3 is selected. Mid-connection Alt-Svc upgrades on an existing H2↔H2 MITM relay are not taken. |
-| HTTP/3 | HTTP/2 | Bridge | `TcpConnectionFactory` with h2 ALPN when `UpstreamHttpProtocol.Http2` is set. |
+| HTTP/3 | HTTP/2 | Bridge | `Http3OriginBridge.ForwardOverHttp2Async` via `Http2OriginConnection` (TLS ALPN `h2`) when `UpstreamHttpProtocol.Http2` is set. No h2c. |
 | HTTP/3 | HTTP/1.1 | Bridge | `TcpConnectionFactory` with default ALPN negotiation. |
 
 Not supported:
