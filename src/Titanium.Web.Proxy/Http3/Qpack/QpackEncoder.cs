@@ -15,6 +15,9 @@ namespace Titanium.Web.Proxy.Http3.Qpack;
 /// </summary>
 internal static class QpackEncoder
 {
+    [ThreadStatic]
+    private static MemoryStream? reusableBuffer;
+
     /// <summary>
     ///     Encodes a list of header fields into a QPACK header block using static-table-only mode.
     ///     Equivalent to calling <see cref="Encode(IEnumerable{ValueTuple{string,string}},QpackContext?)" />
@@ -31,7 +34,8 @@ internal static class QpackEncoder
     /// </summary>
     public static byte[] Encode(IEnumerable<(string Name, string Value)> headers, QpackContext? context) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
-        var body = new MemoryStream();
+        var body = reusableBuffer ??= new MemoryStream();
+        body.SetLength(0);
         var outboundTable = context != null && !context.OutboundTableDisabled && context.MaxTableCapacityFromPeer > 0
             ? context.OutboundEncoderTable
             : null;

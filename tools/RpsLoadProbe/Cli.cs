@@ -330,6 +330,9 @@ internal static class Cli
             case "yarp-reverse-http3-to-http2":
                 mode = ProbeMode.YarpReverseHttp3ToHttp2;
                 return true;
+            case "yarp-reverse-http3-to-http3":
+                mode = ProbeMode.YarpReverseHttp3ToHttp3;
+                return true;
             case "explicit-http1-multi":
                 mode = ProbeMode.ExplicitHttp1Multi;
                 return true;
@@ -436,6 +439,7 @@ internal static class Cli
               yarp-reverse-http2-to-http3 YARP H2 TLS -> HTTP/3 origin
               reverse-http3-to-http2  TWP H3 -> H3→H2 bridge -> Kestrel HTTPS/h2
               yarp-reverse-http3-to-http2 YARP H3 -> HTTPS/h2
+              yarp-reverse-http3-to-http3 YARP H3 -> HTTP/3 origin
               explicit-http1-multi    Explicit MITM across 16 HTTPS origins (fan-out)
               explicit-http2-multi    Same fan-out forcing HTTP/2
               compare                 Sequential HTTP/1 compare (+ MITM)

@@ -128,6 +128,44 @@ internal static class Http3RequestStream
                 foreach (var (name, value) in regularHeaders)
                     request.Headers.AddHeader(new HttpHeader(name, value));
 
+                var host = authority;
+                var port = request.IsHttps ? 443 : 80;
+                if (authority.Length > 0 && authority[0] == '[')
+                {
+                    var closingBracket = authority.IndexOf(']');
+                    if (closingBracket > 0)
+                    {
+                        host = authority[1..closingBracket];
+                        if (closingBracket + 2 < authority.Length &&
+                            authority[closingBracket + 1] == ':' &&
+                            int.TryParse(authority.AsSpan(closingBracket + 2), out var parsedPort))
+                            port = parsedPort;
+                    }
+                }
+                else
+                {
+                    var colon = authority.LastIndexOf(':');
+                    if (colon > 0 && int.TryParse(authority.AsSpan(colon + 1), out var parsedPort))
+                    {
+                        host = authority[..colon];
+                        port = parsedPort;
+                    }
+                }
+
+                var interceptionContext = new HttpInterceptionContext
+                {
+                    Hostname = host,
+                    Port = port,
+                    IsHttps = request.IsHttps,
+                    Method = method,
+                    PathAndQuery = normalizedPath,
+                    HttpVersion = HttpHeader.Version30,
+                    ProxyEndPoint = endPoint,
+                    ClientRemoteEndPoint = sessionArgs.ClientRemoteEndPoint,
+                    ClientProcessId = null
+                };
+                sessionArgs.IsFastPath = !server.ShouldIntercept(interceptionContext, endPoint);
+
                 // Seed per-connection overrides from the auth event.
                 // CustomUpStreamProxy is the typed proxy field read by the bridge; UserData is
                 // intentionally left null so the public API is not polluted with internal state.
@@ -391,7 +429,7 @@ internal static class Http3RequestStream
         Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask>? onTrailerFrame = null)
     {
         var request = sessionArgs.HttpClient.Request;
-        var hasHook = server.HasOnRequestBodyWriteSubscribers;
+        var hasHook = !sessionArgs.IsFastPath && server.HasOnRequestBodyWriteSubscribers;
 
         if (!hasHook)
         {
@@ -615,10 +653,10 @@ internal static class Http3RequestStream
         {
             switch (name)
             {
-                case ":method":    method    = value; break;
-                case ":scheme":    scheme    = value; break;
+                case ":method": method = value; break;
+                case ":scheme": scheme = value; break;
                 case ":authority": authority = value; break;
-                case ":path":      path      = value; break;
+                case ":path": path = value; break;
                 default:
                     if (!name.StartsWith(':')) regular.Add((name, value));
                     break;

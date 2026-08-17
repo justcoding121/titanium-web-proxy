@@ -62,6 +62,7 @@ internal static class ServeProxyHost
             or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3
             or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
             or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
+            or ProbeMode.YarpReverseHttp3ToHttp3
             or ProbeMode.ReverseH2c or ProbeMode.YarpReverseH2c
             or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
             or ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1
@@ -353,6 +354,7 @@ internal static class ServeProxyHost
         ProbeMode.YarpReverseHttp2ToHttp3 => "yarp-reverse-http2-to-http3",
         ProbeMode.ReverseHttp3ToHttp2 => "reverse-http3-to-http2",
         ProbeMode.YarpReverseHttp3ToHttp2 => "yarp-reverse-http3-to-http2",
+        ProbeMode.YarpReverseHttp3ToHttp3 => "yarp-reverse-http3-to-http3",
         ProbeMode.MitmHttp2ToHttp1 => "mitm-http2-to-http1",
         ProbeMode.MitmHttp3ToHttp1 => "mitm-http3-to-http1",
         ProbeMode.ExplicitHttp1Multi => "explicit-http1-multi",
@@ -899,6 +901,17 @@ internal static class ServeHost
                     var yarp = await YarpProxyHost.StartHttp3ToHttp2Async(origin.HttpsPort);
                     return new ServeStack(origin, yarp, null, origin.HttpUrl, origin.HttpsUrl, [], yarp.ListenUrl, null,
                         yarp.ListenUrl, [yarp.ListenUrl], null, "3.0", yarpVersion: yarp.Version);
+                }
+                case ProbeMode.YarpReverseHttp3ToHttp3:
+                {
+                    if (!System.Net.Quic.QuicListener.IsSupported)
+                        throw new PlatformNotSupportedException("QuicListener is not supported.");
+
+                    var origin = new QuicHttp3OriginHost(responseBytes);
+                    var yarp = await YarpProxyHost.StartHttp3ToHttp3Async(origin.Port);
+                    return new ServeStack(origin, yarp, null, $"quic://localhost:{origin.Port}/",
+                        $"quic://localhost:{origin.Port}/", [], yarp.ListenUrl, null, yarp.ListenUrl, [yarp.ListenUrl],
+                        null, "3.0", originQuicPort: origin.Port, yarpVersion: yarp.Version);
                 }
                 case ProbeMode.ExplicitHttp1Multi:
                 case ProbeMode.ExplicitHttp2Multi:

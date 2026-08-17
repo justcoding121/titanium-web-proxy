@@ -156,6 +156,46 @@ public class Http3TransparentTests
     }
 
     [TestMethod]
+    public async Task ShouldInterceptHttp_False_SkipsBeforeRequest()
+    {
+        RequireQuic();
+
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleRequest(_ => Task.FromResult(new QuicHttp3Response(200, "fast-path")));
+
+        var quicEp = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = origin.Port
+        };
+
+        using var proxy = CreateHttp3Proxy(quicEp);
+        var beforeRequestCalls = 0;
+        proxy.BeforeRequest += (_, _) =>
+        {
+            Interlocked.Increment(ref beforeRequestCalls);
+            return Task.CompletedTask;
+        };
+        proxy.ShouldInterceptHttp = context =>
+        {
+            Assert.AreEqual("localhost", context.Hostname);
+            Assert.AreEqual(origin.Port, context.Port);
+            Assert.AreEqual("/fast", context.PathAndQuery);
+            Assert.AreEqual(HttpVersion.Version30, context.HttpVersion);
+            return false;
+        };
+
+        await using var client = await QuicHttp3Client.ConnectAsync(
+            new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+
+        var response = await client.SendAsync("GET", $"localhost:{origin.Port}", "/fast");
+
+        Assert.AreEqual(200, response.StatusCode);
+        Assert.AreEqual("fast-path", response.TextBody);
+        Assert.AreEqual(0, beforeRequestCalls);
+    }
+
+    [TestMethod]
     public async Task ConcurrentStreams_ShareOneClientConnection()
     {
         RequireQuic();

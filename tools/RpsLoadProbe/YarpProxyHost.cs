@@ -198,6 +198,18 @@ internal sealed class YarpProxyHost : IDisposable
             AcceptAnyServerCertificate = true
         });
 
+    /// <summary>H3 → HTTP/3 origin.</summary>
+    public static Task<YarpProxyHost> StartHttp3ToHttp3Async(int originQuicPort) =>
+        StartAsync(new YarpListenOptions
+        {
+            UseTls = true,
+            InboundProtocols = HttpProtocols.Http1AndHttp2AndHttp3,
+            DestinationAddress = $"https://127.0.0.1:{originQuicPort}/",
+            OutboundVersion = HttpVersion.Version30,
+            OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            AcceptAnyServerCertificate = true
+        });
+
     private sealed class YarpListenOptions
     {
         public bool UseTls { get; init; }

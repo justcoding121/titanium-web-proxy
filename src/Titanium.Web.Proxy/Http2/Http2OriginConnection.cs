@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.IO;
@@ -119,28 +120,28 @@ internal sealed class Http2OriginConnection : IDisposable
         ILogger logger, long maxBufferedBodyBytes, CancellationToken cancellationToken,
         ProxyResourceLimits? resourceLimits = null)
     {
-                var instance = new Http2OriginConnection(connection, logger, maxBufferedBodyBytes,
-                    resourceLimits ?? ProxyResourceLimits.Default);
+        var instance = new Http2OriginConnection(connection, logger, maxBufferedBodyBytes,
+            resourceLimits ?? ProxyResourceLimits.Default);
 
-                var preface = Http2Helper.ConnectionPreface;
-                connection.Http2SessionStarted = true;
-                await instance.stream.WriteAsync(preface.AsMemory(), cancellationToken);
-                // Shared with the H2↔H2 MITM path (SendHttp2ClientConnectionStartupAsync).
-                await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.stream, cancellationToken);
+        var preface = Http2Helper.ConnectionPreface;
+        connection.Http2SessionStarted = true;
+        await instance.stream.WriteAsync(preface.AsMemory(), cancellationToken);
+        // Shared with the H2↔H2 MITM path (SendHttp2ClientConnectionStartupAsync).
+        await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.stream, cancellationToken);
 
-                _ = instance.ReadLoopAsync(instance.connectionCts.Token);
+        _ = instance.ReadLoopAsync(instance.connectionCts.Token);
 
-                try
-                {
-                    await instance.initialSettingsReceived.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    ProxyDiagnostics.ReportCaught(logger,
-                        "Http2OriginConnection settings wait failed; failing connection and rethrowing", ex);
-                    instance.Fail(ex);
-                    throw;
-                }
+        try
+        {
+            await instance.initialSettingsReceived.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            ProxyDiagnostics.ReportCaught(logger,
+                "Http2OriginConnection settings wait failed; failing connection and rethrowing", ex);
+            instance.Fail(ex);
+            throw;
+        }
 
         return instance;
     }
@@ -275,7 +276,8 @@ internal sealed class Http2OriginConnection : IDisposable
             var response = pending.Response ??
                            new Response
                            {
-                               StatusCode = 502, StatusDescription = string.Empty,
+                               StatusCode = 502,
+                               StatusDescription = string.Empty,
                                HttpVersion = HttpHeader.Version11
                            };
 
@@ -409,7 +411,8 @@ internal sealed class Http2OriginConnection : IDisposable
             var response = pending.Response ??
                            new Response
                            {
-                               StatusCode = 502, StatusDescription = string.Empty,
+                               StatusCode = 502,
+                               StatusDescription = string.Empty,
                                HttpVersion = HttpHeader.Version11
                            };
 
@@ -553,7 +556,10 @@ internal sealed class Http2OriginConnection : IDisposable
     {
         var frameHeader = new Http2FrameHeader
         {
-            StreamId = 0, Type = Http2FrameType.Settings, Flags = Http2FrameFlag.Ack, Length = 0
+            StreamId = 0,
+            Type = Http2FrameType.Settings,
+            Flags = Http2FrameFlag.Ack,
+            Length = 0
         };
         var frameHeaderBuffer = new byte[9];
         frameHeader.CopyToBuffer(frameHeaderBuffer);
@@ -573,7 +579,10 @@ internal sealed class Http2OriginConnection : IDisposable
     {
         var frameHeader = new Http2FrameHeader
         {
-            StreamId = 0, Type = Http2FrameType.Ping, Flags = Http2FrameFlag.Ack, Length = payload.Length
+            StreamId = 0,
+            Type = Http2FrameType.Ping,
+            Flags = Http2FrameFlag.Ack,
+            Length = payload.Length
         };
         var frameHeaderBuffer = new byte[9];
         frameHeader.CopyToBuffer(frameHeaderBuffer);
@@ -623,18 +632,18 @@ internal sealed class Http2OriginConnection : IDisposable
 
         try
         {
-                    while (true)
-                    {
-                        var read = await ForceReadAsync(frameHeaderBuffer, 0, 9, cancellationToken);
-                        if (read != 9)
-                        {
-                            Fail(new IOException("The origin h2 connection was closed."));
-                            return;
-                        }
+            while (true)
+            {
+                var read = await ForceReadAsync(frameHeaderBuffer, 0, 9, cancellationToken);
+                if (read != 9)
+                {
+                    Fail(new IOException("The origin h2 connection was closed."));
+                    return;
+                }
 
-                        var length = (frameHeaderBuffer[0] << 16) + (frameHeaderBuffer[1] << 8) + frameHeaderBuffer[2];
-                        var type = (Http2FrameType)frameHeaderBuffer[3];
-                        var flags = (Http2FrameFlag)frameHeaderBuffer[4];
+                var length = (frameHeaderBuffer[0] << 16) + (frameHeaderBuffer[1] << 8) + frameHeaderBuffer[2];
+                var type = (Http2FrameType)frameHeaderBuffer[3];
+                var flags = (Http2FrameFlag)frameHeaderBuffer[4];
                 var streamId = ((frameHeaderBuffer[5] & 0x7f) << 24) + (frameHeaderBuffer[6] << 16) +
                                (frameHeaderBuffer[7] << 8) + frameHeaderBuffer[8];
 
@@ -658,238 +667,258 @@ internal sealed class Http2OriginConnection : IDisposable
                     return;
                 }
 
-                var payload = length == 0 ? Array.Empty<byte>() : new byte[length];
-                if (length > 0)
+                var rentPayload = length > 0 &&
+                                  type == Http2FrameType.Data &&
+                                  streams.TryGetValue(streamId, out var pendingForFrame) &&
+                                  !pendingForFrame.IsTunnel;
+                var payload = length == 0
+                    ? Array.Empty<byte>()
+                    : rentPayload
+                        ? ArrayPool<byte>.Shared.Rent(length)
+                        : new byte[length];
+                try
                 {
-                    read = await ForceReadAsync(payload, 0, length, cancellationToken);
-                    if (read != length)
+                    if (length > 0)
                     {
-                        Fail(new IOException("The origin h2 connection was closed mid-frame."));
-                        return;
-                    }
-                }
-
-                switch (type)
-                {
-                    case Http2FrameType.Settings:
-                        if (streamId != 0)
+                        read = await ForceReadAsync(payload, 0, length, cancellationToken);
+                        if (read != length)
                         {
-                            Fail(new IOException("HTTP/2 protocol error: SETTINGS frame must have stream ID 0."));
+                            Fail(new IOException("The origin h2 connection was closed mid-frame."));
                             return;
                         }
+                    }
 
-                        if ((flags & Http2FrameFlag.Ack) != 0)
-                        {
-                            if (payload.Length != 0)
+                    switch (type)
+                    {
+                        case Http2FrameType.Settings:
+                            if (streamId != 0)
                             {
-                                Fail(new IOException("HTTP/2 protocol error: SETTINGS ACK must have empty payload."));
+                                Fail(new IOException("HTTP/2 protocol error: SETTINGS frame must have stream ID 0."));
                                 return;
+                            }
+
+                            if ((flags & Http2FrameFlag.Ack) != 0)
+                            {
+                                if (payload.Length != 0)
+                                {
+                                    Fail(new IOException("HTTP/2 protocol error: SETTINGS ACK must have empty payload."));
+                                    return;
+                                }
+
+                                break;
+                            }
+
+                            if (payload.Length % 6 != 0)
+                            {
+                                Fail(new IOException(
+                                    $"HTTP/2 protocol error: SETTINGS payload must be a multiple of 6 bytes, got {payload.Length}."));
+                                return;
+                            }
+
+                            ApplySettings(payload);
+                            if (faulted) return;
+                            await SendSettingsAckAsync(cancellationToken);
+                            if (!initialSettingsReceived.Task.IsCompleted)
+                            {
+                                // Consolidated with Http2Helper's client-facing admission check: both now
+                                // derive from the same proxy-owned ProxyResourceLimits.MaxConcurrentStreamsPerConnection
+                                // rather than each hard-coding its own default, so the two mechanisms cannot
+                                // silently drift apart. This gate additionally respects a lower
+                                // origin-advertised value (never a higher one) since it self-throttles the
+                                // proxy's own outbound usage of this shared origin connection - unlike
+                                // Http2Helper's check, there is no wire value here to keep in sync with.
+                                var proxyCap = resourceLimits.MaxConcurrentStreamsPerConnection;
+                                var cap = originSettings.MaxConcurrentStreams == int.MaxValue
+                                    ? proxyCap
+                                    : Math.Max(1, Math.Min(originSettings.MaxConcurrentStreams, proxyCap));
+                                concurrencyGate = new SemaphoreSlim(cap, cap);
+                                initialSettingsReceived.TrySetResult(true);
                             }
 
                             break;
-                        }
 
-                        if (payload.Length % 6 != 0)
-                        {
-                            Fail(new IOException(
-                                $"HTTP/2 protocol error: SETTINGS payload must be a multiple of 6 bytes, got {payload.Length}."));
-                            return;
-                        }
-
-                        ApplySettings(payload);
-                        if (faulted) return;
-                        await SendSettingsAckAsync(cancellationToken);
-                        if (!initialSettingsReceived.Task.IsCompleted)
-                        {
-                            // Consolidated with Http2Helper's client-facing admission check: both now
-                            // derive from the same proxy-owned ProxyResourceLimits.MaxConcurrentStreamsPerConnection
-                            // rather than each hard-coding its own default, so the two mechanisms cannot
-                            // silently drift apart. This gate additionally respects a lower
-                            // origin-advertised value (never a higher one) since it self-throttles the
-                            // proxy's own outbound usage of this shared origin connection - unlike
-                            // Http2Helper's check, there is no wire value here to keep in sync with.
-                            var proxyCap = resourceLimits.MaxConcurrentStreamsPerConnection;
-                            var cap = originSettings.MaxConcurrentStreams == int.MaxValue
-                                ? proxyCap
-                                : Math.Max(1, Math.Min(originSettings.MaxConcurrentStreams, proxyCap));
-                            concurrencyGate = new SemaphoreSlim(cap, cap);
-                            initialSettingsReceived.TrySetResult(true);
-                        }
-
-                        break;
-
-                    case Http2FrameType.WindowUpdate:
-                        if (payload.Length != 4)
-                        {
-                            Fail(new IOException("HTTP/2 protocol error: WINDOW_UPDATE frame must be exactly 4 bytes."));
-                            return;
-                        }
-
-                        {
-                            var increment = (int)(BinaryPrimitives.ReadUInt32BigEndian(payload) & 0x7fffffff);
-                            if (increment == 0)
+                        case Http2FrameType.WindowUpdate:
+                            if (payload.Length != 4)
                             {
-                                // RFC 7540 §6.9.1: a zero-increment WINDOW_UPDATE is a connection error PROTOCOL_ERROR.
-                                Fail(new IOException("HTTP/2 protocol error: WINDOW_UPDATE increment must not be zero."));
+                                Fail(new IOException("HTTP/2 protocol error: WINDOW_UPDATE frame must be exactly 4 bytes."));
                                 return;
                             }
 
-                            sendFlow.OnWindowUpdate(streamId, increment);
-                        }
-
-                        break;
-
-                    case Http2FrameType.Headers:
-                    {
-                        headerBlockStreamId = streamId;
-                        headerBlockBuffer.SetLength(0);
-                        headerBlockEndStream = (flags & Http2FrameFlag.EndStream) != 0;
-                        var data = StripHeadersFraming(payload, flags);
-                        if (data.Length > MaxHeaderBlockBytes)
-                        {
-                            Fail(new IOException(
-                                $"HTTP/2 protocol error: origin header block exceeded {MaxHeaderBlockBytes} bytes."));
-                            return;
-                        }
-
-                        await headerBlockBuffer.WriteAsync(data.AsMemory(), cancellationToken);
-                        if ((flags & Http2FrameFlag.EndHeaders) != 0)
-                        {
-                            ProcessHeaderBlock(streamId,
-                                headerBlockBuffer.GetBuffer().AsSpan(0, (int)headerBlockBuffer.Length),
-                                headerBlockEndStream);
-                            headerBlockStreamId = null;
-                        }
-
-                        break;
-                    }
-
-                    case Http2FrameType.Continuation:
-                        if (headerBlockStreamId == null)
-                        {
-                            Fail(new IOException("HTTP/2 protocol error: received CONTINUATION frame outside a header block."));
-                            return;
-                        }
-
-                        if (headerBlockStreamId != streamId)
-                        {
-                            Fail(new IOException(
-                                $"HTTP/2 protocol error: CONTINUATION frame stream ID {streamId} does not match open header block stream {headerBlockStreamId}."));
-                            return;
-                        }
-
-                        if (headerBlockBuffer.Length + payload.Length > MaxHeaderBlockBytes)
-                        {
-                            Fail(new IOException(
-                                $"HTTP/2 protocol error: origin CONTINUATION block exceeded {MaxHeaderBlockBytes} bytes."));
-                            return;
-                        }
-
-                        await headerBlockBuffer.WriteAsync(payload.AsMemory(), cancellationToken);
-                        if ((flags & Http2FrameFlag.EndHeaders) != 0)
-                        {
-                            ProcessHeaderBlock(streamId,
-                                headerBlockBuffer.GetBuffer().AsSpan(0, (int)headerBlockBuffer.Length),
-                                headerBlockEndStream);
-                            headerBlockStreamId = null;
-                        }
-
-                        break;
-
-                    case Http2FrameType.Data:
-                    {
-                        var data = StripDataFraming(payload, flags);
-                        if (streams.TryGetValue(streamId, out var pendingData))
-                        {
-                            if (pendingData.IsTunnel)
                             {
-                                if (data.Length > 0)
+                                var increment = (int)(BinaryPrimitives.ReadUInt32BigEndian(payload) & 0x7fffffff);
+                                if (increment == 0)
                                 {
-                                    var tunnelDataChannel = pendingData.TunnelDataChannel ??
-                                        throw new InvalidOperationException("A tunnel stream has no data channel.");
+                                    // RFC 7540 §6.9.1: a zero-increment WINDOW_UPDATE is a connection error PROTOCOL_ERROR.
+                                    Fail(new IOException("HTTP/2 protocol error: WINDOW_UPDATE increment must not be zero."));
+                                    return;
+                                }
 
-                                    // Bounded channel provides backpressure; drop only if the tunnel is
-                                    // already tearing down (writer completed).
-                                    try
+                                sendFlow.OnWindowUpdate(streamId, increment);
+                            }
+
+                            break;
+
+                        case Http2FrameType.Headers:
+                            {
+                                headerBlockStreamId = streamId;
+                                headerBlockBuffer.SetLength(0);
+                                headerBlockEndStream = (flags & Http2FrameFlag.EndStream) != 0;
+                                var data = StripHeadersFraming(payload, flags);
+                                if (data.Length > MaxHeaderBlockBytes)
+                                {
+                                    Fail(new IOException(
+                                        $"HTTP/2 protocol error: origin header block exceeded {MaxHeaderBlockBytes} bytes."));
+                                    return;
+                                }
+
+                                await headerBlockBuffer.WriteAsync(data.AsMemory(), cancellationToken);
+                                if ((flags & Http2FrameFlag.EndHeaders) != 0)
+                                {
+                                    ProcessHeaderBlock(streamId,
+                                        headerBlockBuffer.GetBuffer().AsSpan(0, (int)headerBlockBuffer.Length),
+                                        headerBlockEndStream);
+                                    headerBlockStreamId = null;
+                                }
+
+                                break;
+                            }
+
+                        case Http2FrameType.Continuation:
+                            if (headerBlockStreamId == null)
+                            {
+                                Fail(new IOException("HTTP/2 protocol error: received CONTINUATION frame outside a header block."));
+                                return;
+                            }
+
+                            if (headerBlockStreamId != streamId)
+                            {
+                                Fail(new IOException(
+                                    $"HTTP/2 protocol error: CONTINUATION frame stream ID {streamId} does not match open header block stream {headerBlockStreamId}."));
+                                return;
+                            }
+
+                            if (headerBlockBuffer.Length + payload.Length > MaxHeaderBlockBytes)
+                            {
+                                Fail(new IOException(
+                                    $"HTTP/2 protocol error: origin CONTINUATION block exceeded {MaxHeaderBlockBytes} bytes."));
+                                return;
+                            }
+
+                            await headerBlockBuffer.WriteAsync(payload.AsMemory(), cancellationToken);
+                            if ((flags & Http2FrameFlag.EndHeaders) != 0)
+                            {
+                                ProcessHeaderBlock(streamId,
+                                    headerBlockBuffer.GetBuffer().AsSpan(0, (int)headerBlockBuffer.Length),
+                                    headerBlockEndStream);
+                                headerBlockStreamId = null;
+                            }
+
+                            break;
+
+                        case Http2FrameType.Data:
+                            {
+                                if (streams.TryGetValue(streamId, out var pendingData))
+                                {
+                                    if (pendingData.IsTunnel)
                                     {
-                                        await tunnelDataChannel.Writer
-                                            .WriteAsync(data, cancellationToken);
+                                        var data = StripDataFraming(payload, flags);
+                                        if (data.Length > 0)
+                                        {
+                                            var tunnelDataChannel = pendingData.TunnelDataChannel ??
+                                                throw new InvalidOperationException("A tunnel stream has no data channel.");
+
+                                            // Bounded channel provides backpressure; drop only if the tunnel is
+                                            // already tearing down (writer completed).
+                                            try
+                                            {
+                                                await tunnelDataChannel.Writer
+                                                    .WriteAsync(data, cancellationToken);
+                                            }
+                                            catch (ChannelClosedException)
+                                            {
+                                                // Tunnel already closed; ignore stale DATA.
+                                            }
+                                        }
                                     }
-                                    catch (ChannelClosedException)
+                                    else
                                     {
-                                        // Tunnel already closed; ignore stale DATA.
+                                        var bodyData = StripDataFramingMemory(payload, length, flags);
+                                        if (!bodyData.IsEmpty)
+                                        {
+                                            try
+                                            {
+                                                await pendingData.BodyPipe.WriteAsync(bodyData, cancellationToken);
+                                            }
+                                            catch (BodySizeLimitExceededException)
+                                            {
+                                                // WriteAsync already faulted the pipe writer; CopyToAsync in SendAsync will
+                                                // propagate the exception. Continue the read loop for other streams.
+                                            }
+                                            catch (InvalidOperationException)
+                                            {
+                                                // Writer already completed (cancelled or stream failed); ignore stale frames.
+                                            }
+                                        }
+                                    }
+                                }
+
+                                await GrantReceiveCreditAsync(streamId, length, cancellationToken);
+
+                                if ((flags & Http2FrameFlag.EndStream) != 0) CompleteStream(streamId);
+
+                                break;
+                            }
+
+                        case Http2FrameType.RstStream:
+                            FailStream(streamId,
+                                new IOException($"HTTP/2 stream {streamId} was reset by the origin (RST_STREAM)."));
+                            break;
+
+                        case Http2FrameType.GoAway:
+                            if (streamId != 0)
+                            {
+                                Fail(new IOException("HTTP/2 protocol error: GOAWAY frame must have stream ID 0."));
+                                return;
+                            }
+
+                            if (payload.Length >= 8)
+                            {
+                                var lastId = (int)(BinaryPrimitives.ReadUInt32BigEndian(payload.AsSpan(0, 4)) & 0x7fffffff);
+                                goAwayLastStreamId = lastId;
+                                goingAway = true;
+                                foreach (var kvp in streams)
+                                {
+                                    if (kvp.Key > lastId)
+                                    {
+                                        var goAwayEx = new Http2OriginGoAwayException(
+                                            $"The origin sent GOAWAY before stream {kvp.Key} was processed; it is safe to retry.");
+                                        FailPending(kvp.Value, goAwayEx);
                                     }
                                 }
                             }
-                            else if (data.Length > 0)
-                            {
-                                try
-                                {
-                                    await pendingData.BodyPipe.WriteAsync(data.AsMemory(), cancellationToken);
-                                }
-                                catch (BodySizeLimitExceededException)
-                                {
-                                    // WriteAsync already faulted the pipe writer; CopyToAsync in SendAsync will
-                                    // propagate the exception. Continue the read loop for other streams.
-                                }
-                                catch (InvalidOperationException)
-                                {
-                                    // Writer already completed (cancelled or stream failed); ignore stale frames.
-                                }
-                            }
-                        }
 
-                        await GrantReceiveCreditAsync(streamId, length, cancellationToken);
+                            break;
 
-                        if ((flags & Http2FrameFlag.EndStream) != 0) CompleteStream(streamId);
+                        case Http2FrameType.Ping:
+                            if ((flags & Http2FrameFlag.Ack) == 0) await SendPingAckAsync(payload, cancellationToken);
+                            break;
 
-                        break;
-                    }
-
-                    case Http2FrameType.RstStream:
-                        FailStream(streamId,
-                            new IOException($"HTTP/2 stream {streamId} was reset by the origin (RST_STREAM)."));
-                        break;
-
-                    case Http2FrameType.GoAway:
-                        if (streamId != 0)
-                        {
-                            Fail(new IOException("HTTP/2 protocol error: GOAWAY frame must have stream ID 0."));
+                        case Http2FrameType.PushPromise:
+                            // This bridge always advertises SETTINGS_ENABLE_PUSH=0 - a PUSH_PROMISE anyway is a
+                            // direct protocol violation (RFC 7540 §6.6); tear the connection down rather than
+                            // decode a header block that would desync every subsequent HPACK block.
+                            Fail(new IOException("HTTP/2 protocol error: unexpected PUSH_PROMISE from the origin."));
                             return;
-                        }
 
-                        if (payload.Length >= 8)
-                        {
-                            var lastId = (int)(BinaryPrimitives.ReadUInt32BigEndian(payload.AsSpan(0, 4)) & 0x7fffffff);
-                            goAwayLastStreamId = lastId;
-                            goingAway = true;
-                            foreach (var kvp in streams)
-                            {
-                                if (kvp.Key > lastId)
-                                {
-                                    var goAwayEx = new Http2OriginGoAwayException(
-                                        $"The origin sent GOAWAY before stream {kvp.Key} was processed; it is safe to retry.");
-                                    FailPending(kvp.Value, goAwayEx);
-                                }
-                            }
-                        }
-
-                        break;
-
-                    case Http2FrameType.Ping:
-                        if ((flags & Http2FrameFlag.Ack) == 0) await SendPingAckAsync(payload, cancellationToken);
-                        break;
-
-                    case Http2FrameType.PushPromise:
-                        // This bridge always advertises SETTINGS_ENABLE_PUSH=0 - a PUSH_PROMISE anyway is a
-                        // direct protocol violation (RFC 7540 §6.6); tear the connection down rather than
-                        // decode a header block that would desync every subsequent HPACK block.
-                        Fail(new IOException("HTTP/2 protocol error: unexpected PUSH_PROMISE from the origin."));
-                        return;
-
-                    default:
-                        // PRIORITY and any unknown/reserved frame types are simply ignored.
-                        break;
+                        default:
+                            // PRIORITY and any unknown/reserved frame types are simply ignored.
+                            break;
+                    }
+                }
+                finally
+                {
+                    if (rentPayload)
+                        ArrayPool<byte>.Shared.Return(payload);
                 }
             }
         }
@@ -997,6 +1026,18 @@ internal sealed class Http2OriginConnection : IDisposable
         var padLength = payload[0];
         var end = Math.Max(1, payload.Length - padLength);
         return payload.AsSpan(1, end - 1).ToArray();
+    }
+
+    /// <summary>Strips DATA padding while retaining ownership of a pooled payload buffer.</summary>
+    private static ReadOnlyMemory<byte> StripDataFramingMemory(
+        byte[] payload, int payloadLength, Http2FrameFlag flags)
+    {
+        if ((flags & Http2FrameFlag.Padded) == 0 || payloadLength == 0)
+            return payload.AsMemory(0, payloadLength);
+
+        var padLength = payload[0];
+        var end = Math.Max(1, payloadLength - padLength);
+        return payload.AsMemory(1, end - 1);
     }
 
     private void ProcessHeaderBlock(int streamId, ReadOnlySpan<byte> compressed, bool endStream) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.

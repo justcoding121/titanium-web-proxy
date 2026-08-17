@@ -122,6 +122,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3
         or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
         or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
+        or ProbeMode.YarpReverseHttp3ToHttp3
         or ProbeMode.ReverseH2c or ProbeMode.YarpReverseH2c
         or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
         or ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1

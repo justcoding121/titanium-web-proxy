@@ -22,7 +22,7 @@ param(
         'reverse-http11-to-http2', 'yarp-reverse-http11-to-http2',
         'reverse-http1-to-http3', 'yarp-reverse-http1-to-http3',
         'reverse-http2-to-http3', 'yarp-reverse-http2-to-http3',
-        'reverse-http3-to-http2', 'yarp-reverse-http3-to-http2',
+        'reverse-http3-to-http2', 'yarp-reverse-http3-to-http2', 'yarp-reverse-http3-to-http3',
         'explicit-http1-multi', 'explicit-http2-multi')]
     [string] $Mode = 'compare',
 

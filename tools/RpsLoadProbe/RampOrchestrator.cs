@@ -51,6 +51,8 @@ internal enum ProbeMode
     /// <summary>Client H3 → H3→H2 bridge → origin HTTPS h2.</summary>
     ReverseHttp3ToHttp2,
     YarpReverseHttp3ToHttp2,
+    /// <summary>YARP client H3 → origin HTTP/3.</summary>
+    YarpReverseHttp3ToHttp3,
     /// <summary>Client H2 TLS → H2→H1 bridge → origin HTTPS HTTP/1 (MITM, both sides TLS).</summary>
     MitmHttp2ToHttp1,
     /// <summary>Client H3 QUIC → bridge → origin HTTPS HTTP/1 (MITM, both sides crypto).</summary>
@@ -137,6 +139,7 @@ internal static class RampOrchestrator
                     or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3
                     or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
                     or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
+                    or ProbeMode.YarpReverseHttp3ToHttp3
                     or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
                     or ProbeMode.MitmHttp3ToHttp1);
             if (removed > 0)
@@ -321,6 +324,8 @@ internal static class RampOrchestrator
                 [new("twp-reverse-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null)],
             ProbeMode.YarpReverseHttp3ToHttp2 =>
                 [new("yarp-reverse-http3-to-http2", ProbeMode.YarpReverseHttp3ToHttp2, null)],
+            ProbeMode.YarpReverseHttp3ToHttp3 =>
+                [new("yarp-reverse-http3-to-http3", ProbeMode.YarpReverseHttp3ToHttp3, null)],
             ProbeMode.ExplicitHttp1Multi =>
                 [new("twp-explicit-http1-multi", ProbeMode.ExplicitHttp1Multi, null)],
             ProbeMode.ExplicitHttp2Multi =>
@@ -452,7 +457,8 @@ internal static class RampOrchestrator
                 new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
                 new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null),
                 new("twp-reverse-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null),
-                new("yarp-reverse-http3-to-http2", ProbeMode.YarpReverseHttp3ToHttp2, null)
+                new("yarp-reverse-http3-to-http2", ProbeMode.YarpReverseHttp3ToHttp2, null),
+                new("yarp-reverse-http3-to-http3", ProbeMode.YarpReverseHttp3ToHttp3, null)
             ],
             ProbeMode.CompareMitm =>
             [
