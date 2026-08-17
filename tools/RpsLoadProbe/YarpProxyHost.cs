@@ -221,6 +221,9 @@ internal sealed class YarpProxyHost : IDisposable
         });
         builder.Logging.ClearProviders();
         builder.Logging.SetMinimumLevel(LogLevel.Warning);
+        // Prevent default http://localhost:5000 from colliding with our Listen() port
+        // (HTTP/3 especially fails hard when Kestrel tries both).
+        builder.WebHost.UseUrls();
 
         builder.WebHost.ConfigureKestrel(kestrel =>
         {
