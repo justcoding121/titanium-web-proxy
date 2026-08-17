@@ -1481,7 +1481,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         var readerSupportsHook = SupportsBodyWriteHook;
         var writerSupportsHook = writer is ITransportCapableStream { SupportsBodyWriteHook: true }; // NOSONAR S3060 -- preserves external interface compatibility.
 
-        if (readerSupportsHook && writerSupportsHook &&
+        if (readerSupportsHook && writerSupportsHook && !args.IsFastPath &&
             ((isRequest && args.HttpClient.Request.OriginalHasBody && !args.HttpClient.Request.IsBodyRead && server.ShouldCallBeforeRequestBodyWrite()) ||
              (isResponse && args.HttpClient.Response.OriginalHasBody && !args.HttpClient.Response.IsBodyRead && server.ShouldCallBeforeResponseBodyWrite())))
         {

@@ -116,7 +116,7 @@ public partial class ProxyServer
         response.SetOriginalHeaders();
 
         // if user requested call back then do it
-        if (!response.Locked) await OnBeforeResponse(args);
+        if (!response.Locked && !args.IsFastPath) await OnBeforeResponse(args);
 
         // it may changed in the user event
         response = args.HttpClient.Response;
@@ -190,7 +190,7 @@ public partial class ProxyServer
         {
             response.Headers.FixProxyHeaders();
             // Via injection on outgoing response (RFC 9110 §7.6.3).
-            if (!string.IsNullOrEmpty(ViaHeaderPseudonym))
+            if (!args.IsFastPath && !string.IsNullOrEmpty(ViaHeaderPseudonym))
                 AddViaHeader(response.Headers, args.HttpClient.Response.HttpVersion, ViaHeaderPseudonym);
         }
         else
@@ -317,6 +317,8 @@ public partial class ProxyServer
     /// <returns></returns>
     private Task OnBeforeResponse(SessionEventArgs args)
     {
+        if (args.IsFastPath) return Task.CompletedTask;
+
         return BeforeResponse != null
             ? BeforeResponse.InvokeAsync(this, args, logger)
             : Task.CompletedTask;
@@ -333,7 +335,7 @@ public partial class ProxyServer
     /// <returns></returns>
     private Task OnAfterResponse(SessionEventArgs args)
     {
-        if (AfterResponse != null)
+        if (!args.IsFastPath && AfterResponse != null)
             return OnAfterResponseWithHandlerAsync(args);
 
         TryUpdateHttp3CapabilityFromResponse(args);

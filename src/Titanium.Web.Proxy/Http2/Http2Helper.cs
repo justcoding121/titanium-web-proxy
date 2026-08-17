@@ -1901,7 +1901,7 @@ namespace Titanium.Web.Proxy.Http2
                                 await data.WriteAsync(buffer.AsMemory(offset, length), cancellationToken);
                             }
                         }
-                        else if (!rr.Http2IgnoreBodyFrames && !rr.IsBodyRead &&
+                        else if (!args.IsFastPath && !rr.Http2IgnoreBodyFrames && !rr.IsBodyRead &&
                                  (isClient
                                      ? args.Server.ShouldCallBeforeRequestBodyWrite()
                                      : args.Server.ShouldCallBeforeResponseBodyWrite()))

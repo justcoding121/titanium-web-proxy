@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading;
@@ -180,10 +181,30 @@ public partial class ProxyServer
                                 request.Host = rawAuthority;
                         }
 
+                        var interceptionCtx = new HttpInterceptionContext
+                        {
+                            Hostname = request.RequestUri?.Host
+                                        ?? request.Host
+                                        ?? string.Empty,
+                            Port = request.RequestUri?.Port
+                                   ?? connectRequest?.RequestUri?.Port
+                                   ?? endPoint.Port,
+                            IsHttps = isHttps || request.IsHttps,
+                            Method = request.Method ?? string.Empty,
+                            PathAndQuery = request.RequestUriString8.GetString(),
+                            HttpVersion = request.HttpVersion,
+                            ProxyEndPoint = endPoint,
+                            ClientRemoteEndPoint = args.ClientRemoteEndPoint,
+                            ClientProcessId = null
+                        };
+                        var fastPath = !ShouldIntercept(interceptionCtx, endPoint);
+                        args.IsFastPath = fastPath;
+
                         // If user requested interception do it
                         try
                         {
-                            await OnBeforeRequest(args);
+                            if (!fastPath)
+                                await OnBeforeRequest(args);
                         }
                         catch (BodySizeLimitExceededException bodyLimitEx)
                         {
@@ -232,7 +253,7 @@ public partial class ProxyServer
                                 // must be preserved.  The default was already filled in above.
 
                                 // Via loop detection and injection (RFC 9110 §7.6.3).
-                                if (!string.IsNullOrEmpty(ViaHeaderPseudonym))
+                                if (!fastPath && !string.IsNullOrEmpty(ViaHeaderPseudonym))
                                 {
                                     if (HasLoopedVia(request.Headers, ViaHeaderPseudonym))
                                     {
@@ -547,7 +568,7 @@ public partial class ProxyServer
                 Http1FramingValidator.Validate(h3Response, FramingSource.SynthesizedFromH3);
                 h3Response.SetOriginalHeaders();
 
-                if (!h3Response.Locked) await OnBeforeResponse(args);
+                if (!h3Response.Locked && !args.IsFastPath) await OnBeforeResponse(args);
 
                 h3Response = args.HttpClient.Response;
                 var h3ClientStream = args.ClientStream;
@@ -572,7 +593,7 @@ public partial class ProxyServer
                     if (!args.IsTransparent && !args.IsSocks)
                     {
                         h3Response.Headers.FixProxyHeaders();
-                        if (!string.IsNullOrEmpty(ViaHeaderPseudonym))
+                        if (!args.IsFastPath && !string.IsNullOrEmpty(ViaHeaderPseudonym))
                             AddViaHeader(h3Response.Headers, h3Response.HttpVersion, ViaHeaderPseudonym);
                     }
                     else
@@ -779,6 +800,8 @@ public partial class ProxyServer
     /// <returns></returns>
     private Task OnBeforeRequest(SessionEventArgs args)
     {
+        if (args.IsFastPath) return Task.CompletedTask;
+
         args.Timing?.MarkRequestHeadersReceived();
 
         return BeforeRequest != null

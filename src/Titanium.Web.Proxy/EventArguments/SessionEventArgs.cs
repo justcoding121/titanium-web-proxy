@@ -47,6 +47,12 @@ public class SessionEventArgs : SessionEventArgsBase
     public bool IsPromise { get; internal set; }
 
     /// <summary>
+    ///     When true, this session skips BeforeRequest/BeforeResponse/AfterResponse and Via
+    ///     injection because the interception gate/predicate selected the fast-forward path.
+    /// </summary>
+    internal bool IsFastPath { get; set; }
+
+    /// <summary>
     ///     Native HTTP/3 only: reads remaining client DATA frames into a bounded buffer (wire bytes).
     ///     Set by <c>Http3RequestStream</c> before <c>BeforeRequest</c>; cleared once the body is
     ///     buffered or streamed to the origin. Used by <see cref="GetRequestBody" /> and TCP fallback.
