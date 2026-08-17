@@ -20,13 +20,25 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         [TestMethod]
-        public void TryMatchValue_InternsKeepAliveAndChunked()
+        public void TryMatchValue_InternsKeepAliveChunkedAndEncodings()
         {
             Assert.IsTrue(KnownHeaders.TryMatchValue("keep-alive", out var keepAlive));
             Assert.AreSame(KnownHeaders.ConnectionKeepAlive, keepAlive);
 
             Assert.IsTrue(KnownHeaders.TryMatchValue("chunked", out var chunked));
             Assert.AreSame(KnownHeaders.TransferEncodingChunked, chunked);
+
+            Assert.IsTrue(KnownHeaders.TryMatchValue("gzip", out var gzip));
+            Assert.AreSame(KnownHeaders.ContentEncodingGzip, gzip);
+
+            Assert.IsTrue(KnownHeaders.TryMatchValue("deflate", out var deflate));
+            Assert.AreSame(KnownHeaders.ContentEncodingDeflate, deflate);
+
+            Assert.IsTrue(KnownHeaders.TryMatchValue("br", out var br));
+            Assert.AreSame(KnownHeaders.ContentEncodingBrotli, br);
+
+            Assert.IsTrue(KnownHeaders.TryMatchValue("identity", out var identity));
+            Assert.AreSame(KnownHeaders.ContentEncodingIdentity, identity);
         }
 
         [TestMethod]
@@ -42,6 +54,59 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.IsNotNull(header);
             Assert.AreSame(KnownHeaders.Connection.String, header.Name);
             Assert.AreSame(KnownHeaders.ConnectionKeepAlive.String, header.Value);
+        }
+
+        [TestMethod]
+        public void HeaderParser_UnknownNameAndValue_RoundTripViaByteString()
+        {
+            var headers = new HeaderCollection();
+            HeaderParser.ReadHeaders(
+                new SingleLineReader("X-Custom: hello-world"),
+                headers,
+                default).AsTask().GetAwaiter().GetResult();
+
+            var header = headers.GetFirstHeader("X-Custom");
+            Assert.IsNotNull(header);
+            Assert.AreEqual("X-Custom", header.Name);
+            Assert.AreEqual("hello-world", header.Value);
+        }
+
+        [TestMethod]
+        public void HeaderParser_KnownNameUnknownValue_PreservesValue()
+        {
+            var headers = new HeaderCollection();
+            HeaderParser.ReadHeaders(
+                new SingleLineReader("Host: example.com:8443"),
+                headers,
+                default).AsTask().GetAwaiter().GetResult();
+
+            var header = headers.GetFirstHeader(KnownHeaders.Host);
+            Assert.IsNotNull(header);
+            Assert.AreSame(KnownHeaders.Host.String, header.Name);
+            Assert.AreEqual("example.com:8443", header.Value);
+        }
+
+        private sealed class SingleLineReader : Titanium.Web.Proxy.StreamExtended.Network.ILineStream
+        {
+            private readonly string?[] lines;
+            private int index;
+
+            public SingleLineReader(params string?[] lines) => this.lines = lines;
+
+            public bool DataAvailable => false;
+
+            public System.Threading.Tasks.ValueTask<bool> FillBufferAsync(
+                System.Threading.CancellationToken cancellationToken) =>
+                new(false);
+
+            public byte ReadByteFromBuffer() => throw new System.InvalidOperationException();
+
+            public System.Threading.Tasks.ValueTask<string?> ReadLineAsync(
+                System.Threading.CancellationToken cancellationToken)
+            {
+                if (index >= lines.Length) return new System.Threading.Tasks.ValueTask<string?>((string?)null);
+                return new System.Threading.Tasks.ValueTask<string?>(lines[index++]);
+            }
         }
 
         [TestMethod]

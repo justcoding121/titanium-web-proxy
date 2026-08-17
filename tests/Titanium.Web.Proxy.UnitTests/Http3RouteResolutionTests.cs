@@ -382,15 +382,30 @@ public class Http3RouteResolutionTests
             await Task.Delay(20);
         Assert.AreEqual(1, resolver.ProbeCount, "First miss must probe once.");
 
-        // Give the background task a moment to record the miss suppression before re-probing.
-        await Task.Delay(50);
+        // Wait until miss suppression is recorded (ProbeCount stays at 1 across further resolves).
+        var suppressed = false;
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (DateTime.UtcNow < deadline)
+        {
+            server.ResolveHttp3Origin("example.com", 443, UpstreamHttpProtocol.Auto, true);
+            if (resolver.ProbeCount == 1)
+            {
+                // Confirm it stays suppressed across another resolve + short settle.
+                await Task.Delay(20);
+                server.ResolveHttp3Origin("example.com", 443, UpstreamHttpProtocol.Auto, true);
+                if (resolver.ProbeCount == 1)
+                {
+                    suppressed = true;
+                    break;
+                }
+            }
 
-        server.ResolveHttp3Origin("example.com", 443, UpstreamHttpProtocol.Auto, true);
-        server.ResolveHttp3Origin("example.com", 443, UpstreamHttpProtocol.Auto, true);
-        await Task.Delay(50);
+            await Task.Delay(20);
+        }
 
-        Assert.AreEqual(1, resolver.ProbeCount,
+        Assert.IsTrue(suppressed,
             "A recent miss must suppress further background discovery for the same host:port.");
+        Assert.AreEqual(1, resolver.ProbeCount);
     }
 
     [TestMethod]

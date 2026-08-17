@@ -163,12 +163,7 @@ internal class TcpConnectionFactory : IDisposable
         // when creating Tcp client isConnect won't matter
         cacheKeyBuilder.Append(isHttps);
 
-        if (applicationProtocols != null)
-            foreach (var protocol in applicationProtocols.OrderBy(x => x))
-            {
-                cacheKeyBuilder.Append('-');
-                cacheKeyBuilder.Append(protocol);
-            }
+        AppendApplicationProtocolsToCacheKey(cacheKeyBuilder, applicationProtocols);
 
         // Include generic + family-specific bind endpoints so dual-stack adapter selection
         // never shares pool buckets across different local NICs (issue #951).
@@ -187,6 +182,33 @@ internal class TcpConnectionFactory : IDisposable
         }
 
         return cacheKeyBuilder.ToString();
+    }
+
+    /// <summary>
+    ///     Appends ALPN protocols in a deterministic order without LINQ <c>OrderBy</c> allocations.
+    /// </summary>
+    private static void AppendApplicationProtocolsToCacheKey(StringBuilder cacheKeyBuilder,
+        List<SslApplicationProtocol>? applicationProtocols)
+    {
+        if (applicationProtocols == null || applicationProtocols.Count == 0) return;
+
+        if (applicationProtocols.Count == 1)
+        {
+            cacheKeyBuilder.Append('-');
+            cacheKeyBuilder.Append(applicationProtocols[0]);
+            return;
+        }
+
+        var sorted = new SslApplicationProtocol[applicationProtocols.Count];
+        applicationProtocols.CopyTo(sorted);
+        Array.Sort(sorted, static (a, b) =>
+            string.CompareOrdinal(a.ToString(), b.ToString()));
+
+        foreach (var protocol in sorted)
+        {
+            cacheKeyBuilder.Append('-');
+            cacheKeyBuilder.Append(protocol);
+        }
     }
 
     /// <summary>

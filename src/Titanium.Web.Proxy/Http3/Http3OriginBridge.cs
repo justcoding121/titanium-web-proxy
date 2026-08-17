@@ -573,7 +573,7 @@ internal static class Http3OriginBridge
         var (host, port) = ResolveH2OriginAuthority(request);
         var (connectHost, connectPort) = ResolveTransparentForwardTarget(sessionArgs);
 
-        var poolKey = $"{connectHost ?? host}:{connectPort ?? port}";
+        var poolKey = BuildHttp2OriginPoolKey(sessionArgs, server, host, port, connectHost, connectPort);
         try
         {
             var on1xx = CreateInterimResponseAdapter(onInterimResponse);
@@ -643,6 +643,29 @@ internal static class Http3OriginBridge
             return (transparent.ForwardHost, transparent.ForwardPort);
 
         return (null, null);
+    }
+
+    /// <summary>
+    ///     Pool key for H3→H2 origin bags. Matches the identity dimensions of
+    ///     <see cref="TcpConnectionFactory.GetConnectionCacheKey"/> so different upstream proxies /
+    ///     bind endpoints / TLS vs h2c never share one multiplexed connection.
+    /// </summary>
+    private static string BuildHttp2OriginPoolKey(
+        SessionEventArgs sessionArgs, ProxyServer server,
+        string host, int port, string? connectHost, int? connectPort)
+    {
+        var originIsHttps = sessionArgs.ProxyEndPoint is not TransparentBaseProxyEndPoint { ForwardCleartext: true };
+        var upStreamProxy = sessionArgs.CustomUpStreamProxyUsed
+                            ?? (originIsHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
+        var effectiveProxy = TcpConnectionFactory.GetEffectiveUpstreamProxy(upStreamProxy, host, port);
+        var upStreamEndPoint = sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint;
+
+        return TcpConnectionFactory.GetConnectionCacheKey(
+            host, port, originIsHttps,
+            originIsHttps ? SslExtensions.Http2ProtocolAsList : null,
+            upStreamEndPoint, effectiveProxy,
+            connectHost, connectPort,
+            server.UpStreamEndPointIPv4, server.UpStreamEndPointIPv6);
     }
 
     private static Func<int, HeaderCollection, CancellationToken, Task>? CreateInterimResponseAdapter(

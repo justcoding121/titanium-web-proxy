@@ -43,6 +43,8 @@ namespace Titanium.Web.Proxy.Http2
     {
         public static readonly byte[] ConnectionPreface = Encoding.ASCII.GetBytes("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
 
+        private static readonly byte[] ConnectMethodBytes = "CONNECT"u8.ToArray();
+
         /// <summary>
         ///     Connection-level WINDOW_UPDATE increment matching Chrome/Edge (0xEF0001). Grows the peer's
         ///     connection send window from the RFC default 65535 to ~15 MB. Without this, multiplexed large
@@ -548,7 +550,7 @@ namespace Titanium.Web.Proxy.Http2
                     // All other requests require :method, :path, and :scheme.
                     // RFC 8441 §5: extended CONNECT has :method=CONNECT + :protocol + :scheme + :path + :authority.
                     bool isConnect = method.Length > 0 &&
-                        method.Span.SequenceEqual(System.Text.Encoding.ASCII.GetBytes("CONNECT"));
+                        method.Span.SequenceEqual(ConnectMethodBytes);
                     bool isExtendedConnect = isConnect && headerListener.Protocol.Length > 0;
                     bool isMainHeaders = (method.Length > 0 && path.Length > 0) ||
                         (isConnect && headerListener.Authority.Length > 0);

@@ -107,9 +107,12 @@ public class TunnelConnectSessionEventArgs : SessionEventArgsBase
 
     internal void OnDecryptedDataSent(byte[] buffer, int offset, int count)
     {
+        var handler = DecryptedDataSent;
+        if (handler == null) return;
+
         try
         {
-            DecryptedDataSent?.Invoke(this, new DataEventArgs(buffer, offset, count));
+            handler.Invoke(this, new DataEventArgs(CopyDataEventPayload(buffer, offset, count), 0, count));
         }
         catch (Exception ex)
         {
@@ -119,14 +122,26 @@ public class TunnelConnectSessionEventArgs : SessionEventArgsBase
 
     internal void OnDecryptedDataReceived(byte[] buffer, int offset, int count)
     {
+        var handler = DecryptedDataReceived;
+        if (handler == null) return;
+
         try
         {
-            DecryptedDataReceived?.Invoke(this, new DataEventArgs(buffer, offset, count));
+            handler.Invoke(this, new DataEventArgs(CopyDataEventPayload(buffer, offset, count), 0, count));
         }
         catch (Exception ex)
         {
             OnException(new Exception("Exception thrown in user event", ex));
         }
+    }
+
+    private static byte[] CopyDataEventPayload(byte[] buffer, int offset, int count)
+    {
+        if (count == 0) return Array.Empty<byte>();
+        if (offset == 0 && count == buffer.Length) return (byte[])buffer.Clone();
+        var copy = new byte[count];
+        Buffer.BlockCopy(buffer, offset, copy, 0, count);
+        return copy;
     }
 
 }

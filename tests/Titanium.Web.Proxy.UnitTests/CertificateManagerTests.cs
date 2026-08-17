@@ -633,7 +633,9 @@ namespace Titanium.Web.Proxy.UnitTests
             cached!.LastAccess = DateTime.UtcNow.AddHours(-2);
 
             var sweep = mgr.ClearIdleCertificates();
-            await Task.Delay(250);
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (cache.ContainsKey("idle-evict.example") && DateTime.UtcNow < deadline)
+                await Task.Delay(20);
             mgr.StopClearIdleCertificates();
             await sweep;
 
@@ -691,7 +693,9 @@ namespace Titanium.Web.Proxy.UnitTests
                 enqueue.Invoke(queue, new[] { item });
 
             var sweep = mgr.ClearIdleCertificates();
-            await Task.Delay(250);
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while ((int)queueType.GetProperty("Count")!.GetValue(queue)! > 0 && DateTime.UtcNow < deadline)
+                await Task.Delay(20);
             mgr.StopClearIdleCertificates();
             await sweep;
 

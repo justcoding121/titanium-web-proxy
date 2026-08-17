@@ -21,6 +21,19 @@ namespace Titanium.Web.Proxy.UnitTests
         private static readonly string[] CookieValuesBa = { "b=2", "a=1" };
 
         [TestMethod]
+        public void NonUniqueHeaders_ExposedList_IsReadOnly()
+        {
+            var headers = new HeaderCollection();
+            headers.AddHeader("X-Test", "1");
+            headers.AddHeader("X-Test", "2");
+
+            var view = headers.NonUniqueHeaders["X-Test"];
+            Assert.IsInstanceOfType(view, typeof(System.Collections.ObjectModel.ReadOnlyCollection<HttpHeader>));
+            Assert.ThrowsExactly<NotSupportedException>(() => ((IList<HttpHeader>)view).Add(new HttpHeader("X-Test", "3")));
+            Assert.ThrowsExactly<NotSupportedException>(() => ((IList<HttpHeader>)view).Clear());
+        }
+
+        [TestMethod]
         public void AddHeader_SameNameTwice_MovesBothValuesToNonUniqueCollection()
         {
             var headers = new HeaderCollection();

@@ -74,7 +74,7 @@ public partial class ProxyServer
         // check in non-unique headers first
         var header = response.Headers.NonUniqueHeaders.FirstOrDefault(x => authHeaderNames.Contains(x.Key));
 
-        if (!header.Equals(new KeyValuePair<string, List<HttpHeader>>())) headerName = header.Key;
+        if (!header.Equals(new KeyValuePair<string, IReadOnlyList<HttpHeader>>())) headerName = header.Key;
 
         if (headerName != null)
             authHeader = response.Headers.NonUniqueHeaders[headerName]

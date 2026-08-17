@@ -71,7 +71,9 @@ public class Http3OriginCapabilityCacheTests
         cache.Set("example.com:443", ttl: TimeSpan.FromMilliseconds(50));
         Assert.IsTrue(cache.TryGet("example.com:443", out _), "Entry should be fresh immediately.");
 
-        await Task.Delay(200);
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (cache.TryGet("example.com:443", out _) && DateTime.UtcNow < deadline)
+            await Task.Delay(10);
 
         var found = cache.TryGet("example.com:443", out _);
 
@@ -258,7 +260,9 @@ public class Http3OriginCapabilityCacheTrimTests
         cache.Set("a.example.com:443", ttl: TimeSpan.FromMilliseconds(50));
         cache.Set("b.example.com:443", altPort: 8443, ttl: TimeSpan.FromMilliseconds(50));
 
-        await Task.Delay(200);
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (cache.TryGet("a.example.com:443", out _) && DateTime.UtcNow < deadline)
+            await Task.Delay(10);
 
         cache.TrimExpired();
 

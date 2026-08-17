@@ -191,6 +191,28 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         [TestMethod]
+        public void CacheKey_ApplicationProtocolListOrder_IsDeterministic()
+        {
+            var orderA = new List<SslApplicationProtocol>
+            {
+                SslApplicationProtocol.Http2,
+                SslApplicationProtocol.Http11
+            };
+            var orderB = new List<SslApplicationProtocol>
+            {
+                SslApplicationProtocol.Http11,
+                SslApplicationProtocol.Http2
+            };
+
+            var keyA = TcpConnectionFactory.GetConnectionCacheKey(
+                "example.com", 443, true, orderA, null, null);
+            var keyB = TcpConnectionFactory.GetConnectionCacheKey(
+                "example.com", 443, true, orderB, null, null);
+
+            Assert.AreEqual(keyA, keyB);
+        }
+
+        [TestMethod]
         public void CacheKey_NextProxyHopChangesConnectionIdentity()
         {
             var singleHop = new ExternalProxy("proxy.example", 8080);

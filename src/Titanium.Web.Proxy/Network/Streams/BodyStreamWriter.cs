@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -97,11 +98,18 @@ internal sealed class BodyStreamWriter : Stream
             return;
         }
 
-        // Non-array memory (e.g. NativeMemory): copy through a short-lived heap array sized to the
-        // write. Callers of RespondStreaming almost always pass array-backed Memory from the pool.
-        var rented = new byte[buffer.Length];
-        buffer.CopyTo(rented);
-        await writer.WriteAsync(rented, 0, rented.Length, cancellationToken);
+        // Non-array memory (e.g. NativeMemory): copy through a pooled array sized to the write.
+        // Callers of RespondStreaming almost always pass array-backed Memory from the pool.
+        var rented = ArrayPool<byte>.Shared.Rent(buffer.Length);
+        try
+        {
+            buffer.CopyTo(rented);
+            await writer.WriteAsync(rented, 0, buffer.Length, cancellationToken);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
     }
 
     /// <summary>

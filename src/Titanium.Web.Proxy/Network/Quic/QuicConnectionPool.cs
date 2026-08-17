@@ -109,31 +109,42 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
             upStreamProxy, upStreamEndPoint);
         var entry = _pool.GetOrAdd(cacheKey, static _ => new OriginEntry());
 
-        // Fast path: an established connection is already shared for this origin.
-        if (TryAcquireCurrent(entry, out var shared)) return shared;
-
-        // Slow path. The gate is what turns a cold burst of concurrent requests to one origin into a
-        // single handshake: the first caller connects while the rest wait here and then reuse the
-        // result, instead of every one of them opening its own connection.
-        await entry.CreationGate.WaitAsync(cancellationToken);
+        // Pin the dictionary entry for this whole acquire so ClearIdleConnectionsAsync cannot
+        // remove it between GetOrAdd and CreationGate.WaitAsync. That TOCTOU let concurrent cold
+        // callers land on different OriginEntry instances and each open their own connection.
+        Interlocked.Increment(ref entry.Interest);
         try
         {
-            if (_draining) throw new InvalidOperationException("QuicConnectionPool is draining.");
-            if (TryAcquireCurrent(entry, out shared)) return shared;
+            // Fast path: an established connection is already shared for this origin.
+            if (TryAcquireCurrent(entry, out var shared)) return shared;
 
-            var created = await _factory.CreateAsync(
-                connectHost, effectiveSniHost, port, upStreamEndPoint, upStreamProxy,
-                cacheKey, remoteCertificateValidationCallback, cancellationToken);
+            // Slow path. The gate is what turns a cold burst of concurrent requests to one origin into a
+            // single handshake: the first caller connects while the rest wait here and then reuse the
+            // result, instead of every one of them opening its own connection.
+            await entry.CreationGate.WaitAsync(cancellationToken);
+            try
+            {
+                if (_draining) throw new InvalidOperationException("QuicConnectionPool is draining.");
+                if (TryAcquireCurrent(entry, out shared)) return shared;
 
-            // Nothing else can see `created` yet, so this cannot fail.
-            created.TryAcquireStream();
-            entry.Current = created;
-            _proxyServer.Http3WarmOrigins.Mark(effectiveSniHost, port);
-            return created;
+                var created = await _factory.CreateAsync(
+                    connectHost, effectiveSniHost, port, upStreamEndPoint, upStreamProxy,
+                    cacheKey, remoteCertificateValidationCallback, cancellationToken);
+
+                // Nothing else can see `created` yet, so this cannot fail.
+                created.TryAcquireStream();
+                entry.Current = created;
+                _proxyServer.Http3WarmOrigins.Mark(effectiveSniHost, port);
+                return created;
+            }
+            finally
+            {
+                entry.CreationGate.Release();
+            }
         }
         finally
         {
-            entry.CreationGate.Release();
+            Interlocked.Decrement(ref entry.Interest);
         }
     }
 
@@ -269,7 +280,8 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     ///     Periodically disposes shared connections that have gone idle or closed (without waiting for
     ///     a future <see cref="GetOrCreateAsync" /> call against that same origin, which may never
     ///     come) and removes entries left empty afterward so <see cref="_pool" /> does not grow one
-    ///     entry per distinct origin ever contacted for the lifetime of the proxy.
+    ///     entry per distinct origin ever contacted for the lifetime of the proxy. Empty-entry removal
+    ///     observes <see cref="OriginEntry.Interest" /> so it cannot race concurrent acquires.
     /// </summary>
     private async Task ClearIdleConnectionsAsync() // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
@@ -301,11 +313,15 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
                         continue;
                     }
 
-                    // Only drop the entry once it is genuinely unused: taking the gate proves no
-                    // caller is mid-creation and about to publish a connection into it.
+                    // Drop empty entries only when no GetOrCreateAsync caller still holds Interest.
+                    // Taking CreationGate alone is not enough: a caller can already have GetOrAdd'd
+                    // this entry and not yet reached WaitAsync, which used to let the sweep remove
+                    // the entry and force a second handshake for concurrent cold acquires.
+                    if (Volatile.Read(ref entry.Interest) != 0) continue;
                     if (!await entry.CreationGate.WaitAsync(0, _cleanupCts.Token)) continue;
                     try
                     {
+                        if (Volatile.Read(ref entry.Interest) != 0) continue;
                         if (Volatile.Read(ref entry.Current) == null)
                             ((ICollection<KeyValuePair<string, OriginEntry>>)_pool)
                                 .Remove(new KeyValuePair<string, OriginEntry>(key, entry));
@@ -342,6 +358,13 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
 
         // Field rather than a property so Interlocked/Volatile can operate on it directly.
         internal QuicServerConnection? Current;
+
+        /// <summary>
+        ///     Number of <see cref="GetOrCreateAsync" /> callers currently using this entry. Prevents the
+        ///     idle sweep from removing the entry out from under a caller that has not yet taken
+        ///     <see cref="CreationGate" />.
+        /// </summary>
+        internal int Interest;
     }
 }
 #pragma warning restore CA1416

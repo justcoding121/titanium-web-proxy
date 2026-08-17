@@ -32,6 +32,11 @@ internal static class RunTime
         private static bool IsRunningOnMac => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
 
     /// <summary>
+    ///     Test-only override for <see cref="IsWindows" />. Null restores the real OS check.
+    /// </summary>
+    private static bool? isWindowsOverride;
+
+    /// <summary>
     ///     Is running on Mono?
     /// </summary>
     internal static bool IsRunningOnMono => isRunningOnMono.Value;
@@ -39,7 +44,13 @@ internal static class RunTime
     public static bool IsLinux => IsRunningOnLinux;
 
     [SupportedOSPlatformGuard("windows")]
-    public static bool IsWindows => IsRunningOnWindows;
+    public static bool IsWindows => isWindowsOverride ?? IsRunningOnWindows;
+
+    /// <summary>
+    ///     Forces <see cref="IsWindows" /> for unit tests that need to cover non-Windows (or Windows)
+    ///     branches on a machine of the opposite OS. Pass <see langword="null" /> to clear.
+    /// </summary>
+    internal static void SetIsWindowsForTests(bool? value) => isWindowsOverride = value;
 
     [SupportedOSPlatformGuard("windows")]
     public static bool IsUwpOnWindows => IsWindows && UwpHelper.IsRunningAsUwp();

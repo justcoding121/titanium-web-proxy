@@ -79,6 +79,7 @@ static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentEncoding -> Titanium
 static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingBrotli -> Titanium.Web.Proxy.Http.KnownHeader!
 static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingDeflate -> Titanium.Web.Proxy.Http.KnownHeader!
 static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingGzip -> Titanium.Web.Proxy.Http.KnownHeader!
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingIdentity -> Titanium.Web.Proxy.Http.KnownHeader!
 static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentLength -> Titanium.Web.Proxy.Http.KnownHeader!
 static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentLengthHttp2 -> Titanium.Web.Proxy.Http.KnownHeader!
 static readonly Titanium.Web.Proxy.Http.KnownHeaders.ContentType -> Titanium.Web.Proxy.Http.KnownHeader!
@@ -379,7 +380,7 @@ Titanium.Web.Proxy.Http.HeaderCollection.GetHeaders(string! name) -> System.Coll
 Titanium.Web.Proxy.Http.HeaderCollection.HeaderCollection() -> void
 Titanium.Web.Proxy.Http.HeaderCollection.HeaderExists(string! name) -> bool
 Titanium.Web.Proxy.Http.HeaderCollection.Headers.get -> System.Collections.ObjectModel.ReadOnlyDictionary<string!, Titanium.Web.Proxy.Models.HttpHeader!>!
-Titanium.Web.Proxy.Http.HeaderCollection.NonUniqueHeaders.get -> System.Collections.ObjectModel.ReadOnlyDictionary<string!, System.Collections.Generic.List<Titanium.Web.Proxy.Models.HttpHeader!>!>!
+Titanium.Web.Proxy.Http.HeaderCollection.NonUniqueHeaders.get -> System.Collections.ObjectModel.ReadOnlyDictionary<string!, System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Models.HttpHeader!>!>!
 Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader(string! headerName) -> bool
 Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader(Titanium.Web.Proxy.Http.KnownHeader! headerName) -> bool
 Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader(Titanium.Web.Proxy.Models.HttpHeader! header) -> bool

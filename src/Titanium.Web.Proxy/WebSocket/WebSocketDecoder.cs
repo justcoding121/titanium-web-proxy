@@ -39,10 +39,9 @@ public class WebSocketDecoder
     ///     trailing partial frame is buffered internally and completed by a later call).
     /// </summary>
     /// <remarks>
-    ///     Every yielded <see cref="WebSocketFrame" />'s <see cref="WebSocketFrame.Data" /> is a zero-copy
-    ///     slice of either <paramref name="data" /> itself or this decoder's internal reassembly buffer -
-    ///     see the remarks on <see cref="WebSocketFrame" />. In particular, do not retain frames across
-    ///     separate calls to this method on the same decoder instance without first copying out their data.
+    ///     Every yielded <see cref="WebSocketFrame" />'s <see cref="WebSocketFrame.Data" /> is an owned
+    ///     copy of the unmasked payload, safe to retain after this method returns. Remaining incomplete
+    ///     frame bytes stay in this decoder's internal reassembly buffer for a later call.
     /// </remarks>
     public IEnumerable<WebSocketFrame> Decode(byte[] data, int offset, int count) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
@@ -147,7 +146,7 @@ public class WebSocketDecoder
                 }
             }
 
-            var frameData = decodeBuffer.Slice(idx, (int)size);
+            var frameData = decodeBuffer.Slice(idx, (int)size).ToArray();
             var frame = new WebSocketFrame { IsFinal = isFinal, Data = frameData, OpCode = opCode };
             yield return frame;
 

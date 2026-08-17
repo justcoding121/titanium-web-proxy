@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Http;
@@ -47,10 +49,10 @@ internal static class HeaderParser
             if (KnownHeaders.TryMatchValue(valueSpan, out var knownValue))
                 headerCollection.AddHeader(knownName, knownValue);
             else
-                headerCollection.AddHeader(knownName, valueSpan.ToString());
+                headerCollection.AddHeader(new HttpHeader(knownName, valueSpan.Trim().GetByteString()));
             return;
         }
 
-        headerCollection.AddHeader(nameSpan.ToString(), valueSpan.ToString());
+        headerCollection.AddHeader(new HttpHeader(nameSpan.Trim().GetByteString(), valueSpan.Trim().GetByteString()));
     }
 }

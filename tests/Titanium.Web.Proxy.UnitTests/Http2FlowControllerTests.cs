@@ -40,8 +40,7 @@ public class Http2FlowControllerTests
         await flow.ReserveAsync(1, Http2FlowController.InitialConnectionWindow, CancellationToken.None);
 
         var reserveTask = flow.ReserveAsync(1, 10, CancellationToken.None);
-        await Task.Delay(50);
-        Assert.IsFalse(reserveTask.IsCompleted, "Reservation should block while the stream window is exhausted.");
+        await AssertRemainsIncompleteAsync(reserveTask, "Reservation should block while the stream window is exhausted.");
 
         flow.OnWindowUpdate(1, 20);
 
@@ -60,8 +59,7 @@ public class Http2FlowControllerTests
         await flow.ReserveAsync(1, Http2FlowController.InitialConnectionWindow, CancellationToken.None);
 
         var reserveTask = flow.ReserveAsync(2, 10, CancellationToken.None);
-        await Task.Delay(50);
-        Assert.IsFalse(reserveTask.IsCompleted, "Reservation should block while the connection window is exhausted even though the stream window is untouched.");
+        await AssertRemainsIncompleteAsync(reserveTask, "Reservation should block while the connection window is exhausted even though the stream window is untouched.");
 
         flow.OnWindowUpdate(0, 20);
 
@@ -122,8 +120,7 @@ public class Http2FlowControllerTests
         flow.OnInitialWindowSizeChanged(0);
 
         var reserveTask = flow.ReserveAsync(1, 1, CancellationToken.None);
-        await Task.Delay(50);
-        Assert.IsFalse(reserveTask.IsCompleted, "A stream window driven to zero/negative by SETTINGS_INITIAL_WINDOW_SIZE must still block new reservations (RFC 7540 §6.9.2).");
+        await AssertRemainsIncompleteAsync(reserveTask, "A stream window driven to zero/negative by SETTINGS_INITIAL_WINDOW_SIZE must still block new reservations (RFC 7540 §6.9.2).");
 
         flow.OnWindowUpdate(1, 10);
         await reserveTask.WaitAsync(TimeSpan.FromSeconds(5));
@@ -249,5 +246,20 @@ public class Http2FlowControllerTests
         var reserveTask = flow.ReserveAsync(7, 100, CancellationToken.None);
         await reserveTask.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.IsTrue(reserveTask.IsCompletedSuccessfully);
+    }
+
+    /// <summary>
+    ///     Confirms <paramref name="task" /> stays incomplete across several yields (not a fixed wall-clock
+    ///     delay that can race under load).
+    /// </summary>
+    private static async Task AssertRemainsIncompleteAsync(Task task, string message)
+    {
+        for (var i = 0; i < 5; i++)
+        {
+            Assert.IsFalse(task.IsCompleted, message);
+            await Task.Yield();
+        }
+
+        Assert.IsFalse(task.IsCompleted, message);
     }
 }

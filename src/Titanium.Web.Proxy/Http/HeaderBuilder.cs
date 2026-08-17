@@ -30,6 +30,10 @@ internal class HeaderBuilder
     }
 
     /// <summary>Returns a builder to the thread-local cache.</summary>
+    /// <remarks>
+    ///     Do not use <see cref="GetBuffer"/> (or any view into this builder) after <see cref="Return"/>;
+    ///     the rented instance may be reused on the same thread.
+    /// </remarks>
     public static void Return(HeaderBuilder builder)
     {
         if (cached == null)
@@ -109,11 +113,19 @@ internal class HeaderBuilder
             WriteHeader(HttpHeader.GetProxyAuthorizationHeader(upstreamProxyUserName, upstreamProxyPassword));
         }
 
-        foreach (var header in headers)
+        if (sendProxyAuthorization)
         {
-            if (!sendProxyAuthorization && KnownHeaders.ProxyAuthorization.Equals(header.Name))
-                continue;
-            WriteHeader(header);
+            foreach (var header in headers)
+                WriteHeader(header);
+        }
+        else
+        {
+            foreach (var header in headers)
+            {
+                if (KnownHeaders.ProxyAuthorization.Equals(header.Name))
+                    continue;
+                WriteHeader(header);
+            }
         }
 
         WriteLine();

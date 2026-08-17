@@ -64,6 +64,13 @@ public class HttpHeader
         ValueData = valueString.GetByteString();
     }
 
+    internal HttpHeader(KnownHeader name, ByteString value)
+    {
+        nameString = name.String;
+        NameData = name.String8;
+        ValueData = value;
+    }
+
     internal HttpHeader(KnownHeader name, KnownHeader value)
     {
         nameString = name.String;

@@ -51,6 +51,7 @@ public static class KnownHeaders
     public static readonly KnownHeader ContentEncodingDeflate = "deflate";
     public static readonly KnownHeader ContentEncodingGzip = "gzip";
     public static readonly KnownHeader ContentEncodingBrotli = "br";
+    public static readonly KnownHeader ContentEncodingIdentity = "identity";
 
     public static readonly KnownHeader Location = "Location";
 
@@ -138,7 +139,7 @@ public static class KnownHeaders
            || TryAssign(name, fourth, out header);
 
     /// <summary>
-    ///     Interns frequent header values (<c>keep-alive</c>, <c>close</c>, <c>chunked</c>, …).
+    ///     Interns frequent header values (<c>keep-alive</c>, <c>close</c>, <c>chunked</c>, encodings, …).
     /// </summary>
     internal static bool TryMatchValue(ReadOnlySpan<char> value, out KnownHeader header)
     {
@@ -146,11 +147,21 @@ public static class KnownHeaders
         header = null!;
         switch (value.Length)
         {
+            case 2:
+                if (ContentEncodingBrotli.Equals(value)) { header = ContentEncodingBrotli; return true; }
+                return false;
+            case 4:
+                if (ContentEncodingGzip.Equals(value)) { header = ContentEncodingGzip; return true; }
+                return false;
             case 5:
                 if (ConnectionClose.Equals(value)) { header = ConnectionClose; return true; }
                 return false;
             case 7:
                 if (TransferEncodingChunked.Equals(value)) { header = TransferEncodingChunked; return true; }
+                if (ContentEncodingDeflate.Equals(value)) { header = ContentEncodingDeflate; return true; }
+                return false;
+            case 8:
+                if (ContentEncodingIdentity.Equals(value)) { header = ContentEncodingIdentity; return true; }
                 return false;
             case 10:
                 if (ConnectionKeepAlive.Equals(value)) { header = ConnectionKeepAlive; return true; }

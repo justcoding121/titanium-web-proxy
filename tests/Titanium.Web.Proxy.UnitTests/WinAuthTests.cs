@@ -8,6 +8,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Certificate;
@@ -238,11 +239,20 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public void GetInitialAuthToken_NonWindows_ThrowsInvalidOperation()
         {
-            if (OperatingSystem.IsWindows())
-                Assert.Inconclusive("Non-Windows path only.");
-
-            Assert.ThrowsExactly<InvalidOperationException>(() =>
-                WinAuthHandler.GetInitialAuthToken("host", "NTLM", new InternalDataStore()));
+            // Force the non-Windows SSPI-unavailable path on any host OS so this coverage is not
+            // skipped on Windows CI (Assert.Inconclusive previously left it as Skipped).
+            RunTime.SetIsWindowsForTests(false);
+            try
+            {
+                Assert.ThrowsExactly<InvalidOperationException>(() =>
+                    WinAuthHandler.GetInitialAuthToken("host", "NTLM", new InternalDataStore()));
+                Assert.ThrowsExactly<InvalidOperationException>(() =>
+                    WinAuthHandler.GetInitialProxyAuthToken("proxy", "NTLM", new InternalDataStore()));
+            }
+            finally
+            {
+                RunTime.SetIsWindowsForTests(null);
+            }
         }
 
         [TestMethod]

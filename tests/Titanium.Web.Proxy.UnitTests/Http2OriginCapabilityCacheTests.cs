@@ -77,7 +77,7 @@ public class Http2OriginCapabilityCacheTests
         cache.Set("www.google.com:443", true);
         Assert.IsTrue(cache.TryGet("www.google.com:443", out _), "Entry should still be fresh immediately after Set.");
 
-        await Task.Delay(200);
+        await WaitUntilAsync(() => !cache.TryGet("www.google.com:443", out _), TimeSpan.FromSeconds(2));
 
         var found = cache.TryGet("www.google.com:443", out var supported);
 
@@ -92,7 +92,7 @@ public class Http2OriginCapabilityCacheTests
         cache.Set("a.example.com:443", true);
         cache.Set("b.example.com:443", false);
 
-        await Task.Delay(200);
+        await WaitUntilAsync(() => !cache.TryGet("a.example.com:443", out _), TimeSpan.FromSeconds(2));
 
         cache.TrimExpired();
 
@@ -111,5 +111,12 @@ public class Http2OriginCapabilityCacheTests
 
         Assert.IsTrue(cache.TryGet("live.example.com:443", out var supported));
         Assert.IsTrue(supported);
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!condition() && DateTime.UtcNow < deadline)
+            await Task.Delay(10);
     }
 }

@@ -324,7 +324,14 @@ public partial class ProxyServer
                 seedConnection = null;
             }
 
-            if (seedConnection != null && seedConnection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
+            // TLS ALPN "h2" *or* cleartext h2c (ForwardCleartext) — same acceptance rule as
+            // EstablishHttp2OriginTcpConnectionAsync / ResolveHttp2ForClientAsync. Checking ALPN
+            // alone discards a valid h2c seed (no TLS, so NegotiatedApplicationProtocol is never
+            // Http2) and forces a second TCP open; the unstarted seed is closed without a preface,
+            // which races the raw origin and surfaces to HttpClient as a premature response end.
+            if (seedConnection != null &&
+                seedConnection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2 &&
+                !seedConnection.Http2Cleartext)
             {
                 await TcpConnectionFactory.Release(seedConnection, true);
                 seedConnection = null;

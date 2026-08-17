@@ -195,35 +195,23 @@ public class WebSocketDecoderTests
     }
 
     [TestMethod]
-    public void Decode_FrameDataFromInternalBuffer_IsOverwrittenByALaterDecodeCall()
+    public void Decode_FrameDataFromInternalBuffer_IsOwnedAndSurvivesLaterDecodeCall()
     {
-        // Characterization test for a documented sharp edge (see the remarks on WebSocketFrame and
-        // WebSocketDecoder.Decode): a frame whose bytes had to be buffered internally (because it arrived
-        // split across two Decode calls) exposes Data as a zero-copy slice of the decoder's own
-        // reassembly buffer. That buffer is reused by later calls, so retaining the WebSocketFrame past
-        // the call that produced it - instead of consuming/copying its Data immediately - is a misuse of
-        // the API that silently corrupts the previously-observed content, as asserted below.
+        // Frames copy their payload so retained WebSocketFrame.Data stays stable across later
+        // Decode calls on the same decoder instance.
         var decoder = CreateDecoder();
         var frameA = BuildFrame(WebsocketOpCode.Text, Encoding.UTF8.GetBytes("first-message"));
 
-        // Split frameA so the second call goes through the internal-buffer ("copied") reassembly path,
-        // making its yielded Data alias `this.buffer` rather than the caller's own array.
         var splitPoint = frameA.Length - 2;
         Assert.AreEqual(0, decoder.Decode(frameA, 0, splitPoint).Count());
         var decodedFrameA = decoder.Decode(frameA, splitPoint, frameA.Length - splitPoint).Single();
-        Assert.AreEqual("first-message", decodedFrameA.GetText(), "Sanity check before the buffer is reused.");
+        Assert.AreEqual("first-message", decodedFrameA.GetText());
 
-        // Decode a second, unrelated frame through the very same decoder instance. Since frameA's bytes
-        // were fully consumed (the decoder's internal bufferLength resets to 0), this reuses the same
-        // internal buffer starting from the same offset frameA's Data used to point into.
         var frameB = BuildFrame(WebsocketOpCode.Text, Encoding.UTF8.GetBytes("second-msg"));
         Assert.AreEqual(0, decoder.Decode(frameB, 0, frameB.Length - 2).Count());
         _ = decoder.Decode(frameB, frameB.Length - 2, 2).Single();
 
-        // The long-retained reference to frameA's Data now observes frameB's raw wire bytes instead - it
-        // no longer reads back "first-message". This is the exact bug this test would have caught: naively
-        // collecting WebSocketFrame instances (rather than their extracted text/bytes) for later use.
-        Assert.AreNotEqual("first-message", decodedFrameA.GetText());
+        Assert.AreEqual("first-message", decodedFrameA.GetText());
     }
 
     [TestMethod]

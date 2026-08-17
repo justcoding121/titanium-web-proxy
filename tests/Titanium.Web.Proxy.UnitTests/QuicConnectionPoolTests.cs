@@ -73,6 +73,30 @@ public class QuicConnectionPoolTests
     }
 
     [TestMethod]
+    public async Task GetOrCreateAsync_BurstOfConcurrentAcquires_SharesOneConnection()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var factory = new FakeQuicFactory(proxy) { HandshakeDelay = TimeSpan.FromMilliseconds(25) };
+        await using var pool = new QuicConnectionPool(proxy, factory);
+
+        var tasks = new Task<QuicServerConnection>[32];
+        for (var i = 0; i < tasks.Length; i++)
+            tasks[i] = pool.GetOrCreateAsync("burst.example", 443, null, null, null, CancellationToken.None)
+                .AsTask();
+
+        var connections = await Task.WhenAll(tasks);
+        var first = connections[0];
+        foreach (var c in connections)
+            Assert.AreSame(first, c);
+
+        Assert.AreEqual(1, factory.CreateCount);
+        Assert.AreEqual(tasks.Length, first.InFlightStreams);
+
+        foreach (var c in connections)
+            await QuicConnectionPool.ReleaseAsync(c);
+    }
+
+    [TestMethod]
     public async Task InvalidateAsync_ForcesNextAcquireToCreateFreshConnection()
     {
         using var proxy = new ProxyServer(false, false, false);
@@ -130,7 +154,12 @@ public class QuicConnectionPoolTests
 
         // Second warmup for the same origin must be a no-op once warm.
         pool.BeginWarmup("connect.example", 443, "sni.example", null);
-        await Task.Delay(50);
+        var secondDeadline = DateTime.UtcNow.AddMilliseconds(200);
+        while (DateTime.UtcNow < secondDeadline)
+        {
+            Assert.AreEqual(1, factory.CreateCount);
+            await Task.Delay(20);
+        }
         Assert.AreEqual(1, factory.CreateCount);
     }
 
@@ -163,7 +192,10 @@ public class QuicConnectionPoolTests
 
         public int CreateCount => Volatile.Read(ref _createCount);
 
-        public Task<QuicServerConnection> CreateAsync(
+        /// <summary>Optional delay so concurrent GetOrCreate callers exercise the creation gate.</summary>
+        public TimeSpan HandshakeDelay { get; set; } = TimeSpan.FromMilliseconds(5);
+
+        public async Task<QuicServerConnection> CreateAsync(
             string connectHost,
             string sniHost,
             int port,
@@ -174,9 +206,12 @@ public class QuicConnectionPoolTests
             CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _createCount);
-            // Simulate a slow handshake so concurrent GetOrCreate callers exercise the creation gate.
-            return Task.FromResult(
-                QuicServerConnection.CreateDetachedForTests(_proxy, sniHost, port, cacheKey));
+            if (HandshakeDelay > TimeSpan.Zero)
+                await Task.Delay(HandshakeDelay, cancellationToken);
+            else
+                await Task.Yield();
+
+            return QuicServerConnection.CreateDetachedForTests(_proxy, sniHost, port, cacheKey);
         }
     }
 }

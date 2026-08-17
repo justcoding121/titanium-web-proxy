@@ -13,7 +13,7 @@
     <!-- Keep in sync with the AssemblyVersion/AssemblyFileVersion attributes in
          Properties/AssemblyInfo.cs on every bump - GenerateAssemblyInfo is false below, so the SDK
          does not derive those attributes from this property automatically. -->
-    <VersionPrefix>5.10.0</VersionPrefix>
+    <VersionPrefix>5.11.0</VersionPrefix>
     <!-- The library itself is the canonical implementation of the TWP001 experimental HTTP/3 APIs.
          Suppress the diagnostic internally; consumers will still see it. -->
     <!--

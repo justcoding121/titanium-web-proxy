@@ -18,6 +18,8 @@ public class HeaderCollection : IEnumerable<HttpHeader>
 
     private readonly Dictionary<string, List<HttpHeader>> nonUniqueHeaders;
 
+    private readonly Dictionary<string, IReadOnlyList<HttpHeader>> nonUniqueHeadersReadOnly;
+
     /// <summary>
     ///     Initializes a new instance of the <see cref="HeaderCollection" /> class.
     /// </summary>
@@ -25,8 +27,10 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     {
         headers = new Dictionary<string, HttpHeader>(StringComparer.OrdinalIgnoreCase);
         nonUniqueHeaders = new Dictionary<string, List<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
+        nonUniqueHeadersReadOnly =
+            new Dictionary<string, IReadOnlyList<HttpHeader>>(StringComparer.OrdinalIgnoreCase);
         Headers = new ReadOnlyDictionary<string, HttpHeader>(headers);
-        NonUniqueHeaders = new ReadOnlyDictionary<string, List<HttpHeader>>(nonUniqueHeaders);
+        NonUniqueHeaders = new ReadOnlyDictionary<string, IReadOnlyList<HttpHeader>>(nonUniqueHeadersReadOnly);
     }
 
     /// <summary>
@@ -35,9 +39,10 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     public ReadOnlyDictionary<string, HttpHeader> Headers { get; }
 
     /// <summary>
-    ///     Non Unique headers.
+    ///     Non-unique headers. Values are read-only views over the internal lists so callers cannot
+    ///     <c>Add</c>/<c>Clear</c> storage that still belongs to this collection.
     /// </summary>
-    public ReadOnlyDictionary<string, List<HttpHeader>> NonUniqueHeaders { get; }
+    public ReadOnlyDictionary<string, IReadOnlyList<HttpHeader>> NonUniqueHeaders { get; }
 
     /// <summary>
     ///     Returns an enumerator that iterates through the collection.
@@ -261,11 +266,13 @@ public class HeaderCollection : IEnumerable<HttpHeader>
         {
             headers.Remove(newHeader.Name);
 
-            nonUniqueHeaders.Add(newHeader.Name, new List<HttpHeader>
+            var moved = new List<HttpHeader>
             {
                 existing,
                 newHeader
-            });
+            };
+            nonUniqueHeaders.Add(newHeader.Name, moved);
+            nonUniqueHeadersReadOnly.Add(newHeader.Name, new ReadOnlyCollection<HttpHeader>(moved));
         }
         else
         {
@@ -327,7 +334,11 @@ public class HeaderCollection : IEnumerable<HttpHeader>
         var result = headers.Remove(headerName);
 
         // do not convert to '||' expression to avoid lazy evaluation
-        if (nonUniqueHeaders.Remove(headerName)) result = true;
+        if (nonUniqueHeaders.Remove(headerName))
+        {
+            nonUniqueHeadersReadOnly.Remove(headerName);
+            result = true;
+        }
 
         return result;
     }
@@ -345,7 +356,11 @@ public class HeaderCollection : IEnumerable<HttpHeader>
         var result = headers.Remove(headerName.String);
 
         // do not convert to '||' expression to avoid lazy evaluation
-        if (nonUniqueHeaders.Remove(headerName.String)) result = true;
+        if (nonUniqueHeaders.Remove(headerName.String))
+        {
+            nonUniqueHeadersReadOnly.Remove(headerName.String);
+            result = true;
+        }
 
         return result;
     }
@@ -378,6 +393,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     {
         headers.Clear();
         nonUniqueHeaders.Clear();
+        nonUniqueHeadersReadOnly.Clear();
     }
 
     internal string? GetHeaderValueOrNull(KnownHeader headerName)

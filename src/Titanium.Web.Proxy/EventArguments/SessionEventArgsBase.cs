@@ -289,9 +289,13 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 
     internal void OnDataSent(byte[] buffer, int offset, int count)
     {
+        var handler = DataSent;
+        if (handler == null) return;
+
         try
         {
-            DataSent?.Invoke(this, new DataEventArgs(buffer, offset, count));
+            // Snapshot so subscribers can retain Buffer across later I/O without seeing reuse.
+            handler.Invoke(this, new DataEventArgs(CopyDataEventPayload(buffer, offset, count), 0, count));
         }
         catch (Exception ex)
         {
@@ -301,14 +305,26 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 
     internal void OnDataReceived(byte[] buffer, int offset, int count)
     {
+        var handler = DataReceived;
+        if (handler == null) return;
+
         try
         {
-            DataReceived?.Invoke(this, new DataEventArgs(buffer, offset, count));
+            handler.Invoke(this, new DataEventArgs(CopyDataEventPayload(buffer, offset, count), 0, count));
         }
         catch (Exception ex)
         {
             OnException(new Exception("Exception thrown in user event", ex));
         }
+    }
+
+    private static byte[] CopyDataEventPayload(byte[] buffer, int offset, int count)
+    {
+        if (count == 0) return Array.Empty<byte>();
+        if (offset == 0 && count == buffer.Length) return (byte[])buffer.Clone();
+        var copy = new byte[count];
+        Buffer.BlockCopy(buffer, offset, copy, 0, count);
+        return copy;
     }
 
     /// <summary>

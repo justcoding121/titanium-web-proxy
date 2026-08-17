@@ -32,14 +32,17 @@ public class QpackContextTests
         await using var ctx = new QpackContext(4096);
         // InsertCount = 0; require 1 — will block until NotifyInsert() is called.
 
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var waitTask = Task.Run(async () =>
         {
+            started.SetResult();
             using var cts = new CancellationTokenSource(2000);
             await ctx.AwaitInsertCountAsync(1, cts.Token);
         });
 
-        // Simulate a short delay then insert and notify.
-        await Task.Delay(50);
+        await started.Task;
+        // Let AwaitInsertCountAsync register its wait before we assert incompleteness.
+        await Task.Yield();
         Assert.IsFalse(waitTask.IsCompleted, "Task should still be waiting.");
 
         ctx.InboundDecoderTable.Insert("a", "1");

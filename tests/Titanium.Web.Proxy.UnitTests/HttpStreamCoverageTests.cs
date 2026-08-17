@@ -503,6 +503,64 @@ public class HttpStreamCoverageTests
     }
 
     [TestMethod]
+    public async Task HandleBodyWrite_RetainedBodyBytes_SurviveLaterChunks()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        byte[]? retainedFirst = null;
+        var calls = 0;
+        proxy.OnResponseBodyWrite += (_, e) =>
+        {
+            calls++;
+            if (calls == 1)
+                retainedFirst = e.BodyBytes;
+            else
+                Assert.AreEqual("hello", Encoding.ASCII.GetString(retainedFirst!),
+                    "Retained BodyBytes from an earlier chunk must not be overwritten.");
+            return Task.CompletedTask;
+        };
+
+        var payload = Encoding.ASCII.GetBytes("5\r\nhello\r\n5\r\nworld\r\n0\r\n\r\n");
+        var (reader, writer, sinkStream) =
+            await CreateNetworkCopyPairAsync(proxy, payload, CancellationToken.None);
+
+        using (reader)
+        using (writer)
+        {
+            using (var session = MakeSession(proxy))
+            {
+                session.HttpClient.Response.OriginalHasBody = true;
+                session.HttpClient.Response.OriginalIsChunked = true;
+                session.HttpClient.Response.IsBodyRead = false;
+
+                await reader.CopyBodyAsync(writer, isChunked: true, contentLength: -1, isRequest: false, session,
+                    CancellationToken.None);
+                Assert.IsTrue(calls >= 2);
+                Assert.AreEqual("hello", Encoding.ASCII.GetString(retainedFirst!));
+                _ = sinkStream;
+            }
+        }
+    }
+
+    [TestMethod]
+    public void OnDataSent_CopiesPayload_WhenSubscribersExist()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        using var session = MakeSession(proxy);
+        byte[]? retained = null;
+        session.DataSent += (_, e) => retained = e.Buffer;
+
+        var live = new byte[] { 1, 2, 3, 4 };
+        session.OnDataSent(live, 1, 2);
+        live[1] = 99;
+        live[2] = 99;
+
+        Assert.IsNotNull(retained);
+        Assert.AreEqual(2, retained.Length);
+        Assert.AreEqual(2, retained[0]);
+        Assert.AreEqual(3, retained[1]);
+    }
+
+    [TestMethod]
     public async Task HandleBodyWrite_ChunkedEarlyStop_DrainsRemainingChunks()
     {
         using var proxy = new ProxyServer(false, false, false);
@@ -729,6 +787,27 @@ public class HttpStreamCoverageTests
         using var stream = MakeReader(Encoding.ASCII.GetBytes(expected + "\r\n"), new TinyBufferPool(8));
 
         Assert.AreEqual(expected, await stream.ReadLineAsync());
+    }
+
+    [TestMethod]
+    public async Task ReadLineAsync_MultipleHeadersInOneFill_LeavesUnreadWindowIntact()
+    {
+        // Several CRLF-terminated lines in a single fill: IndexOf must consume only up to the
+        // first LF and leave the rest available for subsequent ReadLineAsync calls.
+        using var stream = MakeReader(Encoding.ASCII.GetBytes("A: 1\r\nB: 2\r\n\r\n"));
+
+        Assert.AreEqual("A: 1", await stream.ReadLineAsync());
+        Assert.AreEqual("B: 2", await stream.ReadLineAsync());
+        Assert.AreEqual(string.Empty, await stream.ReadLineAsync());
+    }
+
+    [TestMethod]
+    public async Task ReadLineAsync_LineSpanningFills_TinyBuffer_StillAssembles()
+    {
+        // Line longer than the read-ahead buffer forces the IndexOf path to carry bytes in scratch.
+        using var stream = MakeReader(Encoding.ASCII.GetBytes("Host: example.com\r\n"), new TinyBufferPool(4));
+
+        Assert.AreEqual("Host: example.com", await stream.ReadLineAsync());
     }
 
     [TestMethod]
