@@ -30,26 +30,39 @@ on:
           - reverse-http1
           - bare-reverse-http1
           - nginx-reverse-http1
+          - yarp-reverse-http1
           - reverse-http1-tls
           - bare-reverse-http1-tls
           - nginx-reverse-http1-tls
+          - yarp-reverse-http1-tls
           - https-mitm
           - mitm-http2-to-http1
           - mitm-http3-to-http1
           - reverse-http2
           - reverse-http2-cleartext
           - reverse-http2-to-h2c
+          - yarp-reverse-http2-to-h2c
           - reverse-h2c
+          - yarp-reverse-h2c
           - reverse-h2c-to-h2c
+          - yarp-reverse-h2c-to-h2c
           - reverse-h2c-to-h1
+          - yarp-reverse-h2c-to-h1
           - reverse-h2c-to-h3
+          - yarp-reverse-h2c-to-h3
           - reverse-http3
           - reverse-http3-cleartext
+          - yarp-reverse-http3-cleartext
           - reverse-http11-to-http2
+          - yarp-reverse-http11-to-http2
           - reverse-http1-to-http3
+          - yarp-reverse-http1-to-http3
           - reverse-http2-to-http3
+          - yarp-reverse-http2-to-http3
           - reverse-http3-to-http2
+          - yarp-reverse-http3-to-http2
           - nginx-reverse-http2
+          - yarp-reverse-http2
       concurrency:
         description: 'Comma-separated concurrency steps'
         required: true

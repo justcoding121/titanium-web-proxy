@@ -20,6 +20,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     public IReadOnlyList<Uri> TargetUris { get; }
     public string? ExplicitProxyUrl { get; }
     public string? NginxVersion { get; }
+    public string? YarpVersion { get; }
     public Version RequestHttpVersion { get; }
     public HttpVersionPolicy VersionPolicy { get; }
     public string? LoadGenerator { get; }
@@ -29,7 +30,8 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     private ChildProcessStack(Process? originProcess, StreamReader originStdout, Process proxyProcess,
         StreamReader proxyStdout, Uri targetUri, IReadOnlyList<Uri> targetUris, string? explicitProxyUrl,
         string? nginxVersion, Version requestHttpVersion, HttpVersionPolicy versionPolicy,
-        string? loadGenerator = null, int? quicPort = null, int? originQuicPort = null)
+        string? loadGenerator = null, int? quicPort = null, int? originQuicPort = null,
+        string? yarpVersion = null)
     {
         this.originProcess = originProcess;
         this.originStdout = originStdout;
@@ -39,6 +41,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         TargetUris = targetUris;
         ExplicitProxyUrl = explicitProxyUrl;
         NginxVersion = nginxVersion;
+        YarpVersion = yarpVersion;
         RequestHttpVersion = requestHttpVersion;
         VersionPolicy = versionPolicy;
         LoadGenerator = loadGenerator;
@@ -61,6 +64,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
                 cancellationToken);
 
         var originArgs = mode is ProbeMode.ReverseHttp2ToH2c or ProbeMode.ReverseH2cToH2c
+            or ProbeMode.YarpReverseHttp2ToH2c or ProbeMode.YarpReverseH2cToH2c
             ? $"--serve-origin --h2c --response-bytes {workload.ResponseBytes}"
             : $"--serve-origin --response-bytes {workload.ResponseBytes}";
         var origin = StartChild(exe, originArgs);
@@ -93,6 +97,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         var target = Require(proxyLines, "target_for_client");
         proxyLines.TryGetValue("explicit_proxy", out var explicitProxy);
         proxyLines.TryGetValue("nginx", out var nginxVersion);
+        proxyLines.TryGetValue("yarp", out var yarpVersion);
         proxyLines.TryGetValue("http_version", out var httpVersionText);
         proxyLines.TryGetValue("load_generator", out var loadGenerator);
         var (httpVersion, policy) = ParseHttpVersion(httpVersionText);
@@ -104,7 +109,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         return new ChildProcessStack(origin, origin.StandardOutput, proxy, proxy.StandardOutput,
             new Uri(target), [new Uri(target)],
             string.IsNullOrWhiteSpace(explicitProxy) ? null : explicitProxy, nginxVersion,
-            httpVersion, policy, loadGenerator, quicPort);
+            httpVersion, policy, loadGenerator, quicPort, yarpVersion: yarpVersion);
     }
 
     /// <summary>
@@ -113,9 +118,12 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     /// </summary>
     private static bool RequiresCombinedServe(ProbeMode mode) => mode is
         ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp3
-        or ProbeMode.ReverseHttp11ToHttp2 or ProbeMode.ReverseHttp1ToHttp3
-        or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.ReverseHttp3ToHttp2
-        or ProbeMode.ReverseH2c or ProbeMode.ReverseH2cToH3
+        or ProbeMode.ReverseHttp11ToHttp2 or ProbeMode.YarpReverseHttp11ToHttp2
+        or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3
+        or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
+        or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
+        or ProbeMode.ReverseH2c or ProbeMode.YarpReverseH2c
+        or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
         or ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1
         or ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi;
 
@@ -146,6 +154,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         var target = Require(lines, "target_for_client");
         lines.TryGetValue("explicit_proxy", out var explicitProxy);
         lines.TryGetValue("nginx", out var nginxVersion);
+        lines.TryGetValue("yarp", out var yarpVersion);
         lines.TryGetValue("http_version", out var httpVersionText);
 
         var targets = new List<Uri> { new(target) };
@@ -169,7 +178,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         return new ChildProcessStack(null, serve.StandardOutput, serve, serve.StandardOutput,
             new Uri(target), targets,
             string.IsNullOrWhiteSpace(explicitProxy) ? null : explicitProxy, nginxVersion,
-            httpVersion, policy, loadGenerator, quicPort, originQuicPort);
+            httpVersion, policy, loadGenerator, quicPort, originQuicPort, yarpVersion);
     }
 
     private static (Version Version, HttpVersionPolicy Policy) ParseHttpVersion(string? text) => text switch

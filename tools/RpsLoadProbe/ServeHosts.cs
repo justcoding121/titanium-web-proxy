@@ -58,9 +58,12 @@ internal static class ServeProxyHost
 
         // Cleartext-origin terminate arms may use --serve-proxy (split). HTTPS/QUIC origin arms need --serve.
         if (mode is ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp3
-            or ProbeMode.ReverseHttp11ToHttp2 or ProbeMode.ReverseHttp1ToHttp3
-            or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.ReverseHttp3ToHttp2
-            or ProbeMode.ReverseH2c or ProbeMode.ReverseH2cToH3
+            or ProbeMode.ReverseHttp11ToHttp2 or ProbeMode.YarpReverseHttp11ToHttp2
+            or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3
+            or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
+            or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
+            or ProbeMode.ReverseH2c or ProbeMode.YarpReverseH2c
+            or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
             or ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1
             or ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi)
         {
@@ -74,6 +77,7 @@ internal static class ServeProxyHost
         string? explicitProxy = null;
         string targetForClient;
         string? nginxVersion = null;
+        string? yarpVersion = null;
 
         switch (mode)
         {
@@ -106,6 +110,16 @@ internal static class ServeProxyHost
                 nginxVersion = nginx.Version;
                 break;
             }
+            case ProbeMode.YarpReverseHttp1:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var yarp = await YarpProxyHost.StartHttp1Async(originHttpPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
+                break;
+            }
             case ProbeMode.ReverseHttp1Tls:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
@@ -135,6 +149,16 @@ internal static class ServeProxyHost
                 nginxVersion = nginx.Version;
                 break;
             }
+            case ProbeMode.YarpReverseHttp1Tls:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var yarp = await YarpProxyHost.StartHttp1TlsAsync(originHttpPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
+                break;
+            }
             case ProbeMode.ReverseHttp2Cleartext:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
@@ -142,6 +166,16 @@ internal static class ServeProxyHost
                 proxy = twp;
                 listenUrl = twp.ListenUrl;
                 targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.YarpReverseHttp2:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var yarp = await YarpProxyHost.StartHttp2ToH1Async(originHttpPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
                 break;
             }
             case ProbeMode.ReverseHttp2ToH2c:
@@ -153,6 +187,16 @@ internal static class ServeProxyHost
                 targetForClient = twp.ListenUrl;
                 break;
             }
+            case ProbeMode.YarpReverseHttp2ToH2c:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var yarp = await YarpProxyHost.StartHttp2ToH2cAsync(originHttpPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
+                break;
+            }
             case ProbeMode.ReverseH2cToH2c:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
@@ -162,6 +206,16 @@ internal static class ServeProxyHost
                 targetForClient = twp.ListenUrl;
                 break;
             }
+            case ProbeMode.YarpReverseH2cToH2c:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var yarp = await YarpProxyHost.StartH2cToH2cAsync(originHttpPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
+                break;
+            }
             case ProbeMode.ReverseH2cToH1:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
@@ -169,6 +223,16 @@ internal static class ServeProxyHost
                 proxy = twp;
                 listenUrl = twp.ListenUrl;
                 targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.YarpReverseH2cToH1:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var yarp = await YarpProxyHost.StartH2cToH1Async(originHttpPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
                 break;
             }
             case ProbeMode.NginxReverseHttp2:
@@ -191,6 +255,16 @@ internal static class ServeProxyHost
                 targetForClient = twp.ListenUrl;
                 break;
             }
+            case ProbeMode.YarpReverseHttp3Cleartext:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var yarp = await YarpProxyHost.StartHttp3CleartextAsync(originHttpPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
+                break;
+            }
             default:
                 throw new ArgumentOutOfRangeException(nameof(mode));
         }
@@ -198,11 +272,14 @@ internal static class ServeProxyHost
         var httpVersion = mode switch
         {
             ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c or ProbeMode.NginxReverseHttp2
+                or ProbeMode.YarpReverseHttp2 or ProbeMode.YarpReverseHttp2ToH2c
                 or ProbeMode.ReverseH2c or ProbeMode.ReverseH2cToH2c or ProbeMode.ReverseH2cToH1
-                or ProbeMode.ReverseH2cToH3 => "2.0",
-            ProbeMode.ReverseHttp3Cleartext => "3.0",
+                or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2c or ProbeMode.YarpReverseH2cToH2c
+                or ProbeMode.YarpReverseH2cToH1 or ProbeMode.YarpReverseH2cToH3 => "2.0",
+            ProbeMode.ReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3Cleartext => "3.0",
             _ => "1.1"
         };
+        // TWP transparent QUIC needs the custom generator; YARP H3 is normal Kestrel HTTPS/H3.
         var loadGenerator = mode is ProbeMode.ReverseHttp3Cleartext ? "quic-http3" : null;
 
         using (proxy)
@@ -222,6 +299,8 @@ internal static class ServeProxyHost
             }
             if (nginxVersion != null)
                 await ProbeLog.WriteProtocolLineAsync($"nginx={nginxVersion}", cancellationToken);
+            if (yarpVersion != null)
+                await ProbeLog.WriteProtocolLineAsync($"yarp={yarpVersion}", cancellationToken);
             if (maxCachedConnections is { } m)
                 await ProbeLog.WriteProtocolLineAsync($"max_cached_connections={m}", cancellationToken);
             await ProbeLog.WriteProtocolLineAsync("READY", cancellationToken);
@@ -243,24 +322,37 @@ internal static class ServeProxyHost
         ProbeMode.ReverseHttp1 => "reverse-http1",
         ProbeMode.BareReverseHttp1 => "bare-reverse-http1",
         ProbeMode.NginxReverseHttp1 => "nginx-reverse-http1",
+        ProbeMode.YarpReverseHttp1 => "yarp-reverse-http1",
         ProbeMode.ReverseHttp1Tls => "reverse-http1-tls",
         ProbeMode.BareReverseHttp1Tls => "bare-reverse-http1-tls",
         ProbeMode.NginxReverseHttp1Tls => "nginx-reverse-http1-tls",
+        ProbeMode.YarpReverseHttp1Tls => "yarp-reverse-http1-tls",
         ProbeMode.HttpsMitm => "https-mitm",
         ProbeMode.ReverseHttp2 => "reverse-http2",
         ProbeMode.ReverseHttp2Cleartext => "reverse-http2-cleartext",
         ProbeMode.ReverseHttp2ToH2c => "reverse-http2-to-h2c",
+        ProbeMode.YarpReverseHttp2ToH2c => "yarp-reverse-http2-to-h2c",
         ProbeMode.ReverseH2c => "reverse-h2c",
+        ProbeMode.YarpReverseH2c => "yarp-reverse-h2c",
         ProbeMode.ReverseH2cToH2c => "reverse-h2c-to-h2c",
+        ProbeMode.YarpReverseH2cToH2c => "yarp-reverse-h2c-to-h2c",
         ProbeMode.ReverseH2cToH1 => "reverse-h2c-to-h1",
+        ProbeMode.YarpReverseH2cToH1 => "yarp-reverse-h2c-to-h1",
         ProbeMode.ReverseH2cToH3 => "reverse-h2c-to-h3",
+        ProbeMode.YarpReverseH2cToH3 => "yarp-reverse-h2c-to-h3",
         ProbeMode.NginxReverseHttp2 => "nginx-reverse-http2",
+        ProbeMode.YarpReverseHttp2 => "yarp-reverse-http2",
         ProbeMode.ReverseHttp3 => "reverse-http3",
         ProbeMode.ReverseHttp3Cleartext => "reverse-http3-cleartext",
+        ProbeMode.YarpReverseHttp3Cleartext => "yarp-reverse-http3-cleartext",
         ProbeMode.ReverseHttp11ToHttp2 => "reverse-http11-to-http2",
+        ProbeMode.YarpReverseHttp11ToHttp2 => "yarp-reverse-http11-to-http2",
         ProbeMode.ReverseHttp1ToHttp3 => "reverse-http1-to-http3",
+        ProbeMode.YarpReverseHttp1ToHttp3 => "yarp-reverse-http1-to-http3",
         ProbeMode.ReverseHttp2ToHttp3 => "reverse-http2-to-http3",
+        ProbeMode.YarpReverseHttp2ToHttp3 => "yarp-reverse-http2-to-http3",
         ProbeMode.ReverseHttp3ToHttp2 => "reverse-http3-to-http2",
+        ProbeMode.YarpReverseHttp3ToHttp2 => "yarp-reverse-http3-to-http2",
         ProbeMode.MitmHttp2ToHttp1 => "mitm-http2-to-http1",
         ProbeMode.MitmHttp3ToHttp1 => "mitm-http3-to-http1",
         ProbeMode.ExplicitHttp1Multi => "explicit-http1-multi",
@@ -341,6 +433,10 @@ internal static class ServeHost
                 await ProbeLog.WriteProtocolLineAsync($"quic_port={qp}", cancellationToken);
             if (stack.OriginQuicPort is { } oqp)
                 await ProbeLog.WriteProtocolLineAsync($"origin_quic_port={oqp}", cancellationToken);
+            if (stack.NginxVersion != null)
+                await ProbeLog.WriteProtocolLineAsync($"nginx={stack.NginxVersion}", cancellationToken);
+            if (stack.YarpVersion != null)
+                await ProbeLog.WriteProtocolLineAsync($"yarp={stack.YarpVersion}", cancellationToken);
             if (maxCachedConnections is { } m)
                 await ProbeLog.WriteProtocolLineAsync($"max_cached_connections={m}", cancellationToken);
             if (stack.ServerConnectionProbe != null)
@@ -382,6 +478,7 @@ internal static class ServeHost
         public string ClientTargetUrl { get; }
         public IReadOnlyList<string> ClientTargetUrls { get; }
         public string? NginxVersion { get; }
+        public string? YarpVersion { get; }
         public string? HttpVersion { get; }
         public string? LoadGenerator { get; }
         public int? QuicPort { get; }
@@ -392,7 +489,7 @@ internal static class ServeHost
             string? originHttpsUrl, IReadOnlyList<string> extraOriginHttpsUrls, string listenUrl,
             string? explicitProxyUrl, string clientTargetUrl, IReadOnlyList<string> clientTargetUrls,
             string? nginxVersion, string? httpVersion, string? loadGenerator = null, int? quicPort = null,
-            int? originQuicPort = null)
+            int? originQuicPort = null, string? yarpVersion = null)
         {
             this.origin = origin;
             this.proxy = proxy;
@@ -405,6 +502,7 @@ internal static class ServeHost
             ClientTargetUrl = clientTargetUrl;
             ClientTargetUrls = clientTargetUrls;
             NginxVersion = nginxVersion;
+            YarpVersion = yarpVersion;
             HttpVersion = httpVersion;
             LoadGenerator = loadGenerator;
             QuicPort = quicPort;
@@ -662,6 +760,145 @@ internal static class ServeHost
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, [], twp.ListenUrl, null,
                         twp.ListenUrl, [twp.ListenUrl], null, "3.0", loadGenerator: "quic-http3",
                         quicPort: twp.Port);
+                }
+                case ProbeMode.YarpReverseHttp1:
+                {
+                    var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
+                    var yarp = await YarpProxyHost.StartHttp1Async(origin.HttpPort);
+                    return new ServeStack(origin, yarp, null, origin.HttpUrl, null, [], yarp.ListenUrl, null,
+                        yarp.ListenUrl, [yarp.ListenUrl], null, "1.1", yarpVersion: yarp.Version);
+                }
+                case ProbeMode.YarpReverseHttp1Tls:
+                {
+                    var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
+                    var yarp = await YarpProxyHost.StartHttp1TlsAsync(origin.HttpPort);
+                    return new ServeStack(origin, yarp, null, origin.HttpUrl, null, [], yarp.ListenUrl, null,
+                        yarp.ListenUrl, [yarp.ListenUrl], null, "1.1", yarpVersion: yarp.Version);
+                }
+                case ProbeMode.YarpReverseHttp2:
+                {
+                    var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
+                    var yarp = await YarpProxyHost.StartHttp2ToH1Async(origin.HttpPort);
+                    return new ServeStack(origin, yarp, null, origin.HttpUrl, null, [], yarp.ListenUrl, null,
+                        yarp.ListenUrl, [yarp.ListenUrl], null, "2.0", yarpVersion: yarp.Version);
+                }
+                case ProbeMode.YarpReverseHttp2ToH2c:
+                {
+                    var origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = true,
+                        EnableHttps = false,
+                        HttpProtocols = HttpProtocols.Http2,
+                        ResponseBytes = responseBytes
+                    }, cancellationToken);
+                    var yarp = await YarpProxyHost.StartHttp2ToH2cAsync(origin.HttpPort);
+                    return new ServeStack(origin, yarp, null, origin.HttpUrl, null, [], yarp.ListenUrl, null,
+                        yarp.ListenUrl, [yarp.ListenUrl], null, "2.0", yarpVersion: yarp.Version);
+                }
+                case ProbeMode.YarpReverseH2cToH2c:
+                {
+                    var origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = true,
+                        EnableHttps = false,
+                        HttpProtocols = HttpProtocols.Http2,
+                        ResponseBytes = responseBytes
+                    }, cancellationToken);
+                    var yarp = await YarpProxyHost.StartH2cToH2cAsync(origin.HttpPort);
+                    return new ServeStack(origin, yarp, null, origin.HttpUrl, null, [], yarp.ListenUrl, null,
+                        yarp.ListenUrl, [yarp.ListenUrl], null, "2.0", yarpVersion: yarp.Version);
+                }
+                case ProbeMode.YarpReverseH2cToH1:
+                {
+                    var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
+                    var yarp = await YarpProxyHost.StartH2cToH1Async(origin.HttpPort);
+                    return new ServeStack(origin, yarp, null, origin.HttpUrl, null, [], yarp.ListenUrl, null,
+                        yarp.ListenUrl, [yarp.ListenUrl], null, "2.0", yarpVersion: yarp.Version);
+                }
+                case ProbeMode.YarpReverseH2c:
+                {
+                    var origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = false,
+                        EnableHttps = true,
+                        HttpsProtocols = HttpProtocols.Http1AndHttp2,
+                        ResponseBytes = responseBytes
+                    }, cancellationToken);
+                    var yarp = await YarpProxyHost.StartH2cToHttpsAsync(origin.HttpsPort);
+                    return new ServeStack(origin, yarp, null, origin.HttpUrl, origin.HttpsUrl, [], yarp.ListenUrl, null,
+                        yarp.ListenUrl, [yarp.ListenUrl], null, "2.0", yarpVersion: yarp.Version);
+                }
+                case ProbeMode.YarpReverseH2cToH3:
+                {
+                    if (!System.Net.Quic.QuicListener.IsSupported)
+                        throw new PlatformNotSupportedException("QuicListener is not supported.");
+
+                    var origin = new QuicHttp3OriginHost(responseBytes);
+                    var yarp = await YarpProxyHost.StartH2cToHttp3Async(origin.Port);
+                    return new ServeStack(origin, yarp, null, $"quic://localhost:{origin.Port}/",
+                        $"quic://localhost:{origin.Port}/", [], yarp.ListenUrl, null, yarp.ListenUrl, [yarp.ListenUrl],
+                        null, "2.0", originQuicPort: origin.Port, yarpVersion: yarp.Version);
+                }
+                case ProbeMode.YarpReverseHttp3Cleartext:
+                {
+                    if (!System.Net.Quic.QuicListener.IsSupported)
+                        throw new PlatformNotSupportedException("QuicListener is not supported.");
+
+                    var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
+                    var yarp = await YarpProxyHost.StartHttp3CleartextAsync(origin.HttpPort);
+                    return new ServeStack(origin, yarp, null, origin.HttpUrl, null, [], yarp.ListenUrl, null,
+                        yarp.ListenUrl, [yarp.ListenUrl], null, "3.0", yarpVersion: yarp.Version);
+                }
+                case ProbeMode.YarpReverseHttp11ToHttp2:
+                {
+                    var origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = false,
+                        EnableHttps = true,
+                        HttpsProtocols = HttpProtocols.Http1AndHttp2,
+                        ResponseBytes = responseBytes
+                    }, cancellationToken);
+                    var yarp = await YarpProxyHost.StartHttp1ToHttp2Async(origin.HttpsPort);
+                    return new ServeStack(origin, yarp, null, origin.HttpUrl, origin.HttpsUrl, [], yarp.ListenUrl, null,
+                        yarp.ListenUrl, [yarp.ListenUrl], null, "1.1", yarpVersion: yarp.Version);
+                }
+                case ProbeMode.YarpReverseHttp1ToHttp3:
+                {
+                    if (!System.Net.Quic.QuicListener.IsSupported)
+                        throw new PlatformNotSupportedException("QuicListener is not supported.");
+
+                    var origin = new QuicHttp3OriginHost(responseBytes);
+                    var yarp = await YarpProxyHost.StartHttp1ToHttp3Async(origin.Port);
+                    return new ServeStack(origin, yarp, null, $"quic://localhost:{origin.Port}/",
+                        $"quic://localhost:{origin.Port}/", [], yarp.ListenUrl, null, yarp.ListenUrl, [yarp.ListenUrl],
+                        null, "1.1", originQuicPort: origin.Port, yarpVersion: yarp.Version);
+                }
+                case ProbeMode.YarpReverseHttp2ToHttp3:
+                {
+                    if (!System.Net.Quic.QuicListener.IsSupported)
+                        throw new PlatformNotSupportedException("QuicListener is not supported.");
+
+                    var origin = new QuicHttp3OriginHost(responseBytes);
+                    var yarp = await YarpProxyHost.StartHttp2ToHttp3Async(origin.Port);
+                    return new ServeStack(origin, yarp, null, $"quic://localhost:{origin.Port}/",
+                        $"quic://localhost:{origin.Port}/", [], yarp.ListenUrl, null, yarp.ListenUrl, [yarp.ListenUrl],
+                        null, "2.0", originQuicPort: origin.Port, yarpVersion: yarp.Version);
+                }
+                case ProbeMode.YarpReverseHttp3ToHttp2:
+                {
+                    if (!System.Net.Quic.QuicListener.IsSupported)
+                        throw new PlatformNotSupportedException("QuicListener is not supported.");
+
+                    var origin = await OriginServer.StartAsync(new OriginListenOptions
+                    {
+                        EnableHttp = false,
+                        EnableHttps = true,
+                        HttpsProtocols = HttpProtocols.Http1AndHttp2,
+                        ResponseBytes = responseBytes
+                    }, cancellationToken);
+                    var yarp = await YarpProxyHost.StartHttp3ToHttp2Async(origin.HttpsPort);
+                    return new ServeStack(origin, yarp, null, origin.HttpUrl, origin.HttpsUrl, [], yarp.ListenUrl, null,
+                        yarp.ListenUrl, [yarp.ListenUrl], null, "3.0", yarpVersion: yarp.Version);
                 }
                 case ProbeMode.ExplicitHttp1Multi:
                 case ProbeMode.ExplicitHttp2Multi:

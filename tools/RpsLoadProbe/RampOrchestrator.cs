@@ -7,10 +7,12 @@ internal enum ProbeMode
     ReverseHttp1,
     BareReverseHttp1,
     NginxReverseHttp1,
+    YarpReverseHttp1,
     HttpsMitm,
     ReverseHttp1Tls,
     BareReverseHttp1Tls,
     NginxReverseHttp1Tls,
+    YarpReverseHttp1Tls,
     ReverseHttp2,
     /// <summary>TWP client TLS+h2 → ForwardCleartext H2→H1 bridge → cleartext HTTP/1 origin.</summary>
     ReverseHttp2Cleartext,
@@ -25,17 +27,30 @@ internal enum ProbeMode
     /// <summary>Client prior-knowledge h2c → H2→H3 bridge → QUIC/h3.</summary>
     ReverseH2cToH3,
     NginxReverseHttp2,
+    /// <summary>YARP client TLS+h2 → cleartext HTTP/1 origin (nginx parity).</summary>
+    YarpReverseHttp2,
+    YarpReverseHttp2ToH2c,
+    YarpReverseH2c,
+    YarpReverseH2cToH2c,
+    YarpReverseH2cToH1,
+    YarpReverseH2cToH3,
     ReverseHttp3,
     /// <summary>TWP QUIC/h3 terminate → ForwardCleartext → cleartext HTTP/1 origin.</summary>
     ReverseHttp3Cleartext,
+    /// <summary>YARP HTTP/3 (Kestrel) terminate → cleartext HTTP/1. Client uses HttpClient H3.</summary>
+    YarpReverseHttp3Cleartext,
     /// <summary>Client H1 TLS → H1→H2 bridge → origin HTTPS h2.</summary>
     ReverseHttp11ToHttp2,
+    YarpReverseHttp11ToHttp2,
     /// <summary>Client H1 TLS → H1→H3 bridge → origin QUIC/h3.</summary>
     ReverseHttp1ToHttp3,
+    YarpReverseHttp1ToHttp3,
     /// <summary>Client H2 TLS → H2→H3 cold bridge → origin QUIC/h3.</summary>
     ReverseHttp2ToHttp3,
+    YarpReverseHttp2ToHttp3,
     /// <summary>Client H3 → H3→H2 bridge → origin HTTPS h2.</summary>
     ReverseHttp3ToHttp2,
+    YarpReverseHttp3ToHttp2,
     /// <summary>Client H2 TLS → H2→H1 bridge → origin HTTPS HTTP/1 (MITM, both sides TLS).</summary>
     MitmHttp2ToHttp1,
     /// <summary>Client H3 QUIC → bridge → origin HTTPS HTTP/1 (MITM, both sides crypto).</summary>
@@ -118,8 +133,11 @@ internal static class RampOrchestrator
         {
             var removed = arms.RemoveAll(a =>
                 a.Mode is ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext
-                    or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.ReverseHttp2ToHttp3
-                    or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.ReverseH2cToH3
+                    or ProbeMode.YarpReverseHttp3Cleartext
+                    or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3
+                    or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
+                    or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
+                    or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
                     or ProbeMode.MitmHttp3ToHttp1);
             if (removed > 0)
                 ProbeLog.Info("QuicListener is not supported on this host — skipping HTTP/3 arms.");
@@ -175,7 +193,7 @@ internal static class RampOrchestrator
     private static void WriteMedianSummary(Dictionary<string, List<double>> peakByArm)
     {
         ProbeLog.Info("=== median peaks across repeats ===");
-        double? twpH1Tls = null, nginxH1Tls = null;
+        double? twpH1Tls = null, nginxH1Tls = null, yarpH1Tls = null;
         foreach (var (name, peaks) in peakByArm.OrderBy(kv => kv.Key, StringComparer.Ordinal))
         {
             var median = Median(peaks);
@@ -184,12 +202,20 @@ internal static class RampOrchestrator
                 twpH1Tls = median;
             if (name.Contains("nginx-reverse-http1-tls", StringComparison.Ordinal))
                 nginxH1Tls = median;
+            if (name.Contains("yarp-reverse-http1-tls", StringComparison.Ordinal))
+                yarpH1Tls = median;
         }
 
         if (twpH1Tls is > 0 && nginxH1Tls is > 0)
         {
             var ratio = twpH1Tls.Value / nginxH1Tls.Value;
             ProbeLog.Info($"  TWP÷nginx H1 TLS median ratio={ratio:F3}");
+        }
+
+        if (twpH1Tls is > 0 && yarpH1Tls is > 0)
+        {
+            var ratio = twpH1Tls.Value / yarpH1Tls.Value;
+            ProbeLog.Info($"  TWP÷YARP H1 TLS median ratio={ratio:F3}");
         }
     }
 
@@ -211,14 +237,22 @@ internal static class RampOrchestrator
         var arms = new List<ArmSpec>
         {
             new($"twp-reverse-http1-tls-{nameSuffix}", ProbeMode.ReverseHttp1Tls, null, workload),
-            new($"twp-reverse-http2-cleartext-{nameSuffix}", ProbeMode.ReverseHttp2Cleartext, null, workload)
+            new($"yarp-reverse-http1-tls-{nameSuffix}", ProbeMode.YarpReverseHttp1Tls, null, workload),
+            new($"twp-reverse-http2-cleartext-{nameSuffix}", ProbeMode.ReverseHttp2Cleartext, null, workload),
+            new($"yarp-reverse-http2-{nameSuffix}", ProbeMode.YarpReverseHttp2, null, workload)
         };
         if (includeHttp3)
+        {
             arms.Add(new($"twp-reverse-http3-cleartext-{nameSuffix}", ProbeMode.ReverseHttp3Cleartext, null, workload));
+            arms.Add(new($"yarp-reverse-http3-cleartext-{nameSuffix}", ProbeMode.YarpReverseHttp3Cleartext, null,
+                workload));
+        }
+
         if (nginxAvailable)
         {
             arms.Insert(1, new($"nginx-reverse-http1-tls-{nameSuffix}", ProbeMode.NginxReverseHttp1Tls, null, workload));
-            arms.Insert(3, new($"nginx-reverse-http2-{nameSuffix}", ProbeMode.NginxReverseHttp2, null, workload));
+            // After insert: twp H1, nginx H1, yarp H1, twp H2, yarp H2 — put nginx H2 after twp H2.
+            arms.Insert(4, new($"nginx-reverse-http2-{nameSuffix}", ProbeMode.NginxReverseHttp2, null, workload));
         }
 
         return arms;
@@ -233,38 +267,60 @@ internal static class RampOrchestrator
             ProbeMode.NginxReverseHttp1 => nginxAvailable
                 ? [new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null)]
                 : [],
+            ProbeMode.YarpReverseHttp1 => [new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null)],
             ProbeMode.HttpsMitm => [new("twp-https-mitm", ProbeMode.HttpsMitm, null)],
             ProbeMode.ReverseHttp1Tls => [new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null)],
             ProbeMode.BareReverseHttp1Tls => [new("bare-reverse-http1-tls", ProbeMode.BareReverseHttp1Tls, null)],
             ProbeMode.NginxReverseHttp1Tls => nginxAvailable
                 ? [new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null)]
                 : [],
+            ProbeMode.YarpReverseHttp1Tls => [new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null)],
             ProbeMode.ReverseHttp2 => [new("twp-reverse-http2", ProbeMode.ReverseHttp2, null)],
             ProbeMode.ReverseHttp2Cleartext =>
                 [new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null)],
             ProbeMode.ReverseHttp2ToH2c =>
                 [new("twp-reverse-http2-to-h2c", ProbeMode.ReverseHttp2ToH2c, null)],
+            ProbeMode.YarpReverseHttp2ToH2c =>
+                [new("yarp-reverse-http2-to-h2c", ProbeMode.YarpReverseHttp2ToH2c, null)],
             ProbeMode.ReverseH2c => [new("twp-reverse-h2c", ProbeMode.ReverseH2c, null)],
+            ProbeMode.YarpReverseH2c => [new("yarp-reverse-h2c", ProbeMode.YarpReverseH2c, null)],
             ProbeMode.ReverseH2cToH2c =>
                 [new("twp-reverse-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null)],
+            ProbeMode.YarpReverseH2cToH2c =>
+                [new("yarp-reverse-h2c-to-h2c", ProbeMode.YarpReverseH2cToH2c, null)],
             ProbeMode.ReverseH2cToH1 =>
                 [new("twp-reverse-h2c-to-h1", ProbeMode.ReverseH2cToH1, null)],
+            ProbeMode.YarpReverseH2cToH1 =>
+                [new("yarp-reverse-h2c-to-h1", ProbeMode.YarpReverseH2cToH1, null)],
             ProbeMode.ReverseH2cToH3 =>
                 [new("twp-reverse-h2c-to-h3", ProbeMode.ReverseH2cToH3, null)],
+            ProbeMode.YarpReverseH2cToH3 =>
+                [new("yarp-reverse-h2c-to-h3", ProbeMode.YarpReverseH2cToH3, null)],
             ProbeMode.NginxReverseHttp2 => nginxAvailable
                 ? [new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null)]
                 : [],
+            ProbeMode.YarpReverseHttp2 => [new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null)],
             ProbeMode.ReverseHttp3 => [new("twp-reverse-http3", ProbeMode.ReverseHttp3, null)],
             ProbeMode.ReverseHttp3Cleartext =>
                 [new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null)],
+            ProbeMode.YarpReverseHttp3Cleartext =>
+                [new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null)],
             ProbeMode.ReverseHttp11ToHttp2 =>
                 [new("twp-reverse-http11-to-http2", ProbeMode.ReverseHttp11ToHttp2, null)],
+            ProbeMode.YarpReverseHttp11ToHttp2 =>
+                [new("yarp-reverse-http11-to-http2", ProbeMode.YarpReverseHttp11ToHttp2, null)],
             ProbeMode.ReverseHttp1ToHttp3 =>
                 [new("twp-reverse-http1-to-http3", ProbeMode.ReverseHttp1ToHttp3, null)],
+            ProbeMode.YarpReverseHttp1ToHttp3 =>
+                [new("yarp-reverse-http1-to-http3", ProbeMode.YarpReverseHttp1ToHttp3, null)],
             ProbeMode.ReverseHttp2ToHttp3 =>
                 [new("twp-reverse-http2-to-http3", ProbeMode.ReverseHttp2ToHttp3, null)],
+            ProbeMode.YarpReverseHttp2ToHttp3 =>
+                [new("yarp-reverse-http2-to-http3", ProbeMode.YarpReverseHttp2ToHttp3, null)],
             ProbeMode.ReverseHttp3ToHttp2 =>
                 [new("twp-reverse-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null)],
+            ProbeMode.YarpReverseHttp3ToHttp2 =>
+                [new("yarp-reverse-http3-to-http2", ProbeMode.YarpReverseHttp3ToHttp2, null)],
             ProbeMode.ExplicitHttp1Multi =>
                 [new("twp-explicit-http1-multi", ProbeMode.ExplicitHttp1Multi, null)],
             ProbeMode.ExplicitHttp2Multi =>
@@ -274,11 +330,13 @@ internal static class RampOrchestrator
                 [
                     new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
                     new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null),
+                    new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
                     new("twp-https-mitm", ProbeMode.HttpsMitm, null)
                 ]
                 :
                 [
                     new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
+                    new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
                     new("twp-https-mitm", ProbeMode.HttpsMitm, null)
                 ],
             ProbeMode.CompareHttp2 => nginxAvailable
@@ -286,11 +344,13 @@ internal static class RampOrchestrator
                 [
                     new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
                     new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null),
+                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
                     new("twp-reverse-http3", ProbeMode.ReverseHttp3, null)
                 ]
                 :
                 [
                     new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
+                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
                     new("twp-reverse-http3", ProbeMode.ReverseHttp3, null)
                 ],
             ProbeMode.CompareTls => nginxAvailable
@@ -298,14 +358,18 @@ internal static class RampOrchestrator
                 [
                     new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
                     new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null),
+                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
                     new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
                     new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null),
+                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
                     new("twp-reverse-http3", ProbeMode.ReverseHttp3, null)
                 ]
                 :
                 [
                     new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
+                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
                     new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
+                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
                     new("twp-reverse-http3", ProbeMode.ReverseHttp3, null)
                 ],
             ProbeMode.CompareTerminate => nginxAvailable
@@ -313,54 +377,82 @@ internal static class RampOrchestrator
                 [
                     new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
                     new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null),
+                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
                     new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
+                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
                     new("twp-reverse-h2c-to-h1", ProbeMode.ReverseH2cToH1, null),
+                    new("yarp-reverse-h2c-to-h1", ProbeMode.YarpReverseH2cToH1, null),
                     new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null),
-                    new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null)
+                    new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
+                    new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null)
                 ]
                 :
                 [
                     new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
+                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
                     new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
+                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
                     new("twp-reverse-h2c-to-h1", ProbeMode.ReverseH2cToH1, null),
-                    new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null)
+                    new("yarp-reverse-h2c-to-h1", ProbeMode.YarpReverseH2cToH1, null),
+                    new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
+                    new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null)
                 ],
             ProbeMode.CompareSame => nginxAvailable
                 ?
                 [
                     new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
                     new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null),
+                    new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
                     new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
                     new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null),
+                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
                     new("twp-https-mitm", ProbeMode.HttpsMitm, null),
                     new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
                     new("twp-reverse-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null),
+                    new("yarp-reverse-h2c-to-h2c", ProbeMode.YarpReverseH2cToH2c, null),
                     new("twp-reverse-h2c", ProbeMode.ReverseH2c, null),
+                    new("yarp-reverse-h2c", ProbeMode.YarpReverseH2c, null),
                     new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null),
+                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
                     new("twp-reverse-http3", ProbeMode.ReverseHttp3, null)
                 ]
                 :
                 [
                     new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
+                    new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
                     new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
+                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
                     new("twp-https-mitm", ProbeMode.HttpsMitm, null),
                     new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
                     new("twp-reverse-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null),
+                    new("yarp-reverse-h2c-to-h2c", ProbeMode.YarpReverseH2cToH2c, null),
                     new("twp-reverse-h2c", ProbeMode.ReverseH2c, null),
+                    new("yarp-reverse-h2c", ProbeMode.YarpReverseH2c, null),
+                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
                     new("twp-reverse-http3", ProbeMode.ReverseHttp3, null)
                 ],
             ProbeMode.CompareBridges =>
             [
                 new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
+                new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
                 new("twp-reverse-http2-to-h2c", ProbeMode.ReverseHttp2ToH2c, null),
+                new("yarp-reverse-http2-to-h2c", ProbeMode.YarpReverseHttp2ToH2c, null),
                 new("twp-reverse-h2c-to-h1", ProbeMode.ReverseH2cToH1, null),
+                new("yarp-reverse-h2c-to-h1", ProbeMode.YarpReverseH2cToH1, null),
                 new("twp-reverse-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null),
+                new("yarp-reverse-h2c-to-h2c", ProbeMode.YarpReverseH2cToH2c, null),
                 new("twp-reverse-h2c-to-h3", ProbeMode.ReverseH2cToH3, null),
+                new("yarp-reverse-h2c-to-h3", ProbeMode.YarpReverseH2cToH3, null),
                 new("twp-reverse-http11-to-http2", ProbeMode.ReverseHttp11ToHttp2, null),
+                new("yarp-reverse-http11-to-http2", ProbeMode.YarpReverseHttp11ToHttp2, null),
                 new("twp-reverse-http1-to-http3", ProbeMode.ReverseHttp1ToHttp3, null),
+                new("yarp-reverse-http1-to-http3", ProbeMode.YarpReverseHttp1ToHttp3, null),
                 new("twp-reverse-http2-to-http3", ProbeMode.ReverseHttp2ToHttp3, null),
+                new("yarp-reverse-http2-to-http3", ProbeMode.YarpReverseHttp2ToHttp3, null),
                 new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
-                new("twp-reverse-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null)
+                new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null),
+                new("twp-reverse-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null),
+                new("yarp-reverse-http3-to-http2", ProbeMode.YarpReverseHttp3ToHttp2, null)
             ],
             ProbeMode.CompareMitm =>
             [
@@ -384,19 +476,25 @@ internal static class RampOrchestrator
                     new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
                     new("bare-reverse-http1", ProbeMode.BareReverseHttp1, null),
                     new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null),
+                    new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
                     new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
                     new("bare-reverse-http1-tls", ProbeMode.BareReverseHttp1Tls, null),
                     new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null),
+                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
                     new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
-                    new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null)
+                    new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null),
+                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null)
                 ]
                 :
                 [
                     new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
                     new("bare-reverse-http1", ProbeMode.BareReverseHttp1, null),
+                    new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
                     new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
                     new("bare-reverse-http1-tls", ProbeMode.BareReverseHttp1Tls, null),
-                    new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null)
+                    new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
+                    new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
+                    new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null)
                 ],
             ProbeMode.CompareBodies =>
             [
@@ -428,14 +526,17 @@ internal static class RampOrchestrator
         var arms = new List<ArmSpec>
         {
             new("twp-reverse-http1-tls-ka-tiny", ProbeMode.ReverseHttp1Tls, null, tinyKa),
+            new("yarp-reverse-http1-tls-ka-tiny", ProbeMode.YarpReverseHttp1Tls, null, tinyKa),
             new("twp-reverse-http1-tls-nc-tiny", ProbeMode.ReverseHttp1Tls, null, tinyNc),
-            new("twp-reverse-http1-tls-ka-256k", ProbeMode.ReverseHttp1Tls, null, largeKa)
+            new("yarp-reverse-http1-tls-nc-tiny", ProbeMode.YarpReverseHttp1Tls, null, tinyNc),
+            new("twp-reverse-http1-tls-ka-256k", ProbeMode.ReverseHttp1Tls, null, largeKa),
+            new("yarp-reverse-http1-tls-ka-256k", ProbeMode.YarpReverseHttp1Tls, null, largeKa)
         };
         if (nginxAvailable)
         {
             arms.Insert(1, new("nginx-reverse-http1-tls-ka-tiny", ProbeMode.NginxReverseHttp1Tls, null, tinyKa));
-            arms.Insert(3, new("nginx-reverse-http1-tls-nc-tiny", ProbeMode.NginxReverseHttp1Tls, null, tinyNc));
-            arms.Add(new("nginx-reverse-http1-tls-ka-256k", ProbeMode.NginxReverseHttp1Tls, null, largeKa));
+            arms.Insert(4, new("nginx-reverse-http1-tls-nc-tiny", ProbeMode.NginxReverseHttp1Tls, null, tinyNc));
+            arms.Insert(7, new("nginx-reverse-http1-tls-ka-256k", ProbeMode.NginxReverseHttp1Tls, null, largeKa));
         }
 
         return arms;
@@ -537,7 +638,8 @@ internal static class RampOrchestrator
                 }
 
                 var meetsSlo = result.ErrorRatePercent < options.MaxErrorRatePercent && result.P99Ms <= p99Slo;
-                await CsvWriter.WriteRowAsync(csv, arm.Name, result, meetsSlo, nginxVersion, maxCached, workload);
+                await CsvWriter.WriteRowAsync(csv, arm.Name, result, meetsSlo, nginxVersion, maxCached, workload,
+                    stack.YarpVersion);
                 await csv.FlushAsync(cancellationToken);
 
                 ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
