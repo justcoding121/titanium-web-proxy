@@ -6,6 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Http2;
+using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
 using Titanium.Web.Proxy.Models;
 
@@ -104,5 +106,122 @@ public class HttpInterceptionFastPathTests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("predicate-ok", await response.Content.ReadAsStringAsync());
         Assert.AreEqual(0, beforeCalled);
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task H2c_Reverse_NoHandlers_ProxiesWithoutBeforeRequest()
+    {
+        using var rawServer = Http2RawOriginServer.CreateCleartext();
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.SendInitialSettingsAsync();
+            var (streamId, _, _) = await connection.ReadRequestAsync();
+            var headers = connection.EncodeHeaders([(":status", "200")], Array.Empty<(string, string)>());
+            await connection.WriteHeaderBlockAsync(streamId, headers, endStream: false);
+            await connection.WriteFrameAsync(Http2FrameType.Data, streamId, Http2FrameFlag.EndStream,
+                "h2c-fast"u8.ToArray());
+        });
+
+        var proxy = new ProxyServer(false, false, false)
+        {
+            EnableHttp2 = true
+        };
+        proxy.AddEndPoint(new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false));
+        proxy.Start();
+        try
+        {
+            Assert.IsFalse(proxy.NeedsHttpInterception());
+            var endpoint = proxy.ProxyEndPoints.OfType<TransparentProxyEndPoint>().First();
+            endpoint.ForwardHost = "127.0.0.1";
+            endpoint.ForwardPort = rawServer.Port;
+            endpoint.ForwardCleartext = true;
+            endpoint.BeforeHttpAuthenticate += (_, e) =>
+            {
+                e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+                return Task.CompletedTask;
+            };
+
+            using var rawClient = await Http2RawClient.ConnectCleartextDirectAsync(endpoint.Port);
+            var requestHeaders = rawClient.Connection.EncodeHeaders(
+                [(":method", "GET"), (":scheme", "http"), (":authority", "localhost"), (":path", "/")],
+                Array.Empty<(string, string)>());
+            await rawClient.Connection.WriteHeaderBlockAsync(1, requestHeaders, true);
+
+            var (streamId, responseHeaders, endStream) = await rawClient.Connection.ReadHeaderBlockAsync();
+            Assert.AreEqual(1, streamId);
+            Assert.AreEqual("200", responseHeaders.Single(h => h.Name == ":status").Value);
+            if (!endStream)
+            {
+                while (true)
+                {
+                    var frame = await rawClient.Connection.ReadFrameAsync();
+                    if (frame.Type == Http2FrameType.Data)
+                    {
+                        Assert.AreEqual("h2c-fast", System.Text.Encoding.UTF8.GetString(frame.Payload));
+                        break;
+                    }
+                }
+            }
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task H2c_Reverse_PredicateFalse_SkipsBeforeRequest()
+    {
+        using var rawServer = Http2RawOriginServer.CreateCleartext();
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.SendInitialSettingsAsync();
+            var (streamId, _, _) = await connection.ReadRequestAsync();
+            var headers = connection.EncodeHeaders([(":status", "200")], Array.Empty<(string, string)>());
+            await connection.WriteHeaderBlockAsync(streamId, headers, endStream: true);
+        });
+
+        var proxy = new ProxyServer(false, false, false) { EnableHttp2 = true };
+        proxy.AddEndPoint(new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false));
+        proxy.Start();
+        try
+        {
+            var beforeCalled = 0;
+            proxy.BeforeRequest += (_, _) =>
+            {
+                Interlocked.Increment(ref beforeCalled);
+                return Task.CompletedTask;
+            };
+            proxy.ShouldInterceptHttp = _ => false;
+
+            var endpoint = proxy.ProxyEndPoints.OfType<TransparentProxyEndPoint>().First();
+            endpoint.ForwardHost = "127.0.0.1";
+            endpoint.ForwardPort = rawServer.Port;
+            endpoint.ForwardCleartext = true;
+            endpoint.BeforeHttpAuthenticate += (_, e) =>
+            {
+                e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+                return Task.CompletedTask;
+            };
+
+            using var rawClient = await Http2RawClient.ConnectCleartextDirectAsync(endpoint.Port);
+            var requestHeaders = rawClient.Connection.EncodeHeaders(
+                [(":method", "GET"), (":scheme", "http"), (":authority", "localhost"), (":path", "/")],
+                Array.Empty<(string, string)>());
+            await rawClient.Connection.WriteHeaderBlockAsync(1, requestHeaders, true);
+
+            var (streamId, responseHeaders, _) = await rawClient.Connection.ReadHeaderBlockAsync();
+            Assert.AreEqual(1, streamId);
+            Assert.AreEqual("200", responseHeaders.Single(h => h.Name == ":status").Value);
+            Assert.AreEqual(0, beforeCalled);
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
     }
 }

@@ -133,8 +133,7 @@ namespace Titanium.Web.Proxy.UnitTests
 
         private static void Decode(Decoder decoder, RecordingHeaderListener listener, byte[] encoded)
         {
-            using var reader = new BinaryReader(new MemoryStream(encoded));
-            decoder.Decode(reader, listener);
+            decoder.Decode(encoded, listener);
             decoder.EndHeaderBlock();
         }
 

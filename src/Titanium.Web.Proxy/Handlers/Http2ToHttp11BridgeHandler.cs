@@ -99,7 +99,9 @@ public partial class ProxyServer
                     PrepareRequestHeaders(headers);
             },
             cancellationTokenSource, clientStream.Connection.Id, logger,
-            MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits);
+            MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
+            httpInterceptionEnabled: NeedsHttpInterception(endPoint),
+            shouldInterceptHttp: ShouldInterceptHttp);
     }
 
     /// <summary>
@@ -127,7 +129,7 @@ public partial class ProxyServer
 
         // This bridge performs its origin I/O outside Http2Helper's normal h2 forwarding path,
         // so apply Via loop detection and injection here while the inbound version is still h2.
-        if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
+        if (!sessionArgs.IsFastPath && !sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
             !string.IsNullOrEmpty(ViaHeaderPseudonym))
         {
             if (HasLoopedVia(sessionArgs.HttpClient.Request.Headers, ViaHeaderPseudonym))

@@ -68,13 +68,14 @@ internal class Decoder
     /// </summary>
     /// <param name="input">Input.</param>
     /// <param name="headerListener">Header listener.</param>
-    public void Decode(BinaryReader input, IHeaderListener headerListener) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    public void Decode(ReadOnlySpan<byte> input, IHeaderListener headerListener) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
-        while (input.BaseStream.Length - input.BaseStream.Position > 0)
+        var pos = 0;
+        while (input.Length - pos > 0)
             switch (state)
             {
                 case State.ReadHeaderRepresentation:
-                    var b = input.ReadSByte();
+                    var b = (sbyte)input[pos++];
                     if (maxDynamicTableSizeChangeRequired && (b & 0xE0) != 0x20)
                         // Encoder MUST signal maximum dynamic table size change
                         throw new IOException("max dynamic table size change required");
@@ -148,7 +149,7 @@ internal class Decoder
                     break;
 
                 case State.ReadMaxDynamicTableSize:
-                    var maxSize = DecodeUle128(input);
+                    var maxSize = DecodeUle128(input, ref pos);
                     if (maxSize == -1) return;
 
                     // Check for numerical overflow
@@ -159,7 +160,7 @@ internal class Decoder
                     break;
 
                 case State.ReadIndexedHeader:
-                    var headerIndex = DecodeUle128(input);
+                    var headerIndex = DecodeUle128(input, ref pos);
                     if (headerIndex == -1) return;
 
                     // Check for numerical overflow
@@ -171,7 +172,7 @@ internal class Decoder
 
                 case State.ReadIndexedHeaderName:
                     // Header Name matches an entry in the Header Table
-                    var nameIndex = DecodeUle128(input);
+                    var nameIndex = DecodeUle128(input, ref pos);
                     if (nameIndex == -1) return;
 
                     // Check for numerical overflow
@@ -182,7 +183,7 @@ internal class Decoder
                     break;
 
                 case State.ReadLiteralHeaderNameLengthPrefix:
-                    b = input.ReadSByte();
+                    b = (sbyte)input[pos++];
                     huffmanEncoded = (b & 0x80) == 0x80;
                     index = b & 0x7F;
                     if (index == 0x7f)
@@ -226,7 +227,7 @@ internal class Decoder
 
                 case State.ReadLiteralHeaderNameLength:
                     // Header Name is a Literal String
-                    nameLength = DecodeUle128(input);
+                    nameLength = DecodeUle128(input, ref pos);
                     if (nameLength == -1) return;
 
                     // Check for numerical overflow
@@ -262,23 +263,24 @@ internal class Decoder
 
                 case State.ReadLiteralHeaderName:
                     // Wait until entire name is readable
-                    if (input.BaseStream.Length - input.BaseStream.Position < nameLength) return;
+                    if (input.Length - pos < nameLength) return;
 
-                    name = ReadStringLiteral(input, nameLength);
+                    name = ReadStringLiteral(input, ref pos, nameLength);
                     state = State.ReadLiteralHeaderValueLengthPrefix;
                     break;
 
                 case State.SkipLiteralHeaderName:
 
-                    skipLength -= (int)input.BaseStream.Seek(skipLength, SeekOrigin.Current);
-                    if (skipLength < 0) skipLength = 0;
+                    var skippedNameLength = Math.Min(skipLength, input.Length - pos);
+                    pos += skippedNameLength;
+                    skipLength -= skippedNameLength;
 
                     if (skipLength == 0) state = State.ReadLiteralHeaderValueLengthPrefix;
 
                     break;
 
                 case State.ReadLiteralHeaderValueLengthPrefix:
-                    b = input.ReadSByte();
+                    b = (sbyte)input[pos++];
                     huffmanEncoded = (b & 0x80) == 0x80;
                     index = b & 0x7F;
                     if (index == 0x7f)
@@ -335,7 +337,7 @@ internal class Decoder
 
                 case State.ReadLiteralHeaderValueLength:
                     // Header Value is a Literal String
-                    valueLength = DecodeUle128(input);
+                    valueLength = DecodeUle128(input, ref pos);
                     if (valueLength == -1) return;
 
                     // Check for numerical overflow
@@ -371,16 +373,17 @@ internal class Decoder
 
                 case State.ReadLiteralHeaderValue:
                     // Wait until entire value is readable
-                    if (input.BaseStream.Length - input.BaseStream.Position < valueLength) return;
+                    if (input.Length - pos < valueLength) return;
 
-                    var value = ReadStringLiteral(input, valueLength);
+                    var value = ReadStringLiteral(input, ref pos, valueLength);
                     InsertHeader(headerListener, name, value, indexType);
                     state = State.ReadHeaderRepresentation;
                     break;
 
                 case State.SkipLiteralHeaderValue:
-                    valueLength -= (int)input.BaseStream.Seek(valueLength, SeekOrigin.Current);
-                    if (valueLength < 0) valueLength = 0;
+                    var skippedValueLength = Math.Min(valueLength, input.Length - pos);
+                    pos += skippedValueLength;
+                    valueLength -= skippedValueLength;
 
                     if (valueLength == 0) state = State.ReadHeaderRepresentation;
 
@@ -515,38 +518,31 @@ internal class Decoder
         return true;
     }
 
-    private ByteString ReadStringLiteral(BinaryReader input, int length)
+    private ByteString ReadStringLiteral(ReadOnlySpan<byte> input, ref int pos, int length)
     {
-        var buf = new byte[length];
-        var totalRead = 0;
-        while (totalRead < length)
-        {
-            var read = input.Read(buf, totalRead, length - totalRead);
-            if (read == 0) throw new IOException(DecompressionFailure);
-
-            totalRead += read;
-        }
+        var buf = input.Slice(pos, length).ToArray();
+        pos += length;
 
         return new ByteString(huffmanEncoded ? HuffmanDecoder.Instance.Decode(buf) : buf);
     }
 
     // Unsigned Little Endian Base 128 Variable-Length Integer Encoding
-    private static int DecodeUle128(BinaryReader input)
+    private static int DecodeUle128(ReadOnlySpan<byte> input, ref int pos)
     {
-        var markedPosition = input.BaseStream.Position;
+        var markedPosition = pos;
         var result = 0;
         var shift = 0;
         while (shift < 32)
         {
-            if (input.BaseStream.Length - input.BaseStream.Position == 0)
+            if (input.Length - pos == 0)
             {
                 // Buffer does not contain entire integer,
                 // reset reader index and return -1.
-                input.BaseStream.Position = markedPosition;
+                pos = markedPosition;
                 return -1;
             }
 
-            var b = input.ReadSByte();
+            var b = (sbyte)input[pos++];
             if (shift == 28 && (b & 0xF8) != 0) break;
 
             result |= (b & 0x7F) << shift;
@@ -556,7 +552,7 @@ internal class Decoder
         }
 
         // Value exceeds Integer.MAX_VALUE
-        input.BaseStream.Position = markedPosition;
+        pos = markedPosition;
         throw new IOException(DecompressionFailure);
     }
 

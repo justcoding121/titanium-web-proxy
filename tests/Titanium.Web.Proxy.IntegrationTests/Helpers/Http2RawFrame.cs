@@ -116,7 +116,7 @@ internal static class Http2RawFrame
     public static List<(string Name, string Value)> DecodeHeaderBlock(Decoder decoder, byte[] compressed)
     {
         var listener = new RecordingHeaderListener();
-        decoder.Decode(new BinaryReader(new MemoryStream(compressed)), listener);
+        decoder.Decode(compressed, listener);
         decoder.EndHeaderBlock();
         return listener.Headers;
     }

@@ -209,7 +209,9 @@ namespace Titanium.Web.Proxy.Http2
             CancellationTokenSource cancellationTokenSource, long connectionId,
             ILogger logger, int maxDecodedHeaderListBytes = 64 * 1024, bool enableRfc8441 = false,
             ProxyResourceLimits? resourceLimits = null,
-            TcpServerConnection? originConnection = null)
+            TcpServerConnection? originConnection = null,
+            bool httpInterceptionEnabled = true,
+            Func<HttpInterceptionContext, bool>? shouldInterceptHttp = null)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
             var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource);
@@ -224,11 +226,12 @@ namespace Titanium.Web.Proxy.Http2
                 CopyHttp2FrameAsync(clientStream, serverStream, connectionState,
                     sessionFactory, onBeforeRequest, onAfterResponse, prepareRequestHeaders, true,
                     cancellationTokenSource.Token, logger, maxDecodedHeaderListBytes, enableRfc8441,
-                    resourceLimits, originConnection);
+                    resourceLimits, originConnection, httpInterceptionEnabled, shouldInterceptHttp);
             var receiveRelay =
                 CopyHttp2FrameAsync(serverStream, clientStream, connectionState,
                     sessionFactory, onBeforeResponse, onAfterResponse, null, false, cancellationTokenSource.Token,
-                    logger, maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, originConnection);
+                    logger, maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, originConnection,
+                    httpInterceptionEnabled, shouldInterceptHttp);
 
             await Task.WhenAny(sendRelay, receiveRelay);
             await cancellationTokenSource.CancelAsync();
@@ -326,7 +329,9 @@ namespace Titanium.Web.Proxy.Http2
             int maxDecodedHeaderListBytes = 64 * 1024,
             bool enableRfc8441 = false,
             ProxyResourceLimits? resourceLimits = null,
-            TcpServerConnection? originConnection = null)
+            TcpServerConnection? originConnection = null,
+            bool httpInterceptionEnabled = true,
+            Func<HttpInterceptionContext, bool>? shouldInterceptHttp = null)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
             var cancellationTokenSource = connectionState.CancellationTokenSource;
@@ -580,8 +585,7 @@ namespace Titanium.Web.Proxy.Http2
                         decoder.SetMaxHeaderTableSize(headerTableSize);
                     }
 
-                    decoder.Decode(new BinaryReader(new MemoryStream(compressed, 0, compressed.Length)),
-                        headerListener);
+                    decoder.Decode(compressed.AsSpan(0, compressed.Length), headerListener);
                     var truncated = decoder.EndHeaderBlock();
                     if (truncated)
                     {
@@ -863,6 +867,34 @@ namespace Titanium.Web.Proxy.Http2
                         request.Headers.AddHeader(header);
                     }
 
+                    // Per-stream predicate: gate is on but this stream may still be passthrough.
+                    if (httpInterceptionEnabled && shouldInterceptHttp != null && isMainHeaders)
+                    {
+                        var authority = headerListener.Authority.GetString();
+                        var host = authority;
+                        var port = request.IsHttps ? 443 : 80;
+                        var colon = authority.LastIndexOf(':');
+                        if (colon > 0 && int.TryParse(authority.AsSpan(colon + 1), out var parsedPort))
+                        {
+                            host = authority[..colon];
+                            port = parsedPort;
+                        }
+
+                        var interceptionCtx = new HttpInterceptionContext
+                        {
+                            Hostname = host,
+                            Port = port,
+                            IsHttps = request.IsHttps,
+                            Method = request.Method ?? string.Empty,
+                            PathAndQuery = path.GetString(),
+                            HttpVersion = HttpVersion.Version20,
+                            ProxyEndPoint = sessionArgs.ProxyEndPoint,
+                            ClientRemoteEndPoint = sessionArgs.ClientRemoteEndPoint,
+                            ClientProcessId = null
+                        };
+                        sessionArgs.IsFastPath = !shouldInterceptHttp(interceptionCtx);
+                    }
+
                     var tcs = new TaskCompletionSource<bool>();
                     request.ReadHttp2BeforeHandlerTaskCompletionSource = tcs;
 
@@ -891,7 +923,7 @@ namespace Titanium.Web.Proxy.Http2
                             // their background origin operation; doing it here afterward races
                             // with that operation and can mutate headers while they are sent.
                             prepareRequestHeaders?.Invoke(request.Headers);
-                            if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
+                            if (!sessionArgs.IsFastPath && !sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
                                 !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym))
                             {
                                 var pseudonym = sessionArgs.Server.ViaHeaderPseudonym;
@@ -1479,6 +1511,11 @@ namespace Titanium.Web.Proxy.Http2
                     if (args == null)
                     {
                         args = sessionFactory();
+                        // Gate off: every stream on this connection uses the fast-forward path.
+                        // When the gate is on, IsFastPath may still be set per-stream after HEADERS decode
+                        // once :authority / method / path are known (predicate evaluation below).
+                        if (!httpInterceptionEnabled)
+                            args.IsFastPath = true;
                         connectionState.RegisterStream(streamId, args);
                     }
 

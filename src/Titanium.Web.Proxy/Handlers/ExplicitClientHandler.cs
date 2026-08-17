@@ -559,7 +559,9 @@ public partial class ProxyServer
                                 headers => PrepareRequestHeaders(headers),
                                 connectArgs.CancellationTokenSource, clientStream.Connection.Id, logger,
                                 MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
-                                originConnection: connection);
+                                originConnection: connection,
+                                httpInterceptionEnabled: NeedsHttpInterception(endPoint),
+                                shouldInterceptHttp: ShouldInterceptHttp);
                     }
                     finally
                     {

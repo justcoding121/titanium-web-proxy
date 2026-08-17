@@ -34,9 +34,8 @@ public class Http2HpackEvictionTests
             encoder.EncodeHeader(writer, Encoding.ASCII.GetBytes(name), Encoding.ASCII.GetBytes(value));
             var encoded = ms.ToArray();
 
-            using var reader = new BinaryReader(new MemoryStream(encoded));
             listener.Headers.Clear();
-            decoder.Decode(reader, listener);
+            decoder.Decode(encoded, listener);
             decoder.EndHeaderBlock();
 
             Assert.AreEqual(1, listener.Headers.Count, $"iteration {i}: expected exactly one decoded header");
@@ -71,8 +70,7 @@ public class Http2HpackEvictionTests
             var encoded = ms.ToArray();
 
             var listener = new RecordingHeaderListener();
-            using var reader = new BinaryReader(new MemoryStream(encoded));
-            decoder.Decode(reader, listener);
+            decoder.Decode(encoded, listener);
             decoder.EndHeaderBlock();
 
             Assert.AreEqual(headers.Length, listener.Headers.Count, $"iteration {i}: header count mismatch");

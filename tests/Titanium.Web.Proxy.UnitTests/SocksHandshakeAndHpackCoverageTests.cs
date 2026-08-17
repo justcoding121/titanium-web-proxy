@@ -383,12 +383,8 @@ public class SocksHandshakeAndHpackCoverageTests
         {
             0x40, 0x03, (byte)'f', (byte)'o', (byte)'o', 0x03, (byte)'b', (byte)'a', (byte)'r'
         };
-        using (var stream = new MemoryStream(incremental))
-        using (var reader = new BinaryReader(stream))
-        {
-            decoder.Decode(reader, listener);
-            decoder.EndHeaderBlock();
-        }
+        decoder.Decode(incremental, listener);
+        decoder.EndHeaderBlock();
 
         Assert.AreEqual(1, listener.Headers.Count);
         Assert.AreEqual("foo", listener.Headers[0].Name);
@@ -399,12 +395,8 @@ public class SocksHandshakeAndHpackCoverageTests
         {
             0x10, 0x03, (byte)'x', (byte)'y', (byte)'z', 0x03, (byte)'a', (byte)'b', (byte)'c'
         };
-        using (var stream = new MemoryStream(never))
-        using (var reader = new BinaryReader(stream))
-        {
-            decoder.Decode(reader, listener);
-            decoder.EndHeaderBlock();
-        }
+        decoder.Decode(never, listener);
+        decoder.EndHeaderBlock();
 
         Assert.AreEqual(1, listener.Headers.Count);
         Assert.AreEqual("xyz", listener.Headers[0].Name);
@@ -412,11 +404,8 @@ public class SocksHandshakeAndHpackCoverageTests
 
         // illegal dynamic index on empty/almost-empty table
         var bad = new HpackDecoder(8192, 4096);
-        using (var stream = new MemoryStream(new byte[] { 0xC0 })) // indexed 64
-        using (var reader = new BinaryReader(stream))
-        {
-            Assert.ThrowsExactly<IOException>(() => bad.Decode(reader, new RecordingHeaderListener()));
-        }
+        var badInput = new byte[] { 0xC0 }; // indexed 64
+        Assert.ThrowsExactly<IOException>(() => bad.Decode(badInput, new RecordingHeaderListener()));
     }
 
     [TestMethod]
@@ -425,44 +414,30 @@ public class SocksHandshakeAndHpackCoverageTests
         var listener = new RecordingHeaderListener();
         var decoder = new HpackDecoder(8192, 4096);
         var emptyValue = new byte[] { 0x00, 0x03, (byte)'f', (byte)'o', (byte)'o', 0x00 };
-        using (var stream = new MemoryStream(emptyValue))
-        using (var reader = new BinaryReader(stream))
-        {
-            decoder.Decode(reader, listener);
-            Assert.IsFalse(decoder.EndHeaderBlock());
-        }
+        decoder.Decode(emptyValue, listener);
+        Assert.IsFalse(decoder.EndHeaderBlock());
 
         Assert.AreEqual(1, listener.Headers.Count);
         Assert.AreEqual("", listener.Headers[0].Value);
 
         var dtsu = new HpackDecoder(8192, 4096);
         // 0x3F 0x01 => DTSU size 32 (31+1)
-        using (var stream = new MemoryStream(new byte[] { 0x3F, 0x01, 0x82 }))
-        using (var reader = new BinaryReader(stream))
-        {
-            dtsu.Decode(reader, new RecordingHeaderListener());
-            dtsu.EndHeaderBlock();
-        }
+        dtsu.Decode(new byte[] { 0x3F, 0x01, 0x82 }, new RecordingHeaderListener());
+        dtsu.EndHeaderBlock();
 
         Assert.AreEqual(32, dtsu.GetMaxHeaderTableSize());
 
         var tiny = new HpackDecoder(maxHeaderSize: 1, maxHeaderTableSize: 4096);
-        using (var stream = new MemoryStream(new byte[]
-               { 0x00, 0x03, (byte)'a', (byte)'b', (byte)'c', 0x03, (byte)'d', (byte)'e', (byte)'f' }))
-        using (var reader = new BinaryReader(stream))
-        {
-            tiny.Decode(reader, new RecordingHeaderListener());
-            Assert.IsTrue(tiny.EndHeaderBlock());
-        }
+        tiny.Decode(new byte[]
+            { 0x00, 0x03, (byte)'a', (byte)'b', (byte)'c', 0x03, (byte)'d', (byte)'e', (byte)'f' },
+            new RecordingHeaderListener());
+        Assert.IsTrue(tiny.EndHeaderBlock());
 
         var capped = new HpackDecoder(8192, 4096);
         capped.SetMaxHeaderTableSize(100);
         // DTSU above max: 0x3F then large ULE
-        using (var stream = new MemoryStream(new byte[] { 0x3F, 0x60 }))
-        using (var reader = new BinaryReader(stream))
-        {
-            Assert.ThrowsExactly<IOException>(() => capped.Decode(reader, new RecordingHeaderListener()));
-        }
+        var invalidSize = new byte[] { 0x3F, 0x60 };
+        Assert.ThrowsExactly<IOException>(() => capped.Decode(invalidSize, new RecordingHeaderListener()));
     }
 
     [TestMethod]

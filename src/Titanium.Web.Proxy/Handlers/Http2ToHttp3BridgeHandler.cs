@@ -73,7 +73,9 @@ public partial class ProxyServer
             sessionArgs => OnAfterResponse(sessionArgs),
             headers => PrepareRequestHeaders(headers),
             cancellationTokenSource, clientStream.Connection.Id, logger,
-            MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits);
+            MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
+            httpInterceptionEnabled: NeedsHttpInterception(endPoint),
+            shouldInterceptHttp: ShouldInterceptHttp);
     }
 
     /// <summary>
@@ -200,7 +202,7 @@ public partial class ProxyServer
     /// <returns><see langword="true"/> when a Via loop was detected and a 508 response was synthesized.</returns>
     private bool TryRejectLoopedVia(SessionEventArgs sessionArgs)
     {
-        if (sessionArgs.IsTransparent || sessionArgs.IsSocks ||
+        if (sessionArgs.IsFastPath || sessionArgs.IsTransparent || sessionArgs.IsSocks ||
             string.IsNullOrEmpty(ViaHeaderPseudonym))
             return false;
 
@@ -300,7 +302,7 @@ public partial class ProxyServer
                 response.Headers.RemoveHeader(KnownHeaders.ProxyConnection);
                 response.Headers.RemoveHeader(KnownHeaders.Upgrade);
 
-                if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
+                if (!sessionArgs.IsFastPath && !sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
                     !string.IsNullOrEmpty(ViaHeaderPseudonym))
                 {
                     AddViaHeader(response.Headers, response.HttpVersion, ViaHeaderPseudonym);

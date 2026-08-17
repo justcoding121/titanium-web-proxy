@@ -242,8 +242,8 @@ public class Http2BodyWriterAndOriginSettingsTests
         var streams = typeof(Http2OriginConnection).GetField("streams", PrivateInstance)!.GetValue(origin)!;
         Assert.IsTrue((bool)streams.GetType().GetMethod("TryAdd")!.Invoke(streams, [1, pending])!);
 
-        var process = typeof(Http2OriginConnection).GetMethod("ProcessHeaderBlock", PrivateInstance)!;
-        process.Invoke(origin, [1, EncodeStatusBlock(100, ("x-hint", "1")), false]);
+        var process = GetProcessHeaderBlock(origin);
+        process(1, EncodeStatusBlock(100, ("x-hint", "1")), false);
 
         var interimProp = pendingType.GetField("InterimChannel", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!;
         var interim = interimProp.GetValue(pending)!;
@@ -254,7 +254,7 @@ public class Http2BodyWriterAndOriginSettingsTests
         var interimValue = readArgs[0]!;
         Assert.AreEqual(100, (int)interimValue.GetType().GetField("Item1")!.GetValue(interimValue)!);
 
-        process.Invoke(origin, [1, EncodeStatusBlock(200, ("content-type", "text/plain")), false]);
+        process(1, EncodeStatusBlock(200, ("content-type", "text/plain")), false);
         var response = (Response?)pendingType.GetField("Response", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
             .GetValue(pending);
         Assert.IsNotNull(response);
@@ -273,9 +273,9 @@ public class Http2BodyWriterAndOriginSettingsTests
         var streams = streamsField.GetValue(origin)!;
         Assert.IsTrue((bool)streams.GetType().GetMethod("TryAdd")!.Invoke(streams, [3, pending])!);
 
-        var process = typeof(Http2OriginConnection).GetMethod("ProcessHeaderBlock", PrivateInstance)!;
-        process.Invoke(origin, [3, EncodeStatusBlock(200), false]);
-        process.Invoke(origin, [3, EncodeLiteralBlock(("x-trailer", "t1")), true]);
+        var process = GetProcessHeaderBlock(origin);
+        process(3, EncodeStatusBlock(200), false);
+        process(3, EncodeLiteralBlock(("x-trailer", "t1")), true);
 
         var trailers = (HeaderCollection?)pendingType.GetField("TrailingHeaders",
             BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!.GetValue(pending);
@@ -287,8 +287,8 @@ public class Http2BodyWriterAndOriginSettingsTests
     public async Task ProcessHeaderBlock_BadHpack_FaultsConnection()
     {
         using var origin = await CreateOriginConnectionShellAsync();
-        var process = typeof(Http2OriginConnection).GetMethod("ProcessHeaderBlock", PrivateInstance)!;
-        process.Invoke(origin, [1, new byte[] { 0x80 }, false]); // illegal indexed 0
+        var process = GetProcessHeaderBlock(origin);
+        process(1, new byte[] { 0x80 }, false); // illegal indexed 0
         Assert.IsFalse(origin.IsUsable);
     }
 
@@ -329,9 +329,7 @@ public class Http2BodyWriterAndOriginSettingsTests
 
         var listener = new RecordingHeaderListener();
         var decoder = new HpackDecoder(8192, 4096);
-        encoded.Position = 0;
-        using var reader = new BinaryReader(encoded);
-        decoder.Decode(reader, listener);
+        decoder.Decode(encoded.ToArray(), listener);
         decoder.EndHeaderBlock();
 
         Assert.AreEqual(1, listener.Headers.Count);
@@ -345,20 +343,12 @@ public class Http2BodyWriterAndOriginSettingsTests
         // DTSU with size needing continuation: 0x3F then more bytes for size > 31
         // First feed only 0x3F (incomplete ULE128), then complete with 0x01 and a header.
         var decoder = new HpackDecoder(8192, 4096);
-        using (var partial = new MemoryStream(new byte[] { 0x3F }))
-        using (var reader = new BinaryReader(partial))
-        {
-            decoder.Decode(reader, new RecordingHeaderListener());
-        }
+        decoder.Decode(new byte[] { 0x3F }, new RecordingHeaderListener());
 
         var listener = new RecordingHeaderListener();
-        using (var rest = new MemoryStream(new byte[]
-               { 0x01, 0x00, 0x03, (byte)'a', (byte)'b', (byte)'c', 0x01, (byte)'d' }))
-        using (var reader = new BinaryReader(rest))
-        {
-            decoder.Decode(reader, listener);
-            decoder.EndHeaderBlock();
-        }
+        decoder.Decode(new byte[]
+            { 0x01, 0x00, 0x03, (byte)'a', (byte)'b', (byte)'c', 0x01, (byte)'d' }, listener);
+        decoder.EndHeaderBlock();
 
         Assert.AreEqual(32, decoder.GetMaxHeaderTableSize());
         Assert.AreEqual(1, listener.Headers.Count);
@@ -376,6 +366,14 @@ public class Http2BodyWriterAndOriginSettingsTests
     }
 
     private static ByteString Bs(string s) => new(Encoding.ASCII.GetBytes(s));
+
+    private delegate void ProcessHeaderBlockDelegate(int streamId, ReadOnlySpan<byte> compressed, bool endStream);
+
+    private static ProcessHeaderBlockDelegate GetProcessHeaderBlock(Http2OriginConnection origin)
+    {
+        var method = typeof(Http2OriginConnection).GetMethod("ProcessHeaderBlock", PrivateInstance)!;
+        return (ProcessHeaderBlockDelegate)method.CreateDelegate(typeof(ProcessHeaderBlockDelegate), origin);
+    }
 
     private sealed class RecordingHeaderListener : IHeaderListener
     {

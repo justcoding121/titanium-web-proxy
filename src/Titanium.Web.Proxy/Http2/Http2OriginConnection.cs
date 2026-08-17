@@ -755,7 +755,9 @@ internal sealed class Http2OriginConnection : IDisposable
                         await headerBlockBuffer.WriteAsync(data.AsMemory(), cancellationToken);
                         if ((flags & Http2FrameFlag.EndHeaders) != 0)
                         {
-                            ProcessHeaderBlock(streamId, headerBlockBuffer.ToArray(), headerBlockEndStream);
+                            ProcessHeaderBlock(streamId,
+                                headerBlockBuffer.GetBuffer().AsSpan(0, (int)headerBlockBuffer.Length),
+                                headerBlockEndStream);
                             headerBlockStreamId = null;
                         }
 
@@ -786,7 +788,9 @@ internal sealed class Http2OriginConnection : IDisposable
                         await headerBlockBuffer.WriteAsync(payload.AsMemory(), cancellationToken);
                         if ((flags & Http2FrameFlag.EndHeaders) != 0)
                         {
-                            ProcessHeaderBlock(streamId, headerBlockBuffer.ToArray(), headerBlockEndStream);
+                            ProcessHeaderBlock(streamId,
+                                headerBlockBuffer.GetBuffer().AsSpan(0, (int)headerBlockBuffer.Length),
+                                headerBlockEndStream);
                             headerBlockStreamId = null;
                         }
 
@@ -995,7 +999,7 @@ internal sealed class Http2OriginConnection : IDisposable
         return payload.AsSpan(1, end - 1).ToArray();
     }
 
-    private void ProcessHeaderBlock(int streamId, byte[] compressed, bool endStream) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    private void ProcessHeaderBlock(int streamId, ReadOnlySpan<byte> compressed, bool endStream) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var collected = new HeaderCollection();
         ByteString status = default;
@@ -1014,7 +1018,7 @@ internal sealed class Http2OriginConnection : IDisposable
         try
         {
             decoder ??= new Decoder(8192, 4096);
-            decoder.Decode(new BinaryReader(new MemoryStream(compressed)), listener);
+            decoder.Decode(compressed, listener);
             decoder.EndHeaderBlock();
         }
         catch (Exception ex)

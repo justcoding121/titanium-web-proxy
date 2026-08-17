@@ -22,12 +22,8 @@ namespace Titanium.Web.Proxy.UnitTests
             var listener = new RecordingHeaderListener();
             var decoder = new Decoder(8192, 4096);
 
-            using (var stream = new FragmentedReadStream(encodedHeader))
-            using (var reader = new BinaryReader(stream))
-            {
-                decoder.Decode(reader, listener);
-                decoder.EndHeaderBlock();
-            }
+            decoder.Decode(encodedHeader, listener);
+            decoder.EndHeaderBlock();
 
             Assert.AreEqual(1, listener.Headers.Count);
             Assert.AreEqual("foo", listener.Headers[0].Item1);
@@ -58,12 +54,8 @@ namespace Titanium.Web.Proxy.UnitTests
             // 0x82 = indexed header field index 2 (:method GET)
             var listener = new RecordingHeaderListener();
             var decoder = new Decoder(8192, 4096);
-            using (var stream = new MemoryStream(new byte[] { 0x82 }))
-            using (var reader = new BinaryReader(stream))
-            {
-                decoder.Decode(reader, listener);
-                decoder.EndHeaderBlock();
-            }
+            decoder.Decode(new byte[] { 0x82 }, listener);
+            decoder.EndHeaderBlock();
 
             Assert.AreEqual(1, listener.Headers.Count);
             Assert.AreEqual(":method", listener.Headers[0].Item1);
@@ -74,9 +66,8 @@ namespace Titanium.Web.Proxy.UnitTests
         public void Decode_IndexedZero_Throws()
         {
             var decoder = new Decoder(8192, 4096);
-            using var stream = new MemoryStream(new byte[] { 0x80 }); // indexed, index 0
-            using var reader = new BinaryReader(stream);
-            Assert.ThrowsExactly<IOException>(() => decoder.Decode(reader, new RecordingHeaderListener()));
+            var input = new byte[] { 0x80 }; // indexed, index 0
+            Assert.ThrowsExactly<IOException>(() => decoder.Decode(input, new RecordingHeaderListener()));
         }
 
         [TestMethod]
@@ -91,12 +82,8 @@ namespace Titanium.Web.Proxy.UnitTests
                 0x00, 0x03, (byte)'f', (byte)'o', (byte)'o',
                 0x03, (byte)'b', (byte)'a', (byte)'r'
             };
-            using (var stream = new MemoryStream(bytes))
-            using (var reader = new BinaryReader(stream))
-            {
-                decoder.Decode(reader, listener);
-                decoder.EndHeaderBlock();
-            }
+            decoder.Decode(bytes, listener);
+            decoder.EndHeaderBlock();
 
             Assert.AreEqual(0, decoder.GetMaxHeaderTableSize());
             Assert.AreEqual(1, listener.Headers.Count);
@@ -107,9 +94,8 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var decoder = new Decoder(8192, 4096);
             decoder.SetMaxHeaderTableSize(100);
-            using var stream = new MemoryStream(new byte[] { 0x82 });
-            using var reader = new BinaryReader(stream);
-            Assert.ThrowsExactly<IOException>(() => decoder.Decode(reader, new RecordingHeaderListener()));
+            var input = new byte[] { 0x82 };
+            Assert.ThrowsExactly<IOException>(() => decoder.Decode(input, new RecordingHeaderListener()));
         }
 
         private sealed class RecordingHeaderListener : IHeaderListener
@@ -122,16 +108,5 @@ namespace Titanium.Web.Proxy.UnitTests
             }
         }
 
-        private sealed class FragmentedReadStream : MemoryStream
-        {
-            internal FragmentedReadStream(byte[] buffer) : base(buffer)
-            {
-            }
-
-            public override int Read(byte[] buffer, int offset, int count)
-            {
-                return base.Read(buffer, offset, Math.Min(1, count));
-            }
-        }
     }
 }
