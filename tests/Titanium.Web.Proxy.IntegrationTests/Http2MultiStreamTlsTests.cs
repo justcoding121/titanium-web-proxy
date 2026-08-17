@@ -63,6 +63,49 @@ public class Http2MultiStreamTlsTests
 
     [TestMethod]
     [Timeout(60 * 1000)]
+    public async Task Http2_Tls_Concurrent_Streams_Do_Not_Serialize_Delayed_BeforeRequest()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("ok"));
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.BeforeRequest += async (_, args) =>
+        {
+            if (args.HttpClient.Request.RequestUriString.StartsWith("/delayed-", StringComparison.Ordinal))
+                await Task.Delay(50);
+        };
+
+        using var client = TestHelper.GetHttp2Client(proxy);
+
+        // Establish and warm the single HTTP/2 connection before measuring handler dispatch.
+        using (var warmup = await client.GetAsync(server.ListeningHttpsUrl.TrimEnd('/') + "/warmup"))
+        {
+            Assert.AreEqual(System.Net.HttpStatusCode.OK, warmup.StatusCode);
+        }
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var requests = Enumerable.Range(0, 8)
+            .Select(i => client.GetAsync(server.ListeningHttpsUrl.TrimEnd('/') + "/delayed-" + i))
+            .ToArray();
+        var responses = await Task.WhenAll(requests);
+        stopwatch.Stop();
+
+        foreach (var response in responses)
+        {
+            Assert.AreEqual(System.Net.HttpStatusCode.OK, response.StatusCode);
+            Assert.AreEqual("ok", await response.Content.ReadAsStringAsync());
+            response.Dispose();
+        }
+
+        Assert.IsTrue(stopwatch.ElapsedMilliseconds < 250,
+            "Eight 50ms BeforeRequest delays should overlap across multiplexed streams; " +
+            $"completion took {stopwatch.ElapsedMilliseconds}ms.");
+    }
+
+    [TestMethod]
+    [Timeout(60 * 1000)]
     public async Task Http2_Tls_MultiplexedStreams_ShareServerConnectionId_WithoutHasConnection()
     {
         using var testSuite = new TestSuite();

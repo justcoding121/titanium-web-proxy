@@ -285,6 +285,13 @@ namespace Titanium.Web.Proxy.Http2
 
             try
             {
+                var requestDispatch = state.SessionArgs.HttpClient.Request.Http2BeforeHandlerTask;
+                var responseDispatch = state.SessionArgs.HttpClient.Response.Http2BeforeHandlerTask;
+                if (requestDispatch != null)
+                    await requestDispatch;
+                if (responseDispatch != null && !ReferenceEquals(responseDispatch, requestDispatch))
+                    await responseDispatch;
+
                 await onAfterResponse(state.SessionArgs);
             }
             catch (Exception ex)
@@ -364,7 +371,7 @@ namespace Titanium.Web.Proxy.Http2
 
             // stream ids that were answered with a synthetic (proxy-generated) response and therefore must not
             // be forwarded to the server. Only relevant on the client=>server relay.
-            var syntheticStreams = new HashSet<int>();
+            var syntheticStreams = new ConcurrentDictionary<int, byte>();
 
             // Synthetic responses (Ok/Respond/RespondStreaming during BeforeRequest) are no longer awaited
             // inline in the frame loop below (see the HEADERS dispatch) so that a slow synthetic body does
@@ -375,6 +382,7 @@ namespace Titanium.Web.Proxy.Http2
 
             var frameHeader = new Http2FrameHeader();
             var frameHeaderBuffer = new byte[9];
+            var requestDispatchChain = Task.CompletedTask;
 
             // Writes toward `output` must be serialized against every other writer of that same stream: the
             // other relay task's own-leg control-frame replies (WINDOW_UPDATE receive-credit grants,
@@ -844,7 +852,9 @@ namespace Titanium.Web.Proxy.Http2
                         // a request answered synthetically never reached the server - nothing to forward,
                         // but the block above still had to be decoded to keep this connection's HPACK
                         // decoder state in sync with the peer's encoder.
-                        if (!syntheticStreams.Contains(hbStreamId))
+                        await requestDispatchChain;
+
+                        if (!syntheticStreams.ContainsKey(hbStreamId))
                         {
                             // Drain queued HEADERS/DATA so trailers cannot overtake them on the wire.
                             if (isClient)
@@ -901,10 +911,26 @@ namespace Titanium.Web.Proxy.Http2
                     var streamContext = new Http2StreamContext(hbStreamId, connectionState,
                         isClient ? input : output, cancellationToken);
                     var handler = onBeforeRequestResponse(sessionArgs, streamContext);
-                    request.Http2BeforeHandlerTask = handler;
 
-                    if (handler == await Task.WhenAny(tcs.Task, handler))
+                    // HPACK decode and Request population above must stay ordered on this frame loop.
+                    // Everything after the user handler starts is per-stream work, though, and awaiting it
+                    // here serializes unrelated streams on the same connection. Dispatch it independently;
+                    // DATA/body completion awaits this task before SendBody, preserving HEADERS-before-DATA
+                    // ordering for the stream without delaying subsequent HEADERS decode.
+                    var dispatchFrameHeader = new Http2FrameHeader { StreamId = hbStreamId };
+                    var dispatchFrameHeaderBuffer = new byte[9];
+                    var previousDispatch = requestDispatchChain;
+                    var dispatchTask = Task.Run(async () =>
                     {
+                        var handlerCompleted = handler == await Task.WhenAny(tcs.Task, handler);
+
+                        // The origin must observe newly opened client streams in increasing stream-id order.
+                        // Handlers run concurrently, but admit each completed decision after the prior stream's
+                        // decision has queued (or suppressed) its HEADERS.
+                        await previousDispatch;
+
+                        if (handlerCompleted)
+                        {
                         request.ReadHttp2BeforeHandlerTaskCompletionSource = null;
                         tcs.SetResult(true);
 
@@ -949,7 +975,7 @@ namespace Titanium.Web.Proxy.Http2
                             // block reading/relaying frames for every other multiplexed stream on this
                             // connection; failures are reported centrally instead of tearing down the whole
                             // relay.
-                            syntheticStreams.Add(hbStreamId);
+                            syntheticStreams.TryAdd(hbStreamId, 0);
                             connectionState.Streams.TryGetValue(hbStreamId, out var streamState);
                             var linkedCts694 = streamState != null
                                 ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
@@ -997,7 +1023,7 @@ namespace Titanium.Web.Proxy.Http2
                                 // SyntheticTask and owns this stream's origin round trip entirely.
                                 // Suppress forwarding the request HEADERS to the native H2 origin;
                                 // the bridge task emits the response via EmitSyntheticResponseAsync.
-                                syntheticStreams.Add(hbStreamId);
+                                syntheticStreams.TryAdd(hbStreamId, 0);
                             }
                             else if (isNativeExtendedConnect && output is not NullOriginStream)
                             {
@@ -1017,7 +1043,7 @@ namespace Titanium.Web.Proxy.Http2
                                         $"RFC 8441 extended CONNECT (protocol: {ecProto ?? "unknown"}) " +
                                         "is not supported by this proxy. Only 'websocket' is implemented.",
                                         HttpStatusCode.NotImplemented);
-                                    syntheticStreams.Add(hbStreamId);
+                                    syntheticStreams.TryAdd(hbStreamId, 0);
                                     connectionState.Streams.TryGetValue(hbStreamId, out var unknProtoState);
                                     var linkedCts751 = unknProtoState != null
                                         ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
@@ -1049,7 +1075,6 @@ namespace Titanium.Web.Proxy.Http2
                                     RemoveAndFinalizeStream(hbStreamId);
                                     await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
                                         hbStreamId, Http2ErrorCode.RefusedStream, input));
-                                    return false;
                                 }
                                 else
                                 {
@@ -1058,10 +1083,10 @@ namespace Titanium.Web.Proxy.Http2
                                         BindOriginForHttp2Stream(sessionArgs, originConnection);
                                     ApplyCleartextOriginScheme(request, originConnection,
                                         sessionArgs.ClientConnection);
-                                    // Encode HPACK on this loop; queue copied wire bytes so the next
-                                    // stream can be admitted without awaiting origin socket I/O.
+                                    // Encode HPACK under the ordered dispatch chain and queue copied wire
+                                    // bytes without awaiting origin socket I/O.
                                     QueueSendHeaderTowardServer(connectionState, outputWriteLock,
-                                        remoteSettings, frameHeader, frameHeaderBuffer, request,
+                                        remoteSettings, dispatchFrameHeader, dispatchFrameHeaderBuffer, request,
                                         endStreamFlag, output, isPromise);
                                 }
                             }
@@ -1074,17 +1099,21 @@ namespace Titanium.Web.Proxy.Http2
                                 ApplyCleartextOriginScheme(request, originConnection,
                                     sessionArgs.ClientConnection);
                                 QueueSendHeaderTowardServer(connectionState, outputWriteLock,
-                                    remoteSettings, frameHeader, frameHeaderBuffer, request,
+                                    remoteSettings, dispatchFrameHeader, dispatchFrameHeaderBuffer, request,
                                     endStreamFlag, output, isPromise);
                             }
                         }
-                    }
-                    else
-                    {
-                        request.Http2IgnoreBodyFrames = true;
-                    }
+                        }
+                        else
+                        {
+                            request.Http2IgnoreBodyFrames = true;
+                        }
 
-                    request.Locked = true;
+                        request.Locked = true;
+                    });
+                    requestDispatchChain = dispatchTask;
+                    request.Http2BeforeHandlerTask = dispatchTask;
+                    pendingSynthetics.Add(dispatchTask);
                     return false;
                 }
                 else
@@ -1670,7 +1699,7 @@ namespace Titanium.Web.Proxy.Http2
 
                     sendPacket = false;
                 }
-                else if (isClient && syntheticStreams.Contains(streamId)
+                else if (isClient && syntheticStreams.ContainsKey(streamId)
                          && type != Http2FrameType.WindowUpdate
                          && type != Http2FrameType.RstStream)
                 {
@@ -2893,11 +2922,16 @@ namespace Titanium.Web.Proxy.Http2
             SemaphoreSlim writeLock, Http2Settings settings, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise)
         {
-            var block = EncodeHeaderBlock(settings, rr);
-            var framed = RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, frameHeader.StreamId,
-                pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers, endStream,
-                rr.Priority.HasValue, block, settings.MaxFrameSize);
-            connectionState.EnqueueWriteRented(towardServer, writeLock, output, framed.Array!, framed.Count);
+            // BeforeRequest dispatches may finish on different thread-pool threads. Keep HPACK encoding and
+            // write-chain admission atomic per direction so the connection-scoped dynamic table remains ordered.
+            lock (settings)
+            {
+                var block = EncodeHeaderBlock(settings, rr);
+                var framed = RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, frameHeader.StreamId,
+                    pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers, endStream,
+                    rr.Priority.HasValue, block, settings.MaxFrameSize);
+                connectionState.EnqueueWriteRented(towardServer, writeLock, output, framed.Array!, framed.Count);
+            }
         }
 
         private static void QueueSendHeaderTowardServer(Http2ConnectionState connectionState,
