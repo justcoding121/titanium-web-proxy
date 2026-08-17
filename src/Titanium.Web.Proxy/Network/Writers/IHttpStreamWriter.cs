@@ -12,7 +12,7 @@ public interface IHttpStreamWriter
 
     void Write(byte[] buffer, int offset, int count);
 
-    Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken);
+    ValueTask WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken);
 
     ValueTask WriteLineAsync(CancellationToken cancellationToken = default);
 

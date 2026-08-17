@@ -493,9 +493,19 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     [DebuggerStepThrough]
     public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
-        OnDataWrite(buffer, offset, count);
-        var vt = WriteToBaseStreamAsync(buffer.AsMemory(offset, count), cancellationToken);
+        var vt = WriteAsyncCore(buffer, offset, count, cancellationToken);
         return vt.IsCompletedSuccessfully ? Task.CompletedTask : vt.AsTask();
+    }
+
+    /// <inheritdoc cref="IHttpStreamWriter.WriteAsync" />
+    ValueTask IHttpStreamWriter.WriteAsync(byte[] buffer, int offset, int count,
+        CancellationToken cancellationToken)
+        => WriteAsyncCore(buffer, offset, count, cancellationToken);
+
+    private ValueTask WriteAsyncCore(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        OnDataWrite(buffer, offset, count);
+        return WriteToBaseStreamAsync(buffer.AsMemory(offset, count), cancellationToken);
     }
 
     /// <summary>
@@ -1245,7 +1255,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// <param name="headerBuilder"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    internal Task WriteHeadersAsync(HeaderBuilder headerBuilder, CancellationToken cancellationToken = default)
+    internal ValueTask WriteHeadersAsync(HeaderBuilder headerBuilder, CancellationToken cancellationToken = default)
     {
         var buffer = headerBuilder.GetBuffer();
         var array = buffer.Array ??
@@ -1255,10 +1265,9 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         {
             // NetworkStream.FlushAsync is a no-op but still pays async machinery. Flush only when the
             // base stream may buffer (SslStream / custom) so cleartext reverse keep-alive stays hot.
-            // When the socket write completes synchronously (common on loopback), return CompletedTask
-            // without allocating a write state machine.
-            var vt = WriteAsync(array, buffer.Offset, buffer.Count, flush: !IsNetworkStream, cancellationToken);
-            return vt.IsCompletedSuccessfully ? Task.CompletedTask : vt.AsTask();
+            // When the socket write completes synchronously (common on loopback), return without a
+            // write state machine.
+            return WriteAsync(array, buffer.Offset, buffer.Count, flush: !IsNetworkStream, cancellationToken);
         }
         catch (IOException e)
         {

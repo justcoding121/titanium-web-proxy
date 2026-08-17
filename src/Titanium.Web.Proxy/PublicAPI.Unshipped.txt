@@ -36,3 +36,5 @@ Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.TerminateSessi
 Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.UpstreamHttpProtocol.get -> Titanium.Web.Proxy.Models.UpstreamHttpProtocol
 Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.UpstreamHttpProtocol.set -> void
 Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeHttpAuthenticate -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs!>?
+*REMOVED*Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask

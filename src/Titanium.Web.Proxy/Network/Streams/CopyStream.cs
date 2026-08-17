@@ -97,13 +97,14 @@ internal class CopyStream : ILineStream, IDisposable
             ProxyResourceLimits.Default.MaxHeaderLineBytes);
     }
 
-    public async Task FlushAsync(CancellationToken cancellationToken = default)
+    public ValueTask FlushAsync(CancellationToken cancellationToken = default)
     {
-        // send out the current data from from the buffer
-        if (bufferLength > 0)
-        {
-            await writer.WriteAsync(buffer, 0, bufferLength, cancellationToken);
-            bufferLength = 0;
-        }
+        // send out the current data from the buffer
+        if (bufferLength <= 0)
+            return default;
+
+        var length = bufferLength;
+        bufferLength = 0;
+        return writer.WriteAsync(buffer, 0, length, cancellationToken);
     }
 }

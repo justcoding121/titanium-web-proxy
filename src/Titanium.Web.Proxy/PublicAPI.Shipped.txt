@@ -912,7 +912,6 @@ Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamReader.ReadAsync(byte[]! bu
 Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter
 Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.IsNetworkStream.get -> bool
 Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.Write(byte[]! buffer, int offset, int count) -> void
-Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
 Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.WriteLineAsync(string! value, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.WriteLineAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Titanium.Web.Proxy.StreamExtended.Network.ILineStream

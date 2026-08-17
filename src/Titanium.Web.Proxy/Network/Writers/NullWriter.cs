@@ -26,9 +26,9 @@ internal class NullWriter : IHttpStreamWriter, ITransportCapableStream
     {
     }
 
-    public Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    public ValueTask WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
-        return Task.CompletedTask;
+        return default;
     }
 
     public ValueTask WriteLineAsync(CancellationToken cancellationToken = default)
