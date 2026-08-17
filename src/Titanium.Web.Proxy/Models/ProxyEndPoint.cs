@@ -74,6 +74,12 @@ public abstract class ProxyEndPoint
     public int? MaxConcurrentClients { get; set; }
 
     /// <summary>
+    /// Endpoint-level override for <see cref="ProxyServer.EnableHttpInterception"/>.
+    /// <see langword="null"/> inherits the server-level value.
+    /// </summary>
+    public bool? EnableHttpInterception { get; set; }
+
+    /// <summary>
     ///     Number of client connections currently admitted on this endpoint (accepted and past the
     ///     admission gate, not yet finished being handled).
     /// </summary>

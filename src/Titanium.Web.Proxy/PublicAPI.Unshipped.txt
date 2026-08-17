@@ -35,6 +35,32 @@ Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.ForwardPort.se
 Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.TerminateSession() -> void
 Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.UpstreamHttpProtocol.get -> Titanium.Web.Proxy.Models.UpstreamHttpProtocol
 Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.UpstreamHttpProtocol.set -> void
+Titanium.Web.Proxy.Models.HttpInterceptionContext
+Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientProcessId.get -> int?
+Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientProcessId.init -> void
+Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientRemoteEndPoint.get -> System.Net.IPEndPoint?
+Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientRemoteEndPoint.init -> void
+Titanium.Web.Proxy.Models.HttpInterceptionContext.Hostname.get -> string!
+Titanium.Web.Proxy.Models.HttpInterceptionContext.Hostname.init -> void
+Titanium.Web.Proxy.Models.HttpInterceptionContext.HttpInterceptionContext() -> void
+Titanium.Web.Proxy.Models.HttpInterceptionContext.HttpVersion.get -> System.Version!
+Titanium.Web.Proxy.Models.HttpInterceptionContext.HttpVersion.init -> void
+Titanium.Web.Proxy.Models.HttpInterceptionContext.IsHttps.get -> bool
+Titanium.Web.Proxy.Models.HttpInterceptionContext.IsHttps.init -> void
+Titanium.Web.Proxy.Models.HttpInterceptionContext.Method.get -> string!
+Titanium.Web.Proxy.Models.HttpInterceptionContext.Method.init -> void
+Titanium.Web.Proxy.Models.HttpInterceptionContext.PathAndQuery.get -> string!
+Titanium.Web.Proxy.Models.HttpInterceptionContext.PathAndQuery.init -> void
+Titanium.Web.Proxy.Models.HttpInterceptionContext.Port.get -> int
+Titanium.Web.Proxy.Models.HttpInterceptionContext.Port.init -> void
+Titanium.Web.Proxy.Models.HttpInterceptionContext.ProxyEndPoint.get -> Titanium.Web.Proxy.Models.ProxyEndPoint!
+Titanium.Web.Proxy.Models.HttpInterceptionContext.ProxyEndPoint.init -> void
+Titanium.Web.Proxy.Models.ProxyEndPoint.EnableHttpInterception.get -> bool?
+Titanium.Web.Proxy.Models.ProxyEndPoint.EnableHttpInterception.set -> void
 Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeHttpAuthenticate -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs!>?
+Titanium.Web.Proxy.ProxyServer.EnableHttpInterception.get -> bool
+Titanium.Web.Proxy.ProxyServer.EnableHttpInterception.set -> void
+Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp.get -> System.Func<Titanium.Web.Proxy.Models.HttpInterceptionContext, bool>?
+Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp.set -> void
 *REMOVED*Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
 Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask

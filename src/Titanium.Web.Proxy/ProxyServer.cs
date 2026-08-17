@@ -1167,6 +1167,47 @@ public partial class ProxyServer : IDisposable
     public event AsyncEventHandler<ConnectRequest>? BeforeUpStreamConnectRequest; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
+    /// Forces the full interception path (SessionEventArgs, BeforeRequest, etc.) even when
+    /// no event handlers are subscribed. Set this when consuming SessionEventArgs for timing
+    /// or metrics without subscribing to any event. Default: <see langword="false"/>.
+    /// </summary>
+    public bool EnableHttpInterception { get; set; }
+
+    /// <summary>
+    /// Optional per-request/stream predicate consulted only when the global interception gate
+    /// is active. Return <see langword="true"/> to use the full SessionEventArgs path;
+    /// return <see langword="false"/> to use the fast-forward path.
+    /// <see langword="null"/> (the default) intercepts every request — preserving today's behavior.
+    /// </summary>
+    public Func<HttpInterceptionContext, bool>? ShouldInterceptHttp { get; set; }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when the global interception gate is active for the given
+    /// endpoint: any session event handler is subscribed, <see cref="EnableHttpInterception"/> is
+    /// set on the server, or the endpoint's own <see cref="ProxyEndPoint.EnableHttpInterception"/>
+    /// override is set.
+    /// </summary>
+    internal bool NeedsHttpInterception(ProxyEndPoint? endPoint = null) =>
+        (endPoint?.EnableHttpInterception ?? EnableHttpInterception)
+        || BeforeRequest != null
+        || BeforeResponse != null
+        || AfterResponse != null
+        || OnRequestBodyWrite != null
+        || OnResponseBodyWrite != null;
+
+    /// <summary>
+    /// Returns <see langword="true"/> when this specific request/stream should go through the
+    /// full interception path. If the gate is off the result is always <see langword="false"/>.
+    /// If the gate is on and <see cref="ShouldInterceptHttp"/> is <see langword="null"/> the
+    /// result is always <see langword="true"/> (intercept-all, default behavior).
+    /// </summary>
+    internal bool ShouldIntercept(HttpInterceptionContext ctx, ProxyEndPoint? endPoint = null)
+    {
+        if (!NeedsHttpInterception(endPoint)) return false;
+        return ShouldInterceptHttp?.Invoke(ctx) ?? true;
+    }
+
+    /// <summary>
     ///     Customize the minimum ThreadPool size (increase it on a server).
     ///     Defaults to <c>max(ProcessorCount * 2, 16)</c> so short loopback/proxy workloads are not
     ///     starved while the pool is still ramping workers.
