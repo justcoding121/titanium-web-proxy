@@ -3433,6 +3433,12 @@ references:
   commentId: F:Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingGzip
   fullName: Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingGzip
   nameWithType: KnownHeaders.ContentEncodingGzip
+- uid: Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingIdentity
+  name: ContentEncodingIdentity
+  href: api/Titanium.Web.Proxy.Http.KnownHeaders.html#Titanium_Web_Proxy_Http_KnownHeaders_ContentEncodingIdentity
+  commentId: F:Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingIdentity
+  fullName: Titanium.Web.Proxy.Http.KnownHeaders.ContentEncodingIdentity
+  nameWithType: KnownHeaders.ContentEncodingIdentity
 - uid: Titanium.Web.Proxy.Http.KnownHeaders.ContentLength
   name: ContentLength
   href: api/Titanium.Web.Proxy.Http.KnownHeaders.html#Titanium_Web_Proxy_Http_KnownHeaders_ContentLength

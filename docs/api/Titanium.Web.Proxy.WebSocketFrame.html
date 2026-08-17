@@ -120,15 +120,8 @@
     <pre><code class="lang-csharp hljs">public class WebSocketFrame</code></pre>
   </div>
   <h5 id="Titanium_Web_Proxy_WebSocketFrame_remarks"><strong>Remarks</strong></h5>
-  <div class="markdown level0 remarks"><p><a class="xref" href="Titanium.Web.Proxy.WebSocketFrame.html#Titanium_Web_Proxy_WebSocketFrame_Data">Data</a> is only valid for as long as the buffer it was decoded from is unchanged - it
-is a zero-copy slice of either the byte array passed into <a class="xref" href="Titanium.Web.Proxy.WebSocketDecoder.html#Titanium_Web_Proxy_WebSocketDecoder_Decode_System_Byte___System_Int32_System_Int32_">Decode(byte[], int, int)</a> or
-the decoder's own internal reassembly buffer (used to hold onto a frame that arrived split across
-multiple calls), and both of those are reused/overwritten by later reads and later calls to
-<a class="xref" href="Titanium.Web.Proxy.WebSocketDecoder.html#Titanium_Web_Proxy_WebSocketDecoder_Decode_System_Byte___System_Int32_System_Int32_">Decode(byte[], int, int)</a> on the same decoder instance. Consume <a class="xref" href="Titanium.Web.Proxy.WebSocketFrame.html#Titanium_Web_Proxy_WebSocketFrame_Data">Data</a> (or
-call <a class="xref" href="Titanium.Web.Proxy.WebSocketFrame.html#Titanium_Web_Proxy_WebSocketFrame_GetText">GetText()</a>) while still enumerating the same <code>Decode(...)</code> call that
-produced this frame; copy it out (e.g. via <code>Data.ToArray()</code>) before retaining a
-<a class="xref" href="Titanium.Web.Proxy.WebSocketFrame.html">WebSocketFrame</a> for later use, otherwise its content can silently change or become
-garbage once more data flows through the decoder.</p>
+  <div class="markdown level0 remarks"><p><a class="xref" href="Titanium.Web.Proxy.WebSocketFrame.html#Titanium_Web_Proxy_WebSocketFrame_Data">Data</a> is an owned copy of the unmasked payload produced by
+<a class="xref" href="Titanium.Web.Proxy.WebSocketDecoder.html#Titanium_Web_Proxy_WebSocketDecoder_Decode_System_Byte___System_Int32_System_Int32_">Decode(byte[], int, int)</a>, safe to retain after that call returns.</p>
 </div>
   <h3 id="properties">Properties
 </h3>
@@ -137,14 +130,11 @@ garbage once more data flows through the decoder.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_WebSocketFrame_Data.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.WebSocketFrame.Data%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/WebSocket/WebSocketFrame.cs/#L32">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/WebSocket/WebSocketFrame.cs/#L22">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_WebSocketFrame_Data_" data-uid="Titanium.Web.Proxy.WebSocketFrame.Data*"></a>
   <h4 id="Titanium_Web_Proxy_WebSocketFrame_Data" data-uid="Titanium.Web.Proxy.WebSocketFrame.Data">Data</h4>
-  <div class="markdown level1 summary"><p>The unmasked frame payload. See the class remarks - this is a zero-copy view into a buffer that
-gets reused, so it must be consumed (or copied, e.g. via <code>Data.ToArray()</code>) before further
-data is read through the same <a class="xref" href="Titanium.Web.Proxy.WebSocketDecoder.html">WebSocketDecoder</a> or before the caller-supplied
-buffer this frame was decoded from is reused.</p>
+  <div class="markdown level1 summary"><p>The unmasked frame payload (owned copy from <a class="xref" href="Titanium.Web.Proxy.WebSocketDecoder.html">WebSocketDecoder</a>).</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="declaration">Declaration</h5>
@@ -171,7 +161,7 @@ buffer this frame was decoded from is reused.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_WebSocketFrame_IsFinal.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.WebSocketFrame.IsFinal%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/WebSocket/WebSocketFrame.cs/#L22">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/WebSocket/WebSocketFrame.cs/#L15">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_WebSocketFrame_IsFinal_" data-uid="Titanium.Web.Proxy.WebSocketFrame.IsFinal*"></a>
   <h4 id="Titanium_Web_Proxy_WebSocketFrame_IsFinal" data-uid="Titanium.Web.Proxy.WebSocketFrame.IsFinal">IsFinal</h4>
@@ -201,7 +191,7 @@ buffer this frame was decoded from is reused.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_WebSocketFrame_OpCode.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.WebSocketFrame.OpCode%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/WebSocket/WebSocketFrame.cs/#L24">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/WebSocket/WebSocketFrame.cs/#L17">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_WebSocketFrame_OpCode_" data-uid="Titanium.Web.Proxy.WebSocketFrame.OpCode*"></a>
   <h4 id="Titanium_Web_Proxy_WebSocketFrame_OpCode" data-uid="Titanium.Web.Proxy.WebSocketFrame.OpCode">OpCode</h4>
@@ -233,7 +223,7 @@ buffer this frame was decoded from is reused.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_WebSocketFrame_GetText.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.WebSocketFrame.GetText%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/WebSocket/WebSocketFrame.cs/#L34">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/WebSocket/WebSocketFrame.cs/#L24">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_WebSocketFrame_GetText_" data-uid="Titanium.Web.Proxy.WebSocketFrame.GetText*"></a>
   <h4 id="Titanium_Web_Proxy_WebSocketFrame_GetText" data-uid="Titanium.Web.Proxy.WebSocketFrame.GetText">GetText()</h4>
@@ -263,7 +253,7 @@ buffer this frame was decoded from is reused.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_WebSocketFrame_GetText_System_Text_Encoding_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.WebSocketFrame.GetText(System.Text.Encoding)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/WebSocket/WebSocketFrame.cs/#L39">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/WebSocket/WebSocketFrame.cs/#L29">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_WebSocketFrame_GetText_" data-uid="Titanium.Web.Proxy.WebSocketFrame.GetText*"></a>
   <h4 id="Titanium_Web_Proxy_WebSocketFrame_GetText_System_Text_Encoding_" data-uid="Titanium.Web.Proxy.WebSocketFrame.GetText(System.Text.Encoding)">GetText(Encoding)</h4>
@@ -317,7 +307,7 @@ buffer this frame was decoded from is reused.</p>
                     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_WebSocketFrame.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.WebSocketFrame%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
                   </li>
                   <li>
-                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/WebSocket/WebSocketFrame.cs/#L20" class="contribution-link">View Source</a>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/WebSocket/WebSocketFrame.cs/#L13" class="contribution-link">View Source</a>
                   </li>
                 </ul>
               </div>

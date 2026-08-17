@@ -132,7 +132,7 @@ public class HeaderCollection : IEnumerable&lt;HttpHeader&gt;, IEnumerable</code
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection__ctor.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.%23ctor%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L24">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L26">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection__ctor_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.#ctor*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection__ctor" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.#ctor">HeaderCollection()</h4>
@@ -150,7 +150,7 @@ public class HeaderCollection : IEnumerable&lt;HttpHeader&gt;, IEnumerable</code
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_Headers.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.Headers%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L35">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L39">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_Headers_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.Headers*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_Headers" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.Headers">Headers</h4>
@@ -181,16 +181,17 @@ public class HeaderCollection : IEnumerable&lt;HttpHeader&gt;, IEnumerable</code
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_NonUniqueHeaders.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.NonUniqueHeaders%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L40">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L45">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_NonUniqueHeaders_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.NonUniqueHeaders*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_NonUniqueHeaders" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.NonUniqueHeaders">NonUniqueHeaders</h4>
-  <div class="markdown level1 summary"><p>Non Unique headers.</p>
+  <div class="markdown level1 summary"><p>Non-unique headers. Values are read-only views over the internal lists so callers cannot
+<code>Add</code>/<code>Clear</code> storage that still belongs to this collection.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public ReadOnlyDictionary&lt;string, List&lt;HttpHeader&gt;&gt; NonUniqueHeaders { get; }</code></pre>
+    <pre><code class="lang-csharp hljs">public ReadOnlyDictionary&lt;string, IReadOnlyList&lt;HttpHeader&gt;&gt; NonUniqueHeaders { get; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
   <table class="table table-bordered table-condensed">
@@ -202,7 +203,7 @@ public class HeaderCollection : IEnumerable&lt;HttpHeader&gt;, IEnumerable</code
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.objectmodel.readonlydictionary-2">ReadOnlyDictionary</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>, <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.list-1">List</a>&lt;<a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;&gt;</td>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.objectmodel.readonlydictionary-2">ReadOnlyDictionary</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>, <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ireadonlylist-1">IReadOnlyList</a>&lt;<a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a>&gt;&gt;</td>
         <td></td>
       </tr>
     </tbody>
@@ -214,7 +215,7 @@ public class HeaderCollection : IEnumerable&lt;HttpHeader&gt;, IEnumerable</code
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_AddHeader_System_String_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.AddHeader(System.String%2CSystem.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L231">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L236">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_AddHeader_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.AddHeader*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_AddHeader_System_String_System_String_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.AddHeader(System.String,System.String)">AddHeader(string, string)</h4>
@@ -252,7 +253,7 @@ public class HeaderCollection : IEnumerable&lt;HttpHeader&gt;, IEnumerable</code
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_AddHeader_Titanium_Web_Proxy_Models_HttpHeader_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.AddHeader(Titanium.Web.Proxy.Models.HttpHeader)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L250">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L255">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_AddHeader_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.AddHeader*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_AddHeader_Titanium_Web_Proxy_Models_HttpHeader_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.AddHeader(Titanium.Web.Proxy.Models.HttpHeader)">AddHeader(HttpHeader)</h4>
@@ -285,7 +286,7 @@ public class HeaderCollection : IEnumerable&lt;HttpHeader&gt;, IEnumerable</code
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_AddHeaders_System_Collections_Generic_IEnumerable_System_Collections_Generic_KeyValuePair_System_String_System_String___.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.AddHeaders(System.Collections.Generic.IEnumerable%7BSystem.Collections.Generic.KeyValuePair%7BSystem.String%2CSystem.String%7D%7D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L292">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L299">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_AddHeaders_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.AddHeaders*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_AddHeaders_System_Collections_Generic_IEnumerable_System_Collections_Generic_KeyValuePair_System_String_System_String___" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.AddHeaders(System.Collections.Generic.IEnumerable{System.Collections.Generic.KeyValuePair{System.String,System.String}})">AddHeaders(IEnumerable&lt;KeyValuePair&lt;string, string&gt;&gt;?)</h4>
@@ -318,7 +319,7 @@ public class HeaderCollection : IEnumerable&lt;HttpHeader&gt;, IEnumerable</code
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_AddHeaders_System_Collections_Generic_IEnumerable_System_Collections_Generic_KeyValuePair_System_String_Titanium_Web_Proxy_Models_HttpHeader___.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.AddHeaders(System.Collections.Generic.IEnumerable%7BSystem.Collections.Generic.KeyValuePair%7BSystem.String%2CTitanium.Web.Proxy.Models.HttpHeader%7D%7D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L303">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L310">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_AddHeaders_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.AddHeaders*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_AddHeaders_System_Collections_Generic_IEnumerable_System_Collections_Generic_KeyValuePair_System_String_Titanium_Web_Proxy_Models_HttpHeader___" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.AddHeaders(System.Collections.Generic.IEnumerable{System.Collections.Generic.KeyValuePair{System.String,Titanium.Web.Proxy.Models.HttpHeader}})">AddHeaders(IEnumerable&lt;KeyValuePair&lt;string, HttpHeader&gt;&gt;?)</h4>
@@ -351,7 +352,7 @@ public class HeaderCollection : IEnumerable&lt;HttpHeader&gt;, IEnumerable</code
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_AddHeaders_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.AddHeaders(System.Collections.Generic.IEnumerable%7BTitanium.Web.Proxy.Models.HttpHeader%7D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L281">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L288">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_AddHeaders_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.AddHeaders*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_AddHeaders_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Models_HttpHeader__" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.AddHeaders(System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Models.HttpHeader})">AddHeaders(IEnumerable&lt;HttpHeader&gt;?)</h4>
@@ -384,7 +385,7 @@ public class HeaderCollection : IEnumerable&lt;HttpHeader&gt;, IEnumerable</code
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_Clear.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.Clear%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L377">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L392">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_Clear_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.Clear*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_Clear" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.Clear">Clear()</h4>
@@ -400,7 +401,7 @@ public class HeaderCollection : IEnumerable&lt;HttpHeader&gt;, IEnumerable</code
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_GetAllHeaders.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.GetAllHeaders%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L205">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L210">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_GetAllHeaders_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.GetAllHeaders*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_GetAllHeaders" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.GetAllHeaders">GetAllHeaders()</h4>
@@ -431,7 +432,7 @@ public class HeaderCollection : IEnumerable&lt;HttpHeader&gt;, IEnumerable</code
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_GetEnumerator.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.GetEnumerator%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L62">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L67">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_GetEnumerator_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.GetEnumerator*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_GetEnumerator" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.GetEnumerator">GetEnumerator()</h4>
@@ -477,7 +478,7 @@ and unchanged from before this optimization.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_GetFirstHeader_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.GetFirstHeader(System.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L183">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L188">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_GetFirstHeader_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.GetFirstHeader*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_GetFirstHeader_System_String_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.GetFirstHeader(System.String)">GetFirstHeader(string)</h4>
@@ -524,7 +525,7 @@ and unchanged from before this optimization.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_GetHeaders_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.GetHeaders(System.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L169">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L174">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_GetHeaders_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.GetHeaders*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_GetHeaders_System_String_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.GetHeaders(System.String)">GetHeaders(string)</h4>
@@ -573,7 +574,7 @@ Returns null if doesn't exist</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_HeaderExists_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.HeaderExists(System.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L158">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L163">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_HeaderExists_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.HeaderExists*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_HeaderExists_System_String_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.HeaderExists(System.String)">HeaderExists(string)</h4>
@@ -621,7 +622,7 @@ Returns null if doesn't exist</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_RemoveHeader_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader(System.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L325">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L332">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_RemoveHeader_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_RemoveHeader_System_String_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader(System.String)">RemoveHeader(string)</h4>
@@ -671,7 +672,7 @@ False if no header exists with given name</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_RemoveHeader_Titanium_Web_Proxy_Http_KnownHeader_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader(Titanium.Web.Proxy.Http.KnownHeader)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L343">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L354">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_RemoveHeader_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_RemoveHeader_Titanium_Web_Proxy_Http_KnownHeader_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader(Titanium.Web.Proxy.Http.KnownHeader)">RemoveHeader(KnownHeader)</h4>
@@ -721,7 +722,7 @@ False if no header exists with given name</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HeaderCollection_RemoveHeader_Titanium_Web_Proxy_Models_HttpHeader_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader(Titanium.Web.Proxy.Models.HttpHeader)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L357">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Http/HeaderCollection.cs/#L372">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HeaderCollection_RemoveHeader_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HeaderCollection_RemoveHeader_Titanium_Web_Proxy_Models_HttpHeader_" data-uid="Titanium.Web.Proxy.Http.HeaderCollection.RemoveHeader(Titanium.Web.Proxy.Models.HttpHeader)">RemoveHeader(HttpHeader)</h4>
