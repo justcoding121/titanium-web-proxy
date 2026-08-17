@@ -791,10 +791,11 @@ public partial class ProxyServer
     /// </summary>
     /// <param name="request">The COONECT request.</param>
     /// <returns></returns>
-    internal async Task OnBeforeUpStreamConnectRequest(ConnectRequest request)
+    internal Task OnBeforeUpStreamConnectRequest(ConnectRequest request)
     {
-        if (BeforeUpStreamConnectRequest != null)
-            await BeforeUpStreamConnectRequest.InvokeAsync(this, request, logger);
+        return BeforeUpStreamConnectRequest != null
+            ? BeforeUpStreamConnectRequest.InvokeAsync(this, request, logger)
+            : Task.CompletedTask;
     }
 
     internal bool ShouldCallBeforeRequestBodyWrite()
@@ -802,12 +803,11 @@ public partial class ProxyServer
         return OnRequestBodyWrite != null;
     }
 
-    internal async Task OnBeforeRequestBodyWrite(BeforeBodyWriteEventArgs args)
+    internal Task OnBeforeRequestBodyWrite(BeforeBodyWriteEventArgs args)
     {
-        if (OnRequestBodyWrite != null)
-        {
-            await OnRequestBodyWrite.InvokeAsync(this, args, logger);
-        }
+        return OnRequestBodyWrite != null
+            ? OnRequestBodyWrite.InvokeAsync(this, args, logger)
+            : Task.CompletedTask;
     }
 
     /// <summary>

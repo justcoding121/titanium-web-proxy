@@ -49,9 +49,24 @@ internal sealed class HttpClientStream : HttpStream
         }
     }
 
-    internal async ValueTask<RequestStatusInfo> ReadRequestLine(CancellationToken cancellationToken = default)
+    internal ValueTask<RequestStatusInfo> ReadRequestLine(CancellationToken cancellationToken = default)
     {
-        var result = await ReadRequestLineWithResultAsync(cancellationToken);
+        var resultVt = ReadRequestLineWithResultAsync(cancellationToken);
+        if (resultVt.IsCompletedSuccessfully)
+        {
+            var result = resultVt.Result;
+            if (result.Cancelled)
+                cancellationToken.ThrowIfCancellationRequested();
+            return new ValueTask<RequestStatusInfo>(result.Status);
+        }
+
+        return ReadRequestLineSlow(resultVt, cancellationToken);
+    }
+
+    private static async ValueTask<RequestStatusInfo> ReadRequestLineSlow(
+        ValueTask<(RequestStatusInfo Status, bool Cancelled)> resultVt, CancellationToken cancellationToken)
+    {
+        var result = await resultVt;
         if (result.Cancelled)
             cancellationToken.ThrowIfCancellationRequested();
         return result.Status;
@@ -60,14 +75,30 @@ internal sealed class HttpClientStream : HttpStream
     /// <summary>
     ///     Reads the request line without throwing on cancellation (HTTP/1 session cancel hygiene).
     /// </summary>
-    internal async ValueTask<(RequestStatusInfo Status, bool Cancelled)> ReadRequestLineWithResultAsync(
+    internal ValueTask<(RequestStatusInfo Status, bool Cancelled)> ReadRequestLineWithResultAsync(
         CancellationToken cancellationToken = default)
     {
-        var (httpCmd, cancelled) = await ReadLineWithResultAsync(cancellationToken);
-        if (cancelled) return (default, true);
-        if (string.IsNullOrEmpty(httpCmd)) return (default, false);
+        var lineVt = ReadLineWithResultAsync(cancellationToken);
+        if (lineVt.IsCompletedSuccessfully)
+            return new ValueTask<(RequestStatusInfo Status, bool Cancelled)>(
+                ParseRequestLineResult(lineVt.Result));
 
-        Request.ParseRequestLine(httpCmd, out var method, out var requestUri, out var version);
+        return ReadRequestLineWithResultSlowAsync(lineVt);
+    }
+
+    private static async ValueTask<(RequestStatusInfo Status, bool Cancelled)> ReadRequestLineWithResultSlowAsync(
+        ValueTask<(string? Line, bool Cancelled)> lineVt)
+    {
+        return ParseRequestLineResult(await lineVt);
+    }
+
+    private static (RequestStatusInfo Status, bool Cancelled) ParseRequestLineResult(
+        (string? httpCmd, bool cancelled) line)
+    {
+        if (line.cancelled) return (default, true);
+        if (string.IsNullOrEmpty(line.httpCmd)) return (default, false);
+
+        Request.ParseRequestLine(line.httpCmd, out var method, out var requestUri, out var version);
 
         return (new RequestStatusInfo { Method = method, RequestUri = requestUri, Version = version }, false);
     }

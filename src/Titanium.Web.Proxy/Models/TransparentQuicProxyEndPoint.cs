@@ -147,11 +147,12 @@ public class TransparentQuicProxyEndPoint : TransparentBaseProxyEndPoint
     /// </summary>
     public event AsyncEventHandler<BeforeQuicAuthenticateEventArgs>? BeforeQuicAuthenticate; // NOSONAR S3264 -- Public extension event invoked by the QUIC pipeline.
 
-    internal async Task InvokeBeforeQuicAuthenticate(ProxyServer proxyServer,
+    internal Task InvokeBeforeQuicAuthenticate(ProxyServer proxyServer,
         BeforeQuicAuthenticateEventArgs args, ILogger logger)
     {
-        if (BeforeQuicAuthenticate != null)
-            await BeforeQuicAuthenticate.InvokeAsync(proxyServer, args, logger);
+        return BeforeQuicAuthenticate != null
+            ? BeforeQuicAuthenticate.InvokeAsync(proxyServer, args, logger)
+            : Task.CompletedTask;
     }
 
     /// <summary>

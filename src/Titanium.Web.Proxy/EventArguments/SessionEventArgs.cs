@@ -171,10 +171,11 @@ public class SessionEventArgs : SessionEventArgsBase
 
     internal bool HasWebSocketFrameInterceptHandler => BeforeWebSocketFrame != null;
 
-    internal async Task InvokeBeforeWebSocketFrame(WebSocketFrameInterceptEventArgs args)
+    internal Task InvokeBeforeWebSocketFrame(WebSocketFrameInterceptEventArgs args)
     {
-        if (BeforeWebSocketFrame != null)
-            await BeforeWebSocketFrame.InvokeAsync(Server, args, Logger);
+        return BeforeWebSocketFrame != null
+            ? BeforeWebSocketFrame.InvokeAsync(Server, args, Logger)
+            : Task.CompletedTask;
     }
 
     /// <summary>
@@ -490,10 +491,17 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
     /// <returns>The body as bytes.</returns>
-    public async Task<byte[]> GetRequestBody(CancellationToken cancellationToken = default)
+    public Task<byte[]> GetRequestBody(CancellationToken cancellationToken = default)
     {
-        if (!HttpClient.Request.IsBodyRead) await ReadRequestBodyAsync(cancellationToken);
+        if (HttpClient.Request.IsBodyRead)
+            return Task.FromResult(HttpClient.Request.Body);
 
+        return GetRequestBodyCoreAsync(cancellationToken);
+    }
+
+    private async Task<byte[]> GetRequestBodyCoreAsync(CancellationToken cancellationToken)
+    {
+        await ReadRequestBodyAsync(cancellationToken);
         return HttpClient.Request.Body;
     }
 
@@ -502,10 +510,17 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
     /// <returns>The body as string.</returns>
-    public async Task<string> GetRequestBodyAsString(CancellationToken cancellationToken = default)
+    public Task<string> GetRequestBodyAsString(CancellationToken cancellationToken = default)
     {
-        if (!HttpClient.Request.IsBodyRead) await ReadRequestBodyAsync(cancellationToken);
+        if (HttpClient.Request.IsBodyRead)
+            return Task.FromResult(HttpClient.Request.BodyString);
 
+        return GetRequestBodyAsStringCoreAsync(cancellationToken);
+    }
+
+    private async Task<string> GetRequestBodyAsStringCoreAsync(CancellationToken cancellationToken)
+    {
+        await ReadRequestBodyAsync(cancellationToken);
         return HttpClient.Request.BodyString;
     }
 
@@ -538,10 +553,17 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
     /// <returns>The resulting bytes.</returns>
-    public async Task<byte[]> GetResponseBody(CancellationToken cancellationToken = default)
+    public Task<byte[]> GetResponseBody(CancellationToken cancellationToken = default)
     {
-        if (!HttpClient.Response.IsBodyRead) await ReadResponseBodyAsync(cancellationToken);
+        if (HttpClient.Response.IsBodyRead)
+            return Task.FromResult(HttpClient.Response.Body);
 
+        return GetResponseBodyCoreAsync(cancellationToken);
+    }
+
+    private async Task<byte[]> GetResponseBodyCoreAsync(CancellationToken cancellationToken)
+    {
+        await ReadResponseBodyAsync(cancellationToken);
         return HttpClient.Response.Body;
     }
 
@@ -550,10 +572,17 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
     /// <returns>The string body.</returns>
-    public async Task<string> GetResponseBodyAsString(CancellationToken cancellationToken = default)
+    public Task<string> GetResponseBodyAsString(CancellationToken cancellationToken = default)
     {
-        if (!HttpClient.Response.IsBodyRead) await ReadResponseBodyAsync(cancellationToken);
+        if (HttpClient.Response.IsBodyRead)
+            return Task.FromResult(HttpClient.Response.BodyString);
 
+        return GetResponseBodyAsStringCoreAsync(cancellationToken);
+    }
+
+    private async Task<string> GetResponseBodyAsStringCoreAsync(CancellationToken cancellationToken)
+    {
+        await ReadResponseBodyAsync(cancellationToken);
         return HttpClient.Response.BodyString;
     }
 

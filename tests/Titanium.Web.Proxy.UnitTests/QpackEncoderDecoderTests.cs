@@ -211,6 +211,6 @@ public class QpackEncoderDecoderTests
         using var cts = new System.Threading.CancellationTokenSource();
         cts.Cancel();
         await Assert.ThrowsExactlyAsync<System.OperationCanceledException>(
-            () => QpackDecoder.DecodeAsync(new byte[] { 0x00, 0x00 }, null, cts.Token));
+            () => QpackDecoder.DecodeAsync(new byte[] { 0x00, 0x00 }, null, cts.Token).AsTask());
     }
 }

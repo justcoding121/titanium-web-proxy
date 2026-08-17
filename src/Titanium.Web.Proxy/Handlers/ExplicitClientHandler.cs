@@ -555,8 +555,8 @@ public partial class ProxyServer
                                 // individual h2 streams to H3 mid-connection (warm path).
                                 (args, ctx) => BridgeOnBeforeRequestForH3(args, ctx, sessionConnectHost,
                                     sessionConnectPort, coldH3Bridge: false),
-                                async (args, ctx) => { await OnBeforeResponse(args); },
-                                async args => { await OnAfterResponse(args); },
+                                (args, ctx) => OnBeforeResponse(args),
+                                args => OnAfterResponse(args),
                                 headers => PrepareRequestHeaders(headers),
                                 connectArgs.CancellationTokenSource, clientStream.Connection.Id, logger,
                                 MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,

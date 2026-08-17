@@ -91,7 +91,7 @@ public partial class ProxyServer
             // never actually invoked: NullOriginStream never produces a real response HEADERS frame for
             // CopyHttp2FrameAsync's isClient=false direction to decode.
             (sessionArgs, ctx) => Task.CompletedTask,
-            async sessionArgs => { await OnAfterResponse(sessionArgs); },
+            sessionArgs => OnAfterResponse(sessionArgs),
             // Transparent reverse matches the H1 path: do not rewrite Accept-Encoding / proxy headers.
             headers =>
             {
@@ -510,7 +510,7 @@ public partial class ProxyServer
                 connectionState.ClientSendFlow.RemoveStream(streamId);
                 connectionState.ServerSendFlow.RemoveStream(streamId);
                 await Http2Helper.FinalizeStreamAsync(finalStreamState,
-                    async args => { await OnAfterResponse(args); }, logger);
+                    args => OnAfterResponse(args), logger);
             }
         }
     }
@@ -778,7 +778,7 @@ public partial class ProxyServer
                 ctx.ConnectionState.ClientSendFlow.RemoveStream(ctx.StreamId);
                 ctx.ConnectionState.ServerSendFlow.RemoveStream(ctx.StreamId);
                 await Http2Helper.FinalizeStreamAsync(finalStreamState,
-                    async args => { await OnAfterResponse(args); }, logger);
+                    args => OnAfterResponse(args), logger);
             }
         }
     }

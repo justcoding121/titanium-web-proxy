@@ -40,8 +40,8 @@ internal static class QpackDecoder
     ///     waiting for it to be satisfied - see the type-level remarks for why blocking would
     ///     contradict this connection's own SETTINGS advertisement.
     /// </summary>
-    public static Task<List<(string Name, string Value)>> DecodeAsync(
-        ReadOnlyMemory<byte> data, QpackContext? context, CancellationToken ct)
+    public static List<(string Name, string Value)> Decode(
+        ReadOnlyMemory<byte> data, QpackContext? context, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
 
@@ -61,8 +61,17 @@ internal static class QpackDecoder
                     "held open waiting for it to be satisfied.");
         }
 
-        return Task.FromResult(DecodeCore(data.Span, context));
+        return DecodeCore(data.Span, context);
     }
+
+    /// <summary>
+    ///     Async-shaped wrapper over <see cref="Decode" />. Decoding never yields (blocked streams
+    ///     are rejected); prefer the synchronous overload on the request hot path.
+    /// </summary>
+    public static ValueTask<List<(string Name, string Value)>> DecodeAsync(
+        ReadOnlyMemory<byte> data, QpackContext? context, CancellationToken ct)
+        => new(Decode(data, context, ct));
+
 
     internal static ulong DecodeRequiredInsertCount(ulong encodedRic, ulong insertCount, uint maxTableCapacity)
     {

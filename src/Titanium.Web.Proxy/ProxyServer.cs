@@ -2111,11 +2111,11 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     /// <param name="clientSocket">The TcpClient object.</param>
     /// <returns></returns>
-    internal async Task InvokeClientConnectionCreateEvent(Socket clientSocket)
+    internal Task InvokeClientConnectionCreateEvent(Socket clientSocket)
     {
-        // client connection created
-        if (OnClientConnectionCreate != null)
-            await OnClientConnectionCreate.InvokeAsync(this, clientSocket, logger);
+        return OnClientConnectionCreate != null
+            ? OnClientConnectionCreate.InvokeAsync(this, clientSocket, logger)
+            : Task.CompletedTask;
     }
 
     /// <summary>
@@ -2123,11 +2123,11 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     /// <param name="serverSocket">The Socket object.</param>
     /// <returns></returns>
-    internal async Task InvokeServerConnectionCreateEvent(Socket serverSocket)
+    internal Task InvokeServerConnectionCreateEvent(Socket serverSocket)
     {
-        // server connection created
-        if (OnServerConnectionCreate != null)
-            await OnServerConnectionCreate.InvokeAsync(this, serverSocket, logger);
+        return OnServerConnectionCreate != null
+            ? OnServerConnectionCreate.InvokeAsync(this, serverSocket, logger)
+            : Task.CompletedTask;
     }
 
     /// <summary>

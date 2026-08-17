@@ -138,13 +138,13 @@ internal sealed class QpackContext : IAsyncDisposable
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         DecoderAckChannel.Writer.TryComplete();
         EncoderStreamWriteLock.Dispose();
         _insertNotifier.Dispose();
         InboundDecoderTable.Dispose();
         OutboundEncoderTable.Dispose();
-        await Task.CompletedTask; // satisfy async signature; heavy cleanup is synchronous
+        return default;
     }
 }

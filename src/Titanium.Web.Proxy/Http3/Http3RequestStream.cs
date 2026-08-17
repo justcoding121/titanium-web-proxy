@@ -82,9 +82,8 @@ internal static class Http3RequestStream
                         $"Expected HEADERS frame as first frame on request stream, got type 0x{headersFrame.Type:X}.");
 
                 // 2. Decode QPACK headers → extract HTTP/3 pseudo-headers and regular headers.
-                // When dynamic table is enabled, DecodeAsync waits until the required insert count is
-                // satisfied by the encoder stream reader, then decodes using table entries.
-                var decodedHeaders = await QpackDecoder.DecodeAsync(
+                // Decoding is synchronous (SETTINGS_QPACK_BLOCKED_STREAMS = 0; missing inserts are errors).
+                var decodedHeaders = QpackDecoder.Decode(
                     headersFrame.Payload, qpackContext, cancellationToken);
                 qpackContext?.EnqueueSectionAck(stream.Id);
                 var (method, scheme, authority, path, regularHeaders) = ExtractPseudoHeaders(decodedHeaders);

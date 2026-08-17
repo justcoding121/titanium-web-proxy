@@ -69,7 +69,7 @@ public partial class ProxyServer
                 coldH3Bridge: true),
             // NullOriginStream never produces real response HEADERS frames; this delegate is never invoked.
             (sessionArgs, ctx) => Task.CompletedTask,
-            async sessionArgs => { await OnAfterResponse(sessionArgs); },
+            sessionArgs => OnAfterResponse(sessionArgs),
             headers => PrepareRequestHeaders(headers),
             cancellationTokenSource, clientStream.Connection.Id, logger,
             MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits);
@@ -355,7 +355,7 @@ public partial class ProxyServer
                 connectionState.ServerSendFlow.RemoveStream(streamId);
                 await Http2Helper.FinalizeStreamAsync(
                     finalStreamState,
-                    async args => { await OnAfterResponse(args); },
+                    args => OnAfterResponse(args),
                     logger);
             }
         }

@@ -114,9 +114,9 @@ internal class LimitedStream : Stream
         throw new NotSupportedException("Use ReadAsync.");
     }
 
-    public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
-        return await ReadAsync(buffer.AsMemory(offset, count), cancellationToken);
+        return ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
     }
 
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer,

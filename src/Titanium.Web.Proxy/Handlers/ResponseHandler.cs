@@ -357,11 +357,10 @@ public partial class ProxyServer
         return OnResponseBodyWrite != null;
     }
 
-    internal async Task OnBeforeResponseBodyWrite(BeforeBodyWriteEventArgs args)
+    internal Task OnBeforeResponseBodyWrite(BeforeBodyWriteEventArgs args)
     {
-        if (OnResponseBodyWrite != null)
-        {
-            await OnResponseBodyWrite.InvokeAsync(this, args, logger);
-        }
+        return OnResponseBodyWrite != null
+            ? OnResponseBodyWrite.InvokeAsync(this, args, logger)
+            : Task.CompletedTask;
     }
 }

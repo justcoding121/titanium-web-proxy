@@ -10,9 +10,38 @@ namespace Titanium.Web.Proxy.Http;
 
 internal static class HeaderParser
 {
-    internal static async ValueTask ReadHeaders(ILineStream reader, HeaderCollection headerCollection,
+    internal static ValueTask ReadHeaders(ILineStream reader, HeaderCollection headerCollection,
         CancellationToken cancellationToken)
     {
+        // Sync-complete as many header lines as are already buffered (keep-alive leftovers often
+        // hold the entire header block), then await only when a fill is required.
+        while (reader.DataAvailable)
+        {
+            var lineVt = reader.ReadLineAsync(cancellationToken);
+            if (!lineVt.IsCompletedSuccessfully)
+                return ReadHeadersContinueAsync(reader, headerCollection, lineVt, hasPending: true,
+                    cancellationToken);
+
+            var buffered = lineVt.Result;
+            if (string.IsNullOrEmpty(buffered)) return default;
+            AddHeaderLine(headerCollection, buffered);
+        }
+
+        return ReadHeadersContinueAsync(reader, headerCollection, default, hasPending: false,
+            cancellationToken);
+    }
+
+    private static async ValueTask ReadHeadersContinueAsync(ILineStream reader,
+        HeaderCollection headerCollection, ValueTask<string?> pendingLine, bool hasPending,
+        CancellationToken cancellationToken)
+    {
+        if (hasPending)
+        {
+            var pending = await pendingLine;
+            if (string.IsNullOrEmpty(pending)) return;
+            AddHeaderLine(headerCollection, pending);
+        }
+
         while (true)
         {
             var tmpLine = await reader.ReadLineAsync(cancellationToken);
@@ -24,9 +53,42 @@ internal static class HeaderParser
     /// <summary>
     ///     Reads headers without throwing on cancellation. Returns <see langword="false" /> when cancelled.
     /// </summary>
-    internal static async ValueTask<bool> TryReadHeadersAsync(HttpStream reader,
+    internal static ValueTask<bool> TryReadHeadersAsync(HttpStream reader,
         HeaderCollection headerCollection, CancellationToken cancellationToken)
     {
+        // Sync-complete as many header lines as are already buffered, then fall through to async
+        // only when a socket fill is required.
+        while (reader.DataAvailable)
+        {
+            var lineVt = reader.ReadLineWithResultAsync(cancellationToken);
+            if (!lineVt.IsCompletedSuccessfully)
+                return TryReadHeadersContinueAsync(reader, headerCollection, lineVt, hasPending: true,
+                    cancellationToken);
+
+            var (tmpLine, cancelled) = lineVt.Result;
+            if (cancelled) return new ValueTask<bool>(false);
+            if (string.IsNullOrEmpty(tmpLine)) return new ValueTask<bool>(true);
+            AddHeaderLine(headerCollection, tmpLine);
+        }
+
+        return TryReadHeadersContinueAsync(reader, headerCollection, default, hasPending: false,
+            cancellationToken);
+    }
+
+    private static async ValueTask<bool> TryReadHeadersContinueAsync(HttpStream reader,
+        HeaderCollection headerCollection,
+        ValueTask<(string? Line, bool Cancelled)> pendingLine,
+        bool hasPending,
+        CancellationToken cancellationToken)
+    {
+        if (hasPending)
+        {
+            var (pending, cancelled) = await pendingLine;
+            if (cancelled) return false;
+            if (string.IsNullOrEmpty(pending)) return true;
+            AddHeaderLine(headerCollection, pending);
+        }
+
         while (true)
         {
             var (tmpLine, cancelled) = await reader.ReadLineWithResultAsync(cancellationToken);

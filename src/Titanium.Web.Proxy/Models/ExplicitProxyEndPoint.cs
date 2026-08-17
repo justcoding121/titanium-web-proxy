@@ -51,27 +51,29 @@ public class ExplicitProxyEndPoint : ProxyEndPoint
     /// </summary>
     public event AsyncEventHandler<TunnelConnectFailureEventArgs>? BeforeTunnelConnectFailure; // NOSONAR S3264 -- Public extension event invoked by the proxy pipeline.
 
-    internal async Task InvokeBeforeTunnelConnectRequest(ProxyServer proxyServer,
+    internal Task InvokeBeforeTunnelConnectRequest(ProxyServer proxyServer,
         TunnelConnectSessionEventArgs connectArgs, ILogger logger)
     {
-        if (BeforeTunnelConnectRequest != null)
-            await BeforeTunnelConnectRequest.InvokeAsync(proxyServer, connectArgs, logger);
+        return BeforeTunnelConnectRequest != null
+            ? BeforeTunnelConnectRequest.InvokeAsync(proxyServer, connectArgs, logger)
+            : Task.CompletedTask;
     }
 
-    internal async Task InvokeBeforeTunnelConnectResponse(ProxyServer proxyServer,
+    internal Task InvokeBeforeTunnelConnectResponse(ProxyServer proxyServer,
         TunnelConnectSessionEventArgs connectArgs, ILogger logger, bool isClientHello = false)
     {
-        if (BeforeTunnelConnectResponse != null)
-        {
-            connectArgs.IsHttpsConnect = isClientHello;
-            await BeforeTunnelConnectResponse.InvokeAsync(proxyServer, connectArgs, logger);
-        }
+        if (BeforeTunnelConnectResponse == null)
+            return Task.CompletedTask;
+
+        connectArgs.IsHttpsConnect = isClientHello;
+        return BeforeTunnelConnectResponse.InvokeAsync(proxyServer, connectArgs, logger);
     }
 
-    internal async Task InvokeBeforeTunnelConnectFailure(ProxyServer proxyServer,
+    internal Task InvokeBeforeTunnelConnectFailure(ProxyServer proxyServer,
         TunnelConnectFailureEventArgs failureArgs, ILogger logger)
     {
-        if (BeforeTunnelConnectFailure != null)
-            await BeforeTunnelConnectFailure.InvokeAsync(proxyServer, failureArgs, logger);
+        return BeforeTunnelConnectFailure != null
+            ? BeforeTunnelConnectFailure.InvokeAsync(proxyServer, failureArgs, logger)
+            : Task.CompletedTask;
     }
 }

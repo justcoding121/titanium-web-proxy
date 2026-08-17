@@ -43,17 +43,19 @@ public class TransparentProxyEndPoint : TransparentBaseProxyEndPoint
     /// </summary>
     public event AsyncEventHandler<BeforeHttpAuthenticateEventArgs>? BeforeHttpAuthenticate; // NOSONAR S3264 -- Public extension event invoked by the proxy pipeline.
 
-    internal override async Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
+    internal override Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
         BeforeSslAuthenticateEventArgs connectArgs, ILogger logger)
     {
-        if (BeforeSslAuthenticate != null)
-            await BeforeSslAuthenticate.InvokeAsync(proxyServer, connectArgs, logger);
+        return BeforeSslAuthenticate != null
+            ? BeforeSslAuthenticate.InvokeAsync(proxyServer, connectArgs, logger)
+            : Task.CompletedTask;
     }
 
-    internal override async Task InvokeBeforeHttpAuthenticate(ProxyServer proxyServer,
+    internal override Task InvokeBeforeHttpAuthenticate(ProxyServer proxyServer,
         BeforeHttpAuthenticateEventArgs args, ILogger logger)
     {
-        if (BeforeHttpAuthenticate != null)
-            await BeforeHttpAuthenticate.InvokeAsync(proxyServer, args, logger);
+        return BeforeHttpAuthenticate != null
+            ? BeforeHttpAuthenticate.InvokeAsync(proxyServer, args, logger)
+            : Task.CompletedTask;
     }
 }

@@ -9,21 +9,33 @@ namespace Titanium.Web.Proxy.Extensions;
 
 internal static class FuncExtensions
 {
-    internal static async Task InvokeAsync<T>(this AsyncEventHandler<T> callback, object sender, T args,
+    internal static Task InvokeAsync<T>(this AsyncEventHandler<T> callback, object sender, T args,
         ILogger logger)
     {
         var invocationList = callback.GetInvocationList();
 
-        foreach (var @delegate in invocationList)
-            await InternalInvokeAsync((AsyncEventHandler<T>)@delegate, sender, args, logger);
+        // Single subscriber is the common case — avoid GetInvocationList allocation churn is already
+        // paid, but skip an outer async state machine when the handler's Task completed inline.
+        if (invocationList.Length == 1)
+            return InvokeOneAsync((AsyncEventHandler<T>)invocationList[0], sender, args, logger);
+
+        return InvokeManyAsync(invocationList, sender, args, logger);
     }
 
-    private static async Task InternalInvokeAsync<T>(AsyncEventHandler<T> callback, object sender, T args,
+    private static async Task InvokeManyAsync<T>(Delegate[] invocationList, object sender, T args,
         ILogger logger)
     {
+        foreach (var @delegate in invocationList)
+            await InvokeOneAsync((AsyncEventHandler<T>)@delegate, sender, args, logger);
+    }
+
+    private static Task InvokeOneAsync<T>(AsyncEventHandler<T> callback, object sender, T args,
+        ILogger logger)
+    {
+        Task task;
         try
         {
-            await callback(sender, args);
+            task = callback(sender, args);
         }
         catch (BodySizeLimitExceededException bodyLimitEx)
         {
@@ -42,6 +54,30 @@ internal static class FuncExtensions
         {
             // A user event handler threw: this is always unexpected from the proxy's point of view, so
             // it is reported at Error regardless of what kind of exception it is.
+            ProxyDiagnostics.ReportUnexpected(logger, "Exception thrown in user event", e);
+            return Task.CompletedTask;
+        }
+
+        if (task.IsCompletedSuccessfully)
+            return Task.CompletedTask;
+
+        return ObserveAsync(task, logger);
+    }
+
+    private static async Task ObserveAsync(Task task, ILogger logger)
+    {
+        try
+        {
+            await task;
+        }
+        catch (BodySizeLimitExceededException bodyLimitEx)
+        {
+            ProxyDiagnostics.ReportCaught(logger,
+                "User event hit body size limit; rethrowing for pipeline 413/close handling", bodyLimitEx);
+            throw;
+        }
+        catch (Exception e)
+        {
             ProxyDiagnostics.ReportUnexpected(logger, "Exception thrown in user event", e);
         }
     }
