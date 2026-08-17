@@ -28,7 +28,7 @@ namespace Titanium.Web.Proxy.UnitTests
             headers.AddHeader("X-Test", "2");
 
             var view = headers.NonUniqueHeaders["X-Test"];
-            Assert.IsInstanceOfType(view, typeof(System.Collections.ObjectModel.ReadOnlyCollection<HttpHeader>));
+            Assert.IsInstanceOfType<System.Collections.ObjectModel.ReadOnlyCollection<HttpHeader>>(view);
             Assert.ThrowsExactly<NotSupportedException>(() => ((IList<HttpHeader>)view).Add(new HttpHeader("X-Test", "3")));
             Assert.ThrowsExactly<NotSupportedException>(() => ((IList<HttpHeader>)view).Clear());
         }

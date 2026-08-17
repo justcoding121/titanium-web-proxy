@@ -819,7 +819,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     ///     Scans <see cref="streamBuffer" /> with <c>IndexOf('\n')</c> instead of copying one byte at a
     ///     time into a scratch array. A scratch buffer is only rented when a line spans multiple fills.
     /// </summary>
-    private async ValueTask<(string? Line, bool Cancelled)> ReadLineFromStreamBufferAsync(
+    private async ValueTask<(string? Line, bool Cancelled)> ReadLineFromStreamBufferAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         CancellationToken cancellationToken)
     {
         var maxLineBytes = server.ResourceLimits.MaxHeaderLineBytes;
