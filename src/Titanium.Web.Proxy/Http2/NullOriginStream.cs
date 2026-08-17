@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,10 +14,12 @@ namespace Titanium.Web.Proxy.Http2;
 ///     generic relay loop that nothing on the client=>server leg ever appears to fail or hang unexpectedly:
 ///     <list type="bullet">
 ///         <item>
-///             Exactly one empty connection SETTINGS frame is produced on the first read, because the
-///             client=>server relay direction requires one before it will emit any client-facing HEADERS (see
+///             Exactly one connection SETTINGS frame is produced on the first read (ENABLE_PUSH=0 and
+///             INITIAL_WINDOW_SIZE = Kestrel-class 768 KiB), because the client=>server relay direction
+///             requires one before it will emit any client-facing HEADERS (see
 ///             <see cref="Http2ConnectionState.ServerSettingsRelayed" />) - including the bridge's own synthetic
-///             responses, which reuse that exact signal.
+///             responses, which reuse that exact signal. The large INITIAL_WINDOW_SIZE is relayed to the
+///             client so concurrent 64 KiB uploads are not capped at the RFC default 65535.
 ///         </item>
 ///         <item>
 ///             Every write (the client's re-encoded HEADERS/DATA that <see cref="Http2Helper" /> forwards toward
@@ -35,16 +38,36 @@ namespace Titanium.Web.Proxy.Http2;
 /// </summary>
 internal sealed class NullOriginStream : Stream
 {
-    private static readonly byte[] EmptySettingsFrame =
-    {
-        0, 0, 0, // length = 0
-        (byte)Http2FrameType.Settings,
-        0, // flags
-        0, 0, 0, 0 // stream id = 0
-    };
+    /// <summary>
+    ///     SETTINGS frame: ENABLE_PUSH=0 (6 bytes) + INITIAL_WINDOW_SIZE=768 KiB (6 bytes).
+    ///     Length = 12, type = SETTINGS, flags = 0, stream id = 0.
+    /// </summary>
+    private static readonly byte[] ClientFacingSettingsFrame = BuildClientFacingSettingsFrame();
 
     private readonly CancellationToken cancellationToken;
     private int settingsBytesServed;
+
+    private static byte[] BuildClientFacingSettingsFrame()
+    {
+        // 9-byte header + 12-byte payload (two SETTINGS entries).
+        var frame = new byte[9 + 12];
+        // Length = 12
+        frame[0] = 0;
+        frame[1] = 0;
+        frame[2] = 12;
+        frame[3] = (byte)Http2FrameType.Settings;
+        frame[4] = 0; // flags
+        // stream id = 0 (bytes 5-8 already zero)
+
+        var payload = frame.AsSpan(9);
+        // SETTINGS_ENABLE_PUSH = 0
+        BinaryPrimitives.WriteUInt16BigEndian(payload, (ushort)Http2SettingsId.EnablePush);
+        BinaryPrimitives.WriteUInt32BigEndian(payload.Slice(2), 0);
+        // SETTINGS_INITIAL_WINDOW_SIZE = 768 KiB
+        BinaryPrimitives.WriteUInt16BigEndian(payload.Slice(6), (ushort)Http2SettingsId.InitialWindowSize);
+        BinaryPrimitives.WriteUInt32BigEndian(payload.Slice(8), (uint)Http2Helper.ClientInitialStreamWindowSize);
+        return frame;
+    }
 
     internal NullOriginStream(CancellationToken cancellationToken)
     {
@@ -96,11 +119,11 @@ internal sealed class NullOriginStream : Stream
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer,
         CancellationToken cancellationToken = default)
     {
-        if (settingsBytesServed < EmptySettingsFrame.Length)
+        if (settingsBytesServed < ClientFacingSettingsFrame.Length)
         {
-            var remaining = EmptySettingsFrame.Length - settingsBytesServed;
+            var remaining = ClientFacingSettingsFrame.Length - settingsBytesServed;
             var toCopy = Math.Min(buffer.Length, remaining);
-            EmptySettingsFrame.AsMemory(settingsBytesServed, toCopy).CopyTo(buffer);
+            ClientFacingSettingsFrame.AsMemory(settingsBytesServed, toCopy).CopyTo(buffer);
             settingsBytesServed += toCopy;
             return toCopy;
         }

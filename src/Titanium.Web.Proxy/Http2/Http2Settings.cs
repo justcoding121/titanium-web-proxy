@@ -80,18 +80,29 @@ internal class Http2Settings
 
     /// <summary>
     ///     Scratch buffer for HPACK encoding on this direction. Only touched under the connection write
-    ///     lock for this peer, so reuse is race-free and avoids per-HEADERS <c>MemoryStream</c> allocs.
+    ///     lock / frame loop for this peer, so reuse is race-free and avoids per-HEADERS <c>MemoryStream</c> allocs.
     /// </summary>
     private MemoryStream? encodeStream;
+    private BinaryWriter? encodeWriter;
 
     /// <summary>Returns a zeroed encode scratch stream for the next header block on this direction.</summary>
     public MemoryStream GetEncodeStream()
     {
         if (encodeStream == null)
+        {
             encodeStream = new MemoryStream(256);
+            encodeWriter = new BinaryWriter(encodeStream, System.Text.Encoding.UTF8, leaveOpen: true);
+        }
         else
             encodeStream.SetLength(0);
 
         return encodeStream;
+    }
+
+    /// <summary>Reusable writer over <see cref="GetEncodeStream"/> (same lifetime rules).</summary>
+    public BinaryWriter GetEncodeWriter()
+    {
+        GetEncodeStream();
+        return encodeWriter!;
     }
 }

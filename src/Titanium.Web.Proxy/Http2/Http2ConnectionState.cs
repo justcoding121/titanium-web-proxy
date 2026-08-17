@@ -1,5 +1,7 @@
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -110,6 +112,122 @@ internal sealed class Http2ConnectionState
     ///     only one client→server SETTINGS frame triggers it.
     /// </summary>
     public int InitialOriginWindowUpdateSent;
+
+    /// <summary>
+    ///     0 until the Kestrel-class connection WINDOW_UPDATE has been written toward the client
+    ///     (enlarging the client's connection send window above RFC 65535).
+    /// </summary>
+    public int InitialClientWindowUpdateSent;
+
+    /// <summary>
+    ///     Serializes origin-bound HEADERS writes so HPACK encode stays ordered, while the client
+    ///     frame-read loop can continue admitting the next stream without awaiting socket I/O
+    ///     (Kestrel StartStream + continue invariant).
+    /// </summary>
+    private readonly object serverWriteChainLock = new();
+    private Task serverWriteChain = Task.CompletedTask;
+
+    /// <summary>
+    ///     Same as the server write chain, but for frames written toward the client (response HEADERS/DATA).
+    /// </summary>
+    private readonly object clientWriteChainLock = new();
+    private Task clientWriteChain = Task.CompletedTask;
+
+    private static Task EnqueueWrite(object gate, ref Task chain, Func<Task> write)
+    {
+        lock (gate)
+        {
+            chain = chain.ContinueWith(
+                    async antecedent =>
+                    {
+                        if (antecedent.IsFaulted)
+                            System.Runtime.ExceptionServices.ExceptionDispatchInfo
+                                .Capture(antecedent.Exception!.InnerException ?? antecedent.Exception).Throw();
+                        if (antecedent.IsCanceled)
+                            throw new TaskCanceledException(antecedent);
+
+                        await write().ConfigureAwait(false);
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.None,
+                    TaskScheduler.Default)
+                .Unwrap();
+            return chain;
+        }
+    }
+
+    /// <summary>
+    ///     Enqueues an origin-bound write after prior enqueued writes. Returns the chain task (do not
+    ///     await it on the frame-read loop — await <see cref="ServerWriteChain"/> at connection teardown).
+    /// </summary>
+    public Task EnqueueServerWrite(Func<Task> write) =>
+        EnqueueWrite(serverWriteChainLock, ref serverWriteChain, write);
+
+    /// <summary>Enqueues a client-bound write (response path).</summary>
+    public Task EnqueueClientWrite(Func<Task> write) =>
+        EnqueueWrite(clientWriteChainLock, ref clientWriteChain, write);
+
+    /// <summary>
+    ///     Enqueues a write of an already-rented buffer (ownership transfers; returned to the pool after write).
+    /// </summary>
+    public void EnqueueWriteRented(bool towardServer, SemaphoreSlim writeLock, Stream output, byte[] rented,
+        int length)
+    {
+        Func<Task> body = async () =>
+        {
+            await writeLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                await output.WriteAsync(rented.AsMemory(0, length), CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            finally
+            {
+                writeLock.Release();
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        };
+
+        if (towardServer)
+            EnqueueServerWrite(body);
+        else
+            EnqueueClientWrite(body);
+    }
+
+    /// <summary>
+    ///     Enqueues a write of an already-rented buffer toward the origin.
+    /// </summary>
+    public void EnqueueServerWriteRented(SemaphoreSlim writeLock, Stream output, byte[] rented, int length) =>
+        EnqueueWriteRented(towardServer: true, writeLock, output, rented, length);
+
+    /// <summary>
+    ///     Copies <paramref name="frameBytes"/> and enqueues a write under <paramref name="writeLock"/>.
+    /// </summary>
+    public void EnqueueServerWriteCopy(SemaphoreSlim writeLock, Stream output, ReadOnlySpan<byte> frameBytes)
+    {
+        var length = frameBytes.Length;
+        var rented = ArrayPool<byte>.Shared.Rent(length);
+        frameBytes.CopyTo(rented);
+        EnqueueServerWriteRented(writeLock, output, rented, length);
+    }
+
+    /// <summary>Current tail of the origin write queue; await at connection teardown.</summary>
+    public Task ServerWriteChain
+    {
+        get
+        {
+            lock (serverWriteChainLock) return serverWriteChain;
+        }
+    }
+
+    /// <summary>Current tail of the client write queue; await at connection teardown.</summary>
+    public Task ClientWriteChain
+    {
+        get
+        {
+            lock (clientWriteChainLock) return clientWriteChain;
+        }
+    }
 
     /// <summary>Set once a GOAWAY has been received from the client; no new client-initiated streams above the recorded id should be admitted.</summary>
     public volatile bool ClientGoingAway;

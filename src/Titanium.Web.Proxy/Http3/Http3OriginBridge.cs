@@ -7,11 +7,13 @@ using System.Linq;
 using System.Net.Quic;
 using System.Net.Security;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3.Qpack;
@@ -20,6 +22,7 @@ using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Options;
+using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -381,12 +384,19 @@ internal static class Http3OriginBridge
                         {
                             var frame = await Http3Frame.ReadAsync(streamToClient, maxPayloadBytes: maxPayload, ct);
                             if (frame == null) break;
-                            if (frame.Type == Http3FrameType.Headers)
-                                break; // trailers — ignored for now
-                            if (frame.Type != Http3FrameType.Data || frame.Payload.Length == 0)
-                                continue;
+                            try
+                            {
+                                if (frame.Type == Http3FrameType.Headers)
+                                    break; // trailers — ignored for now
+                                if (frame.Type != Http3FrameType.Data || frame.Payload.Length == 0)
+                                    continue;
 
-                            await clientBodyStream.WriteAsync(frame.Payload, ct);
+                                await clientBodyStream.WriteAsync(frame.Payload, ct);
+                            }
+                            finally
+                            {
+                                frame.ReturnPayload();
+                            }
                         }
                     }
                     else
@@ -397,20 +407,28 @@ internal static class Http3OriginBridge
                             var next = await Http3Frame.ReadAsync(streamToClient, maxPayloadBytes: maxPayload, ct);
                             var isLast = next == null || next.Type == Http3FrameType.Headers;
 
-                            if (current.Type == Http3FrameType.Data)
+                            try
                             {
-                                var hookArgs = new BeforeBodyWriteEventArgs(
-                                    sessionArgs, current.Payload.ToArray(), isChunked: true, isLastChunk: isLast);
-                                await server.OnBeforeResponseBodyWrite(hookArgs);
-
-                                if (hookArgs.BodyBytes is { Length: > 0 })
-                                    await clientBodyStream.WriteAsync(hookArgs.BodyBytes, ct);
-
-                                if (hookArgs.IsLastChunk && !isLast)
+                                if (current.Type == Http3FrameType.Data)
                                 {
-                                    streamToClient.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
-                                    break;
+                                    var hookArgs = new BeforeBodyWriteEventArgs(
+                                        sessionArgs, current.Payload.ToArray(), isChunked: true, isLastChunk: isLast);
+                                    await server.OnBeforeResponseBodyWrite(hookArgs);
+
+                                    if (hookArgs.BodyBytes is { Length: > 0 })
+                                        await clientBodyStream.WriteAsync(hookArgs.BodyBytes, ct);
+
+                                    if (hookArgs.IsLastChunk && !isLast)
+                                    {
+                                        streamToClient.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
+                                        next?.ReturnPayload();
+                                        break;
+                                    }
                                 }
+                            }
+                            finally
+                            {
+                                current.ReturnPayload();
                             }
 
                             current = next;
@@ -556,7 +574,11 @@ internal static class Http3OriginBridge
     {
         var request = sessionArgs.HttpClient.Request;
 
-        await EnsureHttp3BufferedBodyAsync(sessionArgs, cancellationToken);
+        // Stream when possible; only force a full buffer if a handler already started GetRequestBody
+        // or no live pump is available.
+        var copyRequestBody = sessionArgs.Http3RequestBodyPump;
+        if (copyRequestBody == null)
+            await EnsureHttp3BufferedBodyAsync(sessionArgs, cancellationToken);
 
         var clientHttpVersion = request.HttpVersion;
         request.HttpVersion = HttpHeader.Version20;
@@ -580,14 +602,18 @@ internal static class Http3OriginBridge
             var exchange = await SendHttp2OriginWithGoAwayRetryAsync(
                 server, logger, sessionArgs,
                 new Http2OriginTarget(host, port, connectHost, connectPort, poolKey),
-                on1xx, cancellationToken);
+                on1xx, cancellationToken, copyRequestBody);
 
             var response = exchange.Response;
             response.HttpVersion = HttpHeader.Version30;
             response.RequestMethod = request.Method;
-            response.IsBodyRead = true;
-            response.Body = exchange.Body;
-            if (exchange.TrailingHeaders != null)
+            if (response.StreamBodyWriter == null)
+            {
+                response.IsBodyRead = true;
+                response.Body = exchange.Body;
+            }
+
+            if (exchange.TrailingHeaders != null && !response.HasTrailingHeaders)
             {
                 foreach (var header in exchange.TrailingHeaders)
                     response.TrailingHeaders.AddHeader(header);
@@ -693,22 +719,30 @@ internal static class Http3OriginBridge
         ProxyServer server, ILogger logger, SessionEventArgs sessionArgs,
         Http2OriginTarget target,
         Func<int, HeaderCollection, CancellationToken, Task>? on1xx,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask>, CancellationToken, Task>? copyRequestBody =
+            null)
     {
         try
         {
             var h2 = await LeaseHttp2OriginAsync(server, logger, sessionArgs, target, cancellationToken);
             sessionArgs.HttpClient.BindUpstreamConnection(h2.ServerConnection);
-            var exchange = await h2.SendAsync(sessionArgs.HttpClient.Request, on1xx, cancellationToken);
+            var exchange = await h2.SendAsync(sessionArgs.HttpClient.Request, on1xx, cancellationToken,
+                copyRequestBody);
             ReturnHttp2Origin(target.PoolKey, h2);
             return exchange;
         }
         catch (Exception ex) when (ex is Http2OriginGoAwayException or ObjectDisposedException or IOException)
         {
             // Do not return a GOAWAY/closed connection; lease a fresh one and retry once.
+            // Streaming request bodies cannot be replayed — only buffered bodies retry safely.
+            if (copyRequestBody != null && !sessionArgs.HttpClient.Request.IsBodyRead)
+                throw;
+
             var h2 = await LeaseHttp2OriginAsync(server, logger, sessionArgs, target, cancellationToken);
             sessionArgs.HttpClient.BindUpstreamConnection(h2.ServerConnection);
-            var exchange = await h2.SendAsync(sessionArgs.HttpClient.Request, on1xx, cancellationToken);
+            var exchange = await h2.SendAsync(sessionArgs.HttpClient.Request, on1xx, cancellationToken,
+                copyRequestBody);
             ReturnHttp2Origin(target.PoolKey, h2);
             return exchange;
         }
@@ -802,11 +836,10 @@ internal static class Http3OriginBridge
     /// <summary>
     ///     Forwards the session over a TCP (HTTP/1.1) connection to the origin server.
     ///     <para>
-    ///         H2/H3 client sessions arrive with <c>HttpVersion</c> 2/3, <c>:authority</c> instead of
-    ///         <c>Host</c>, and a buffered request body that <see cref="Network.HttpWebClient.SendRequest" />
-    ///         does not write. Without the translation below, QUIC→TCP fallback sends
-    ///         <c>POST … HTTP/2.0</c> with no Host and no body — origins respond <c>HTTP/1.0 400</c>
-    ///         (logged as <c>H2↔H1.0</c>).
+    ///         H2/H3 client sessions arrive with <c>HttpVersion</c> 2/3, <c>:authority</c> instead of a
+    ///         <c>Host</c>, and may still have unread request DATA. Request bodies stream live when
+    ///         <see cref="SessionEventArgs.Http3RequestBodyPump"/> is set; response bodies stream via
+    ///         <see cref="Response.StreamBodyWriter"/> unless a handler called <c>GetResponseBody</c>.
     ///     </para>
     /// </summary>
     private static async Task ForwardOverTcpAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
@@ -817,9 +850,10 @@ internal static class Http3OriginBridge
     {
         var request = sessionArgs.HttpClient.Request;
 
-        // Native H3→TCP: unbounded uploads still hit MaxBufferedBodyBytes (no streaming to H1/H2
-        // origins in this change). Buffer or drain the inbound QuicStream before SendRequest.
-        if (!request.IsBodyReceived && sessionArgs.Http3BufferedBodyReader != null)
+        // Prefer live pump (H3 client DATA → H1 body). Fall back to full buffer only when a
+        // BeforeRequest handler already called GetRequestBody, or no pump is available.
+        var streamRequestBody = !request.IsBodyRead && sessionArgs.Http3RequestBodyPump != null;
+        if (!streamRequestBody && !request.IsBodyReceived && sessionArgs.Http3BufferedBodyReader != null)
         {
             if (request.HasBody)
             {
@@ -830,8 +864,14 @@ internal static class Http3OriginBridge
                 // Consume FIN for bodiless requests (GET) without exposing a body.
                 _ = await sessionArgs.Http3BufferedBodyReader(cancellationToken);
                 sessionArgs.Http3BufferedBodyReader = null;
+                sessionArgs.Http3RequestBodyPump = null;
                 request.IsBodyReceived = true;
             }
+        }
+        else if (!request.HasBody && !request.IsBodyReceived && sessionArgs.Http3RequestBodyPump != null)
+        {
+            // Drain client FIN with no body octets (GET) so MsQuic is not left with unread DATA.
+            await sessionArgs.Http3RequestBodyPump(static (_, _) => default, cancellationToken);
         }
 
         // SendRequest uses HTTP/1.x framing. Translate H2/H3-shaped requests the same way
@@ -853,20 +893,22 @@ internal static class Http3OriginBridge
                 request.Headers.AddHeader("Cookie", combined);
             }
 
-            // Unlike the H1 GetRequestBody() and native-H2 body-completion paths (both of which
-            // decompress on read - see SessionEventArgs.ReadBodyAsync / Http2Helper's END_STREAM
-            // handling), native HTTP/3 BufferRequestBodyAsync stores DATA-frame payloads verbatim:
-            // Body already IS the wire-compressed representation matching Content-Encoding.
-            // CompressBodyAndUpdateContentLength() assumes the opposite (decompressed Body, to be
-            // compressed for the wire) and would double-compress it here, corrupting the payload sent
-            // to the TCP-fallback origin. Forward the bytes as-is and only fix up Content-Length.
-            // Use BodyAvailable: IsBodyRead is true for GET with an empty body, and Body throws
-            // BodyNotFoundException when HasBody is false.
-            body = request.BodyAvailable ? request.Body : null;
-            request.UpdateContentLength();
+            if (!streamRequestBody)
+            {
+                // Native HTTP/3 GetRequestBody() stores DATA-frame payloads verbatim:
+                // Body already IS the wire-compressed representation matching Content-Encoding.
+                body = request.BodyAvailable ? request.Body : null;
+                request.UpdateContentLength();
+            }
+            else if (request.ContentLength < 0 && !request.IsChunked)
+            {
+                request.Headers.AddHeader(KnownHeaders.TransferEncoding, "chunked");
+            }
+            else
+            {
+                request.UpdateContentLength();
+            }
         }
-
-        // SendRequest always writes HTTP/1.x framing — never negotiate h2/h3 on this path.
 
         TcpServerConnection? connection = null;
         var closeConnection = true;
@@ -902,6 +944,33 @@ internal static class Http3OriginBridge
 
             var (connectHost, connectPort) = ResolveTransparentForwardTarget(sessionArgs);
 
+            // Phase 3: when streaming an upload, start reading client DATA into a channel in
+            // parallel with the origin TCP/TLS connect so MsQuic is not stalled on a full window.
+            Channel<ReadOnlyMemory<byte>>? earlyBodyChannel = null;
+            Task? earlyBodyPump = null;
+            if (streamRequestBody && request.HasBody && sessionArgs.Http3RequestBodyPump != null)
+            {
+                earlyBodyChannel = Channel.CreateBounded<ReadOnlyMemory<byte>>(
+                    new BoundedChannelOptions(256)
+                    {
+                        SingleReader = true,
+                        SingleWriter = true,
+                        FullMode = BoundedChannelFullMode.Wait
+                    });
+                var pump = sessionArgs.Http3RequestBodyPump;
+                var writer = earlyBodyChannel.Writer;
+                earlyBodyPump = pump(
+                    async (data, ct) =>
+                    {
+                        if (!data.IsEmpty)
+                            await writer.WriteAsync(data, ct);
+                    },
+                    cancellationToken).ContinueWith(t =>
+                {
+                    writer.TryComplete(t.Exception?.GetBaseException());
+                }, TaskScheduler.Default);
+            }
+
             connection = await server.TcpConnectionFactory.GetServerConnection(
                 server, host, port, HttpHeader.Version11, isHttps, SslExtensions.Http11ProtocolAsList,
                 false, sessionArgs, sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
@@ -916,8 +985,41 @@ internal static class Http3OriginBridge
                 sessionArgs.OriginHttpVersionPolicy ?? server.OriginHttpVersionPolicy, cancellationToken);
 
             if (needsHttp11Wire && request.HasBody && !request.ExpectationFailed)
-                await connection.Stream.WriteBodyAsync(body ?? Array.Empty<byte>(), request.IsChunked,
-                    request.HasTrailingHeaders ? request.TrailingHeaders : null, cancellationToken);
+            {
+                if (streamRequestBody)
+                {
+                    var bodyWriter = new Helpers.BodyStreamWriter(connection.Stream, request.IsChunked);
+                    if (earlyBodyChannel != null)
+                    {
+                        await foreach (var chunk in earlyBodyChannel.Reader.ReadAllAsync(cancellationToken))
+                        {
+                            if (!chunk.IsEmpty)
+                                await bodyWriter.WriteAsync(chunk, cancellationToken);
+                        }
+
+                        if (earlyBodyPump != null)
+                            await earlyBodyPump;
+                    }
+                    else if (sessionArgs.Http3RequestBodyPump != null)
+                    {
+                        await sessionArgs.Http3RequestBodyPump(
+                            async (data, ct) =>
+                            {
+                                if (!data.IsEmpty)
+                                    await bodyWriter.WriteAsync(data, ct);
+                            },
+                            cancellationToken);
+                    }
+
+                    await bodyWriter.CompleteAsync(
+                        request.HasTrailingHeaders ? request.TrailingHeaders : null, cancellationToken);
+                }
+                else
+                {
+                    await connection.Stream.WriteBodyAsync(body ?? Array.Empty<byte>(), request.IsChunked,
+                        request.HasTrailingHeaders ? request.TrailingHeaders : null, cancellationToken);
+                }
+            }
 
             await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
 
@@ -930,19 +1032,74 @@ internal static class Http3OriginBridge
                 await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
             }
 
-            // Buffer the response body so H2→H3 EmitSyntheticResponseAsync can emit DATA frames.
-            // Without this, HasBody && !IsBodyRead leaves the H2 stream without END_STREAM.
-            if (sessionArgs.HttpClient.Response.HasBody && !sessionArgs.HttpClient.Response.IsBodyRead)
-                await sessionArgs.GetResponseBody(cancellationToken);
+            var response = sessionArgs.HttpClient.Response;
+            // Stream the response unless a handler already buffered it. H3 client emit path
+            // (SendResponseAsync) honours StreamBodyWriter the same way H2 EmitSynthetic does.
+            if (response.HasBody && !response.IsBodyRead)
+            {
+                var originConnection = connection;
+                var originIsChunked = response.IsChunked;
+                var originContentLength = response.ContentLength;
+                if (response.ContentLength < 0 && !response.IsChunked)
+                    response.Headers.AddHeader(KnownHeaders.TransferEncoding, "chunked");
 
-            closeConnection = !sessionArgs.HttpClient.Response.KeepAlive;
+                response.StreamBodyWriter = async (clientBodyStream, ct) =>
+                {
+                    IHttpStreamReader reader = originConnection.Stream;
+                    using var limited = new LimitedStream(reader, server.BufferPool, originIsChunked,
+                        originContentLength, response.TrailingHeaders);
+                    var buffer = server.BufferPool.GetBuffer();
+                    try
+                    {
+                        int read;
+                        while ((read = await limited.ReadAsync(buffer.AsMemory(), ct)) > 0)
+                            await clientBodyStream.WriteAsync(buffer.AsMemory(0, read), ct);
+                        await limited.Finish();
+                    }
+                    finally
+                    {
+                        server.BufferPool.ReturnBuffer(buffer);
+                    }
+                };
+            }
+
+            closeConnection = !response.KeepAlive;
         }
         finally
         {
             // FinishSession only nulls the HttpClient reference. Without Release, every H3→H1
             // GET paid a new origin TLS handshake (Windows ~300 ms / tens of RPS).
+            // When StreamBodyWriter owns the body copy, delay release until after the client emit
+            // path finishes — mark closeConnection so keep-alive is not reused with unread bytes.
             if (connection != null)
-                await server.TcpConnectionFactory.Release(connection, closeConnection);
+            {
+                if (sessionArgs.HttpClient.Response.StreamBodyWriter != null &&
+                    !sessionArgs.HttpClient.Response.IsBodyRead)
+                {
+                    // Hand off: StreamBodyWriter will finish the socket read; release after copy
+                    // by wrapping the writer.
+                    var owned = connection;
+                    var shouldClose = closeConnection;
+                    var inner = sessionArgs.HttpClient.Response.StreamBodyWriter;
+                    sessionArgs.HttpClient.Response.StreamBodyWriter = async (dest, ct) =>
+                    {
+                        try
+                        {
+                            await inner!(dest, ct);
+                        }
+                        finally
+                        {
+                            await server.TcpConnectionFactory.Release(owned, shouldClose);
+                        }
+                    };
+                    connection = null;
+                }
+                else
+                {
+                    await server.TcpConnectionFactory.Release(connection, closeConnection);
+                }
+            }
+
             // Translation is wire-local. Preserve the protocol observed from the client for
             // downstream response handling, callbacks, and the traffic tape.
             request.HttpVersion = clientHttpVersion;

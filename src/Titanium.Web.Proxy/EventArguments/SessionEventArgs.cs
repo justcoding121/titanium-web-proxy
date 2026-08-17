@@ -54,6 +54,14 @@ public class SessionEventArgs : SessionEventArgsBase
     internal Func<CancellationToken, Task<byte[]>>? Http3BufferedBodyReader { get; set; }
 
     /// <summary>
+    ///     Native HTTP/3 only: pumps remaining client DATA payloads to <paramref name="writeData"/>
+    ///     without buffering the whole body. Set by <c>Http3RequestStream</c> when the body was not
+    ///     read during BeforeRequest; used by H3→H1 / H3→H2 bridges and the H3→H3 <c>copyRequestBody</c>.
+    /// </summary>
+    internal Func<Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask>, CancellationToken, Task>?
+        Http3RequestBodyPump { get; set; }
+
+    /// <summary>
     ///     Per-session override for <see cref="ProxyServer.ResponseHeaderTimeoutSeconds" />.
     ///     <see langword="null" /> uses the server default; <see cref="TimeSpan.Zero" /> or negative disables.
     /// </summary>

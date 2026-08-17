@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -137,23 +138,31 @@ public partial class ProxyServer
         // a header mutation against the parallel origin send.
         PrepareRequestHeaders(sessionArgs.HttpClient.Request.Headers);
 
-        // Buffer the request body via the H2 frame-reading handshake.  Calling GetRequestBody
-        // signals ReadHttp2BeforeHandlerTaskCompletionSource which unblocks
-        // Http2Helper.ProcessCompleteHeaderBlockAsync to continue processing other multiplexed
-        // streams without stalling on this method's return; the handler then awaits completion
-        // of all DATA frames in the background.  Do NOT call it for bodiless requests.
-        if (sessionArgs.HttpClient.Request.HasBody)
-            await sessionArgs.GetRequestBody(ctx.CancellationToken);
+        // Stream unread request DATA to the H3 origin unless BeforeRequest already buffered via
+        // GetRequestBody. Create the channel before returning so Http2Helper can route DATA into it.
+        Channel<ReadOnlyMemory<byte>>? requestBodyChannel = null;
+        if (sessionArgs.HttpClient.Request.HasBody && !sessionArgs.HttpClient.Request.IsBodyRead)
+        {
+            requestBodyChannel = Channel.CreateBounded<ReadOnlyMemory<byte>>(
+                new BoundedChannelOptions(256)
+                {
+                    SingleReader = true,
+                    SingleWriter = true,
+                    FullMode = BoundedChannelFullMode.Wait
+                });
+        }
 
-        // Re-check stream existence: it may have been reset while we were buffering the body.
+        // Re-check stream existence: it may have been reset while we were in BeforeRequest.
         if (!ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var streamState))
             return;
 
         ConsolidateCookieHeaders(sessionArgs.HttpClient.Request.Headers);
 
+        streamState.InboundRequestBodyChannel = requestBodyChannel;
+
         var bridgeTask = RunHttp2ToHttp3BridgeRoundTripAsync(
                 sessionArgs, ctx.StreamId, ctx.ConnectionState, ctx.ClientStream,
-                h3Route, ctx.CancellationToken, streamState.Cancellation.Token)
+                h3Route, ctx.CancellationToken, streamState.Cancellation.Token, requestBodyChannel)
             .ContinueWith(t =>
             {
                 if (t.IsFaulted)
@@ -232,13 +241,29 @@ public partial class ProxyServer
         Stream clientStream,
         Http3OriginRoute h3Route,
         CancellationToken connectionToken,
-        CancellationToken streamToken)
+        CancellationToken streamToken,
+        Channel<ReadOnlyMemory<byte>>? requestBodyChannel)
     {
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(connectionToken, streamToken);
         var cancellationToken = linkedCts.Token;
 
         try
         {
+            Func<System.Net.Quic.QuicStream, CancellationToken, Task>? copyRequestBody = null;
+            if (requestBodyChannel != null && !sessionArgs.HttpClient.Request.IsBodyRead)
+            {
+                copyRequestBody = async (originStream, ct) =>
+                {
+                    await foreach (var chunk in requestBodyChannel.Reader.ReadAllAsync(ct))
+                    {
+                        if (!chunk.IsEmpty)
+                            await Http3Frame.WriteAsync(originStream, Http3FrameType.Data, chunk, ct);
+                    }
+
+                    sessionArgs.HttpClient.Request.IsBodyReceived = true;
+                };
+            }
+
             // Forward the request to the QUIC origin using the pre-resolved route (avoids re-probing
             // DNS and ensures the correct alternative port is used). Relay 1xx (103 Early Hints)
             // immediately so browser TTFB is not gated on the final 200.
@@ -249,7 +274,8 @@ public partial class ProxyServer
                     LowercaseHeaderNames(interim.Headers);
                     await Http2Helper.EmitInterimResponseAsync(
                         sessionArgs, streamId, connectionState, clientStream, interim, ct);
-                });
+                },
+                copyRequestBody: copyRequestBody);
 
             sessionArgs.Timing?.MarkResponseHeadersReceived();
 

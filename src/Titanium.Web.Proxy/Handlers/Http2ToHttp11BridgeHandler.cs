@@ -196,14 +196,20 @@ public partial class ProxyServer
             return;
         }
 
-        // Buffer the whole request body before starting the HTTP/1.1 origin round trip (see the "known
-        // simplifications" remarks on this class). Calling GetRequestBody hands control on this stream's
-        // HEADERS block back to Http2Helper.ProcessCompleteHeaderBlockAsync (see its ReadHttp2BeforeHandlerTaskCompletionSource
-        // handoff) so the frame-reading loop is never blocked waiting for this method itself to return.
-        // GetRequestBody() throws for a request with no body at all (e.g. a bodiless GET) rather than
-        // returning an empty array, so it must only be called when the client actually declared a body -
-        // there are no DATA frames coming for this stream in that case anyway.
-        if (sessionArgs.HttpClient.Request.HasBody) await sessionArgs.GetRequestBody(ctx.CancellationToken);
+        // Stream the request body unless a BeforeRequest handler already buffered it via
+        // GetRequestBody. Open the origin on HEADERS and pump DATA live (same invariant as
+        // native H2↔H2 / H3↔H3). Calling GetRequestBody here would force store-and-forward.
+        Channel<ReadOnlyMemory<byte>>? requestBodyChannel = null;
+        if (sessionArgs.HttpClient.Request.HasBody && !sessionArgs.HttpClient.Request.IsBodyRead)
+        {
+            requestBodyChannel = Channel.CreateBounded<ReadOnlyMemory<byte>>(
+                new BoundedChannelOptions(256)
+                {
+                    SingleReader = true,
+                    SingleWriter = true,
+                    FullMode = BoundedChannelFullMode.Wait
+                });
+        }
 
         if (!ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var streamState))
         {
@@ -216,10 +222,11 @@ public partial class ProxyServer
         // can race a second synthetic :status onto the client stream (observed as
         // "Received an HTTP/2 pseudo-header as a trailing header" under load).
         streamState.IsExternalBridge = true;
+        streamState.InboundRequestBodyChannel = requestBodyChannel;
 
         var bridgeTask = RunHttp2ToHttp11BridgeRoundTripAsync(sessionArgs, ctx.StreamId, ctx.ConnectionState,
                 ctx.ClientStream, remoteHostName, remotePort, connectHost, connectPort, ctx.CancellationToken,
-                streamState.Cancellation.Token)
+                streamState.Cancellation.Token, requestBodyChannel)
             .ContinueWith(t =>
             {
                 if (t.IsFaulted)
@@ -243,7 +250,8 @@ public partial class ProxyServer
     /// </summary>
     private async Task RunHttp2ToHttp11BridgeRoundTripAsync(SessionEventArgs sessionArgs, int streamId, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         Http2ConnectionState connectionState, System.IO.Stream clientStream, string remoteHostName, int remotePort,
-        string? connectHost, int? connectPort, CancellationToken connectionToken, CancellationToken streamToken)
+        string? connectHost, int? connectPort, CancellationToken connectionToken, CancellationToken streamToken,
+        Channel<ReadOnlyMemory<byte>>? requestBodyChannel)
     {
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(connectionToken, streamToken);
         var cancellationToken = linkedCts.Token;
@@ -302,18 +310,48 @@ public partial class ProxyServer
             if (sessionArgs.Timing != null)
                 sessionArgs.Timing.MarkConnectionReady(newConnection.Id, !firstUse);
 
-            // Matches HandleHttpSessionRequest's HTTP/1.1 send sequence: compute the (possibly re-compressed)
-            // body and its Content-Length *before* SendRequest writes the request line/headers, then stream
-            // the already-buffered bytes (GetRequestBody above guarantees IsBodyRead is always true here,
-            // unlike the HTTP/1.1 path which may still need to copy the body live off the client stream).
-            var body = request.CompressBodyAndUpdateContentLength();
+            // Matches HandleHttpSessionRequest's HTTP/1.1 send sequence. Stream live when the body
+            // was not buffered by GetRequestBody; otherwise compress + write the in-memory bytes.
+            byte[]? body = null;
+            var streamRequestBody = requestBodyChannel != null && !request.IsBodyRead;
+            if (!streamRequestBody)
+            {
+                body = request.CompressBodyAndUpdateContentLength();
+            }
+            else if (request.ContentLength < 0 && !request.IsChunked)
+            {
+                // Unknown length over H2 → chunked on the H1 wire.
+                request.Headers.AddHeader(KnownHeaders.TransferEncoding, "chunked");
+            }
+            else
+            {
+                request.UpdateContentLength();
+            }
 
             await sessionArgs.HttpClient.SendRequest(Enable100ContinueBehaviour, true, sessionArgs.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy,
                 cancellationToken);
 
             if (request.HasBody && !request.ExpectationFailed)
-                await connection.Stream.WriteBodyAsync(body ?? Array.Empty<byte>(), request.IsChunked,
-                    request.HasTrailingHeaders ? request.TrailingHeaders : null, cancellationToken);
+            {
+                if (streamRequestBody)
+                {
+                    var bodyWriter = new Helpers.BodyStreamWriter(connection.Stream, request.IsChunked);
+                    await foreach (var chunk in requestBodyChannel!.Reader.ReadAllAsync(cancellationToken))
+                    {
+                        if (!chunk.IsEmpty)
+                            await bodyWriter.WriteAsync(chunk, cancellationToken);
+                    }
+
+                    await bodyWriter.CompleteAsync(
+                        request.HasTrailingHeaders ? request.TrailingHeaders : null, cancellationToken);
+                    request.IsBodyReceived = true;
+                }
+                else
+                {
+                    await connection.Stream.WriteBodyAsync(body ?? Array.Empty<byte>(), request.IsChunked,
+                        request.HasTrailingHeaders ? request.TrailingHeaders : null, cancellationToken);
+                }
+            }
 
             sessionArgs.Timing?.MarkRequestSent();
 
@@ -359,73 +397,62 @@ public partial class ProxyServer
                 var originIsChunked = response.OriginalIsChunked;
                 var originContentLength = response.OriginalContentLength;
 
-                // Buffer the origin body and use the buffered synthetic emitter. RespondStreaming left
-                // HEADERS(endStream=false)+DATA races that .NET HttpClient reports as
-                // "Received an HTTP/2 pseudo-header as a trailing header" under multiplexed load.
-                byte[] bodyBytes = Array.Empty<byte>();
-                if (originHasBody)
+                // If BeforeResponse buffered via GetResponseBody, emit the in-memory body. Otherwise
+                // stream origin→client DATA live (HEADERS+first DATA held under ClientWriteLock).
+                if (originHasBody && !response.IsBodyRead)
                 {
-                    IHttpStreamReader reader = originConnection.Stream;
-                    using var limited = new LimitedStream(reader, BufferPool, originIsChunked,
-                        originContentLength, response.TrailingHeaders);
+                    response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+                    response.HttpVersion = clientHttpVersion;
+                    LowercaseHeaderNames(response.Headers);
+                    if (response.HasTrailingHeaders) LowercaseHeaderNames(response.TrailingHeaders);
+                    response.Locked = true;
 
-                    // Fixed Content-Length: read straight into the final array (one alloc). Chunked /
-                    // unknown length still uses a growable MemoryStream.
-                    if (!originIsChunked && originContentLength > 0 && originContentLength <= int.MaxValue)
+                    response.StreamBodyWriter = async (clientBodyStream, ct) =>
                     {
-                        bodyBytes = new byte[(int)originContentLength];
-                        var offset = 0;
-                        while (offset < bodyBytes.Length)
-                        {
-                            var read = await limited.ReadAsync(
-                                bodyBytes.AsMemory(offset, bodyBytes.Length - offset), cancellationToken);
-                            if (read == 0)
-                                break;
-                            offset += read;
-                        }
-
-                        await limited.Finish();
-                        if (offset != bodyBytes.Length)
-                            Array.Resize(ref bodyBytes, offset);
-                    }
-                    else
-                    {
-                        using var ms = new System.IO.MemoryStream(256);
+                        IHttpStreamReader reader = originConnection.Stream;
+                        using var limited = new LimitedStream(reader, BufferPool, originIsChunked,
+                            originContentLength, response.TrailingHeaders);
                         var buffer = BufferPool.GetBuffer();
                         try
                         {
                             int read;
-                            while ((read = await limited.ReadAsync(buffer.AsMemory(), cancellationToken)) > 0)
-                                await ms.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                            while ((read = await limited.ReadAsync(buffer.AsMemory(), ct)) > 0)
+                                await clientBodyStream.WriteAsync(buffer.AsMemory(0, read), ct);
                             await limited.Finish();
                         }
                         finally
                         {
                             BufferPool.ReturnBuffer(buffer);
                         }
-
-                        bodyBytes = ms.ToArray();
-                    }
+                    };
                 }
+                else
+                {
+                    byte[] bodyBytes = Array.Empty<byte>();
+                    if (originHasBody)
+                    {
+                        bodyBytes = response.BodyAvailable ? response.Body : Array.Empty<byte>();
+                    }
 
-                // Emit onto the client H2 leg: briefly use HTTP/2 so ContentLength publishes the
-                // lowercase "content-length" name (avoids undoing LowercaseHeaderNames + SendHeader
-                // ToLowerInvariant). Restore HTTP/1.1 afterward so AfterResponse / traffic tape still
-                // report the origin protocol (H2↔H1.1), not H2↔H2.
-                response.HttpVersion = clientHttpVersion;
-                response.Body = bodyBytes;
-                response.IsBodyRead = true;
-                response.ContentLength = bodyBytes.Length;
-                response.HttpVersion = HttpHeader.Version11;
-                response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
-                response.StreamBodyWriter = null;
+                    // Emit onto the client H2 leg: briefly use HTTP/2 so ContentLength publishes the
+                    // lowercase "content-length" name (avoids undoing LowercaseHeaderNames + SendHeader
+                    // ToLowerInvariant). Restore HTTP/1.1 afterward so AfterResponse / traffic tape still
+                    // report the origin protocol (H2↔H1.1), not H2↔H2.
+                    response.HttpVersion = clientHttpVersion;
+                    response.Body = bodyBytes;
+                    response.IsBodyRead = true;
+                    response.ContentLength = bodyBytes.Length;
+                    response.HttpVersion = HttpHeader.Version11;
+                    response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+                    response.StreamBodyWriter = null;
 
-                // RFC 7540 §8.1.2: header field names MUST be lowercase in HTTP/2. An HTTP/1.1 origin
-                // may send mixed-case names; normalize after any ContentLength mutation above.
-                LowercaseHeaderNames(response.Headers);
-                if (response.HasTrailingHeaders) LowercaseHeaderNames(response.TrailingHeaders);
+                    // RFC 7540 §8.1.2: header field names MUST be lowercase in HTTP/2. An HTTP/1.1 origin
+                    // may send mixed-case names; normalize after any ContentLength mutation above.
+                    LowercaseHeaderNames(response.Headers);
+                    if (response.HasTrailingHeaders) LowercaseHeaderNames(response.TrailingHeaders);
 
-                response.Locked = true;
+                    response.Locked = true;
+                }
             }
 
             await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState, clientStream,

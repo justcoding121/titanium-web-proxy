@@ -146,7 +146,15 @@ internal static class Http3RequestStream
                         stream, sessionArgs.HttpClient.Request, server, sessionArgs, ct);
                     streamState.RequestClosed = true;
                     sessionArgs.Http3BufferedBodyReader = null;
+                    sessionArgs.Http3RequestBodyPump = null;
                     return bytes;
+                };
+                sessionArgs.Http3RequestBodyPump = async (writeData, ct) =>
+                {
+                    sessionArgs.Http3BufferedBodyReader = null;
+                    sessionArgs.Http3RequestBodyPump = null;
+                    await StreamRequestBodyToWriteAsync(stream, writeData, server, sessionArgs, ct);
+                    streamState.RequestClosed = true;
                 };
 
                 // 6. Fire BeforeRequest (stamp timing milestone just before).
@@ -162,6 +170,7 @@ internal static class Http3RequestStream
                     stream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.ExcessiveLoad);
                     streamState.RequestClosed = true;
                     sessionArgs.Http3BufferedBodyReader = null;
+                    sessionArgs.Http3RequestBodyPump = null;
                     return;
                 }
 
@@ -175,6 +184,7 @@ internal static class Http3RequestStream
                     // Synthetic response: abort unread request DATA rather than draining an
                     // endless upload (matches RespondStreaming closeServerConnection guidance).
                     sessionArgs.Http3BufferedBodyReader = null;
+                    sessionArgs.Http3RequestBodyPump = null;
                     if (!streamState.RequestClosed)
                     {
                         stream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
@@ -201,6 +211,7 @@ internal static class Http3RequestStream
                         copyRequestBody = async (originStream, ct) =>
                         {
                             sessionArgs.Http3BufferedBodyReader = null;
+                            sessionArgs.Http3RequestBodyPump = null;
                             await StreamRequestBodyToOriginAsync(
                                 stream, originStream, server, sessionArgs, ct);
                             streamState.RequestClosed = true;
@@ -310,16 +321,23 @@ internal static class Http3RequestStream
             {
                 var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0, ct);
                 if (frame is null) break;
-                switch (frame.Type)
+                try
                 {
-                    case Http3FrameType.Data:
-                        await boundedBody.WriteAsync(frame.Payload, ct);
-                        break;
-                    case Http3FrameType.Headers:
-                        var trailers = QpackDecoder.Decode(frame.Payload.Span);
-                        foreach (var (name, value) in trailers)
-                            request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
-                        break;
+                    switch (frame.Type)
+                    {
+                        case Http3FrameType.Data:
+                            await boundedBody.WriteAsync(frame.Payload, ct);
+                            break;
+                        case Http3FrameType.Headers:
+                            var trailers = QpackDecoder.Decode(frame.Payload.Span);
+                            foreach (var (name, value) in trailers)
+                                request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
+                            break;
+                    }
+                }
+                finally
+                {
+                    frame.ReturnPayload();
                 }
             }
 
@@ -345,6 +363,33 @@ internal static class Http3RequestStream
         SessionEventArgs sessionArgs,
         CancellationToken ct)
     {
+        await StreamRequestBodyToWriteAsync(
+            clientStream,
+            async (data, writeCt) =>
+            {
+                await Http3Frame.WriteAsync(originStream, Http3FrameType.Data, data, writeCt);
+            },
+            server,
+            sessionArgs,
+            ct,
+            onTrailerFrame: async (payload, writeCt) =>
+            {
+                await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, payload, writeCt);
+            });
+        await originStream.FlushAsync(ct);
+    }
+
+    /// <summary>
+    ///     Streams client DATA payloads to <paramref name="writeData"/> (H3→H1 / H3→H2 / shared pump).
+    /// </summary>
+    private static async Task StreamRequestBodyToWriteAsync( // NOSONAR S3776 -- Protocol/state-machine path; splitting further creates disproportionate regression risk.
+        QuicStream clientStream,
+        Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask> writeData,
+        ProxyServer server,
+        SessionEventArgs sessionArgs,
+        CancellationToken ct,
+        Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask>? onTrailerFrame = null)
+    {
         var request = sessionArgs.HttpClient.Request;
         var hasHook = server.HasOnRequestBodyWriteSubscribers;
 
@@ -354,19 +399,26 @@ internal static class Http3RequestStream
             {
                 var frame = await Http3Frame.ReadAsync(clientStream, maxPayloadBytes: 0, ct);
                 if (frame is null) break;
-                switch (frame.Type)
+                try
                 {
-                    case Http3FrameType.Data:
-                        if (frame.Payload.Length > 0)
-                            await Http3Frame.WriteAsync(originStream, Http3FrameType.Data, frame.Payload, ct);
-                        break;
-                    case Http3FrameType.Headers:
-                        // Forward trailing HEADERS as-is (already QPACK-encoded).
-                        await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, frame.Payload, ct);
-                        var trailers = QpackDecoder.Decode(frame.Payload.Span);
-                        foreach (var (name, value) in trailers)
-                            request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
-                        break;
+                    switch (frame.Type)
+                    {
+                        case Http3FrameType.Data:
+                            if (frame.Payload.Length > 0)
+                                await writeData(frame.Payload, ct);
+                            break;
+                        case Http3FrameType.Headers:
+                            if (onTrailerFrame != null)
+                                await onTrailerFrame(frame.Payload, ct);
+                            var trailers = QpackDecoder.Decode(frame.Payload.Span);
+                            foreach (var (name, value) in trailers)
+                                request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
+                            break;
+                    }
+                }
+                finally
+                {
+                    frame.ReturnPayload();
                 }
             }
         }
@@ -378,27 +430,36 @@ internal static class Http3RequestStream
                 var next = await Http3Frame.ReadAsync(clientStream, maxPayloadBytes: 0, ct);
                 var isLast = next == null || next.Type == Http3FrameType.Headers;
 
-                if (current.Type == Http3FrameType.Data)
+                try
                 {
-                    var hookArgs = new BeforeBodyWriteEventArgs(
-                        sessionArgs, current.Payload.ToArray(), isChunked: true, isLastChunk: isLast);
-                    await server.OnBeforeRequestBodyWrite(hookArgs);
-
-                    if (hookArgs.BodyBytes is { Length: > 0 })
-                        await Http3Frame.WriteAsync(originStream, Http3FrameType.Data, hookArgs.BodyBytes, ct);
-
-                    if (hookArgs.IsLastChunk && !isLast)
+                    if (current.Type == Http3FrameType.Data)
                     {
-                        clientStream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
-                        break;
+                        var hookArgs = new BeforeBodyWriteEventArgs(
+                            sessionArgs, current.Payload.ToArray(), isChunked: true, isLastChunk: isLast);
+                        await server.OnBeforeRequestBodyWrite(hookArgs);
+
+                        if (hookArgs.BodyBytes is { Length: > 0 })
+                            await writeData(hookArgs.BodyBytes, ct);
+
+                        if (hookArgs.IsLastChunk && !isLast)
+                        {
+                            clientStream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
+                            next?.ReturnPayload();
+                            break;
+                        }
+                    }
+                    else if (current.Type == Http3FrameType.Headers)
+                    {
+                        if (onTrailerFrame != null)
+                            await onTrailerFrame(current.Payload, ct);
+                        var trailerList = QpackDecoder.Decode(current.Payload.Span);
+                        foreach (var (name, value) in trailerList)
+                            request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
                     }
                 }
-                else if (current.Type == Http3FrameType.Headers)
+                finally
                 {
-                    await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, current.Payload, ct);
-                    var trailerList = QpackDecoder.Decode(current.Payload.Span);
-                    foreach (var (name, value) in trailerList)
-                        request.TrailingHeaders.AddHeader(new HttpHeader(name, value));
+                    current.ReturnPayload();
                 }
 
                 current = next;
@@ -406,7 +467,6 @@ internal static class Http3RequestStream
         }
 
         request.IsBodyReceived = true;
-        await originStream.FlushAsync(ct);
     }
 
     /// <summary>

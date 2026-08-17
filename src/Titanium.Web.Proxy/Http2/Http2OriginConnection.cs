@@ -146,23 +146,16 @@ internal sealed class Http2OriginConnection : IDisposable
     }
 
     /// <summary>
-    ///     Translates <paramref name="request" /> (already fully header-prepared by the caller: hop-by-hop
-    ///     headers stripped, host/authority resolved) onto a freshly leased stream and returns once the
-    ///     origin's complete response (status, headers, fully buffered body, and any trailers) has been
-    ///     received. The caller must have already buffered the request body (if any) via
-    ///     <c>SessionEventArgs.GetRequestBody</c> so <c>request.IsBodyRead</c> is true.
+    ///     Translates <paramref name="request" /> onto a freshly leased stream and returns once final
+    ///     response headers are available. When <paramref name="copyRequestBody"/> is set (or the request
+    ///     body was not buffered), request DATA is streamed; the response body is delivered via
+    ///     <see cref="Response.StreamBodyWriter"/> instead of a fully materialized <c>byte[]</c>.
     /// </summary>
-    /// <param name="request">The HTTP request to send.</param>
-    /// <param name="on1xx">
-    ///     Optional async callback invoked (in order) for each 1xx interim response received before the
-    ///     final response headers arrive. When non-null, the caller can relay these interim responses to the
-    ///     connected HTTP/1.1 client while the exchange is still in flight. Invoked from the <c>SendAsync</c>
-    ///     continuation (not the background read loop), so it is safe to write to the client stream.
-    /// </param>
-    /// <param name="cancellationToken">Cancellation for the whole request/response exchange.</param>
     internal async Task<Http2OriginExchange> SendAsync(Request request,
         Func<int, HeaderCollection, CancellationToken, Task>? on1xx,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask>, CancellationToken, Task>? copyRequestBody =
+            null)
     {
         if (!IsUsable) throw new Http2OriginGoAwayException("The origin h2 connection is no longer usable.");
 
@@ -185,25 +178,71 @@ internal sealed class Http2OriginConnection : IDisposable
         streams[streamId] = pending;
         sendFlow.RegisterStream(streamId);
 
+        var bodyHandedOff = false;
         try
         {
             var frameHeader = new Http2FrameHeader { StreamId = streamId };
             var frameHeaderBuffer = new byte[9];
             var dataBuffer = new byte[SafeMaxFrameSize];
 
-            await writeLock.WaitAsync(cancellationToken);
-            try
+            var streamRequest = copyRequestBody != null && !request.IsBodyRead && !request.BodyAvailable;
+            if (streamRequest)
             {
-                await Http2Helper.SendBody(originSettings, request, frameHeader, frameHeaderBuffer, dataBuffer,
-                    sendFlow, stream, cancellationToken);
+                await writeLock.WaitAsync(cancellationToken);
+                try
+                {
+                    await Http2Helper.SendHeader(originSettings, frameHeader, frameHeaderBuffer, request,
+                        endStream: false, stream, pushPromise: false);
+                }
+                finally
+                {
+                    writeLock.Release();
+                }
 
-                if (request.HasTrailingHeaders && request.TrailingHeaders.Any())
-                    await Http2Helper.SendTrailer(originSettings, frameHeader, frameHeaderBuffer, streamId,
-                        request.TrailingHeaders, true, stream);
+                await copyRequestBody!(
+                    async (data, ct) =>
+                    {
+                        if (data.IsEmpty) return;
+                        await Http2Helper.SendData(frameHeader, frameHeaderBuffer, streamId, data, false,
+                            SafeMaxFrameSize, sendFlow, stream, ct, writeLock);
+                    },
+                    cancellationToken);
+
+                await writeLock.WaitAsync(cancellationToken);
+                try
+                {
+                    if (request.HasTrailingHeaders && request.TrailingHeaders.Any())
+                    {
+                        await Http2Helper.SendTrailer(originSettings, frameHeader, frameHeaderBuffer, streamId,
+                            request.TrailingHeaders, true, stream);
+                    }
+                    else
+                    {
+                        await Http2Helper.SendData(frameHeader, frameHeaderBuffer, streamId, Array.Empty<byte>(),
+                            true, SafeMaxFrameSize, sendFlow, stream, cancellationToken, writeLock: null);
+                    }
+                }
+                finally
+                {
+                    writeLock.Release();
+                }
             }
-            finally
+            else
             {
-                writeLock.Release();
+                await writeLock.WaitAsync(cancellationToken);
+                try
+                {
+                    await Http2Helper.SendBody(originSettings, request, frameHeader, frameHeaderBuffer, dataBuffer,
+                        sendFlow, stream, cancellationToken);
+
+                    if (request.HasTrailingHeaders && request.TrailingHeaders.Any())
+                        await Http2Helper.SendTrailer(originSettings, frameHeader, frameHeaderBuffer, streamId,
+                            request.TrailingHeaders, true, stream);
+                }
+                finally
+                {
+                    writeLock.Release();
+                }
             }
         }
         catch (Exception sendEx)
@@ -220,23 +259,18 @@ internal sealed class Http2OriginConnection : IDisposable
 
         try
         {
-            // Register cancellation: complete the pipe writer so CopyToAsync below unblocks and throws.
-            await using var registration = cancellationToken.Register(() =>
+            // Register cancellation: complete the pipe writer so CopyToAsync unblocks and throws.
+            // When the body is handed off via StreamBodyWriter, that callback disposes the registration.
+            var registration = cancellationToken.Register(() =>
                 pending.BodyPipe.CompleteWriter(new OperationCanceledException(cancellationToken)));
 
             // Relay 1xx interim responses (e.g. 103 Early Hints) to the HTTP/1.1 client before reading
             // the body. ReadLoopAsync writes each interim into pending.InterimChannel and completes the
             // writer as soon as final response headers arrive, so this loop exits cleanly before
-            // CopyToAsync below even begins to drain body DATA frames.
+            // body drainage begins.
             if (on1xx != null)
                 await foreach (var interim in pending.InterimChannel.Reader.ReadAllAsync(cancellationToken))
                     await on1xx(interim.StatusCode, interim.Headers, cancellationToken);
-
-            // Concurrently drain the pipe while ReadLoopAsync writes DATA frames into it.
-            // CopyToAsync returns when the writer is completed (END_STREAM) or throws when
-            // the writer is completed with an exception (RST_STREAM, GOAWAY, cancellation, limit).
-            using var bodyMs = new MemoryStream();
-            await pending.BodyPipe.CopyToAsync(bodyMs, cancellationToken);
 
             var response = pending.Response ??
                            new Response
@@ -244,14 +278,53 @@ internal sealed class Http2OriginConnection : IDisposable
                                StatusCode = 502, StatusDescription = string.Empty,
                                HttpVersion = HttpHeader.Version11
                            };
-            return new Http2OriginExchange(response, bodyMs.ToArray(), pending.TrailingHeaders);
+
+            if (!response.HasBody)
+            {
+                registration.Dispose();
+                response.IsBodyRead = true;
+                response.Body = Array.Empty<byte>();
+                return new Http2OriginExchange(response, Array.Empty<byte>(), pending.TrailingHeaders);
+            }
+
+            // Stream origin DATA to the caller instead of materializing ToArray().
+            var bodyPipe = pending.BodyPipe;
+            var trailers = pending.TrailingHeaders;
+            bodyHandedOff = true;
+
+            response.StreamBodyWriter = async (dest, ct) =>
+            {
+                try
+                {
+                    await bodyPipe.CopyToAsync(dest, ct);
+                }
+                finally
+                {
+                    registration.Dispose();
+                    streams.TryRemove(streamId, out _);
+                    pending.Dispose();
+                    sendFlow.RemoveStream(streamId);
+                    gate.Release();
+                }
+            };
+
+            if (trailers != null)
+            {
+                foreach (var header in trailers)
+                    response.TrailingHeaders.AddHeader(header);
+            }
+
+            return new Http2OriginExchange(response, Array.Empty<byte>(), trailers);
         }
         finally
         {
-            streams.TryRemove(streamId, out _);
-            pending.Dispose();
-            sendFlow.RemoveStream(streamId);
-            gate.Release();
+            if (!bodyHandedOff)
+            {
+                streams.TryRemove(streamId, out _);
+                pending.Dispose();
+                sendFlow.RemoveStream(streamId);
+                gate.Release();
+            }
         }
     }
 

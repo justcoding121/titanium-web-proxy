@@ -128,6 +128,7 @@ internal static class EmbeddedLoadGenerator
                             var detail = ex.ToString();
                             if (detail.Length > 500) detail = detail[..500];
                             firstError = detail;
+                            ProbeLog.Error($"  [http] first error: {firstError}");
                         }
 
                         Interlocked.Increment(ref errors);

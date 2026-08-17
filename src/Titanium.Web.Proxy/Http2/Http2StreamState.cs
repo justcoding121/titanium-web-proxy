@@ -89,6 +89,19 @@ internal sealed class Http2StreamState
     internal Channel<ReadOnlyMemory<byte>>? InboundTunnelChannel { get; set; }
 
     /// <summary>
+    ///     Bounded channel of inbound request DATA payloads for <see cref="IsExternalBridge"/> streams
+    ///     when the body was not buffered via <c>GetRequestBody</c>. The bridge pumps these chunks
+    ///     live to the origin instead of waiting for a full <c>byte[]</c>.
+    /// </summary>
+    internal Channel<ReadOnlyMemory<byte>>? InboundRequestBodyChannel { get; set; }
+
+    /// <summary>
+    ///     Completes when the queued origin HEADERS write for this stream has finished (or failed).
+    ///     Client→origin DATA must await this so frames never overtake HEADERS on the wire.
+    /// </summary>
+    internal TaskCompletionSource? OriginHeadersFlushed { get; set; }
+
+    /// <summary>
     ///     Set by an external bridge handler (e.g. the H2→H3 bridge) before returning from
     ///     <c>onBeforeRequest</c> to signal that it owns this stream's origin round trip and
     ///     response emission entirely.

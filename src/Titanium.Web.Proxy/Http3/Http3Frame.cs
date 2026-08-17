@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,11 +9,33 @@ namespace Titanium.Web.Proxy.Http3;
 /// <summary>
 ///     HTTP/3 frame as read from or written to a stream (typically a QUIC stream).
 ///     Format: <c>Type (VarInt) | Length (VarInt) | Payload (Length bytes)</c> (RFC 9114 §7.1).
+///     Payload buffers are rented from <see cref="ArrayPool{T}"/> when non-empty; call
+///     <see cref="ReturnPayload"/> when finished with <see cref="Payload"/> (idempotent).
 /// </summary>
 internal sealed class Http3Frame
 {
-    public ulong Type { get; init; }
-    public ReadOnlyMemory<byte> Payload { get; init; }
+    private byte[]? rentedPayload;
+
+    public ulong Type { get; }
+    public ReadOnlyMemory<byte> Payload { get; }
+
+    private Http3Frame(ulong type, ReadOnlyMemory<byte> payload, byte[]? rented)
+    {
+        Type = type;
+        Payload = payload;
+        rentedPayload = rented;
+    }
+
+    /// <summary>
+    ///     Returns a rented payload buffer to <see cref="ArrayPool{T}"/>. Safe to call more than once.
+    ///     After this, <see cref="Payload"/> must not be read.
+    /// </summary>
+    public void ReturnPayload()
+    {
+        var buffer = Interlocked.Exchange(ref rentedPayload, null);
+        if (buffer != null)
+            ArrayPool<byte>.Shared.Return(buffer);
+    }
 
     /// <summary>
     ///     Reads one HTTP/3 frame from <paramref name="stream" />.
@@ -34,26 +57,30 @@ internal sealed class Http3Frame
             throw new Http3ConnectionException(Http3ErrorCode.ExcessiveLoad,
                 $"HTTP/3 frame payload {payloadLength} bytes exceeds limit {maxPayloadBytes}.");
 
-        byte[] payload;
         if (payloadLength == 0)
+            return new Http3Frame(frameType.Value, ReadOnlyMemory<byte>.Empty, null);
+
+        var length = (int)payloadLength;
+        var rented = ArrayPool<byte>.Shared.Rent(length);
+        try
         {
-            payload = Array.Empty<byte>();
-        }
-        else
-        {
-            payload = new byte[payloadLength];
             var offset = 0;
-            while (offset < payload.Length)
+            while (offset < length)
             {
-                var read = await stream.ReadAsync(payload.AsMemory(offset), cancellationToken);
+                var read = await stream.ReadAsync(rented.AsMemory(offset, length - offset), cancellationToken);
                 if (read == 0)
                     throw new Http3ConnectionException(Http3ErrorCode.FrameError,
                         $"Unexpected end of stream reading frame payload (expected {payloadLength}, got {offset}).");
                 offset += read;
             }
-        }
 
-        return new Http3Frame { Type = frameType.Value, Payload = payload };
+            return new Http3Frame(frameType.Value, rented.AsMemory(0, length), rented);
+        }
+        catch
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+            throw;
+        }
     }
 
     /// <summary>
@@ -65,17 +92,24 @@ internal sealed class Http3Frame
         ReadOnlyMemory<byte> payload,
         CancellationToken cancellationToken)
     {
-        var typeBytes = new byte[8];
-        var typeLen = Http3VarInt.Write(typeBytes, frameType);
+        var typeBytes = ArrayPool<byte>.Shared.Rent(8);
+        var lengthBytes = ArrayPool<byte>.Shared.Rent(8);
+        try
+        {
+            var typeLen = Http3VarInt.Write(typeBytes, frameType);
+            var lengthLen = Http3VarInt.Write(lengthBytes, (ulong)payload.Length);
 
-        var lengthBytes = new byte[8];
-        var lengthLen = Http3VarInt.Write(lengthBytes, (ulong)payload.Length);
-
-        // Write header (type + length) then payload.
-        await stream.WriteAsync(typeBytes.AsMemory(0, typeLen), cancellationToken);
-        await stream.WriteAsync(lengthBytes.AsMemory(0, lengthLen), cancellationToken);
-        if (!payload.IsEmpty)
-            await stream.WriteAsync(payload, cancellationToken);
+            // Write header (type + length) then payload.
+            await stream.WriteAsync(typeBytes.AsMemory(0, typeLen), cancellationToken);
+            await stream.WriteAsync(lengthBytes.AsMemory(0, lengthLen), cancellationToken);
+            if (!payload.IsEmpty)
+                await stream.WriteAsync(payload, cancellationToken);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(typeBytes);
+            ArrayPool<byte>.Shared.Return(lengthBytes);
+        }
     }
 
     /// <summary>

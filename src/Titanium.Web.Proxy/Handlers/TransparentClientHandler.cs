@@ -342,10 +342,8 @@ public partial class ProxyServer
                                     await Http2Helper.SendHttp2(clientStream, connection.Stream,
                                         () => new SessionEventArgs(this, endPoint, clientStream, null,
                                             cancellationTokenSource),
-                                        // Use the H3-aware delegate so Alt-Svc cache hits can upgrade
-                                        // individual h2 streams to H3 mid-connection (warm path).
-                                        (sessionArgs, ctx) => BridgeOnBeforeRequestForH3(sessionArgs, ctx,
-                                            httpsHostName, args.ForwardHttpsPort, coldH3Bridge: false),
+                                        // Warm H2↔H2: BeforeRequest only (no mid-connection H3 upgrade).
+                                        (sessionArgs, ctx) => OnBeforeRequest(sessionArgs),
                                         (sessionArgs, ctx) => OnBeforeResponse(sessionArgs),
                                         sessionArgs => OnAfterResponse(sessionArgs),
                                         headers => PrepareRequestHeaders(headers),
@@ -624,8 +622,7 @@ public partial class ProxyServer
             await connection.Stream.WriteAsync(connectionPreface, cancellationToken);
             await Http2Helper.SendHttp2(clientStream, connection.Stream,
                 () => new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource),
-                (sessionArgs, ctx) => BridgeOnBeforeRequestForH3(sessionArgs, ctx,
-                    remoteHostName, remotePort, coldH3Bridge: false),
+                (sessionArgs, ctx) => OnBeforeRequest(sessionArgs),
                 (sessionArgs, ctx) => OnBeforeResponse(sessionArgs),
                 sessionArgs => OnAfterResponse(sessionArgs),
                 headers => PrepareRequestHeaders(headers),

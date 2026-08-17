@@ -551,10 +551,9 @@ public partial class ProxyServer
                                     // the connection-level policy explicitly prohibits it.
                                     UpstreamHttpProtocol = connectArgs?.UpstreamHttpProtocol
                                 },
-                                // Use the H3-aware delegate so per-stream Alt-Svc cache hits can upgrade
-                                // individual h2 streams to H3 mid-connection (warm path).
-                                (args, ctx) => BridgeOnBeforeRequestForH3(args, ctx, sessionConnectHost,
-                                    sessionConnectPort, coldH3Bridge: false),
+                                // Warm H2↔H2: BeforeRequest only. Mid-connection H3 upgrades are not
+                                // taken on this path (see BridgeOnBeforeRequestForH3 cold path).
+                                (args, ctx) => OnBeforeRequest(args),
                                 (args, ctx) => OnBeforeResponse(args),
                                 args => OnAfterResponse(args),
                                 headers => PrepareRequestHeaders(headers),

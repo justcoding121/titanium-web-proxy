@@ -420,7 +420,37 @@ public partial class ProxyServer
 
         try
         {
-            if (request.HasBody) await args.GetRequestBody(cancellationToken);
+            // Stream request body to the h2 origin unless BeforeRequest already buffered it.
+            Func<Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask>, CancellationToken, Task>?
+                copyRequestBody = null;
+            if (request.HasBody && !request.IsBodyRead)
+            {
+                var clientBodyStream = args.ClientStream;
+                var isChunked = request.OriginalIsChunked;
+                var contentLength = request.OriginalContentLength;
+                copyRequestBody = async (writeData, ct) =>
+                {
+                    using var limited = new LimitedStream(clientBodyStream, BufferPool, isChunked,
+                        contentLength, request.TrailingHeaders);
+                    var buffer = BufferPool.GetBuffer();
+                    try
+                    {
+                        int read;
+                        while ((read = await limited.ReadAsync(buffer.AsMemory(), ct)) > 0)
+                            await writeData(buffer.AsMemory(0, read), ct);
+                        await limited.Finish();
+                        request.IsBodyReceived = true;
+                    }
+                    finally
+                    {
+                        BufferPool.ReturnBuffer(buffer);
+                    }
+                };
+            }
+            else if (request.HasBody)
+            {
+                await args.GetRequestBody(cancellationToken);
+            }
 
             // TLS-terminate → h2c: origin expects :scheme http (Kestrel rejects https on cleartext).
             if (args.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
@@ -456,7 +486,8 @@ public partial class ProxyServer
             Http2OriginExchange exchange;
             try
             {
-                exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken);
+                exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken,
+                    copyRequestBody);
             }
             catch (Http2OriginGoAwayException)
             {
@@ -567,14 +598,26 @@ public partial class ProxyServer
         // framed it.
         if (response.HasTrailingHeaders)
             response.IsChunked = true;
-        else
+        else if (response.StreamBodyWriter == null)
             response.ContentLength = body.Length;
+        else if (response.ContentLength < 0 && !response.IsChunked)
+            response.Headers.AddHeader(KnownHeaders.TransferEncoding, "chunked");
 
         await clientStream.WriteResponseAsync(response, cancellationToken);
 
-        if (response.HasBody || response.HasTrailingHeaders)
+        if (response.StreamBodyWriter != null && !response.IsBodySent)
+        {
+            var bodyWriter = new BodyStreamWriter(clientStream, response.IsChunked);
+            await response.StreamBodyWriter(bodyWriter, cancellationToken);
+            await bodyWriter.CompleteAsync(response.HasTrailingHeaders ? response.TrailingHeaders : null,
+                cancellationToken);
+            response.IsBodySent = true;
+        }
+        else if (response.HasBody || response.HasTrailingHeaders)
+        {
             await clientStream.WriteBodyAsync(body, response.IsChunked,
                 response.HasTrailingHeaders ? response.TrailingHeaders : null, cancellationToken);
+        }
 
         response.IsBodyReceived = true;
         response.IsBodySent = true;

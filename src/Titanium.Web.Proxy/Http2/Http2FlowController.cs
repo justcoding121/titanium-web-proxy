@@ -135,6 +135,32 @@ internal sealed class Http2FlowController
     }
 
     /// <summary>
+    ///     Non-blocking variant of <see cref="ReserveAsync"/>. Returns <c>false</c> when credit is
+    ///     insufficient instead of waiting. Used to keep HEADERS + first DATA under one write lock
+    ///     when the peer window already has room.
+    /// </summary>
+    public bool TryReserve(int streamId, int bytes)
+    {
+        if (bytes <= 0) return true;
+
+        lock (gate)
+        {
+            if (!streamWindows.TryGetValue(streamId, out var streamWindow))
+            {
+                streamWindow = initialStreamWindow;
+                streamWindows[streamId] = streamWindow;
+            }
+
+            if (connectionWindow < bytes || streamWindow < bytes)
+                return false;
+
+            connectionWindow -= bytes;
+            streamWindows[streamId] = streamWindow - bytes;
+            return true;
+        }
+    }
+
+    /// <summary>
     ///     Waits until both the connection window and the given stream's window have at least
     ///     <paramref name="bytes" /> of credit, then atomically reserves (decrements) both. Must be called
     ///     with the exact on-wire payload length of the DATA frame that is about to be written, before it is
