@@ -90,7 +90,7 @@ proxyServer.CertificateManager.EnsureRootCertificate(
 
 proxyServer.Start();
 proxyServer.Logger.LogInformation("Proxy listening on 127.0.0.1:8000. Press Enter to stop.");
-Console.ReadLine();
+await Console.In.ReadLineAsync();
 proxyServer.Stop();
 
 Task OnRequest(object sender, SessionEventArgs e)
