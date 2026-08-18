@@ -1224,10 +1224,9 @@ namespace Titanium.Web.Proxy.Http2
 
                     var streamContext = new Http2StreamContext(hbStreamId, connectionState,
                         isClient ? input : output, cancellationToken);
-                    var handler = onBeforeRequestResponse(sessionArgs, streamContext);
 
                     // HPACK decode and Request population above must stay ordered on this frame loop.
-                    // Everything after the user handler starts is per-stream work, though, and awaiting it
+                    // Everything from the user handler on is per-stream work, though, and running it
                     // here serializes unrelated streams on the same connection. Dispatch it independently;
                     // DATA/body completion awaits this task before SendBody, preserving HEADERS-before-DATA
                     // ordering for the stream without delaying subsequent HEADERS decode.
@@ -1236,6 +1235,14 @@ namespace Titanium.Web.Proxy.Http2
                     var previousDispatch = requestDispatchChain;
                     var dispatchTask = Task.Run(async () =>
                     {
+                        // The handler must start here on the pool, not on the frame loop: its synchronous
+                        // prefix (BeforeRequest dispatch, bridge request prep, origin pool checkout - even
+                        // the origin header write when the socket buffer accepts it without suspending)
+                        // otherwise runs inline per HEADERS and caps one client connection at the
+                        // reciprocal of that prefix (~22k streams/s measured on the h2-to-h1 bridge).
+                        // DATA routing stays correct: client DATA frames await this dispatch task before
+                        // being routed, so channels the handler registers are always visible in time.
+                        var handler = onBeforeRequestResponse(sessionArgs, streamContext);
                         var handlerCompleted = handler == await Task.WhenAny(tcs.Task, handler);
 
                         // The origin must observe newly opened client streams in increasing stream-id order.

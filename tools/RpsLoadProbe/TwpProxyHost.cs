@@ -481,6 +481,15 @@ internal sealed class TwpProxyHost : IDisposable
         proxy.EnableRequestTimingCapture =
             string.Equals(Environment.GetEnvironmentVariable("TWP_RPS_CAPTURE_TLS"), "1",
                 StringComparison.Ordinal);
+
+        // Diagnostic-only stage decomposition (TWP_RPS_STAGE_TIMING=1): prints per-stage latency
+        // percentiles to stderr every 20s. Subscribing AfterResponse disables no-interception fast
+        // paths, so never enable this for publishable benchmark numbers.
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TWP_RPS_STAGE_TIMING")))
+        {
+            proxy.EnableRequestTimingCapture = true;
+            StageTimingCollector.Attach(proxy);
+        }
         proxy.EnableConnectionPool = true;
         proxy.EnableHttp2 = enableHttp2;
         proxy.EnableHttp3 = enableHttp3;
