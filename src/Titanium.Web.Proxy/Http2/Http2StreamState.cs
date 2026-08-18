@@ -16,16 +16,27 @@ namespace Titanium.Web.Proxy.Http2;
 /// </summary>
 internal sealed class Http2StreamState
 {
+    public Http2StreamState(int streamId)
+    {
+        StreamId = streamId;
+        SessionArgs = null;
+        IsCompressedRelay = true;
+        Cancellation = new CancellationTokenSource();
+    }
+
     public Http2StreamState(int streamId, SessionEventArgs sessionArgs)
     {
         StreamId = streamId;
         SessionArgs = sessionArgs;
+        IsCompressedRelay = false;
         Cancellation = new CancellationTokenSource();
     }
 
     public int StreamId { get; }
 
-    public SessionEventArgs SessionArgs { get; }
+    public SessionEventArgs? SessionArgs { get; }
+
+    public bool IsCompressedRelay { get; }
 
     /// <summary>
     ///     Cancelled when this stream is individually reset (RST_STREAM) or the peer GOAWAYs past it, so a

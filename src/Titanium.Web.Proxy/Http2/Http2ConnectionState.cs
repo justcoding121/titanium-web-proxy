@@ -281,6 +281,23 @@ internal sealed class Http2ConnectionState
         return state;
     }
 
+    /// <summary>
+    ///     Registers a passthrough stream that relays compressed HEADERS/DATA without a
+    ///     <see cref="SessionEventArgs" /> (gate-off same-protocol H2↔H2).
+    /// </summary>
+    public Http2StreamState RegisterCompressedRelayStream(int streamId)
+    {
+        var state = new Http2StreamState(streamId);
+        if (!Streams.TryAdd(streamId, state))
+        {
+            return Streams[streamId];
+        }
+
+        ClientSendFlow.RegisterStream(streamId);
+        ServerSendFlow.RegisterStream(streamId);
+        return state;
+    }
+
     /// <summary>Removes a stream from the registry and both flow-control send windows once fully closed/reset.</summary>
     public void RemoveStream(int streamId)
     {

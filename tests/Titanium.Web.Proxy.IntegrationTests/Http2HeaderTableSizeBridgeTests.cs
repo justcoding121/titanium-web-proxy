@@ -57,6 +57,9 @@ public class Http2HeaderTableSizeBridgeTests
         using var testSuite = new TestSuite();
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
+        // These tests exercise MITM HPACK table sizing; keep interception on so compressed
+        // passthrough (which forces SETTINGS_HEADER_TABLE_SIZE=0) is not used.
+        proxy.EnableHttpInterception = true;
 
         var uri = new Uri(rawServer.Url);
         using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port,
@@ -109,6 +112,9 @@ public class Http2HeaderTableSizeBridgeTests
         using var testSuite = new TestSuite();
         var proxy = testSuite.GetProxy();
         proxy.EnableHttp2 = true;
+        // These tests exercise MITM HPACK table sizing; keep interception on so compressed
+        // passthrough (which forces SETTINGS_HEADER_TABLE_SIZE=0) is not used.
+        proxy.EnableHttpInterception = true;
 
         var uri = new Uri(rawServer.Url);
         using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);

@@ -253,9 +253,13 @@ namespace Titanium.Web.Proxy.Http2
             {
                 // Same rationale as the RST_STREAM case above: a stream still in-flight when the whole
                 // connection tears down never got a response, so record that as Exception before finalizing.
-                if (leftover.SessionArgs.Exception == null && !leftover.SessionArgs.HttpClient.Response.Locked)
-                    leftover.SessionArgs.Exception = new OperationCanceledException(
+                if (leftover.SessionArgs is { } leftoverArgs
+                    && leftoverArgs.Exception == null
+                    && !leftoverArgs.HttpClient.Response.Locked)
+                {
+                    leftoverArgs.Exception = new OperationCanceledException(
                         "The HTTP/2 connection was closed before this stream received a response.");
+                }
 
                 connectionState.PendingFinalizations.Add(
                     FinalizeStreamAsync(leftover, onAfterResponse, logger));
@@ -280,6 +284,14 @@ namespace Titanium.Web.Proxy.Http2
         {
             if (Interlocked.CompareExchange(ref state.FinalizedFlag, 1, 0) != 0)
             {
+                return;
+            }
+
+            // Compressed-relay streams never allocate SessionEventArgs.
+            if (state.SessionArgs == null)
+            {
+                try { state.Cancellation.Dispose(); }
+                catch { /* ignore */ }
                 return;
             }
 
@@ -342,6 +354,18 @@ namespace Titanium.Web.Proxy.Http2
         {
             resourceLimits ??= ProxyResourceLimits.Default;
             var cancellationTokenSource = connectionState.CancellationTokenSource;
+
+            // Gate-off same-protocol H2↔H2: relay compressed HEADERS/DATA without SessionEventArgs.
+            // Bridges (NullOriginStream on either leg) still need decoded headers to translate protocols.
+            bool useCompressedRelay = !httpInterceptionEnabled
+                && output is not NullOriginStream
+                && input is not NullOriginStream;
+            if (useCompressedRelay)
+            {
+                // Static-table-only on both legs so compressed blocks are interchangeable.
+                connectionState.ClientSettings.UpdateHeaderTableSize(0);
+                connectionState.ServerSettings.UpdateHeaderTableSize(0);
+            }
 
             // "Settings describing the peer this task reads from" - used both to size the HPACK decoder for
             // header blocks read from that peer, and (SETTINGS handling below) updated directly from that
@@ -540,6 +564,52 @@ namespace Titanium.Web.Proxy.Http2
                     connectionState.PendingFinalizations.Add(
                         FinalizeStreamAsync(removedState, onAfterResponse, logger));
                 }
+            }
+
+            // Gate-off same-protocol path: keep HPACK decoder in sync with a no-op listener, then
+            // forward the compressed block unchanged (valid when both legs negotiated table size 0).
+            async Task RelayCompressedHeaderBlockAsync(int hbStreamId, byte[] compressed, bool endStreamFlag)
+            {
+                try
+                {
+                    if (decoder == null)
+                    {
+                        headerTableSize = remoteSettings.HeaderTableSize;
+                        decoder = new Decoder(maxDecodedHeaderListBytes, headerTableSize);
+                    }
+                    else if (headerTableSize != remoteSettings.HeaderTableSize)
+                    {
+                        headerTableSize = remoteSettings.HeaderTableSize;
+                        decoder.SetMaxHeaderTableSize(headerTableSize);
+                    }
+
+                    decoder.Decode(compressed.AsSpan(0, compressed.Length), NoOpHeaderListener.Instance);
+                    if (decoder.EndHeaderBlock())
+                    {
+                        ReportException(logger, new ProxyHttpException(
+                            "HTTP/2 header list too large on compressed-relay stream.", null, null));
+                        RemoveAndFinalizeStream(hbStreamId);
+                        await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                            hbStreamId, (Http2ErrorCode)0xb /* ENHANCE_YOUR_CALM */, input));
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    ReportException(logger, new ProxyHttpException(
+                        "Failed to decode HTTP/2 headers on compressed-relay stream", ex, null));
+                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
+                        Http2ErrorCode.CompressionError, input));
+                    throw;
+                }
+
+                var relayFrameHeader = new Http2FrameHeader { StreamId = hbStreamId };
+                var relayFrameHeaderBuffer = new byte[9];
+                var framed = RentFramedHeaderBlock(relayFrameHeader, relayFrameHeaderBuffer, hbStreamId,
+                    Http2FrameType.Headers, endStreamFlag, hasPriority: false, compressed,
+                    remoteSettings.MaxFrameSize);
+                connectionState.EnqueueWriteRented(towardServer: isClient, outputWriteLock, output,
+                    framed.Array!, framed.Count);
             }
 
             // Decodes one fully-assembled HEADERS(+CONTINUATION...) block (already stripped of padding/
@@ -1346,6 +1416,7 @@ namespace Titanium.Web.Proxy.Http2
             RequestResponseBase? pendingHeaderRr = null;
             bool pendingHeaderEndStream = false;
             bool pendingHeaderIsPromise = false;
+            bool pendingCompressedRelay = false;
 
             // Companion bounds for the open header block above: a byte cap alone never trips on
             // zero-length CONTINUATION frames, and only one header block may be open per connection
@@ -1487,13 +1558,14 @@ namespace Titanium.Web.Proxy.Http2
 
                 SessionEventArgs? args = null;
                 RequestResponseBase? rr = null;
+                Http2StreamState? existingStreamState = null;
                 if ((type == Http2FrameType.Data || type == Http2FrameType.Headers) &&
-                    connectionState.Streams.TryGetValue(streamId, out var existingStreamState))
+                    connectionState.Streams.TryGetValue(streamId, out existingStreamState))
                 {
                     args = existingStreamState.SessionArgs;
                 }
 
-                if (type == Http2FrameType.Data && args == null)
+                if (type == Http2FrameType.Data && existingStreamState == null)
                 {
                     // DATA is flow-controlled at the connection level even when it arrives
                     // for an already-closed stream. Return that connection credit, then reject
@@ -1537,6 +1609,100 @@ namespace Titanium.Web.Proxy.Http2
                         offset = 1;
                     }
 
+                    bool compressedRelayHeaders = useCompressedRelay
+                        && (existingStreamState == null || existingStreamState.IsCompressedRelay);
+
+                    if (compressedRelayHeaders)
+                    {
+                        if (existingStreamState == null)
+                        {
+                            if (isClient)
+                            {
+                                if (streamId % 2 == 0 || streamId <= connectionState.LastClientStreamId)
+                                {
+                                    ReportException(logger, new ProxyHttpException(
+                                        "HTTP/2 protocol error: invalid client stream id on compressed-relay HEADERS.",
+                                        null, null));
+                                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                                        connectionState.LastClientStreamId, Http2ErrorCode.ProtocolError, input));
+                                    return;
+                                }
+
+                                connectionState.LastClientStreamId = streamId;
+                            }
+
+                            if (connectionState.ServerGoingAway &&
+                                streamId > connectionState.ServerLastStreamId)
+                            {
+                                await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                    streamId, Http2ErrorCode.RefusedStream, input));
+                                sendPacket = false;
+                                continue;
+                            }
+
+                            if (isClient && connectionState.ClientResetBudgetExceeded)
+                            {
+                                await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                    streamId, Http2ErrorCode.RefusedStream, input));
+                                sendPacket = false;
+                                continue;
+                            }
+
+                            existingStreamState = connectionState.RegisterCompressedRelayStream(streamId);
+                            if (connectionState.Streams.Count > remoteSettings.MaxConcurrentStreams)
+                            {
+                                RemoveAndFinalizeStream(streamId);
+                                await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                    streamId, Http2ErrorCode.RefusedStream, input));
+                                sendPacket = false;
+                                continue;
+                            }
+                        }
+
+                        if (priority)
+                            offset += 5;
+
+                        int fragmentLength = length - offset - padLength;
+                        if (fragmentLength < 0)
+                            fragmentLength = 0;
+
+                        if (pendingHeaderBlock != null)
+                        {
+                            ReportException(logger, new ProxyHttpException(
+                                "HTTP/2 protocol error: HEADERS frame received while a previous header block on this connection was still open.",
+                                null, null));
+                            await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                                pendingHeaderStreamId, Http2ErrorCode.ProtocolError, input));
+                            return;
+                        }
+
+                        if (endHeaders)
+                        {
+                            var fragment = new byte[fragmentLength];
+                            Buffer.BlockCopy(buffer, offset, fragment, 0, fragmentLength);
+                            await RelayCompressedHeaderBlockAsync(streamId, fragment, endStreamFlag);
+                            if (endStreamFlag)
+                                endStream = true;
+                        }
+                        else
+                        {
+                            pendingHeaderBlock = new MemoryStream();
+                            await pendingHeaderBlock.WriteAsync(buffer.AsMemory(offset, fragmentLength),
+                                cancellationToken);
+                            pendingHeaderStreamId = streamId;
+                            pendingHeaderArgs = null;
+                            pendingHeaderRr = null;
+                            pendingHeaderEndStream = endStreamFlag;
+                            pendingHeaderIsPromise = false;
+                            pendingCompressedRelay = true;
+                            pendingHeaderBlockFrameCount = 1;
+                            pendingHeaderBlockOpenedAt = Environment.TickCount64;
+                        }
+
+                        sendPacket = false;
+                    }
+                    else
+                    {
                     if (args == null)
                     {
                         args = sessionFactory();
@@ -1605,11 +1771,13 @@ namespace Titanium.Web.Proxy.Http2
                         pendingHeaderRr = rr;
                         pendingHeaderEndStream = endStreamFlag;
                         pendingHeaderIsPromise = args.IsPromise;
+                        pendingCompressedRelay = false;
                         pendingHeaderBlockFrameCount = 1;
                         pendingHeaderBlockOpenedAt = Environment.TickCount64;
                     }
 
                     sendPacket = false;
+                    }
                 }
                 else if (type == Http2FrameType.Continuation)
                 {
@@ -1638,7 +1806,8 @@ namespace Titanium.Web.Proxy.Http2
                     // frames (or paces non-empty ones just slowly enough to never look byte-abusive).
                     pendingHeaderBlockFrameCount++;
                     var openMillis = Environment.TickCount64 - pendingHeaderBlockOpenedAt;
-                    var http2AbuseMode = pendingHeaderArgs!.Server.PolicyModes[PolicyFamily.Http2AbuseBudget];
+                    var http2AbuseMode = pendingHeaderArgs?.Server.PolicyModes[PolicyFamily.Http2AbuseBudget]
+                        ?? PolicyMode.Enforce;
                     var continuationBudgetBreached = http2AbuseMode != PolicyMode.Disabled &&
                         (pendingHeaderBlockFrameCount > resourceLimits.MaxOpenHeaderBlockFrames ||
                          openMillis > resourceLimits.MaxOpenHeaderBlockDuration.TotalMilliseconds);
@@ -1668,9 +1837,10 @@ namespace Titanium.Web.Proxy.Http2
                         var completeBlock = pendingHeaderBlock.ToArray();
                         var pStreamId = pendingHeaderStreamId;
                         var pArgs = pendingHeaderArgs;
-                        var pRr = pendingHeaderRr!;
+                        var pRr = pendingHeaderRr;
                         var pEndStream = pendingHeaderEndStream;
                         var pIsPromise = pendingHeaderIsPromise;
+                        var pCompressedRelay = pendingCompressedRelay;
 
                         pendingHeaderBlock = null;
                         pendingHeaderArgs = null;
@@ -1678,11 +1848,20 @@ namespace Titanium.Web.Proxy.Http2
                         pendingHeaderStreamId = -1;
                         pendingHeaderBlockFrameCount = 0;
                         pendingHeaderBlockOpenedAt = 0;
+                        pendingCompressedRelay = false;
 
                         args = pArgs;
                         rr = pRr;
 
-                        bool isInterim = await ProcessCompleteHeaderBlockAsync(pStreamId, pArgs, pRr, completeBlock,
+                        if (pCompressedRelay)
+                        {
+                            await RelayCompressedHeaderBlockAsync(pStreamId, completeBlock, pEndStream);
+                            if (pEndStream)
+                                endStream = true;
+                        }
+                        else
+                        {
+                        bool isInterim = await ProcessCompleteHeaderBlockAsync(pStreamId, pArgs!, pRr!, completeBlock,
                             pEndStream, pIsPromise);
                         if (pEndStream && !isInterim)
                         {
@@ -1692,12 +1871,22 @@ namespace Titanium.Web.Proxy.Http2
                             // RequestHandler.HandleHttpSessionRequest / ResponseHandler.OnAfterResponse)
                             // for the no-body (headers-only END_STREAM, or trailer-terminated) case; the
                             // with-body case is stamped where the terminating DATA frame is handled below.
-                            if (isClient) pArgs.Timing?.MarkRequestSent();
-                            else pArgs.Timing?.MarkComplete();
+                            if (isClient) pArgs!.Timing?.MarkRequestSent();
+                            else pArgs!.Timing?.MarkComplete();
+                        }
                         }
                     }
 
                     sendPacket = false;
+                }
+                else if (type == Http2FrameType.Data && existingStreamState?.IsCompressedRelay == true)
+                {
+                    // Passthrough: grant receive credit and forward the frame unchanged (no body API).
+                    bool dataEndStream = (flags & Http2FrameFlag.EndStream) != 0;
+                    await GrantReceiveCreditAsync(streamId, length, forceFlush: dataEndStream);
+                    if (dataEndStream)
+                        endStream = true;
+                    // sendPacket remains true
                 }
                 else if (isClient && syntheticStreams.ContainsKey(streamId)
                          && type != Http2FrameType.WindowUpdate
@@ -2163,6 +2352,7 @@ namespace Titanium.Web.Proxy.Http2
                     bool sawEnableConnectProtocol = false;
                     bool sawMaxConcurrentStreams = false;
                     bool sawInitialWindowSize = false;
+                    bool sawHeaderTableSize = false;
 
                     int pos = 0;
                     while (pos < length)
@@ -2175,10 +2365,27 @@ namespace Titanium.Web.Proxy.Http2
 
                         if (identifier == (int)Http2SettingsId.HeaderTableSize)
                         {
-                            localSettings.UpdateHeaderTableSize((int)value);
-                            if (logger.IsEnabled(LogLevel.Trace))
-                                logger.LogTrace("[h2 settings] SETTINGS_HEADER_TABLE_SIZE={Value} from {Direction}",
-                                    value, isClient ? "browser" : "origin");
+                            sawHeaderTableSize = true;
+                            if (useCompressedRelay)
+                            {
+                                // Force static-table-only so compressed HEADERS are interchangeable across legs.
+                                localSettings.UpdateHeaderTableSize(0);
+                                buffer[valueOffset] = 0;
+                                buffer[valueOffset + 1] = 0;
+                                buffer[valueOffset + 2] = 0;
+                                buffer[valueOffset + 3] = 0;
+                                if (logger.IsEnabled(LogLevel.Trace))
+                                    logger.LogTrace(
+                                        "[h2 settings] SETTINGS_HEADER_TABLE_SIZE forced to 0 (compressed relay) from {Direction} (peer sent {Value})",
+                                        isClient ? "browser" : "origin", value);
+                            }
+                            else
+                            {
+                                localSettings.UpdateHeaderTableSize((int)value);
+                                if (logger.IsEnabled(LogLevel.Trace))
+                                    logger.LogTrace("[h2 settings] SETTINGS_HEADER_TABLE_SIZE={Value} from {Direction}",
+                                        value, isClient ? "browser" : "origin");
+                            }
                         }
                         else if (identifier == (int)Http2SettingsId.MaxFrameSize)
                         {
@@ -2342,6 +2549,22 @@ namespace Titanium.Web.Proxy.Http2
                         frameHeader.Length = length;
                     }
 
+                    if (useCompressedRelay && !sawHeaderTableSize && (flags & Http2FrameFlag.Ack) == 0 &&
+                        length + 6 <= buffer.Length)
+                    {
+                        // Peer omitted SETTINGS_HEADER_TABLE_SIZE (RFC default 4096). Inject 0 so the
+                        // other leg encodes static-table-only and compressed blocks stay interchangeable.
+                        localSettings.UpdateHeaderTableSize(0);
+                        buffer[length] = (byte)(((int)Http2SettingsId.HeaderTableSize >> 8) & 0xff);
+                        buffer[length + 1] = (byte)((int)Http2SettingsId.HeaderTableSize & 0xff);
+                        buffer[length + 2] = 0;
+                        buffer[length + 3] = 0;
+                        buffer[length + 4] = 0;
+                        buffer[length + 5] = 0;
+                        length += 6;
+                        frameHeader.Length = length;
+                    }
+
                     if (!isClient && enableRfc8441 && !sawEnableConnectProtocol &&
                         (flags & Http2FrameFlag.Ack) == 0 && length + 6 <= buffer.Length)
                     {
@@ -2438,11 +2661,15 @@ namespace Titanium.Web.Proxy.Http2
                         // on the session (see RequestHandler/Http11ToHttp2BridgeHandler/Http2ToHttp3BridgeHandler) -
                         // lets AfterResponse consumers tell "client reset this incomplete stream" apart from
                         // an actual proxy failure, instead of seeing an unexplained zero-status entry.
-                        if (resetStream.SessionArgs.Exception == null && !resetStream.SessionArgs.HttpClient.Response.Locked)
-                            resetStream.SessionArgs.Exception = new OperationCanceledException(
+                        if (resetStream.SessionArgs is { } resetArgs
+                            && resetArgs.Exception == null
+                            && !resetArgs.HttpClient.Response.Locked)
+                        {
+                            resetArgs.Exception = new OperationCanceledException(
                                 isClient
                                     ? "Stream was reset by the client before it received a response."
                                     : "Stream was reset by the origin before it received a response.");
+                        }
 
                         connectionState.PendingFinalizations.Add(
                             FinalizeStreamAsync(resetStream, onAfterResponse, logger));
@@ -2452,9 +2679,11 @@ namespace Titanium.Web.Proxy.Http2
                         // always null here without this assignment).
                         args = resetStream.SessionArgs;
 
+                        if (args != null)
+                        {
                         var resetRr = isClient
-                            ? (RequestResponseBase)resetStream.SessionArgs.HttpClient.Request
-                            : resetStream.SessionArgs.HttpClient.Response;
+                            ? (RequestResponseBase)args.HttpClient.Request
+                            : args.HttpClient.Response;
 
                         // unblock a pending GetBody()-style waiter rather than hanging forever now that no
                         // further DATA/END_STREAM will ever arrive for this stream.
@@ -2466,6 +2695,7 @@ namespace Titanium.Web.Proxy.Http2
                             resetRr.IsBodyReceived = true;
                             bodyTcs.TrySetResult(true);
                         }
+                        }
 
                         // Rapid Reset (CVE-2023-44487) abuse budget: this branch only runs for a stream
                         // that was still tracked (i.e. never reached a normal end-stream) at the moment
@@ -2476,7 +2706,8 @@ namespace Titanium.Web.Proxy.Http2
                         if (isClient && resourceLimits.MaxPeerInitiatedIncompleteStreamResets.HasValue &&
                             !connectionState.ClientResetBudgetExceeded)
                         {
-                            var resetBudgetMode = args.Server.PolicyModes[PolicyFamily.Http2AbuseBudget];
+                            var resetBudgetMode = args?.Server.PolicyModes[PolicyFamily.Http2AbuseBudget]
+                                ?? PolicyMode.Enforce;
                             var resetCount = Interlocked.Increment(ref connectionState.ClientIncompleteStreamResetCount);
                             if (resetBudgetMode != PolicyMode.Disabled &&
                                 resetCount > resourceLimits.MaxPeerInitiatedIncompleteStreamResets.Value)
@@ -2521,9 +2752,16 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 if (endStream && rr == null)
-                    throw new InvalidOperationException("An HTTP/2 end-stream frame has no request or response.");
+                {
+                    var compressedEndStream = existingStreamState?.IsCompressedRelay == true
+                        || (connectionState.Streams.TryGetValue(streamId, out var endStreamState)
+                            && endStreamState.IsCompressedRelay);
+                    if (!compressedEndStream)
+                        throw new InvalidOperationException(
+                            "An HTTP/2 end-stream frame has no request or response.");
+                }
 
-                if (endStream && rr!.ReadHttp2BodyTaskCompletionSource != null)
+                if (endStream && rr != null && rr.ReadHttp2BodyTaskCompletionSource != null)
                 {
                     if (!rr.BodyAvailable)
                     {
@@ -3765,6 +4003,19 @@ namespace Titanium.Web.Proxy.Http2
 
                 await SendData(frameHeader, frameHeaderBuffer, streamId, Array.Empty<byte>(), true,
                     SafeMaxFrameSize, flow, clientStream, cancellationToken, clientWriteLock);
+            }
+        }
+
+        /// <summary>
+        ///     HPACK listener that discards decoded headers. Used on the compressed-relay path so the
+        ///     connection-scoped dynamic table stays in sync without allocating a <see cref="HeaderCollection"/>.
+        /// </summary>
+        private sealed class NoOpHeaderListener : IHeaderListener
+        {
+            public static readonly NoOpHeaderListener Instance = new();
+
+            public void AddHeader(ByteString name, ByteString value, bool sensitive)
+            {
             }
         }
 
