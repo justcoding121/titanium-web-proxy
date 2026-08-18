@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Struct HttpInterceptionContext | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Struct HttpInterceptionContext | Titanium Web Proxy ">
+    
+    <meta name="description" content="Minimal, read-only context passed to  to let callers route requests to the fast-forward path or the full interception path without materialising a .">
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+
+        <div id="search-results">
+          <div class="search-list">Search Results for <span></span></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext">
+
+
+
+  <h1 id="Titanium_Web_Proxy_Models_HttpInterceptionContext" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext" class="text-break">Struct HttpInterceptionContext</h1>
+  <div class="markdown level0 summary"><p>Minimal, read-only context passed to <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ShouldInterceptHttp">ShouldInterceptHttp</a>
+to let callers route requests to the fast-forward path or the full interception path
+without materialising a <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html">SessionEventArgs</a>.</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <div class="inheritedMembers">
+    <h5>Inherited Members</h5>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.valuetype.equals">ValueType.Equals(object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.valuetype.gethashcode">ValueType.GetHashCode()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.valuetype.tostring">ValueType.ToString()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object-system-object)">object.Equals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gettype">object.GetType()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.referenceequals">object.ReferenceEquals(object, object)</a>
+    </div>
+  </div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Titanium.html">Titanium</a>.<a class="xref" href="Titanium.Web.html">Web</a>.<a class="xref" href="Titanium.Web.Proxy.html">Proxy</a>.<a class="xref" href="Titanium.Web.Proxy.Models.html">Models</a></h6>
+  <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
+  <h5 id="Titanium_Web_Proxy_Models_HttpInterceptionContext_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public readonly struct HttpInterceptionContext</code></pre>
+  </div>
+  <h3 id="properties">Properties
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_HttpInterceptionContext_ClientProcessId.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientProcessId%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/HttpInterceptionContext.cs/#L38">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Models_HttpInterceptionContext_ClientProcessId_" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientProcessId*"></a>
+  <h4 id="Titanium_Web_Proxy_Models_HttpInterceptionContext_ClientProcessId" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientProcessId">ClientProcessId</h4>
+  <div class="markdown level1 summary"><p>Process ID of the local client (explicit proxy / Windows only; null otherwise).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int? ClientProcessId { get; init; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_HttpInterceptionContext_ClientRemoteEndPoint.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientRemoteEndPoint%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/HttpInterceptionContext.cs/#L35">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Models_HttpInterceptionContext_ClientRemoteEndPoint_" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientRemoteEndPoint*"></a>
+  <h4 id="Titanium_Web_Proxy_Models_HttpInterceptionContext_ClientRemoteEndPoint" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientRemoteEndPoint">ClientRemoteEndPoint</h4>
+  <div class="markdown level1 summary"><p>Remote IP endpoint of the connected client (null when unavailable).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public IPEndPoint? ClientRemoteEndPoint { get; init; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.net.ipendpoint">IPEndPoint</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_HttpInterceptionContext_Hostname.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.HttpInterceptionContext.Hostname%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/HttpInterceptionContext.cs/#L14">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Models_HttpInterceptionContext_Hostname_" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.Hostname*"></a>
+  <h4 id="Titanium_Web_Proxy_Models_HttpInterceptionContext_Hostname" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.Hostname">Hostname</h4>
+  <div class="markdown level1 summary"><p>Target hostname (from Host / :authority), no port, no userinfo.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public string Hostname { get; init; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_HttpInterceptionContext_HttpVersion.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.HttpInterceptionContext.HttpVersion%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/HttpInterceptionContext.cs/#L29">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Models_HttpInterceptionContext_HttpVersion_" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.HttpVersion*"></a>
+  <h4 id="Titanium_Web_Proxy_Models_HttpInterceptionContext_HttpVersion" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.HttpVersion">HttpVersion</h4>
+  <div class="markdown level1 summary"><p>HTTP version (1.1 / 2.0 / 3.0).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Version HttpVersion { get; init; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.version">Version</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_HttpInterceptionContext_IsHttps.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.HttpInterceptionContext.IsHttps%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/HttpInterceptionContext.cs/#L20">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Models_HttpInterceptionContext_IsHttps_" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.IsHttps*"></a>
+  <h4 id="Titanium_Web_Proxy_Models_HttpInterceptionContext_IsHttps" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.IsHttps">IsHttps</h4>
+  <div class="markdown level1 summary"><p>True when the connection is over TLS.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool IsHttps { get; init; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_HttpInterceptionContext_Method.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.HttpInterceptionContext.Method%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/HttpInterceptionContext.cs/#L23">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Models_HttpInterceptionContext_Method_" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.Method*"></a>
+  <h4 id="Titanium_Web_Proxy_Models_HttpInterceptionContext_Method" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.Method">Method</h4>
+  <div class="markdown level1 summary"><p>HTTP method (GET, POST, CONNECT, …).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public string Method { get; init; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_HttpInterceptionContext_PathAndQuery.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.HttpInterceptionContext.PathAndQuery%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/HttpInterceptionContext.cs/#L26">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Models_HttpInterceptionContext_PathAndQuery_" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.PathAndQuery*"></a>
+  <h4 id="Titanium_Web_Proxy_Models_HttpInterceptionContext_PathAndQuery" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.PathAndQuery">PathAndQuery</h4>
+  <div class="markdown level1 summary"><p>Path and query only (no scheme/authority).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public string PathAndQuery { get; init; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_HttpInterceptionContext_Port.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.HttpInterceptionContext.Port%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/HttpInterceptionContext.cs/#L17">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Models_HttpInterceptionContext_Port_" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.Port*"></a>
+  <h4 id="Titanium_Web_Proxy_Models_HttpInterceptionContext_Port" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.Port">Port</h4>
+  <div class="markdown level1 summary"><p>Target port (80, 443, or explicit).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int Port { get; init; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_HttpInterceptionContext_ProxyEndPoint.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.HttpInterceptionContext.ProxyEndPoint%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/HttpInterceptionContext.cs/#L32">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Models_HttpInterceptionContext_ProxyEndPoint_" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.ProxyEndPoint*"></a>
+  <h4 id="Titanium_Web_Proxy_Models_HttpInterceptionContext_ProxyEndPoint" data-uid="Titanium.Web.Proxy.Models.HttpInterceptionContext.ProxyEndPoint">ProxyEndPoint</h4>
+  <div class="markdown level1 summary"><p>The proxy endpoint that accepted this connection.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public ProxyEndPoint ProxyEndPoint { get; init; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.ProxyEndPoint.html">ProxyEndPoint</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_HttpInterceptionContext.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.HttpInterceptionContext%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/HttpInterceptionContext.cs/#L11" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

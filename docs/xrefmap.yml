@@ -4667,6 +4667,129 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.HttpHeader.Value
   nameWithType: HttpHeader.Value
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext
+  name: HttpInterceptionContext
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html
+  commentId: T:Titanium.Web.Proxy.Models.HttpInterceptionContext
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext
+  nameWithType: HttpInterceptionContext
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientProcessId
+  name: ClientProcessId
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_ClientProcessId
+  commentId: P:Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientProcessId
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientProcessId
+  nameWithType: HttpInterceptionContext.ClientProcessId
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientProcessId*
+  name: ClientProcessId
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_ClientProcessId_
+  commentId: Overload:Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientProcessId
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientProcessId
+  nameWithType: HttpInterceptionContext.ClientProcessId
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientRemoteEndPoint
+  name: ClientRemoteEndPoint
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_ClientRemoteEndPoint
+  commentId: P:Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientRemoteEndPoint
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientRemoteEndPoint
+  nameWithType: HttpInterceptionContext.ClientRemoteEndPoint
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientRemoteEndPoint*
+  name: ClientRemoteEndPoint
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_ClientRemoteEndPoint_
+  commentId: Overload:Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientRemoteEndPoint
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.ClientRemoteEndPoint
+  nameWithType: HttpInterceptionContext.ClientRemoteEndPoint
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.Hostname
+  name: Hostname
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_Hostname
+  commentId: P:Titanium.Web.Proxy.Models.HttpInterceptionContext.Hostname
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.Hostname
+  nameWithType: HttpInterceptionContext.Hostname
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.Hostname*
+  name: Hostname
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_Hostname_
+  commentId: Overload:Titanium.Web.Proxy.Models.HttpInterceptionContext.Hostname
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.Hostname
+  nameWithType: HttpInterceptionContext.Hostname
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.HttpVersion
+  name: HttpVersion
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_HttpVersion
+  commentId: P:Titanium.Web.Proxy.Models.HttpInterceptionContext.HttpVersion
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.HttpVersion
+  nameWithType: HttpInterceptionContext.HttpVersion
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.HttpVersion*
+  name: HttpVersion
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_HttpVersion_
+  commentId: Overload:Titanium.Web.Proxy.Models.HttpInterceptionContext.HttpVersion
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.HttpVersion
+  nameWithType: HttpInterceptionContext.HttpVersion
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.IsHttps
+  name: IsHttps
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_IsHttps
+  commentId: P:Titanium.Web.Proxy.Models.HttpInterceptionContext.IsHttps
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.IsHttps
+  nameWithType: HttpInterceptionContext.IsHttps
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.IsHttps*
+  name: IsHttps
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_IsHttps_
+  commentId: Overload:Titanium.Web.Proxy.Models.HttpInterceptionContext.IsHttps
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.IsHttps
+  nameWithType: HttpInterceptionContext.IsHttps
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.Method
+  name: Method
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_Method
+  commentId: P:Titanium.Web.Proxy.Models.HttpInterceptionContext.Method
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.Method
+  nameWithType: HttpInterceptionContext.Method
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.Method*
+  name: Method
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_Method_
+  commentId: Overload:Titanium.Web.Proxy.Models.HttpInterceptionContext.Method
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.Method
+  nameWithType: HttpInterceptionContext.Method
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.PathAndQuery
+  name: PathAndQuery
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_PathAndQuery
+  commentId: P:Titanium.Web.Proxy.Models.HttpInterceptionContext.PathAndQuery
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.PathAndQuery
+  nameWithType: HttpInterceptionContext.PathAndQuery
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.PathAndQuery*
+  name: PathAndQuery
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_PathAndQuery_
+  commentId: Overload:Titanium.Web.Proxy.Models.HttpInterceptionContext.PathAndQuery
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.PathAndQuery
+  nameWithType: HttpInterceptionContext.PathAndQuery
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.Port
+  name: Port
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_Port
+  commentId: P:Titanium.Web.Proxy.Models.HttpInterceptionContext.Port
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.Port
+  nameWithType: HttpInterceptionContext.Port
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.Port*
+  name: Port
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_Port_
+  commentId: Overload:Titanium.Web.Proxy.Models.HttpInterceptionContext.Port
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.Port
+  nameWithType: HttpInterceptionContext.Port
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.ProxyEndPoint
+  name: ProxyEndPoint
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_ProxyEndPoint
+  commentId: P:Titanium.Web.Proxy.Models.HttpInterceptionContext.ProxyEndPoint
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.ProxyEndPoint
+  nameWithType: HttpInterceptionContext.ProxyEndPoint
+- uid: Titanium.Web.Proxy.Models.HttpInterceptionContext.ProxyEndPoint*
+  name: ProxyEndPoint
+  href: api/Titanium.Web.Proxy.Models.HttpInterceptionContext.html#Titanium_Web_Proxy_Models_HttpInterceptionContext_ProxyEndPoint_
+  commentId: Overload:Titanium.Web.Proxy.Models.HttpInterceptionContext.ProxyEndPoint
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.HttpInterceptionContext.ProxyEndPoint
+  nameWithType: HttpInterceptionContext.ProxyEndPoint
 - uid: Titanium.Web.Proxy.Models.IExternalProxy
   name: IExternalProxy
   href: api/Titanium.Web.Proxy.Models.IExternalProxy.html
@@ -4954,6 +5077,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.DecryptSsl
   nameWithType: ProxyEndPoint.DecryptSsl
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.EnableHttpInterception
+  name: EnableHttpInterception
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_EnableHttpInterception
+  commentId: P:Titanium.Web.Proxy.Models.ProxyEndPoint.EnableHttpInterception
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.EnableHttpInterception
+  nameWithType: ProxyEndPoint.EnableHttpInterception
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.EnableHttpInterception*
+  name: EnableHttpInterception
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_EnableHttpInterception_
+  commentId: Overload:Titanium.Web.Proxy.Models.ProxyEndPoint.EnableHttpInterception
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.EnableHttpInterception
+  nameWithType: ProxyEndPoint.EnableHttpInterception
 - uid: Titanium.Web.Proxy.Models.ProxyEndPoint.GenericCertificate
   name: GenericCertificate
   href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_GenericCertificate
@@ -6714,6 +6850,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOpenHeaderBlockFrames
   nameWithType: ProxyResourceLimits.MaxOpenHeaderBlockFrames
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority
+  name: MaxOriginHttp2ConnectionsPerAuthority
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxOriginHttp2ConnectionsPerAuthority
+  commentId: P:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority
+  nameWithType: ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority*
+  name: MaxOriginHttp2ConnectionsPerAuthority
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxOriginHttp2ConnectionsPerAuthority_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority
+  nameWithType: ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority
 - uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxPeerInitiatedIncompleteStreamResets
   name: MaxPeerInitiatedIncompleteStreamResets
   href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxPeerInitiatedIncompleteStreamResets
@@ -6743,6 +6892,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithCertificateCacheBounds
   nameWithType: ProxyResourceLimits.WithCertificateCacheBounds
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxOriginHttp2ConnectionsPerAuthority(System.Int32)
+  name: WithMaxOriginHttp2ConnectionsPerAuthority(int)
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithMaxOriginHttp2ConnectionsPerAuthority_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxOriginHttp2ConnectionsPerAuthority(System.Int32)
+  name.vb: WithMaxOriginHttp2ConnectionsPerAuthority(Integer)
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxOriginHttp2ConnectionsPerAuthority(int)
+  fullName.vb: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxOriginHttp2ConnectionsPerAuthority(Integer)
+  nameWithType: ProxyResourceLimits.WithMaxOriginHttp2ConnectionsPerAuthority(int)
+  nameWithType.vb: ProxyResourceLimits.WithMaxOriginHttp2ConnectionsPerAuthority(Integer)
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxOriginHttp2ConnectionsPerAuthority*
+  name: WithMaxOriginHttp2ConnectionsPerAuthority
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithMaxOriginHttp2ConnectionsPerAuthority_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxOriginHttp2ConnectionsPerAuthority
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxOriginHttp2ConnectionsPerAuthority
+  nameWithType: ProxyResourceLimits.WithMaxOriginHttp2ConnectionsPerAuthority
 - uid: Titanium.Web.Proxy.Options.ProxyTimeoutOptions
   name: ProxyTimeoutOptions
   href: api/Titanium.Web.Proxy.Options.ProxyTimeoutOptions.html
@@ -7389,6 +7554,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.EnableHttp3
   nameWithType: ProxyServer.EnableHttp3
+- uid: Titanium.Web.Proxy.ProxyServer.EnableHttpInterception
+  name: EnableHttpInterception
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableHttpInterception
+  commentId: P:Titanium.Web.Proxy.ProxyServer.EnableHttpInterception
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableHttpInterception
+  nameWithType: ProxyServer.EnableHttpInterception
+- uid: Titanium.Web.Proxy.ProxyServer.EnableHttpInterception*
+  name: EnableHttpInterception
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableHttpInterception_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.EnableHttpInterception
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableHttpInterception
+  nameWithType: ProxyServer.EnableHttpInterception
 - uid: Titanium.Web.Proxy.ProxyServer.EnableHttpsSvcbDnsDiscovery
   name: EnableHttpsSvcbDnsDiscovery
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableHttpsSvcbDnsDiscovery
@@ -8043,6 +8221,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy
   nameWithType: ProxyServer.SetAsSystemProxy
+- uid: Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp
+  name: ShouldInterceptHttp
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ShouldInterceptHttp
+  commentId: P:Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp
+  fullName: Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp
+  nameWithType: ProxyServer.ShouldInterceptHttp
+- uid: Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp*
+  name: ShouldInterceptHttp
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ShouldInterceptHttp_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp
+  nameWithType: ProxyServer.ShouldInterceptHttp
 - uid: Titanium.Web.Proxy.ProxyServer.Start(System.Boolean)
   name: Start(bool)
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_Start_System_Boolean_
