@@ -95,16 +95,19 @@ namespace Titanium.Web.Proxy.Http2
             var frameHeader = new Http2FrameHeader();
             var frameHeaderBuffer = new byte[9];
 
-            // SETTINGS with ENABLE_PUSH=0 (6-byte payload) for proxy-owned origin connections.
+            // SETTINGS: ENABLE_PUSH=0 + HEADER_TABLE_SIZE=0 (static-table-only for compressed relay /
+            // origin connections the proxy owns).
             frameHeader.StreamId = 0;
             frameHeader.Type = Http2FrameType.Settings;
             frameHeader.Flags = 0;
-            frameHeader.Length = 6;
+            frameHeader.Length = 12;
             frameHeader.CopyToBuffer(frameHeaderBuffer);
 
-            var settingsPayload = new byte[6];
-            BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(0, 2), (ushort)Http2SettingsId.EnablePush);
+            var settingsPayload = new byte[12];
+            BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(0, 2), (ushort)Http2SettingsId.HeaderTableSize);
             BinaryPrimitives.WriteUInt32BigEndian(settingsPayload.AsSpan(2, 4), 0);
+            BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(6, 2), (ushort)Http2SettingsId.EnablePush);
+            BinaryPrimitives.WriteUInt32BigEndian(settingsPayload.AsSpan(8, 4), 0);
 
             await originStream.WriteAsync(frameHeaderBuffer, cancellationToken);
             await originStream.WriteAsync(settingsPayload, cancellationToken);
@@ -211,27 +214,67 @@ namespace Titanium.Web.Proxy.Http2
             ProxyResourceLimits? resourceLimits = null,
             TcpServerConnection? originConnection = null,
             bool httpInterceptionEnabled = true,
-            Func<HttpInterceptionContext, bool>? shouldInterceptHttp = null)
+            Func<HttpInterceptionContext, bool>? shouldInterceptHttp = null,
+            Func<CancellationToken, Task<TcpServerConnection>>? openOriginConnectionAsync = null)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
             var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource);
+
+            // Dedicated writers (share the direction locks so control-frame paths cannot interleave).
+            connectionState.ClientFrameWriter =
+                new Http2FrameWriter(clientStream, connectionState.ClientWriteLock);
+            connectionState.ServerFrameWriter =
+                new Http2FrameWriter(serverStream, connectionState.ServerWriteLock);
+
+            Http2OriginRelayPool? originPool = null;
+            var useMultiOrigin = !httpInterceptionEnabled
+                && originConnection != null
+                && openOriginConnectionAsync != null
+                && resourceLimits.MaxOriginHttp2ConnectionsPerAuthority > 1
+                && serverStream is not NullOriginStream;
+
+            if (useMultiOrigin)
+            {
+                // Primary leg reuses ServerWriteLock / ServerFrameWriter's stream; dispose the
+                // connection-level server writer so only the pool's primary Writer owns that direction.
+                try { await connectionState.ServerFrameWriter.DisposeAsync(); }
+                catch { /* ignore */ }
+                connectionState.ServerFrameWriter = null;
+
+                originPool = new Http2OriginRelayPool(originConnection!, openOriginConnectionAsync!,
+                    resourceLimits, logger, connectionState.ServerWriteLock);
+                connectionState.OriginRelayPool = originPool;
+            }
 
             // Do NOT send connection WINDOW_UPDATE toward the client before the first SETTINGS frame.
             // Strict peers (including .NET HttpClient/Kestrel) treat a non-SETTINGS first frame as a
             // PROTOCOL_ERROR — the same failure mode as InitialOriginWindowUpdateSent toward origins.
             // Client connection credit is sent immediately after ServerSettingsRelayed below.
 
-            // Now async relay all server=>client & client=>server data
             var sendRelay =
                 CopyHttp2FrameAsync(clientStream, serverStream, connectionState,
                     sessionFactory, onBeforeRequest, onAfterResponse, prepareRequestHeaders, true,
                     cancellationTokenSource.Token, logger, maxDecodedHeaderListBytes, enableRfc8441,
                     resourceLimits, originConnection, httpInterceptionEnabled, shouldInterceptHttp);
-            var receiveRelay =
-                CopyHttp2FrameAsync(serverStream, clientStream, connectionState,
-                    sessionFactory, onBeforeResponse, onAfterResponse, null, false, cancellationTokenSource.Token,
-                    logger, maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, originConnection,
-                    httpInterceptionEnabled, shouldInterceptHttp);
+
+            Task receiveRelay;
+            if (originPool != null)
+            {
+                // Each origin leg has its own read loop; remaps origin stream ids back to the client.
+                receiveRelay = RunMultiOriginReceiveAsync(clientStream, connectionState, originPool,
+                    sessionFactory, onBeforeResponse, onAfterResponse, cancellationTokenSource.Token, logger,
+                    maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, httpInterceptionEnabled,
+                    shouldInterceptHttp);
+            }
+            else
+            {
+                receiveRelay =
+                    CopyHttp2FrameAsync(serverStream, clientStream, connectionState,
+                        sessionFactory, onBeforeResponse, onAfterResponse, null, false,
+                        cancellationTokenSource.Token,
+                        logger, maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, originConnection,
+                        httpInterceptionEnabled, shouldInterceptHttp);
+            }
 
             await Task.WhenAny(sendRelay, receiveRelay);
             await cancellationTokenSource.CancelAsync();
@@ -243,6 +286,23 @@ namespace Titanium.Web.Proxy.Http2
             catch { /* relay already faulted / cancelled */ }
             try { await connectionState.ClientWriteChain; }
             catch { /* relay already faulted / cancelled */ }
+            if (connectionState.ClientFrameWriter != null)
+            {
+                try { await connectionState.ClientFrameWriter.DisposeAsync(); }
+                catch { /* ignore */ }
+            }
+
+            if (connectionState.ServerFrameWriter != null)
+            {
+                try { await connectionState.ServerFrameWriter.DisposeAsync(); }
+                catch { /* ignore */ }
+            }
+
+            if (originPool != null)
+            {
+                try { await originPool.DisposeAsync(); }
+                catch { /* ignore */ }
+            }
 
             // Both relay directions have stopped (client/server disconnect, cancellation, or an
             // unrecoverable protocol error); any stream that never reached a normal end-stream/RST_STREAM
@@ -269,6 +329,98 @@ namespace Titanium.Web.Proxy.Http2
             if (!connectionState.PendingFinalizations.IsEmpty)
             {
                 await Task.WhenAll(connectionState.PendingFinalizations.ToArray());
+            }
+        }
+
+        private static async Task RunMultiOriginReceiveAsync( // NOSONAR S107
+            Stream clientStream,
+            Http2ConnectionState connectionState,
+            Http2OriginRelayPool originPool,
+            Func<SessionEventArgs> sessionFactory,
+            Func<SessionEventArgs, Http2StreamContext, Task> onBeforeResponse,
+            Func<SessionEventArgs, Task> onAfterResponse,
+            CancellationToken cancellationToken,
+            ILogger logger,
+            int maxDecodedHeaderListBytes,
+            bool enableRfc8441,
+            ProxyResourceLimits resourceLimits,
+            bool httpInterceptionEnabled,
+            Func<HttpInterceptionContext, bool>? shouldInterceptHttp)
+        {
+            var tasks = new ConcurrentDictionary<Http2OriginRelayPool.OriginLeg, Task>();
+
+            void EnsureLegReceive(Http2OriginRelayPool.OriginLeg leg)
+            {
+                tasks.GetOrAdd(leg, l => CopyHttp2FrameAsync(l.Stream, clientStream, connectionState,
+                    sessionFactory, onBeforeResponse, onAfterResponse, null, false, cancellationToken,
+                    logger, maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, null,
+                    httpInterceptionEnabled, shouldInterceptHttp, originReceiveLeg: l));
+            }
+
+            foreach (var leg in originPool.SnapshotLegs())
+                EnsureLegReceive(leg);
+
+            try
+            {
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    foreach (var leg in originPool.SnapshotLegs())
+                        EnsureLegReceive(leg);
+
+                    var running = tasks.Values.ToArray();
+                    if (running.Length == 0)
+                    {
+                        await Task.Delay(1, cancellationToken).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    // Poll so newly opened overflow legs get a receive loop without waiting for an
+                    // existing leg to finish (AssignStreamAsync can open legs while primary is busy).
+                    var poll = Task.Delay(5, cancellationToken);
+                    var completed = await Task.WhenAny(running.Append(poll)).ConfigureAwait(false);
+                    if (ReferenceEquals(completed, poll))
+                        continue;
+
+                    Http2OriginRelayPool.OriginLeg? completedLeg = null;
+                    foreach (var kvp in tasks)
+                    {
+                        if (ReferenceEquals(kvp.Value, completed))
+                        {
+                            completedLeg = kvp.Key;
+                            break;
+                        }
+                    }
+
+                    if (completedLeg != null)
+                        tasks.TryRemove(completedLeg, out _);
+
+                    var primaryEnded = completedLeg != null
+                        && ReferenceEquals(completedLeg, originPool.PrimaryLeg);
+
+                    try
+                    {
+                        await completed.ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+                    catch (Exception ex) when (!primaryEnded)
+                    {
+                        logger.LogDebug(ex, "Overflow origin HTTP/2 receive ended");
+                    }
+
+                    if (primaryEnded)
+                        return;
+                }
+            }
+            finally
+            {
+                foreach (var t in tasks.Values)
+                {
+                    try { await t.ConfigureAwait(false); }
+                    catch { /* shutting down */ }
+                }
             }
         }
 
@@ -350,7 +502,8 @@ namespace Titanium.Web.Proxy.Http2
             ProxyResourceLimits? resourceLimits = null,
             TcpServerConnection? originConnection = null,
             bool httpInterceptionEnabled = true,
-            Func<HttpInterceptionContext, bool>? shouldInterceptHttp = null)
+            Func<HttpInterceptionContext, bool>? shouldInterceptHttp = null,
+            Http2OriginRelayPool.OriginLeg? originReceiveLeg = null)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
             var cancellationTokenSource = connectionState.CancellationTokenSource;
@@ -384,11 +537,18 @@ namespace Titanium.Web.Proxy.Http2
 
             // The lock protecting every write onto `input` itself (same-leg replies: PING ACK, WINDOW_UPDATE
             // receive-credit grants, RST_STREAM for a malformed block).
-            var ownLegWriteLock = isClient ? connectionState.ClientWriteLock : connectionState.ServerWriteLock;
+            var ownLegWriteLock = originReceiveLeg != null
+                ? originReceiveLeg.WriteLock
+                : (isClient ? connectionState.ClientWriteLock : connectionState.ServerWriteLock);
 
             // The lock protecting every write onto `output` (shared with the other task, which reads from
             // `output`'s peer and may itself need to reply directly on it).
             var outputWriteLock = isClient ? connectionState.ServerWriteLock : connectionState.ClientWriteLock;
+
+            // Multi-origin overflow legs must not forward connection-level frames to the client.
+            var suppressConnectionFrameRelay = originReceiveLeg != null
+                && connectionState.OriginRelayPool != null
+                && !ReferenceEquals(originReceiveLeg, connectionState.OriginRelayPool.PrimaryLeg);
 
             int headerTableSize = 0;
             Decoder? decoder = null;
@@ -552,6 +712,8 @@ namespace Titanium.Web.Proxy.Http2
                     _ = GrantReceiveCreditLockedAsync(removeStreamId, 0, leftover);
                 }
 
+                connectionState.OriginRelayPool?.ReleaseStream(removeStreamId);
+
                 if (connectionState.Streams.TryRemove(removeStreamId, out var removedState))
                 {
                     connectionState.MultipartObservers.TryRemove(removeStreamId, out _);
@@ -603,13 +765,36 @@ namespace Titanium.Web.Proxy.Http2
                     throw;
                 }
 
-                var relayFrameHeader = new Http2FrameHeader { StreamId = hbStreamId };
+                var wireStreamId = hbStreamId;
+                Http2FrameWriter? dedicatedWriter = null;
+                SemaphoreSlim writeLock = outputWriteLock;
+                Stream writeStream = output;
+                var towardServer = isClient;
+
+                if (isClient && connectionState.OriginRelayPool != null)
+                {
+                    var assignment = await connectionState.OriginRelayPool
+                        .AssignStreamAsync(hbStreamId, cancellationToken).ConfigureAwait(false);
+                    wireStreamId = assignment.OriginStreamId;
+                    dedicatedWriter = assignment.Leg.Writer;
+                    writeStream = assignment.Leg.Stream;
+                }
+                else if (!isClient && originReceiveLeg != null)
+                {
+                    // Origin → client: hbStreamId is already remapped to the client stream id by the caller.
+                    dedicatedWriter = connectionState.ClientFrameWriter;
+                }
+
+                var relayFrameHeader = new Http2FrameHeader { StreamId = wireStreamId };
                 var relayFrameHeaderBuffer = new byte[9];
-                var framed = RentFramedHeaderBlock(relayFrameHeader, relayFrameHeaderBuffer, hbStreamId,
+                var framed = RentFramedHeaderBlock(relayFrameHeader, relayFrameHeaderBuffer, wireStreamId,
                     Http2FrameType.Headers, endStreamFlag, hasPriority: false, compressed,
                     remoteSettings.MaxFrameSize);
-                connectionState.EnqueueWriteRented(towardServer: isClient, outputWriteLock, output,
-                    framed.Array!, framed.Count);
+                if (dedicatedWriter != null)
+                    dedicatedWriter.EnqueueRented(framed.Array!, framed.Count);
+                else
+                    connectionState.EnqueueWriteRented(towardServer, writeLock, writeStream,
+                        framed.Array!, framed.Count);
             }
 
             // Decodes one fully-assembled HEADERS(+CONTINUATION...) block (already stripped of padding/
@@ -1470,6 +1655,9 @@ namespace Titanium.Web.Proxy.Http2
                 int streamId = ((frameHeaderBuffer[5] & 0x7f) << 24) + (frameHeaderBuffer[6] << 16) +
                                (frameHeaderBuffer[7] << 8) + frameHeaderBuffer[8];
 
+                // Wire id on `input` (origin stream id when reading an origin leg).
+                int peerStreamId = streamId;
+
                 frameHeader.Length = length;
                 frameHeader.Type = type;
                 frameHeader.Flags = flags;
@@ -1532,6 +1720,31 @@ namespace Titanium.Web.Proxy.Http2
                 {
                     await TrySendGracefulGoAwayAsync();
                     return;
+                }
+
+                if (originReceiveLeg != null && peerStreamId != 0)
+                {
+                    if (!originReceiveLeg.OriginToClient.TryGetValue(peerStreamId, out var clientStreamId))
+                    {
+                        if (type == Http2FrameType.Data)
+                            await GrantReceiveCreditAsync(peerStreamId, length, forceFlush: true);
+
+                        if (type is Http2FrameType.Data or Http2FrameType.Headers or Http2FrameType.RstStream
+                            or Http2FrameType.Continuation or Http2FrameType.Priority)
+                        {
+                            await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                peerStreamId, Http2ErrorCode.StreamClosed, input));
+                        }
+
+                        continue;
+                    }
+
+                    streamId = clientStreamId;
+                    frameHeader.StreamId = streamId;
+                    frameHeaderBuffer[5] = (byte)((streamId >> 24) & 0x7f);
+                    frameHeaderBuffer[6] = (byte)((streamId >> 16) & 0xff);
+                    frameHeaderBuffer[7] = (byte)((streamId >> 8) & 0xff);
+                    frameHeaderBuffer[8] = (byte)(streamId & 0xff);
                 }
 
                 if (type == Http2FrameType.PushPromise)
@@ -1883,7 +2096,8 @@ namespace Titanium.Web.Proxy.Http2
                 {
                     // Passthrough: grant receive credit and forward the frame unchanged (no body API).
                     bool dataEndStream = (flags & Http2FrameFlag.EndStream) != 0;
-                    await GrantReceiveCreditAsync(streamId, length, forceFlush: dataEndStream);
+                    var creditStreamId = originReceiveLeg != null ? peerStreamId : streamId;
+                    await GrantReceiveCreditAsync(creditStreamId, length, forceFlush: dataEndStream);
                     if (dataEndStream)
                         endStream = true;
                     // sendPacket remains true
@@ -2218,16 +2432,17 @@ namespace Titanium.Web.Proxy.Http2
                             return;
                         }
 
-                        await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9], streamId,
-                            Http2ErrorCode.ProtocolError, input));
+                        await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                            peerStreamId, Http2ErrorCode.ProtocolError, input));
                     }
                     else
                     {
-                        // this WINDOW_UPDATE governs how much *this* task's peer will accept - it is
-                        // consumed here as internal bookkeeping for the *other* relay task's writes toward
-                        // that same peer, never forwarded onward as a frame itself.
-                        var flow = isClient ? connectionState.ClientSendFlow : connectionState.ServerSendFlow;
-                        bool overflow = flow.OnWindowUpdate(streamId, increment);
+                        // Multi-origin: each origin leg has its own send window (peer ids).
+                        var flow = originReceiveLeg != null
+                            ? originReceiveLeg.SendFlow
+                            : (isClient ? connectionState.ClientSendFlow : connectionState.ServerSendFlow);
+                        var flowStreamId = originReceiveLeg != null ? peerStreamId : streamId;
+                        bool overflow = flow.OnWindowUpdate(flowStreamId, increment);
                         if (overflow)
                         {
                             // RFC 7540 ?6.9.1: a WINDOW_UPDATE that drives a flow-control window above
@@ -2236,7 +2451,7 @@ namespace Titanium.Web.Proxy.Http2
                             ReportException(logger, new ProxyHttpException(
                                 "HTTP/2 protocol error: WINDOW_UPDATE increment overflowed the flow-control window.",
                                 null, args));
-                            if (streamId == 0)
+                            if (flowStreamId == 0)
                             {
                                 await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], 0,
                                     Http2ErrorCode.FlowControlError, input));
@@ -2244,7 +2459,7 @@ namespace Titanium.Web.Proxy.Http2
                             }
 
                             await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
-                                streamId, Http2ErrorCode.FlowControlError, input));
+                                peerStreamId, Http2ErrorCode.FlowControlError, input));
                         }
                     }
                 }
@@ -2286,7 +2501,8 @@ namespace Titanium.Web.Proxy.Http2
                 }
                 else if (type == Http2FrameType.GoAway)
                 {
-                    sendPacket = true; // still let the true endpoint learn the connection is going away.
+                    // Overflow origin GOAWAY must not tear down the client session.
+                    sendPacket = !suppressConnectionFrameRelay;
 
                     if (length >= 8)
                     {
@@ -2296,7 +2512,7 @@ namespace Titanium.Web.Proxy.Http2
                             connectionState.ClientGoingAway = true;
                             connectionState.ClientLastStreamId = lastStreamId;
                         }
-                        else
+                        else if (!suppressConnectionFrameRelay)
                         {
                             connectionState.ServerGoingAway = true;
                             connectionState.ServerLastStreamId = lastStreamId;
@@ -2305,6 +2521,8 @@ namespace Titanium.Web.Proxy.Http2
                         // unblock any stream-scoped waiter (synthetic response task, etc.) for streams the
                         // sender has already said it will not process, without tearing down the streams
                         // that are still permitted to drain.
+                        if (!suppressConnectionFrameRelay)
+                        {
                         foreach (var kvp in connectionState.Streams)
                         {
                             if (kvp.Key > lastStreamId)
@@ -2318,6 +2536,7 @@ namespace Titanium.Web.Proxy.Http2
                                 await kvp.Value.Cancellation.CancelAsync();
                                 kvp.Value.Cancellation.Dispose();
                             }
+                        }
                         }
                     }
                 }
@@ -2415,10 +2634,12 @@ namespace Titanium.Web.Proxy.Http2
                                 // this peer is telling us the initial send-window it grants us for streams
                                 // we open toward it - i.e. it feeds the SEND flow controller for writes
                                 // toward *this* peer, symmetrically with WINDOW_UPDATE above.
-                                var flow = isClient ? connectionState.ClientSendFlow : connectionState.ServerSendFlow;
+                                var flow = originReceiveLeg != null
+                                    ? originReceiveLeg.SendFlow
+                                    : (isClient ? connectionState.ClientSendFlow : connectionState.ServerSendFlow);
                                 flow.OnInitialWindowSizeChanged((int)value);
 
-                                if (!isClient && value < ClientInitialStreamWindowSize)
+                                if (!isClient && !suppressConnectionFrameRelay && value < ClientInitialStreamWindowSize)
                                 {
                                     // Raise only the stream window *advertised to the client* (wire rewrite).
                                     // Do not change ServerSendFlow — that must reflect the origin's real grant.
@@ -2565,7 +2786,7 @@ namespace Titanium.Web.Proxy.Http2
                         frameHeader.Length = length;
                     }
 
-                    if (!isClient && enableRfc8441 && !sawEnableConnectProtocol &&
+                    if (!isClient && !suppressConnectionFrameRelay && enableRfc8441 && !sawEnableConnectProtocol &&
                         (flags & Http2FrameFlag.Ack) == 0 && length + 6 <= buffer.Length)
                     {
                         // The server's SETTINGS frame did not include ENABLE_CONNECT_PROTOCOL but the proxy
@@ -2582,7 +2803,7 @@ namespace Titanium.Web.Proxy.Http2
                         connectionState.DownstreamAdvertisedEnableConnect = true;
                     }
 
-                    if (!isClient && !sawInitialWindowSize && (flags & Http2FrameFlag.Ack) == 0 &&
+                    if (!isClient && !suppressConnectionFrameRelay && !sawInitialWindowSize && (flags & Http2FrameFlag.Ack) == 0 &&
                         length + 6 <= buffer.Length)
                     {
                         // Origin omitted SETTINGS_INITIAL_WINDOW_SIZE (RFC default 65535). Inject the
@@ -2598,7 +2819,7 @@ namespace Titanium.Web.Proxy.Http2
                         frameHeader.Length = length;
                     }
 
-                    if (!isClient && !sawMaxConcurrentStreams &&
+                    if (!isClient && !suppressConnectionFrameRelay && !sawMaxConcurrentStreams &&
                         resourceLimits.MaxConcurrentStreamsPerConnection < int.MaxValue &&
                         (flags & Http2FrameFlag.Ack) == 0 && length + 6 <= buffer.Length)
                     {
@@ -2619,6 +2840,9 @@ namespace Titanium.Web.Proxy.Http2
                         length += 6;
                         frameHeader.Length = length;
                     }
+
+                    if (suppressConnectionFrameRelay)
+                        sendPacket = false;
                 }
 
                 if (type == Http2FrameType.RstStream)
@@ -2645,6 +2869,7 @@ namespace Titanium.Web.Proxy.Http2
                     // slower hosts where the RST races the client DATA processing.)
                     if (isClient)
                         connectionState.MultipartObservers.TryRemove(streamId, out _);
+                    connectionState.OriginRelayPool?.ReleaseStream(streamId);
                     if (connectionState.Streams.TryRemove(streamId, out var resetStream))
                     {
                         // RFC 8441: if the reset stream is an extended CONNECT tunnel, unblock the relay
@@ -2868,6 +3093,7 @@ namespace Titanium.Web.Proxy.Http2
 
                         if (closingStream.IsClosed)
                         {
+                            connectionState.OriginRelayPool?.ReleaseStream(streamId);
                             connectionState.RemoveStream(streamId);
                             connectionState.PendingFinalizations.Add(
                                 FinalizeStreamAsync(closingStream, onAfterResponse, logger));
@@ -2881,34 +3107,76 @@ namespace Titanium.Web.Proxy.Http2
 
                     if (type == Http2FrameType.Data)
                     {
-                        await outboundFlow.ReserveAsync(streamId, frameLength, cancellationToken);
+                        if (isClient && connectionState.OriginRelayPool != null
+                            && connectionState.OriginRelayPool.TryGetAssignment(streamId, out var dataAssignment))
+                        {
+                            await dataAssignment.Leg.SendFlow
+                                .ReserveAsync(dataAssignment.OriginStreamId, frameLength, cancellationToken)
+                                .ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            await outboundFlow.ReserveAsync(streamId, frameLength, cancellationToken);
+                        }
                     }
 
                     if (type == Http2FrameType.Data)
                     {
                         // Copy and queue so DATA cannot overtake a queued HEADERS write on this direction
                         // (and so the frame loop does not await peer socket I/O on the hot path).
+                        Http2FrameWriter? dedicatedWriter = null;
+                        if (isClient && connectionState.OriginRelayPool != null
+                            && connectionState.OriginRelayPool.TryGetAssignment(streamId, out var assignment))
+                        {
+                            frameHeader.StreamId = assignment.OriginStreamId;
+                            dedicatedWriter = assignment.Leg.Writer;
+                        }
+                        else if (!isClient && originReceiveLeg != null)
+                        {
+                            dedicatedWriter = connectionState.ClientFrameWriter;
+                        }
+
                         frameHeader.CopyToBuffer(frameHeaderBuffer);
                         var wireLen = 9 + frameLength;
                         var rented = ArrayPool<byte>.Shared.Rent(wireLen);
                         frameHeaderBuffer.AsSpan(0, 9).CopyTo(rented);
                         if (frameLength > 0)
                             buffer.AsSpan(0, frameLength).CopyTo(rented.AsSpan(9));
-                        connectionState.EnqueueWriteRented(towardServer: isClient, outputWriteLock, output, rented,
-                            wireLen);
+                        if (dedicatedWriter != null)
+                            dedicatedWriter.EnqueueRented(rented, wireLen);
+                        else
+                            connectionState.EnqueueWriteRented(towardServer: isClient, outputWriteLock, output, rented,
+                                wireLen);
                     }
                     else
                     {
                         // Control frames (SETTINGS/WINDOW_UPDATE/PING/…): await in order so e.g. the
                         // post-SETTINGS connection WINDOW_UPDATE cannot overtake SETTINGS on the wire.
-                        async ValueTask writeFrame()
+                        // Stream-scoped control (RST/PRIORITY) on a remapped multi-origin stream must use
+                        // that leg's writer and origin stream id.
+                        if (isClient && streamId != 0 && connectionState.OriginRelayPool != null
+                            && connectionState.OriginRelayPool.TryGetAssignment(streamId, out var ctrlAssignment))
                         {
+                            frameHeader.StreamId = ctrlAssignment.OriginStreamId;
                             frameHeader.CopyToBuffer(frameHeaderBuffer);
-                            await output.WriteAsync(frameHeaderBuffer.AsMemory(), CancellationToken.None);
-                            await output.WriteAsync(buffer.AsMemory(0, frameLength), CancellationToken.None);
+                            var wireLen = 9 + frameLength;
+                            var rented = ArrayPool<byte>.Shared.Rent(wireLen);
+                            frameHeaderBuffer.AsSpan(0, 9).CopyTo(rented);
+                            if (frameLength > 0)
+                                buffer.AsSpan(0, frameLength).CopyTo(rented.AsSpan(9));
+                            ctrlAssignment.Leg.Writer.EnqueueRented(rented, wireLen);
                         }
+                        else
+                        {
+                            async ValueTask writeFrame()
+                            {
+                                frameHeader.CopyToBuffer(frameHeaderBuffer);
+                                await output.WriteAsync(frameHeaderBuffer.AsMemory(), CancellationToken.None);
+                                await output.WriteAsync(buffer.AsMemory(0, frameLength), CancellationToken.None);
+                            }
 
-                        await lockedOutputWrite(writeFrame);
+                            await lockedOutputWrite(writeFrame);
+                        }
                     }
 
                     // signal once the server's SETTINGS frame has actually reached the client, so a synthetic

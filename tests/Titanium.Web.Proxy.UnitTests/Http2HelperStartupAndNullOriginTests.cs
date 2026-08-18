@@ -17,18 +17,22 @@ public class Http2HelperStartupAndNullOriginTests
         await Http2Helper.SendHttp2ClientConnectionStartupAsync(ms, CancellationToken.None);
 
         var wire = ms.ToArray();
-        // SETTINGS header (9) + 6-byte ENABLE_PUSH payload + WINDOW_UPDATE header (9) + 4-byte increment
-        Assert.AreEqual(28, wire.Length, $"wire hex={Convert.ToHexString(wire)}");
+        // SETTINGS header (9) + 12-byte payload (HEADER_TABLE_SIZE=0, ENABLE_PUSH=0)
+        // + WINDOW_UPDATE header (9) + 4-byte increment
+        Assert.AreEqual(34, wire.Length, $"wire hex={Convert.ToHexString(wire)}");
         Assert.AreEqual((byte)Http2FrameType.Settings, wire[3]);
-        Assert.AreEqual(6, (wire[0] << 16) | (wire[1] << 8) | wire[2]);
+        Assert.AreEqual(12, (wire[0] << 16) | (wire[1] << 8) | wire[2]);
 
-        // ENABLE_PUSH setting id + zero value
-        var settingsId = (wire[9] << 8) | wire[10];
-        Assert.AreEqual((int)Http2SettingsId.EnablePush, settingsId);
+        var headerTableId = (wire[9] << 8) | wire[10];
+        Assert.AreEqual((int)Http2SettingsId.HeaderTableSize, headerTableId);
         Assert.AreEqual(0, (wire[11] << 24) | (wire[12] << 16) | (wire[13] << 8) | wire[14]);
 
-        Assert.AreEqual((byte)Http2FrameType.WindowUpdate, wire[18]);
-        var increment = (wire[24] << 24) | (wire[25] << 16) | (wire[26] << 8) | wire[27];
+        var enablePushId = (wire[15] << 8) | wire[16];
+        Assert.AreEqual((int)Http2SettingsId.EnablePush, enablePushId);
+        Assert.AreEqual(0, (wire[17] << 24) | (wire[18] << 16) | (wire[19] << 8) | wire[20]);
+
+        Assert.AreEqual((byte)Http2FrameType.WindowUpdate, wire[24]);
+        var increment = (wire[30] << 24) | (wire[31] << 16) | (wire[32] << 8) | wire[33];
         Assert.AreEqual(Http2Helper.InitialConnectionWindowIncrement, increment);
     }
 

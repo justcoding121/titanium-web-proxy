@@ -63,6 +63,20 @@ internal sealed class Http2ConnectionState
     /// </summary>
     public SemaphoreSlim ServerWriteLock { get; } = new(1, 1);
 
+    /// <summary>
+    ///     Optional dedicated writers (P0.3). When set, <see cref="EnqueueWriteRented"/> prefers these
+    ///     over the ContinueWith + SemaphoreSlim chain.
+    /// </summary>
+    public Http2FrameWriter? ClientFrameWriter { get; set; }
+
+    public Http2FrameWriter? ServerFrameWriter { get; set; }
+
+    /// <summary>
+    ///     Optional multi-origin pool for gate-off same-protocol H2↔H2. When set, compressed-relay
+    ///     streams are distributed across origin legs with stream-id remapping.
+    /// </summary>
+    public Http2OriginRelayPool? OriginRelayPool { get; set; }
+
     /// <summary>Completed once the server's connection SETTINGS frame has been relayed to the client.</summary>
     public TaskCompletionSource<bool> ServerSettingsRelayed { get; } =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -173,6 +187,13 @@ internal sealed class Http2ConnectionState
     public void EnqueueWriteRented(bool towardServer, SemaphoreSlim writeLock, Stream output, byte[] rented,
         int length)
     {
+        var dedicated = towardServer ? ServerFrameWriter : ClientFrameWriter;
+        if (dedicated != null)
+        {
+            dedicated.EnqueueRented(rented, length);
+            return;
+        }
+
         Func<Task> body = async () =>
         {
             await writeLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);

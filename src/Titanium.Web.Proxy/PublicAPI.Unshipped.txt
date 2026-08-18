@@ -24,7 +24,9 @@ Titanium.Web.Proxy.Network.CertificateManager.LeafCertificateKeyAlgorithm.set ->
 static Titanium.Web.Proxy.Network.CertificateManager.LeafRsaKeyPairBufferSize.get -> int
 static Titanium.Web.Proxy.Network.CertificateManager.LeafRsaKeyPairBufferSize.set -> void
 Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCertificateDiskCacheEntries.get -> int?
+Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority.get -> int
 Titanium.Web.Proxy.Options.ProxyResourceLimits.WithCertificateCacheBounds(int? maxCertificateCacheEntries, int? maxCertificateDiskCacheEntries) -> Titanium.Web.Proxy.Options.ProxyResourceLimits!
+Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxOriginHttp2ConnectionsPerAuthority(int maxOriginHttp2ConnectionsPerAuthority) -> Titanium.Web.Proxy.Options.ProxyResourceLimits!
 Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs
 Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.AllowHttpProtocolTranslation.get -> bool
 Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs.AllowHttpProtocolTranslation.set -> void

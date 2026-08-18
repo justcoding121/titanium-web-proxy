@@ -372,6 +372,25 @@ public partial class ProxyServer
         return connection;
     }
 
+    /// <summary>
+    ///     Opens an additional HTTP/2 origin TCP connection for multi-leg same-protocol relay
+    ///     (<see cref="ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority" />).
+    /// </summary>
+    private async Task<TcpServerConnection> OpenAdditionalOriginHttp2ConnectionAsync(
+        string remoteHostName, int remotePort, string? connectHost, int? connectPort,
+        bool originIsHttps, SessionEventArgs sessionArgs, CancellationToken cancellationToken)
+    {
+        var connection = (await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
+            HttpHeader.Version20, originIsHttps,
+            originIsHttps ? SslExtensions.Http2ProtocolAsList : null,
+            true, sessionArgs, UpStreamEndPoint,
+            originIsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy, true, false,
+            cancellationToken, connectHost, connectPort))!;
+        if (connection is { Http2Cleartext: false } && !originIsHttps)
+            connection.Http2Cleartext = true;
+        return connection;
+    }
+
     private static bool IsApplicationProtocolCompatible(SslApplicationProtocol negotiated,
         List<SslApplicationProtocol>? requestedProtocols)
     {

@@ -351,7 +351,10 @@ public partial class ProxyServer
                                         MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
                                         originConnection: connection,
                                         httpInterceptionEnabled: NeedsHttpInterception(endPoint),
-                                        shouldInterceptHttp: ShouldInterceptHttp);
+                                        shouldInterceptHttp: ShouldInterceptHttp,
+                                        openOriginConnectionAsync: ct => OpenAdditionalOriginHttp2ConnectionAsync(
+                                            httpsHostName, args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
+                                            originIsHttps, sessionForCacheKey, ct));
                                 }
                                 finally
                                 {
@@ -632,7 +635,10 @@ public partial class ProxyServer
                 MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
                 originConnection: connection,
                 httpInterceptionEnabled: NeedsHttpInterception(endPoint),
-                shouldInterceptHttp: ShouldInterceptHttp);
+                shouldInterceptHttp: ShouldInterceptHttp,
+                openOriginConnectionAsync: ct => OpenAdditionalOriginHttp2ConnectionAsync(
+                    remoteHostName, remotePort, http2ConnectHost, http2ConnectPort,
+                    originIsHttps, negotiationSession, ct));
         }
         finally
         {

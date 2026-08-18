@@ -561,7 +561,14 @@ public partial class ProxyServer
                                 MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
                                 originConnection: connection,
                                 httpInterceptionEnabled: NeedsHttpInterception(endPoint),
-                                shouldInterceptHttp: ShouldInterceptHttp);
+                                shouldInterceptHttp: ShouldInterceptHttp,
+                                openOriginConnectionAsync: async ct =>
+                                {
+                                    var extra = (await TcpConnectionFactory.GetServerConnection(this, connectArgs,
+                                        true, SslExtensions.Http2ProtocolAsList,
+                                        true, false, ct))!;
+                                    return extra;
+                                });
                     }
                     finally
                     {

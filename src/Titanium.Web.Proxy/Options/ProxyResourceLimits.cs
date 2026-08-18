@@ -114,6 +114,13 @@ public sealed class ProxyResourceLimits
     public int MaxCachedConnectionsPerHost { get; private init; }
 
     /// <summary>
+    ///     Maximum number of concurrent origin HTTP/2 connections the proxy may open for one
+    ///     authority (host+port+scheme) when multiplexing streams from a single client connection
+    ///     (SocketsHttpHandler <c>EnableMultipleHttp2Connections</c> analog). Always at least 1.
+    /// </summary>
+    public int MaxOriginHttp2ConnectionsPerAuthority { get; private init; }
+
+    /// <summary>
     ///     Maximum number of generated leaf certificates held in the in-memory certificate cache.
     ///     Each entry holds a full <see cref="System.Security.Cryptography.X509Certificates.X509Certificate2" />
     ///     with its private key, so unlike most other limits in this type this one defends against
@@ -219,7 +226,35 @@ public sealed class ProxyResourceLimits
             MaxOpenHeaderBlockDuration = maxOpenHeaderBlockDuration,
             ConnectionPoolingEnabled = connectionPoolingEnabled,
             MaxCachedConnectionsPerHost = maxCachedConnectionsPerHost,
+            MaxOriginHttp2ConnectionsPerAuthority = 8,
             MaxCertificateCacheEntries = maxCertificateCacheEntries
+        };
+    }
+
+    /// <summary>
+    ///     Returns a copy with <see cref="MaxOriginHttp2ConnectionsPerAuthority" /> replaced.
+    /// </summary>
+    public ProxyResourceLimits WithMaxOriginHttp2ConnectionsPerAuthority(int maxOriginHttp2ConnectionsPerAuthority)
+    {
+        RequirePositive(maxOriginHttp2ConnectionsPerAuthority, nameof(maxOriginHttp2ConnectionsPerAuthority));
+        return new ProxyResourceLimits
+        {
+            MaxHeaderLineBytes = MaxHeaderLineBytes,
+            MaxHeaderCount = MaxHeaderCount,
+            MaxHeaderAggregateBytes = MaxHeaderAggregateBytes,
+            MaxEncodedBodyBytes = MaxEncodedBodyBytes,
+            MaxDecodedBodyBytes = MaxDecodedBodyBytes,
+            MaxDecompressionRatio = MaxDecompressionRatio,
+            MaxConcurrentClients = MaxConcurrentClients,
+            MaxConcurrentStreamsPerConnection = MaxConcurrentStreamsPerConnection,
+            MaxPeerInitiatedIncompleteStreamResets = MaxPeerInitiatedIncompleteStreamResets,
+            MaxOpenHeaderBlockFrames = MaxOpenHeaderBlockFrames,
+            MaxOpenHeaderBlockDuration = MaxOpenHeaderBlockDuration,
+            ConnectionPoolingEnabled = ConnectionPoolingEnabled,
+            MaxCachedConnectionsPerHost = MaxCachedConnectionsPerHost,
+            MaxOriginHttp2ConnectionsPerAuthority = maxOriginHttp2ConnectionsPerAuthority,
+            MaxCertificateCacheEntries = MaxCertificateCacheEntries,
+            MaxCertificateDiskCacheEntries = MaxCertificateDiskCacheEntries
         };
     }
 
@@ -258,6 +293,7 @@ public sealed class ProxyResourceLimits
             MaxOpenHeaderBlockDuration = MaxOpenHeaderBlockDuration,
             ConnectionPoolingEnabled = ConnectionPoolingEnabled,
             MaxCachedConnectionsPerHost = MaxCachedConnectionsPerHost,
+            MaxOriginHttp2ConnectionsPerAuthority = MaxOriginHttp2ConnectionsPerAuthority,
             MaxCertificateCacheEntries = maxCertificateCacheEntries,
             MaxCertificateDiskCacheEntries = maxCertificateDiskCacheEntries
         };
