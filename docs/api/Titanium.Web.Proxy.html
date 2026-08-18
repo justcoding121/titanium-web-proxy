@@ -92,8 +92,8 @@ cross-checking purposes.</p>
       <h4><a class="xref" href="Titanium.Web.Proxy.ProxyServer.html">ProxyServer</a></h4>
       <section><p>Translates an HTTP/1.1 client connection onto an h2-only origin (<a class="xref" href="Titanium.Web.Proxy.Models.UpstreamHttpProtocol.html#Titanium_Web_Proxy_Models_UpstreamHttpProtocol_Http2">Http2</a>
 with <code>AllowHttpProtocolTranslation</code> enabled - see <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html">ResolveHttp2ForClientAsync(SessionEventArgsBase, bool, string, int, string, int?, UpstreamHttpProtocol, bool, bool, CancellationToken, bool)</a>), leasing
-one h2 stream per HTTP/1.1 request from a persistent <span class="xref">Titanium.Web.Proxy.Http2.Http2OriginConnection</span> rather than
-opening a new TCP/TLS connection for every request the way pooled HTTP/1.1 origin connections are used.</p>
+one h2 stream per HTTP/1.1 request from a shared <span class="xref">Titanium.Web.Proxy.Http2.Http2OriginConnection</span> via
+<span class="xref">Titanium.Web.Proxy.ProxyServer.Http2OriginConnectionPool</span> rather than opening a new TCP/TLS connection for every request.</p>
 </section>
       <h4><a class="xref" href="Titanium.Web.Proxy.SystemProxySettings.html">SystemProxySettings</a></h4>
       <section><p>Options applied when configuring an explicit endpoint as the Windows system proxy.</p>

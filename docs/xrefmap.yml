@@ -3385,6 +3385,12 @@ references:
   commentId: F:Titanium.Web.Proxy.Http.KnownHeaders.AcceptEncoding
   fullName: Titanium.Web.Proxy.Http.KnownHeaders.AcceptEncoding
   nameWithType: KnownHeaders.AcceptEncoding
+- uid: Titanium.Web.Proxy.Http.KnownHeaders.AltSvc
+  name: AltSvc
+  href: api/Titanium.Web.Proxy.Http.KnownHeaders.html#Titanium_Web_Proxy_Http_KnownHeaders_AltSvc
+  commentId: F:Titanium.Web.Proxy.Http.KnownHeaders.AltSvc
+  fullName: Titanium.Web.Proxy.Http.KnownHeaders.AltSvc
+  nameWithType: KnownHeaders.AltSvc
 - uid: Titanium.Web.Proxy.Http.KnownHeaders.Authorization
   name: Authorization
   href: api/Titanium.Web.Proxy.Http.KnownHeaders.html#Titanium_Web_Proxy_Http_KnownHeaders_Authorization
@@ -5350,12 +5356,31 @@ references:
   commentId: E:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeHttpAuthenticate
   fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeHttpAuthenticate
   nameWithType: TransparentProxyEndPoint.BeforeHttpAuthenticate
+- uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeQuicAuthenticate
+  name: BeforeQuicAuthenticate
+  href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_BeforeQuicAuthenticate
+  commentId: E:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeQuicAuthenticate
+  fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeQuicAuthenticate
+  nameWithType: TransparentProxyEndPoint.BeforeQuicAuthenticate
 - uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeSslAuthenticate
   name: BeforeSslAuthenticate
   href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_BeforeSslAuthenticate
   commentId: E:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeSslAuthenticate
   fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeSslAuthenticate
   nameWithType: TransparentProxyEndPoint.BeforeSslAuthenticate
+- uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.EnableHttp3
+  name: EnableHttp3
+  href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_EnableHttp3
+  commentId: P:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.EnableHttp3
+  fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.EnableHttp3
+  nameWithType: TransparentProxyEndPoint.EnableHttp3
+- uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.EnableHttp3*
+  name: EnableHttp3
+  href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_EnableHttp3_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.EnableHttp3
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.EnableHttp3
+  nameWithType: TransparentProxyEndPoint.EnableHttp3
 - uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.GenericCertificateName
   name: GenericCertificateName
   href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_GenericCertificateName
@@ -5369,6 +5394,58 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.GenericCertificateName
   nameWithType: TransparentProxyEndPoint.GenericCertificateName
+- uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.HandshakeTimeout
+  name: HandshakeTimeout
+  href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_HandshakeTimeout
+  commentId: P:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.HandshakeTimeout
+  fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.HandshakeTimeout
+  nameWithType: TransparentProxyEndPoint.HandshakeTimeout
+- uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.HandshakeTimeout*
+  name: HandshakeTimeout
+  href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_HandshakeTimeout_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.HandshakeTimeout
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.HandshakeTimeout
+  nameWithType: TransparentProxyEndPoint.HandshakeTimeout
+- uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.IdleTimeout
+  name: IdleTimeout
+  href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_IdleTimeout
+  commentId: P:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.IdleTimeout
+  fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.IdleTimeout
+  nameWithType: TransparentProxyEndPoint.IdleTimeout
+- uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.IdleTimeout*
+  name: IdleTimeout
+  href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_IdleTimeout_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.IdleTimeout
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.IdleTimeout
+  nameWithType: TransparentProxyEndPoint.IdleTimeout
+- uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundBidirectionalStreams
+  name: MaxInboundBidirectionalStreams
+  href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_MaxInboundBidirectionalStreams
+  commentId: P:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundBidirectionalStreams
+  fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundBidirectionalStreams
+  nameWithType: TransparentProxyEndPoint.MaxInboundBidirectionalStreams
+- uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundBidirectionalStreams*
+  name: MaxInboundBidirectionalStreams
+  href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_MaxInboundBidirectionalStreams_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundBidirectionalStreams
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundBidirectionalStreams
+  nameWithType: TransparentProxyEndPoint.MaxInboundBidirectionalStreams
+- uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundUnidirectionalStreams
+  name: MaxInboundUnidirectionalStreams
+  href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_MaxInboundUnidirectionalStreams
+  commentId: P:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundUnidirectionalStreams
+  fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundUnidirectionalStreams
+  nameWithType: TransparentProxyEndPoint.MaxInboundUnidirectionalStreams
+- uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundUnidirectionalStreams*
+  name: MaxInboundUnidirectionalStreams
+  href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_MaxInboundUnidirectionalStreams_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundUnidirectionalStreams
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundUnidirectionalStreams
+  nameWithType: TransparentProxyEndPoint.MaxInboundUnidirectionalStreams
 - uid: Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint
   name: TransparentQuicProxyEndPoint
   href: api/Titanium.Web.Proxy.Models.TransparentQuicProxyEndPoint.html
