@@ -42,11 +42,11 @@ public class Http2HelperStartupAndNullOriginTests
         using var cts = new CancellationTokenSource();
         var stream = new NullOriginStream(cts.Token);
 
-        var buf = new byte[16];
+        var buf = new byte[32];
         var n1 = await stream.ReadAsync(buf);
-        Assert.AreEqual(9, n1);
+        Assert.AreEqual(21, n1); // 9-byte header + 12-byte SETTINGS payload
         Assert.AreEqual((byte)Http2FrameType.Settings, buf[3]);
-        Assert.AreEqual(0, (buf[0] << 16) | (buf[1] << 8) | buf[2]);
+        Assert.AreEqual(12, (buf[0] << 16) | (buf[1] << 8) | buf[2]);
 
         // Writes are discarded
         await stream.WriteAsync(new byte[] { 1, 2, 3 }, CancellationToken.None);

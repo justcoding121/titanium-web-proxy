@@ -37,7 +37,7 @@ public class Http2BodyWriterAndOriginSettingsTests
         flow.RegisterStream(1);
 
         var writer = Activator.CreateInstance(writerType, PrivateInstance, binder: null,
-            args: [1, ms, writeLock, flow, CancellationToken.None], culture: null)!;
+            args: [1, ms, writeLock, flow, CancellationToken.None, false], culture: null)!;
 
         Assert.IsFalse((bool)writerType.GetProperty("CanRead")!.GetValue(writer)!);
         Assert.IsFalse((bool)writerType.GetProperty("CanSeek")!.GetValue(writer)!);

@@ -64,7 +64,7 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 | MITM | HTTP/2 · TLS | HTTP/2 · TLS | **5,192** | **5,192** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | Reverse | HTTP/2 · TLS | HTTP/2 · plain | **4,293** | **4,293** | *Not possible* | *Not possible* | **51,309** | **51,309** | **YARP** |
 | Reverse | HTTP/2 · plain | HTTP/1 · plain | **6,698** | **6,698** | *Not possible* | *Not possible* | **37,064** | **37,064** | **YARP** |
-| Reverse | HTTP/2 · plain | HTTP/2 · plain | **10,135** | **10,135** | *Not possible* | *Not possible* | **86,443** | **86,443** | **YARP** |
+| Reverse | HTTP/2 · plain | HTTP/2 · plain | **33,720** | **33,720** | *Not possible* | *Not possible* | **86,443** | **86,443** | **YARP** |
 | Reverse | HTTP/2 · plain | HTTP/2 · TLS | **5,394** | **5,394** | *Not possible* | *Not possible* | **68,492** | **68,492** | **YARP** |
 | Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **3,989** | **3,989** | *Not possible* (no QUIC) | *Not possible* | **17,715** | **17,715** | **YARP** |
 | Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **8,578** | **8,578** | *Not possible* (no QUIC) | *Not possible* | **23,117** | **23,117** | **YARP** |
@@ -75,7 +75,9 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 | Reverse | HTTP/1 · TLS | HTTP/3 · QUIC | **11,250** | **11,250** | *Not possible* (no QUIC) | *Not possible* | **12,844** | **12,844** | **YARP** |
 | Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | **4,420** | **4,420** | *Not possible* (no QUIC) | *Not possible* | **15,352** | **15,352** | **YARP** |
 
-Windows sources: H1 / MITM rows reuse prior `compare-same` / `compare-mitm` (`rps-ramp-20260817-184912` and earlier). **H2/H3 reverse + bridges** remeasured after client-window / streaming / frame-loop queue work: `compare-bridges` (`rps-ramp-20260817-210802`; warmup 2s; measure 5s; concurrency 8–64); h2c↔h2c refreshed after Phase-4 queue (`rps-ramp-20260817-212516` TWP, `rps-ramp-20260817-212332` YARP). nginx H2 terminate cell not re-run this pass (prior nginx numbers). Absolute RPS on this laptop swings with sequential-arm heat; nginx/Windows sustain is especially noisy.
+Windows sources: H1 / MITM rows reuse prior `compare-same` / `compare-mitm` (`rps-ramp-20260817-184912` and earlier). **H2/H3 reverse + bridges** remeasured after client-window / streaming / frame-loop queue work: `compare-bridges` (`rps-ramp-20260817-210802`; warmup 2s; measure 5s; concurrency 8–64). **h2c↔h2c** refreshed after multi-origin H2 pooling + dedicated frame writers (`rps-ramp-20260818-012238` TWP ~33.7k sustain @ c=64; YARP cell kept from prior `rps-ramp-20260817-212332`). nginx H2 terminate cell not re-run this pass (prior nginx numbers). Absolute RPS on this laptop swings with sequential-arm heat; nginx/Windows sustain is especially noisy.
+
+After multi-origin pooling, TWP÷YARP on Windows h2c→h2c improved from ~**8.5×** behind (10k/86k) to ~**2.6×** (34k/86k) on this laptop — still a managed MITM floor, not parity.
 
 nginx/Windows is a limited port. Use it for **same-OS** comparison only — not as the industry nginx baseline. YARP H3 reverse uses Kestrel HTTP/3 (HttpClient), not TWP’s transparent QUIC listen.
 
