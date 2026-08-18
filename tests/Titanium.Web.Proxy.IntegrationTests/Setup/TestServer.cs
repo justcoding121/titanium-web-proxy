@@ -16,7 +16,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Titanium.Web.Proxy.IntegrationTests.Setup;
 
-// set up a kestrel test server
+// set up an ASP.NET Core test server
 public class TestServer : IDisposable
 {
     private readonly IHost host;
@@ -54,7 +54,7 @@ public class TestServer : IDisposable
                     options.Listen(IPAddress.Loopback, 0, listenOptions =>
                     {
                         // TestCertificateAuthority.ServerCertificate vends a fresh, independent
-                        // X509Certificate2 each time (backed by cached PKCS12 bytes), so Kestrel
+                        // X509Certificate2 each time (backed by cached PKCS12 bytes), so the server host
                         // can safely dispose it without affecting any other TestServer instance.
                         listenOptions.UseHttps(serverCertificate);
                     });

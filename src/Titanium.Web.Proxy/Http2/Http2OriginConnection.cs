@@ -72,7 +72,7 @@ internal sealed class Http2OriginConnection : IDisposable
     private readonly TaskCompletionSource<bool> initialSettingsReceived =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    // Batched receive credit (read loop is single-threaded). Matches Http2Helper / Kestrel half-window.
+    // Batched receive credit (read loop is single-threaded). Matches Http2Helper half-window batch threshold.
     private int pendingConnectionReceiveCredit;
     private readonly Dictionary<int, int> pendingStreamReceiveCredit = new();
 
@@ -110,7 +110,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
     /// <summary>
     ///     Grow the origin pool once every member has this many active streams, well before
-    ///     <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> (Kestrel default 100). One connection serializes
+    ///     <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> (common default 100). One connection serializes
     ///     encode+enqueue under <c>writeLock</c>; spreading across a few TLS+H2 sessions matches
     ///     SocketsHttpHandler <c>EnableMultipleHttp2Connections</c>.
     ///     Profiled at c=16 with threshold 16: dumpasync showed a single
@@ -386,10 +386,17 @@ internal sealed class Http2OriginConnection : IDisposable
             // Relay 1xx interim responses (e.g. 103 Early Hints) to the HTTP/1.1 client before reading
             // the body. ReadLoopAsync writes each interim into pending.InterimChannel and completes the
             // writer as soon as final response headers arrive, so this loop exits cleanly before
-            // body drainage begins.
+            // body drainage begins. When on1xx is null (diag: TWP_DIAG_HEADERS_WAIT_TCS=1), wait on the
+            // HeadersReceived TCS instead — otherwise we race ProcessHeaderBlock and synthesize 502.
             if (on1xx != null)
+            {
                 await foreach (var interim in pending.InterimChannel.Reader.ReadAllAsync(cancellationToken))
                     await on1xx(interim.StatusCode, interim.Headers, cancellationToken);
+            }
+            else
+            {
+                await pending.HeadersReceived.Task.WaitAsync(cancellationToken);
+            }
 
             var response = pending.Response ??
                            new Response
@@ -667,7 +674,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
     /// <summary>
     ///     Re-grants flow-control credit for DATA frame on-wire payload (RFC 7540 §6.9). Batched at
-    ///     <see cref="Http2Helper.ReceiveCreditBatchThreshold" /> (half of the Kestrel-class stream window),
+    ///     <see cref="Http2Helper.ReceiveCreditBatchThreshold" /> (half of the 768 KiB stream window),
     ///     matching <see cref="Http2Helper" /> so credit is not drip-fed under the write lock per frame.
     /// </summary>
     private Task GrantReceiveCreditAsync(int streamId, int bytes, bool forceFlush,
@@ -1418,7 +1425,8 @@ internal sealed class Http2OriginConnection : IDisposable
 
         /// <summary>
         ///     Completed when the final (non-1xx) response HEADERS arrive. Used by
-        ///     <see cref="OpenTunnelAsync" />; ordinary <see cref="SendAsync" /> ignores it.
+        ///     <see cref="OpenTunnelAsync" /> and by <see cref="SendAsync" /> when <c>on1xx</c> is null
+        ///     (no InterimChannel drain).
         /// </summary>
         internal readonly TaskCompletionSource<bool> HeadersReceived =
             new(TaskCreationOptions.RunContinuationsAsynchronously);

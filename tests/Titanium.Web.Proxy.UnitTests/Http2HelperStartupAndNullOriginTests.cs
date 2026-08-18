@@ -18,7 +18,7 @@ public class Http2HelperStartupAndNullOriginTests
 
         var wire = ms.ToArray();
         // SETTINGS header (9) + 18-byte payload (HEADER_TABLE_SIZE=0, ENABLE_PUSH=0,
-        // INITIAL_WINDOW_SIZE=Kestrel-class) + WINDOW_UPDATE header (9) + 4-byte increment
+        // INITIAL_WINDOW_SIZE=reference .NET server stack-class) + WINDOW_UPDATE header (9) + 4-byte increment
         Assert.AreEqual(40, wire.Length, $"wire hex={Convert.ToHexString(wire)}");
         Assert.AreEqual((byte)Http2FrameType.Settings, wire[3]);
         Assert.AreEqual(18, (wire[0] << 16) | (wire[1] << 8) | wire[2]);

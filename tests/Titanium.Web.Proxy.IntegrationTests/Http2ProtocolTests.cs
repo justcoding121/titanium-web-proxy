@@ -436,7 +436,7 @@ public class Http2ProtocolTests
         do
         {
             frame = await rawClient.Connection.ReadFrameAsync();
-            // The proxy also grants Kestrel-class connection window credit toward the client right
+            // The proxy also grants reference .NET server stack-class connection window credit toward the client right
             // after relaying the origin's SETTINGS - a connection-maintenance WINDOW_UPDATE that can
             // race ahead of the provoked GOAWAY/RST_STREAM exactly like the SETTINGS frames do.
         } while (frame.Type == Http2FrameType.Settings || frame.Type == Http2FrameType.WindowUpdate);

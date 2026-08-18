@@ -15,7 +15,7 @@ namespace Titanium.Web.Proxy.Benchmarks;
 
 /// <summary>
 ///     End-to-end HTTP/2 throughput through a real <see cref="ProxyServer" /> explicit endpoint,
-///     MITM-decrypting the client leg and re-encrypting to a Kestrel origin that also speaks HTTP/2.
+///     MITM-decrypting the client leg and re-encrypting to a managed HTTP/2 origin that also speaks HTTP/2.
 ///     <see cref="ConcurrentStreams" /> issues that many requests concurrently over one
 ///     <see cref="HttpClient" />, which HTTP/2 multiplexes onto a single TCP connection on both legs -
 ///     this is what item 11's proxy-owned concurrent-stream cap and CONTINUATION/reset budgets need a

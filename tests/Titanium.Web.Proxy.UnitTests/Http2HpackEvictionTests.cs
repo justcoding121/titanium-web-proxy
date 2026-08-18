@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.UnitTests;
 ///     Regression coverage for HPACK dynamic-table eviction: a persistent encoder/decoder pair (as used per
 ///     connection direction by <c>Http2Helper</c>) must keep producing correctly-decodable output as the
 ///     dynamic table fills and entries get evicted, both for many distinct headers and for the
-///     Kestrel-shaped repeated-header case that originally exposed the encoder's <c>COMPRESSION_ERROR</c>
+///     realistic repeated-header case that originally exposed the encoder's <c>COMPRESSION_ERROR</c>
 ///     bug (see the end-to-end coverage in <c>Titanium.Web.Proxy.IntegrationTests.Http2Tests</c>).
 /// </summary>
 [TestClass]
@@ -45,7 +45,7 @@ public class Http2HpackEvictionTests
     }
 
     [TestMethod]
-    public void Encoder_KestrelLikeResponseHeaders_RepeatedAcrossManyResponses_StillDecodesCorrectly()
+    public void Encoder_TypicalResponseHeaders_RepeatedAcrossManyResponses_StillDecodesCorrectly()
     {
         var encoder = new Encoder(4096);
         var decoder = new Decoder(8192, 4096);
@@ -59,7 +59,7 @@ public class Http2HpackEvictionTests
                 (":status", "200"),
                 ("date", $"Wed, 22 Jul 2026 18:{i:D2}:00 GMT"),
                 ("content-type", "text/plain"),
-                ("server", "Kestrel"),
+                ("server", "TestOrigin"),
                 ("x-custom-repeated", repeatedValue),
             };
 

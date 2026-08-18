@@ -132,7 +132,7 @@ internal sealed class Http2ConnectionState
     public int InitialOriginWindowUpdateSent;
 
     /// <summary>
-    ///     0 until the Kestrel-class connection WINDOW_UPDATE has been written toward the client
+    ///     0 until the 1 MiB connection WINDOW_UPDATE has been written toward the client
     ///     (enlarging the client's connection send window above RFC 65535).
     /// </summary>
     public int InitialClientWindowUpdateSent;
@@ -140,7 +140,7 @@ internal sealed class Http2ConnectionState
     /// <summary>
     ///     Serializes origin-bound HEADERS writes so HPACK encode stays ordered, while the client
     ///     frame-read loop can continue admitting the next stream without awaiting socket I/O
-    ///     (Kestrel StartStream + continue invariant).
+    ///     (encode on the read loop, queue the write, continue without awaiting peer I/O invariant).
     /// </summary>
     private readonly object serverWriteChainLock = new();
     private Task serverWriteChain = Task.CompletedTask;

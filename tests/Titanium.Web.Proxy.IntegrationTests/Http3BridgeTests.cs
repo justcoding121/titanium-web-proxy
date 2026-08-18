@@ -140,7 +140,7 @@ public class Http3BridgeTests
             await using var client = await QuicHttp3Client.ConnectAsync(
                 new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
 
-            // Authority must include the Kestrel HTTPS port — H3→TCP uses RequestUri, not ForwardPort.
+            // Authority must include the origin HTTPS port — H3→TCP uses RequestUri, not ForwardPort.
             var response = await client.SendAsync("GET", $"localhost:{server.HttpsListeningPort}", "/tcp");
             Assert.AreEqual(200, response.StatusCode, response.TextBody);
             Assert.AreEqual("h3-to-h1", response.TextBody);

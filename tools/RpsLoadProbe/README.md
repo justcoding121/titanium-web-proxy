@@ -28,7 +28,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-terminate
 
 Client TLS → cleartext origin across H1 TLS terminate, H2→H1, h2c→H1, and H3→H1 arms.
 
-Cleartext-origin terminate arms run **origin and proxy in separate processes** so the proxy under test does not share a ThreadPool/GC with the Kestrel origin.
+Cleartext-origin terminate arms run **origin and proxy in separate processes** so the proxy under test does not share a ThreadPool/GC with the managed origin server.
 
 ## Heavier reverse workloads (bodies / POST / lossy / TLS cost)
 

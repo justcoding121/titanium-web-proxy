@@ -11,7 +11,7 @@ using Titanium.Web.Proxy.Models;
 namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
-///     Tests share a single Kestrel <see cref="TestServer" /> instance (started once for the class)
+///     Tests share a single <see cref="TestServer" /> instance (started once for the class)
 ///     to avoid paying the ~200–400 ms host-start cost on every test. Tests within this class are
 ///     serialised (<see cref="DoNotParallelizeAttribute" />) so that each test's
 ///     <see cref="TestServer.HandleRequest" /> assignment is not racy; they still run concurrently

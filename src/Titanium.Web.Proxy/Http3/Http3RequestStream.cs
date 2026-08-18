@@ -116,7 +116,7 @@ internal static class Http3RequestStream
                 request.Method = method;
                 // Mirror Http2Helper: keep :authority and :path separate (origin-form RequestUriString8).
                 // Storing an absolute URL here made transparent H3→H1 SendRequest write absolute-form
-                // request targets ("GET https://host/path HTTP/1.1"), which Kestrel rejects with 400.
+                // request targets ("GET https://host/path HTTP/1.1"), which strict ASP.NET Core origins reject with 400.
                 var normalizedPath = path ?? "/";
                 if (!normalizedPath.StartsWith('/'))
                     normalizedPath = "/" + normalizedPath; // NOSONAR S1075 -- Slash is the HTTP origin-form delimiter, not a filesystem path.

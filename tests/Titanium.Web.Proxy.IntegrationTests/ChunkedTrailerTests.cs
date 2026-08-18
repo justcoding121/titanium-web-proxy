@@ -320,7 +320,7 @@ public class ChunkedTrailerTests
             connectionIds.Add(context.Connection.Id);
             var n = Interlocked.Increment(ref requestIndex);
 
-            // No Content-Length is set, so Kestrel uses chunked transfer-encoding for this HTTP/1.1 response.
+            // No Content-Length is set, so ASP.NET Core uses chunked transfer-encoding for this HTTP/1.1 response.
             await context.Response.WriteAsync(n == 1
                 ? "original-upstream-body-that-should-be-discarded"
                 : "second-request-body");

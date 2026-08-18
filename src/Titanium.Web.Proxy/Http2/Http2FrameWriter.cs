@@ -12,7 +12,7 @@ namespace Titanium.Web.Proxy.Http2;
 ///     writes into one <see cref="System.IO.Stream.WriteAsync(System.ReadOnlyMemory{byte}, CancellationToken)" />
 ///     to cut syscalls.
 ///     <para>
-///         When constructed without a lock the drain is the exclusive socket writer (Kestrel model):
+///         When constructed without a lock the drain is the exclusive socket writer (exclusive drain model):
 ///         it never takes a lock around <c>WriteAsync</c>. Pass a <see cref="SemaphoreSlim" /> only
 ///         when mixed direct-locked writes still exist on the same stream (client MITM path).
 ///     </para>

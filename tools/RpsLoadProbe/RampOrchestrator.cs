@@ -37,7 +37,7 @@ internal enum ProbeMode
     ReverseHttp3,
     /// <summary>TWP QUIC/h3 terminate → ForwardCleartext → cleartext HTTP/1 origin.</summary>
     ReverseHttp3Cleartext,
-    /// <summary>Managed reverse peer HTTP/3 (Kestrel) terminate → cleartext HTTP/1. Client uses quic-http3 (matched with TWP).</summary>
+    /// <summary>Managed reverse peer HTTP/3 terminate → cleartext HTTP/1. Client uses quic-http3 (matched with TWP).</summary>
     YarpReverseHttp3Cleartext,
     /// <summary>Client H1 TLS → H1→H2 bridge → origin HTTPS h2.</summary>
     ReverseHttp11ToHttp2,
@@ -688,7 +688,7 @@ internal static class RampOrchestrator
 
     /// <summary>
     ///     TWP <c>TransparentQuicProxyEndPoint</c> forwards using <c>:authority</c> as the upstream target
-    ///     when an origin QUIC port is published. Managed reverse listens like Kestrel — use the listen host.
+    ///     when an origin QUIC port is published. Managed reverse listens on the listen host directly.
     /// </summary>
     private static string ResolveQuicAuthority(ProbeMode mode, ChildProcessStack stack)
     {

@@ -60,10 +60,10 @@ public class Http2MultipartTests
         var server = testSuite.GetServer();
 
         // The origin handler MUST drain the request body before responding.
-        // Without this, in the H2-to-H2 direct path Kestrel responds immediately (before reading the
+        // Without this, in the H2-to-H2 direct path the origin responds immediately (before reading the
         // body), which lets receiveRelay forward the 200 to the raw client before sendRelay has
         // processed the DATA frame and fired the multipart observer. Draining first creates a strict
-        // ordering: DATA processed ? events fired ? Kestrel responds ? raw client asserts.
+        // ordering: DATA processed ? events fired ? origin responds ? raw client asserts.
         var bodyReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         server.HandleRequest(async context =>
         {

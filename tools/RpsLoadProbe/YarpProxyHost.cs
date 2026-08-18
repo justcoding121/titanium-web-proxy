@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.RpsLoadProbe;
 
 /// <summary>
 /// Minimal managed reverse peer against the shared loopback origin.
-/// Process-split from Kestrel origin (via --serve-proxy) for fair compare with native reverse peer/TWP.
+/// Process-split from managed origin server (via --serve-proxy) for fair compare with native reverse peer/TWP.
 /// </summary>
 internal sealed class YarpProxyHost : IDisposable
 {
@@ -234,7 +234,7 @@ internal sealed class YarpProxyHost : IDisposable
         builder.Logging.ClearProviders();
         builder.Logging.SetMinimumLevel(LogLevel.Warning);
         // Prevent default http://localhost:5000 from colliding with our Listen() port
-        // (HTTP/3 especially fails hard when Kestrel tries both).
+        // (HTTP/3 especially fails hard when the host tries both default and explicit Listen() ports).
         builder.WebHost.UseUrls();
 
         builder.WebHost.ConfigureKestrel(kestrel =>

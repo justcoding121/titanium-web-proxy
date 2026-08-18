@@ -280,7 +280,7 @@ internal static class ServeProxyHost
             ProbeMode.ReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3Cleartext => "3.0",
             _ => "1.1"
         };
-        // Dual-listen reverse H3 (TWP TransparentProxyEndPoint.EnableHttp3 and Kestrel) use HttpClient.
+        // Dual-listen reverse H3 (TWP TransparentProxyEndPoint.EnableHttp3 and reference .NET server stack) use HttpClient.
         // UDP-only TransparentQuic arms still advertise quic-http3 via combined ServeStack.
         string? loadGenerator = null;
 
@@ -602,7 +602,7 @@ internal static class ServeHost
                 }
                 case ProbeMode.ReverseHttp2ToH2c:
                 {
-                    // Client TLS+h2 → terminate → prior-knowledge h2c origin (Kestrel HttpProtocols.Http2).
+                    // Client TLS+h2 → terminate → prior-knowledge h2c origin (HttpProtocols.Http2 on the managed origin).
                     var origin = await OriginServer.StartAsync(new OriginListenOptions
                     {
                         EnableHttp = true,

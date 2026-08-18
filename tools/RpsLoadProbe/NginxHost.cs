@@ -10,7 +10,7 @@ using Titanium.Web.Proxy.RpsLoadProbe.Support;
 namespace Titanium.Web.Proxy.RpsLoadProbe;
 
 /// <summary>
-/// Starts a stock-ish native reverse peer against the shared Kestrel origin.
+/// Starts a stock-ish native reverse peer against the shared managed origin server.
 /// Uses a temp prefix directory so the user's install tree is never modified.
 /// </summary>
 internal sealed class NginxHost : IDisposable

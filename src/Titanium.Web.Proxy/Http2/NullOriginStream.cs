@@ -15,7 +15,7 @@ namespace Titanium.Web.Proxy.Http2;
 ///     <list type="bullet">
 ///         <item>
 ///             Exactly one connection SETTINGS frame is produced on the first read (ENABLE_PUSH=0 and
-///             INITIAL_WINDOW_SIZE = Kestrel-class 768 KiB), because the client=>server relay direction
+///             INITIAL_WINDOW_SIZE = 768 KiB), because the client=>server relay direction
 ///             requires one before it will emit any client-facing HEADERS (see
 ///             <see cref="Http2ConnectionState.ServerSettingsRelayed" />) - including the bridge's own synthetic
 ///             responses, which reuse that exact signal. The large INITIAL_WINDOW_SIZE is relayed to the

@@ -474,7 +474,7 @@ public partial class ProxyServer
                 await args.GetRequestBody(cancellationToken);
             }
 
-            // TLS-terminate → h2c: origin expects :scheme http (Kestrel rejects https on cleartext).
+            // TLS-terminate → h2c: origin expects :scheme http (strict ASP.NET Core origins reject https on cleartext).
             if (args.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
                 request.IsHttps = false;
 
@@ -491,9 +491,16 @@ public partial class ProxyServer
             // client as they arrive, before the final response is written via DeliverOriginExchangeAsync.
             // This callback is invoked from SendAsync on the current (caller) task - not from the background
             // read loop - so it is safe to write to clientStream without additional synchronization.
-            var capturedClientStream = clientStream;
-            Func<int, HeaderCollection, CancellationToken, Task> relayInterim =
-                async (statusCode, headers, ct) =>
+            // Diag: TWP_DIAG_HEADERS_WAIT_TCS=1 skips the interim channel and waits on HeadersReceived TCS
+            // (probe origins do not emit 1xx; measures per-request Channel machinery cost).
+            var useTcsHeadersWait = string.Equals(
+                Environment.GetEnvironmentVariable("TWP_DIAG_HEADERS_WAIT_TCS"), "1",
+                StringComparison.Ordinal);
+            Func<int, HeaderCollection, CancellationToken, Task>? relayInterim = null;
+            if (!useTcsHeadersWait)
+            {
+                var capturedClientStream = clientStream;
+                relayInterim = async (statusCode, headers, ct) =>
                 {
                     var interim = new Response
                     {
@@ -504,6 +511,7 @@ public partial class ProxyServer
                     foreach (var h in headers) interim.Headers.AddHeader(h);
                     await capturedClientStream.WriteResponseAsync(interim, ct);
                 };
+            }
 
             Http2OriginExchange exchange;
             try

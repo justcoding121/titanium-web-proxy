@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     sized the decoder for headers arriving from one peer using *that peer's own* self-declared
 ///     SETTINGS_HEADER_TABLE_SIZE, instead of the value forwarded to it (transparently, by this same relay)
 ///     from the *other* peer - which is what that peer's real encoder is actually bound by (RFC 7540 §6.5.2).
-///     A local Kestrel <c>TestServer</c> and .NET's own HTTP/2 client both only ever use the RFC default
+///     A local <c>TestServer</c> and .NET's own HTTP/2 client both only ever use the RFC default
 ///     (4096) for this setting, so the divergence - and the bug - never surfaced against those; a real
 ///     browser (which typically advertises a larger value, e.g. Chrome's 65536) does trigger it against any
 ///     real origin that grows its dynamic table in response. Reproduced deterministically here with

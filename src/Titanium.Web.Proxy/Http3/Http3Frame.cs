@@ -86,7 +86,7 @@ internal sealed class Http3Frame
     /// <summary>
     ///     Writes a frame (type + length + payload) to <paramref name="stream" />.
     ///     Coalesces the VarInt header (and small payloads) into a single socket write —
-    ///     same idea as Kestrel <c>Http3FrameWriter.WriteHeader</c> using one span flush.
+    ///     single-span header flush pattern (VarInt header + small payload coalesced into one write).
     /// </summary>
     public static async ValueTask WriteAsync(
         Stream stream,

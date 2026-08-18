@@ -14,7 +14,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Reproduces a real-world HTTP/2 failure (browser reports <c>ERR_HTTP2_PROTOCOL_ERROR</c>) seen when
 ///     browsing to an external HTTP/2 site (e.g. https://www.google.com/) through the proxy with TLS
 ///     decryption on and <see cref="ProxyServer.EnableHttp2" /> at its new default of <c>true</c>. Unlike the
-///     rest of the HTTP/2 suite, which relays to a local Kestrel <c>TestServer</c>, this hits a real external
+///     rest of the HTTP/2 suite, which relays to a local <c>TestServer</c>, this hits a real external
 ///     origin so the proxy's relay has to cope with whatever frame patterns/extensions a production HTTP/2
 ///     server actually sends (e.g. additional SETTINGS parameters, larger header blocks, server-initiated
 ///     WINDOW_UPDATE/PING cadence) that a local test server may never exercise. Requires outbound internet

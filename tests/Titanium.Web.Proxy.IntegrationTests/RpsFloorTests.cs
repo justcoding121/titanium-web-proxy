@@ -12,7 +12,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
 /// Loose reverse-proxy RPS smoke floor — not the publishable saturation number.
-/// Headline RPS comes from tools/RpsLoadProbe (and optional nginx control arm).
+/// Headline RPS comes from tools/RpsLoadProbe (and optional native reverse peer control arm).
 /// </summary>
 [TestClass]
 [TestCategory("Slow")]

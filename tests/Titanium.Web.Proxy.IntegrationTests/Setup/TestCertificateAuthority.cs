@@ -28,7 +28,7 @@ internal static class TestCertificateAuthority
 
     // Store the server cert as raw PKCS12 bytes so we can vend independent X509Certificate2 instances.
     // Each caller (TestServer) gets its own object with its own key handle, preventing any shared
-    // handle from being invalidated when Kestrel disposes "its" copy of the certificate.
+    // handle from being invalidated when the server host disposes "its" copy of the certificate.
     private static readonly Lazy<byte[]> serverCertificateBytes = new(CreateServerCertificateBytes);
 
     public static X509Certificate2 RootCertificate => rootCertificate.Value;
@@ -36,7 +36,7 @@ internal static class TestCertificateAuthority
     /// <summary>
     /// Creates a fresh, independent <see cref="X509Certificate2"/> from cached PKCS12 bytes.
     /// Each call returns a new object. Callers (e.g. <see cref="TestServer"/>) own the returned
-    /// certificate and may let Kestrel dispose it without affecting any other caller's copy.
+    /// certificate and may let the server host dispose it without affecting any other caller's copy.
     /// </summary>
     public static X509Certificate2 ServerCertificate =>
         X509CertificateLoader.LoadPkcs12(serverCertificateBytes.Value, null,

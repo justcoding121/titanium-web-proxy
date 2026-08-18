@@ -198,7 +198,7 @@ internal static class QuicHttp3LoadGenerator
         var connections = new QuicConnection?[connectionCount];
         var connectionLocks = new object[connectionCount];
         // Critical H3 unidirectional streams must stay open for the connection lifetime
-        // (closing them is H3_CLOSED_CRITICAL_STREAM = 0x104 / 260 — Kestrel aborts).
+        // (closing them is H3_CLOSED_CRITICAL_STREAM = 0x104 / 260 — many server stacks abort).
         var retainedUnidirectional = new ConcurrentBag<QuicStream>();
         for (var i = 0; i < connectionCount; i++)
             connectionLocks[i] = new object();

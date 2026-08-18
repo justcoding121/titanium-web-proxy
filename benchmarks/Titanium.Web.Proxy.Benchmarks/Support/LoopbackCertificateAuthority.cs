@@ -6,7 +6,7 @@ namespace Titanium.Web.Proxy.Benchmarks.Support;
 /// <summary>
 ///     Process-local certificate authority for the HTTP/2 end-to-end benchmark, which needs a real
 ///     TLS handshake on both legs: the proxy must present a MITM leaf certificate to the client leg,
-///     and must validate the Kestrel origin's certificate on the server leg. Deliberately minimal
+///     and must validate the origin server's certificate on the server leg. Deliberately minimal
 ///     compared to a production certificate store - a benchmark run is single-process and
 ///     short-lived, so there is nothing to persist or trust system-wide.
 /// </summary>
@@ -20,7 +20,7 @@ internal static class LoopbackCertificateAuthority
     public static X509Certificate2 RootCertificate => rootCertificate.Value;
 
     /// <summary>
-    ///     Vends an independent <see cref="X509Certificate2" /> instance each call so Kestrel can own
+    ///     Vends an independent <see cref="X509Certificate2" /> instance each call so the origin server can own
     ///     and dispose "its" copy without invalidating a shared key handle used elsewhere.
     /// </summary>
     public static X509Certificate2 ServerCertificate =>

@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.Http2;
 
 /// <summary>
 ///     Bounded pool of <see cref="Http2StreamState" /> shells reused across streams on one connection
-///     (Kestrel Http2Stream pooling analog). Caps retained instances to avoid unbounded growth.
+///     (HTTP/2 stream state pooling pattern). Caps retained instances to avoid unbounded growth.
 /// </summary>
 internal sealed class Http2StreamStatePool
 {

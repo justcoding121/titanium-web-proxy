@@ -20,7 +20,7 @@ namespace Titanium.Web.Proxy.Models;
 ///         When <see cref="EnableHttp3" /> is <see langword="true" /> (and
 ///         <see cref="ProxyServer.EnableHttp3" /> is enabled with <see cref="ProxyEndPoint.DecryptSsl" />),
 ///         the endpoint also listens for HTTP/3 on the same IP:port over UDP and injects
-///         <c>Alt-Svc: h3=":PORT"</c> into H1/H2 responses — Kestrel-style reverse HTTPS.
+///         <c>Alt-Svc: h3=":PORT"</c> into H1/H2 responses — reverse HTTPS with Alt-Svc advertisement.
 ///     </para>
 /// </summary>
 [DebuggerDisplay("Transparent: {IpAddress}:{Port}")]

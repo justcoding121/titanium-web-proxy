@@ -25,7 +25,7 @@ after it has silently rotted for several releases.
 | Header parse cost | `HeaderParseBenchmarks` | Real internal `HeaderParser.ReadHeaders`, 5/25/100 headers. |
 | Chunk parse cost | `ChunkSizeLineParseBenchmarks` | Real line reader plus a legacy `int.TryParse` hex baseline. Production parsing uses `ChunkSizeParser` with `ProxyLimits.DefaultMaxChunkSizeBytes`; keep this benchmark as a historical comparison unless it is updated to call that API. |
 | HTTP/1 throughput, with/without body interception | `Http1ProxyThroughputBenchmarks` | Real `ProxyServer` against a plain-HTTP loopback origin; `InterceptBody` toggles `GetRequestBody()`/`GetResponseBody()`. |
-| HTTP/2 multiplexed streams at varying concurrency | `Http2ProxyThroughputBenchmarks` | Real `ProxyServer` MITM-decrypting to a Kestrel HTTP/2 origin; `ConcurrentStreams` = 1/10/50 over one connection. |
+| HTTP/2 multiplexed streams at varying concurrency | `Http2ProxyThroughputBenchmarks` | Real `ProxyServer` MITM-decrypting to a managed HTTP/2 origin; `ConcurrentStreams` = 1/10/50 over one connection. |
 | Allocation / LOH growth per request | All of the above | `[MemoryDiagnoser]` on every benchmark class reports Gen0/1/2 collections and allocated bytes per operation. |
 | Connection-pool acquire/release under contention | Not isolated separately | `Http1ProxyThroughputBenchmarks`'s repeated GETs against one loopback origin already drive `TcpConnectionFactory.GetServerConnection`/`Release` on every iteration. Constructing a `SessionEventArgsBase` by hand to isolate the pool alone was judged not worth the fragility versus this incidental, realistic coverage; revisit if pool-lock sharding (PR item 7) needs a dedicated number. |
 

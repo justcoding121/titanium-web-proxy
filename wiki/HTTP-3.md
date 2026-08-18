@@ -30,7 +30,7 @@ sudo apt-get update && sudo apt-get install -y libmsquic
   - **macOS**: not bundled by the .NET runtime. See [macOS](#macos) below for the bundling workaround.
 - At runtime: `System.Net.Quic.QuicListener.IsSupported == true` — check this before enabling HTTP/3.
 - An inbound HTTP/3 endpoint: either `TransparentQuicProxyEndPoint` (UDP-only transparent/NAT) or
-  `TransparentProxyEndPoint` with `EnableHttp3 = true` (Kestrel-style TCP+UDP reverse listen).
+  `TransparentProxyEndPoint` with `EnableHttp3 = true` (reference .NET server stack-style TCP+UDP reverse listen).
 
 The Linux [RPS saturation](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/rps-saturation.yml) workflow installs `libmsquic` so HTTP/3 probe arms run on `ubuntu-latest`.
 

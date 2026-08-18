@@ -935,7 +935,7 @@ public partial class ProxyServer
     /// </summary>
     private static void LowercaseHeaderNames(HeaderCollection headers)
     {
-        // Fast path: origin already sent lowercase names (common for Kestrel / modern stacks).
+        // Fast path: origin already sent lowercase names (common for modern server stacks).
         if (!headers.Any(header => HeaderNameHasUpperCaseAscii(header.Name)))
             return;
 

@@ -17,7 +17,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers;
 
 /// <summary>
 ///     A minimal, hand-rolled HTTP/2 origin server used to exercise proxy behavior that a real HTTP/2
-///     server (Kestrel) either cannot easily be told to do (send an interim 1xx, split a header block
+///     server (managed HTTP/2 stack) either cannot easily be told to do (send an interim 1xx, split a header block
 ///     across CONTINUATION frames, send trailers with exact byte control) or a real HTTP/2 client
 ///     (SocketsHttpHandler) has no public API for on the request side (see <see cref="Http2RawFrame" />
 ///     for the shared frame read/write helpers).

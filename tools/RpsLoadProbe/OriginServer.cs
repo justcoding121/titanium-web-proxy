@@ -12,7 +12,7 @@ using Titanium.Web.Proxy.RpsLoadProbe.Support;
 namespace Titanium.Web.Proxy.RpsLoadProbe;
 
 /// <summary>
-/// Kestrel origin that serves a fixed-size body and drains request bodies. Shared by every proxy arm.
+/// Managed loopback origin that serves a fixed-size body and drains request bodies. Shared by every proxy arm.
 /// </summary>
 internal sealed class OriginServer : IAsyncDisposable
 {

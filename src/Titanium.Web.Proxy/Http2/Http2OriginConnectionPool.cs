@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Security;
 using System.Threading;
@@ -90,11 +91,13 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
         Interlocked.Increment(ref entry.Interest);
         try
         {
+            DiagPickStats.OnRent();
             var limits = proxyServer.ResourceLimits;
             var picked = TryPick(entry, limits);
             if (picked != null)
                 return picked;
 
+            DiagPickStats.OnCreationGate();
             await entry.CreationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
@@ -110,11 +113,13 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
                     // At max connections: share the least-loaded usable member (caller may wait on
                     // concurrencyGate). If none remain, open would have been the only option —
                     // fall through to open when Count is somehow zero after races.
+                    DiagPickStats.OnTryPickAny();
                     picked = TryPickAnyUsable(entry);
                     if (picked != null)
                         return picked;
                 }
 
+                DiagPickStats.OnOpen();
                 var created = await openAsync(cancellationToken).ConfigureAwait(false);
                 lock (entry.Gate)
                 {
@@ -251,13 +256,18 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
 
             Http2OriginConnection? best = null;
             var bestActive = int.MaxValue;
+            var activeSum = 0;
+            var softCapSample = 0;
             foreach (var c in entry.Connections)
             {
                 if (!c.IsUsable || c.IsNearStreamIdExhaustion)
                     continue;
 
+                var soft = c.SoftStreamCapacity;
+                softCapSample = soft; // same threshold on all members in practice
                 var active = c.ActiveStreamCount;
-                if (active >= c.SoftStreamCapacity)
+                activeSum += active;
+                if (active >= soft)
                     continue;
 
                 if (active < bestActive)
@@ -266,6 +276,8 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
                     bestActive = active;
                 }
             }
+
+            DiagPickStats.OnTryPick(entry.Connections.Count, softCapSample, activeSum, best != null);
 
             if (best != null)
             {
@@ -389,5 +401,130 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
         internal readonly List<Http2OriginConnection> Connections = new();
         internal readonly SemaphoreSlim CreationGate = new(1, 1);
         internal int Interest;
+    }
+
+    /// <summary>
+    ///     Diag-only counters for pool pick shape (env <c>TWP_DIAG_POOL_PICK=1</c>). Process-wide; not thread-local.
+    /// </summary>
+    internal static class DiagPickStats
+    {
+        private static readonly bool Enabled =
+            string.Equals(Environment.GetEnvironmentVariable("TWP_DIAG_POOL_PICK"), "1",
+                StringComparison.Ordinal);
+
+        internal static long RentCalls;
+        internal static long TryPickCalls;
+        internal static long TryPickHits;
+        internal static long TryPickSoftMiss;
+        internal static long CreationGateEnters;
+        internal static long TryPickAnyUsableCalls;
+        internal static long Opens;
+        internal static long MemberSumOnPick;
+        internal static long MemberSamples;
+        internal static long SoftCapSumOnPick;
+        internal static long ActiveSumOnPick;
+
+        private static int loggerStarted;
+
+        internal static bool IsEnabled => Enabled;
+
+        internal static void OnRent()
+        {
+            if (!Enabled) return;
+            var n = Interlocked.Increment(ref RentCalls);
+            EnsureLogger();
+            if (n % 5000 == 0)
+                Emit($"tick rents={n}");
+        }
+
+        private static void EnsureLogger()
+        {
+            if (Interlocked.Exchange(ref loggerStarted, 1) != 0)
+                return;
+
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => Emit("exit");
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    while (true)
+                    {
+                        await Task.Delay(2000).ConfigureAwait(false);
+                        Emit("periodic");
+                    }
+                }
+                catch
+                {
+                    // ignore
+                }
+            });
+        }
+
+        private static void Emit(string tag)
+        {
+            var line = $"[TWP_DIAG_POOL_PICK {tag}] {FormatSummary()}";
+            var path = Environment.GetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT");
+            if (!string.IsNullOrEmpty(path))
+            {
+                try
+                {
+                    File.AppendAllText(path, line + Environment.NewLine);
+                    return;
+                }
+                catch
+                {
+                    // fall through
+                }
+            }
+
+            Console.Error.WriteLine(line);
+        }
+
+        internal static void OnTryPick(int members, int softCap, int activeSum, bool hit)
+        {
+            if (!Enabled) return;
+            Interlocked.Increment(ref TryPickCalls);
+            Interlocked.Add(ref MemberSumOnPick, members);
+            Interlocked.Increment(ref MemberSamples);
+            Interlocked.Add(ref SoftCapSumOnPick, softCap);
+            Interlocked.Add(ref ActiveSumOnPick, activeSum);
+            if (hit) Interlocked.Increment(ref TryPickHits);
+            else Interlocked.Increment(ref TryPickSoftMiss);
+        }
+
+        internal static void OnCreationGate()
+        {
+            if (Enabled) Interlocked.Increment(ref CreationGateEnters);
+        }
+
+        internal static void OnTryPickAny()
+        {
+            if (Enabled) Interlocked.Increment(ref TryPickAnyUsableCalls);
+        }
+
+        internal static void OnOpen()
+        {
+            if (Enabled) Interlocked.Increment(ref Opens);
+        }
+
+        internal static string FormatSummary()
+        {
+            var rents = Volatile.Read(ref RentCalls);
+            var picks = Volatile.Read(ref TryPickCalls);
+            var hits = Volatile.Read(ref TryPickHits);
+            var miss = Volatile.Read(ref TryPickSoftMiss);
+            var gate = Volatile.Read(ref CreationGateEnters);
+            var any = Volatile.Read(ref TryPickAnyUsableCalls);
+            var opens = Volatile.Read(ref Opens);
+            var samples = Volatile.Read(ref MemberSamples);
+            var avgMembers = samples == 0 ? 0.0 : (double)Volatile.Read(ref MemberSumOnPick) / samples;
+            var avgSoft = samples == 0 ? 0.0 : (double)Volatile.Read(ref SoftCapSumOnPick) / samples;
+            var avgActive = samples == 0 ? 0.0 : (double)Volatile.Read(ref ActiveSumOnPick) / samples;
+            var missRate = picks == 0 ? 0.0 : 100.0 * miss / picks;
+            return
+                $"rents={rents} tryPick={picks} hit={hits} softMiss={miss} ({missRate:F1}%) " +
+                $"creationGate={gate} tryPickAny={any} opens={opens} " +
+                $"avgMembers={avgMembers:F2} avgSoftCapSample={avgSoft:F1} avgActiveSum={avgActive:F1}";
+        }
     }
 }

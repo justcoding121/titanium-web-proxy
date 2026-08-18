@@ -56,13 +56,13 @@ namespace Titanium.Web.Proxy.Http2
         internal const int InitialConnectionWindowIncrement = 15663105;
 
         /// <summary>
-        ///     Kestrel-class stream receive window advertised to the HTTP/2 client via SETTINGS_INITIAL_WINDOW_SIZE
+        ///     768 KiB stream receive window advertised to the HTTP/2 client via SETTINGS_INITIAL_WINDOW_SIZE
         ///     (768 KiB). RFC default 65535 is one byte short of a 64 KiB POST and serializes concurrent uploads.
         /// </summary>
         internal const int ClientInitialStreamWindowSize = 768 * 1024;
 
         /// <summary>
-        ///     Kestrel-class connection receive window for the HTTP/2 client (1 MiB). Sent as a connection-level
+        ///     1 MiB connection receive window for the HTTP/2 client. Sent as a connection-level
         ///     WINDOW_UPDATE increment of <see cref="ClientConnectionWindowIncrement"/>.
         /// </summary>
         internal const int ClientInitialConnectionWindowSize = 1024 * 1024;
@@ -75,7 +75,7 @@ namespace Titanium.Web.Proxy.Http2
 
         /// <summary>
         ///     Batch threshold for receive-side WINDOW_UPDATE (half of <see cref="ClientInitialStreamWindowSize"/>),
-        ///     matching Kestrel's InputFlowControl strategy so credit is not drip-fed under the write lock.
+        ///     matching a batched half-window credit strategy so credit is not drip-fed under the write lock.
         /// </summary>
         internal const int ReceiveCreditBatchThreshold = ClientInitialStreamWindowSize / 2;
 
@@ -96,7 +96,7 @@ namespace Titanium.Web.Proxy.Http2
             var frameHeaderBuffer = new byte[9];
 
             // SETTINGS: ENABLE_PUSH=0 + HEADER_TABLE_SIZE=0 (static-table-only for compressed relay /
-            // origin connections the proxy owns) + the Kestrel-class INITIAL_WINDOW_SIZE. The stream
+            // origin connections the proxy owns) + the 768 KiB INITIAL_WINDOW_SIZE. The stream
             // window must be at least ReceiveCreditBatchThreshold or the batched receive-credit grants
             // never flush and a >64 KiB response body deadlocks on the RFC-default 65,535 window.
             frameHeader.StreamId = 0;
@@ -256,7 +256,7 @@ namespace Titanium.Web.Proxy.Http2
             }
 
             // Do NOT send connection WINDOW_UPDATE toward the client before the first SETTINGS frame.
-            // Strict peers (including .NET HttpClient/Kestrel) treat a non-SETTINGS first frame as a
+            // Strict peers (including .NET HttpClient and strict ASP.NET Core server stacks) treat a non-SETTINGS first frame as a
             // PROTOCOL_ERROR — the same failure mode as InitialOriginWindowUpdateSent toward origins.
             // Client connection credit is sent immediately after ServerSettingsRelayed below.
 
@@ -540,7 +540,7 @@ namespace Titanium.Web.Proxy.Http2
 
             // Mixed-transport passthrough (inbound h2c client → TLS origin, or TLS-terminated client →
             // cleartext h2 origin): the verbatim compressed block still carries the client's ':scheme',
-            // and strict origins (Kestrel included) reset every stream whose :scheme does not match the
+            // and strict ASP.NET Core origins reset every stream whose :scheme does not match the
             // origin transport with RST_STREAM(PROTOCOL_ERROR). Detect the mismatch once here; request
             // blocks are then decoded with a collecting listener and re-encoded with the origin-transport
             // scheme in RelayCompressedHeaderBlockAsync. Same-transport connections keep the zero-work
@@ -638,7 +638,7 @@ namespace Titanium.Web.Proxy.Http2
             }
 
             // Grants back flow-control credit consumed by reading DATA frames. Batched at
-            // ReceiveCreditBatchThreshold (half of the Kestrel-class stream window) so every DATA frame
+            // ReceiveCreditBatchThreshold (half of the 768 KiB stream window) so every DATA frame
             // does not take the write lock for two WINDOW_UPDATE frames. Flushed on END_STREAM / stream
             // removal and when the threshold is crossed.
             int pendingConnectionReceiveCredit = 0;
@@ -1655,7 +1655,7 @@ namespace Titanium.Web.Proxy.Http2
             }
 
             byte[] buffer = new byte[MaxAcceptableFrameSize];
-            // Kestrel Http2Connection reads a large Pipe buffer then peels frames with
+            // Typical HTTP/2 server stacks read a large Pipe buffer then peel frames with
             // Http2FrameReader.TryReadFrame. Mirror that without a ReadOnlySequence retrofit:
             // one socket ReadAsync fills up to 32 KiB; subsequent frames reuse leftover bytes.
             var intake = new Http2FrameIntake(input);
@@ -2897,7 +2897,7 @@ namespace Titanium.Web.Proxy.Http2
                         length + 6 <= buffer.Length)
                     {
                         // Peer omitted SETTINGS_INITIAL_WINDOW_SIZE (RFC default 65535). Inject the
-                        // Kestrel-class stream window onto the wire toward the other leg — required toward
+                        // 768 KiB stream window onto the wire toward the other leg — required toward
                         // the origin for the same batched-receive-credit liveness reason as the in-place
                         // rewrite above.
                         var window = ClientInitialStreamWindowSize;
@@ -2957,7 +2957,7 @@ namespace Titanium.Web.Proxy.Http2
                     // is scoped to the client-side DATA stream and must survive an origin RST_STREAM so
                     // that any already-received client DATA frames can still finish firing their events.
                     // (An origin RST_STREAM with NO_ERROR is a normal post-response cleanup by servers
-                    // like Kestrel; removing the observer here would silently drop multipart events on
+                    // by strict server stacks; removing the observer here would silently drop multipart events on
                     // slower hosts where the RST races the client DATA processing.)
                     if (isClient)
                         connectionState.MultipartObservers.TryRemove(streamId, out _);
@@ -3295,7 +3295,7 @@ namespace Titanium.Web.Proxy.Http2
                     {
                         connectionState.ServerSettingsRelayed.TrySetResult(true);
 
-                        // Kestrel-class connection window toward the client — must follow SETTINGS on the
+                        // 1 MiB connection window toward the client — must follow SETTINGS on the
                         // wire (see SendHttp2 remarks). Same CompareExchange guard as the origin path.
                         if (Interlocked.CompareExchange(ref connectionState.InitialClientWindowUpdateSent, 1, 0) == 0)
                         {
@@ -3588,7 +3588,7 @@ namespace Titanium.Web.Proxy.Http2
 
         /// <summary>
         ///     Encodes HEADERS on the frame-read loop, copies the framed bytes, and queues the socket write
-        ///     so the loop can admit the next stream without awaiting peer I/O (Kestrel StartStream + continue).
+        ///     so the loop can admit the next stream without awaiting peer I/O (encode on the read loop, queue the write, continue).
         ///     DATA frames for the same direction must also go through <see cref="Http2ConnectionState.EnqueueWriteRented"/>
         ///     so they cannot overtake this HEADERS on the wire.
         /// </summary>
@@ -4363,8 +4363,8 @@ namespace Titanium.Web.Proxy.Http2
 
         /// <summary>
         ///     Socket-backed frame intake: one large <see cref="Stream.ReadAsync(Memory{byte}, CancellationToken)" />
-        ///     can satisfy many subsequent 9-byte headers + payloads (Kestrel <c>Http2Connection</c> /
-        ///     <c>Http2FrameReader.TryReadFrame</c> pattern without adopting <c>ReadOnlySequence</c>).
+        ///     can satisfy many subsequent 9-byte headers + payloads (typical HTTP/2 server stack
+        ///     <c>Http2Connection</c> / <c>Http2FrameReader.TryReadFrame</c> pattern without adopting <c>ReadOnlySequence</c>).
         /// </summary>
         private sealed class Http2FrameIntake
         {

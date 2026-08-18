@@ -74,7 +74,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
 
         // Combined --serve only when origin and proxy must share the in-process test CA
         // (HTTPS / QUIC origin). Cleartext-origin terminate arms run split so TWP is not
-        // contending with Kestrel for CPU/GC the way a separate native reverse peer process does not.
+        // contending with the origin server for CPU/GC the way a separate native reverse peer process does not.
         if (RequiresCombinedServe(mode))
             return await StartCombinedServeAsync(exe, mode, nginxPath, maxCachedConnections, workload,
                 cancellationToken);

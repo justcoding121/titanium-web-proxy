@@ -23,7 +23,7 @@ public class ConnectionPoolTests
 
         var server = testSuite.GetServer();
 
-        // Kestrel assigns a distinct Connection.Id per upstream TCP connection, so reuse of a pooled
+        // ASP.NET Core assigns a distinct Connection.Id per upstream TCP connection, so reuse of a pooled
         // proxy -> server connection shows up as the same id across sequential requests.
         var connectionIds = new ConcurrentBag<string>();
         server.HandleRequest(context =>
