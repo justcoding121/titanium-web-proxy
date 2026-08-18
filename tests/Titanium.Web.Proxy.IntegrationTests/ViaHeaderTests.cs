@@ -50,6 +50,7 @@ public class ViaHeaderTests
         });
 
         var proxy = testSuite.GetProxy();
+        proxy.EnableHttpInterception = true; // Via injection runs only on the interception path
         proxy.ViaHeaderPseudonym = "test-proxy";
 
         using var client = testSuite.GetClient(proxy);
@@ -74,6 +75,7 @@ public class ViaHeaderTests
         });
 
         var proxy = testSuite.GetProxy();
+        proxy.EnableHttpInterception = true; // Via injection runs only on the interception path
         proxy.ViaHeaderPseudonym = "test-proxy";
 
         using var client = testSuite.GetClient(proxy);
@@ -105,6 +107,7 @@ public class ViaHeaderTests
         });
 
         var proxy = testSuite.GetProxy();
+        proxy.EnableHttpInterception = true; // Via injection runs only on the interception path
         proxy.ViaHeaderPseudonym = "";  // explicitly disable Via injection
 
         using var client = testSuite.GetClient(proxy);
@@ -126,6 +129,7 @@ public class ViaHeaderTests
         });
 
         var proxy = testSuite.GetProxy();
+        proxy.EnableHttpInterception = true; // Via injection / loop detection run on the interception path
         proxy.ViaHeaderPseudonym = "my-proxy";
 
         using var client = testSuite.GetClient(proxy);
@@ -156,6 +160,7 @@ public class ViaHeaderTests
         });
 
         var proxy = testSuite.GetProxy();
+        proxy.EnableHttpInterception = true; // Via injection runs only on the interception path
         proxy.ViaHeaderPseudonym = "proxy2";
 
         using var client = testSuite.GetClient(proxy);
