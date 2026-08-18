@@ -97,6 +97,17 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
             if (picked != null)
                 return picked;
 
+            // Soft-miss. Skip CreationGate only when a Gate-held snapshot says the authority
+            // is already at max — open is impossible, so serializing on CreationGate cannot
+            // create and would only convoy oversubscribed rents (c=64).
+            if (!CanOpenAnother(entry, limits))
+            {
+                DiagPickStats.OnTryPickAny();
+                picked = TryPickAnyUsable(entry);
+                if (picked != null)
+                    return picked;
+            }
+
             DiagPickStats.OnCreationGate();
             await entry.CreationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
@@ -110,9 +121,6 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
 
                 if (!CanOpenAnother(entry, limits))
                 {
-                    // At max connections: share the least-loaded usable member (caller may wait on
-                    // concurrencyGate). If none remain, open would have been the only option —
-                    // fall through to open when Count is somehow zero after races.
                     DiagPickStats.OnTryPickAny();
                     picked = TryPickAnyUsable(entry);
                     if (picked != null)
@@ -250,71 +258,70 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
 
     private static Http2OriginConnection? TryPick(AuthorityEntry entry, ProxyResourceLimits limits)
     {
-        lock (entry.Gate)
+        var snapshot = SnapshotMembers(entry);
+        Http2OriginConnection? best = null;
+        var bestActive = int.MaxValue;
+        var activeSum = 0;
+        var softCapSample = 0;
+        foreach (var c in snapshot)
         {
-            PruneUnusableUnderLock(entry);
+            if (!c.IsUsable || c.IsNearStreamIdExhaustion)
+                continue;
 
-            Http2OriginConnection? best = null;
-            var bestActive = int.MaxValue;
-            var activeSum = 0;
-            var softCapSample = 0;
-            foreach (var c in entry.Connections)
+            var soft = c.SoftStreamCapacity;
+            softCapSample = soft;
+            var active = c.ActiveStreamCount;
+            activeSum += active;
+            if (active >= soft)
+                continue;
+
+            if (active < bestActive)
             {
-                if (!c.IsUsable || c.IsNearStreamIdExhaustion)
-                    continue;
-
-                var soft = c.SoftStreamCapacity;
-                softCapSample = soft; // same threshold on all members in practice
-                var active = c.ActiveStreamCount;
-                activeSum += active;
-                if (active >= soft)
-                    continue;
-
-                if (active < bestActive)
-                {
-                    best = c;
-                    bestActive = active;
-                }
+                best = c;
+                bestActive = active;
             }
-
-            DiagPickStats.OnTryPick(entry.Connections.Count, softCapSample, activeSum, best != null);
-
-            if (best != null)
-            {
-                best.Touch();
-                return best;
-            }
-
-            // All at soft capacity: open another if room; otherwise fall through to TryPickAnyUsable
-            // at the call site when CanOpenAnother is false.
-            _ = limits;
-            return null;
         }
+
+        DiagPickStats.OnTryPick(snapshot.Length, softCapSample, activeSum, best != null);
+        best?.Touch();
+        _ = limits;
+        return best;
     }
 
     private static Http2OriginConnection? TryPickAnyUsable(AuthorityEntry entry)
     {
+        var snapshot = SnapshotMembers(entry);
+        Http2OriginConnection? best = null;
+        var bestActive = int.MaxValue;
+        foreach (var c in snapshot)
+        {
+            if (!c.IsUsable || c.IsNearStreamIdExhaustion)
+                continue;
+
+            var active = c.ActiveStreamCount;
+            if (active < bestActive)
+            {
+                best = c;
+                bestActive = active;
+            }
+        }
+
+        best?.Touch();
+        return best;
+    }
+
+    /// <summary>
+    ///     Prune + copy member refs under Gate; caller picks outside the lock using Interlocked
+    ///     actives. Stale snapshot is acceptable (IsUsable filters retirements).
+    /// </summary>
+    private static Http2OriginConnection[] SnapshotMembers(AuthorityEntry entry)
+    {
         lock (entry.Gate)
         {
             PruneUnusableUnderLock(entry);
-
-            Http2OriginConnection? best = null;
-            var bestActive = int.MaxValue;
-            foreach (var c in entry.Connections)
-            {
-                if (!c.IsUsable || c.IsNearStreamIdExhaustion)
-                    continue;
-
-                var active = c.ActiveStreamCount;
-                if (active < bestActive)
-                {
-                    best = c;
-                    bestActive = active;
-                }
-            }
-
-            best?.Touch();
-            return best;
+            return entry.Connections.Count == 0
+                ? []
+                : entry.Connections.ToArray();
         }
     }
 

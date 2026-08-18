@@ -86,6 +86,7 @@ internal sealed class Http2OriginConnection : IDisposable
     private int disposed;
     private int pendingDispose;
     private int leaseCount;
+    private int activeStreamCount;
     private long lastUsedUtcTicks = DateTime.UtcNow.Ticks;
 
     private Http2OriginConnection(TcpServerConnection connection, ILogger logger, long maxBufferedBodyBytes,
@@ -102,8 +103,11 @@ internal sealed class Http2OriginConnection : IDisposable
     /// <summary>True while this connection may still be leased for a new request.</summary>
     internal bool IsUsable => !faulted && !goingAway && !connection.IsClosed;
 
-    /// <summary>In-flight streams currently registered on this connection.</summary>
-    internal int ActiveStreamCount => streams.Count;
+    /// <summary>
+    ///     In-flight streams currently registered on this connection. Interlocked — do not use
+    ///     <c>streams.Count</c> (that takes every ConcurrentDictionary lock).
+    /// </summary>
+    internal int ActiveStreamCount => Volatile.Read(ref activeStreamCount);
 
     /// <summary>Rents currently pinned on this connection (SendAsync / tunnel in progress).</summary>
     internal int LeaseCount => Volatile.Read(ref leaseCount);
@@ -178,6 +182,21 @@ internal sealed class Http2OriginConnection : IDisposable
         TryDisposeIfRetiredAndIdle();
     }
 
+    private void RegisterOpenedStream(int streamId, PendingStream pending)
+    {
+        if (!streams.TryAdd(streamId, pending))
+            throw new InvalidOperationException($"HTTP/2 stream {streamId} is already registered on this origin connection.");
+        Interlocked.Increment(ref activeStreamCount);
+    }
+
+    private bool TryUnregisterStream(int streamId, out PendingStream? pending)
+    {
+        if (!streams.TryRemove(streamId, out pending))
+            return false;
+        Interlocked.Decrement(ref activeStreamCount);
+        return true;
+    }
+
     /// <summary>
     ///     Stops handing this connection out. Does not fail in-flight streams. Dispose runs when the
     ///     last lease/stream drains, so siblings on a shared connection survive GOAWAY/CloseServerConnection.
@@ -193,7 +212,7 @@ internal sealed class Http2OriginConnection : IDisposable
     {
         if (Volatile.Read(ref pendingDispose) == 0)
             return;
-        if (Volatile.Read(ref leaseCount) > 0 || streams.Count > 0)
+        if (Volatile.Read(ref leaseCount) > 0 || Volatile.Read(ref activeStreamCount) > 0)
             return;
         Dispose();
     }
@@ -290,7 +309,7 @@ internal sealed class Http2OriginConnection : IDisposable
                     throw new Http2OriginGoAwayException(
                         $"The origin sent GOAWAY before stream {streamId} could be opened; it was never processed.");
 
-                streams[streamId] = pending;
+                RegisterOpenedStream(streamId, pending);
                 sendFlow.RegisterStream(streamId);
                 streamOpened = true;
                 frameHeader.StreamId = streamId;
@@ -360,7 +379,7 @@ internal sealed class Http2OriginConnection : IDisposable
             ProxyDiagnostics.ReportCaught(logger,
                 "Http2OriginConnection SendAsync failed before response; cleaning up stream and rethrowing",
                 sendEx);
-            streams.TryRemove(streamId, out _);
+            TryUnregisterStream(streamId, out _);
             pending.Dispose();
             sendFlow.RemoveStream(streamId);
             gate.Release();
@@ -438,7 +457,7 @@ internal sealed class Http2OriginConnection : IDisposable
                 finally
                 {
                     registration.Dispose();
-                    streams.TryRemove(streamId, out _);
+                    TryUnregisterStream(streamId, out _);
                     pending.Dispose();
                     sendFlow.RemoveStream(streamId);
                     gate.Release();
@@ -459,7 +478,7 @@ internal sealed class Http2OriginConnection : IDisposable
         {
             if (!bodyHandedOff)
             {
-                streams.TryRemove(streamId, out _);
+                TryUnregisterStream(streamId, out _);
                 pending.Dispose();
                 sendFlow.RemoveStream(streamId);
                 gate.Release();
@@ -518,7 +537,7 @@ internal sealed class Http2OriginConnection : IDisposable
                     throw new Http2OriginGoAwayException(
                         $"The origin sent GOAWAY before stream {streamId} could be opened; it was never processed.");
 
-                streams[streamId] = pending;
+                RegisterOpenedStream(streamId, pending);
                 sendFlow.RegisterStream(streamId);
                 streamOpened = true;
                 frameHeader.StreamId = streamId;
@@ -538,7 +557,7 @@ internal sealed class Http2OriginConnection : IDisposable
             ProxyDiagnostics.ReportCaught(logger,
                 "Http2OriginConnection CONNECT headers send failed; cleaning up stream and rethrowing",
                 connectHeadersEx);
-            streams.TryRemove(streamId, out _);
+            TryUnregisterStream(streamId, out _);
             pending.Dispose();
             sendFlow.RemoveStream(streamId);
             gate.Release();
@@ -634,7 +653,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
     private void ReleaseTunnelBookkeeping(int streamId, PendingStream pending, SemaphoreSlim gate)
     {
-        if (streams.TryRemove(streamId, out var removed))
+        if (TryUnregisterStream(streamId, out var removed) && removed != null)
         {
             removed.TunnelDataChannel?.Writer.TryComplete();
             removed.Dispose();
@@ -1233,7 +1252,7 @@ internal sealed class Http2OriginConnection : IDisposable
         }
 
         // Use TryRemove so subsequent DATA frames for this stream-id are ignored in the read loop.
-        if (!streams.TryRemove(streamId, out pending)) return;
+        if (!TryUnregisterStream(streamId, out pending) || pending == null) return;
         pending.BodyPipe.CompleteWriter();
         TryDisposeIfRetiredAndIdle();
     }
@@ -1241,7 +1260,7 @@ internal sealed class Http2OriginConnection : IDisposable
     private void FailStream(int streamId, Exception ex)
     {
         // Use TryRemove so subsequent DATA frames for this stream are ignored in the read loop.
-        if (streams.TryRemove(streamId, out var pending))
+        if (TryUnregisterStream(streamId, out var pending) && pending != null)
             FailPending(pending, ex);
     }
 
