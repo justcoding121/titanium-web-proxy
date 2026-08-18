@@ -4,7 +4,7 @@ Titanium targets **low-overhead MITM proxying**: connection pooling, HTTP/2 mult
 
 Control arms: **nginx** (native C reverse-proxy ceiling; Linux is authoritative) and **YARP** (`Yarp.ReverseProxy`, managed .NET reverse proxy). Neither can MITM (no CONNECT / forged certs). FiddlerCore is not compared (commercial debugger license; not a throughput peer).
 
-For pooling knobs and certificate first-visit tuning, see [Performance and pooling](Home#performance-and-pooling).
+For pooling knobs and certificate first-visit tuning, see [Performance and pooling](Home#performance-and-pooling). For the methodology behind these numbers — the harness, noise control, and the profiling techniques used to find each hotspot — see [Performance Profiling](Performance-Profiling).
 
 ## Measurement environment
 
