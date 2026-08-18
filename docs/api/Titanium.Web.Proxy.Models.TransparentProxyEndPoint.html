@@ -9,7 +9,7 @@
       <meta name="viewport" content="width=device-width">
       <meta name="title" content="Class TransparentProxyEndPoint | Titanium Web Proxy ">
     
-    <meta name="description" content="A proxy end point client is not aware of. Useful when requests are redirected to this proxy end point through port forwarding via router.      When  is true (and      is enabled with ),     the endpoint also listens for HTTP/3 on the same IP:port over UDP and injects     Alt-Svc: h3=&quot;:PORT&quot; into H1/H2 responses — Kestrel-style reverse HTTPS.">
+    <meta name="description" content="A proxy end point client is not aware of. Useful when requests are redirected to this proxy end point through port forwarding via router.      When  is true (and      is enabled with ),     the endpoint also listens for HTTP/3 on the same IP:port over UDP and injects     Alt-Svc: h3=&quot;:PORT&quot; into H1/H2 responses — reverse HTTPS with Alt-Svc advertisement.">
       <link rel="shortcut icon" href="../favicon.ico">
       <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
       <link rel="stylesheet" href="../styles/docfx.css">
@@ -87,7 +87,7 @@ Useful when requests are redirected to this proxy end point through port forward
     When <a class="xref" href="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_EnableHttp3">EnableHttp3</a> is <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a> (and
     <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableHttp3">EnableHttp3</a> is enabled with <a class="xref" href="Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_DecryptSsl">DecryptSsl</a>),
     the endpoint also listens for HTTP/3 on the same IP:port over UDP and injects
-    <code>Alt-Svc: h3=":PORT"</code> into H1/H2 responses — Kestrel-style reverse HTTPS.
+    <code>Alt-Svc: h3=":PORT"</code> into H1/H2 responses — reverse HTTPS with Alt-Svc advertisement.
 </p>
 </div>
   <div class="markdown level0 conceptual"></div>
