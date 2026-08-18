@@ -1,138 +1,393 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
+using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Http2;
 
 /// <summary>
-///     Pool of <see cref="Http2OriginConnection" /> instances for one authority, used by H1→H2
-///     (and related) bridges so concurrent translated streams are not serialized onto a single
-///     origin write lock / concurrency gate.
+///     Process-scoped fan-in pool of <see cref="Http2OriginConnection" /> instances keyed by authority.
+///     Many H1 or H3 clients multiplex onto a small set of shared origin H2 connections (the inverse of
+///     <see cref="Http2OriginRelayPool" />, which fans one H2 client out to many origin legs).
+///     <para>
+///         Rent does <em>not</em> exclusive-checkout: concurrent callers share the same connection and
+///         each open a stream via <see cref="Http2OriginConnection.SendAsync" />. A new TCP+H2 session is
+///         opened only when every usable member is at soft stream capacity and the authority still has
+///         room under <see cref="ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority" />.
+///     </para>
 /// </summary>
 internal sealed class Http2OriginConnectionPool : IAsyncDisposable
 {
-    private readonly List<Http2OriginConnection> connections = new();
-    private readonly object gate = new();
-    private readonly Func<CancellationToken, Task<TcpServerConnection>> openTcpAsync;
-    private readonly ILogger logger;
-    private readonly long maxBufferedBodyBytes;
-    private readonly ProxyResourceLimits resourceLimits;
-    private int rrCursor;
-    private int disposed;
+    private static readonly TimeSpan IdleConnectionTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan IdleSweepInterval = TimeSpan.FromSeconds(15);
 
-    public Http2OriginConnectionPool(
-        Http2OriginConnection primary,
-        Func<CancellationToken, Task<TcpServerConnection>> openTcpAsync,
-        ILogger logger,
-        long maxBufferedBodyBytes,
-        ProxyResourceLimits resourceLimits)
-    {
-        connections.Add(primary);
-        this.openTcpAsync = openTcpAsync;
-        this.logger = logger;
-        this.maxBufferedBodyBytes = maxBufferedBodyBytes;
-        this.resourceLimits = resourceLimits;
-    }
+    private readonly ConcurrentDictionary<string, AuthorityEntry> pool =
+        new(StringComparer.OrdinalIgnoreCase);
 
-    public int Count
+    private readonly ProxyServer proxyServer;
+    private readonly CancellationTokenSource cleanupCts = new();
+    private readonly Task cleanupTask;
+    private readonly SemaphoreSlim drainGate = new(1, 1);
+    private volatile bool draining;
+
+    internal Http2OriginConnectionPool(ProxyServer proxyServer)
     {
-        get { lock (gate) return connections.Count; }
+        this.proxyServer = proxyServer;
+        cleanupTask = Task.Run(ClearIdleConnectionsAsync, cleanupCts.Token);
     }
 
     /// <summary>
-    ///     Returns a usable origin connection, opening another when every existing connection is at
-    ///     capacity and the pool has room.
+    ///     Builds the pool key for an H2 origin authority using the same identity dimensions as
+    ///     <see cref="TcpConnectionFactory.GetConnectionCacheKey" />.
     /// </summary>
-    public async ValueTask<Http2OriginConnection> RentAsync(CancellationToken cancellationToken)
+    internal static string BuildPoolKey(
+        ProxyServer server,
+        SessionEventArgs sessionArgs,
+        string host,
+        int port,
+        string? connectHost,
+        int? connectPort)
     {
-        lock (gate)
-        {
-            var usable = PickUsableUnderLock();
-            if (usable != null)
-                return usable;
-        }
+        var originIsHttps = sessionArgs.ProxyEndPoint is not TransparentBaseProxyEndPoint { ForwardCleartext: true };
+        var upStreamProxy = sessionArgs.CustomUpStreamProxyUsed
+                            ?? (originIsHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
+        var effectiveProxy = TcpConnectionFactory.GetEffectiveUpstreamProxy(upStreamProxy, host, port);
+        var upStreamEndPoint = sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint;
 
-        var opened = await TryOpenAsync(cancellationToken).ConfigureAwait(false);
-        if (opened != null)
-            return opened;
-
-        lock (gate)
-        {
-            foreach (var c in connections)
-            {
-                if (c.IsUsable)
-                    return c;
-            }
-
-            throw new Http2OriginGoAwayException("No usable origin HTTP/2 connection remains in the pool.");
-        }
+        return TcpConnectionFactory.GetConnectionCacheKey(
+            host, port, originIsHttps,
+            originIsHttps ? SslExtensions.Http2ProtocolAsList : null,
+            upStreamEndPoint, effectiveProxy,
+            connectHost, connectPort,
+            server.UpStreamEndPointIPv4, server.UpStreamEndPointIPv6);
     }
 
-    private Http2OriginConnection? PickUsableUnderLock()
+    /// <summary>
+    ///     Returns a usable shared origin connection for <paramref name="poolKey" />, opening one when
+    ///     needed. The caller must not dispose the connection on client disconnect; use
+    ///     <see cref="Invalidate" /> only when the connection is known bad (GOAWAY/fault) or the user
+    ///     requested <c>CloseServerConnection</c>.
+    /// </summary>
+    internal async ValueTask<Http2OriginConnection> RentAsync(
+        string poolKey,
+        Func<CancellationToken, Task<Http2OriginConnection>> openAsync,
+        CancellationToken cancellationToken)
     {
-        if (connections.Count == 0) return null;
+        if (draining)
+            throw new ObjectDisposedException(nameof(Http2OriginConnectionPool));
 
-        var start = rrCursor++ % connections.Count;
-        for (var i = 0; i < connections.Count; i++)
-        {
-            var c = connections[(start + i) % connections.Count];
-            if (c.IsUsable)
-                return c;
-        }
-
-        return null;
-    }
-
-    private async Task<Http2OriginConnection?> TryOpenAsync(CancellationToken cancellationToken)
-    {
-        lock (gate)
-        {
-            if (connections.Count >= resourceLimits.MaxOriginHttp2ConnectionsPerAuthority)
-                return null;
-        }
-
+        var entry = pool.GetOrAdd(poolKey, static _ => new AuthorityEntry());
+        Interlocked.Increment(ref entry.Interest);
         try
         {
-            var tcp = await openTcpAsync(cancellationToken).ConfigureAwait(false);
-            var created = await Http2OriginConnection.CreateAsync(tcp, logger, maxBufferedBodyBytes,
-                cancellationToken, resourceLimits).ConfigureAwait(false);
+            var limits = proxyServer.ResourceLimits;
+            var picked = TryPick(entry, limits);
+            if (picked != null)
+                return picked;
 
-            lock (gate)
+            await entry.CreationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
             {
-                if (connections.Count >= resourceLimits.MaxOriginHttp2ConnectionsPerAuthority)
+                if (draining)
+                    throw new ObjectDisposedException(nameof(Http2OriginConnectionPool));
+
+                picked = TryPick(entry, limits);
+                if (picked != null)
+                    return picked;
+
+                if (!CanOpenAnother(entry, limits))
                 {
-                    created.Dispose();
-                    return PickUsableUnderLock();
+                    // At max connections: share the least-loaded usable member (caller may wait on
+                    // concurrencyGate). If none remain, open would have been the only option —
+                    // fall through to open when Count is somehow zero after races.
+                    picked = TryPickAnyUsable(entry);
+                    if (picked != null)
+                        return picked;
                 }
 
-                connections.Add(created);
-                return created;
+                var created = await openAsync(cancellationToken).ConfigureAwait(false);
+                lock (entry.Gate)
+                {
+                    if (draining ||
+                        entry.Connections.Count >= limits.MaxOriginHttp2ConnectionsPerAuthority)
+                    {
+                        // Another opener won or we are shutting down — dispose the spare unless we
+                        // have zero members left to serve this request.
+                        if (entry.Connections.Count > 0)
+                        {
+                            created.Dispose();
+                            return TryPickAnyUsable(entry)
+                                   ?? throw new Http2OriginGoAwayException(
+                                       "No usable origin HTTP/2 connection remains in the pool.");
+                        }
+                    }
+
+                    entry.Connections.Add(created);
+                    return created;
+                }
+            }
+            finally
+            {
+                entry.CreationGate.Release();
             }
         }
-        catch (Exception ex)
+        finally
         {
-            logger.LogDebug(ex, "Failed to open additional Http2OriginConnection for pool");
+            Interlocked.Decrement(ref entry.Interest);
+        }
+    }
+
+    /// <summary>
+    ///     Offers an already-established connection (e.g. the H1 bridge seed from negotiation) into the
+    ///     pool for <paramref name="poolKey" />. Disposes it when the authority is already at capacity.
+    /// </summary>
+    internal void Offer(string poolKey, Http2OriginConnection connection)
+    {
+        if (draining || !connection.IsUsable || connection.IsNearStreamIdExhaustion)
+        {
+            connection.Dispose();
+            return;
+        }
+
+        var entry = pool.GetOrAdd(poolKey, static _ => new AuthorityEntry());
+        lock (entry.Gate)
+        {
+            if (draining ||
+                entry.Connections.Count >= proxyServer.ResourceLimits.MaxOriginHttp2ConnectionsPerAuthority)
+            {
+                connection.Dispose();
+                return;
+            }
+
+            entry.Connections.Add(connection);
+            connection.Touch();
+        }
+    }
+
+    /// <summary>
+    ///     Stops handing <paramref name="connection" /> out. In-flight streams are allowed to finish;
+    ///     the connection disposes itself when the last lease/stream drains.
+    /// </summary>
+    internal void Invalidate(string poolKey, Http2OriginConnection connection)
+    {
+        if (pool.TryGetValue(poolKey, out var entry))
+        {
+            lock (entry.Gate)
+                entry.Connections.Remove(connection);
+        }
+
+        connection.Retire();
+    }
+
+    /// <summary>
+    ///     Cancels idle sweep, disposes every pooled connection, and clears the dictionary. Called from
+    ///     <see cref="ProxyServer.Stop" /> / Dispose so static-bag leaks cannot outlive the proxy.
+    /// </summary>
+    internal async ValueTask DrainAsync()
+    {
+        await drainGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            draining = true;
+            cleanupCts.Cancel();
+            try
+            {
+                await cleanupTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // expected
+            }
+
+            foreach (var kvp in pool)
+            {
+                Http2OriginConnection[] snapshot;
+                lock (kvp.Value.Gate)
+                {
+                    snapshot = kvp.Value.Connections.ToArray();
+                    kvp.Value.Connections.Clear();
+                }
+
+                foreach (var c in snapshot)
+                {
+                    try
+                    {
+                        c.Dispose();
+                    }
+                    catch
+                    {
+                        // ignore
+                    }
+                }
+
+                kvp.Value.CreationGate.Dispose();
+            }
+
+            pool.Clear();
+        }
+        finally
+        {
+            drainGate.Release();
+        }
+    }
+
+    public async ValueTask DisposeAsync() => await DrainAsync().ConfigureAwait(false);
+
+    private static Http2OriginConnection? TryPick(AuthorityEntry entry, ProxyResourceLimits limits)
+    {
+        lock (entry.Gate)
+        {
+            PruneUnusableUnderLock(entry);
+
+            Http2OriginConnection? best = null;
+            var bestActive = int.MaxValue;
+            foreach (var c in entry.Connections)
+            {
+                if (!c.IsUsable || c.IsNearStreamIdExhaustion)
+                    continue;
+
+                var active = c.ActiveStreamCount;
+                if (active >= c.SoftStreamCapacity)
+                    continue;
+
+                if (active < bestActive)
+                {
+                    best = c;
+                    bestActive = active;
+                }
+            }
+
+            if (best != null)
+            {
+                best.Touch();
+                return best;
+            }
+
+            // All at soft capacity: open another if room; otherwise fall through to TryPickAnyUsable
+            // at the call site when CanOpenAnother is false.
+            _ = limits;
             return null;
         }
     }
 
-    public async ValueTask DisposeAsync()
+    private static Http2OriginConnection? TryPickAnyUsable(AuthorityEntry entry)
     {
-        if (Interlocked.Exchange(ref disposed, 1) != 0)
-            return;
-
-        Http2OriginConnection[] snapshot;
-        lock (gate) snapshot = connections.ToArray();
-        foreach (var c in snapshot)
+        lock (entry.Gate)
         {
-            try { c.Dispose(); }
-            catch { /* ignore */ }
-        }
+            PruneUnusableUnderLock(entry);
 
-        await Task.CompletedTask;
+            Http2OriginConnection? best = null;
+            var bestActive = int.MaxValue;
+            foreach (var c in entry.Connections)
+            {
+                if (!c.IsUsable || c.IsNearStreamIdExhaustion)
+                    continue;
+
+                var active = c.ActiveStreamCount;
+                if (active < bestActive)
+                {
+                    best = c;
+                    bestActive = active;
+                }
+            }
+
+            best?.Touch();
+            return best;
+        }
+    }
+
+    private static bool CanOpenAnother(AuthorityEntry entry, ProxyResourceLimits limits)
+    {
+        lock (entry.Gate)
+        {
+            PruneUnusableUnderLock(entry);
+            return entry.Connections.Count < limits.MaxOriginHttp2ConnectionsPerAuthority;
+        }
+    }
+
+    private static void PruneUnusableUnderLock(AuthorityEntry entry)
+    {
+        for (var i = entry.Connections.Count - 1; i >= 0; i--)
+        {
+            var c = entry.Connections[i];
+            if (c.IsUsable && !c.IsNearStreamIdExhaustion)
+                continue;
+
+            entry.Connections.RemoveAt(i);
+            // Never Dispose here while siblings may still be in SendAsync — Retire waits for idle.
+            c.Retire();
+        }
+    }
+
+    private async Task ClearIdleConnectionsAsync()
+    {
+        try
+        {
+            while (!cleanupCts.IsCancellationRequested)
+            {
+                await Task.Delay(IdleSweepInterval, cleanupCts.Token).ConfigureAwait(false);
+                var cutOff = DateTime.UtcNow - IdleConnectionTimeout;
+
+                foreach (var kvp in pool)
+                {
+                    if (Volatile.Read(ref kvp.Value.Interest) > 0)
+                        continue;
+
+                    List<Http2OriginConnection>? toDispose = null;
+                    lock (kvp.Value.Gate)
+                    {
+                        for (var i = kvp.Value.Connections.Count - 1; i >= 0; i--)
+                        {
+                            var c = kvp.Value.Connections[i];
+                            if (c.ActiveStreamCount > 0 || c.LeaseCount > 0)
+                                continue;
+
+                            if (c.IsUsable && c.LastUsedUtc >= cutOff && !c.IsNearStreamIdExhaustion)
+                                continue;
+
+                            kvp.Value.Connections.RemoveAt(i);
+                            (toDispose ??= new List<Http2OriginConnection>()).Add(c);
+                        }
+                    }
+
+                    if (toDispose == null)
+                        continue;
+
+                    foreach (var c in toDispose)
+                    {
+                        try
+                        {
+                            c.Dispose();
+                        }
+                        catch
+                        {
+                            // ignore
+                        }
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // shut down
+        }
+    }
+
+    private sealed class AuthorityEntry
+    {
+        internal readonly object Gate = new();
+        internal readonly List<Http2OriginConnection> Connections = new();
+        internal readonly SemaphoreSlim CreationGate = new(1, 1);
+        internal int Interest;
     }
 }

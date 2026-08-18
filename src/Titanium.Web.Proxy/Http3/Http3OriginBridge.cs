@@ -1,6 +1,5 @@
 #pragma warning disable CA1416
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -40,14 +39,6 @@ namespace Titanium.Web.Proxy.Http3;
 /// </summary>
 internal static class Http3OriginBridge
 {
-    /// <summary>
-    ///     Shared H3→H2 origin connections. A bag (not a single connection) so GOAWAY / stream-id
-    ///     exhaustion rotates without disposing a connection that still has in-flight SendAsync calls.
-    /// </summary>
-    private static readonly ConcurrentDictionary<string, ConcurrentBag<Http2OriginConnection>> Http2OriginBags =
-        new(StringComparer.OrdinalIgnoreCase);
-    private const int MaxHttp2OriginsPerTarget = 16;
-
     // ────────────────────────────────────────────────────────────────────────────────────────
     // Public API
     // ────────────────────────────────────────────────────────────────────────────────────────
@@ -579,6 +570,15 @@ internal static class Http3OriginBridge
         var copyRequestBody = sessionArgs.Http3RequestBodyPump;
         if (copyRequestBody == null)
             await EnsureHttp3BufferedBodyAsync(sessionArgs, cancellationToken);
+        else if (!request.HasBody && !request.IsBodyReceived)
+        {
+            // Bodiless H3 (GET): drain client FIN via the pump, then send origin HEADERS+END_STREAM.
+            // Leaving the pump set forces HEADERS without END_STREAM plus an empty DATA frame under
+            // writeLock — profiled as wasted origin-write serialization under multiplex.
+            await copyRequestBody(static (_, _) => default, cancellationToken);
+            copyRequestBody = null;
+            request.IsBodyReceived = true;
+        }
 
         var clientHttpVersion = request.HttpVersion;
         request.HttpVersion = HttpHeader.Version20;
@@ -595,7 +595,8 @@ internal static class Http3OriginBridge
         var (host, port) = ResolveH2OriginAuthority(request);
         var (connectHost, connectPort) = ResolveTransparentForwardTarget(sessionArgs);
 
-        var poolKey = BuildHttp2OriginPoolKey(sessionArgs, server, host, port, connectHost, connectPort);
+        var poolKey = Http2OriginConnectionPool.BuildPoolKey(server, sessionArgs, host, port, connectHost,
+            connectPort);
         try
         {
             var on1xx = CreateInterimResponseAdapter(onInterimResponse);
@@ -671,29 +672,6 @@ internal static class Http3OriginBridge
         return (null, null);
     }
 
-    /// <summary>
-    ///     Pool key for H3→H2 origin bags. Matches the identity dimensions of
-    ///     <see cref="TcpConnectionFactory.GetConnectionCacheKey"/> so different upstream proxies /
-    ///     bind endpoints / TLS vs h2c never share one multiplexed connection.
-    /// </summary>
-    private static string BuildHttp2OriginPoolKey(
-        SessionEventArgs sessionArgs, ProxyServer server,
-        string host, int port, string? connectHost, int? connectPort)
-    {
-        var originIsHttps = sessionArgs.ProxyEndPoint is not TransparentBaseProxyEndPoint { ForwardCleartext: true };
-        var upStreamProxy = sessionArgs.CustomUpStreamProxyUsed
-                            ?? (originIsHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
-        var effectiveProxy = TcpConnectionFactory.GetEffectiveUpstreamProxy(upStreamProxy, host, port);
-        var upStreamEndPoint = sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint;
-
-        return TcpConnectionFactory.GetConnectionCacheKey(
-            host, port, originIsHttps,
-            originIsHttps ? SslExtensions.Http2ProtocolAsList : null,
-            upStreamEndPoint, effectiveProxy,
-            connectHost, connectPort,
-            server.UpStreamEndPointIPv4, server.UpStreamEndPointIPv6);
-    }
-
     private static Func<int, HeaderCollection, CancellationToken, Task>? CreateInterimResponseAdapter(
         Func<Response, CancellationToken, Task>? onInterimResponse)
     {
@@ -723,87 +701,80 @@ internal static class Http3OriginBridge
         Func<Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask>, CancellationToken, Task>? copyRequestBody =
             null)
     {
+        Http2OriginConnection? h2 = null;
         try
         {
-            var h2 = await LeaseHttp2OriginAsync(server, logger, sessionArgs, target, cancellationToken);
+            h2 = await LeaseHttp2OriginAsync(server, logger, sessionArgs, target, cancellationToken);
             sessionArgs.HttpClient.BindUpstreamConnection(h2.ServerConnection);
-            var exchange = await h2.SendAsync(sessionArgs.HttpClient.Request, on1xx, cancellationToken,
+            return await h2.SendAsync(sessionArgs.HttpClient.Request, on1xx, cancellationToken,
                 copyRequestBody);
-            ReturnHttp2Origin(target.PoolKey, h2);
-            return exchange;
         }
-        catch (Exception ex) when (ex is Http2OriginGoAwayException or ObjectDisposedException or IOException)
+        catch (Exception ex) when (ex is Http2OriginGoAwayException
+                                   || (ex is IOException && h2 is { IsUsable: false }))
         {
-            // Do not return a GOAWAY/closed connection; lease a fresh one and retry once.
-            // Streaming request bodies cannot be replayed — only buffered bodies retry safely.
-            if (copyRequestBody != null && !sessionArgs.HttpClient.Request.IsBodyRead)
+            // Stop new leases on this member; do not Dispose — siblings below last-stream-id
+            // must finish. Retry once on another pooled connection when the body is replayable.
+            // H3 GET still has a pump delegate even after a zero-DATA FIN, so do not treat
+            // "copyRequestBody != null" as "body was consumed and cannot be replayed".
+            if (h2 != null)
+                server.Http2OriginConnectionPool.Invalidate(target.PoolKey, h2);
+
+            if (!CanReplayHttp2OriginRequest(sessionArgs.HttpClient.Request, copyRequestBody))
                 throw;
 
-            var h2 = await LeaseHttp2OriginAsync(server, logger, sessionArgs, target, cancellationToken);
+            h2 = await LeaseHttp2OriginAsync(server, logger, sessionArgs, target, cancellationToken);
             sessionArgs.HttpClient.BindUpstreamConnection(h2.ServerConnection);
-            var exchange = await h2.SendAsync(sessionArgs.HttpClient.Request, on1xx, cancellationToken,
-                copyRequestBody);
-            ReturnHttp2Origin(target.PoolKey, h2);
-            return exchange;
+            return await h2.SendAsync(sessionArgs.HttpClient.Request, on1xx, cancellationToken);
         }
     }
+
+    private static bool CanReplayHttp2OriginRequest(Request request,
+        Func<Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask>, CancellationToken, Task>? copyRequestBody) =>
+        copyRequestBody == null
+        || request.IsBodyRead
+        || request.IsBodyReceived
+        || !request.HasBody;
 
     private readonly record struct Http2OriginTarget(
         string Host, int Port, string? ConnectHost, int? ConnectPort, string PoolKey);
-
-    private static void ReturnHttp2Origin(string poolKey, Http2OriginConnection connection)
-    {
-        if (!connection.IsUsable)
-            return;
-
-        var bag = Http2OriginBags.GetOrAdd(poolKey, static _ => new ConcurrentBag<Http2OriginConnection>());
-        if (bag.Count >= MaxHttp2OriginsPerTarget)
-            return;
-
-        bag.Add(connection);
-    }
 
     private static async Task<Http2OriginConnection> LeaseHttp2OriginAsync(
         ProxyServer server, ILogger logger, SessionEventArgs sessionArgs,
         Http2OriginTarget target, CancellationToken cancellationToken)
     {
-        var bag = Http2OriginBags.GetOrAdd(target.PoolKey, static _ => new ConcurrentBag<Http2OriginConnection>());
-        while (bag.TryTake(out var existing))
+        return await server.Http2OriginConnectionPool.RentAsync(target.PoolKey, async ct =>
         {
-            if (existing.IsUsable)
-                return existing;
-        }
+            var originIsHttps = sessionArgs.ProxyEndPoint is not TransparentBaseProxyEndPoint { ForwardCleartext: true };
+            var upStreamProxy = sessionArgs.CustomUpStreamProxyUsed
+                                ?? (originIsHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
 
-        var originIsHttps = sessionArgs.ProxyEndPoint is not TransparentBaseProxyEndPoint { ForwardCleartext: true };
-        var upStreamProxy = sessionArgs.CustomUpStreamProxyUsed
-                            ?? (originIsHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
+            var tcp = await server.TcpConnectionFactory.GetServerConnection(
+                server, target.Host, target.Port, HttpHeader.Version20, originIsHttps,
+                originIsHttps ? SslExtensions.Http2ProtocolAsList : null,
+                false, sessionArgs, sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
+                upStreamProxy,
+                true, false, ct, target.ConnectHost, target.ConnectPort);
 
-        var tcp = await server.TcpConnectionFactory.GetServerConnection(
-            server, target.Host, target.Port, HttpHeader.Version20, originIsHttps,
-            originIsHttps ? SslExtensions.Http2ProtocolAsList : null,
-            false, sessionArgs, sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
-            upStreamProxy,
-            false, false, cancellationToken, target.ConnectHost, target.ConnectPort);
+            if (tcp != null && !originIsHttps)
+                tcp.Http2Cleartext = true;
 
-        if (tcp != null && !originIsHttps)
-            tcp.Http2Cleartext = true;
+            if (tcp == null ||
+                (originIsHttps
+                    ? tcp.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2
+                    : !tcp.Http2Cleartext))
+            {
+                if (tcp != null)
+                    await server.TcpConnectionFactory.Release(tcp, true);
+                var how = originIsHttps ? "did not negotiate HTTP/2 via ALPN" : "did not accept cleartext HTTP/2 (h2c)";
+                throw new ProxyHttpException(
+                    $"The origin '{target.Host}:{target.Port}' {how} for the H3→H2 bridge.",
+                    null, sessionArgs);
+            }
 
-        if (tcp == null ||
-            (originIsHttps
-                ? tcp.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2
-                : !tcp.Http2Cleartext))
-        {
-            if (tcp != null)
-                await server.TcpConnectionFactory.Release(tcp, true);
-            var how = originIsHttps ? "did not negotiate HTTP/2 via ALPN" : "did not accept cleartext HTTP/2 (h2c)";
-            throw new ProxyHttpException(
-                $"The origin '{target.Host}:{target.Port}' {how} for the H3→H2 bridge.",
-                null, sessionArgs);
-        }
-
-        return await Http2OriginConnection.CreateAsync(tcp, logger,
-            sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes, cancellationToken,
-            server.ResourceLimits);
+            return await Http2OriginConnection.CreateAsync(tcp, logger,
+                sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes, ct,
+                server.ResourceLimits);
+        }, cancellationToken);
     }
 
     private static void PrepareH2OriginRequestHeaders(Request request)

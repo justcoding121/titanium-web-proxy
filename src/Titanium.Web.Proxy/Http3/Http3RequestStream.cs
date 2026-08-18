@@ -310,6 +310,16 @@ internal static class Http3RequestStream
             catch (Exception ex)
             {
                 logger.LogError(ex, "Unhandled error on HTTP/3 stream {StreamId}", stream.Id);
+                try
+                {
+                    var path = Environment.GetEnvironmentVariable("TWP_H3_ERROR_LOG");
+                    if (!string.IsNullOrEmpty(path))
+                        System.IO.File.AppendAllText(path, ex.ToString() + Environment.NewLine + "---" + Environment.NewLine);
+                }
+                catch
+                {
+                    // diagnostics only
+                }
                 stream.Abort(QuicAbortDirection.Write, (long)Http3ErrorCode.InternalError);
             }
             finally

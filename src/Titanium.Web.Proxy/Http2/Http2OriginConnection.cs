@@ -2,6 +2,7 @@ using System;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -36,21 +37,13 @@ internal sealed class Http2OriginGoAwayException : IOException
 
 /// <summary>
 ///     One real, persistent HTTP/2 connection to one origin server, used as the target of the
-///     HTTP/1.1-client-to-h2-origin translation bridge (<c>Http11ToHttp2BridgeHandler</c>). Leases an odd,
-///     strictly increasing stream id (RFC 7540 §5.1.1) for each translated request rather than dequeuing the
-///     whole connection the way an HTTP/1.1 pooled connection is used, so several requests - sequential or
-///     concurrent - on the same bridged client connection reuse one persistent origin connection instead of
-///     opening a new TCP/TLS connection per request.
-///     <para>
-///         Per the delivery plan, this milestone binds one dedicated instance to one client connection rather
-///         than sharing it across independent client connections; cross-client multiplexing is deferred until
-///         auth/cancellation/fairness/pool stress tests exist for it.
-///     </para>
+///     H1→H2 and H3→H2 translation bridges. Leases an odd, strictly increasing stream id
+///     (RFC 7540 §5.1.1) for each translated request. Instances are shared across independent client
+///     connections via <see cref="Http2OriginConnectionPool" /> so many clients multiplex onto a small
+///     set of origin TLS+H2 sessions.
 ///     <para>
 ///         Response bodies are streamed through a <see cref="BoundedBodyPipe" /> to enforce
-///         <c>MaxBufferedBodyBytes</c> and propagate RST_STREAM/GOAWAY cancellation promptly; the body is
-///         fully materialized into a <c>byte[]</c> before being handed to the caller (full streaming delivery
-///         to the HTTP/1.1 client is a future phase).
+///         <c>MaxBufferedBodyBytes</c> and propagate RST_STREAM/GOAWAY cancellation promptly.
 ///     </para>
 /// </summary>
 internal sealed class Http2OriginConnection : IDisposable
@@ -60,6 +53,9 @@ internal sealed class Http2OriginConnection : IDisposable
 
     /// <summary>Maximum total header block (HEADERS + CONTINUATION fragments) we accept from origin before treating it as a protocol violation.</summary>
     private const int MaxHeaderBlockBytes = 256 * 1024;
+
+    /// <summary>Retire the connection before odd client stream ids wrap (RFC 7540 §5.1.1).</summary>
+    private const int StreamIdExhaustionThreshold = int.MaxValue - 10_000;
 
     private readonly TcpServerConnection connection;
     private readonly Stream stream;
@@ -74,13 +70,21 @@ internal sealed class Http2OriginConnection : IDisposable
     private readonly TaskCompletionSource<bool> initialSettingsReceived =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    // Batched receive credit (read loop is single-threaded). Matches Http2Helper / Kestrel half-window.
+    private int pendingConnectionReceiveCredit;
+    private readonly Dictionary<int, int> pendingStreamReceiveCredit = new();
+
     private SemaphoreSlim? concurrencyGate;
+    private int concurrencyGateCapacity;
     private Decoder? decoder;
     private int lastStreamId = -1;
     private volatile bool faulted;
     private volatile bool goingAway;
     private int goAwayLastStreamId = int.MaxValue;
     private int disposed;
+    private int pendingDispose;
+    private int leaseCount;
+    private long lastUsedUtcTicks = DateTime.UtcNow.Ticks;
 
     private Http2OriginConnection(TcpServerConnection connection, ILogger logger, long maxBufferedBodyBytes,
         ProxyResourceLimits resourceLimits)
@@ -95,6 +99,44 @@ internal sealed class Http2OriginConnection : IDisposable
     /// <summary>True while this connection may still be leased for a new request.</summary>
     internal bool IsUsable => !faulted && !goingAway && !connection.IsClosed;
 
+    /// <summary>In-flight streams currently registered on this connection.</summary>
+    internal int ActiveStreamCount => streams.Count;
+
+    /// <summary>Rents currently pinned on this connection (SendAsync / tunnel in progress).</summary>
+    internal int LeaseCount => Volatile.Read(ref leaseCount);
+
+    /// <summary>
+    ///     Grow the origin pool once every member has this many active streams, well before
+    ///     <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> (Kestrel default 100). One connection serializes
+    ///     HEADERS under <c>writeLock</c>; spreading across a few TLS+H2 sessions matches YARP /
+    ///     SocketsHttpHandler <c>EnableMultipleHttp2Connections</c>.
+    ///     Profiled at c=16 with threshold 16: dumpasync showed a single
+    ///     <c>ReadLoopAsync</c> and hundreds of <c>SemaphoreSlim</c> waiters — grow earlier so
+    ///     low concurrency is not pinned to one origin TLS+H2 session.
+    /// </summary>
+    internal const int PoolGrowActiveStreamThreshold = 4;
+
+    /// <summary>
+    ///     Soft multiplex capacity used by <see cref="Http2OriginConnectionPool" /> to decide when to
+    ///     open another origin connection. Prefers filling existing connections before growing the pool.
+    /// </summary>
+    internal int SoftStreamCapacity
+    {
+        get
+        {
+            var cap = concurrencyGateCapacity;
+            if (cap <= 0)
+                cap = resourceLimits.MaxConcurrentStreamsPerConnection;
+            return Math.Max(1, Math.Min(cap, PoolGrowActiveStreamThreshold));
+        }
+    }
+
+    /// <summary>True when the next odd stream id would approach int wraparound.</summary>
+    internal bool IsNearStreamIdExhaustion => Volatile.Read(ref lastStreamId) >= StreamIdExhaustionThreshold;
+
+    /// <summary>Last time this connection was selected for a new stream (UTC).</summary>
+    internal DateTime LastUsedUtc => new(Volatile.Read(ref lastUsedUtcTicks), DateTimeKind.Utc);
+
     /// <summary>
     ///     Whether the origin advertised <c>SETTINGS_ENABLE_CONNECT_PROTOCOL=1</c> (RFC 8441).
     ///     Valid only after the initial SETTINGS exchange has completed.
@@ -107,6 +149,38 @@ internal sealed class Http2OriginConnection : IDisposable
     ///     establishment timing) to each request leased from this shared, persistent origin connection.
     /// </summary>
     internal TcpServerConnection ServerConnection => connection;
+
+    internal void Touch() => Volatile.Write(ref lastUsedUtcTicks, DateTime.UtcNow.Ticks);
+
+    /// <summary>Pins this connection so idle sweep / prune will not dispose it mid-request.</summary>
+    internal void AcquireLease() => Interlocked.Increment(ref leaseCount);
+
+    /// <summary>Drops a pin from <see cref="AcquireLease"/> and disposes if the pool asked to retire.</summary>
+    internal void ReleaseLease()
+    {
+        Interlocked.Decrement(ref leaseCount);
+        TryDisposeIfRetiredAndIdle();
+    }
+
+    /// <summary>
+    ///     Stops handing this connection out. Does not fail in-flight streams. Dispose runs when the
+    ///     last lease/stream drains, so siblings on a shared connection survive GOAWAY/CloseServerConnection.
+    /// </summary>
+    internal void Retire()
+    {
+        goingAway = true;
+        Volatile.Write(ref pendingDispose, 1);
+        TryDisposeIfRetiredAndIdle();
+    }
+
+    private void TryDisposeIfRetiredAndIdle()
+    {
+        if (Volatile.Read(ref pendingDispose) == 0)
+            return;
+        if (Volatile.Read(ref leaseCount) > 0 || streams.Count > 0)
+            return;
+        Dispose();
+    }
 
     /// <summary>
     ///     Establishes a new origin h2 connection over an already-opened <see cref="TcpServerConnection" />
@@ -160,46 +234,67 @@ internal sealed class Http2OriginConnection : IDisposable
     {
         if (!IsUsable) throw new Http2OriginGoAwayException("The origin h2 connection is no longer usable.");
 
+        Touch();
+        AcquireLease();
+        var leaseOwned = true;
+        try
+        {
         await initialSettingsReceived.Task.WaitAsync(cancellationToken);
 
         var gate = concurrencyGate ?? throw new InvalidOperationException("Origin settings were never processed.");
         await gate.WaitAsync(cancellationToken);
 
-        var streamId = Interlocked.Add(ref lastStreamId, 2);
         var pending = new PendingStream(maxBufferedBodyBytes);
-
-        if (goingAway && streamId > goAwayLastStreamId)
-        {
-            gate.Release();
-            pending.Dispose();
-            throw new Http2OriginGoAwayException(
-                $"The origin sent GOAWAY before stream {streamId} could be opened; it was never processed.");
-        }
-
-        streams[streamId] = pending;
-        sendFlow.RegisterStream(streamId);
-
+        var streamId = 0;
+        var streamOpened = false;
         var bodyHandedOff = false;
         try
         {
-            var frameHeader = new Http2FrameHeader { StreamId = streamId };
+            var frameHeader = new Http2FrameHeader();
             var frameHeaderBuffer = new byte[9];
             var dataBuffer = new byte[SafeMaxFrameSize];
 
             var streamRequest = copyRequestBody != null && !request.IsBodyRead && !request.BodyAvailable;
-            if (streamRequest)
+
+            // RFC 7540 §5.1.1: the first HEADERS for a new stream id must appear on the wire after
+            // every lower idle client stream has been opened (or those lower ids are implicitly
+            // closed). Allocating ids off the write lock lets a later stream send HEADERS first;
+            // Kestrel then GOAWAYs the connection (PROTOCOL_ERROR / STREAM_CLOSED).
+            await writeLock.WaitAsync(cancellationToken);
+            try
             {
-                await writeLock.WaitAsync(cancellationToken);
-                try
+                streamId = Interlocked.Add(ref lastStreamId, 2);
+                if (goingAway && streamId > goAwayLastStreamId)
+                    throw new Http2OriginGoAwayException(
+                        $"The origin sent GOAWAY before stream {streamId} could be opened; it was never processed.");
+
+                streams[streamId] = pending;
+                sendFlow.RegisterStream(streamId);
+                streamOpened = true;
+                frameHeader.StreamId = streamId;
+
+                if (streamRequest)
                 {
                     await Http2Helper.SendHeader(originSettings, frameHeader, frameHeaderBuffer, request,
                         endStream: false, stream, pushPromise: false);
                 }
-                finally
+                else
                 {
-                    writeLock.Release();
-                }
+                    await Http2Helper.SendBody(originSettings, request, frameHeader, frameHeaderBuffer, dataBuffer,
+                        sendFlow, stream, cancellationToken);
 
+                    if (request.HasTrailingHeaders && request.TrailingHeaders.Any())
+                        await Http2Helper.SendTrailer(originSettings, frameHeader, frameHeaderBuffer, streamId,
+                            request.TrailingHeaders, true, stream);
+                }
+            }
+            finally
+            {
+                writeLock.Release();
+            }
+
+            if (streamRequest)
+            {
                 await copyRequestBody!(
                     async (data, ct) =>
                     {
@@ -208,6 +303,7 @@ internal sealed class Http2OriginConnection : IDisposable
                             SafeMaxFrameSize, sendFlow, stream, ct, writeLock);
                     },
                     cancellationToken);
+                request.IsBodyReceived = true;
 
                 await writeLock.WaitAsync(cancellationToken);
                 try
@@ -228,25 +324,8 @@ internal sealed class Http2OriginConnection : IDisposable
                     writeLock.Release();
                 }
             }
-            else
-            {
-                await writeLock.WaitAsync(cancellationToken);
-                try
-                {
-                    await Http2Helper.SendBody(originSettings, request, frameHeader, frameHeaderBuffer, dataBuffer,
-                        sendFlow, stream, cancellationToken);
-
-                    if (request.HasTrailingHeaders && request.TrailingHeaders.Any())
-                        await Http2Helper.SendTrailer(originSettings, frameHeader, frameHeaderBuffer, streamId,
-                            request.TrailingHeaders, true, stream);
-                }
-                finally
-                {
-                    writeLock.Release();
-                }
-            }
         }
-        catch (Exception sendEx)
+        catch (Exception sendEx) when (streamOpened)
         {
             ProxyDiagnostics.ReportCaught(logger,
                 "Http2OriginConnection SendAsync failed before response; cleaning up stream and rethrowing",
@@ -256,6 +335,15 @@ internal sealed class Http2OriginConnection : IDisposable
             sendFlow.RemoveStream(streamId);
             gate.Release();
             throw;
+        }
+        finally
+        {
+            // Gate was taken but the stream never opened (cancel / GOAWAY before HEADERS).
+            if (!streamOpened)
+            {
+                pending.Dispose();
+                gate.Release();
+            }
         }
 
         try
@@ -317,8 +405,10 @@ internal sealed class Http2OriginConnection : IDisposable
                     pending.Dispose();
                     sendFlow.RemoveStream(streamId);
                     gate.Release();
+                    ReleaseLease();
                 }
             };
+            leaseOwned = false;
 
             if (trailers != null)
             {
@@ -338,6 +428,12 @@ internal sealed class Http2OriginConnection : IDisposable
                 gate.Release();
             }
         }
+        }
+        finally
+        {
+            if (leaseOwned)
+                ReleaseLease();
+        }
     }
 
     /// <summary>
@@ -352,6 +448,11 @@ internal sealed class Http2OriginConnection : IDisposable
     {
         if (!IsUsable) throw new Http2OriginGoAwayException("The origin h2 connection is no longer usable.");
 
+        Touch();
+        AcquireLease();
+        var leaseOwned = true;
+        try
+        {
         await initialSettingsReceived.Task.WaitAsync(cancellationToken);
 
         if (!originSettings.EnableConnectProtocol)
@@ -364,28 +465,27 @@ internal sealed class Http2OriginConnection : IDisposable
         var gate = concurrencyGate ?? throw new InvalidOperationException("Origin settings were never processed.");
         await gate.WaitAsync(cancellationToken);
 
-        var streamId = Interlocked.Add(ref lastStreamId, 2);
         var pending = PendingStream.CreateTunnel();
-
-        if (goingAway && streamId > goAwayLastStreamId)
-        {
-            gate.Release();
-            pending.Dispose();
-            throw new Http2OriginGoAwayException(
-                $"The origin sent GOAWAY before stream {streamId} could be opened; it was never processed.");
-        }
-
-        streams[streamId] = pending;
-        sendFlow.RegisterStream(streamId);
-
+        var streamId = 0;
+        var streamOpened = false;
         try
         {
-            var frameHeader = new Http2FrameHeader { StreamId = streamId };
+            var frameHeader = new Http2FrameHeader();
             var frameHeaderBuffer = new byte[9];
 
             await writeLock.WaitAsync(cancellationToken);
             try
             {
+                streamId = Interlocked.Add(ref lastStreamId, 2);
+                if (goingAway && streamId > goAwayLastStreamId)
+                    throw new Http2OriginGoAwayException(
+                        $"The origin sent GOAWAY before stream {streamId} could be opened; it was never processed.");
+
+                streams[streamId] = pending;
+                sendFlow.RegisterStream(streamId);
+                streamOpened = true;
+                frameHeader.StreamId = streamId;
+
                 // Must use SendHeader with endStream=false: SendBody derives END_STREAM from the body
                 // and would half-close a bodiless CONNECT before the first tunnel byte.
                 await Http2Helper.SendHeader(originSettings, frameHeader, frameHeaderBuffer, request,
@@ -396,7 +496,7 @@ internal sealed class Http2OriginConnection : IDisposable
                 writeLock.Release();
             }
         }
-        catch (Exception connectHeadersEx)
+        catch (Exception connectHeadersEx) when (streamOpened)
         {
             ProxyDiagnostics.ReportCaught(logger,
                 "Http2OriginConnection CONNECT headers send failed; cleaning up stream and rethrowing",
@@ -406,6 +506,14 @@ internal sealed class Http2OriginConnection : IDisposable
             sendFlow.RemoveStream(streamId);
             gate.Release();
             throw;
+        }
+        finally
+        {
+            if (!streamOpened)
+            {
+                pending.Dispose();
+                gate.Release();
+            }
         }
 
         try
@@ -429,6 +537,7 @@ internal sealed class Http2OriginConnection : IDisposable
             if (response.StatusCode is < 200 or >= 300)
             {
                 await ResetStreamAsync(streamId, Http2ErrorCode.Cancel, CancellationToken.None);
+                leaseOwned = false;
                 ReleaseTunnelBookkeeping(streamId, pending, gate);
                 return new Http2OriginTunnelResult(response, null);
             }
@@ -439,7 +548,8 @@ internal sealed class Http2OriginConnection : IDisposable
                 (errorCode, ct) => ResetStreamAsync(streamId, errorCode, ct),
                 () => ReleaseTunnelBookkeeping(streamId, pending, gate));
 
-            // Ownership of gate/sendFlow/pending transfers to the tunnel stream until Dispose.
+            // Ownership of gate/sendFlow/pending/lease transfers to the tunnel stream until Dispose.
+            leaseOwned = false;
             return new Http2OriginTunnelResult(response, tunnelStream);
         }
         catch (Exception tunnelEx)
@@ -457,8 +567,15 @@ internal sealed class Http2OriginConnection : IDisposable
                     "Http2OriginConnection best-effort RST_STREAM after tunnel failure", resetEx);
             }
 
+            leaseOwned = false;
             ReleaseTunnelBookkeeping(streamId, pending, gate);
             throw;
+        }
+        }
+        finally
+        {
+            if (leaseOwned)
+                ReleaseLease();
         }
     }
 
@@ -548,6 +665,7 @@ internal sealed class Http2OriginConnection : IDisposable
         }
 
         sendFlow.RemoveStream(streamId);
+        ReleaseLease();
         try
         {
             gate.Release();
@@ -609,21 +727,55 @@ internal sealed class Http2OriginConnection : IDisposable
         }
     }
 
-    /// <summary>Re-grants flow-control credit for one DATA frame's on-wire payload (RFC 7540 §6.9), see the identical strategy in <c>Http2Helper</c>.</summary>
-    private async Task GrantReceiveCreditAsync(int streamId, int bytes, CancellationToken cancellationToken)
+    /// <summary>
+    ///     Re-grants flow-control credit for DATA frame on-wire payload (RFC 7540 §6.9). Batched at
+    ///     <see cref="Http2Helper.ReceiveCreditBatchThreshold" /> (half of the Kestrel-class stream window),
+    ///     matching <see cref="Http2Helper" /> so credit is not drip-fed under the write lock per frame.
+    /// </summary>
+    private async Task GrantReceiveCreditAsync(int streamId, int bytes, bool forceFlush,
+        CancellationToken cancellationToken)
     {
-        if (bytes <= 0) return;
+        if (bytes <= 0 && !forceFlush) return;
 
-        var streamStillTracked = streams.ContainsKey(streamId);
+        if (bytes > 0)
+        {
+            pendingConnectionReceiveCredit += bytes;
+            if (pendingStreamReceiveCredit.TryGetValue(streamId, out var streamPending))
+                pendingStreamReceiveCredit[streamId] = streamPending + bytes;
+            else
+                pendingStreamReceiveCredit[streamId] = bytes;
+        }
+
+        var flushConnection = forceFlush
+                              || pendingConnectionReceiveCredit >= Http2Helper.ReceiveCreditBatchThreshold;
+        var flushStream = forceFlush
+                          || (pendingStreamReceiveCredit.TryGetValue(streamId, out var streamCredit)
+                              && streamCredit >= Http2Helper.ReceiveCreditBatchThreshold);
+
+        if (!flushConnection && !flushStream)
+            return;
+
+        var connectionBytes = flushConnection ? pendingConnectionReceiveCredit : 0;
+        var streamBytes = 0;
+        if (flushStream && pendingStreamReceiveCredit.TryGetValue(streamId, out streamBytes))
+            pendingStreamReceiveCredit.Remove(streamId);
+        if (flushConnection)
+            pendingConnectionReceiveCredit = 0;
+
+        if (connectionBytes <= 0 && streamBytes <= 0)
+            return;
+
+        var streamStillTracked = streamBytes > 0 && streams.ContainsKey(streamId);
         var frameHeader = new Http2FrameHeader();
         var frameHeaderBuffer = new byte[9];
 
         await writeLock.WaitAsync(cancellationToken);
         try
         {
-            await Http2Helper.SendWindowUpdateAsync(frameHeader, frameHeaderBuffer, 0, bytes, stream);
+            if (connectionBytes > 0)
+                await Http2Helper.SendWindowUpdateAsync(frameHeader, frameHeaderBuffer, 0, connectionBytes, stream);
             if (streamStillTracked)
-                await Http2Helper.SendWindowUpdateAsync(frameHeader, frameHeaderBuffer, streamId, bytes, stream);
+                await Http2Helper.SendWindowUpdateAsync(frameHeader, frameHeaderBuffer, streamId, streamBytes, stream);
         }
         finally
         {
@@ -741,6 +893,7 @@ internal sealed class Http2OriginConnection : IDisposable
                                 var cap = originSettings.MaxConcurrentStreams == int.MaxValue
                                     ? proxyCap
                                     : Math.Max(1, Math.Min(originSettings.MaxConcurrentStreams, proxyCap));
+                                concurrencyGateCapacity = cap;
                                 concurrencyGate = new SemaphoreSlim(cap, cap);
                                 initialSettingsReceived.TrySetResult(true);
                             }
@@ -872,9 +1025,15 @@ internal sealed class Http2OriginConnection : IDisposable
                                     }
                                 }
 
-                                await GrantReceiveCreditAsync(streamId, length, cancellationToken);
+                                await GrantReceiveCreditAsync(streamId, length, forceFlush: false,
+                                    cancellationToken);
 
-                                if ((flags & Http2FrameFlag.EndStream) != 0) CompleteStream(streamId);
+                                if ((flags & Http2FrameFlag.EndStream) != 0)
+                                {
+                                    await GrantReceiveCreditAsync(streamId, 0, forceFlush: true,
+                                        cancellationToken);
+                                    CompleteStream(streamId);
+                                }
 
                                 break;
                             }
@@ -894,6 +1053,7 @@ internal sealed class Http2OriginConnection : IDisposable
                             if (payload.Length >= 8)
                             {
                                 var lastId = (int)(BinaryPrimitives.ReadUInt32BigEndian(payload.AsSpan(0, 4)) & 0x7fffffff);
+                                var errorCode = (Http2ErrorCode)BinaryPrimitives.ReadUInt32BigEndian(payload.AsSpan(4, 4));
                                 goAwayLastStreamId = lastId;
                                 goingAway = true;
                                 foreach (var kvp in streams)
@@ -901,7 +1061,7 @@ internal sealed class Http2OriginConnection : IDisposable
                                     if (kvp.Key > lastId)
                                     {
                                         var goAwayEx = new Http2OriginGoAwayException(
-                                            $"The origin sent GOAWAY before stream {kvp.Key} was processed; it is safe to retry.");
+                                            $"The origin sent GOAWAY ({errorCode}) before stream {kvp.Key} was processed; it is safe to retry.");
                                         FailPending(kvp.Value, goAwayEx);
                                     }
                                 }
@@ -1139,6 +1299,7 @@ internal sealed class Http2OriginConnection : IDisposable
         // Use TryRemove so subsequent DATA frames for this stream-id are ignored in the read loop.
         if (!streams.TryRemove(streamId, out pending)) return;
         pending.BodyPipe.CompleteWriter();
+        TryDisposeIfRetiredAndIdle();
     }
 
     private void FailStream(int streamId, Exception ex)

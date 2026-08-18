@@ -88,11 +88,13 @@ For arms where the sweep says "per-request cost" or "saturation," attach the sam
 ```powershell
 tools/RpsLoadProbe/bin/Release/net10.0/RpsLoadProbe.exe --ramp --mode <arm> --concurrency 64 `
   --warmup-sec 2 --duration-sec 150 --results-dir tools/RpsLoadProbe/results/profiling
-# in a second shell, once the proxy child process exists:
-dotnet-trace collect -p <proxy PID>   # default profile; view the .nettrace in PerfView/VS
+# ramp logs print: attach: combined --serve pid=N  (or split origin/proxy pids)
+# in a second shell:
+dotnet-dump collect -p <proxy PID> --type Full
+dotnet-trace collect -p <proxy PID> --profile dotnet-sampled-thread-time --duration 00:00:25
 ```
 
-This is a *confirmation* tool more than a discovery tool here: it confirmed the residual H1→H2 gap is whole-box CPU saturation (dual TLS legs plus the per-request session pipeline filling all 8 cores at ~21k RPS, where YARP's cheaper per-request path fits ~42k) — i.e. the honest answer was "this is cost, not a bug."
+This is a *confirmation* tool more than a discovery tool here: it confirmed the residual H1→H2 gap after origin-connection sharing is still whole-box cost (dual TLS legs plus the per-request session pipeline). Sharing lifted the arm from **0.33× to 0.53×** YARP at c=32 (`rps-ramp-20260818-130040` / `130112`); cool remeasure after grow-at-4 stayed ~**0.51×** (`profile-baseline` / `profile-post-fix`). TTFB still rises with concurrency. At c=32 dumpasync showed **8** origin `ReadLoopAsync` instances (pool already spreading) plus `Monitor` / `SslStream` in the sampled stacks — not a single-conn convoy. Honest remainder: dual-TLS + session cost on this 8-thread box.
 
 ## Technique 5: reference-source comparison
 
@@ -100,6 +102,7 @@ When a comparable system (YARP/Kestrel) is faster, read its source to answer **n
 
 - *"Does Kestrel tune `MAX_CONCURRENT_STREAMS` dynamically?"* No — it opens additional origin connections when the stream limit is hit. TWP replicated the behavior within its own design (`Http2OriginRelayPool`).
 - *"Is `System.IO.Pipelines` the advantage?"* No — TWP's buffered `HttpStream` already amortizes socket reads to one syscall per buffer drain; the memcpy `ReadOnlySequence` would remove costs ~0.02% of a request, and the TLS decrypt copy exists in both models (`SslStream` cannot produce a `ReadOnlySequence`; Kestrel copies decrypted bytes into its Pipe too). Measured support: H1 arms at parity, and TWP's c=1 latency *lower* than YARP's.
+- *"When does YARP open another origin H2 connection?"* [`ForwarderHttpClientFactory`](https://github.com/microsoft/reverse-proxy) sets `EnableMultipleHttp2Connections = true` by default — SocketsHttpHandler grows sessions under stream pressure. TWP's `PoolGrowActiveStreamThreshold` is the analogous dial (lowered 16→4 after profiling).
 
 ## Case studies: symptom → tool → root cause → fix
 
@@ -110,7 +113,12 @@ When a comparable system (YARP/Kestrel) is faster, read its source to answer **n
 | External-site H2 downloads stalled at exactly 64 KB | Standalone repro tool (`tools/H2ExternalRepro`) + a window-size env knob | Flow-control starvation: batched WINDOW_UPDATE threshold larger than the default 65,535 B window | Advertise a Kestrel-class 768 KiB initial stream window in both directions |
 | Two bridge arms at 100% errors after the passthrough change | The benchmark suite itself (error-rate SLO) | `:scheme` mismatch in compressed header relay on mixed-transport bridges | Detect and re-encode the header block with the corrected scheme |
 | POST arm collapsed 842 → 9 RPS | Benchmark suite + targeted repro | Client DATA frames raced the handler dispatch and were routed before channels existed | Await the stream's dispatch task before routing its DATA frames |
-| H1→H2 bridge stuck at ~0.3× YARP | Stage timing (TTFB 240 µs → 1,830 µs as c grows) + `dotnet-trace` | Whole-box CPU saturation: dual TLS legs + per-request pipeline; also one origin H2 connection per client connection | Documented as cost; origin-connection sharing is the open follow-up |
+| H1→H2 bridge stuck at ~0.3× YARP | Stage timing (TTFB 240 µs → 1,830 µs as c grows) + `dotnet-trace` | Dual TLS + per-request pipeline; also one dedicated origin H2 connection per H1 client | Shared `Http2OriginConnectionPool` (0.33× → 0.53× at c=32). Remainder still looks CPU-bound |
+| H3→H2 SLO-failed above c=16 (then 100% errors after pooling) | Error log (`TWP_H3_ERROR_LOG`) + RFC 7540 §5.1.1 | Exclusive `ConcurrentBag` cap 16, then concurrent `SendAsync` allocated stream ids off the write lock so a higher id's HEADERS could hit the wire first; Kestrel implicitly closed the lower idle streams and GOAWAYed | Shared pool (no exclusive checkout) + allocate stream id and write opening HEADERS under the same write lock. Reverse H3→H2 holds c=64 at 0% errors (`rps-ramp-20260818-130231`) |
+| Inbound H3 ~0.40× YARP blamed on “managed QUIC vs MsQuic” | Code read of `QuicClientHandler.ListenQuic` | Inbound H3 already is `System.Net.Quic` / MsQuic. The gap is TWP’s C# H3 session vs Kestrel HTTP/3. H3 probe ratios also mix `quic-http3` vs HttpClient | Documented as session-layer bound; do not prototype a second QUIC stack |
+| H3→H2 c=8/16 lost ~30–40% vs exclusive-bag after pooling | Cool A/B (`profile-baseline`) + `dumpasync`/`dotnet-trace` @ c=16 (`h3h2-c16.dmp` / `.nettrace`) | Grow threshold 16 pinned all streams on **one** origin `ReadLoopAsync`; **716** `SemaphoreSlim` waiters; H3 GET also did HEADERS + empty DATA | Grow at **4** active streams + drain FIN then HEADERS+`END_STREAM` for bodiless H3. Recovered **8,418 @ c=16** (`profile-post-fix`, vs phase-0 **8,539**) |
+| H2 TLS→h2c / h2c→h2c ~0.63–0.66× cool | `dumpasync` + sampled trace @ c=32 | `Http2FrameWriter` already on path; remaining inclusive time in `ForceRead` / `CopyHttp2FrameAsync` / socket send — not a writeLock convoy | Documented; large-read bypass still open if chasing 0.80 |
+| Cool H3→H1 ~0.36× YARP (12.1k / 33.4k) | Cool pair + trace @ c=32 | Trace dominated by thread-pool idle + QuicStream I/O; not MsQuic-native hotspots. Session/`HandleAsync` is the structure of the work | Session-layer bound; generator mismatch (`quic-http3` vs HttpClient) |
 
 ## Guardrails while optimizing
 

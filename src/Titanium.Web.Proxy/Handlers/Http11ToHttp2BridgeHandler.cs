@@ -22,8 +22,8 @@ namespace Titanium.Web.Proxy;
 /// <summary>
 ///     Translates an HTTP/1.1 client connection onto an h2-only origin (<see cref="UpstreamHttpProtocol.Http2" />
 ///     with <c>AllowHttpProtocolTranslation</c> enabled - see <see cref="ResolveHttp2ForClientAsync" />), leasing
-///     one h2 stream per HTTP/1.1 request from a persistent <see cref="Http2OriginConnection" /> rather than
-///     opening a new TCP/TLS connection for every request the way pooled HTTP/1.1 origin connections are used.
+///     one h2 stream per HTTP/1.1 request from a shared <see cref="Http2OriginConnection" /> via
+///     <see cref="Http2OriginConnectionPool" /> rather than opening a new TCP/TLS connection for every request.
 /// </summary>
 /// <remarks>
 ///     This re-implements the HTTP/1.1 client read loop (request line, headers, <c>BeforeRequest</c>,
@@ -34,11 +34,9 @@ namespace Titanium.Web.Proxy;
 ///     (<c>Http2ToHttp11BridgeHandler</c>), which similarly bypasses the wire-format-specific machinery for the
 ///     leg that does not match it.
 ///     <para>
-///         Per the delivery plan, this milestone binds one dedicated origin h2 connection to the one HTTP/1.1
-///         client connection it serves (never shared across independent client connections); cross-client
-///         multiplexing is deferred until auth/cancellation/fairness/pool stress tests exist for it. Response
-///         bodies are fully buffered by <see cref="Http2OriginConnection" /> before being written back to the
-///         client rather than streamed incrementally as DATA frames arrive.
+///         Origin connections are multiplexed across independent HTTP/1.1 clients through
+///         <see cref="Http2OriginConnectionPool" /> (fan-in share). Response bodies are delivered via
+///         <see cref="Http2OriginConnection" /> streaming writers where available.
 ///     </para>
 /// </remarks>
 public partial class ProxyServer
@@ -59,8 +57,7 @@ public partial class ProxyServer
     /// <param name="connectPort">The actual TCP connect destination override port.</param>
     /// <param name="retainedConnectionTask">
     ///     The already-established (ALPN="h2") origin connection opened while resolving the connection policy,
-    ///     adopted here as the bridge's first <see cref="Http2OriginConnection" /> instead of being discarded
-    ///     and reopened.
+    ///     offered into <see cref="Http2OriginConnectionPool" /> as the authority's first member when present.
     /// </param>
     /// <param name="cancellationTokenSource">Cancellation for the whole client connection.</param>
     internal async Task SendHttp11ToHttp2Bridge(HttpClientStream clientStream, ProxyEndPoint endPoint, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
@@ -69,7 +66,7 @@ public partial class ProxyServer
         CancellationTokenSource cancellationTokenSource)
     {
         var cancellationToken = cancellationTokenSource.Token;
-        Http2OriginConnection? originConnection = null;
+        var seedOffered = false;
 
         try
         {
@@ -212,19 +209,25 @@ public partial class ProxyServer
                             }
                             else
                             {
-                                if (originConnection == null || !originConnection.IsUsable)
+                                var poolKey = Http2OriginConnectionPool.BuildPoolKey(this, args, remoteHostName,
+                                    remotePort, connectHost, connectPort);
+                                if (!seedOffered && retainedConnectionTask != null)
                                 {
-                                    originConnection?.Dispose();
-                                    originConnection = await AcquireHttp2OriginConnectionAsync(args, remoteHostName,
-                                        remotePort, connectHost, connectPort, retainedConnectionTask,
-                                        cancellationToken);
+                                    await OfferRetainedHttp2OriginSeedAsync(args, poolKey, remoteHostName, remotePort,
+                                        connectHost, connectPort, retainedConnectionTask, cancellationToken);
                                     retainedConnectionTask = null;
+                                    seedOffered = true;
                                 }
+
+                                var originConnection = await RentHttp2OriginConnectionAsync(args, poolKey,
+                                    remoteHostName, remotePort, connectHost, connectPort, cancellationToken);
 
                                 if (originConnection.EnableConnectProtocol)
                                 {
                                     await RunHttp11ToHttp2WebSocketTunnelAsync(args, originConnection,
                                         cancellationTokenSource, cancellationToken);
+                                    if (args.HttpClient.CloseServerConnection)
+                                        Http2OriginConnectionPool.Invalidate(poolKey, originConnection);
                                 }
                                 else
                                 {
@@ -240,25 +243,18 @@ public partial class ProxyServer
 
                         if (keepGoing)
                         {
-                            if (originConnection == null || !originConnection.IsUsable)
+                            var poolKey = Http2OriginConnectionPool.BuildPoolKey(this, args, remoteHostName,
+                                remotePort, connectHost, connectPort);
+                            if (!seedOffered && retainedConnectionTask != null)
                             {
-                                originConnection?.Dispose();
-                                originConnection = await AcquireHttp2OriginConnectionAsync(args, remoteHostName,
-                                    remotePort, connectHost, connectPort, retainedConnectionTask, cancellationToken);
+                                await OfferRetainedHttp2OriginSeedAsync(args, poolKey, remoteHostName, remotePort,
+                                    connectHost, connectPort, retainedConnectionTask, cancellationToken);
                                 retainedConnectionTask = null;
+                                seedOffered = true;
                             }
 
-                            originConnection = await RunHttp11ToHttp2ExchangeAsync(args, originConnection,
-                                remoteHostName, remotePort, connectHost, connectPort, cancellationToken);
-
-                            if (args.HttpClient.CloseServerConnection)
-                            {
-                                // The user asked (via BeforeResponse) for the backing origin connection to be
-                                // discarded - drop this persistent h2 connection so the next request on this
-                                // client connection opens a brand new one instead of reusing it.
-                                originConnection.Dispose();
-                                originConnection = null;
-                            }
+                            await RunHttp11ToHttp2ExchangeAsync(args, poolKey, remoteHostName, remotePort,
+                                connectHost, connectPort, cancellationToken);
 
                             if (!args.HttpClient.Response.KeepAlive || clientRequestedClose) closeConnection = true;
                         }
@@ -296,54 +292,77 @@ public partial class ProxyServer
         }
         finally
         {
-            originConnection?.Dispose();
             if (retainedConnectionTask != null) await TcpConnectionFactory.Release(retainedConnectionTask, true);
         }
     }
 
     /// <summary>
-    ///     Returns the bridge's current origin connection, adopting <paramref name="retainedConnectionTask" />
-    ///     (only present for the very first request on this client connection) or opening a fresh, correctly
-    ///     policy-checked h2 connection otherwise - e.g. after the previous one failed, went away (GOAWAY), or
-    ///     was never established.
+    ///     Offers the negotiation-retained TCP seed (when ALPN/h2c is valid) into the shared origin pool
+    ///     as an established <see cref="Http2OriginConnection" />. Releases invalid seeds.
     /// </summary>
-    private async Task<Http2OriginConnection> AcquireHttp2OriginConnectionAsync(SessionEventArgs args,
+    private async Task OfferRetainedHttp2OriginSeedAsync(SessionEventArgs args, string poolKey,
         string remoteHostName, int remotePort, string? connectHost, int? connectPort,
-        Task<TcpServerConnection?>? retainedConnectionTask, CancellationToken cancellationToken)
+        Task<TcpServerConnection?> retainedConnectionTask, CancellationToken cancellationToken)
     {
         TcpServerConnection? seedConnection = null;
-        if (retainedConnectionTask != null)
+        try
         {
-            try
-            {
-                seedConnection = await retainedConnectionTask;
-            }
-            catch (Exception seedEx)
-            {
-                ProxyDiagnostics.ReportCaught(logger,
-                    "Http11ToHttp2Bridge seed connection failed; opening a fresh origin connection", seedEx);
-                seedConnection = null;
-            }
-
-            // TLS ALPN "h2" *or* cleartext h2c (ForwardCleartext) — same acceptance rule as
-            // EstablishHttp2OriginTcpConnectionAsync / ResolveHttp2ForClientAsync. Checking ALPN
-            // alone discards a valid h2c seed (no TLS, so NegotiatedApplicationProtocol is never
-            // Http2) and forces a second TCP open; the unstarted seed is closed without a preface,
-            // which races the raw origin and surfaces to HttpClient as a premature response end.
-            if (seedConnection != null &&
-                seedConnection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2 &&
-                !seedConnection.Http2Cleartext)
-            {
-                await TcpConnectionFactory.Release(seedConnection, true);
-                seedConnection = null;
-            }
+            seedConnection = await retainedConnectionTask;
+        }
+        catch (Exception seedEx)
+        {
+            ProxyDiagnostics.ReportCaught(logger,
+                "Http11ToHttp2Bridge seed connection failed; pool will open on demand", seedEx);
+            return;
         }
 
-        seedConnection ??= await EstablishHttp2OriginTcpConnectionAsync(args, remoteHostName, remotePort,
-            connectHost, connectPort, cancellationToken);
+        if (seedConnection != null &&
+            seedConnection.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2 &&
+            !seedConnection.Http2Cleartext)
+        {
+            await TcpConnectionFactory.Release(seedConnection, true);
+            return;
+        }
 
-        return await Http2OriginConnection.CreateAsync(seedConnection, logger,
-            args.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes, cancellationToken, ResourceLimits);
+        if (seedConnection == null)
+            return;
+
+        try
+        {
+            var created = await Http2OriginConnection.CreateAsync(seedConnection, logger,
+                args.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes, cancellationToken, ResourceLimits);
+            Http2OriginConnectionPool.Offer(poolKey, created);
+        }
+        catch (Exception ex)
+        {
+            ProxyDiagnostics.ReportCaught(logger,
+                "Http11ToHttp2Bridge failed to adopt seed into origin pool", ex);
+            try
+            {
+                await TcpConnectionFactory.Release(seedConnection, true);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Rents a shared origin h2 connection from <see cref="Http2OriginConnectionPool" />, opening a
+    ///     fresh TCP+H2 session when the authority has no usable member under soft capacity.
+    /// </summary>
+    private ValueTask<Http2OriginConnection> RentHttp2OriginConnectionAsync(SessionEventArgs args,
+        string poolKey, string remoteHostName, int remotePort, string? connectHost, int? connectPort,
+        CancellationToken cancellationToken)
+    {
+        return Http2OriginConnectionPool.RentAsync(poolKey, async ct =>
+        {
+            var tcp = await EstablishHttp2OriginTcpConnectionAsync(args, remoteHostName, remotePort,
+                connectHost, connectPort, ct);
+            return await Http2OriginConnection.CreateAsync(tcp, logger,
+                args.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes, ct, ResourceLimits);
+        }, cancellationToken);
     }
 
     /// <summary>
@@ -372,7 +391,7 @@ public partial class ProxyServer
                 HttpHeader.Version20, originIsHttps,
                 originIsHttps ? SslExtensions.Http2ProtocolAsList : null, false, args,
                 args.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint, upStreamProxy,
-                false, false, cancellationToken, connectHost, connectPort);
+                true, false, cancellationToken, connectHost, connectPort);
             if (connection != null && !originIsHttps)
                 connection.Http2Cleartext = true;
         }
@@ -400,17 +419,19 @@ public partial class ProxyServer
     }
 
     /// <summary>
-    ///     Performs one request/response exchange over a leased h2 stream and writes the translated result
-    ///     back to the HTTP/1.1 client. Returns the <see cref="Http2OriginConnection" /> the caller should keep
-    ///     using for the next request on this client connection - normally <paramref name="originConnection" />
-    ///     itself, but a freshly established replacement if a GOAWAY forced a safe, transparent retry.
+    ///     Performs one request/response exchange over a leased h2 stream from the shared origin pool and
+    ///     writes the translated result back to the HTTP/1.1 client. On GOAWAY for an unprocessed stream,
+    ///     invalidates that connection and retries once on a freshly rented member.
     /// </summary>
-    private async Task<Http2OriginConnection> RunHttp11ToHttp2ExchangeAsync(SessionEventArgs args,
-        Http2OriginConnection originConnection, string remoteHostName, int remotePort, string? connectHost,
-        int? connectPort, CancellationToken cancellationToken)
+    private async Task RunHttp11ToHttp2ExchangeAsync(SessionEventArgs args, string poolKey,
+        string remoteHostName, int remotePort, string? connectHost, int? connectPort,
+        CancellationToken cancellationToken)
     {
         var request = args.HttpClient.Request;
         var clientStream = args.ClientStream;
+
+        var originConnection = await RentHttp2OriginConnectionAsync(args, poolKey, remoteHostName, remotePort,
+            connectHost, connectPort, cancellationToken);
 
         // Bind shared h2 origin identity without SetConnection: this bridge owns frame I/O via
         // Http2OriginConnection, and HasConnection must stay false so H1 syphon paths never run.
@@ -494,10 +515,14 @@ public partial class ProxyServer
             {
                 // The origin told us (via GOAWAY) it never took any action for this stream at all (RFC 7540
                 // §6.8) - the request, still fully buffered in `request`, is safe to replay verbatim on a
-                // brand new connection exactly once.
-                originConnection.Dispose();
-                originConnection = await AcquireHttp2OriginConnectionAsync(args, remoteHostName, remotePort,
-                    connectHost, connectPort, null, cancellationToken);
+                // different pooled connection exactly once. Do not dispose a shared conn that may still
+                // have sibling streams below last-stream-id — Invalidate retires only this member.
+                if (copyRequestBody != null && !request.IsBodyRead)
+                    throw;
+
+                Http2OriginConnectionPool.Invalidate(poolKey, originConnection);
+                originConnection = await RentHttp2OriginConnectionAsync(args, poolKey, remoteHostName,
+                    remotePort, connectHost, connectPort, cancellationToken);
 
                 var retriedConnection = originConnection.ServerConnection;
                 args.HttpClient.BindUpstreamConnection(retriedConnection);
@@ -511,6 +536,9 @@ public partial class ProxyServer
             args.Timing?.MarkResponseHeadersReceived();
 
             await DeliverOriginExchangeAsync(args, exchange, cancellationToken);
+
+            if (args.HttpClient.CloseServerConnection)
+                Http2OriginConnectionPool.Invalidate(poolKey, originConnection);
         }
         catch (Exception ex) when (!(ex is ProxyHttpException))
         {
@@ -523,11 +551,9 @@ public partial class ProxyServer
             if (!args.HttpClient.Response.Locked)
             {
                 args.GenericResponse($"Bad Gateway. {ex.Message}", HttpStatusCode.BadGateway);
-                await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
             }
         }
-
-        return originConnection;
     }
 
     /// <summary>

@@ -27,6 +27,19 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     public int? QuicPort { get; }
     public int? OriginQuicPort { get; }
 
+    /// <summary>
+    ///     PID of the proxy (or combined --serve) child. Use for <c>dotnet-dump</c> / <c>dotnet-trace</c>.
+    /// </summary>
+    public int ProxyProcessId { get; }
+
+    /// <summary>
+    ///     PID of the origin child when process-split; null when origin+proxy share one combined --serve process.
+    /// </summary>
+    public int? OriginProcessId { get; }
+
+    /// <summary>True when origin and proxy share one OS process (TLS/QUIC CA must be shared).</summary>
+    public bool IsCombinedServe { get; }
+
     private ChildProcessStack(Process? originProcess, StreamReader originStdout, Process proxyProcess,
         StreamReader proxyStdout, Uri targetUri, IReadOnlyList<Uri> targetUris, string? explicitProxyUrl,
         string? nginxVersion, Version requestHttpVersion, HttpVersionPolicy versionPolicy,
@@ -47,6 +60,9 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         LoadGenerator = loadGenerator;
         QuicPort = quicPort;
         OriginQuicPort = originQuicPort;
+        ProxyProcessId = proxyProcess.Id;
+        IsCombinedServe = originProcess == null || ReferenceEquals(originProcess, proxyProcess);
+        OriginProcessId = IsCombinedServe ? null : originProcess!.Id;
     }
 
     public static async Task<ChildProcessStack> StartAsync(ProbeMode mode, string? nginxPath,

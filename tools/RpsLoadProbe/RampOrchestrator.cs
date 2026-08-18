@@ -608,6 +608,16 @@ internal static class RampOrchestrator
 
             ProbeLog.Info(
                 $"  target={targetUri} workload={workload.Suffix} proxy={(stack.ExplicitProxyUrl ?? "(direct-to-listen)")} http={stack.RequestHttpVersion} generator={(useQuic ? "quic-http3" : "dotnet-httpclient")} maxCached={(maxCached?.ToString() ?? "default")}");
+            if (stack.IsCombinedServe)
+            {
+                ProbeLog.Info(
+                    $"  attach: combined --serve pid={stack.ProxyProcessId} (origin+proxy same process; traces mix Kestrel origin with TWP)");
+            }
+            else
+            {
+                ProbeLog.Info(
+                    $"  attach: split origin pid={stack.OriginProcessId} proxy pid={stack.ProxyProcessId}");
+            }
 
             foreach (var concurrency in options.ConcurrencySteps)
             {

@@ -180,6 +180,7 @@ public partial class ProxyServer : IDisposable
         TcpConnectionFactory = new TcpConnectionFactory(this);
         Http3WarmOrigins = new Http3.Http3WarmOriginRegistry();
         QuicConnectionPool = new Network.Quic.QuicConnectionPool(this);
+        Http2OriginConnectionPool = new Http2.Http2OriginConnectionPool(this);
         if (RunTime.IsWindows && !RunTime.IsUwpOnWindows) SystemProxySettingsManager = new SystemProxyManager();
 
         CertificateManager = new CertificateManager(rootCertificateName, rootCertificateIssuerName,
@@ -198,6 +199,12 @@ public partial class ProxyServer : IDisposable
     ///     Drained on proxy stop and disposed with the proxy.
     /// </summary>
     internal Network.Quic.QuicConnectionPool QuicConnectionPool { get; }
+
+    /// <summary>
+    ///     Shared fan-in pool of outbound HTTP/2 origin connections used by the H1→H2 and H3→H2
+    ///     bridges. Drained on proxy stop and disposed with the proxy.
+    /// </summary>
+    internal Http2.Http2OriginConnectionPool Http2OriginConnectionPool { get; }
 
     /// <summary>
     ///     Origins that currently have an established QUIC connection, maintained by
@@ -1661,6 +1668,7 @@ public partial class ProxyServer : IDisposable
 
         TcpConnectionFactory.ClearPools();
         await QuicConnectionPool.DrainAsync();
+        await Http2OriginConnectionPool.DrainAsync();
     }
 
     private void StopCore(bool cancelSessions, bool clearPools) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
@@ -1709,6 +1717,7 @@ public partial class ProxyServer : IDisposable
 
         if (clearPools) TcpConnectionFactory.ClearPools();
         if (clearPools) QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
+        if (clearPools) Http2OriginConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
 
         // Start() may have wired GetCustomUpStreamProxyFunc to GetSystemUpStreamProxy and created
         // systemProxyResolver to back it. Undo both together: leaving the callback in place while
@@ -2235,6 +2244,15 @@ public partial class ProxyServer : IDisposable
         try
         {
             QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            Http2OriginConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
         }
         catch
         {
