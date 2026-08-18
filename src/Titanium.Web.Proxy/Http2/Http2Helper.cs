@@ -1657,7 +1657,7 @@ namespace Titanium.Web.Proxy.Http2
             byte[] buffer = new byte[MaxAcceptableFrameSize];
             // Typical HTTP/2 server stacks read a large Pipe buffer then peel frames with
             // Http2FrameReader.TryReadFrame. Mirror that without a ReadOnlySequence retrofit:
-            // one socket ReadAsync fills up to 32 KiB; subsequent frames reuse leftover bytes.
+            // one socket ReadAsync fills up to 64 KiB; subsequent frames reuse leftover bytes.
             var intake = new Http2FrameIntake(input);
 
             // Metadata for a HEADERS/PUSH_PROMISE block that has not yet been terminated by END_HEADERS and
@@ -4359,102 +4359,6 @@ namespace Titanium.Web.Proxy.Http2
             }
 
             return totalRead;
-        }
-
-        /// <summary>
-        ///     Socket-backed frame intake: one large <see cref="Stream.ReadAsync(Memory{byte}, CancellationToken)" />
-        ///     can satisfy many subsequent 9-byte headers + payloads (typical HTTP/2 server stack
-        ///     <c>Http2Connection</c> / <c>Http2FrameReader.TryReadFrame</c> pattern without adopting <c>ReadOnlySequence</c>).
-        /// </summary>
-        private sealed class Http2FrameIntake
-        {
-            private const int DefaultCapacity = 64 * 1024;
-            private readonly Stream input;
-            private readonly byte[] buf;
-            private int start;
-            private int end;
-
-            public Http2FrameIntake(Stream input, int capacity = DefaultCapacity)
-            {
-                this.input = input;
-                buf = GC.AllocateUninitializedArray<byte>(capacity);
-            }
-
-            private int Available => end - start;
-
-            public async ValueTask<bool> ReadExactAsync(byte[] dest, int destOffset, int count,
-                CancellationToken cancellationToken)
-            {
-                if (count == 0)
-                    return true;
-
-                var copied = 0;
-                while (copied < count)
-                {
-                    if (Available == 0 && !await FillAsync(cancellationToken))
-                        return false;
-
-                    var n = Math.Min(count - copied, Available);
-                    Buffer.BlockCopy(buf, start, dest, destOffset + copied, n);
-                    start += n;
-                    copied += n;
-                }
-
-                return true;
-            }
-
-            public async ValueTask DiscardAsync(int length, CancellationToken cancellationToken)
-            {
-                var remaining = length;
-                while (remaining > 0)
-                {
-                    if (Available == 0 && !await FillAsync(cancellationToken))
-                        return;
-
-                    var n = Math.Min(remaining, Available);
-                    start += n;
-                    remaining -= n;
-                }
-            }
-
-            private async ValueTask<bool> FillAsync(CancellationToken cancellationToken)
-            {
-                if (start == end)
-                {
-                    start = 0;
-                    end = 0;
-                }
-                else if (start > 0 && end == buf.Length)
-                {
-                    var available = end - start;
-                    Buffer.BlockCopy(buf, start, buf, 0, available);
-                    start = 0;
-                    end = available;
-                }
-
-                if (end == buf.Length)
-                {
-                    // Should not happen for frames ≤ MaxAcceptableFrameSize with 32 KiB capacity, but
-                    // compact so a single oversized need can still progress via ForceRead-sized chunks.
-                    if (start > 0)
-                    {
-                        var available = end - start;
-                        Buffer.BlockCopy(buf, start, buf, 0, available);
-                        start = 0;
-                        end = available;
-                    }
-
-                    if (end == buf.Length)
-                        return false;
-                }
-
-                var read = await input.ReadAsync(buf.AsMemory(end, buf.Length - end), cancellationToken);
-                if (read == 0)
-                    return false;
-
-                end += read;
-                return true;
-            }
         }
 
         /// <summary>
