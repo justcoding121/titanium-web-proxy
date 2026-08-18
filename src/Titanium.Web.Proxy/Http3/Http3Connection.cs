@@ -29,7 +29,7 @@ namespace Titanium.Web.Proxy.Http3;
 internal sealed class Http3Connection
 {
     private readonly QuicConnection _connection;
-    private readonly TransparentQuicProxyEndPoint _endPoint;
+    private readonly ProxyEndPoint _endPoint;
     private readonly BeforeQuicAuthenticateEventArgs _authArgs;
     private readonly ProxyServer _server;
     private readonly ILogger _logger;
@@ -98,7 +98,7 @@ internal sealed class Http3Connection
 
     private Http3Connection( // NOSONAR S107, CA1068 -- Existing connection wiring and token position are retained.
         QuicConnection connection,
-        TransparentQuicProxyEndPoint endPoint,
+        ProxyEndPoint endPoint,
         BeforeQuicAuthenticateEventArgs authArgs,
         ProxyServer server,
         ILogger logger,
@@ -124,7 +124,7 @@ internal sealed class Http3Connection
     /// </summary>
     public static async Task RunAsync( // NOSONAR S107, CA1068 -- Existing connection wiring and token position are retained.
         QuicConnection connection,
-        TransparentQuicProxyEndPoint endPoint,
+        ProxyEndPoint endPoint,
         BeforeQuicAuthenticateEventArgs authArgs,
         ProxyServer server,
         ILogger logger,

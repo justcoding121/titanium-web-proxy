@@ -370,6 +370,8 @@ public partial class ProxyServer
                 sessionArgs.Server.PolicyModes.AllowAmbiguousFraming);
             sessionArgs.HttpClient.Response.SetOriginalHeaders();
 
+            MaybeInjectClientAltSvc(sessionArgs);
+
             if (!sessionArgs.HttpClient.Response.Locked) await OnBeforeResponse(sessionArgs);
 
             var response = sessionArgs.HttpClient.Response;

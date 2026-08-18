@@ -156,9 +156,9 @@ internal sealed class QuicHttp3OriginHost : IAsyncDisposable
 }
 
 /// <summary>
-/// HTTP/3 load generator over <see cref="QuicConnection"/>. HttpClient cannot drive a
-/// UDP-only <c>TransparentQuicProxyEndPoint</c>; the same generator is also used against
-/// Kestrel reverse H3 so publishable TWP÷peer ratios match clients.
+/// HTTP/3 load generator over <see cref="QuicConnection"/>. Used for UDP-only
+/// <c>TransparentQuicProxyEndPoint</c> arms (e.g. MITM H3) where HttpClient has no TCP/Alt-Svc
+/// discovery path. Dual-listen reverse H3 uses <c>dotnet-httpclient</c> instead.
 /// </summary>
 internal static class QuicHttp3LoadGenerator
 {

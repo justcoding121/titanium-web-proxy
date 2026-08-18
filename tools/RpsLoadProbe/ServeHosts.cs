@@ -280,10 +280,9 @@ internal static class ServeProxyHost
             ProbeMode.ReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3Cleartext => "3.0",
             _ => "1.1"
         };
-        // Inbound H3 (TWP TransparentQuic and Kestrel reverse) both use quic-http3 so TWP÷peer ratios match clients.
-        var loadGenerator = mode is ProbeMode.ReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3Cleartext
-            ? "quic-http3"
-            : null;
+        // Dual-listen reverse H3 (TWP TransparentProxyEndPoint.EnableHttp3 and Kestrel) use HttpClient.
+        // UDP-only TransparentQuic arms still advertise quic-http3 via combined ServeStack.
+        string? loadGenerator = null;
 
         using (proxy)
         {
@@ -295,11 +294,6 @@ internal static class ServeProxyHost
             await ProbeLog.WriteProtocolLineAsync($"http_version={httpVersion}", cancellationToken);
             if (loadGenerator != null)
                 await ProbeLog.WriteProtocolLineAsync($"load_generator={loadGenerator}", cancellationToken);
-            if (mode is ProbeMode.ReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3Cleartext)
-            {
-                var quicPort = new Uri(listenUrl).Port;
-                await ProbeLog.WriteProtocolLineAsync($"quic_port={quicPort}", cancellationToken);
-            }
             if (nginxVersion != null)
                 await ProbeLog.WriteProtocolLineAsync($"nginx={nginxVersion}", cancellationToken);
             if (yarpVersion != null)
@@ -682,7 +676,7 @@ internal static class ServeHost
                     var twp = TwpProxyHost.StartReverseHttp3(origin.Port);
                     return new ServeStack(origin, twp, twp, $"quic://localhost:{origin.Port}/",
                         $"quic://localhost:{origin.Port}/", [], twp.ListenUrl, null, twp.ListenUrl, [twp.ListenUrl],
-                        null, "3.0", loadGenerator: "quic-http3", quicPort: twp.Port, originQuicPort: origin.Port);
+                        null, "3.0", originQuicPort: origin.Port);
                 }
                 case ProbeMode.MitmHttp3ToHttp1:
                 {
@@ -710,8 +704,7 @@ internal static class ServeHost
                     var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
                     var twp = TwpProxyHost.StartReverseHttp3Cleartext(origin.HttpPort);
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
-                        twp.ListenUrl, [twp.ListenUrl], null, "3.0", loadGenerator: "quic-http3",
-                        quicPort: twp.Port);
+                        twp.ListenUrl, [twp.ListenUrl], null, "3.0");
                 }
                 case ProbeMode.ReverseHttp11ToHttp2:
                 {
@@ -762,8 +755,7 @@ internal static class ServeHost
                     }, cancellationToken);
                     var twp = TwpProxyHost.StartReverseHttp3ToHttp2(origin.HttpsPort);
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, [], twp.ListenUrl, null,
-                        twp.ListenUrl, [twp.ListenUrl], null, "3.0", loadGenerator: "quic-http3",
-                        quicPort: twp.Port);
+                        twp.ListenUrl, [twp.ListenUrl], null, "3.0");
                 }
                 case ProbeMode.YarpReverseHttp1:
                 {
@@ -851,8 +843,7 @@ internal static class ServeHost
                     var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
                     var yarp = await YarpProxyHost.StartHttp3CleartextAsync(origin.HttpPort);
                     return new ServeStack(origin, yarp, null, origin.HttpUrl, null, [], yarp.ListenUrl, null,
-                        yarp.ListenUrl, [yarp.ListenUrl], null, "3.0", loadGenerator: "quic-http3",
-                        quicPort: yarp.Port, yarpVersion: yarp.Version);
+                        yarp.ListenUrl, [yarp.ListenUrl], null, "3.0", yarpVersion: yarp.Version);
                 }
                 case ProbeMode.YarpReverseHttp11ToHttp2:
                 {
@@ -903,8 +894,7 @@ internal static class ServeHost
                     }, cancellationToken);
                     var yarp = await YarpProxyHost.StartHttp3ToHttp2Async(origin.HttpsPort);
                     return new ServeStack(origin, yarp, null, origin.HttpUrl, origin.HttpsUrl, [], yarp.ListenUrl, null,
-                        yarp.ListenUrl, [yarp.ListenUrl], null, "3.0", loadGenerator: "quic-http3",
-                        quicPort: yarp.Port, yarpVersion: yarp.Version);
+                        yarp.ListenUrl, [yarp.ListenUrl], null, "3.0", yarpVersion: yarp.Version);
                 }
                 case ProbeMode.YarpReverseHttp3ToHttp3:
                 {
@@ -915,8 +905,7 @@ internal static class ServeHost
                     var yarp = await YarpProxyHost.StartHttp3ToHttp3Async(origin.Port);
                     return new ServeStack(origin, yarp, null, $"quic://localhost:{origin.Port}/",
                         $"quic://localhost:{origin.Port}/", [], yarp.ListenUrl, null, yarp.ListenUrl, [yarp.ListenUrl],
-                        null, "3.0", loadGenerator: "quic-http3", quicPort: yarp.Port,
-                        originQuicPort: origin.Port, yarpVersion: yarp.Version);
+                        null, "3.0", originQuicPort: origin.Port, yarpVersion: yarp.Version);
                 }
                 case ProbeMode.ExplicitHttp1Multi:
                 case ProbeMode.ExplicitHttp2Multi:

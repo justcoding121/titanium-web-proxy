@@ -185,6 +185,7 @@ internal static class EmbeddedLoadGenerator
             // all DATA writes on ClientWriteLock and fans every stream onto the H2→H1 bridge at once;
             // multiple connections match browser-style fan-out and keep error rates down.
             EnableMultipleHttp2Connections = true,
+            EnableMultipleHttp3Connections = httpVersion.Major >= 3,
             SslOptions = new SslClientAuthenticationOptions
             {
                 RemoteCertificateValidationCallback = static (_, _, _, _) => true

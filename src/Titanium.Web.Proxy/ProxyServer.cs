@@ -21,6 +21,7 @@ using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
+using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Network.WinAuth;
 using Titanium.Web.Proxy.Options;
@@ -357,8 +358,14 @@ public partial class ProxyServer : IDisposable
     ///     <list type="bullet">
     ///       <item>
     ///         <description>
-    ///           Any <c>TransparentQuicProxyEndPoint</c> added to <see cref="ProxyEndPoints" /> is started as
-    ///           a QUIC listener that accepts inbound HTTP/3 connections.
+    ///           Any <c>TransparentQuicProxyEndPoint</c> is started as a UDP-only QUIC listener for
+    ///           transparent/NAT HTTP/3 interception.
+    ///         </description>
+    ///       </item>
+    ///       <item>
+    ///         <description>
+    ///           Any <c>TransparentProxyEndPoint</c> with <c>EnableHttp3</c> also listens for HTTP/3 on
+    ///           the same IP:port (TCP H1/H2 + UDP H3) and injects client-facing <c>Alt-Svc</c>.
     ///         </description>
     ///       </item>
     ///       <item>
@@ -373,7 +380,7 @@ public partial class ProxyServer : IDisposable
     ///     </list>
     ///     Requires MsQuic native library and a supported operating-system version
     ///     (<see cref="System.Net.Quic.QuicListener.IsSupported" />). Setting to <see langword="true" /> with
-    ///     no <c>TransparentQuicProxyEndPoint</c> configured emits a warning and skips QUIC initialization.
+    ///     no inbound HTTP/3 endpoint configured emits a warning and skips QUIC initialization.
     ///     Default: <see langword="false" /> (opt-in).
     ///     <para>
     ///         <b>Experimental:</b> HTTP/3 support has not yet completed the full interop/soak/fuzz gate
@@ -1241,6 +1248,14 @@ public partial class ProxyServer : IDisposable
         else if (ProxyRunning)
         {
             Listen(endPoint);
+            if (EnableHttp3 && endPoint is TransparentProxyEndPoint { EnableHttp3: true } dualListen)
+            {
+                if (!dualListen.DecryptSsl)
+                    throw new InvalidOperationException(
+                        "TransparentProxyEndPoint.EnableHttp3 requires DecryptSsl = true.");
+                quicListenerCts ??= new CancellationTokenSource();
+                ListenQuic(dualListen);
+            }
         }
     }
 
@@ -1259,7 +1274,11 @@ public partial class ProxyServer : IDisposable
         if (ProxyRunning && endPoint is TransparentQuicProxyEndPoint quicEndPoint)
             QuitListenQuic(quicEndPoint);
         else if (ProxyRunning)
+        {
+            if (endPoint is TransparentProxyEndPoint { EnableHttp3: true } dualListen)
+                QuitListenQuic(dualListen);
             QuitListen(endPoint);
+        }
     }
 
     /// <summary>
@@ -1542,14 +1561,29 @@ public partial class ProxyServer : IDisposable
         _ = CertificateManager.ClearIdleCertificates();
 
         var startedTcpEndPoints = new List<ProxyEndPoint>();
-        var startedQuicEndPoints = new List<TransparentQuicProxyEndPoint>();
+        var startedQuicEndPoints = new List<IQuicInboundEndPoint>();
         var createdQuicListenerCts = false;
 
         try
         {
-            if (EnableHttp3 && ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>().Any())
-            {
+            var hasUdpOnlyQuic = ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>().Any();
+            var hasDualListenHttp3 = ProxyEndPoints.OfType<TransparentProxyEndPoint>()
+                .Any(e => e.EnableHttp3);
+            var needsInboundHttp3 = EnableHttp3 && (hasUdpOnlyQuic || hasDualListenHttp3);
+
+            if (needsInboundHttp3)
                 quicListenerCts = new CancellationTokenSource();
+            else if (EnableHttp3)
+            {
+                Logger.LogWarning(
+                    "EnableHttp3 is true but no inbound HTTP/3 endpoint is registered. " +
+                    "Add a TransparentQuicProxyEndPoint, or a TransparentProxyEndPoint with EnableHttp3, " +
+                    "before calling Start().");
+            }
+
+            // UDP-only transparent QUIC first (no TCP on that port).
+            if (needsInboundHttp3 && hasUdpOnlyQuic)
+            {
                 createdQuicListenerCts = true;
                 foreach (var quicEndPoint in ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>())
                 {
@@ -1557,23 +1591,34 @@ public partial class ProxyServer : IDisposable
                     startedQuicEndPoints.Add(quicEndPoint);
                 }
             }
-            else if (EnableHttp3)
-            {
-                Logger.LogWarning(
-                    "EnableHttp3 is true but no TransparentQuicProxyEndPoint is registered. " +
-                    "Add a TransparentQuicProxyEndPoint to ProxyEndPoints before calling Start().");
-            }
 
-            // TransparentQuicProxyEndPoint is UDP-only (ListenQuic). Do not also TcpListener.Start on
-            // the same port number — ListenQuic may have assigned an ephemeral Port that is free for
-            // UDP but already taken for TCP, which aborted H3 reverse arms on Linux RPS runners.
+            // TCP endpoints. Dual-listen reverse H3: bind TCP first (assign ephemeral port), then UDP
+            // on the same IP:port so HttpClient can discover H3 via Alt-Svc or RequestVersionExact.
             foreach (var endPoint in ProxyEndPoints)
             {
                 if (endPoint is TransparentQuicProxyEndPoint)
                     continue;
 
+                if (endPoint is TransparentProxyEndPoint { EnableHttp3: true } dualListen)
+                {
+                    if (!EnableHttp3)
+                        throw new InvalidOperationException(
+                            "TransparentProxyEndPoint.EnableHttp3 requires ProxyServer.EnableHttp3 = true.");
+                    if (!dualListen.DecryptSsl)
+                        throw new InvalidOperationException(
+                            "TransparentProxyEndPoint.EnableHttp3 requires DecryptSsl = true.");
+                }
+
                 Listen(endPoint);
                 startedTcpEndPoints.Add(endPoint);
+
+                if (EnableHttp3 && endPoint is TransparentProxyEndPoint { EnableHttp3: true } dual)
+                {
+                    createdQuicListenerCts = true;
+                    quicListenerCts ??= new CancellationTokenSource();
+                    ListenQuic(dual);
+                    startedQuicEndPoints.Add(dual);
+                }
             }
         }
         catch (Exception startEx)
@@ -1704,10 +1749,12 @@ public partial class ProxyServer : IDisposable
             QuitListen(endPoint);
         }
 
-        // Cancel and wait for QUIC accept loops to exit.
+        // Cancel and wait for QUIC accept loops to exit (UDP-only + dual-listen reverse).
         quicListenerCts?.Cancel();
         foreach (var quicEndPoint in ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>())
             QuitListenQuic(quicEndPoint);
+        foreach (var dual in ProxyEndPoints.OfType<TransparentProxyEndPoint>().Where(e => e.EnableHttp3))
+            QuitListenQuic(dual);
         quicListenerCts?.Dispose();
         quicListenerCts = null;
 

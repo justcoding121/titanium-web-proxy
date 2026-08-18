@@ -67,8 +67,8 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 | Reverse | HTTP/2 · plain | HTTP/2 · plain | **38,473** | **38,473** | *Not possible* | *Not possible* | **55,241** | **55,241** | **YARP** |
 | Reverse | HTTP/2 · plain | HTTP/2 · TLS | **27,943** | **27,943** | *Not possible* | *Not possible* | **49,202** | **49,202** | **YARP** |
 | Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **12,036** | **12,036** | *Not possible* (no QUIC) | *Not possible* | **14,817** | **14,817** | **YARP** |
-| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **7,187** | **7,681** | *Not possible* (no QUIC) | *Not possible* | **8,302** | **10,461** | **YARP** |
-| Reverse | HTTP/3 · QUIC | HTTP/2 · TLS | **5,041** | **5,041** | *Not possible* (no QUIC) | *Not possible* | **7,969** | **7,969** | **YARP** |
+| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **12,392** | **12,850** | *Not possible* (no QUIC) | *Not possible* | **14,181** | **17,238** | **YARP** |
+| Reverse | HTTP/3 · QUIC | HTTP/2 · TLS | **7,665** | **7,665** | *Not possible* (no QUIC) | *Not possible* | **23,347** | **23,347** | **YARP** |
 | MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **9,732** | **10,334** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | MITM | HTTP/3 · QUIC | HTTP/2 · TLS | **3,527** | **3,527** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | MITM | HTTP/3 · QUIC | HTTP/3 · QUIC | **10,810** | **10,810** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
@@ -76,11 +76,13 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 | Reverse | HTTP/1 · TLS | HTTP/3 · QUIC | **14,053** | **14,053** | *Not possible* (no QUIC) | *Not possible* | **17,350** | **17,350** | **YARP** |
 | Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | **17,141** | **17,141** | *Not possible* (no QUIC) | *Not possible* | **13,473** | **13,473** | **TWP** |
 
-Windows sources: matched-client cool pairs under `tools/RpsLoadProbe/results/matched-baseline/` and `matched-post-fix/` / `matched-post-headers-writer/` (2026-08-18). Warmup 2s; measure 5s; concurrency 8–64. Absolute RPS swings with sequential-arm heat; prefer TWP÷YARP ratios over absolutes. **Publishable H3 ratios require the same load generator on both sides** (`quic-http3`); older H3÷YARP numbers that mixed `quic-http3` vs HttpClient are not comparable.
+Windows sources: matched-client cool pairs under `tools/RpsLoadProbe/results/matched-baseline/` and `matched-post-fix/` / `matched-post-headers-writer/` (2026-08-18), plus **HttpClient H3** cool pairs under `matched-httpclient-h3/` (2026-08-18). Warmup 2s; measure 5s; concurrency 8–64. Absolute RPS swings with sequential-arm heat; prefer TWP÷YARP ratios over absolutes.
 
-**Matched-client TWP÷YARP (cool, same generator):** H3→H1 ≈ **0.87** sustain (7,187 / 8,302). H3→H2 ≈ **0.63** (5,041 / 7,969). H2 TLS→h2c ≈ **0.66**, h2c→h2c ≈ **0.70**. H1→H2 ≈ **0.29** sustain on this pass.
+**Load generators:** Reverse inbound H3 arms (H3→H1, H3→H2) use **`dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) on both TWP and YARP after dual-listen reverse H3. UDP-only MITM H3 still uses **`quic-http3`**. Older reverse-H3 ratios that used matched `quic-http3` are **not** comparable to these HttpClient numbers.
 
-nginx/Windows is a limited port — use it for **same-OS** comparison only, not as the industry nginx baseline. Inbound H3 compares use **`quic-http3`** on both TWP and YARP.
+**Matched HttpClient TWP÷YARP (cool):** H3→H1 ≈ **0.87** sustain (12,392 / 14,181). H3→H2 ≈ **0.33** (7,665 / 23,347). Prior matched `quic-http3` H3→H1 was also ≈0.87 at lower absolute RPS; H2 TLS→h2c ≈ **0.66**, h2c→h2c ≈ **0.70**, H1→H2 ≈ **0.29** remain from the earlier matched-client pass.
+
+nginx/Windows is a limited port — use it for **same-OS** comparison only, not as the industry nginx baseline.
 
 **H2 TLS → H1 plain on Windows:** fair terminate — **TWP leads sustain (~1.05× YARP)** in the current table. Absolute RPS swings with background load; treat as same-OS only.
 

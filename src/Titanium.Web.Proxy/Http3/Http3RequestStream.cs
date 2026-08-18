@@ -52,7 +52,7 @@ internal static class Http3RequestStream
     public static async Task HandleAsync( // NOSONAR S3776, CA1068 -- Protocol flow and established token position are retained.
         QuicStream stream,
         QuicConnection connection,
-        TransparentQuicProxyEndPoint endPoint,
+        ProxyEndPoint endPoint,
         BeforeQuicAuthenticateEventArgs authArgs,
         ProxyServer server,
         ILogger logger,

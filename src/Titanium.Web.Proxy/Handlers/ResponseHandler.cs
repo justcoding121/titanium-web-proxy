@@ -115,6 +115,8 @@ public partial class ProxyServer
         // we can still use original values when syphoning out data from attached tcp connection.
         response.SetOriginalHeaders();
 
+        MaybeInjectClientAltSvc(args);
+
         // if user requested call back then do it
         if (!response.Locked && !args.IsFastPath) await OnBeforeResponse(args);
 

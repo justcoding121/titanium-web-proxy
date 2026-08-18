@@ -4,8 +4,8 @@ Titanium Web Proxy supports HTTP/3 as an **opt-in experimental** feature built o
 (which in turn uses the MsQuic native library).
 
 > **Experimental API:** The HTTP/3 public surface (`EnableHttp3`, `TransparentQuicProxyEndPoint`,
-> `BeforeQuicAuthenticateEventArgs`) is marked `[Experimental("TWP001")]`.  Consuming projects must suppress
-> the diagnostic to opt in:
+> `TransparentProxyEndPoint.EnableHttp3`, `BeforeQuicAuthenticateEventArgs`) is marked
+> `[Experimental("TWP001")]`.  Consuming projects must suppress the diagnostic to opt in:
 > ```csharp
 > #pragma warning disable TWP001
 > proxyServer.EnableHttp3 = true;
@@ -29,11 +29,50 @@ sudo apt-get update && sudo apt-get install -y libmsquic
 
   - **macOS**: not bundled by the .NET runtime. See [macOS](#macos) below for the bundling workaround.
 - At runtime: `System.Net.Quic.QuicListener.IsSupported == true` — check this before enabling HTTP/3.
-- A `TransparentQuicProxyEndPoint` added to `ProxyServer.ProxyEndPoints`.
+- An inbound HTTP/3 endpoint: either `TransparentQuicProxyEndPoint` (UDP-only transparent/NAT) or
+  `TransparentProxyEndPoint` with `EnableHttp3 = true` (Kestrel-style TCP+UDP reverse listen).
 
 The Linux [RPS saturation](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/rps-saturation.yml) workflow installs `libmsquic` so HTTP/3 probe arms run on `ubuntu-latest`.
 
-## Quick start
+## Quick start — reverse dual-listen (HttpClient / browsers)
+
+Same IP:port speaks TLS H1/H2 over TCP and H3 over UDP, and injects `Alt-Svc: h3=":PORT"` on H1/H2
+responses so `HttpClient` (`HttpVersion.Version30` + `RequestVersionExact`) and Alt-Svc discovery work:
+
+```csharp
+#pragma warning disable TWP001
+var proxy = new ProxyServer { EnableHttp3 = true, EnableHttp2 = true };
+
+if (QuicListener.IsSupported)
+{
+    var reverse = new TransparentProxyEndPoint(IPAddress.Any, 443, decryptSsl: true)
+    {
+        EnableHttp3 = true,
+        ForwardHost = "127.0.0.1",
+        ForwardPort = 8080,
+        ForwardCleartext = true,
+        GenericCertificateName = "localhost",
+        MaxInboundBidirectionalStreams = 256,
+    };
+    reverse.BeforeQuicAuthenticate += (_, e) =>
+    {
+        e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+        return Task.CompletedTask;
+    };
+    reverse.BeforeSslAuthenticate += (_, e) =>
+    {
+        e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+        e.AllowHttpProtocolTranslation = true;
+        return Task.CompletedTask;
+    };
+    proxy.AddEndPoint(reverse);
+}
+#pragma warning restore TWP001
+
+proxy.Start();
+```
+
+## Quick start — transparent UDP-only
 
 ```csharp
 #pragma warning disable TWP001 // Experimental HTTP/3 API
@@ -162,8 +201,8 @@ HTTP/3-specific limits:
   existing H2↔H2 MITM relay are not taken.
 - A configured upstream proxy cannot speak QUIC CONNECT or SOCKS UDP ASSOCIATE; those requests fall
   back to `ForwardOverTcpAsync`.
-- Inbound HTTP/3 is transparent-only (`TransparentQuicProxyEndPoint`); there is no explicit QUIC
-  proxy endpoint.
+- Inbound HTTP/3: **UDP-only transparent** (`TransparentQuicProxyEndPoint`) or **dual-listen reverse**
+  (`TransparentProxyEndPoint.EnableHttp3`). There is no explicit (system-proxy) QUIC endpoint.
 
 ## Per-request overrides
 
@@ -236,12 +275,26 @@ When enabled, per accepted QUIC connection:
 | `MaxInboundUnidirectionalStreams` | `3` | Minimum 3 (control + QPACK encoder/decoder); values below 3 are clamped to 3. |
 | `HandshakeTimeout` | `30 s` | QUIC TLS handshake deadline. |
 | `IdleTimeout` | `60 s` | Connection idle timeout. |
-| `AdvertiseToHttpClients` | `false` | When true, injects `Alt-Svc: h3=...` into H1/H2 responses for origins whose H3 capability is cached. |
+| `AdvertiseToHttpClients` | `false` | Documented for origin-upgrade scenarios; unused on UDP-only endpoints (no H1/H2 listen). Prefer dual-listen reverse below for client-facing Alt-Svc. |
+
+## Dual-listen reverse HTTP/3 (`TransparentProxyEndPoint.EnableHttp3`)
+
+When `EnableHttp3` is set on a TLS-terminating `TransparentProxyEndPoint` (and `ProxyServer.EnableHttp3`
+is true), `Start()` binds TCP first, then a QUIC listener on the **same** port. H1/H2 responses from
+that endpoint receive `Alt-Svc: h3=":PORT"; ma=86400` when the origin did not already send Alt-Svc.
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `EnableHttp3` | `false` | Opt-in dual-listen reverse H3. Requires `DecryptSsl = true`. |
+| `BeforeQuicAuthenticate` | — | Per-connection QUIC policy (same as transparent QUIC). |
+| `MaxInboundBidirectionalStreams` | `100` | Per QUIC connection stream limit. |
+| `HandshakeTimeout` / `IdleTimeout` | `30 s` / `60 s` | Same semantics as `TransparentQuicProxyEndPoint`. |
 
 ## Limitations
 
-- **Transparent only**: HTTP/3 cannot be configured as an explicit (system-proxy) endpoint. See
+- **No explicit (system-proxy) inbound HTTP/3**: see
   [Why no explicit HTTP/3 endpoint yet](#why-no-explicit-http3-endpoint-yet) below.
+  Reverse dual-listen and transparent UDP-only cover the supported inbound shapes.
 - **QPACK dynamic table is opt-in**: static-table-only mode is the default; see [QPACK](#qpack) above.
 - **Upstream proxy with QUIC falls back to TCP**: `System.Net.Quic` does not support HTTP CONNECT
   tunnelling or SOCKS5 UDP ASSOCIATE. When a per-request or global upstream proxy is configured, the

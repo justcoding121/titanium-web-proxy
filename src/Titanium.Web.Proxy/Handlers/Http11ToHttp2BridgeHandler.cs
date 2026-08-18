@@ -580,6 +580,8 @@ public partial class ProxyServer
         response.SetOriginalHeaders();
         args.HttpClient.Response = response;
 
+        MaybeInjectClientAltSvc(args);
+
         if (!response.Locked) await OnBeforeResponse(args);
 
         response = args.HttpClient.Response;

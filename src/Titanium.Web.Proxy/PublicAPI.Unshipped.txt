@@ -60,6 +60,18 @@ Titanium.Web.Proxy.Models.HttpInterceptionContext.ProxyEndPoint.init -> void
 Titanium.Web.Proxy.Models.ProxyEndPoint.EnableHttpInterception.get -> bool?
 Titanium.Web.Proxy.Models.ProxyEndPoint.EnableHttpInterception.set -> void
 Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeHttpAuthenticate -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.BeforeHttpAuthenticateEventArgs!>?
+[TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeQuicAuthenticate -> Titanium.Web.Proxy.EventArguments.AsyncEventHandler<Titanium.Web.Proxy.EventArguments.BeforeQuicAuthenticateEventArgs!>?
+[TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.EnableHttp3.get -> bool
+[TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.EnableHttp3.set -> void
+[TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.HandshakeTimeout.get -> System.TimeSpan
+[TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.HandshakeTimeout.set -> void
+[TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.IdleTimeout.get -> System.TimeSpan
+[TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.IdleTimeout.set -> void
+[TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundBidirectionalStreams.get -> int
+[TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundBidirectionalStreams.set -> void
+[TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundUnidirectionalStreams.get -> int
+[TWP001]Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundUnidirectionalStreams.set -> void
+static readonly Titanium.Web.Proxy.Http.KnownHeaders.AltSvc -> Titanium.Web.Proxy.Http.KnownHeader!
 Titanium.Web.Proxy.ProxyServer.EnableHttpInterception.get -> bool
 Titanium.Web.Proxy.ProxyServer.EnableHttpInterception.set -> void
 Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp.get -> System.Func<Titanium.Web.Proxy.Models.HttpInterceptionContext, bool>?

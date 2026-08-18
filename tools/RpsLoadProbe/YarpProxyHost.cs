@@ -240,7 +240,9 @@ internal sealed class YarpProxyHost : IDisposable
         builder.WebHost.ConfigureKestrel(kestrel =>
         {
             kestrel.Limits.MaxRequestBodySize = 10 * 1024 * 1024;
-            kestrel.Listen(IPAddress.Loopback, port, listen =>
+            // Dual-stack so HttpClient "localhost" (::1 first) reaches H3; IPv4-only Loopback
+            // surfaces as ALPN failure — same issue TWP dual-listen QuicListener hit.
+            void ConfigureListen(Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions listen)
             {
                 listen.Protocols = options.InboundProtocols;
                 if (options.UseTls)
@@ -252,7 +254,12 @@ internal sealed class YarpProxyHost : IDisposable
                         https.SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13;
                     });
                 }
-            });
+            }
+
+            if (options.InboundProtocols.HasFlag(HttpProtocols.Http3))
+                kestrel.ListenAnyIP(port, ConfigureListen);
+            else
+                kestrel.Listen(IPAddress.Loopback, port, ConfigureListen);
         });
 
         var routes = new[]
@@ -301,7 +308,9 @@ internal sealed class YarpProxyHost : IDisposable
         await app.StartAsync();
 
         var scheme = options.UseTls ? "https" : "http";
-        return new YarpProxyHost(app, port, $"{scheme}://127.0.0.1:{port}/", cert);
+        // HttpClient H3 + IP literals often fails SNI; match TWP dual-listen ListenUrl host.
+        var host = options.InboundProtocols.HasFlag(HttpProtocols.Http3) ? "localhost" : "127.0.0.1";
+        return new YarpProxyHost(app, port, $"{scheme}://{host}:{port}/", cert);
     }
 
     public void Dispose()

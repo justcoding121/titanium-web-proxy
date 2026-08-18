@@ -55,6 +55,8 @@ public static class KnownHeaders
 
     public static readonly KnownHeader Location = "Location";
 
+    public static readonly KnownHeader AltSvc = "Alt-Svc";
+
     public static readonly KnownHeader ProxyAuthenticate = "Proxy-Authenticate";
 
     public static readonly KnownHeader TransferEncoding = "Transfer-Encoding";

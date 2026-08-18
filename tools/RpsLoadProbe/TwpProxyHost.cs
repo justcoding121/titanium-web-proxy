@@ -242,8 +242,9 @@ internal sealed class TwpProxyHost : IDisposable
         var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: true);
         ConfigureSharedTestCa(proxy);
 
-        var endPoint = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
         {
+            EnableHttp3 = true,
             ForwardHost = "localhost",
             ForwardPort = originHttpsPort,
             GenericCertificateName = "localhost",
@@ -257,11 +258,12 @@ internal sealed class TwpProxyHost : IDisposable
         };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
+        WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
         return new TwpProxyHost(proxy, endPoint.Port, $"https://localhost:{endPoint.Port}/", isExplicitProxy: false);
     }
 
     /// <summary>
-    /// QUIC/h3 TLS terminate → cleartext HTTP/1 origin (ForwardCleartext + UpstreamHttpProtocol.Http11).
+    /// Dual-listen reverse: client QUIC/h3 (or TCP H1/H2) TLS terminate → cleartext HTTP/1 origin.
     /// </summary>
     public static TwpProxyHost StartReverseHttp3Cleartext(int originHttpPort)
     {
@@ -271,8 +273,9 @@ internal sealed class TwpProxyHost : IDisposable
         var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: true);
         ConfigureSharedTestCa(proxy);
 
-        var endPoint = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
         {
+            EnableHttp3 = true,
             ForwardHost = "127.0.0.1",
             ForwardPort = originHttpPort,
             ForwardCleartext = true,
@@ -285,8 +288,20 @@ internal sealed class TwpProxyHost : IDisposable
             args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
             return Task.CompletedTask;
         };
+        endPoint.BeforeSslAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+        endPoint.BeforeQuicAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            return Task.CompletedTask;
+        };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
+        WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
         return new TwpProxyHost(proxy, endPoint.Port, $"https://localhost:{endPoint.Port}/", isExplicitProxy: false);
     }
 
@@ -414,7 +429,7 @@ internal sealed class TwpProxyHost : IDisposable
     }
 
     /// <summary>
-    /// Client H3 QUIC → H3→H2 bridge → origin HTTPS with ALPN h2.
+    /// Dual-listen reverse: client H3 → H3→H2 bridge → origin HTTPS with ALPN h2.
     /// </summary>
     public static TwpProxyHost StartReverseHttp3ToHttp2(int originHttpsPort)
     {
@@ -424,8 +439,9 @@ internal sealed class TwpProxyHost : IDisposable
         var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: true);
         ConfigureSharedTestCa(proxy);
 
-        var endPoint = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
         {
+            EnableHttp3 = true,
             ForwardHost = "127.0.0.1",
             ForwardPort = originHttpsPort,
             GenericCertificateName = "localhost",
@@ -437,8 +453,14 @@ internal sealed class TwpProxyHost : IDisposable
             args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
             return Task.CompletedTask;
         };
+        endPoint.BeforeSslAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            return Task.CompletedTask;
+        };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
+        WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
         return new TwpProxyHost(proxy, endPoint.Port, $"https://localhost:{endPoint.Port}/", isExplicitProxy: false);
     }
 

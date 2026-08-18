@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Quic;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
@@ -40,7 +41,7 @@ namespace Titanium.Web.Proxy.Models;
 /// </summary>
 [DebuggerDisplay("TransparentQuic: {IpAddress}:{Port}")]
 [Experimental("TWP001")]
-public class TransparentQuicProxyEndPoint : TransparentBaseProxyEndPoint
+public class TransparentQuicProxyEndPoint : TransparentBaseProxyEndPoint, IQuicInboundEndPoint
 {
     private int maxInboundUnidirectionalStreams = 3;
 
@@ -113,11 +114,10 @@ public class TransparentQuicProxyEndPoint : TransparentBaseProxyEndPoint
     public TimeSpan IdleTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>
-    ///     When <see langword="true" />, the proxy injects an <c>Alt-Svc: h3=":PORT"; ma=N</c> header into
-    ///     HTTP/1.1 and HTTP/2 responses passing through this proxy for origins whose HTTP/3 capability is
-    ///     cached. This allows HTTP/1.1/2 clients to discover the proxy's QUIC endpoint and upgrade to H3
-    ///     on subsequent requests. Default: <see langword="false" /> (opt-in to avoid accidental Alt-Svc
-    ///     injection in environments where the QUIC endpoint is not reachable by all clients).
+    ///     Documented for origin-upgrade scenarios; dual-listen reverse HTTP/3 on
+    ///     <see cref="TransparentProxyEndPoint.EnableHttp3" /> is the supported path for client-facing
+    ///     <c>Alt-Svc</c> discovery. This flag remains unused on UDP-only endpoints (no H1/H2 listen).
+    ///     Default: <see langword="false" />.
     /// </summary>
     public bool AdvertiseToHttpClients { get; set; } = false;
 
@@ -134,8 +134,24 @@ public class TransparentQuicProxyEndPoint : TransparentBaseProxyEndPoint
     ///     entries are automatically released if the <see cref="QuicConnection" /> is GC'd before the
     ///     accept loop picks it up.
     /// </summary>
-    internal System.Runtime.CompilerServices.ConditionalWeakTable<QuicConnection, BeforeQuicAuthenticateEventArgs>
+    internal ConditionalWeakTable<QuicConnection, BeforeQuicAuthenticateEventArgs>
         PendingQuicAuthArgs { get; } = new();
+
+    QuicListener? IQuicInboundEndPoint.QuicListener
+    {
+        get => QuicListener;
+        set => QuicListener = value;
+    }
+
+    ConditionalWeakTable<QuicConnection, BeforeQuicAuthenticateEventArgs> IQuicInboundEndPoint.PendingQuicAuthArgs =>
+        PendingQuicAuthArgs;
+
+    IOriginalDestinationResolver? IQuicInboundEndPoint.OriginalDestinationResolver =>
+        OriginalDestinationResolver;
+
+    ProxyEndPoint IQuicInboundEndPoint.ProxyEndPoint => this;
+
+    void IQuicInboundEndPoint.AssignPort(int port) => Port = port;
 
     /// <summary>
     ///     Fired before the QUIC TLS handshake completes for each inbound connection.
@@ -154,6 +170,10 @@ public class TransparentQuicProxyEndPoint : TransparentBaseProxyEndPoint
             ? BeforeQuicAuthenticate.InvokeAsync(proxyServer, args, logger)
             : Task.CompletedTask;
     }
+
+    Task IQuicInboundEndPoint.InvokeBeforeQuicAuthenticate(ProxyServer proxyServer,
+        BeforeQuicAuthenticateEventArgs args, ILogger logger) =>
+        InvokeBeforeQuicAuthenticate(proxyServer, args, logger);
 
     /// <summary>
     ///     Not applicable for QUIC endpoints (QUIC always decrypts TLS 1.3). Implemented as a no-op to
