@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -127,25 +128,32 @@ internal static class Http3VarInt
     /// </summary>
     public static async ValueTask<ulong?> ReadAsync(Stream stream, CancellationToken cancellationToken)
     {
-        var oneByte = new byte[1];
-        if (!await ReadExactAsync(stream, oneByte, cancellationToken)) return null;
-
-        var prefix = (oneByte[0] & 0xC0) >> 6;
-        int remaining = prefix switch
+        // RFC 9000 VarInts are at most 8 bytes. One small buffer replaces the previous
+        // per-call <c>new byte[1]</c> + <c>new byte[1+remaining]</c> pair (two VarInts per H3 frame).
+        var buf = ArrayPool<byte>.Shared.Rent(8);
+        try
         {
-            0 => 0,
-            1 => 1,
-            2 => 3,
-            _ => 7
-        };
+            if (!await ReadExactAsync(stream, buf.AsMemory(0, 1), cancellationToken)) return null;
 
-        var buf = new byte[1 + remaining];
-        buf[0] = oneByte[0];
-        if (remaining > 0 && !await ReadExactAsync(stream, buf.AsMemory(1, remaining), cancellationToken))
-            return null;
+            var prefix = (buf[0] & 0xC0) >> 6;
+            int remaining = prefix switch
+            {
+                0 => 0,
+                1 => 1,
+                2 => 3,
+                _ => 7
+            };
 
-        TryRead(buf, out var value, out _);
-        return value;
+            if (remaining > 0 && !await ReadExactAsync(stream, buf.AsMemory(1, remaining), cancellationToken))
+                return null;
+
+            TryRead(buf.AsSpan(0, 1 + remaining), out var value, out _);
+            return value;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buf);
+        }
     }
 
     private static async ValueTask<bool> ReadExactAsync(Stream stream, Memory<byte> buffer, CancellationToken ct)

@@ -85,6 +85,8 @@ internal sealed class Http3Frame
 
     /// <summary>
     ///     Writes a frame (type + length + payload) to <paramref name="stream" />.
+    ///     Coalesces the VarInt header (and small payloads) into a single socket write —
+    ///     same idea as Kestrel <c>Http3FrameWriter.WriteHeader</c> using one span flush.
     /// </summary>
     public static async ValueTask WriteAsync(
         Stream stream,
@@ -92,23 +94,40 @@ internal sealed class Http3Frame
         ReadOnlyMemory<byte> payload,
         CancellationToken cancellationToken)
     {
-        var typeBytes = ArrayPool<byte>.Shared.Rent(8);
-        var lengthBytes = ArrayPool<byte>.Shared.Rent(8);
+        // Max VarInt is 8 bytes each for type + length.
+        const int headerCap = 16;
+        if (payload.Length <= 256)
+        {
+            var rented = ArrayPool<byte>.Shared.Rent(headerCap + payload.Length);
+            try
+            {
+                var typeLen = Http3VarInt.Write(rented, frameType);
+                var lengthLen = Http3VarInt.Write(rented.AsSpan(typeLen), (ulong)payload.Length);
+                var headerLen = typeLen + lengthLen;
+                if (!payload.IsEmpty)
+                    payload.Span.CopyTo(rented.AsSpan(headerLen));
+                await stream.WriteAsync(rented.AsMemory(0, headerLen + payload.Length), cancellationToken);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+
+            return;
+        }
+
+        // Large DATA: one write for the header, then the payload buffer as-is (avoid a huge copy).
+        var headerBytes = ArrayPool<byte>.Shared.Rent(headerCap);
         try
         {
-            var typeLen = Http3VarInt.Write(typeBytes, frameType);
-            var lengthLen = Http3VarInt.Write(lengthBytes, (ulong)payload.Length);
-
-            // Write header (type + length) then payload.
-            await stream.WriteAsync(typeBytes.AsMemory(0, typeLen), cancellationToken);
-            await stream.WriteAsync(lengthBytes.AsMemory(0, lengthLen), cancellationToken);
-            if (!payload.IsEmpty)
-                await stream.WriteAsync(payload, cancellationToken);
+            var typeLen = Http3VarInt.Write(headerBytes, frameType);
+            var lengthLen = Http3VarInt.Write(headerBytes.AsSpan(typeLen), (ulong)payload.Length);
+            await stream.WriteAsync(headerBytes.AsMemory(0, typeLen + lengthLen), cancellationToken);
+            await stream.WriteAsync(payload, cancellationToken);
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(typeBytes);
-            ArrayPool<byte>.Shared.Return(lengthBytes);
+            ArrayPool<byte>.Shared.Return(headerBytes);
         }
     }
 

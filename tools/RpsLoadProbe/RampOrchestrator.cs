@@ -27,7 +27,7 @@ internal enum ProbeMode
     /// <summary>Client prior-knowledge h2c → H2→H3 bridge → QUIC/h3.</summary>
     ReverseH2cToH3,
     NginxReverseHttp2,
-    /// <summary>YARP client TLS+h2 → cleartext HTTP/1 origin (nginx parity).</summary>
+    /// <summary>Managed reverse peer client TLS+h2 → cleartext HTTP/1 origin (native reverse peer parity).</summary>
     YarpReverseHttp2,
     YarpReverseHttp2ToH2c,
     YarpReverseH2c,
@@ -37,7 +37,7 @@ internal enum ProbeMode
     ReverseHttp3,
     /// <summary>TWP QUIC/h3 terminate → ForwardCleartext → cleartext HTTP/1 origin.</summary>
     ReverseHttp3Cleartext,
-    /// <summary>YARP HTTP/3 (Kestrel) terminate → cleartext HTTP/1. Client uses HttpClient H3.</summary>
+    /// <summary>Managed reverse peer HTTP/3 (Kestrel) terminate → cleartext HTTP/1. Client uses quic-http3 (matched with TWP).</summary>
     YarpReverseHttp3Cleartext,
     /// <summary>Client H1 TLS → H1→H2 bridge → origin HTTPS h2.</summary>
     ReverseHttp11ToHttp2,
@@ -51,7 +51,7 @@ internal enum ProbeMode
     /// <summary>Client H3 → H3→H2 bridge → origin HTTPS h2.</summary>
     ReverseHttp3ToHttp2,
     YarpReverseHttp3ToHttp2,
-    /// <summary>YARP client H3 → origin HTTP/3.</summary>
+    /// <summary>Managed reverse peer client H3 → origin HTTP/3.</summary>
     YarpReverseHttp3ToHttp3,
     /// <summary>Client H2 TLS → H2→H1 bridge → origin HTTPS HTTP/1 (MITM, both sides TLS).</summary>
     MitmHttp2ToHttp1,
@@ -62,25 +62,25 @@ internal enum ProbeMode
     Compare,
     CompareHttp2,
     CompareTls,
-    /// <summary>Fair TLS-terminate compare: H1 TLS, H2→H1 cleartext, H3→H1 cleartext vs nginx where available.</summary>
+    /// <summary>Fair TLS-terminate compare: H1 TLS, H2→H1 cleartext, H3→H1 cleartext vs native reverse peer where available.</summary>
     CompareTerminate,
     /// <summary>
-    /// Same-protocol matrix: H1 cleartext, H1 TLS terminate, H2 MITM, H3 MITM (+ nginx where comparable).
+    /// Same-protocol matrix: H1 cleartext, H1 TLS terminate, H2 MITM, H3 MITM (+ native reverse peer where comparable).
     /// </summary>
     CompareSame,
-    /// <summary>All implemented cross-version bridges under load (no nginx).</summary>
+    /// <summary>All implemented cross-version bridges under load (no native reverse peer).</summary>
     CompareBridges,
     /// <summary>
-    /// MITM-only matrix: explicit H1 MITM, transparent H2/H3 MITM, and dual-crypto bridges (no nginx).
+    /// MITM-only matrix: explicit H1 MITM, transparent H2/H3 MITM, and dual-crypto bridges (no native reverse peer).
     /// </summary>
     CompareMitm,
-    /// <summary>TWP vs bare C# reverse vs nginx on the three Linux nginx-winning reverse rows.</summary>
+    /// <summary>TWP vs bare C# reverse vs native reverse peer on the three Linux native-winning reverse rows.</summary>
     CompareCeiling,
-    /// <summary>Heavier reverse GET bodies (64 KiB / 256 KiB) vs nginx where possible.</summary>
+    /// <summary>Heavier reverse GET bodies (64 KiB / 256 KiB) vs native reverse peer where possible.</summary>
     CompareBodies,
-    /// <summary>POST 64 KiB request+response reverse vs nginx where possible.</summary>
+    /// <summary>POST 64 KiB request+response reverse vs native reverse peer where possible.</summary>
     ComparePost,
-    /// <summary>64 KiB GET under userspace delay/loss (H2/H3 conditions) vs nginx where possible.</summary>
+    /// <summary>64 KiB GET under userspace delay/loss (H2/H3 conditions) vs native reverse peer where possible.</summary>
     CompareLossy,
     /// <summary>H1 TLS terminate cost: keep-alive tiny, new-connection tiny, keep-alive 256 KiB.</summary>
     CompareTlsCost,
@@ -254,7 +254,7 @@ internal static class RampOrchestrator
         if (nginxAvailable)
         {
             arms.Insert(1, new($"nginx-reverse-http1-tls-{nameSuffix}", ProbeMode.NginxReverseHttp1Tls, null, workload));
-            // After insert: twp H1, nginx H1, yarp H1, twp H2, yarp H2 — put nginx H2 after twp H2.
+            // After insert: twp H1, native H1, managed H1, twp H2, managed H2 — put native H2 after twp H2.
             arms.Insert(4, new($"nginx-reverse-http2-{nameSuffix}", ProbeMode.NginxReverseHttp2, null, workload));
         }
 
@@ -625,9 +625,8 @@ internal static class RampOrchestrator
                 if (useQuic)
                 {
                     var ep = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, quicPort!.Value);
-                    var authority = stack.OriginQuicPort is { } op
-                        ? $"localhost:{op}"
-                        : "localhost";
+                    // TWP TransparentQuic uses :authority as the upstream target. Managed reverse uses the listen host.
+                    var authority = ResolveQuicAuthority(arm.Mode, stack);
                     await QuicHttp3LoadGenerator.WarmupAsync(ep, "localhost", authority,
                         concurrency, options.Warmup, cancellationToken, workload);
                 }
@@ -641,9 +640,7 @@ internal static class RampOrchestrator
                 if (useQuic)
                 {
                     var ep = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, quicPort!.Value);
-                    var authority = stack.OriginQuicPort is { } op
-                        ? $"localhost:{op}"
-                        : "localhost";
+                    var authority = ResolveQuicAuthority(arm.Mode, stack);
                     result = await QuicHttp3LoadGenerator.RunAsync(ep, "localhost", authority,
                         concurrency, options.StepDuration, cancellationToken, workload);
                 }
@@ -688,6 +685,41 @@ internal static class RampOrchestrator
                 await udpLink.DisposeAsync();
         }
     }
+
+    /// <summary>
+    ///     TWP <c>TransparentQuicProxyEndPoint</c> forwards using <c>:authority</c> as the upstream target
+    ///     when an origin QUIC port is published. Managed reverse listens like Kestrel — use the listen host.
+    /// </summary>
+    private static string ResolveQuicAuthority(ProbeMode mode, ChildProcessStack stack)
+    {
+        var yarpInboundH3 = mode is ProbeMode.YarpReverseHttp3Cleartext
+            or ProbeMode.YarpReverseHttp3ToHttp2
+            or ProbeMode.YarpReverseHttp3ToHttp3;
+        if (yarpInboundH3)
+            return "localhost";
+
+        return stack.OriginQuicPort is { } originPort
+            ? $"localhost:{originPort}"
+            : "localhost";
+    }
+
+    /// <summary>
+    ///     Publishable TWP÷peer ratios require the same load generator on both sides.
+    ///     Throws when CSV/generator labels would mix quic-http3 with HttpClient for an H3 pair.
+    /// </summary>
+    internal static void EnsureMatchedGenerators(string twpGenerator, string yarpGenerator, string armLabel)
+    {
+        var a = NormalizeGenerator(twpGenerator);
+        var b = NormalizeGenerator(yarpGenerator);
+        if (!string.Equals(a, b, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Refusing TWP÷YARP ratio for '{armLabel}': generators differ ({a} vs {b}). Match clients first.");
+        }
+    }
+
+    private static string NormalizeGenerator(string? generator) =>
+        string.IsNullOrWhiteSpace(generator) ? "dotnet-httpclient" : generator.Trim();
 
     private static string ProbeNginxVersion(string exe)
     {

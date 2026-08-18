@@ -10,8 +10,8 @@ namespace Titanium.Web.Proxy.Helpers;
 internal sealed class HttpClientStream : HttpStream
 {
     internal HttpClientStream(ProxyServer server, TcpClientConnection connection, Stream stream, IBufferPool bufferPool,
-        CancellationToken cancellationToken)
-        : base(server, stream, bufferPool, cancellationToken)
+        CancellationToken cancellationToken, bool rentReadBuffer = true)
+        : base(server, stream, bufferPool, cancellationToken, leaveOpen: false, rentReadBuffer: rentReadBuffer)
     {
         Connection = connection;
     }

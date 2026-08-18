@@ -183,7 +183,7 @@ internal static class EmbeddedLoadGenerator
             PooledConnectionIdleTimeout = keepAlive ? TimeSpan.FromMinutes(2) : TimeSpan.Zero,
             // Multiplex across HTTP/2 connections under load. A single client H2 connection serializes
             // all DATA writes on ClientWriteLock and fans every stream onto the H2→H1 bridge at once;
-            // multiple connections match browser/nginx-style fan-out and keep error rates down.
+            // multiple connections match browser-style fan-out and keep error rates down.
             EnableMultipleHttp2Connections = true,
             SslOptions = new SslClientAuthenticationOptions
             {

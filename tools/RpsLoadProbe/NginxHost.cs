@@ -10,7 +10,7 @@ using Titanium.Web.Proxy.RpsLoadProbe.Support;
 namespace Titanium.Web.Proxy.RpsLoadProbe;
 
 /// <summary>
-/// Starts a stock-ish nginx reverse proxy against the shared Kestrel origin.
+/// Starts a stock-ish native reverse peer against the shared Kestrel origin.
 /// Uses a temp prefix directory so the user's install tree is never modified.
 /// </summary>
 internal sealed class NginxHost : IDisposable
@@ -52,13 +52,13 @@ internal sealed class NginxHost : IDisposable
 
     public static async Task<NginxHost?> TryStartHttp2Async(int originHttpPort, string? nginxPath)
     {
-        // nginx/Windows has http_v2 + ssl but no QUIC/UDP. Client TLS+h2 → cleartext HTTP origin.
+        // Windows build has http_v2 + ssl but no QUIC/UDP. Client TLS+h2 → cleartext HTTP origin.
         var exe = ResolveNginxExecutable(nginxPath);
         if (exe == null)
             return null;
 
         var version = ReadVersion(exe);
-        // nginx 1.25.1+ uses `http2 on;`; Ubuntu 24.04 ships 1.24 which needs `listen ... ssl http2`.
+        // 1.25.1+ uses `http2 on;`; Ubuntu 24.04 ships 1.24 which needs `listen ... ssl http2`.
         var useHttp2OnDirective = SupportsHttp2OnDirective(version);
 
         var prefixProbe = Path.Combine(Path.GetTempPath(), "twp-rps-nginx-certs-" + Guid.NewGuid().ToString("N"));
@@ -210,10 +210,10 @@ internal sealed class NginxHost : IDisposable
             var keyDest = Path.Combine(prefixDir, "certs", "server.key");
             File.Copy(certPem, certDest, overwrite: true);
             File.Copy(keyPem, keyDest, overwrite: true);
-            // Normalize paths for nginx on Windows (forward slashes).
+            // Normalize paths for the Windows build (forward slashes).
             certDest = certDest.Replace('\\', '/');
             keyDest = keyDest.Replace('\\', '/');
-            // Prefer `http2 on` when available; fall back to listen-parameter form for nginx < 1.25.1.
+            // Prefer `http2 on` when available; fall back to listen-parameter form for builds < 1.25.1.
             var listenAndHttp2 = useHttp2OnDirective
                 ? $"listen 127.0.0.1:{port} ssl;\n                        http2 on;"
                 : $"listen 127.0.0.1:{port} ssl http2;";
@@ -250,7 +250,7 @@ internal sealed class NginxHost : IDisposable
                 """;
         };
 
-    /// <summary>True when nginx supports the <c>http2 on;</c> directive (1.25.1+).</summary>
+    /// <summary>True when the binary supports the <c>http2 on;</c> directive (1.25.1+).</summary>
     internal static bool SupportsHttp2OnDirective(string versionText)
     {
         var m = System.Text.RegularExpressions.Regex.Match(versionText, @"nginx/(\d+)\.(\d+)\.(\d+)");

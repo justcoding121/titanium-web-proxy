@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.RpsLoadProbe;
 
 /// <summary>
 ///     Minimal C# HTTP/1 reverse proxy (no MITM session model) used to measure the runtime
-///     ceiling against TWP and nginx on the same loopback GET workload.
+///     ceiling against TWP and the native reverse peer on the same loopback GET workload.
 /// </summary>
 internal sealed class BareHttp1ReverseProxy : IDisposable
 {

@@ -74,6 +74,9 @@ internal sealed class OriginServer : IAsyncDisposable
                 {
                     // Large POST/GET bodies under reverse proxy load.
                     kestrel.Limits.MaxRequestBodySize = 10 * 1024 * 1024;
+                    kestrel.Limits.Http2.MaxStreamsPerConnection = 1024;
+                    kestrel.Limits.Http2.InitialConnectionWindowSize = 1024 * 1024;
+                    kestrel.Limits.Http2.InitialStreamWindowSize = 768 * 1024;
                     if (options.EnableHttp)
                     {
                         kestrel.Listen(IPAddress.Loopback, httpPort, listenOptions =>

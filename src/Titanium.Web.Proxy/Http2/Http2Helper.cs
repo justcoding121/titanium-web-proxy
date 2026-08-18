@@ -1655,6 +1655,10 @@ namespace Titanium.Web.Proxy.Http2
             }
 
             byte[] buffer = new byte[MaxAcceptableFrameSize];
+            // Kestrel Http2Connection reads a large Pipe buffer then peels frames with
+            // Http2FrameReader.TryReadFrame. Mirror that without a ReadOnlySequence retrofit:
+            // one socket ReadAsync fills up to 32 KiB; subsequent frames reuse leftover bytes.
+            var intake = new Http2FrameIntake(input);
 
             // Metadata for a HEADERS/PUSH_PROMISE block that has not yet been terminated by END_HEADERS and
             // is being assembled from subsequent CONTINUATION frames (RFC 7540 ?6.10). Only one such block
@@ -1708,8 +1712,7 @@ namespace Titanium.Web.Proxy.Http2
 
             while (true)
             {
-                int read = await ForceRead(input, frameHeaderBuffer, 0, 9, cancellationToken);
-                if (read != 9)
+                if (!await intake.ReadExactAsync(frameHeaderBuffer, 0, 9, cancellationToken))
                 {
                     await TrySendGracefulGoAwayAsync();
                     return;
@@ -1765,7 +1768,7 @@ namespace Titanium.Web.Proxy.Http2
                     // ever read (see the ForceRead call right below this block) - drain it now so the GOAWAY
                     // just flushed above is not itself lost to an abortive close; see
                     // DiscardRejectedFramePayloadAsync's remarks.
-                    await DiscardRejectedFramePayloadAsync(input, length, cancellationToken);
+                    await intake.DiscardAsync(length, cancellationToken);
                     return;
                 }
 
@@ -1781,8 +1784,7 @@ namespace Titanium.Web.Proxy.Http2
                     return;
                 }
 
-                read = await ForceRead(input, buffer, 0, length, cancellationToken);
-                if (read != length)
+                if (length > 0 && !await intake.ReadExactAsync(buffer, 0, length, cancellationToken))
                 {
                     await TrySendGracefulGoAwayAsync();
                     return;
@@ -2332,9 +2334,9 @@ namespace Titanium.Web.Proxy.Http2
                     else
                     {
                         if (isClient)
-                            args.OnDataSent(buffer, 0, read);
+                            args.OnDataSent(buffer, 0, length);
                         else
-                            args.OnDataReceived(buffer, 0, read);
+                            args.OnDataReceived(buffer, 0, length);
 
                         rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
 
@@ -3238,36 +3240,54 @@ namespace Titanium.Web.Proxy.Http2
                             connectionState.EnqueueWriteRented(towardServer: isClient, outputWriteLock, output, rented,
                                 wireLen);
                     }
-                    else
-                    {
-                        // Control frames (SETTINGS/WINDOW_UPDATE/PING/…): await in order so e.g. the
-                        // post-SETTINGS connection WINDOW_UPDATE cannot overtake SETTINGS on the wire.
-                        // Stream-scoped control (RST/PRIORITY) on a remapped multi-origin stream must use
-                        // that leg's writer and origin stream id.
-                        if (isClient && streamId != 0 && connectionState.OriginRelayPool != null
-                            && connectionState.OriginRelayPool.TryGetAssignment(streamId, out var ctrlAssignment))
-                        {
-                            frameHeader.StreamId = ctrlAssignment.OriginStreamId;
-                            frameHeader.CopyToBuffer(frameHeaderBuffer);
-                            var wireLen = 9 + frameLength;
-                            var rented = ArrayPool<byte>.Shared.Rent(wireLen);
-                            frameHeaderBuffer.AsSpan(0, 9).CopyTo(rented);
-                            if (frameLength > 0)
-                                buffer.AsSpan(0, frameLength).CopyTo(rented.AsSpan(9));
-                            ctrlAssignment.Leg.Writer.EnqueueRented(rented, wireLen);
-                        }
                         else
                         {
-                            async ValueTask writeFrame()
+                            // Control frames (SETTINGS/WINDOW_UPDATE/PING/HEADERS/…): stream-scoped frames
+                            // (HEADERS etc.) go through the dedicated writer for coalesced writes. Connection-
+                            // level SETTINGS/WINDOW_UPDATE/PING/GOAWAY stay awaited under the write lock so
+                            // the post-SETTINGS connection WINDOW_UPDATE below cannot overtake SETTINGS.
+                            if (isClient && streamId != 0 && connectionState.OriginRelayPool != null
+                                && connectionState.OriginRelayPool.TryGetAssignment(streamId, out var ctrlAssignment))
+                            {
+                                frameHeader.StreamId = ctrlAssignment.OriginStreamId;
+                                frameHeader.CopyToBuffer(frameHeaderBuffer);
+                                var wireLen = 9 + frameLength;
+                                var rented = ArrayPool<byte>.Shared.Rent(wireLen);
+                                frameHeaderBuffer.AsSpan(0, 9).CopyTo(rented);
+                                if (frameLength > 0)
+                                    buffer.AsSpan(0, frameLength).CopyTo(rented.AsSpan(9));
+                                ctrlAssignment.Leg.Writer.EnqueueRented(rented, wireLen);
+                            }
+                            else
                             {
                                 frameHeader.CopyToBuffer(frameHeaderBuffer);
-                                await output.WriteAsync(frameHeaderBuffer.AsMemory(), CancellationToken.None);
-                                await output.WriteAsync(buffer.AsMemory(0, frameLength), CancellationToken.None);
-                            }
+                                var wireLen = 9 + frameLength;
+                                var streamScoped = type is Http2FrameType.Headers or Http2FrameType.Continuation
+                                    or Http2FrameType.RstStream or Http2FrameType.Priority;
+                                var dedicatedWriter = streamScoped
+                                    ? (isClient ? connectionState.ServerFrameWriter : connectionState.ClientFrameWriter)
+                                    : null;
+                                if (dedicatedWriter != null)
+                                {
+                                    var rented = ArrayPool<byte>.Shared.Rent(wireLen);
+                                    frameHeaderBuffer.AsSpan(0, 9).CopyTo(rented);
+                                    if (frameLength > 0)
+                                        buffer.AsSpan(0, frameLength).CopyTo(rented.AsSpan(9));
+                                    dedicatedWriter.EnqueueRented(rented, wireLen);
+                                }
+                                else
+                                {
+                                    async ValueTask writeFrame()
+                                    {
+                                        await output.WriteAsync(frameHeaderBuffer.AsMemory(0, 9), CancellationToken.None);
+                                        if (frameLength > 0)
+                                            await output.WriteAsync(buffer.AsMemory(0, frameLength), CancellationToken.None);
+                                    }
 
-                            await lockedOutputWrite(writeFrame);
+                                    await lockedOutputWrite(writeFrame);
+                                }
+                            }
                         }
-                    }
 
                     // signal once the server's SETTINGS frame has actually reached the client, so a synthetic
                     // response on the other relay can safely send HEADERS afterwards.
@@ -4202,6 +4222,102 @@ namespace Titanium.Web.Proxy.Http2
             }
 
             return totalRead;
+        }
+
+        /// <summary>
+        ///     Socket-backed frame intake: one large <see cref="Stream.ReadAsync(Memory{byte}, CancellationToken)" />
+        ///     can satisfy many subsequent 9-byte headers + payloads (Kestrel <c>Http2Connection</c> /
+        ///     <c>Http2FrameReader.TryReadFrame</c> pattern without adopting <c>ReadOnlySequence</c>).
+        /// </summary>
+        private sealed class Http2FrameIntake
+        {
+            private const int DefaultCapacity = 64 * 1024;
+            private readonly Stream input;
+            private readonly byte[] buf;
+            private int start;
+            private int end;
+
+            public Http2FrameIntake(Stream input, int capacity = DefaultCapacity)
+            {
+                this.input = input;
+                buf = GC.AllocateUninitializedArray<byte>(capacity);
+            }
+
+            private int Available => end - start;
+
+            public async ValueTask<bool> ReadExactAsync(byte[] dest, int destOffset, int count,
+                CancellationToken cancellationToken)
+            {
+                if (count == 0)
+                    return true;
+
+                var copied = 0;
+                while (copied < count)
+                {
+                    if (Available == 0 && !await FillAsync(cancellationToken))
+                        return false;
+
+                    var n = Math.Min(count - copied, Available);
+                    Buffer.BlockCopy(buf, start, dest, destOffset + copied, n);
+                    start += n;
+                    copied += n;
+                }
+
+                return true;
+            }
+
+            public async ValueTask DiscardAsync(int length, CancellationToken cancellationToken)
+            {
+                var remaining = length;
+                while (remaining > 0)
+                {
+                    if (Available == 0 && !await FillAsync(cancellationToken))
+                        return;
+
+                    var n = Math.Min(remaining, Available);
+                    start += n;
+                    remaining -= n;
+                }
+            }
+
+            private async ValueTask<bool> FillAsync(CancellationToken cancellationToken)
+            {
+                if (start == end)
+                {
+                    start = 0;
+                    end = 0;
+                }
+                else if (start > 0 && end == buf.Length)
+                {
+                    var available = end - start;
+                    Buffer.BlockCopy(buf, start, buf, 0, available);
+                    start = 0;
+                    end = available;
+                }
+
+                if (end == buf.Length)
+                {
+                    // Should not happen for frames ≤ MaxAcceptableFrameSize with 32 KiB capacity, but
+                    // compact so a single oversized need can still progress via ForceRead-sized chunks.
+                    if (start > 0)
+                    {
+                        var available = end - start;
+                        Buffer.BlockCopy(buf, start, buf, 0, available);
+                        start = 0;
+                        end = available;
+                    }
+
+                    if (end == buf.Length)
+                        return false;
+                }
+
+                var read = await input.ReadAsync(buf.AsMemory(end, buf.Length - end), cancellationToken);
+                if (read == 0)
+                    return false;
+
+                end += read;
+                return true;
+            }
         }
 
         /// <summary>

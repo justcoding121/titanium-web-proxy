@@ -61,7 +61,7 @@ internal sealed class TwpProxyHost : IDisposable
     }
 
     /// <summary>
-    /// TLS-terminating reverse HTTP/2 matching nginx: client h2 TLS → H2→H1 bridge → cleartext HTTP/1 origin.
+    /// TLS-terminating reverse HTTP/2 matching native reverse peer: client h2 TLS → H2→H1 bridge → cleartext HTTP/1 origin.
     /// </summary>
     public static TwpProxyHost StartReverseHttp2Cleartext(int originHttpPort)
     {
@@ -221,7 +221,7 @@ internal sealed class TwpProxyHost : IDisposable
         ConfigureSharedTestCa(proxy);
 
         // Native h2↔h2 MITM to an HTTPS origin. TLS-terminate→cleartext (ForwardCleartext + H1 bridge)
-        // matches nginx's topology but the per-stream H2→H1 bridge still errors under saturation;
+        // matches native reverse peer topology but the per-stream H2→H1 bridge still errors under saturation;
         // keep the zero-error native path for publishable numbers until that bridge is hardened.
         var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
         {

@@ -1,6 +1,6 @@
 # Performance Profiling
 
-How the throughput hotspots behind the numbers on the [Performance](Performance) page were found. This page documents the techniques and tools so future performance work (or a regression hunt) can follow the same playbook instead of rediscovering it. Everything here was used in the 2026 pass that took the HTTP/2 bridge arms from ~6× behind YARP to parity-or-close.
+How the throughput hotspots behind the numbers on the [Performance](Performance) page were found. This page documents the techniques and tools so future performance work (or a regression hunt) can follow the same playbook instead of rediscovering it. Everything here was used in the 2026 pass that took the HTTP/2 bridge arms from ~6× behind the managed reverse peer to parity-or-close.
 
 ## Contents
 
@@ -20,7 +20,7 @@ How the throughput hotspots behind the numbers on the [Performance](Performance)
 All throughput work starts from [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe):
 
 - Each **arm** is one topology: client protocol × origin protocol × TLS/cleartext × reverse/MITM (e.g. `twp-reverse-http2-cleartext` = H2 TLS client → H2→H1 bridge → cleartext H1 origin).
-- Every TWP arm has a **control arm** — YARP (and nginx where it can run the path) hosting the *identical* workload in the same process and session, so both sides see the same machine state.
+- Every TWP arm has a **control arm** — the managed reverse peer (and the native reverse peer where it can run the path) hosting the *identical* workload in the same process and session, so both sides see the same machine state.
 - The probe **ramps concurrency** (typically c=8→64) and reports **sustainable RPS**: the last concurrency step that still met the error-rate and p99-latency SLO. A ramp that grows RPS but blows p99 is a queue, not throughput.
 - Results land in timestamped CSVs under `tools/RpsLoadProbe/results/`; the [Performance](Performance) tables cite the run IDs so every published number is traceable to a raw file.
 
@@ -37,7 +37,7 @@ tools/RpsLoadProbe/bin/Release/net10.0/RpsLoadProbe.exe --ramp --mode reverse-ht
 On a laptop, thermal throttling dominates everything else: the *same* arm measured 23k, 11k, and 51k RPS in one afternoon depending on accumulated heat. Rules that kept conclusions honest:
 
 - **Compare only within one back-to-back session.** Never compare a number from this run against a number from an hour ago.
-- **Prefer TWP÷YARP ratios over absolutes.** The control arm soaks up the same throttling.
+- **Prefer TWP÷peer ratios over absolutes.** The control arm soaks up the same throttling.
 - **For a targeted A/B question, run the two arms paired**: cooldown (~2 min idle), arm A, arm B immediately after — and alternate which goes first across repeats so heat bias cancels. This is how "MITM costs 0.65–0.75× of its reverse twin, and the delta is purely the extra origin TLS leg" was established: the two probe arms differ by exactly one flag (`ForwardCleartext`).
 - If an arm's ratio looks newly bad, **re-measure before profiling** — several "regressions" were heat.
 
@@ -51,7 +51,7 @@ Cheapest tool with the highest information density. Run the arm at c=1 and at c=
 | **Faster** at c=1 but flatlines while the control arm scales | A **serialization point** — something processes streams one at a time; profilers of per-request cost will mislead you |
 | Scales to a cliff, then errors/SLO failures | Resource exhaustion or a convoy (locks, pool limits, flow-control windows) |
 
-The h2c→H1 bridge showed the second shape: TWP *beat* YARP at c=1 (6,425 vs 5,449 RPS) but flatlined at ~22k while YARP scaled to 46k. That single observation eliminated allocation work, `System.IO.Pipelines`, and syscall efficiency as hypotheses and said "find the serial section."
+The h2c→H1 bridge showed the second shape: TWP *beat* the managed reverse peer at c=1 (6,425 vs 5,449 RPS) but flatlined at ~22k while the managed reverse peer scaled to 46k. That single observation eliminated allocation work, `System.IO.Pipelines`, and syscall efficiency as hypotheses and said "find the serial section."
 
 ## Technique 2: async dumps — find where requests wait
 
@@ -94,31 +94,32 @@ dotnet-dump collect -p <proxy PID> --type Full
 dotnet-trace collect -p <proxy PID> --profile dotnet-sampled-thread-time --duration 00:00:25
 ```
 
-This is a *confirmation* tool more than a discovery tool here: it confirmed the residual H1→H2 gap after origin-connection sharing is still whole-box cost (dual TLS legs plus the per-request session pipeline). Sharing lifted the arm from **0.33× to 0.53×** YARP at c=32 (`rps-ramp-20260818-130040` / `130112`); cool remeasure after grow-at-4 stayed ~**0.51×** (`profile-baseline` / `profile-post-fix`). TTFB still rises with concurrency. At c=32 dumpasync showed **8** origin `ReadLoopAsync` instances (pool already spreading) plus `Monitor` / `SslStream` in the sampled stacks — not a single-conn convoy. Honest remainder: dual-TLS + session cost on this 8-thread box.
+This is a *confirmation* tool more than a discovery tool here: it confirmed the residual H1→H2 gap after origin-connection sharing is still whole-box cost (dual TLS legs plus the per-request session pipeline). Sharing lifted the arm from **0.33× to 0.53×** peer at c=32 (`rps-ramp-20260818-130040` / `130112`); cool remeasure after grow-at-4 stayed ~**0.51×** (`profile-baseline` / `profile-post-fix`). TTFB still rises with concurrency. At c=32 dumpasync showed **8** origin `ReadLoopAsync` instances (pool already spreading) plus `Monitor` / `SslStream` in the sampled stacks — not a single-conn convoy. Honest remainder: dual-TLS + session cost on this 8-thread box.
 
 ## Technique 5: reference-source comparison
 
-When a comparable system (YARP/Kestrel) is faster, read its source to answer **named hypotheses** — not to port its architecture. Two examples from this pass:
+When a comparable system (Kestrel reverse / managed reverse peer) is faster, read its source to answer **named hypotheses** — not to port its architecture. Two examples from this pass:
 
 - *"Does Kestrel tune `MAX_CONCURRENT_STREAMS` dynamically?"* No — it opens additional origin connections when the stream limit is hit. TWP replicated the behavior within its own design (`Http2OriginRelayPool`).
-- *"Is `System.IO.Pipelines` the advantage?"* No — TWP's buffered `HttpStream` already amortizes socket reads to one syscall per buffer drain; the memcpy `ReadOnlySequence` would remove costs ~0.02% of a request, and the TLS decrypt copy exists in both models (`SslStream` cannot produce a `ReadOnlySequence`; Kestrel copies decrypted bytes into its Pipe too). Measured support: H1 arms at parity, and TWP's c=1 latency *lower* than YARP's.
-- *"When does YARP open another origin H2 connection?"* [`ForwarderHttpClientFactory`](https://github.com/microsoft/reverse-proxy) sets `EnableMultipleHttp2Connections = true` by default — SocketsHttpHandler grows sessions under stream pressure. TWP's `PoolGrowActiveStreamThreshold` is the analogous dial (lowered 16→4 after profiling).
+- *"Is `System.IO.Pipelines` the advantage?"* No — TWP's buffered `HttpStream` already amortizes socket reads to one syscall per buffer drain; the memcpy `ReadOnlySequence` would remove costs ~0.02% of a request, and the TLS decrypt copy exists in both models (`SslStream` cannot produce a `ReadOnlySequence`; Kestrel copies decrypted bytes into its Pipe too). Measured support: H1 arms at parity, and TWP's c=1 latency *lower* than the managed reverse peer's.
+- *"When does the managed reverse peer open another origin H2 connection?"* [`ForwarderHttpClientFactory`](https://github.com/microsoft/reverse-proxy) sets `EnableMultipleHttp2Connections = true` by default — SocketsHttpHandler grows sessions under stream pressure. TWP's `PoolGrowActiveStreamThreshold` is the analogous dial (lowered 16→4 after profiling).
 
 ## Case studies: symptom → tool → root cause → fix
 
 | Symptom | Tool that found it | Root cause | Fix |
 |---|---|---|---|
-| h2c→H1 bridge 8.5k vs YARP 46k, high system CPU | `dotnet-dump` + `dumpasync --stats` | Response emission convoy on the client write lock; many tiny socket writes | Queue all response frames through `Http2FrameWriter` (coalesced writes) — 3.4× |
-| Same arm flat at ~22k at every concurrency, but faster than YARP at c=1 | Concurrency sweep + stage timing (87 µs internal vs 2.6 ms observed) | Frame loop ran each stream's BeforeRequest prefix inline (~44 µs/HEADERS) | Start the handler on the thread pool from the ordered dispatch task — 22k → 47k |
+| h2c→H1 bridge 8.5k vs peer 46k, high system CPU | `dotnet-dump` + `dumpasync --stats` | Response emission convoy on the client write lock; many tiny socket writes | Queue all response frames through `Http2FrameWriter` (coalesced writes) — 3.4× |
+| Same arm flat at ~22k at every concurrency, but faster than peer at c=1 | Concurrency sweep + stage timing (87 µs internal vs 2.6 ms observed) | Frame loop ran each stream's BeforeRequest prefix inline (~44 µs/HEADERS) | Start the handler on the thread pool from the ordered dispatch task — 22k → 47k |
 | External-site H2 downloads stalled at exactly 64 KB | Standalone repro tool (`tools/H2ExternalRepro`) + a window-size env knob | Flow-control starvation: batched WINDOW_UPDATE threshold larger than the default 65,535 B window | Advertise a Kestrel-class 768 KiB initial stream window in both directions |
 | Two bridge arms at 100% errors after the passthrough change | The benchmark suite itself (error-rate SLO) | `:scheme` mismatch in compressed header relay on mixed-transport bridges | Detect and re-encode the header block with the corrected scheme |
 | POST arm collapsed 842 → 9 RPS | Benchmark suite + targeted repro | Client DATA frames raced the handler dispatch and were routed before channels existed | Await the stream's dispatch task before routing its DATA frames |
-| H1→H2 bridge stuck at ~0.3× YARP | Stage timing (TTFB 240 µs → 1,830 µs as c grows) + `dotnet-trace` | Dual TLS + per-request pipeline; also one dedicated origin H2 connection per H1 client | Shared `Http2OriginConnectionPool` (0.33× → 0.53× at c=32). Remainder still looks CPU-bound |
+| H1→H2 bridge stuck at ~0.3× peer | Stage timing (TTFB 240 µs → 1,830 µs as c grows) + `dotnet-trace` | Dual TLS + per-request pipeline; also one dedicated origin H2 connection per H1 client | Shared `Http2OriginConnectionPool` (0.33× → 0.53× at c=32). Remainder still looks CPU-bound |
 | H3→H2 SLO-failed above c=16 (then 100% errors after pooling) | Error log (`TWP_H3_ERROR_LOG`) + RFC 7540 §5.1.1 | Exclusive `ConcurrentBag` cap 16, then concurrent `SendAsync` allocated stream ids off the write lock so a higher id's HEADERS could hit the wire first; Kestrel implicitly closed the lower idle streams and GOAWAYed | Shared pool (no exclusive checkout) + allocate stream id and write opening HEADERS under the same write lock. Reverse H3→H2 holds c=64 at 0% errors (`rps-ramp-20260818-130231`) |
-| Inbound H3 ~0.40× YARP blamed on “managed QUIC vs MsQuic” | Code read of `QuicClientHandler.ListenQuic` | Inbound H3 already is `System.Net.Quic` / MsQuic. The gap is TWP’s C# H3 session vs Kestrel HTTP/3. H3 probe ratios also mix `quic-http3` vs HttpClient | Documented as session-layer bound; do not prototype a second QUIC stack |
+| Inbound H3 ~0.40× peer blamed on “managed QUIC vs MsQuic” | Code read of `QuicClientHandler.ListenQuic` | Inbound H3 already is `System.Net.Quic` / MsQuic. Pre-match ratios also mixed `quic-http3` vs HttpClient | Matched-client H3→H1 ≈ **0.87**; do not prototype a second QUIC stack |
+| H1→H2 still ≪0.80 after pool + named session micro-opts | Cool matched A/B (`matched-post-fix`) | Dual client+origin TLS + per-request session on an 8-thread box; dumpasync already showed multiple origin `ReadLoop`s (not a single-conn convoy) | Documented dual-TLS ceiling (~0.29–0.51× depending on thermal); stop inventing a second TLS stack |
 | H3→H2 c=8/16 lost ~30–40% vs exclusive-bag after pooling | Cool A/B (`profile-baseline`) + `dumpasync`/`dotnet-trace` @ c=16 (`h3h2-c16.dmp` / `.nettrace`) | Grow threshold 16 pinned all streams on **one** origin `ReadLoopAsync`; **716** `SemaphoreSlim` waiters; H3 GET also did HEADERS + empty DATA | Grow at **4** active streams + drain FIN then HEADERS+`END_STREAM` for bodiless H3. Recovered **8,418 @ c=16** (`profile-post-fix`, vs phase-0 **8,539**) |
-| H2 TLS→h2c / h2c→h2c ~0.63–0.66× cool | `dumpasync` + sampled trace @ c=32 | `Http2FrameWriter` already on path; remaining inclusive time in `ForceRead` / `CopyHttp2FrameAsync` / socket send — not a writeLock convoy | Documented; large-read bypass still open if chasing 0.80 |
-| Cool H3→H1 ~0.36× YARP (12.1k / 33.4k) | Cool pair + trace @ c=32 | Trace dominated by thread-pool idle + QuicStream I/O; not MsQuic-native hotspots. Session/`HandleAsync` is the structure of the work | Session-layer bound; generator mismatch (`quic-http3` vs HttpClient) |
+| H2 TLS→h2c / h2c→h2c ~0.63–0.66× cool | `dumpasync` + sampled trace @ c=32 | `Http2FrameWriter` already on DATA path; `ForceRead` per frame header; HEADERS still two `WriteAsync` under the lock | Large-read `Http2FrameIntake` (64 KiB) + enqueue stream-scoped HEADERS on `Http2FrameWriter`. Matched cool h2c→h2c ≈ **0.70**, H2 TLS→h2c ≈ **0.66** (`matched-post-headers-writer`) |
+| Cool H3→H1 ~0.36× peer (12.1k / 33.4k) | Cool pair + trace @ c=32 | **Invalid ratio**: TWP `quic-http3` vs peer HttpClient. Trace was session/`HandleAsync`, not MsQuic-native | Match clients (`quic-http3` both); coalesce `Http3Frame.WriteAsync`; pool VarInt reads; skip 8 KiB dummy `HttpClientStream` buffer. Matched H3→H1 ≈ **0.87** sustain |
 
 ## Guardrails while optimizing
 

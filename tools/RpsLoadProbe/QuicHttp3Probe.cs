@@ -15,8 +15,7 @@ using Titanium.Web.Proxy.RpsLoadProbe.Support;
 namespace Titanium.Web.Proxy.RpsLoadProbe;
 
 /// <summary>
-/// Minimal HTTP/3 origin (QUIC) for reverse-h3 saturation. HttpClient cannot drive a
-/// UDP-only <c>TransparentQuicProxyEndPoint</c>, so the probe uses the same QuicListener
+/// Minimal HTTP/3 origin (QUIC) for reverse-h3 saturation. Uses the same QuicListener
 /// pattern as integration tests.
 /// </summary>
 internal sealed class QuicHttp3OriginHost : IAsyncDisposable
@@ -156,6 +155,11 @@ internal sealed class QuicHttp3OriginHost : IAsyncDisposable
     }
 }
 
+/// <summary>
+/// HTTP/3 load generator over <see cref="QuicConnection"/>. HttpClient cannot drive a
+/// UDP-only <c>TransparentQuicProxyEndPoint</c>; the same generator is also used against
+/// Kestrel reverse H3 so publishable TWP÷peer ratios match clients.
+/// </summary>
 internal static class QuicHttp3LoadGenerator
 {
     public static async Task WarmupAsync(IPEndPoint proxyEndPoint, string sniHost, string authority,
@@ -193,6 +197,9 @@ internal static class QuicHttp3LoadGenerator
         var connectionCount = keepAlive ? Math.Clamp(concurrency / 8, 1, 8) : concurrency;
         var connections = new QuicConnection?[connectionCount];
         var connectionLocks = new object[connectionCount];
+        // Critical H3 unidirectional streams must stay open for the connection lifetime
+        // (closing them is H3_CLOSED_CRITICAL_STREAM = 0x104 / 260 — Kestrel aborts).
+        var retainedUnidirectional = new ConcurrentBag<QuicStream>();
         for (var i = 0; i < connectionCount; i++)
             connectionLocks[i] = new object();
 
@@ -203,7 +210,7 @@ internal static class QuicHttp3LoadGenerator
                 for (var c = 0; c < connectionCount; c++)
                 {
                     connections[c] = await ConnectAsync(proxyEndPoint, sniHost, cts.Token);
-                    await OpenControlAsync(connections[c]!, cts.Token);
+                    await OpenControlAsync(connections[c]!, retainedUnidirectional, cts.Token);
                     DrainInbound(connections[c]!, cts.Token);
                 }
             }
@@ -231,7 +238,7 @@ internal static class QuicHttp3LoadGenerator
                             try
                             {
                                 connection = await ConnectAsync(proxyEndPoint, sniHost, cts.Token);
-                                await OpenControlAsync(connection, cts.Token);
+                                await OpenControlAsync(connection, retainedUnidirectional, cts.Token);
                                 DrainInbound(connection, cts.Token);
                                 if (keepAlive)
                                 {
@@ -366,6 +373,18 @@ internal static class QuicHttp3LoadGenerator
         }
         finally
         {
+            while (retainedUnidirectional.TryTake(out var uni))
+            {
+                try
+                {
+                    await uni.DisposeAsync();
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+
             for (var c = 0; c < connectionCount; c++)
             {
                 if (connections[c] != null)
@@ -407,14 +426,25 @@ internal static class QuicHttp3LoadGenerator
             .WaitAsync(TimeSpan.FromSeconds(6), cancellationToken);
     }
 
-    private static async Task OpenControlAsync(QuicConnection connection, CancellationToken cancellationToken)
+    private static async Task OpenControlAsync(QuicConnection connection,
+        ConcurrentBag<QuicStream> retainedUnidirectional, CancellationToken cancellationToken)
     {
         var control = await connection.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, cancellationToken);
+        retainedUnidirectional.Add(control);
         await control.WriteAsync(new byte[] { (byte)Http3StreamType.Control }, cancellationToken);
         var settings = new Http3Settings();
         settings.SetQpackMaxTableCapacity(0);
         settings.SetQpackBlockedStreams(0);
         await Http3Frame.WriteAsync(control, Http3FrameType.Settings, settings.Serialize(), cancellationToken);
+
+        // RFC 9114: QPACK encoder/decoder streams are critical; open them even with table capacity 0.
+        var qpackEncoder = await connection.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, cancellationToken);
+        retainedUnidirectional.Add(qpackEncoder);
+        await qpackEncoder.WriteAsync(new byte[] { (byte)Http3StreamType.QpackEncoder }, cancellationToken);
+
+        var qpackDecoder = await connection.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, cancellationToken);
+        retainedUnidirectional.Add(qpackDecoder);
+        await qpackDecoder.WriteAsync(new byte[] { (byte)Http3StreamType.QpackDecoder }, cancellationToken);
     }
 
     private static void DrainInbound(QuicConnection connection, CancellationToken cancellationToken)

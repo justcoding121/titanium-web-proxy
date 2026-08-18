@@ -280,8 +280,10 @@ internal static class ServeProxyHost
             ProbeMode.ReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3Cleartext => "3.0",
             _ => "1.1"
         };
-        // TWP transparent QUIC needs the custom generator; YARP H3 is normal Kestrel HTTPS/H3.
-        var loadGenerator = mode is ProbeMode.ReverseHttp3Cleartext ? "quic-http3" : null;
+        // Inbound H3 (TWP TransparentQuic and Kestrel reverse) both use quic-http3 so TWP÷peer ratios match clients.
+        var loadGenerator = mode is ProbeMode.ReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3Cleartext
+            ? "quic-http3"
+            : null;
 
         using (proxy)
         {
@@ -293,7 +295,7 @@ internal static class ServeProxyHost
             await ProbeLog.WriteProtocolLineAsync($"http_version={httpVersion}", cancellationToken);
             if (loadGenerator != null)
                 await ProbeLog.WriteProtocolLineAsync($"load_generator={loadGenerator}", cancellationToken);
-            if (mode is ProbeMode.ReverseHttp3Cleartext)
+            if (mode is ProbeMode.ReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3Cleartext)
             {
                 var quicPort = new Uri(listenUrl).Port;
                 await ProbeLog.WriteProtocolLineAsync($"quic_port={quicPort}", cancellationToken);
@@ -406,7 +408,7 @@ internal static class ServeHost
         }
         catch (Exception ex)
         {
-            // Surface to parent ChildProcessStack (stderr was empty when nginx conf failed on Linux).
+            // Surface to parent ChildProcessStack (stderr was empty when native reverse conf failed on Linux).
             await Console.Error.WriteLineAsync(ex.ToString());
             ProbeLog.Error(ex.Message);
             return 1;
@@ -598,7 +600,7 @@ internal static class ServeHost
                 }
                 case ProbeMode.ReverseHttp2Cleartext:
                 {
-                    // nginx parity: client TLS+h2 → terminate → cleartext HTTP/1 origin via H2→H1 bridge.
+                    // Native reverse peer parity: client TLS+h2 → terminate → cleartext HTTP/1 origin via H2→H1 bridge.
                     var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
                     var twp = TwpProxyHost.StartReverseHttp2Cleartext(origin.HttpPort);
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
@@ -664,7 +666,7 @@ internal static class ServeHost
                 }
                 case ProbeMode.NginxReverseHttp2:
                 {
-                    // nginx: client TLS+h2 → cleartext HTTP/1.1 origin (same as TryStartHttp2 conf).
+                    // Native reverse: client TLS+h2 → cleartext HTTP/1.1 origin (same as TryStartHttp2 conf).
                     var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
                     var nginx = await NginxHost.TryStartHttp2Async(origin.HttpPort, nginxPath)
                                 ?? throw new InvalidOperationException("nginx not available.");
@@ -849,7 +851,8 @@ internal static class ServeHost
                     var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
                     var yarp = await YarpProxyHost.StartHttp3CleartextAsync(origin.HttpPort);
                     return new ServeStack(origin, yarp, null, origin.HttpUrl, null, [], yarp.ListenUrl, null,
-                        yarp.ListenUrl, [yarp.ListenUrl], null, "3.0", yarpVersion: yarp.Version);
+                        yarp.ListenUrl, [yarp.ListenUrl], null, "3.0", loadGenerator: "quic-http3",
+                        quicPort: yarp.Port, yarpVersion: yarp.Version);
                 }
                 case ProbeMode.YarpReverseHttp11ToHttp2:
                 {
@@ -900,7 +903,8 @@ internal static class ServeHost
                     }, cancellationToken);
                     var yarp = await YarpProxyHost.StartHttp3ToHttp2Async(origin.HttpsPort);
                     return new ServeStack(origin, yarp, null, origin.HttpUrl, origin.HttpsUrl, [], yarp.ListenUrl, null,
-                        yarp.ListenUrl, [yarp.ListenUrl], null, "3.0", yarpVersion: yarp.Version);
+                        yarp.ListenUrl, [yarp.ListenUrl], null, "3.0", loadGenerator: "quic-http3",
+                        quicPort: yarp.Port, yarpVersion: yarp.Version);
                 }
                 case ProbeMode.YarpReverseHttp3ToHttp3:
                 {
@@ -911,7 +915,8 @@ internal static class ServeHost
                     var yarp = await YarpProxyHost.StartHttp3ToHttp3Async(origin.Port);
                     return new ServeStack(origin, yarp, null, $"quic://localhost:{origin.Port}/",
                         $"quic://localhost:{origin.Port}/", [], yarp.ListenUrl, null, yarp.ListenUrl, [yarp.ListenUrl],
-                        null, "3.0", originQuicPort: origin.Port, yarpVersion: yarp.Version);
+                        null, "3.0", loadGenerator: "quic-http3", quicPort: yarp.Port,
+                        originQuicPort: origin.Port, yarpVersion: yarp.Version);
                 }
                 case ProbeMode.ExplicitHttp1Multi:
                 case ProbeMode.ExplicitHttp2Multi:

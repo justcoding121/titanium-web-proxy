@@ -16,8 +16,8 @@ using Titanium.Web.Proxy.RpsLoadProbe.Support;
 namespace Titanium.Web.Proxy.RpsLoadProbe;
 
 /// <summary>
-/// Minimal YARP reverse proxy against the shared loopback origin.
-/// Process-split from Kestrel origin (via --serve-proxy) for fair compare with nginx/TWP.
+/// Minimal managed reverse peer against the shared loopback origin.
+/// Process-split from Kestrel origin (via --serve-proxy) for fair compare with native reverse peer/TWP.
 /// </summary>
 internal sealed class YarpProxyHost : IDisposable
 {
@@ -71,7 +71,7 @@ internal sealed class YarpProxyHost : IDisposable
             OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact
         });
 
-    /// <summary>H2 TLS → H1 cleartext (nginx parity).</summary>
+    /// <summary>H2 TLS → H1 cleartext (native reverse peer parity).</summary>
     public static Task<YarpProxyHost> StartHttp2ToH1Async(int originHttpPort) =>
         StartAsync(new YarpListenOptions
         {
@@ -139,7 +139,7 @@ internal sealed class YarpProxyHost : IDisposable
             AcceptAnyServerCertificate = true
         });
 
-    /// <summary>H3 → H1 cleartext. Client uses HttpClient HTTP/3 (not transparent QUIC).</summary>
+    /// <summary>H3 → H1 cleartext. Client uses quic-http3 (matched with TWP TransparentQuic arms).</summary>
     public static Task<YarpProxyHost> StartHttp3CleartextAsync(int originHttpPort) =>
         StartAsync(new YarpListenOptions
         {
@@ -283,9 +283,14 @@ internal sealed class YarpProxyHost : IDisposable
                     ? new HttpClientConfig
                     {
                         DangerousAcceptAnyServerCertificate = true,
-                        MaxConnectionsPerServer = 256
+                        MaxConnectionsPerServer = 256,
+                        EnableMultipleHttp2Connections = true
                     }
-                    : new HttpClientConfig { MaxConnectionsPerServer = 256 }
+                    : new HttpClientConfig
+                    {
+                        MaxConnectionsPerServer = 256,
+                        EnableMultipleHttp2Connections = true
+                    }
             }
         };
 

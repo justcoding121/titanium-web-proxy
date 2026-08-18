@@ -108,7 +108,7 @@ internal sealed class Http2OriginConnection : IDisposable
     /// <summary>
     ///     Grow the origin pool once every member has this many active streams, well before
     ///     <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> (Kestrel default 100). One connection serializes
-    ///     HEADERS under <c>writeLock</c>; spreading across a few TLS+H2 sessions matches YARP /
+    ///     HEADERS under <c>writeLock</c>; spreading across a few TLS+H2 sessions matches
     ///     SocketsHttpHandler <c>EnableMultipleHttp2Connections</c>.
     ///     Profiled at c=16 with threshold 16: dumpasync showed a single
     ///     <c>ReadLoopAsync</c> and hundreds of <c>SemaphoreSlim</c> waiters — grow earlier so

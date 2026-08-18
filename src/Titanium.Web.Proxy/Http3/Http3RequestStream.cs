@@ -108,7 +108,7 @@ internal static class Http3RequestStream
 
                 var nullHttpClientStream = new HttpClientStream(
                     server, clientConnection, System.IO.Stream.Null,
-                    server.BufferPool, linkedCts.Token);
+                    server.BufferPool, linkedCts.Token, rentReadBuffer: false);
 
                 sessionArgs = new SessionEventArgs(server, endPoint, nullHttpClientStream, null, cts);
 

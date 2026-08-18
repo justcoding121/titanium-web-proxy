@@ -68,6 +68,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     public bool IsClosed { get; private set; }
 
 
+    private readonly bool ownsStreamBuffer;
+
     private static readonly byte[] newLine = ProxyConstants.NewLineBytes;
     private readonly ProxyServer server;
 
@@ -81,8 +83,12 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     ///     <see langword="true" /> to leave the stream open after disposing the
     ///     <see cref="T:CustomBufferedStream" /> object; otherwise, <see langword="false" />.
     /// </param>
+    /// <param name="rentReadBuffer">
+    ///     When <see langword="false" />, skips the 8 KiB <see cref="IBufferPool" /> rent. Use for
+    ///     HTTP/3 session placeholders backed by <see cref="Stream.Null" /> that never read the client stream.
+    /// </param>
     internal HttpStream(ProxyServer server, Stream baseStream, IBufferPool bufferPool,
-        CancellationToken cancellationToken, bool leaveOpen = false)
+        CancellationToken cancellationToken, bool leaveOpen = false, bool rentReadBuffer = true)
     {
         this.server = server;
 
@@ -92,7 +98,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
         BaseStream = baseStream;
         this.leaveOpen = leaveOpen;
-        streamBuffer = bufferPool.GetBuffer();
+        ownsStreamBuffer = rentReadBuffer;
+        streamBuffer = rentReadBuffer ? bufferPool.GetBuffer() : Array.Empty<byte>();
         this.bufferPool = bufferPool;
         this.cancellationToken = cancellationToken;
     }
@@ -571,7 +578,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
             {
                 if (!leaveOpen) BaseStream.Dispose();
 
-                bufferPool.ReturnBuffer(streamBuffer);
+                if (ownsStreamBuffer)
+                    bufferPool.ReturnBuffer(streamBuffer);
             }
         }
 

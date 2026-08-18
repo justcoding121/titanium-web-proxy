@@ -74,7 +74,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
 
         // Combined --serve only when origin and proxy must share the in-process test CA
         // (HTTPS / QUIC origin). Cleartext-origin terminate arms run split so TWP is not
-        // contending with Kestrel for CPU/GC the way a separate nginx process does not.
+        // contending with Kestrel for CPU/GC the way a separate native reverse peer process does not.
         if (RequiresCombinedServe(mode))
             return await StartCombinedServeAsync(exe, mode, nginxPath, maxCachedConnections, workload,
                 cancellationToken);
@@ -130,7 +130,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
 
     /// <summary>
     /// True when the origin speaks TLS/QUIC and must share the probe's in-process test CA with the proxy.
-    /// Cleartext-origin terminate arms (H1 TLS / H2→H1 / H2→h2c / nginx H2 / H3→H1) stay process-split.
+    /// Cleartext-origin terminate arms (H1 TLS / H2→H1 / H2→h2c / native reverse H2 / H3→H1) stay process-split.
     /// </summary>
     private static bool RequiresCombinedServe(ProbeMode mode) => mode is
         ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp3
