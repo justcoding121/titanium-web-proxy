@@ -3971,6 +3971,143 @@ namespace Titanium.Web.Proxy.Http2
             return WriteTwoAsync(output, frameHeaderBuffer.AsMemory(0, 9), payload.AsMemory(0, 4));
         }
 
+        /// <summary>
+        ///     HPACK-encodes <paramref name="rr"/> and enqueues the framed HEADERS/CONTINUATION bytes.
+        ///     Caller must hold the origin write lock across this call so encode + enqueue stay atomic
+        ///     (dynamic table + RFC 7540 §5.1.1 stream-id order).
+        /// </summary>
+        internal static void EnqueueHeader(Http2Settings settings, Http2FrameHeader frameHeader,
+            byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Http2FrameWriter writer,
+            bool pushPromise = false)
+        {
+            var block = EncodeHeaderBlock(settings, rr);
+            var framed = RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, frameHeader.StreamId,
+                pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers, endStream,
+                rr.Priority.HasValue, block, settings.MaxFrameSize);
+            writer.EnqueueRented(framed.Array!, framed.Count);
+        }
+
+        /// <summary>
+        ///     HPACK-encodes trailing headers and enqueues the framed HEADERS block. Same lock contract
+        ///     as <see cref="EnqueueHeader"/>.
+        /// </summary>
+        internal static void EnqueueTrailer(Http2Settings settings, Http2FrameHeader frameHeader,
+            byte[] frameHeaderBuffer, int streamId, HeaderCollection trailingHeaders, bool endStream,
+            Http2FrameWriter writer)
+        {
+            var encoder = settings.Encoder;
+            if (encoder == null)
+            {
+                encoder = new Encoder(RfcDefaultHeaderTableSize);
+                settings.Encoder = encoder;
+            }
+
+            var ms = settings.GetEncodeStream();
+            var writerBuf = settings.GetEncodeWriter();
+
+            var minSizeT = settings.MinHeaderTableSizeSinceLastEncode;
+            var curSizeT = settings.HeaderTableSize;
+            if (encoder.MaxHeaderTableSize != minSizeT)
+                encoder.SetMaxHeaderTableSize(writerBuf, minSizeT);
+            if (encoder.MaxHeaderTableSize != curSizeT)
+                encoder.SetMaxHeaderTableSize(writerBuf, curSizeT);
+            settings.NotifyHeaderBlockEncoded();
+
+            foreach (var header in trailingHeaders)
+            {
+                var nameData = HasUpperCaseAscii(header.Name)
+                    ? header.Name.ToLowerInvariant().GetByteString()
+                    : header.NameData;
+                encoder.EncodeHeader(writerBuf, nameData, header.ValueData);
+            }
+
+            writerBuf.Flush();
+
+            var framed = RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, streamId,
+                Http2FrameType.Headers, endStream, false, GetMemoryStreamMemory(ms), settings.MaxFrameSize);
+            writer.EnqueueRented(framed.Array!, framed.Count);
+        }
+
+        /// <summary>
+        ///     Frames <paramref name="data"/> as one or more DATA frames and enqueues them. Caller must
+        ///     already have reserved flow-control credit for the payload. Does not take a lock — the
+        ///     dedicated writer serializes bytes.
+        /// </summary>
+        internal static void EnqueueDataFrames(Http2FrameWriter writer, int streamId, ReadOnlyMemory<byte> data,
+            bool endStream, int maxFrameSize)
+        {
+            if (maxFrameSize <= 0) maxFrameSize = 16384;
+
+            if (data.Length == 0)
+            {
+                EnqueueControlFrame(writer, Http2FrameType.Data,
+                    endStream ? Http2FrameFlag.EndStream : 0, streamId, ReadOnlySpan<byte>.Empty);
+                return;
+            }
+
+            var pos = 0;
+            while (pos < data.Length)
+            {
+                var frameLength = Math.Min(maxFrameSize, data.Length - pos);
+                var isLast = pos + frameLength >= data.Length;
+                var flags = isLast && endStream ? Http2FrameFlag.EndStream : (Http2FrameFlag)0;
+                EnqueueControlFrame(writer, Http2FrameType.Data, flags, streamId,
+                    data.Span.Slice(pos, frameLength));
+                pos += frameLength;
+            }
+        }
+
+        internal static void EnqueueRstStream(Http2FrameWriter writer, int streamId, Http2ErrorCode errorCode)
+        {
+            if (errorCode != Http2ErrorCode.NoError) ProxyMetrics.ParserError("http2");
+
+            Span<byte> payload = stackalloc byte[4];
+            BinaryPrimitives.WriteInt32BigEndian(payload, (int)errorCode);
+            EnqueueControlFrame(writer, Http2FrameType.RstStream, 0, streamId, payload);
+        }
+
+        internal static void EnqueueWindowUpdate(Http2FrameWriter writer, int streamId, int increment)
+        {
+            if (increment <= 0) return;
+
+            Span<byte> payload = stackalloc byte[4];
+            BinaryPrimitives.WriteInt32BigEndian(payload, increment & 0x7fffffff);
+            EnqueueControlFrame(writer, Http2FrameType.WindowUpdate, 0, streamId, payload);
+        }
+
+        internal static void EnqueueSettingsAck(Http2FrameWriter writer)
+        {
+            EnqueueControlFrame(writer, Http2FrameType.Settings, Http2FrameFlag.Ack, 0, ReadOnlySpan<byte>.Empty);
+        }
+
+        internal static void EnqueuePingAck(Http2FrameWriter writer, ReadOnlySpan<byte> payload)
+        {
+            EnqueueControlFrame(writer, Http2FrameType.Ping, Http2FrameFlag.Ack, 0, payload);
+        }
+
+        /// <summary>
+        ///     Copies a fully-formed frame into a rented buffer and transfers ownership to
+        ///     <paramref name="writer"/>. Safe to call without the origin write lock — DATA and
+        ///     control frames do not mutate the HPACK table.
+        /// </summary>
+        internal static void EnqueueControlFrame(Http2FrameWriter writer, Http2FrameType type,
+            Http2FrameFlag flags, int streamId, ReadOnlySpan<byte> payload)
+        {
+            var total = 9 + payload.Length;
+            var rented = ArrayPool<byte>.Shared.Rent(total);
+            var header = new Http2FrameHeader
+            {
+                Type = type,
+                Flags = flags,
+                StreamId = streamId,
+                Length = payload.Length
+            };
+            header.CopyToBuffer(rented);
+            if (payload.Length > 0)
+                payload.CopyTo(rented.AsSpan(9));
+            writer.EnqueueRented(rented, total);
+        }
+
         private static ValueTask AsValueTask(Task task) => new(task);
 
         /// <summary>

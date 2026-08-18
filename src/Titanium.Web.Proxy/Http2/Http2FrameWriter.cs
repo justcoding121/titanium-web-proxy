@@ -10,8 +10,12 @@ namespace Titanium.Web.Proxy.Http2;
 ///     Single dedicated writer for one HTTP/2 socket direction. Producers enqueue already-framed
 ///     rented buffers; one background task drains the channel, optionally coalescing contiguous
 ///     writes into one <see cref="System.IO.Stream.WriteAsync(System.ReadOnlyMemory{byte}, CancellationToken)" />
-///     to cut syscalls. When a <see cref="SemaphoreSlim" /> is supplied, drain acquires it around each
-///     socket write so control-frame paths that still use the lock cannot interleave bytes.
+///     to cut syscalls.
+///     <para>
+///         When constructed without a lock the drain is the exclusive socket writer (Kestrel model):
+///         it never takes a lock around <c>WriteAsync</c>. Pass a <see cref="SemaphoreSlim" /> only
+///         when mixed direct-locked writes still exist on the same stream (client MITM path).
+///     </para>
 /// </summary>
 internal sealed class Http2FrameWriter : IAsyncDisposable
 {
@@ -69,7 +73,7 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
                     {
                         if (!reader.TryPeek(out _))
                         {
-                            await WriteLockedAsync(first.AsMemory()).ConfigureAwait(false);
+                            await WriteLockedAsync(first.AsMemory(), cancellationToken).ConfigureAwait(false);
                             ArrayPool<byte>.Shared.Return(first.Array!);
                             continue;
                         }
@@ -88,7 +92,7 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
 
                         if (count == 1)
                         {
-                            await WriteLockedAsync(first.AsMemory()).ConfigureAwait(false);
+                            await WriteLockedAsync(first.AsMemory(), cancellationToken).ConfigureAwait(false);
                             ArrayPool<byte>.Shared.Return(first.Array!);
                         }
                         else
@@ -105,7 +109,7 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
                                     frames[i] = default;
                                 }
 
-                                await WriteLockedAsync(coalesced.AsMemory(0, total)).ConfigureAwait(false);
+                                await WriteLockedAsync(coalesced.AsMemory(0, total), cancellationToken).ConfigureAwait(false);
                             }
                             finally
                             {
@@ -141,13 +145,13 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         }
     }
 
-    private async Task WriteLockedAsync(ReadOnlyMemory<byte> memory)
+    private async Task WriteLockedAsync(ReadOnlyMemory<byte> memory, CancellationToken cancellationToken)
     {
         if (writeLock != null)
-            await writeLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await output.WriteAsync(memory, CancellationToken.None).ConfigureAwait(false);
+            await output.WriteAsync(memory, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -160,12 +164,28 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         if (Interlocked.Exchange(ref disposed, 1) != 0)
             return;
 
+        // Complete first so the drain writes already-queued frames. Cancelling immediately
+        // races WaitToReadAsync and drops leftovers (bytes never hit the socket).
         channel.Writer.TryComplete();
+        try
+        {
+            await drainTask.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            try { cts.Cancel(); }
+            catch { /* ignore */ }
+
+            try { await drainTask.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false); }
+            catch { /* drain may fault if socket already closed */ }
+        }
+        catch
+        {
+            /* drain may fault if socket already closed */
+        }
+
         try { cts.Cancel(); }
         catch { /* ignore */ }
-
-        try { await drainTask.ConfigureAwait(false); }
-        catch { /* drain may fault if socket already closed */ }
 
         cts.Dispose();
     }

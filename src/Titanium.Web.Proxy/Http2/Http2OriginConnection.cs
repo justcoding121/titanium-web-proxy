@@ -58,7 +58,9 @@ internal sealed class Http2OriginConnection : IDisposable
     private const int StreamIdExhaustionThreshold = int.MaxValue - 10_000;
 
     private readonly TcpServerConnection connection;
-    private readonly Stream stream;
+    private readonly Stream socket;
+    private Stream stream;
+    private Http2FrameWriter? frameWriter;
     private readonly ILogger logger;
     private readonly long maxBufferedBodyBytes;
     private readonly ProxyResourceLimits resourceLimits;
@@ -90,7 +92,8 @@ internal sealed class Http2OriginConnection : IDisposable
         ProxyResourceLimits resourceLimits)
     {
         this.connection = connection;
-        stream = connection.Stream;
+        socket = connection.Stream;
+        stream = socket;
         this.logger = logger;
         this.maxBufferedBodyBytes = maxBufferedBodyBytes;
         this.resourceLimits = resourceLimits;
@@ -108,7 +111,7 @@ internal sealed class Http2OriginConnection : IDisposable
     /// <summary>
     ///     Grow the origin pool once every member has this many active streams, well before
     ///     <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> (Kestrel default 100). One connection serializes
-    ///     HEADERS under <c>writeLock</c>; spreading across a few TLS+H2 sessions matches
+    ///     encode+enqueue under <c>writeLock</c>; spreading across a few TLS+H2 sessions matches
     ///     SocketsHttpHandler <c>EnableMultipleHttp2Connections</c>.
     ///     Profiled at c=16 with threshold 16: dumpasync showed a single
     ///     <c>ReadLoopAsync</c> and hundreds of <c>SemaphoreSlim</c> waiters — grow earlier so
@@ -149,6 +152,19 @@ internal sealed class Http2OriginConnection : IDisposable
     ///     establishment timing) to each request leased from this shared, persistent origin connection.
     /// </summary>
     internal TcpServerConnection ServerConnection => connection;
+
+    private Http2FrameWriter Writer =>
+        frameWriter ?? throw new InvalidOperationException("Origin frame writer is not attached.");
+
+    /// <summary>
+    ///     Exclusive drain (no lock around <c>WriteAsync</c>). After this, <see cref="stream"/> rejects
+    ///     writes so mixed direct socket I/O cannot interleave with the writer.
+    /// </summary>
+    private void AttachExclusiveFrameWriter()
+    {
+        frameWriter = new Http2FrameWriter(socket);
+        stream = new WriteForbiddenStream(socket);
+    }
 
     internal void Touch() => Volatile.Write(ref lastUsedUtcTicks, DateTime.UtcNow.Ticks);
 
@@ -199,9 +215,10 @@ internal sealed class Http2OriginConnection : IDisposable
 
         var preface = Http2Helper.ConnectionPreface;
         connection.Http2SessionStarted = true;
-        await instance.stream.WriteAsync(preface.AsMemory(), cancellationToken);
+        await instance.socket.WriteAsync(preface.AsMemory(), cancellationToken);
         // Shared with the H2↔H2 MITM path (SendHttp2ClientConnectionStartupAsync).
-        await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.stream, cancellationToken);
+        await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.socket, cancellationToken);
+        instance.AttachExclusiveFrameWriter();
 
         _ = instance.ReadLoopAsync(instance.connectionCts.Token);
 
@@ -252,14 +269,19 @@ internal sealed class Http2OriginConnection : IDisposable
         {
             var frameHeader = new Http2FrameHeader();
             var frameHeaderBuffer = new byte[9];
-            var dataBuffer = new byte[SafeMaxFrameSize];
 
             var streamRequest = copyRequestBody != null && !request.IsBodyRead && !request.BodyAvailable;
+            byte[]? bufferedBody = null;
+            var enqueueBufferedTrailers = false;
+            if (!streamRequest)
+            {
+                var body = request.CompressBodyAndUpdateContentLength();
+                bufferedBody = request.HasBody && request.IsBodyRead ? body : null;
+                enqueueBufferedTrailers = request.HasTrailingHeaders && request.TrailingHeaders.Any();
+            }
 
-            // RFC 7540 §5.1.1: the first HEADERS for a new stream id must appear on the wire after
-            // every lower idle client stream has been opened (or those lower ids are implicitly
-            // closed). Allocating ids off the write lock lets a later stream send HEADERS first;
-            // Kestrel then GOAWAYs the connection (PROTOCOL_ERROR / STREAM_CLOSED).
+            // RFC 7540 §5.1.1: allocate stream id + encode first HEADERS + enqueue as one
+            // critical section. Socket I/O happens on the exclusive frame-writer drain.
             await writeLock.WaitAsync(cancellationToken);
             try
             {
@@ -273,24 +295,33 @@ internal sealed class Http2OriginConnection : IDisposable
                 streamOpened = true;
                 frameHeader.StreamId = streamId;
 
-                if (streamRequest)
-                {
-                    await Http2Helper.SendHeader(originSettings, frameHeader, frameHeaderBuffer, request,
-                        endStream: false, stream, pushPromise: false);
-                }
-                else
-                {
-                    await Http2Helper.SendBody(originSettings, request, frameHeader, frameHeaderBuffer, dataBuffer,
-                        sendFlow, stream, cancellationToken);
-
-                    if (request.HasTrailingHeaders && request.TrailingHeaders.Any())
-                        await Http2Helper.SendTrailer(originSettings, frameHeader, frameHeaderBuffer, streamId,
-                            request.TrailingHeaders, true, stream);
-                }
+                var headersEndStream = !streamRequest && bufferedBody == null && !enqueueBufferedTrailers;
+                Http2Helper.EnqueueHeader(originSettings, frameHeader, frameHeaderBuffer, request,
+                    headersEndStream, Writer);
             }
             finally
             {
                 writeLock.Release();
+            }
+
+            if (bufferedBody != null)
+            {
+                await EnqueueDataWithFlowAsync(streamId, bufferedBody, endStream: !enqueueBufferedTrailers,
+                    cancellationToken);
+            }
+
+            if (enqueueBufferedTrailers)
+            {
+                await writeLock.WaitAsync(cancellationToken);
+                try
+                {
+                    Http2Helper.EnqueueTrailer(originSettings, frameHeader, frameHeaderBuffer, streamId,
+                        request.TrailingHeaders, true, Writer);
+                }
+                finally
+                {
+                    writeLock.Release();
+                }
             }
 
             if (streamRequest)
@@ -299,29 +330,28 @@ internal sealed class Http2OriginConnection : IDisposable
                     async (data, ct) =>
                     {
                         if (data.IsEmpty) return;
-                        await Http2Helper.SendData(frameHeader, frameHeaderBuffer, streamId, data, false,
-                            SafeMaxFrameSize, sendFlow, stream, ct, writeLock);
+                        await EnqueueDataWithFlowAsync(streamId, data, endStream: false, ct);
                     },
                     cancellationToken);
                 request.IsBodyReceived = true;
 
-                await writeLock.WaitAsync(cancellationToken);
-                try
+                if (request.HasTrailingHeaders && request.TrailingHeaders.Any())
                 {
-                    if (request.HasTrailingHeaders && request.TrailingHeaders.Any())
+                    await writeLock.WaitAsync(cancellationToken);
+                    try
                     {
-                        await Http2Helper.SendTrailer(originSettings, frameHeader, frameHeaderBuffer, streamId,
-                            request.TrailingHeaders, true, stream);
+                        Http2Helper.EnqueueTrailer(originSettings, frameHeader, frameHeaderBuffer, streamId,
+                            request.TrailingHeaders, true, Writer);
                     }
-                    else
+                    finally
                     {
-                        await Http2Helper.SendData(frameHeader, frameHeaderBuffer, streamId, Array.Empty<byte>(),
-                            true, SafeMaxFrameSize, sendFlow, stream, cancellationToken, writeLock: null);
+                        writeLock.Release();
                     }
                 }
-                finally
+                else
                 {
-                    writeLock.Release();
+                    await EnqueueDataWithFlowAsync(streamId, ReadOnlyMemory<byte>.Empty, endStream: true,
+                        cancellationToken);
                 }
             }
         }
@@ -488,8 +518,8 @@ internal sealed class Http2OriginConnection : IDisposable
 
                 // Must use SendHeader with endStream=false: SendBody derives END_STREAM from the body
                 // and would half-close a bodiless CONNECT before the first tunnel byte.
-                await Http2Helper.SendHeader(originSettings, frameHeader, frameHeaderBuffer, request,
-                    endStream: false, stream, pushPromise: false);
+                Http2Helper.EnqueueHeader(originSettings, frameHeader, frameHeaderBuffer, request,
+                    endStream: false, Writer);
             }
             finally
             {
@@ -585,71 +615,14 @@ internal sealed class Http2OriginConnection : IDisposable
         if (!streams.ContainsKey(streamId) && !endStream)
             throw new IOException($"HTTP/2 tunnel stream {streamId} is no longer open.");
 
-        var frameHeader = new Http2FrameHeader { StreamId = streamId };
-        var frameHeaderBuffer = new byte[9];
-        var offset = 0;
-
-        await writeLock.WaitAsync(cancellationToken);
-        try
-        {
-            if (payload.Length == 0)
-            {
-                if (!endStream) return;
-
-                frameHeader.Length = 0;
-                frameHeader.Type = Http2FrameType.Data;
-                frameHeader.Flags = Http2FrameFlag.EndStream;
-                frameHeader.CopyToBuffer(frameHeaderBuffer);
-                await stream.WriteAsync(frameHeaderBuffer, cancellationToken);
-                await stream.FlushAsync(cancellationToken);
-                return;
-            }
-
-            while (offset < payload.Length)
-            {
-                var frameLength = Math.Min(SafeMaxFrameSize, payload.Length - offset);
-                await sendFlow.ReserveAsync(streamId, frameLength, cancellationToken);
-
-                frameHeader.Length = frameLength;
-                frameHeader.Type = Http2FrameType.Data;
-                var isLast = offset + frameLength >= payload.Length;
-                frameHeader.Flags = isLast && endStream ? Http2FrameFlag.EndStream : 0;
-                frameHeader.CopyToBuffer(frameHeaderBuffer);
-
-                await stream.WriteAsync(frameHeaderBuffer, cancellationToken);
-                await stream.WriteAsync(payload.Slice(offset, frameLength), cancellationToken);
-                offset += frameLength;
-            }
-
-            if (endStream && payload.Length == 0)
-            {
-                // handled above
-            }
-
-            await stream.FlushAsync(cancellationToken);
-        }
-        finally
-        {
-            writeLock.Release();
-        }
+        await EnqueueDataWithFlowAsync(streamId, payload, endStream, cancellationToken);
     }
 
-    private async Task ResetStreamAsync(int streamId, Http2ErrorCode errorCode,
+    private Task ResetStreamAsync(int streamId, Http2ErrorCode errorCode,
         CancellationToken cancellationToken)
     {
-        var frameHeader = new Http2FrameHeader();
-        var frameHeaderBuffer = new byte[9];
-
-        await writeLock.WaitAsync(cancellationToken);
-        try
-        {
-            await Http2Helper.SendRstStreamAsync(frameHeader, frameHeaderBuffer, streamId, errorCode, stream);
-            await stream.FlushAsync(cancellationToken);
-        }
-        finally
-        {
-            writeLock.Release();
-        }
+        Http2Helper.EnqueueRstStream(Writer, streamId, errorCode);
+        return Task.CompletedTask;
     }
 
     private void ReleaseTunnelBookkeeping(int streamId, PendingStream pending, SemaphoreSlim gate)
@@ -680,51 +653,16 @@ internal sealed class Http2OriginConnection : IDisposable
         }
     }
 
-    private async Task SendSettingsAckAsync(CancellationToken cancellationToken)
+    private Task SendSettingsAckAsync(CancellationToken cancellationToken)
     {
-        var frameHeader = new Http2FrameHeader
-        {
-            StreamId = 0,
-            Type = Http2FrameType.Settings,
-            Flags = Http2FrameFlag.Ack,
-            Length = 0
-        };
-        var frameHeaderBuffer = new byte[9];
-        frameHeader.CopyToBuffer(frameHeaderBuffer);
-
-        await writeLock.WaitAsync(cancellationToken);
-        try
-        {
-            await stream.WriteAsync(frameHeaderBuffer.AsMemory(), cancellationToken);
-        }
-        finally
-        {
-            writeLock.Release();
-        }
+        Http2Helper.EnqueueSettingsAck(Writer);
+        return Task.CompletedTask;
     }
 
-    private async Task SendPingAckAsync(byte[] payload, CancellationToken cancellationToken)
+    private Task SendPingAckAsync(byte[] payload, CancellationToken cancellationToken)
     {
-        var frameHeader = new Http2FrameHeader
-        {
-            StreamId = 0,
-            Type = Http2FrameType.Ping,
-            Flags = Http2FrameFlag.Ack,
-            Length = payload.Length
-        };
-        var frameHeaderBuffer = new byte[9];
-        frameHeader.CopyToBuffer(frameHeaderBuffer);
-
-        await writeLock.WaitAsync(cancellationToken);
-        try
-        {
-            await stream.WriteAsync(frameHeaderBuffer.AsMemory(), cancellationToken);
-            await stream.WriteAsync(payload.AsMemory(), cancellationToken);
-        }
-        finally
-        {
-            writeLock.Release();
-        }
+        Http2Helper.EnqueuePingAck(Writer, payload);
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -732,10 +670,11 @@ internal sealed class Http2OriginConnection : IDisposable
     ///     <see cref="Http2Helper.ReceiveCreditBatchThreshold" /> (half of the Kestrel-class stream window),
     ///     matching <see cref="Http2Helper" /> so credit is not drip-fed under the write lock per frame.
     /// </summary>
-    private async Task GrantReceiveCreditAsync(int streamId, int bytes, bool forceFlush,
+    private Task GrantReceiveCreditAsync(int streamId, int bytes, bool forceFlush,
         CancellationToken cancellationToken)
     {
-        if (bytes <= 0 && !forceFlush) return;
+        if (bytes <= 0 && !forceFlush)
+            return Task.CompletedTask;
 
         if (bytes > 0)
         {
@@ -753,7 +692,7 @@ internal sealed class Http2OriginConnection : IDisposable
                               && streamCredit >= Http2Helper.ReceiveCreditBatchThreshold);
 
         if (!flushConnection && !flushStream)
-            return;
+            return Task.CompletedTask;
 
         var connectionBytes = flushConnection ? pendingConnectionReceiveCredit : 0;
         var streamBytes = 0;
@@ -763,24 +702,14 @@ internal sealed class Http2OriginConnection : IDisposable
             pendingConnectionReceiveCredit = 0;
 
         if (connectionBytes <= 0 && streamBytes <= 0)
-            return;
+            return Task.CompletedTask;
 
         var streamStillTracked = streamBytes > 0 && streams.ContainsKey(streamId);
-        var frameHeader = new Http2FrameHeader();
-        var frameHeaderBuffer = new byte[9];
-
-        await writeLock.WaitAsync(cancellationToken);
-        try
-        {
-            if (connectionBytes > 0)
-                await Http2Helper.SendWindowUpdateAsync(frameHeader, frameHeaderBuffer, 0, connectionBytes, stream);
-            if (streamStillTracked)
-                await Http2Helper.SendWindowUpdateAsync(frameHeader, frameHeaderBuffer, streamId, streamBytes, stream);
-        }
-        finally
-        {
-            writeLock.Release();
-        }
+        if (connectionBytes > 0)
+            Http2Helper.EnqueueWindowUpdate(Writer, 0, connectionBytes);
+        if (streamStillTracked)
+            Http2Helper.EnqueueWindowUpdate(Writer, streamId, streamBytes);
+        return Task.CompletedTask;
     }
 
     private async Task ReadLoopAsync(CancellationToken cancellationToken) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
@@ -1378,10 +1307,82 @@ internal sealed class Http2OriginConnection : IDisposable
 
         Fail(new ObjectDisposedException(nameof(Http2OriginConnection)), false);
         connectionCts.Cancel();
+        var writer = frameWriter;
+        frameWriter = null;
+        if (writer != null)
+            _ = writer.DisposeAsync();
         connectionCts.Dispose();
         writeLock.Dispose();
         concurrencyGate?.Dispose();
         connection.Dispose();
+    }
+
+    private async ValueTask EnqueueDataWithFlowAsync(int streamId, ReadOnlyMemory<byte> data, bool endStream,
+        CancellationToken cancellationToken)
+    {
+        if (data.IsEmpty)
+        {
+            if (endStream)
+                Http2Helper.EnqueueDataFrames(Writer, streamId, data, endStream: true, SafeMaxFrameSize);
+            return;
+        }
+
+        var pos = 0;
+        while (pos < data.Length)
+        {
+            var frameLength = Math.Min(SafeMaxFrameSize, data.Length - pos);
+            await sendFlow.ReserveAsync(streamId, frameLength, cancellationToken);
+            var isLast = pos + frameLength >= data.Length;
+            Http2Helper.EnqueueDataFrames(Writer, streamId, data.Slice(pos, frameLength),
+                endStream && isLast, SafeMaxFrameSize);
+            pos += frameLength;
+        }
+    }
+
+    /// <summary>
+    ///     Read-only view of the origin socket. Writes throw so a missed conversion cannot interleave
+    ///     bytes with <see cref="Http2FrameWriter"/>.
+    /// </summary>
+    private sealed class WriteForbiddenStream : Stream
+    {
+        private readonly Stream inner;
+
+        public WriteForbiddenStream(Stream inner) => this.inner = inner;
+
+        public override bool CanRead => inner.CanRead;
+        public override bool CanSeek => inner.CanSeek;
+        public override bool CanWrite => false;
+        public override long Length => inner.Length;
+        public override long Position
+        {
+            get => inner.Position;
+            set => inner.Position = value;
+        }
+
+        public override void Flush() { }
+
+        public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            => inner.ReadAsync(buffer, offset, count, cancellationToken);
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+            => inner.ReadAsync(buffer, cancellationToken);
+
+        public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
+
+        public override void SetLength(long value) => inner.SetLength(value);
+
+        public override void Write(byte[] buffer, int offset, int count) => throw Create();
+
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            => throw Create();
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+            => throw Create();
+
+        private static InvalidOperationException Create() => new(
+            "Origin socket writes must go through Http2FrameWriter; mixed writes corrupt the HTTP/2 byte stream.");
     }
 
     private async Task<int> ForceReadAsync(byte[] buffer, int offset, int bytesToRead, CancellationToken cancellationToken)

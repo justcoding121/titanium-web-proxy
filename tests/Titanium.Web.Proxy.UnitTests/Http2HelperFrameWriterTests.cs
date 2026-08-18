@@ -404,4 +404,71 @@ public class Http2HelperFrameWriterTests
         Assert.AreEqual(10, payloadLength);
         Assert.AreEqual((byte)Http2FrameFlag.EndStream, finalFlags);
     }
+
+    [TestMethod]
+    public async Task EnqueueRstStream_MatchesSendRstStreamAsync()
+    {
+        using var expected = new MemoryStream();
+        var (header, buf) = NewFrameScratch(7);
+        await Http2Helper.SendRstStreamAsync(header, buf, 7, Http2ErrorCode.ProtocolError, expected);
+
+        using var actual = new MemoryStream();
+        await using (var writer = new Http2FrameWriter(actual))
+            Http2Helper.EnqueueRstStream(writer, 7, Http2ErrorCode.ProtocolError);
+
+        CollectionAssert.AreEqual(expected.ToArray(), actual.ToArray());
+    }
+
+    [TestMethod]
+    public async Task EnqueueWindowUpdate_MatchesSendWindowUpdateAsync()
+    {
+        using var expected = new MemoryStream();
+        var (header, buf) = NewFrameScratch(3);
+        await Http2Helper.SendWindowUpdateAsync(header, buf, 3, increment: 1024, expected);
+
+        using var actual = new MemoryStream();
+        await using (var writer = new Http2FrameWriter(actual))
+            Http2Helper.EnqueueWindowUpdate(writer, 3, 1024);
+
+        CollectionAssert.AreEqual(expected.ToArray(), actual.ToArray());
+    }
+
+    [TestMethod]
+    public async Task EnqueueDataFrames_SplitsOnMaxFrameSize_AndSetsEndStreamOnLast()
+    {
+        using var actual = new MemoryStream();
+        var payload = new byte[10];
+        for (var i = 0; i < payload.Length; i++) payload[i] = (byte)i;
+
+        await using (var writer = new Http2FrameWriter(actual))
+            Http2Helper.EnqueueDataFrames(writer, 1, payload, endStream: true, maxFrameSize: 4);
+
+        Assert.AreEqual(37, actual.Length);
+        var wire = actual.ToArray();
+        Assert.AreEqual((byte)Http2FrameType.Data, wire[3]);
+        Assert.AreEqual((byte)Http2FrameFlag.EndStream, wire[30]);
+    }
+
+    [TestMethod]
+    public async Task EnqueueHeader_Response_WritesHeadersWithEndStream()
+    {
+        using var actual = new MemoryStream();
+        var (header, buf) = NewFrameScratch(1);
+        var settings = new Http2Settings { MaxFrameSize = 16384 };
+        var response = new Response
+        {
+            HttpVersion = HttpHeader.Version20,
+            StatusCode = 200,
+            StatusDescription = "OK"
+        };
+        response.Headers.AddHeader("content-type", "text/plain");
+
+        await using (var writer = new Http2FrameWriter(actual))
+            Http2Helper.EnqueueHeader(settings, header, buf, response, endStream: true, writer);
+
+        var wire = actual.ToArray();
+        Assert.IsTrue(wire.Length > 9);
+        Assert.AreEqual((byte)Http2FrameType.Headers, wire[3]);
+        Assert.AreEqual((byte)(Http2FrameFlag.EndHeaders | Http2FrameFlag.EndStream), wire[4]);
+    }
 }
