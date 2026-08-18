@@ -32,12 +32,13 @@ public class Http2BodyWriterAndOriginSettingsTests
     {
         var writerType = typeof(Http2Helper).GetNestedType("Http2BodyStreamWriter", BindingFlags.NonPublic)!;
         using var ms = new MemoryStream();
-        using var writeLock = new SemaphoreSlim(1, 1);
+        using var cts = new CancellationTokenSource();
+        var connectionState = new Http2ConnectionState(1, cts, 100);
         var flow = new Http2FlowController();
         flow.RegisterStream(1);
 
         var writer = Activator.CreateInstance(writerType, PrivateInstance, binder: null,
-            args: [1, ms, writeLock, flow, CancellationToken.None, false], culture: null)!;
+            args: [1, connectionState, ms, flow, CancellationToken.None], culture: null)!;
 
         Assert.IsFalse((bool)writerType.GetProperty("CanRead")!.GetValue(writer)!);
         Assert.IsFalse((bool)writerType.GetProperty("CanSeek")!.GetValue(writer)!);
@@ -85,6 +86,10 @@ public class Http2BodyWriterAndOriginSettingsTests
                                                             BindingFlags.Public)!;
         await (Task)complete.Invoke(writer, null)!;
         await (Task)complete.Invoke(writer, null)!; // idempotent
+
+        // Frames are queued on the client write chain (no dedicated writer in this harness);
+        // drain it before asserting the wire bytes.
+        await connectionState.ClientWriteChain;
 
         var wire = ms.ToArray();
         Assert.IsTrue(wire.Length > 9 + 16384 + 9);

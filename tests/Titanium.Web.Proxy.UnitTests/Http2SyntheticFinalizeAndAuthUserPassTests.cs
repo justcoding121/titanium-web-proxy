@@ -50,6 +50,9 @@ public class Http2SyntheticFinalizeAndAuthUserPassTests
         await Http2Helper.EmitSyntheticResponseAsync(session, 1, connectionState, clientStream,
             CancellationToken.None);
 
+        // Frames are queued on the client write chain; drain it before asserting the wire bytes.
+        await connectionState.ClientWriteChain;
+
         Assert.IsTrue(session.HttpClient.Response.IsBodySent);
         Assert.IsTrue(clientStream.Length > 9);
         var wire = clientStream.ToArray();
@@ -70,6 +73,9 @@ public class Http2SyntheticFinalizeAndAuthUserPassTests
         using var clientStream = new MemoryStream();
         await Http2Helper.EmitSyntheticResponseAsync(session, 3, connectionState, clientStream,
             CancellationToken.None);
+
+        // Frames are queued on the client write chain; drain it before asserting the wire bytes.
+        await connectionState.ClientWriteChain;
 
         var wire = clientStream.ToArray();
         Assert.AreEqual((byte)Http2FrameType.Headers, wire[3]);

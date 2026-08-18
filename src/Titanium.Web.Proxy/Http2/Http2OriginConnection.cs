@@ -281,7 +281,17 @@ internal sealed class Http2OriginConnection : IDisposable
                                HttpVersion = HttpHeader.Version11
                            };
 
-            if (!response.HasBody)
+            // An h2 body is delimited by END_STREAM (RFC 9113 §8.1), never by HTTP/1.1 framing headers,
+            // and this response object is deliberately stamped HttpVersion 1.1 for the HTTP/1.1 client.
+            // Response.HasBody's H1 framing rules (Content-Length / chunked / Connection-close) would
+            // therefore misclassify a content-length-less h2 response as bodiless and silently drop its
+            // DATA frames. Only the status/method exclusions and an explicit `content-length: 0` mean
+            // "no body" here (1xx never reaches this point; the interim channel consumed those).
+            var noBody = response.StatusCode is 204 or 304
+                         || request.Method == "HEAD"
+                         || (request.Method == "CONNECT" && response.StatusCode is >= 200 and < 300)
+                         || response.ContentLength == 0;
+            if (noBody)
             {
                 registration.Dispose();
                 response.IsBodyRead = true;

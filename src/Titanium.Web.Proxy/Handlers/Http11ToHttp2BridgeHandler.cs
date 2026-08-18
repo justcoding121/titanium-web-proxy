@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
@@ -601,7 +602,18 @@ public partial class ProxyServer
         else if (response.StreamBodyWriter == null)
             response.ContentLength = body.Length;
         else if (response.ContentLength < 0 && !response.IsChunked)
-            response.Headers.AddHeader(KnownHeaders.TransferEncoding, "chunked");
+        {
+            // The h2 origin sent no content-length (END_STREAM delimits its body). Buffer it here -
+            // the BoundedBodyPipe behind StreamBodyWriter already enforces MaxBufferedBodyBytes - so
+            // the HTTP/1.1 client keeps the Content-Length framing this bridge has always produced.
+            // Origin responses that do carry a content-length still stream straight through below.
+            var buffered = new MemoryStream();
+            var streamBody = response.StreamBodyWriter;
+            response.StreamBodyWriter = null;
+            await streamBody(buffered, cancellationToken);
+            body = buffered.ToArray();
+            response.ContentLength = body.Length;
+        }
 
         await clientStream.WriteResponseAsync(response, cancellationToken);
 

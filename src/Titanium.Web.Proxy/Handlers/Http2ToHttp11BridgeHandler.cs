@@ -325,10 +325,10 @@ public partial class ProxyServer
                 // Unknown length over H2 → chunked on the H1 wire.
                 request.Headers.AddHeader(KnownHeaders.TransferEncoding, "chunked");
             }
-            else
-            {
-                request.UpdateContentLength();
-            }
+            // else: the client-declared content-length header is already the correct H1 framing for
+            // the streamed body. UpdateContentLength() must NOT be called here - it stamps
+            // BodyInternal?.Length ?? 0, and a live-streamed body has no BodyInternal, so it would
+            // rewrite content-length to 0 and make the origin skip the entire request body.
 
             await sessionArgs.HttpClient.SendRequest(Enable100ContinueBehaviour, true, sessionArgs.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy,
                 cancellationToken);
@@ -374,6 +374,7 @@ public partial class ProxyServer
 
             var response = sessionArgs.HttpClient.Response;
             closeConnection = !response.KeepAlive;
+            var restoreResponseVersionAfterEmit = false;
 
             if (!response.Locked)
             {
@@ -400,11 +401,16 @@ public partial class ProxyServer
                 var originContentLength = response.OriginalContentLength;
 
                 // If BeforeResponse buffered via GetResponseBody, emit the in-memory body. Otherwise
-                // stream origin→client DATA live (HEADERS+first DATA held under ClientWriteLock).
+                // stream origin→client DATA live (frames queued on the dedicated client frame writer).
                 if (originHasBody && !response.IsBodyRead)
                 {
                     response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+                    // The emitter needs the client (h2) version for correct HasBody semantics and
+                    // lowercase content-length publishing; restored to the origin wire version after
+                    // emission so AfterResponse / traffic tape report H2↔H1.1 (the buffered branch
+                    // below restores it inline instead).
                     response.HttpVersion = clientHttpVersion;
+                    restoreResponseVersionAfterEmit = true;
                     LowercaseHeaderNames(response.Headers);
                     if (response.HasTrailingHeaders) LowercaseHeaderNames(response.TrailingHeaders);
                     response.Locked = true;
@@ -459,6 +465,9 @@ public partial class ProxyServer
 
             await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState, clientStream,
                 cancellationToken);
+
+            if (restoreResponseVersionAfterEmit)
+                sessionArgs.HttpClient.Response.HttpVersion = HttpHeader.Version11;
 
             // Refuse to pool a socket that still has unread bytes in HttpStream's buffer — that is the
             // residual-framing failure mode observed under H2 multiplex (Invalid chunk length / header parse).

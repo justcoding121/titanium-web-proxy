@@ -56,32 +56,32 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 
 | Mode | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak | Winner |
 |---|---|---|---:|---:|---:|---:|---:|---:|---|
-| Reverse | HTTP/1 · plain | HTTP/1 · plain | **33,491** | **34,592** | **19,659** | **22,850** | **42,783** | **42,783** | **YARP** |
-| Reverse | HTTP/1 · TLS | HTTP/1 · plain | **32,485** | **32,485** | **16,140** | **17,015** | **28,472** | **28,472** | **TWP** |
-| MITM | HTTP/1 · TLS | HTTP/1 · TLS | **20,584** | **20,584** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
-| Reverse | HTTP/2 · TLS | HTTP/1 · plain | **5,038** | **5,038** | **5,039** | **10,484** | **30,076** | **30,076** | **YARP** |
+| Reverse | HTTP/1 · plain | HTTP/1 · plain | **17,865** | **17,865** | **10,593** | **10,770** | **18,005** | **18,390** | **YARP** |
+| Reverse | HTTP/1 · TLS | HTTP/1 · plain | **14,336** | **14,336** | **7,520** | **7,880** | **16,426** | **16,426** | **YARP** |
+| MITM | HTTP/1 · TLS | HTTP/1 · TLS | **11,760** | **12,485** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
+| Reverse | HTTP/2 · TLS | HTTP/1 · plain | **22,895** | **27,580** | **3,946** | **9,698** | **48,227** | **48,227** | **YARP** |
 | MITM | HTTP/2 · TLS | HTTP/1 · TLS | **6,383** | **7,040** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | MITM | HTTP/2 · TLS | HTTP/2 · TLS | **5,192** | **5,192** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
-| Reverse | HTTP/2 · TLS | HTTP/2 · plain | **4,293** | **4,293** | *Not possible* | *Not possible* | **51,309** | **51,309** | **YARP** |
-| Reverse | HTTP/2 · plain | HTTP/1 · plain | **6,698** | **6,698** | *Not possible* | *Not possible* | **37,064** | **37,064** | **YARP** |
-| Reverse | HTTP/2 · plain | HTTP/2 · plain | **33,720** | **33,720** | *Not possible* | *Not possible* | **86,443** | **86,443** | **YARP** |
-| Reverse | HTTP/2 · plain | HTTP/2 · TLS | **5,394** | **5,394** | *Not possible* | *Not possible* | **68,492** | **68,492** | **YARP** |
-| Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **3,989** | **3,989** | *Not possible* (no QUIC) | *Not possible* | **17,715** | **17,715** | **YARP** |
-| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **8,578** | **8,578** | *Not possible* (no QUIC) | *Not possible* | **23,117** | **23,117** | **YARP** |
+| Reverse | HTTP/2 · TLS | HTTP/2 · plain | **47,358** | **47,358** | *Not possible* | *Not possible* | **70,718** | **70,718** | **YARP** |
+| Reverse | HTTP/2 · plain | HTTP/1 · plain | **17,974** | **22,171** | *Not possible* | *Not possible* | **44,962** | **44,962** | **YARP** |
+| Reverse | HTTP/2 · plain | HTTP/2 · plain | **45,439** | **45,439** | *Not possible* | *Not possible* | **59,032** | **59,032** | **YARP** |
+| Reverse | HTTP/2 · plain | HTTP/2 · TLS | **20,051** | **20,051** | *Not possible* | *Not possible* | **28,141** | **28,141** | **YARP** |
+| Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **13,685** | **13,685** | *Not possible* (no QUIC) | *Not possible* | **16,076** | **16,076** | **YARP** |
+| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **3,642** | **6,157** | *Not possible* (no QUIC) | *Not possible* | **12,679** | **12,679** | **YARP** |
 | MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **6,433** | **6,433** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | MITM | HTTP/3 · QUIC | HTTP/2 · TLS | **3,489** | **3,489** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | MITM | HTTP/3 · QUIC | HTTP/3 · QUIC | **7,192** | **7,192** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
-| Reverse | HTTP/1 · TLS | HTTP/2 · TLS | **6,302** | **7,120** | *Not possible* | *Not possible* | **21,869** | **21,869** | **YARP** |
-| Reverse | HTTP/1 · TLS | HTTP/3 · QUIC | **11,250** | **11,250** | *Not possible* (no QUIC) | *Not possible* | **12,844** | **12,844** | **YARP** |
-| Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | **4,420** | **4,420** | *Not possible* (no QUIC) | *Not possible* | **15,352** | **15,352** | **YARP** |
+| Reverse | HTTP/1 · TLS | HTTP/2 · TLS | **7,607** | **8,042** | *Not possible* | *Not possible* | **22,576** | **22,576** | **YARP** |
+| Reverse | HTTP/1 · TLS | HTTP/3 · QUIC | **10,210** | **10,210** | *Not possible* (no QUIC) | *Not possible* | **12,051** | **12,051** | **YARP** |
+| Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | **10,966** | **10,966** | *Not possible* (no QUIC) | *Not possible* | **14,350** | **14,350** | **YARP** |
 
-Windows sources: H1 / MITM rows reuse prior `compare-same` / `compare-mitm` (`rps-ramp-20260817-184912` and earlier). **H2/H3 reverse + bridges** remeasured after client-window / streaming / frame-loop queue work: `compare-bridges` (`rps-ramp-20260817-210802`; warmup 2s; measure 5s; concurrency 8–64). **h2c↔h2c** refreshed after multi-origin H2 pooling + dedicated frame writers (`rps-ramp-20260818-012238` TWP ~33.7k sustain @ c=64; YARP cell kept from prior `rps-ramp-20260817-212332`). nginx H2 terminate cell not re-run this pass (prior nginx numbers). Absolute RPS on this laptop swings with sequential-arm heat; nginx/Windows sustain is especially noisy.
+Windows sources: one back-to-back local session after the mixed-transport `:scheme` fix, the bridge DATA-dispatch ordering fix, and queued (coalesced) synthetic-response emission — `compare-bridges` (`rps-ramp-20260818-033816`), `compare-post` (`rps-ramp-20260818-034844`), `compare-same` (`rps-ramp-20260818-035246`); warmup 2s; measure 5s; concurrency 8–64. MITM H2/H3 dual-crypto rows reuse prior `compare-mitm` numbers (not re-run this pass). Absolute RPS on this laptop swings with sequential-arm heat (this session ran cooler overall than earlier one-off runs); compare **within the table**, and prefer TWP÷YARP ratios over absolutes.
 
-After multi-origin pooling, TWP÷YARP on Windows h2c→h2c improved from ~**8.5×** behind (10k/86k) to ~**2.6×** (34k/86k) on this laptop — still a managed MITM floor, not parity.
+TWP÷YARP after this pass: h2c→h2c passthrough ≈ **0.77** (was ~0.12 before multi-origin pooling), H2 TLS→h2c passthrough ≈ **0.67**, h2c→TLS ≈ **0.71** (was 100% errors), h2c→H3 ≈ **0.85**, H1→H3 ≈ **0.85**, H2→H3 ≈ **0.76**. The remaining big gaps are the H2→H1 translation bridges (≈ **0.47** sustain, ≈ **0.57** peak — up from ≈ 0.15) and the H1→H2 / inbound-H3 arms.
 
 nginx/Windows is a limited port. Use it for **same-OS** comparison only — not as the industry nginx baseline. YARP H3 reverse uses Kestrel HTTP/3 (HttpClient), not TWP’s transparent QUIC listen.
 
-**H2 TLS → H1 plain on Windows:** fair terminate (`http2-cleartext` / `nginx-reverse-http2` / `yarp-reverse-http2`) — YARP still leads sustain (~**6×**). Absolute RPS swings with background load; treat as same-OS only.
+**H2 TLS → H1 plain on Windows:** fair terminate (`http2-cleartext` / `nginx-reverse-http2` / `yarp-reverse-http2`) — YARP leads sustain ~**2.1×** (was ~6× before queued synthetic-response emission). Absolute RPS swings with background load; treat as same-OS only.
 
 ## Linux — Titanium vs nginx vs YARP
 
@@ -160,15 +160,15 @@ On Linux H1 TLS, TWP÷nginx ≈ **0.80** at 64 KiB and ≈ **0.79** at 256 KiB �
 
 ### Windows — POST 64 KiB request + 64 KiB response
 
-Source: local `compare-post` after H2 client-window + bridge streaming (`rps-ramp-20260817-205100`; warmup 3s; measure 5s; concurrency 8–64).
+Source: local `compare-post` after the bridge DATA-dispatch ordering fix + queued synthetic-response emission (`rps-ramp-20260818-034844`; warmup 2s; measure 5s; concurrency 8–64).
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak | Winner |
 |---|---|---:|---:|---:|---:|---:|---:|---|
-| HTTP/1 · TLS | HTTP/1 · plain | **3,244** | **3,464** | **131** | **195** | **2,874** | **2,874** | **TWP** |
-| HTTP/2 · TLS | HTTP/1 · plain | **921** | **921** | **216** | **243** | **2,244** | **2,244** | **YARP** |
-| HTTP/3 · QUIC | HTTP/1 · plain | **1,233** | **1,233** | *Not possible* | *Not possible* | **979** | **994** | **TWP** |
+| HTTP/1 · TLS | HTTP/1 · plain | **3,539** | **3,539** | **271** | **281** | **3,122** | **3,156** | **TWP** |
+| HTTP/2 · TLS | HTTP/1 · plain | **1,890** | **2,057** | **200** | **203** | **2,226** | **2,267** | **YARP** |
+| HTTP/3 · QUIC | HTTP/1 · plain | **1,201** | **1,555** | *Not possible* | *Not possible* | **936** | **981** | **TWP** |
 
-Pre-fix TWP H2 POST was ~60 RPS (RFC 64 KiB client window); H3 POST was 0 RPS (store-and-forward / connect abort). Post-fix H2 is ~**2.4×** behind YARP; H3 POST completes and leads this laptop run.
+TWP wins the H1 and H3 POST arms outright and sits at ~**0.85** of YARP sustain (~0.91 peak) on H2 POST — up from ~0.41 after live upload streaming and ~0.03 before the flow-control fixes. (An intermediate build briefly regressed this arm to ~10 RPS when request DATA could race the thread-pool BeforeRequest dispatch and leak origin-leg window credit toward the bridge's null origin; DATA now waits for the stream's dispatch before routing.)
 
 ### Linux — POST 64 KiB request + 64 KiB response
 
