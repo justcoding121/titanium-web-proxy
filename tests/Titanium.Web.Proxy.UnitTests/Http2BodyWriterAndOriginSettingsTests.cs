@@ -155,7 +155,8 @@ public class Http2BodyWriterAndOriginSettingsTests
     public async Task ApplySettings_OutOfRangeMaxFrameSize_FaultsConnection()
     {
         using var origin = await CreateOriginConnectionShellAsync();
-        var apply = typeof(Http2OriginConnection).GetMethod("ApplySettings", PrivateInstance)!;
+        var apply = typeof(Http2OriginConnection).GetMethod("ApplySettings", PrivateInstance,
+            binder: null, types: [typeof(byte[])], modifiers: null)!;
 
         // SETTINGS_MAX_FRAME_SIZE = 0x5, value = 100 (too small)
         var payload = new byte[] { 0x00, 0x05, 0x00, 0x00, 0x00, 100 };
@@ -167,7 +168,8 @@ public class Http2BodyWriterAndOriginSettingsTests
     public async Task ApplySettings_NegativeInitialWindowSize_FaultsConnection()
     {
         using var origin = await CreateOriginConnectionShellAsync();
-        var apply = typeof(Http2OriginConnection).GetMethod("ApplySettings", PrivateInstance)!;
+        var apply = typeof(Http2OriginConnection).GetMethod("ApplySettings", PrivateInstance,
+            binder: null, types: [typeof(byte[])], modifiers: null)!;
 
         // SETTINGS_INITIAL_WINDOW_SIZE = 0x4, value with high bit set → negative int
         var payload = new byte[] { 0x00, 0x04, 0x80, 0x00, 0x00, 0x00 };
@@ -179,7 +181,8 @@ public class Http2BodyWriterAndOriginSettingsTests
     public async Task ApplySettings_ValidMaxFrameAndWindow_UpdatesState()
     {
         using var origin = await CreateOriginConnectionShellAsync();
-        var apply = typeof(Http2OriginConnection).GetMethod("ApplySettings", PrivateInstance)!;
+        var apply = typeof(Http2OriginConnection).GetMethod("ApplySettings", PrivateInstance,
+            binder: null, types: [typeof(byte[])], modifiers: null)!;
 
         var payload = new byte[18];
         // MAX_FRAME_SIZE = 20000

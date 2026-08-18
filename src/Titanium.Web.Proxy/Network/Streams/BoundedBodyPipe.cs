@@ -47,8 +47,10 @@ internal sealed class BoundedBodyPipe : IDisposable
     /// <summary>
     ///     Writes a chunk of body bytes to the pipe, enforcing the byte limit.
     ///     Throws <see cref="BodySizeLimitExceededException"/> if the limit is exceeded.
+    ///     Completes synchronously when the underlying pipe does not apply backpressure
+    ///     (unlimited pipes use <c>pauseWriterThreshold: 0</c>).
     /// </summary>
-    internal async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+    internal ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
@@ -58,16 +60,31 @@ internal sealed class BoundedBodyPipe : IDisposable
             var newTotal = totalWritten + buffer.Length;
             if (newTotal > maxBytes)
             {
-                await pipe.Writer.CompleteAsync(new BodySizeLimitExceededException(
-                    $"Body exceeds the configured limit of {maxBytes:N0} bytes."));
-                throw new BodySizeLimitExceededException(
+                var ex = new BodySizeLimitExceededException(
                     $"Body byte count {newTotal:N0} exceeds the limit of {maxBytes:N0}.");
+                pipe.Writer.Complete(ex);
+                return ValueTask.FromException(ex);
             }
         }
 
-        var result = await pipe.Writer.WriteAsync(buffer, cancellationToken);
-        totalWritten += buffer.Length;
+        var flushVt = pipe.Writer.WriteAsync(buffer, cancellationToken);
+        if (flushVt.IsCompletedSuccessfully)
+        {
+            var result = flushVt.Result;
+            totalWritten += buffer.Length;
+            if (result.IsCanceled)
+                return ValueTask.FromException(new OperationCanceledException(cancellationToken));
+            return default;
+        }
 
+        return WriteAsyncSlow(flushVt, buffer.Length, cancellationToken);
+    }
+
+    private async ValueTask WriteAsyncSlow(ValueTask<FlushResult> flushVt, int byteCount,
+        CancellationToken cancellationToken)
+    {
+        var result = await flushVt.ConfigureAwait(false);
+        totalWritten += byteCount;
         if (result.IsCanceled)
             throw new OperationCanceledException(cancellationToken);
     }

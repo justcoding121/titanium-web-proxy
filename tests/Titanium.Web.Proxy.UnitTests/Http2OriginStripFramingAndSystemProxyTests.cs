@@ -13,7 +13,10 @@ public class Http2OriginStripFramingAndSystemProxyTests
     private static byte[] InvokeStrip(string methodName, byte[] payload, Http2FrameFlag flags)
     {
         var method = typeof(Http2OriginConnection).GetMethod(methodName,
-            BindingFlags.Static | BindingFlags.NonPublic)!;
+            BindingFlags.Static | BindingFlags.NonPublic,
+            binder: null,
+            types: [typeof(byte[]), typeof(Http2FrameFlag)],
+            modifiers: null)!;
         return (byte[])method.Invoke(null, [payload, flags])!;
     }
 
