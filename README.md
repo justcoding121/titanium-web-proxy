@@ -105,12 +105,11 @@ Configure your client to use `127.0.0.1:8000` as its HTTP and HTTPS proxy. Trust
 ## Examples and documentation
 
 - [Wiki](https://github.com/justcoding121/titanium-web-proxy/wiki) — feature guides, including [performance measurements](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance), [streaming request/response bodies](https://github.com/justcoding121/titanium-web-proxy/wiki/Streaming-Bodies), the [HTTP/3 setup guide](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3), and a [protocol feature support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support) (what's supported for HTTP/1.x, HTTP/2, and HTTP/3, including [protocol bridges](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support#protocol-bridges))
-- [Titanium compared with nginx and YARP](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance)
 - [Basic console proxy](examples/Titanium.Web.Proxy.Examples.Basic)
 - [WPF proxy application](examples/Titanium.Web.Proxy.Examples.Wpf)
 - [Windows service](examples/Titanium.Web.Proxy.Examples.WindowsService)
 - [Benchmarks](benchmarks/Titanium.Web.Proxy.Benchmarks) — loopback throughput and allocation (BenchmarkDotNet)
-- [RPS saturation probe](tools/RpsLoadProbe) — concurrent breaking-point RPS vs nginx and YARP (local Windows + manual GitHub Linux VM)
+- [RPS saturation probe](tools/RpsLoadProbe) — concurrent breaking-point RPS (local Windows + manual GitHub Linux VM)
 - [API documentation](https://justcoding121.github.io/titanium-web-proxy/docs/api/Titanium.Web.Proxy.ProxyServer.html)
 
 ### Screenshots

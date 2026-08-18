@@ -364,6 +364,31 @@ proxyServer.ForwardToUpstreamGateway = true;
 Measured HTTPS A/B latency, loopback throughput/allocations, and Basic example footprint are on the
 dedicated [Performance](Performance) page.
 
+### HTTP interception gate (fast path)
+
+When **no** session handlers are subscribed (`BeforeRequest`, `BeforeResponse`, `AfterResponse`,
+`OnRequestBodyWrite`, `OnResponseBodyWrite`) and `EnableHttpInterception` is `false`, Titanium uses a
+**fast-forward** path: requests are still proxied, but `SessionEventArgs` event callbacks and Via
+injection are skipped. This is the default for a bare reverse/explicit listener with no handlers.
+
+| Knob | Default | Effect |
+|---|---|---|
+| `EnableHttpInterception` | `false` | Force full interception even with no handlers (timing / `SessionEventArgs` consumers). |
+| `ProxyEndPoint.EnableHttpInterception` | `null` | Endpoint override; `null` inherits the server value. |
+| `ShouldInterceptHttp` | `null` | Optional per-request predicate. Consulted only when the gate is on. `null` = intercept all (today’s behavior). Return `false` to fast-forward that host/method/path. |
+
+```csharp
+// Intercept only API traffic; static assets use the fast path.
+proxy.BeforeRequest += OnApiRequest;
+proxy.ShouldInterceptHttp = ctx =>
+    ctx.Hostname.Equals("api.example.com", StringComparison.OrdinalIgnoreCase)
+    && ctx.PathAndQuery.StartsWith("/v1/", StringComparison.Ordinal);
+```
+
+`DecryptSsl` remains the **TLS** layer control (opaque `SendRaw` vs MITM). The HTTP gate above is
+independent: after decrypt, hosts can still be fast-forwarded when `ShouldInterceptHttp` returns
+`false`.
+
 Shipped defaults follow `ProxyProfile.Balanced`: networking knobs that are safe for every client are
 on; certificate and experimental-protocol choices that trade compatibility or persistence stay
 opt-in. Examples match those library defaults, except they opt into experimental HTTP/3 so the

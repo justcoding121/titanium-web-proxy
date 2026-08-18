@@ -394,7 +394,8 @@ internal static class Cli
     {
         ProbeLog.Info(
             """
-            RpsLoadProbe — saturation RPS harness for Titanium.Web.Proxy (nginx + YARP control arms)
+            RpsLoadProbe — saturation RPS harness for Titanium.Web.Proxy.
+            Published comparisons: wiki/Performance.md
 
             Usage:
               RpsLoadProbe --serve --mode <mode> [--nginx-path PATH] [--max-cached-connections N] [--response-bytes N]
@@ -405,54 +406,54 @@ internal static class Cli
             Modes:
               reverse-http1           TWP TransparentProxyEndPoint -> Kestrel HTTP/1
               bare-reverse-http1      Thin C# HTTP/1 reverse (runtime-ceiling control)
-              nginx-reverse-http1     nginx proxy_pass -> same Kestrel HTTP/1 origin
-              yarp-reverse-http1      YARP reverse -> same Kestrel HTTP/1 origin
+              nginx-reverse-http1     Control arm: native reverse -> same Kestrel HTTP/1 origin
+              yarp-reverse-http1      Control arm: managed reverse -> same Kestrel HTTP/1 origin
               reverse-http1-tls       TWP TLS-terminating reverse -> Kestrel HTTPS (h1)
               bare-reverse-http1-tls  Thin C# TLS-terminate HTTP/1 reverse
-              nginx-reverse-http1-tls nginx TLS reverse -> same Kestrel HTTPS origin (h1)
-              yarp-reverse-http1-tls  YARP TLS reverse -> cleartext HTTP/1 origin
+              nginx-reverse-http1-tls Control arm: TLS reverse -> same Kestrel HTTPS origin (h1)
+              yarp-reverse-http1-tls  Control arm: TLS reverse -> cleartext HTTP/1 origin
               https-mitm              TWP Explicit MITM -> Kestrel HTTPS
               mitm-http2-to-http1     TWP H2 TLS MITM -> H2→H1 bridge -> Kestrel HTTPS/h1
               mitm-http3-to-http1     TWP H3 MITM -> bridge -> Kestrel HTTPS/h1
               reverse-http2           TWP Transparent TLS+h2 MITM -> Kestrel HTTPS (h2)
-              reverse-http2-cleartext TWP TLS+h2 terminate -> H2→H1 bridge -> Kestrel HTTP/1 (nginx parity)
+              reverse-http2-cleartext TWP TLS+h2 terminate -> H2→H1 bridge -> Kestrel HTTP/1
               reverse-http2-to-h2c     TWP TLS+h2 terminate -> prior-knowledge h2c -> Kestrel HTTP/2 cleartext
-              yarp-reverse-http2-to-h2c YARP TLS+h2 -> prior-knowledge h2c
+              yarp-reverse-http2-to-h2c Control arm: TLS+h2 -> prior-knowledge h2c
               reverse-h2c             TWP cleartext h2c reverse -> Kestrel HTTPS/h2
-              yarp-reverse-h2c        YARP cleartext h2c -> HTTPS/h2
+              yarp-reverse-h2c        Control arm: cleartext h2c -> HTTPS/h2
               reverse-h2c-to-h2c      TWP cleartext h2c reverse -> Kestrel HTTP/2 cleartext
-              yarp-reverse-h2c-to-h2c YARP cleartext h2c -> h2c
+              yarp-reverse-h2c-to-h2c Control arm: cleartext h2c -> h2c
               reverse-h2c-to-h1       TWP cleartext h2c reverse -> H2→H1 bridge -> Kestrel HTTP/1
-              yarp-reverse-h2c-to-h1  YARP cleartext h2c -> HTTP/1
+              yarp-reverse-h2c-to-h1  Control arm: cleartext h2c -> HTTP/1
               reverse-h2c-to-h3       TWP cleartext h2c reverse -> H2→H3 bridge -> Quic/h3 origin
-              yarp-reverse-h2c-to-h3  YARP cleartext h2c -> HTTP/3 origin
-              nginx-reverse-http2     nginx ssl+http2 -> cleartext HTTP/1 origin
-              yarp-reverse-http2      YARP TLS+h2 -> cleartext HTTP/1 origin (nginx parity)
-              reverse-http3           TWP TransparentQuic (h3) -> Quic HTTPS/h3 origin (no nginx/Windows)
+              yarp-reverse-h2c-to-h3  Control arm: cleartext h2c -> HTTP/3 origin
+              nginx-reverse-http2     Control arm: ssl+http2 -> cleartext HTTP/1 origin
+              yarp-reverse-http2      Control arm: TLS+h2 -> cleartext HTTP/1 origin
+              reverse-http3           TWP TransparentQuic (h3) -> Quic HTTPS/h3 origin
               reverse-http3-cleartext TWP QUIC/h3 terminate -> cleartext HTTP/1 origin
-              yarp-reverse-http3-cleartext YARP HTTP/3 (Kestrel) terminate -> cleartext HTTP/1
+              yarp-reverse-http3-cleartext Control arm: HTTP/3 terminate -> cleartext HTTP/1
               reverse-http11-to-http2 TWP H1 TLS -> H1→H2 bridge -> Kestrel HTTPS/h2
-              yarp-reverse-http11-to-http2 YARP H1 TLS -> HTTPS/h2
+              yarp-reverse-http11-to-http2 Control arm: H1 TLS -> HTTPS/h2
               reverse-http1-to-http3  TWP H1 TLS -> H1→H3 bridge -> Quic/h3 origin
-              yarp-reverse-http1-to-http3 YARP H1 TLS -> HTTP/3 origin
+              yarp-reverse-http1-to-http3 Control arm: H1 TLS -> HTTP/3 origin
               reverse-http2-to-http3  TWP H2 TLS -> H2→H3 bridge -> Quic/h3 origin
-              yarp-reverse-http2-to-http3 YARP H2 TLS -> HTTP/3 origin
+              yarp-reverse-http2-to-http3 Control arm: H2 TLS -> HTTP/3 origin
               reverse-http3-to-http2  TWP H3 -> H3→H2 bridge -> Kestrel HTTPS/h2
-              yarp-reverse-http3-to-http2 YARP H3 -> HTTPS/h2
-              yarp-reverse-http3-to-http3 YARP H3 -> HTTP/3 origin
+              yarp-reverse-http3-to-http2 Control arm: H3 -> HTTPS/h2
+              yarp-reverse-http3-to-http3 Control arm: H3 -> HTTP/3 origin
               explicit-http1-multi    Explicit MITM across 16 HTTPS origins (fan-out)
               explicit-http2-multi    Same fan-out forcing HTTP/2
               compare                 Sequential HTTP/1 compare (+ MITM)
-              compare-http2           Sequential: TWP h2 MITM, nginx/YARP h2, TWP h3
-              compare-tls             Sequential: TWP/nginx/YARP h1-tls, TWP h2 MITM, nginx/YARP h2, TWP h3
-              compare-terminate       Fair terminate: H1 TLS, H2→H1, H3→H1 (+ nginx/YARP)
-              compare-same            Same-protocol: H1 cleartext, H1 TLS, H1 MITM, H2 MITM, H3 MITM (+ nginx/YARP)
-              compare-bridges         Cross-version bridges (H1↔H2↔H3; TWP + YARP; no nginx)
+              compare-http2           Sequential: TWP h2 MITM, control H2 terminate, TWP h3
+              compare-tls             Sequential: H1 TLS terminate, TWP h2 MITM, H2 terminate, TWP h3
+              compare-terminate       Fair terminate: H1 TLS, H2→H1, H3→H1 (+ control arms)
+              compare-same            Same-protocol: H1 cleartext, H1 TLS, H1 MITM, H2 MITM, H3 MITM (+ control arms)
+              compare-bridges         Cross-version bridges (H1↔H2↔H3; TWP + control arms)
               compare-mitm            MITM matrix: explicit H1, H2/H3 direct, dual-crypto bridges (TWP only)
-              compare-ceiling         TWP vs bare C# vs nginx vs YARP on H1 / H1 TLS / H2→H1 reverse
-              compare-bodies          Heavier reverse GET (64 KiB + 256 KiB) vs nginx/YARP
-              compare-post            POST 64 KiB request+response reverse vs nginx/YARP
-              compare-lossy           64 KiB GET under userspace delay/loss vs nginx/YARP
+              compare-ceiling         TWP vs bare C# vs control arms on H1 / H1 TLS / H2→H1 reverse
+              compare-bodies          Heavier reverse GET (64 KiB + 256 KiB) vs control arms
+              compare-post            POST 64 KiB request+response reverse vs control arms
+              compare-lossy           64 KiB GET under userspace delay/loss vs control arms
               compare-tls-cost        H1 TLS terminate: keep-alive tiny / new-conn tiny / keep-alive 256 KiB
               explicit-pool-sweep     Fan-out with MaxCachedConnections 4 / 32 / 128
 

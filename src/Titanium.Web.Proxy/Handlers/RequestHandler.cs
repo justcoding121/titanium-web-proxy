@@ -428,8 +428,9 @@ public partial class ProxyServer
                             // bound to this client session (reused for its subsequent requests) and are closed when
                             // the client connection ends, never shared with another client.
                             //
-                            // Sticky ForwardHost (computed above): mirrors nginx upstream keepalive —
-                            // avoid pool Get/Release + IsGoodConnection on every tiny keep-alive GET.
+                            // Sticky ForwardHost (computed above): keep the upstream socket pinned for
+                            // this reverse listener — avoid pool Get/Release + IsGoodConnection on every
+                            // tiny keep-alive GET.
                             if (EnableConnectionPool && connection != null
                                                      && !connection.IsWinAuthenticated
                                                      && !stickyForwardUpstream)
