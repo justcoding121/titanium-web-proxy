@@ -32,18 +32,18 @@ internal sealed class Http2StreamState
         Cancellation = new CancellationTokenSource();
     }
 
-    public int StreamId { get; }
+    public int StreamId { get; private set; }
 
-    public SessionEventArgs? SessionArgs { get; }
+    public SessionEventArgs? SessionArgs { get; private set; }
 
-    public bool IsCompressedRelay { get; }
+    public bool IsCompressedRelay { get; private set; }
 
     /// <summary>
     ///     Cancelled when this stream is individually reset (RST_STREAM) or the peer GOAWAYs past it, so a
     ///     body/before-handler waiter or synthetic-response task blocked only on this stream can unblock
     ///     without tearing down every other multiplexed stream on the connection.
     /// </summary>
-    public CancellationTokenSource Cancellation { get; }
+    public CancellationTokenSource Cancellation { get; private set; }
 
     /// <summary>True once the request side (client -> proxy -> server) has seen END_STREAM or been reset.</summary>
     public bool RequestClosed { get; set; }
@@ -116,18 +116,53 @@ internal sealed class Http2StreamState
     ///     Set by an external bridge handler (e.g. the H2→H3 bridge) before returning from
     ///     <c>onBeforeRequest</c> to signal that it owns this stream's origin round trip and
     ///     response emission entirely.
-    ///     <para>
-    ///         When <see langword="true"/>, <see cref="Http2Helper"/> must:
-    ///         <list type="bullet">
-    ///           <item><description>suppress forwarding the request HEADERS to the native H2 origin;</description></item>
-    ///           <item><description>NOT invoke the inline synthetic-response emitter (which is reserved for
-    ///               BeforeRequest-time <c>Ok</c>/<c>GenericResponse</c>/<c>Redirect</c> etc.);</description></item>
-    ///           <item><description>let the background task registered in <see cref="SyntheticTask"/> be the sole
-    ///               owner of response emission via <c>Http2Helper.EmitSyntheticResponseAsync</c>.</description></item>
-    ///         </list>
-    ///         Register this flag before returning from <c>onBeforeRequest</c> so the check in
-    ///         <c>ProcessCompleteHeaderBlockAsync</c> always sees the up-to-date value.
-    ///     </para>
     /// </summary>
     internal bool IsExternalBridge { get; set; }
+
+    internal void ResetForCompressedRelay(int streamId)
+    {
+        StreamId = streamId;
+        SessionArgs = null;
+        IsCompressedRelay = true;
+        ResetMutableFields();
+    }
+
+    internal void ResetForSession(int streamId, SessionEventArgs sessionArgs)
+    {
+        StreamId = streamId;
+        SessionArgs = sessionArgs;
+        IsCompressedRelay = false;
+        ResetMutableFields();
+    }
+
+    internal void PrepareForPool()
+    {
+        SessionArgs = null;
+        try { Cancellation.Dispose(); }
+        catch { /* ignore */ }
+        Cancellation = new CancellationTokenSource();
+        ResetMutableFields(preserveCancellation: true);
+    }
+
+    private void ResetMutableFields(bool preserveCancellation = false)
+    {
+        if (!preserveCancellation)
+        {
+            try { Cancellation.Dispose(); }
+            catch { /* ignore */ }
+            Cancellation = new CancellationTokenSource();
+        }
+
+        RequestClosed = false;
+        ResponseClosed = false;
+        SyntheticTask = null;
+        FinalizedFlag = 0;
+        IsExtendedConnect = false;
+        ExtendedConnectProtocol = null;
+        ExtendedConnectEstablished = false;
+        InboundTunnelChannel = null;
+        InboundRequestBodyChannel = null;
+        OriginHeadersFlushed = null;
+        IsExternalBridge = false;
+    }
 }

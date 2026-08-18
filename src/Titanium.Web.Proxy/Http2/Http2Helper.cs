@@ -218,7 +218,8 @@ namespace Titanium.Web.Proxy.Http2
             Func<CancellationToken, Task<TcpServerConnection>>? openOriginConnectionAsync = null)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
-            var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource);
+            var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource,
+                resourceLimits.MaxConcurrentStreamsPerConnection);
 
             // Dedicated writers (share the direction locks so control-frame paths cannot interleave).
             connectionState.ClientFrameWriter =
@@ -322,7 +323,7 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 connectionState.PendingFinalizations.Add(
-                    FinalizeStreamAsync(leftover, onAfterResponse, logger));
+                    FinalizeStreamAsync(leftover, onAfterResponse, logger, connectionState));
             }
             connectionState.MultipartObservers.Clear();
 
@@ -432,7 +433,8 @@ namespace Titanium.Web.Proxy.Http2
         ///     never run it twice or race Dispose against a still-running AfterResponse.
         /// </summary>
         internal static async Task FinalizeStreamAsync(Http2StreamState state,
-            Func<SessionEventArgs, Task> onAfterResponse, ILogger logger)
+            Func<SessionEventArgs, Task> onAfterResponse, ILogger logger,
+            Http2ConnectionState? connectionState = null)
         {
             if (Interlocked.CompareExchange(ref state.FinalizedFlag, 1, 0) != 0)
             {
@@ -444,6 +446,7 @@ namespace Titanium.Web.Proxy.Http2
             {
                 try { state.Cancellation.Dispose(); }
                 catch { /* ignore */ }
+                connectionState?.ReturnStreamState(state);
                 return;
             }
 
@@ -466,6 +469,7 @@ namespace Titanium.Web.Proxy.Http2
             finally
             {
                 state.SessionArgs.Dispose();
+                connectionState?.ReturnStreamState(state);
             }
         }
 
@@ -724,7 +728,7 @@ namespace Titanium.Web.Proxy.Http2
                     connectionState.ClientSendFlow.RemoveStream(removeStreamId);
                     connectionState.ServerSendFlow.RemoveStream(removeStreamId);
                     connectionState.PendingFinalizations.Add(
-                        FinalizeStreamAsync(removedState, onAfterResponse, logger));
+                        FinalizeStreamAsync(removedState, onAfterResponse, logger, connectionState));
                 }
             }
 
@@ -2897,7 +2901,7 @@ namespace Titanium.Web.Proxy.Http2
                         }
 
                         connectionState.PendingFinalizations.Add(
-                            FinalizeStreamAsync(resetStream, onAfterResponse, logger));
+                            FinalizeStreamAsync(resetStream, onAfterResponse, logger, connectionState));
 
                         // Wire up args so the RST_STREAM error log below can include the request URL
                         // (args is only populated for DATA/HEADERS frames in the outer scope, so it is
@@ -3096,7 +3100,7 @@ namespace Titanium.Web.Proxy.Http2
                             connectionState.OriginRelayPool?.ReleaseStream(streamId);
                             connectionState.RemoveStream(streamId);
                             connectionState.PendingFinalizations.Add(
-                                FinalizeStreamAsync(closingStream, onAfterResponse, logger));
+                                FinalizeStreamAsync(closingStream, onAfterResponse, logger, connectionState));
                         }
                     }
                 }
@@ -4044,7 +4048,7 @@ namespace Titanium.Web.Proxy.Http2
 
             connectionState.RemoveStream(streamId);
             connectionState.PendingFinalizations.Add(
-                FinalizeStreamAsync(streamState, onAfterResponse, logger));
+                FinalizeStreamAsync(streamState, onAfterResponse, logger, connectionState));
         }
 
         private static async Task<int> ForceRead(Stream input, byte[] buffer, int offset, int bytesToRead,

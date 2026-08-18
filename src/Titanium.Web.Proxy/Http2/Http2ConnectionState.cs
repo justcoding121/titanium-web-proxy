@@ -20,13 +20,17 @@ namespace Titanium.Web.Proxy.Http2;
 /// </summary>
 internal sealed class Http2ConnectionState
 {
-    public Http2ConnectionState(long connectionId, CancellationTokenSource cancellationTokenSource)
+    public Http2ConnectionState(long connectionId, CancellationTokenSource cancellationTokenSource,
+        int maxPooledStreamStates = 256)
     {
         ConnectionId = connectionId;
         CancellationTokenSource = cancellationTokenSource;
+        StreamStatePool = new Http2StreamStatePool(maxPooledStreamStates);
     }
 
     public long ConnectionId { get; }
+
+    public Http2StreamStatePool StreamStatePool { get; }
 
     /// <summary>What the client has told the proxy about itself (client is the "remote" for the server->client leg).</summary>
     public Http2Settings ClientSettings { get; } = new();
@@ -291,9 +295,10 @@ internal sealed class Http2ConnectionState
     /// </summary>
     public Http2StreamState RegisterStream(int streamId, SessionEventArgs sessionArgs)
     {
-        var state = new Http2StreamState(streamId, sessionArgs);
+        var state = StreamStatePool.RentSession(streamId, sessionArgs);
         if (!Streams.TryAdd(streamId, state))
         {
+            StreamStatePool.Return(state);
             return Streams[streamId];
         }
 
@@ -308,9 +313,10 @@ internal sealed class Http2ConnectionState
     /// </summary>
     public Http2StreamState RegisterCompressedRelayStream(int streamId)
     {
-        var state = new Http2StreamState(streamId);
+        var state = StreamStatePool.RentCompressed(streamId);
         if (!Streams.TryAdd(streamId, state))
         {
+            StreamStatePool.Return(state);
             return Streams[streamId];
         }
 
@@ -327,4 +333,7 @@ internal sealed class Http2ConnectionState
         ClientSendFlow.RemoveStream(streamId);
         ServerSendFlow.RemoveStream(streamId);
     }
+
+    /// <summary>Returns a stream state shell to the connection pool after finalization.</summary>
+    public void ReturnStreamState(Http2StreamState state) => StreamStatePool.Return(state);
 }
