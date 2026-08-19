@@ -39,6 +39,15 @@ public abstract class TransparentBaseProxyEndPoint : ProxyEndPoint
     /// </summary>
     public bool ForwardCleartext { get; set; }
 
+    /// <summary>
+    ///     Cached H3→H2 origin pool identity for the interception-off fast path when <c>:authority</c>
+    ///     is stable (typical reverse probe). Avoids rebuilding the pool-key string every request.
+    /// </summary>
+    internal ByteString CachedH2OriginAuthority;
+    internal string? CachedH2OriginHost;
+    internal int CachedH2OriginPort;
+    internal string? CachedH2OriginPoolKey;
+
     internal abstract Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
         BeforeSslAuthenticateEventArgs connectArgs, ILogger logger);
 

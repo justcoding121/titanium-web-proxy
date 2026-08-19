@@ -601,11 +601,34 @@ internal static class Http3OriginBridge
         else if (request.Authority.Length == 0 && !string.IsNullOrEmpty(request.Host))
             request.Authority = request.Host.GetByteString();
 
-        var (host, port) = ResolveH2OriginAuthority(request);
         var (connectHost, connectPort) = ResolveTransparentForwardTarget(sessionArgs);
 
-        var poolKey = Http2OriginConnectionPool.BuildPoolKey(server, sessionArgs, host, port, connectHost,
-            connectPort);
+        string host;
+        int port;
+        string poolKey;
+        if (sessionArgs.IsFastPath
+            && sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint fastEp
+            && fastEp.CachedH2OriginPoolKey != null
+            && request.Authority.Equals(fastEp.CachedH2OriginAuthority))
+        {
+            host = fastEp.CachedH2OriginHost!;
+            port = fastEp.CachedH2OriginPort;
+            poolKey = fastEp.CachedH2OriginPoolKey;
+        }
+        else
+        {
+            (host, port) = ResolveH2OriginAuthority(request);
+            poolKey = Http2OriginConnectionPool.BuildPoolKey(server, sessionArgs, host, port, connectHost,
+                connectPort);
+            if (sessionArgs.IsFastPath && sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint cacheEp)
+            {
+                cacheEp.CachedH2OriginAuthority = request.Authority;
+                cacheEp.CachedH2OriginHost = host;
+                cacheEp.CachedH2OriginPort = port;
+                cacheEp.CachedH2OriginPoolKey = poolKey;
+            }
+        }
+
         try
         {
             var on1xx = CreateInterimResponseAdapter(onInterimResponse);
