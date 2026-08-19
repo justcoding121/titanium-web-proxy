@@ -100,7 +100,14 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         BaseStream = baseStream;
         this.leaveOpen = leaveOpen;
         ownsStreamBuffer = rentReadBuffer;
-        streamBuffer = rentReadBuffer ? bufferPool.GetBuffer() : Array.Empty<byte>();
+        // SslStream: rent a TLS max application-record sized window (16 KiB) so one FillBuffer
+        // can consume a full record. 8 KiB splits records and leaves decrypt leftover in SslStream
+        // — a tax cleartext NetworkStream does not pay.
+        streamBuffer = rentReadBuffer
+            ? bufferPool.GetBuffer(baseStream is SslStream
+                ? Math.Max(bufferPool.BufferSize, 16 * 1024)
+                : bufferPool.BufferSize)
+            : Array.Empty<byte>();
         this.bufferPool = bufferPool;
         this.cancellationToken = cancellationToken;
     }
