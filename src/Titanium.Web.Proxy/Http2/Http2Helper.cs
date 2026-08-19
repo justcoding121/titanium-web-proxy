@@ -1801,6 +1801,104 @@ namespace Titanium.Web.Proxy.Http2
                     return;
                 }
 
+                // Compressed-relay DATA: resolve stream remap + state before reading payload so we can
+                // ReadExact straight into the rented wire buffer (skip the shared frame `buffer` copy).
+                if (type == Http2FrameType.Data)
+                {
+                    var dataStreamId = streamId;
+                    if (originReceiveLeg != null && peerStreamId != 0)
+                    {
+                        if (!originReceiveLeg.OriginToClient.TryGetValue(peerStreamId, out dataStreamId))
+                        {
+                            await GrantReceiveCreditAsync(peerStreamId, length, forceFlush: true);
+                            await intake.DiscardAsync(length, cancellationToken);
+                            await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
+                                peerStreamId, Http2ErrorCode.StreamClosed, input));
+                            continue;
+                        }
+
+                        frameHeader.StreamId = dataStreamId;
+                        frameHeaderBuffer[5] = (byte)((dataStreamId >> 24) & 0x7f);
+                        frameHeaderBuffer[6] = (byte)((dataStreamId >> 16) & 0xff);
+                        frameHeaderBuffer[7] = (byte)((dataStreamId >> 8) & 0xff);
+                        frameHeaderBuffer[8] = (byte)(dataStreamId & 0xff);
+                    }
+
+                    if (connectionState.Streams.TryGetValue(dataStreamId, out var compressedDataState)
+                        && compressedDataState.IsCompressedRelay)
+                    {
+                        bool dataEndStream = (flags & Http2FrameFlag.EndStream) != 0;
+                        var creditStreamId = originReceiveLeg != null ? peerStreamId : dataStreamId;
+                        await GrantReceiveCreditAsync(creditStreamId, length, forceFlush: dataEndStream);
+
+                        Http2FrameWriter? dedicatedWriter = null;
+                        var wireStreamId = dataStreamId;
+                        if (isClient && connectionState.OriginRelayPool != null
+                            && connectionState.OriginRelayPool.TryGetAssignment(dataStreamId, out var assignment))
+                        {
+                            wireStreamId = assignment.OriginStreamId;
+                            dedicatedWriter = assignment.Leg.Writer;
+                            await assignment.Leg.SendFlow
+                                .ReserveAsync(wireStreamId, length, cancellationToken)
+                                .ConfigureAwait(false);
+                            frameHeader.StreamId = wireStreamId;
+                            frameHeaderBuffer[5] = (byte)((wireStreamId >> 24) & 0x7f);
+                            frameHeaderBuffer[6] = (byte)((wireStreamId >> 16) & 0xff);
+                            frameHeaderBuffer[7] = (byte)((wireStreamId >> 8) & 0xff);
+                            frameHeaderBuffer[8] = (byte)(wireStreamId & 0xff);
+                        }
+                        else if (!isClient && originReceiveLeg != null)
+                        {
+                            dedicatedWriter = connectionState.ClientFrameWriter;
+                            await outboundFlow.ReserveAsync(dataStreamId, length, cancellationToken);
+                        }
+                        else
+                        {
+                            await outboundFlow.ReserveAsync(dataStreamId, length, cancellationToken);
+                        }
+
+                        var wireLen = 9 + length;
+                        var rented = ArrayPool<byte>.Shared.Rent(wireLen);
+                        frameHeader.CopyToBuffer(rented);
+                        if (length > 0 && !await intake.ReadExactAsync(rented, 9, length, cancellationToken))
+                        {
+                            ArrayPool<byte>.Shared.Return(rented);
+                            await TrySendGracefulGoAwayAsync();
+                            return;
+                        }
+
+                        if (dedicatedWriter != null)
+                            dedicatedWriter.EnqueueRented(rented, wireLen);
+                        else
+                            connectionState.EnqueueWriteRented(towardServer: isClient, outputWriteLock, output,
+                                rented, wireLen);
+
+                        if (dataEndStream
+                            && connectionState.Streams.TryGetValue(dataStreamId, out var closingCompressed))
+                        {
+                            if (isClient)
+                                closingCompressed.RequestClosed = true;
+                            else
+                                closingCompressed.ResponseClosed = true;
+
+                            if (closingCompressed.IsClosed)
+                            {
+                                connectionState.OriginRelayPool?.ReleaseStream(dataStreamId);
+                                connectionState.RemoveStream(dataStreamId);
+                                connectionState.PendingFinalizations.Add(
+                                    FinalizeStreamAsync(closingCompressed, onAfterResponse, logger, connectionState));
+                            }
+                        }
+
+                        continue;
+                    }
+
+                    // Not compressed-relay DATA: restore peer stream id so the shared remap below
+                    // can apply OriginToClient after the payload is read into `buffer`.
+                    if (originReceiveLeg != null && peerStreamId != 0)
+                        streamId = peerStreamId;
+                }
+
                 if (length > 0 && !await intake.ReadExactAsync(buffer, 0, length, cancellationToken))
                 {
                     await TrySendGracefulGoAwayAsync();
@@ -1831,7 +1929,6 @@ namespace Titanium.Web.Proxy.Http2
                     frameHeaderBuffer[7] = (byte)((streamId >> 8) & 0xff);
                     frameHeaderBuffer[8] = (byte)(streamId & 0xff);
                 }
-
                 if (type == Http2FrameType.PushPromise)
                 {
                     // This proxy always advertises SETTINGS_ENABLE_PUSH=0 toward the server (see the

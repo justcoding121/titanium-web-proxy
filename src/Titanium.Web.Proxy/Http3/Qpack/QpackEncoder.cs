@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using System.Threading.Tasks;
+using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Http3.Qpack;
 
@@ -43,58 +43,117 @@ internal static class QpackEncoder
         ulong maxRequiredInsertCount = 0;
 
         foreach (var (name, value) in headers)
+            EncodeOne(body, outboundTable, ref maxRequiredInsertCount, name, value);
+
+        return FinishBlock(body, maxRequiredInsertCount, outboundTable, context);
+    }
+
+    /// <summary>
+    ///     Encodes an HTTP response without building an intermediate header list (hot H3→client path).
+    /// </summary>
+    public static byte[] EncodeResponse(Response response, QpackContext? context)
+    {
+        var body = reusableBuffer ??= new MemoryStream();
+        body.SetLength(0);
+        var outboundTable = context != null && !context.OutboundTableDisabled && context.MaxTableCapacityFromPeer > 0
+            ? context.OutboundEncoderTable
+            : null;
+
+        ulong maxRequiredInsertCount = 0;
+        EncodeOne(body, outboundTable, ref maxRequiredInsertCount, ":status",
+            StatusCodeToString(response.StatusCode));
+
+        foreach (var header in response.Headers)
         {
-            var lowerName = name; // names from the proxy are already lowercase
-
-            // 1. Try exact match in the static table (O(1) dictionary — was O(n) scan).
-            var exact = QpackStaticTable.FindExact(lowerName, value);
-            if (exact >= 0)
-            {
-                WriteIndexed(body, (ulong)exact);
+            var name = header.Name;
+            if (HasUpperAscii(name))
+                name = name.ToLowerInvariant();
+            if (name is "connection" or "keep-alive" or "proxy-connection"
+                or "transfer-encoding" or "upgrade")
                 continue;
-            }
-
-            var nameOnlyStaticIndex = QpackStaticTable.FindName(lowerName);
-
-            // 2. Try dynamic table (when enabled).
-            if (outboundTable != null && outboundTable.TryFind(lowerName, value, out ulong dynAbsIdx, out bool dynExact))
-            {
-                if (dynExact)
-                {
-                    WriteDynamicIndexed(body, dynAbsIdx);
-                    maxRequiredInsertCount = Math.Max(maxRequiredInsertCount, dynAbsIdx + 1);
-                }
-                else
-                {
-                    WriteLiteralWithDynamicNameRef(body, dynAbsIdx, value);
-                    maxRequiredInsertCount = Math.Max(maxRequiredInsertCount, dynAbsIdx + 1);
-                }
-                continue;
-            }
-
-            // 3. Literal with static name reference.
-            if (nameOnlyStaticIndex >= 0)
-            {
-                WriteLiteralWithStaticNameRef(body, (ulong)nameOnlyStaticIndex, value);
-                continue;
-            }
-
-            // 4. Literal without name reference.
-            WriteLiteralNewName(body, lowerName, value);
+            EncodeOne(body, outboundTable, ref maxRequiredInsertCount, name, header.Value);
         }
 
-        // Encode the 2-byte QPACK prefix per RFC 9204 §4.5.1.
+        return FinishBlock(body, maxRequiredInsertCount, outboundTable, context);
+    }
+
+    private static string StatusCodeToString(int statusCode) => statusCode switch
+    {
+        200 => "200",
+        204 => "204",
+        301 => "301",
+        302 => "302",
+        304 => "304",
+        400 => "400",
+        404 => "404",
+        500 => "500",
+        502 => "502",
+        503 => "503",
+        _ => statusCode.ToString()
+    };
+
+    private static bool HasUpperAscii(string s)
+    {
+        for (var i = 0; i < s.Length; i++)
+        {
+            var c = s[i];
+            if (c is >= 'A' and <= 'Z') return true;
+        }
+
+        return false;
+    }
+
+    private static void EncodeOne(MemoryStream body, QpackDynamicTable? outboundTable,
+        ref ulong maxRequiredInsertCount, string lowerName, string value)
+    {
+        var exact = QpackStaticTable.FindExact(lowerName, value);
+        if (exact >= 0)
+        {
+            WriteIndexed(body, (ulong)exact);
+            return;
+        }
+
+        var nameOnlyStaticIndex = QpackStaticTable.FindName(lowerName);
+
+        if (outboundTable != null && outboundTable.TryFind(lowerName, value, out ulong dynAbsIdx, out bool dynExact))
+        {
+            if (dynExact)
+            {
+                WriteDynamicIndexed(body, dynAbsIdx);
+                maxRequiredInsertCount = Math.Max(maxRequiredInsertCount, dynAbsIdx + 1);
+            }
+            else
+            {
+                WriteLiteralWithDynamicNameRef(body, dynAbsIdx, value);
+                maxRequiredInsertCount = Math.Max(maxRequiredInsertCount, dynAbsIdx + 1);
+            }
+
+            return;
+        }
+
+        if (nameOnlyStaticIndex >= 0)
+        {
+            WriteLiteralWithStaticNameRef(body, (ulong)nameOnlyStaticIndex, value);
+            return;
+        }
+
+        WriteLiteralNewName(body, lowerName, value);
+    }
+
+    private static byte[] FinishBlock(MemoryStream body, ulong maxRequiredInsertCount,
+        QpackDynamicTable? outboundTable, QpackContext? context)
+    {
         byte ricByte, sByte;
         if (maxRequiredInsertCount == 0 || outboundTable == null)
         {
-            ricByte = 0x00; // Required Insert Count = 0
-            sByte = 0x00;   // S=0, Delta Base = 0
+            ricByte = 0x00;
+            sByte = 0x00;
         }
         else
         {
             var encodedRic = EncodeRequiredInsertCount(maxRequiredInsertCount, context!.MaxTableCapacityFromPeer);
             ricByte = (byte)(encodedRic & 0xFF);
-            sByte = 0x00; // S=0, Delta Base = 0 (post-base indexing not used)
+            sByte = 0x00;
         }
 
         var result = new byte[2 + body.Length];

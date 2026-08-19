@@ -583,14 +583,23 @@ internal static class Http3OriginBridge
         var clientHttpVersion = request.HttpVersion;
         request.HttpVersion = HttpHeader.Version20;
 
-        if (string.IsNullOrEmpty(request.Host) && request.Authority.Length > 0)
+        // Prefer :authority for origin resolve; Host string is only needed when handlers / H1
+        // fallback read Request.Host. Skip the GetString alloc on the H3→H2 fast path.
+        if (!sessionArgs.IsFastPath
+            && string.IsNullOrEmpty(request.Host)
+            && request.Authority.Length > 0)
             request.Host = request.Authority.GetString();
 
         // TLS-terminate → h2c: origin expects :scheme http.
         if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
             request.IsHttps = false;
 
-        PrepareH2OriginRequestHeaders(request);
+        // QPACK decode already produces lowercase names and no hop-by-hop headers on the probe
+        // fast path — skip the RemoveHeader/Any scan that dominates Prepare for tiny GETs.
+        if (!sessionArgs.IsFastPath)
+            PrepareH2OriginRequestHeaders(request);
+        else if (request.Authority.Length == 0 && !string.IsNullOrEmpty(request.Host))
+            request.Authority = request.Host.GetByteString();
 
         var (host, port) = ResolveH2OriginAuthority(request);
         var (connectHost, connectPort) = ResolveTransparentForwardTarget(sessionArgs);

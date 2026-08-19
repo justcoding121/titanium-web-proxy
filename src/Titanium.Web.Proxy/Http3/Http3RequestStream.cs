@@ -78,13 +78,17 @@ internal static class Http3RequestStream
                 if (headersFrame is null) return;
 
                 if (headersFrame.Type != Http3FrameType.Headers)
+                {
+                    headersFrame.ReturnPayload();
                     throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
                         $"Expected HEADERS frame as first frame on request stream, got type 0x{headersFrame.Type:X}.");
+                }
 
                 // 2. Decode QPACK headers → extract HTTP/3 pseudo-headers and regular headers.
                 // Decoding is synchronous (SETTINGS_QPACK_BLOCKED_STREAMS = 0; missing inserts are errors).
                 var decodedHeaders = QpackDecoder.Decode(
                     headersFrame.Payload, qpackContext, cancellationToken);
+                headersFrame.ReturnPayload();
                 qpackContext?.EnqueueSectionAck(stream.Id);
                 var (method, scheme, authority, path, regularHeaders) = ExtractPseudoHeaders(decodedHeaders);
 
@@ -99,10 +103,17 @@ internal static class Http3RequestStream
                     connection.LocalEndPoint,
                     connection.RemoteEndPoint);
 
+                // Fast path gate is known before session construction when interception is off.
+                var interceptionOff = !server.NeedsHttpInterception(endPoint);
+
                 // 4. Create SessionEventArgs using a null-backed HttpClientStream, then populate
                 // the session's Request. SessionEventArgs always constructs its own Request; a
                 // discarded local Request previously left Host/URI empty so H3→origin forwarding
                 // failed with Invalid URI: 'http://'.
+                // Always link stream CTS ↔ connection token: FinalizeAllStreamsAsync Cancel()s the
+                // stream CTS, and sessionArgs.CancellationToken must observe that (skipping the
+                // link and setting OperationCancellationToken to the connection token alone left
+                // abortable waiters stuck and cooled H3→H2 ratio ~0.67×).
                 cts = new CancellationTokenSource();
                 linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
 
@@ -128,43 +139,52 @@ internal static class Http3RequestStream
                 foreach (var (name, value) in regularHeaders)
                     request.Headers.AddHeader(new HttpHeader(name, value));
 
-                var host = authority;
-                var port = request.IsHttps ? 443 : 80;
-                if (authority.Length > 0 && authority[0] == '[')
+                // Fast path when the server-wide interception gate is off: skip InterceptionContext
+                // alloc (hostname/port parse) — ShouldIntercept would always return false.
+                if (interceptionOff)
                 {
-                    var closingBracket = authority.IndexOf(']');
-                    if (closingBracket > 0)
-                    {
-                        host = authority[1..closingBracket];
-                        if (closingBracket + 2 < authority.Length &&
-                            authority[closingBracket + 1] == ':' &&
-                            int.TryParse(authority.AsSpan(closingBracket + 2), out var parsedPort))
-                            port = parsedPort;
-                    }
+                    sessionArgs.IsFastPath = true;
                 }
                 else
                 {
-                    var colon = authority.LastIndexOf(':');
-                    if (colon > 0 && int.TryParse(authority.AsSpan(colon + 1), out var parsedPort))
+                    var host = authority;
+                    var port = request.IsHttps ? 443 : 80;
+                    if (authority.Length > 0 && authority[0] == '[')
                     {
-                        host = authority[..colon];
-                        port = parsedPort;
+                        var closingBracket = authority.IndexOf(']');
+                        if (closingBracket > 0)
+                        {
+                            host = authority[1..closingBracket];
+                            if (closingBracket + 2 < authority.Length &&
+                                authority[closingBracket + 1] == ':' &&
+                                int.TryParse(authority.AsSpan(closingBracket + 2), out var parsedPort))
+                                port = parsedPort;
+                        }
                     }
-                }
+                    else
+                    {
+                        var colon = authority.LastIndexOf(':');
+                        if (colon > 0 && int.TryParse(authority.AsSpan(colon + 1), out var parsedPort))
+                        {
+                            host = authority[..colon];
+                            port = parsedPort;
+                        }
+                    }
 
-                var interceptionContext = new HttpInterceptionContext
-                {
-                    Hostname = host,
-                    Port = port,
-                    IsHttps = request.IsHttps,
-                    Method = method,
-                    PathAndQuery = normalizedPath,
-                    HttpVersion = HttpHeader.Version30,
-                    ProxyEndPoint = endPoint,
-                    ClientRemoteEndPoint = sessionArgs.ClientRemoteEndPoint,
-                    ClientProcessId = null
-                };
-                sessionArgs.IsFastPath = !server.ShouldIntercept(interceptionContext, endPoint);
+                    var interceptionContext = new HttpInterceptionContext
+                    {
+                        Hostname = host,
+                        Port = port,
+                        IsHttps = request.IsHttps,
+                        Method = method,
+                        PathAndQuery = normalizedPath,
+                        HttpVersion = HttpHeader.Version30,
+                        ProxyEndPoint = endPoint,
+                        ClientRemoteEndPoint = sessionArgs.ClientRemoteEndPoint,
+                        ClientProcessId = null
+                    };
+                    sessionArgs.IsFastPath = !server.ShouldIntercept(interceptionContext, endPoint);
+                }
 
                 // Seed per-connection overrides from the auth event.
                 // CustomUpStreamProxy is the typed proxy field read by the bridge; UserData is
@@ -175,25 +195,39 @@ internal static class Http3RequestStream
                 streamState = new Http3StreamState(stream.Id, sessionArgs, cts);
                 onSessionCreated(sessionArgs, streamState);
 
-                // 5. Leave the inbound QuicStream readable. BeforeRequest runs on headers only
-                // (matching HTTP/1.1 / HTTP/2). GetRequestBody() buffers remaining DATA; otherwise
-                // the origin bridge streams DATA frames as they arrive.
-                sessionArgs.Http3BufferedBodyReader = async ct =>
+                // Bodiless methods (probe GETs): drain client FIN eagerly and skip installing
+                // Http3BufferedBodyReader / Http3RequestBodyPump lambdas (two async closures per
+                // request). ForwardOverHttp2 then sends HEADERS+END_STREAM without an empty DATA.
+                var bodilessFastPath = sessionArgs.IsFastPath
+                    && method is "GET" or "HEAD" or "DELETE" or "OPTIONS";
+                if (bodilessFastPath)
                 {
-                    var bytes = await BufferRequestBodyAsync(
-                        stream, sessionArgs.HttpClient.Request, server, sessionArgs, ct);
+                    await DrainClientFinOnlyAsync(stream, cancellationToken);
                     streamState.RequestClosed = true;
-                    sessionArgs.Http3BufferedBodyReader = null;
-                    sessionArgs.Http3RequestBodyPump = null;
-                    return bytes;
-                };
-                sessionArgs.Http3RequestBodyPump = async (writeData, ct) =>
+                    request.IsBodyReceived = true;
+                }
+                else
                 {
-                    sessionArgs.Http3BufferedBodyReader = null;
-                    sessionArgs.Http3RequestBodyPump = null;
-                    await StreamRequestBodyToWriteAsync(stream, writeData, server, sessionArgs, ct);
-                    streamState.RequestClosed = true;
-                };
+                    // 5. Leave the inbound QuicStream readable. BeforeRequest runs on headers only
+                    // (matching HTTP/1.1 / HTTP/2). GetRequestBody() buffers remaining DATA; otherwise
+                    // the origin bridge streams DATA frames as they arrive.
+                    sessionArgs.Http3BufferedBodyReader = async ct =>
+                    {
+                        var bytes = await BufferRequestBodyAsync(
+                            stream, sessionArgs.HttpClient.Request, server, sessionArgs, ct);
+                        streamState.RequestClosed = true;
+                        sessionArgs.Http3BufferedBodyReader = null;
+                        sessionArgs.Http3RequestBodyPump = null;
+                        return bytes;
+                    };
+                    sessionArgs.Http3RequestBodyPump = async (writeData, ct) =>
+                    {
+                        sessionArgs.Http3BufferedBodyReader = null;
+                        sessionArgs.Http3RequestBodyPump = null;
+                        await StreamRequestBodyToWriteAsync(stream, writeData, server, sessionArgs, ct);
+                        streamState.RequestClosed = true;
+                    };
+                }
 
                 // 6. Fire BeforeRequest (stamp timing milestone just before).
                 sessionArgs.Timing?.MarkRequestHeadersReceived();
@@ -244,9 +278,10 @@ internal static class Http3RequestStream
                     sessionArgs.HttpClient.Request.Locked = true;
 
                     // Stream unread client DATA to the origin when the body was not buffered
-                    // during BeforeRequest. Always consume until FIN (zero DATA frames for GET).
+                    // during BeforeRequest. Bodiless fast path already drained FIN above.
                     Func<QuicStream, CancellationToken, Task>? copyRequestBody = null;
-                    if (!sessionArgs.HttpClient.Request.IsBodyRead)
+                    if (!sessionArgs.HttpClient.Request.IsBodyRead
+                        && !sessionArgs.HttpClient.Request.IsBodyReceived)
                     {
                         copyRequestBody = async (originStream, ct) =>
                         {
@@ -355,6 +390,35 @@ internal static class Http3RequestStream
                         sessionArgs?.Dispose();
                     }
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Consumes remaining client DATA until END_STREAM without exposing a body (bodiless GET/HEAD).
+    ///     Used on the interception-off fast path so we never allocate Http3RequestBodyPump closures.
+    /// </summary>
+    private static async Task DrainClientFinOnlyAsync(QuicStream stream, CancellationToken ct)
+    {
+        while (true)
+        {
+            var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0, ct);
+            if (frame is null)
+                return;
+            try
+            {
+                if (frame.Type == Http3FrameType.Headers)
+                    return; // trailers; nothing to forward on bodiless GET
+                if (frame.Type != Http3FrameType.Data)
+                    throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
+                        $"Unexpected frame type 0x{frame.Type:X} while draining bodiless request FIN.");
+                if (frame.Payload.Length > 0)
+                    throw new Http3StreamException(Http3ErrorCode.MessageError,
+                        "Bodiless request received non-empty DATA.");
+            }
+            finally
+            {
+                frame.ReturnPayload();
             }
         }
     }
@@ -570,25 +634,10 @@ internal static class Http3RequestStream
     /// </summary>
     private static async Task SendResponseAsync(QuicStream stream, Response response, QpackContext? qpackContext, CancellationToken ct)
     {
-        // Build QPACK-encoded response headers without GetAllHeaders() List alloc.
-        var headers = new List<(string, string)>
-        {
-            (":status", StatusCodeString(response.StatusCode))
-        };
-
-        foreach (var header in response.Headers)
-        {
-            var name = HasUpperAscii(header.Name) ? header.Name.ToLowerInvariant() : header.Name;
-            // Strip HTTP/1.x connection-specific headers that are forbidden in HTTP/3.
-            if (name is "connection" or "keep-alive" or "proxy-connection" or "transfer-encoding" or "upgrade")
-                continue;
-            headers.Add((name, header.Value));
-        }
-
         // HTTP/3 frames the body with DATA; Transfer-Encoding is never used on the wire.
         response.Headers.RemoveHeader("transfer-encoding");
 
-        var qpackHeaders = QpackEncoder.Encode(headers, qpackContext);
+        var qpackHeaders = QpackEncoder.EncodeResponse(response, qpackContext);
         await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
 
         if (response.StreamBodyWriter != null && !response.IsBodySent)
