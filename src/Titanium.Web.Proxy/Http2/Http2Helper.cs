@@ -1848,7 +1848,25 @@ namespace Titanium.Web.Proxy.Http2
                     {
                         bool dataEndStream = (flags & Http2FrameFlag.EndStream) != 0;
                         var creditStreamId = originReceiveLeg != null ? peerStreamId : dataStreamId;
-                        await GrantReceiveCreditAsync(creditStreamId, length, forceFlush: dataEndStream);
+                        if (dataEndStream)
+                        {
+                            // Tiny-GET hot path: END_STREAM closes the stream — skip stream WINDOW_UPDATE
+                            // and do not force-flush connection credit (was one WINDOW_UPDATE pair per
+                            // ~56 B response; profiled ~6% in GrantReceiveCredit).
+                            if (length > 0)
+                                pendingConnectionReceiveCredit += length;
+                            pendingStreamReceiveCredit.Remove(creditStreamId);
+                            if (pendingConnectionReceiveCredit >= ReceiveCreditBatchThreshold)
+                            {
+                                var connBytes = pendingConnectionReceiveCredit;
+                                pendingConnectionReceiveCredit = 0;
+                                await GrantReceiveCreditLockedAsync(0, connBytes, 0);
+                            }
+                        }
+                        else
+                        {
+                            await GrantReceiveCreditAsync(creditStreamId, length, forceFlush: false);
+                        }
 
                         Http2FrameWriter? dedicatedWriter = null;
                         var wireStreamId = dataStreamId;
