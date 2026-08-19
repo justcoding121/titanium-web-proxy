@@ -47,6 +47,26 @@ public class Http2SchemePatchTests
                 ProxyServer.UriSchemeHttps8, out _));
     }
 
+    [TestMethod]
+    public void TryApplyStaticIndexedSchemeOverride_PatchesWithoutDecoder()
+    {
+        var block = EncodeMinimalRequest(https: false);
+        Assert.AreEqual(Http2Helper.StaticSchemeOverrideResult.Patched,
+            Http2Helper.TryApplyStaticIndexedSchemeOverride(block, ProxyServer.UriSchemeHttps8,
+                out var patched));
+        Assert.AreEqual(0x87, patched[FindSchemeByteIndex(patched)]);
+        AssertDecodedScheme(patched, "https");
+    }
+
+    [TestMethod]
+    public void TryApplyStaticIndexedSchemeOverride_AlreadyMatching()
+    {
+        var block = EncodeMinimalRequest(https: true);
+        Assert.AreEqual(Http2Helper.StaticSchemeOverrideResult.AlreadyMatching,
+            Http2Helper.TryApplyStaticIndexedSchemeOverride(block, ProxyServer.UriSchemeHttps8,
+                out _));
+    }
+
     private static byte[] EncodeMinimalRequest(bool https)
     {
         // HEADER_TABLE_SIZE=0 so :scheme is a static Indexed Header Field (6/7).

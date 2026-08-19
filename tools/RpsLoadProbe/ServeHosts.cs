@@ -66,7 +66,8 @@ internal static class ServeProxyHost
             or ProbeMode.ReverseH2c or ProbeMode.YarpReverseH2c
             or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
             or ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1
-            or ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi)
+            or ProbeMode.HttpsMitm or ProbeMode.ReverseHttp1Mitm
+            or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi)
         {
             ProbeLog.Error(
                 $"Mode {mode} requires --serve (combined origin+proxy) so the test CA is shared.");
@@ -325,6 +326,7 @@ internal static class ServeProxyHost
         ProbeMode.NginxReverseHttp1Tls => "nginx-reverse-http1-tls",
         ProbeMode.YarpReverseHttp1Tls => "yarp-reverse-http1-tls",
         ProbeMode.HttpsMitm => "https-mitm",
+        ProbeMode.ReverseHttp1Mitm => "reverse-http1-mitm",
         ProbeMode.ReverseHttp2 => "reverse-http2",
         ProbeMode.ReverseHttp2Cleartext => "reverse-http2-cleartext",
         ProbeMode.ReverseHttp2ToH2c => "reverse-http2-to-h2c",
@@ -543,6 +545,13 @@ internal static class ServeHost
                     var twp = TwpProxyHost.StartHttpsMitm(maxCachedConnections);
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, [], twp.ListenUrl,
                         twp.ListenUrl, origin.HttpsUrl, [origin.HttpsUrl], null, "1.1");
+                }
+                case ProbeMode.ReverseHttp1Mitm:
+                {
+                    var origin = await OriginServer.StartAsync(true, responseBytes, cancellationToken);
+                    var twp = TwpProxyHost.StartReverseHttp1Mitm(origin.HttpsPort);
+                    return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, [], twp.ListenUrl, null,
+                        twp.ListenUrl, [twp.ListenUrl], null, "1.1");
                 }
                 case ProbeMode.ReverseHttp1Tls:
                 {

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -117,7 +118,8 @@ public partial class ProxyServer
     private async Task BridgeOnBeforeRequest(SessionEventArgs sessionArgs, Http2StreamContext ctx, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         string remoteHostName, int remotePort, string? connectHost, int? connectPort)
     {
-        await OnBeforeRequest(sessionArgs);
+        if (!sessionArgs.IsFastPath)
+            await OnBeforeRequest(sessionArgs);
 
         if (sessionArgs.HttpClient.Request.CancelRequest)
         {
@@ -255,8 +257,10 @@ public partial class ProxyServer
         string? connectHost, int? connectPort, CancellationToken connectionToken, CancellationToken streamToken,
         Channel<ReadOnlyMemory<byte>>? requestBodyChannel)
     {
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(connectionToken, streamToken);
-        var cancellationToken = linkedCts.Token;
+        // Stream CTS is cancelled on RST_STREAM and when the connection tears down (all streams
+        // cancelled in CopyHttp2FrameAsync). Skip CreateLinkedTokenSource — dumpheap on H2→H1 MITM
+        // showed ~1 Linked2CancellationTokenSource per in-flight stream.
+        var cancellationToken = streamToken;
 
         var request = sessionArgs.HttpClient.Request;
         TcpServerConnection? connection = null;
@@ -366,13 +370,19 @@ public partial class ProxyServer
             // A framing exception intentionally propagates to this method's own catch block below,
             // which already answers with a clean synthetic 502 when headers have not reached the
             // client yet - exactly the right behavior for ambiguous origin framing.
-            Http1FramingValidator.Validate(sessionArgs.HttpClient.Response, ResolveHttp1WireFramingSource(sessionArgs),
-                sessionArgs.Server.PolicyModes.AllowAmbiguousFraming);
+            if (!sessionArgs.IsFastPath)
+            {
+                Http1FramingValidator.Validate(sessionArgs.HttpClient.Response,
+                    ResolveHttp1WireFramingSource(sessionArgs),
+                    sessionArgs.Server.PolicyModes.AllowAmbiguousFraming);
+            }
+
             sessionArgs.HttpClient.Response.SetOriginalHeaders();
 
             MaybeInjectClientAltSvc(sessionArgs);
 
-            if (!sessionArgs.HttpClient.Response.Locked) await OnBeforeResponse(sessionArgs);
+            if (!sessionArgs.IsFastPath && !sessionArgs.HttpClient.Response.Locked)
+                await OnBeforeResponse(sessionArgs);
 
             var response = sessionArgs.HttpClient.Response;
             closeConnection = !response.KeepAlive;
@@ -402,9 +412,52 @@ public partial class ProxyServer
                 var originIsChunked = response.OriginalIsChunked;
                 var originContentLength = response.OriginalContentLength;
 
+                // Tiny known-length bodies (probe GETs ~56 B, typical JSON APIs): buffer once and emit
+                // via Body instead of LimitedStream + StreamBodyWriter. Dumpheap on H2→H1 MITM showed
+                // ~1 LimitedStream + async pump per response; dual-TLS amplifies that per-chunk cost.
+                const int smallBodyBufferThreshold = 16 * 1024;
+                if (originHasBody && !response.IsBodyRead
+                    && !originIsChunked
+                    && originContentLength is >= 0 and <= smallBodyBufferThreshold)
+                {
+                    byte[] bodyBytes;
+                    if (originContentLength == 0)
+                    {
+                        bodyBytes = Array.Empty<byte>();
+                    }
+                    else
+                    {
+                        bodyBytes = new byte[originContentLength];
+                        using var limited = new LimitedStream(originConnection.Stream, BufferPool,
+                            isChunked: false, originContentLength, response.TrailingHeaders);
+                        var offset = 0;
+                        while (offset < bodyBytes.Length)
+                        {
+                            var read = await limited.ReadAsync(bodyBytes.AsMemory(offset), cancellationToken);
+                            if (read == 0)
+                                break;
+                            offset += read;
+                        }
+
+                        await limited.Finish();
+                        if (offset != bodyBytes.Length)
+                            Array.Resize(ref bodyBytes, offset);
+                    }
+
+                    response.HttpVersion = clientHttpVersion;
+                    response.Body = bodyBytes;
+                    response.IsBodyRead = true;
+                    response.ContentLength = bodyBytes.Length;
+                    response.HttpVersion = HttpHeader.Version11;
+                    response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+                    response.StreamBodyWriter = null;
+                    LowercaseHeaderNames(response.Headers);
+                    if (response.HasTrailingHeaders) LowercaseHeaderNames(response.TrailingHeaders);
+                    response.Locked = true;
+                }
                 // If BeforeResponse buffered via GetResponseBody, emit the in-memory body. Otherwise
                 // stream origin→client DATA live (frames queued on the dedicated client frame writer).
-                if (originHasBody && !response.IsBodyRead)
+                else if (originHasBody && !response.IsBodyRead)
                 {
                     response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
                     // The emitter needs the client (h2) version for correct HasBody semantics and
@@ -936,12 +989,24 @@ public partial class ProxyServer
     private static void LowercaseHeaderNames(HeaderCollection headers)
     {
         // Fast path: origin already sent lowercase names (common for modern server stacks).
-        if (!headers.Any(header => HeaderNameHasUpperCaseAscii(header.Name)))
+        // Use foreach on HeaderCollection (struct enumerator) — LINQ Any/Select boxes IEnumerator.
+        var needsRename = false;
+        foreach (var header in headers)
+        {
+            if (HeaderNameHasUpperCaseAscii(header.Name))
+            {
+                needsRename = true;
+                break;
+            }
+        }
+
+        if (!needsRename)
             return;
 
-        var renamed = headers
-            .Select(header => (Name: header.Name.ToLowerInvariant(), header.Value))
-            .ToList();
+        // Rare mixed-case path: materialize then rewrite (Header.NameData is immutable).
+        var renamed = new List<(string Name, string Value)>(8);
+        foreach (var header in headers)
+            renamed.Add((header.Name.ToLowerInvariant(), header.Value));
         headers.Clear();
         foreach (var (name, value) in renamed)
             headers.AddHeader(name, value);

@@ -93,7 +93,8 @@ internal sealed class WorkloadOptions
 
         return mode switch
         {
-            ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi =>
+            ProbeMode.HttpsMitm or ProbeMode.ReverseHttp1Mitm
+                or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi =>
                 httpsMitm,
             ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c
                 or ProbeMode.YarpReverseHttp2 or ProbeMode.YarpReverseHttp2ToH2c

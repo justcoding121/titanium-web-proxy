@@ -786,75 +786,76 @@ namespace Titanium.Web.Proxy.Http2
             // forward the compressed block unchanged (valid when both legs negotiated table size 0).
             async Task RelayCompressedHeaderBlockAsync(int hbStreamId, byte[] compressed, bool endStreamFlag)
             {
-                // Scheme-override connections collect the decoded fields so the block can be re-encoded
-                // with the origin-transport :scheme below; everything else keeps the NoOp decode.
-                HeaderCollection? overrideHeaders = null;
-                MyHeaderListener? overrideListener = null;
+                // Mixed-transport: prefer a structural HPACK walk that only rewrites Indexed
+                // :scheme (0x86↔0x87) — no Decoder, no HeaderCollection. .NET HttpClient and most
+                // browsers emit static-indexed :scheme; decode+re-encode is the rare fallback.
+                // Same-transport relay stays verbatim (no override).
+                ReadOnlyMemory<byte> blockToRelay = compressed;
                 if (compressedRelaySchemeOverride.Length > 0)
                 {
-                    overrideHeaders = new HeaderCollection();
-                    overrideListener = new MyHeaderListener(
-                        (name, value) => overrideHeaders.AddHeader(new HttpHeader(name, value)),
-                        isRequest: true);
-                }
+                    switch (TryApplyStaticIndexedSchemeOverride(compressed, compressedRelaySchemeOverride,
+                                out var patchedFast))
+                    {
+                        case StaticSchemeOverrideResult.Patched:
+                            blockToRelay = patchedFast;
+                            break;
+                        case StaticSchemeOverrideResult.AlreadyMatching:
+                            break;
+                        default:
+                        {
+                            var overrideHeaders = new HeaderCollection();
+                            var overrideListener = new MyHeaderListener(
+                                (name, value) => overrideHeaders.AddHeader(new HttpHeader(name, value)),
+                                isRequest: true);
+                            try
+                            {
+                                if (decoder == null)
+                                {
+                                    headerTableSize = remoteSettings.HeaderTableSize;
+                                    decoder = new Decoder(maxDecodedHeaderListBytes, headerTableSize);
+                                }
+                                else if (headerTableSize != remoteSettings.HeaderTableSize)
+                                {
+                                    headerTableSize = remoteSettings.HeaderTableSize;
+                                    decoder.SetMaxHeaderTableSize(headerTableSize);
+                                }
 
-                // Verbatim same-transport relay (no scheme override): skip HPACK decode. Blocks are
-                // context-free (HEADER_TABLE_SIZE=0 on both legs); origin validates. Decode was
-                // ~full HPACK walk per stream for a NoOp listener — profiled cost on h2c→h2c.
-                if (overrideListener != null)
-                {
-                try
-                {
-                    if (decoder == null)
-                    {
-                        headerTableSize = remoteSettings.HeaderTableSize;
-                        decoder = new Decoder(maxDecodedHeaderListBytes, headerTableSize);
-                    }
-                    else if (headerTableSize != remoteSettings.HeaderTableSize)
-                    {
-                        headerTableSize = remoteSettings.HeaderTableSize;
-                        decoder.SetMaxHeaderTableSize(headerTableSize);
-                    }
+                                decoder.Decode(compressed.AsSpan(0, compressed.Length), overrideListener);
+                                if (decoder.EndHeaderBlock())
+                                {
+                                    ReportException(logger, new ProxyHttpException(
+                                        "HTTP/2 header list too large on compressed-relay stream.", null, null));
+                                    RemoveAndFinalizeStream(hbStreamId);
+                                    await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
+                                        new byte[9], hbStreamId, (Http2ErrorCode)0xb /* ENHANCE_YOUR_CALM */,
+                                        input));
+                                    return;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                ReportException(logger, new ProxyHttpException(
+                                    "Failed to decode HTTP/2 headers on compressed-relay stream", ex, null));
+                                await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                                    hbStreamId, Http2ErrorCode.CompressionError, input));
+                                throw;
+                            }
 
-                    decoder.Decode(compressed.AsSpan(0, compressed.Length), overrideListener);
-                    if (decoder.EndHeaderBlock())
-                    {
-                        ReportException(logger, new ProxyHttpException(
-                            "HTTP/2 header list too large on compressed-relay stream.", null, null));
-                        RemoveAndFinalizeStream(hbStreamId);
-                        await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
-                            hbStreamId, (Http2ErrorCode)0xb /* ENHANCE_YOUR_CALM */, input));
-                        return;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    ReportException(logger, new ProxyHttpException(
-                        "Failed to decode HTTP/2 headers on compressed-relay stream", ex, null));
-                    await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], hbStreamId,
-                        Http2ErrorCode.CompressionError, input));
-                    throw;
-                }
-                }
+                            // Trailers / CONNECT (no :scheme) and already-matching schemes stay verbatim.
+                            if (!overrideListener.HasMalformedHeader
+                                && overrideListener.RawScheme.Length > 0
+                                && !overrideListener.RawScheme.Equals(compressedRelaySchemeOverride))
+                            {
+                                if (TryPatchStaticIndexedScheme(compressed, overrideListener.RawScheme,
+                                        compressedRelaySchemeOverride, out var patched))
+                                    blockToRelay = patched;
+                                else
+                                    blockToRelay = ReencodeCompressedRequestBlock(remoteSettings,
+                                        overrideListener, overrideHeaders, compressedRelaySchemeOverride);
+                            }
 
-                // Trailer blocks and plain CONNECT carry no :scheme (RawScheme stays empty) and relay
-                // verbatim; a block whose scheme already matches the origin transport also stays verbatim.
-                // Mixed-transport (H2 TLS→h2c): prefer a single-byte static-index patch (0x86↔0x87)
-                // over full HeaderCollection re-encode — same HEADER_TABLE_SIZE=0 contract.
-                ReadOnlyMemory<byte> blockToRelay = compressed;
-                if (overrideListener is { HasMalformedHeader: false }
-                    && overrideListener.RawScheme.Length > 0
-                    && !overrideListener.RawScheme.Equals(compressedRelaySchemeOverride))
-                {
-                    if (TryPatchStaticIndexedScheme(compressed, overrideListener.RawScheme,
-                            compressedRelaySchemeOverride, out var patched))
-                    {
-                        blockToRelay = patched;
-                    }
-                    else
-                    {
-                        blockToRelay = ReencodeCompressedRequestBlock(remoteSettings, overrideListener,
-                            overrideHeaders!, compressedRelaySchemeOverride);
+                            break;
+                        }
                     }
                 }
 
@@ -3697,6 +3698,13 @@ namespace Titanium.Web.Proxy.Http2
         private const byte IndexedSchemeHttp = 0x86;
         private const byte IndexedSchemeHttps = 0x87;
 
+        internal enum StaticSchemeOverrideResult
+        {
+            NeedFallback,
+            Patched,
+            AlreadyMatching,
+        }
+
         private static byte StaticIndexedSchemeByte(ByteString scheme)
         {
             if (scheme.Equals(ProxyServer.UriSchemeHttp8) || scheme.Equals(SchemeHttp))
@@ -3704,6 +3712,71 @@ namespace Titanium.Web.Proxy.Http2
             if (scheme.Equals(ProxyServer.UriSchemeHttps8) || scheme.Equals(SchemeHttps))
                 return IndexedSchemeHttps;
             return 0;
+        }
+
+        /// <summary>
+        ///     Fast mixed-transport path: walk HEADER_TABLE_SIZE=0 HPACK and rewrite Indexed
+        ///     <c>:scheme</c> (0x86↔0x87) without a Decoder. Returns <see cref="StaticSchemeOverrideResult.AlreadyMatching"/>
+        ///     when the block already carries the origin-transport scheme as a static index.
+        /// </summary>
+        internal static StaticSchemeOverrideResult TryApplyStaticIndexedSchemeOverride(byte[] block,
+            ByteString toScheme, out byte[] patched)
+        {
+            patched = null!;
+            var to = StaticIndexedSchemeByte(toScheme);
+            if (to == 0)
+                return StaticSchemeOverrideResult.NeedFallback;
+            var from = to == IndexedSchemeHttps ? IndexedSchemeHttp : IndexedSchemeHttps;
+
+            var i = 0;
+            var fromAt = -1;
+            var toCount = 0;
+            while (i < block.Length)
+            {
+                var b = block[i];
+                if ((b & 0x80) != 0)
+                {
+                    if ((b & 0x7f) == 0)
+                        return StaticSchemeOverrideResult.NeedFallback;
+                    if (b == from)
+                    {
+                        if (fromAt >= 0)
+                            return StaticSchemeOverrideResult.NeedFallback;
+                        fromAt = i;
+                    }
+                    else if (b == to)
+                    {
+                        toCount++;
+                    }
+
+                    i++;
+                    continue;
+                }
+
+                if ((b & 0xe0) == 0x20)
+                {
+                    if ((b & 0x1f) == 0x1f)
+                        return StaticSchemeOverrideResult.NeedFallback;
+                    i++;
+                    continue;
+                }
+
+                if (!TrySkipHpackLiteral(block, ref i))
+                    return StaticSchemeOverrideResult.NeedFallback;
+            }
+
+            if (fromAt >= 0 && toCount == 0)
+            {
+                patched = new byte[block.Length];
+                Buffer.BlockCopy(block, 0, patched, 0, block.Length);
+                patched[fromAt] = to;
+                return StaticSchemeOverrideResult.Patched;
+            }
+
+            if (fromAt < 0 && toCount == 1)
+                return StaticSchemeOverrideResult.AlreadyMatching;
+
+            return StaticSchemeOverrideResult.NeedFallback;
         }
 
         /// <summary>

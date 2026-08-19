@@ -142,7 +142,8 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         or ProbeMode.ReverseH2c or ProbeMode.YarpReverseH2c
         or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
         or ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1
-        or ProbeMode.HttpsMitm or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi;
+        or ProbeMode.HttpsMitm or ProbeMode.ReverseHttp1Mitm
+        or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi;
 
     private static async Task<ChildProcessStack> StartCombinedServeAsync(string exe, ProbeMode mode,
         string? nginxPath, int? maxCachedConnections, WorkloadOptions workload, CancellationToken cancellationToken)

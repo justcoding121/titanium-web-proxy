@@ -308,6 +308,30 @@ internal sealed class TwpProxyHost : IDisposable
     /// <summary>
     /// Client H2 TLS → H2→H1 bridge → origin HTTPS HTTP/1 (MITM: decrypt client, TLS to origin).
     /// </summary>
+    /// <summary>
+    /// Client H1 TLS → re-encrypt → origin HTTPS HTTP/1 (transparent dual-crypto). Fair twin of
+    /// <see cref="StartReverseHttp1Tls"/> for MITM÷pass-through ratios; unlike
+    /// <see cref="StartHttpsMitm"/> this avoids explicit CONNECT overhead.
+    /// </summary>
+    public static TwpProxyHost StartReverseHttp1Mitm(int originHttpsPort)
+    {
+        var proxy = CreateBaseProxy(enableHttp2: false, enableHttp3: false);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpsPort,
+            ForwardCleartext = false,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
+        return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
     public static TwpProxyHost StartMitmHttp2ToHttp1(int originHttpsPort)
     {
         var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);

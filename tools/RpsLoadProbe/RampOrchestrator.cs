@@ -9,6 +9,7 @@ internal enum ProbeMode
     NginxReverseHttp1,
     YarpReverseHttp1,
     HttpsMitm,
+    ReverseHttp1Mitm,
     ReverseHttp1Tls,
     BareReverseHttp1Tls,
     NginxReverseHttp1Tls,
@@ -272,6 +273,7 @@ internal static class RampOrchestrator
                 : [],
             ProbeMode.YarpReverseHttp1 => [new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null)],
             ProbeMode.HttpsMitm => [new("twp-https-mitm", ProbeMode.HttpsMitm, null)],
+            ProbeMode.ReverseHttp1Mitm => [new("twp-reverse-http1-mitm", ProbeMode.ReverseHttp1Mitm, null)],
             ProbeMode.ReverseHttp1Tls => [new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null)],
             ProbeMode.BareReverseHttp1Tls => [new("bare-reverse-http1-tls", ProbeMode.BareReverseHttp1Tls, null)],
             ProbeMode.NginxReverseHttp1Tls => nginxAvailable
@@ -463,6 +465,7 @@ internal static class RampOrchestrator
             ProbeMode.CompareMitm =>
             [
                 new("twp-https-mitm", ProbeMode.HttpsMitm, null),
+                new("twp-reverse-http1-mitm", ProbeMode.ReverseHttp1Mitm, null),
                 new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
                 new("twp-mitm-http2-to-http1", ProbeMode.MitmHttp2ToHttp1, null),
                 new("twp-reverse-http3", ProbeMode.ReverseHttp3, null),

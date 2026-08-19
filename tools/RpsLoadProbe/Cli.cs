@@ -243,6 +243,9 @@ internal static class Cli
             case "https-mitm":
                 mode = ProbeMode.HttpsMitm;
                 return true;
+            case "reverse-http1-mitm":
+                mode = ProbeMode.ReverseHttp1Mitm;
+                return true;
             case "reverse-http1-tls":
                 mode = ProbeMode.ReverseHttp1Tls;
                 return true;
