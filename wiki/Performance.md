@@ -62,25 +62,25 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 | Reverse | HTTP/2 · TLS | HTTP/1 · plain | **29,134** | **29,134** | **4,755** | **10,796** | **27,669** | **27,669** | **TWP** |
 | MITM | HTTP/2 · TLS | HTTP/1 · TLS | **35,673** | **35,823** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | MITM | HTTP/2 · TLS | HTTP/2 · TLS | **51,455** | **51,455** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
-| Reverse | HTTP/2 · TLS | HTTP/2 · plain | **50,995** | **50,995** | *Not possible* | *Not possible* | **65,763** | **65,763** | **YARP** |
+| Reverse | HTTP/2 · TLS | HTTP/2 · plain | **45,757** | **45,757** | *Not possible* | *Not possible* | **56,211** | **56,211** | **YARP** |
 | Reverse | HTTP/2 · plain | HTTP/1 · plain | **23,228** | **23,228** | *Not possible* | *Not possible* | **27,697** | **27,697** | **YARP** |
-| Reverse | HTTP/2 · plain | HTTP/2 · plain | **49,701** | **49,701** | *Not possible* | *Not possible* | **68,325** | **68,325** | **YARP** |
+| Reverse | HTTP/2 · plain | HTTP/2 · plain | **50,243** | **50,243** | *Not possible* | *Not possible* | **67,561** | **67,561** | **YARP** |
 | Reverse | HTTP/2 · plain | HTTP/2 · TLS | **27,943** | **27,943** | *Not possible* | *Not possible* | **49,202** | **49,202** | **YARP** |
 | Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **12,036** | **12,036** | *Not possible* (no QUIC) | *Not possible* | **14,817** | **14,817** | **YARP** |
 | Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **12,392** | **12,850** | *Not possible* (no QUIC) | *Not possible* | **14,181** | **17,238** | **YARP** |
-| Reverse | HTTP/3 · QUIC | HTTP/2 · TLS | **24,942** | **24,942** | *Not possible* (no QUIC) | *Not possible* | **34,188** | **34,188** | **YARP** |
+| Reverse | HTTP/3 · QUIC | HTTP/2 · TLS | **24,995** | **24,995** | *Not possible* (no QUIC) | *Not possible* | **34,708** | **34,708** | **YARP** |
 | MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **9,732** | **10,334** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | MITM | HTTP/3 · QUIC | HTTP/2 · TLS | **3,527** | **3,527** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | MITM | HTTP/3 · QUIC | HTTP/3 · QUIC | **10,810** | **10,810** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
-| Reverse | HTTP/1 · TLS | HTTP/2 · TLS | **37,330** | **37,330** | *Not possible* | *Not possible* | **41,967** | **41,967** | **YARP** |
+| Reverse | HTTP/1 · TLS | HTTP/2 · TLS | **38,540** | **38,540** | *Not possible* | *Not possible* | **45,227** | **45,227** | **YARP** |
 | Reverse | HTTP/1 · TLS | HTTP/3 · QUIC | **14,053** | **14,053** | *Not possible* (no QUIC) | *Not possible* | **17,350** | **17,350** | **YARP** |
 | Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | **17,141** | **17,141** | *Not possible* (no QUIC) | *Not possible* | **13,473** | **13,473** | **TWP** |
 
-Windows sources: matched-client cool pairs under `tools/RpsLoadProbe/results/matched-baseline/` and `matched-post-fix/` / `matched-post-headers-writer/` (2026-08-18), **HttpClient H3** cool pairs under `matched-httpclient-h3/` (2026-08-18), plus **2026-08-19** High-perf cool pairs under `residual-sub08/quiet-remeasure/post-p0p1/` (H1→H2, H3→H2 after Interim lite + SoftStream=2 + Via skip). Warmup 2–8s; measure 5–30s; concurrency 8–64. Absolute RPS swings with sequential-arm heat; prefer TWP÷YARP ratios over absolutes.
+Windows sources: matched-client cool pairs under `tools/RpsLoadProbe/results/matched-baseline/` and `matched-post-fix/` / `matched-post-headers-writer/` (2026-08-18), **HttpClient H3** cool pairs under `matched-httpclient-h3/` (2026-08-18), plus **2026-08-19** High-perf cool pairs under `residual-sub08/quiet-remeasure/post-hpack-static/` + `post-hpack-confirm/` (HPACK static-index fix + SoftStream=1 + scheme patch + Via/response skip). Warmup 2–8s; measure 5–30s; concurrency 8–64. Absolute RPS swings with sequential-arm heat; prefer TWP÷YARP ratios over absolutes.
 
 **Load generators:** Reverse inbound H3 arms (H3→H1, H3→H2) use **`dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) on both TWP and YARP after dual-listen reverse H3. UDP-only MITM H3 still uses **`quic-http3`**. Older reverse-H3 ratios that used matched `quic-http3` are **not** comparable to these HttpClient numbers.
 
-**Matched HttpClient TWP÷YARP (cool):** H3→H1 ≈ **0.87** sustain (12,392 / 14,181). H3→H2 ≈ **0.73** (24,942 / 34,188, 2026-08-19). H1→H2 ≈ **0.89** (37,330 / 41,967, 2026-08-19; ≥0.80). H2 TLS→h2c ≈ **0.78** (50,995 / 65,763), h2c→h2c ≈ **0.73** (49,701 / 68,325) — 2026-08-19 High-perf remasure (`passthrough-fresh/`).
+**Matched HttpClient TWP÷YARP (cool):** H3→H1 ≈ **0.87** sustain (12,392 / 14,181). H3→H2 ≈ **0.72** (24,995 / 34,708, 2026-08-19 confirm). H1→H2 ≈ **0.85** (38,540 / 45,227; ≥0.80). H2 TLS→h2c ≈ **0.81** (45,757 / 56,211; ≥0.80). h2c→h2c ≈ **0.74** (50,243 / 67,561) — 2026-08-19 High-perf (`post-hpack-confirm/`).
 
 nginx/Windows is a limited port — use it for **same-OS** comparison only, not as the industry nginx baseline.
 

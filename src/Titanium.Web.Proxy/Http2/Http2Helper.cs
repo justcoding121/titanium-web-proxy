@@ -779,6 +779,11 @@ namespace Titanium.Web.Proxy.Http2
                         isRequest: true);
                 }
 
+                // Verbatim same-transport relay (no scheme override): skip HPACK decode. Blocks are
+                // context-free (HEADER_TABLE_SIZE=0 on both legs); origin validates. Decode was
+                // ~full HPACK walk per stream for a NoOp listener — profiled cost on h2c→h2c.
+                if (overrideListener != null)
+                {
                 try
                 {
                     if (decoder == null)
@@ -792,8 +797,7 @@ namespace Titanium.Web.Proxy.Http2
                         decoder.SetMaxHeaderTableSize(headerTableSize);
                     }
 
-                    decoder.Decode(compressed.AsSpan(0, compressed.Length),
-                        overrideListener ?? (IHeaderListener)NoOpHeaderListener.Instance);
+                    decoder.Decode(compressed.AsSpan(0, compressed.Length), overrideListener);
                     if (decoder.EndHeaderBlock())
                     {
                         ReportException(logger, new ProxyHttpException(
@@ -812,16 +816,27 @@ namespace Titanium.Web.Proxy.Http2
                         Http2ErrorCode.CompressionError, input));
                     throw;
                 }
+                }
 
                 // Trailer blocks and plain CONNECT carry no :scheme (RawScheme stays empty) and relay
                 // verbatim; a block whose scheme already matches the origin transport also stays verbatim.
+                // Mixed-transport (H2 TLS→h2c): prefer a single-byte static-index patch (0x86↔0x87)
+                // over full HeaderCollection re-encode — same HEADER_TABLE_SIZE=0 contract.
                 ReadOnlyMemory<byte> blockToRelay = compressed;
                 if (overrideListener is { HasMalformedHeader: false }
                     && overrideListener.RawScheme.Length > 0
                     && !overrideListener.RawScheme.Equals(compressedRelaySchemeOverride))
                 {
-                    blockToRelay = ReencodeCompressedRequestBlock(remoteSettings, overrideListener,
-                        overrideHeaders!, compressedRelaySchemeOverride);
+                    if (TryPatchStaticIndexedScheme(compressed, overrideListener.RawScheme,
+                            compressedRelaySchemeOverride, out var patched))
+                    {
+                        blockToRelay = patched;
+                    }
+                    else
+                    {
+                        blockToRelay = ReencodeCompressedRequestBlock(remoteSettings, overrideListener,
+                            overrideHeaders!, compressedRelaySchemeOverride);
+                    }
                 }
 
                 var wireStreamId = hbStreamId;
@@ -1552,7 +1567,9 @@ namespace Titanium.Web.Proxy.Http2
                                 return false;
                             }
 
-                            if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
+                            // Match H1/H3 fast-path: skip Via when no HTTP interception — saves header
+                            // mutation + encode work on the hot client write path (h2c / H2 TLS reverse).
+                            if (!sessionArgs.IsFastPath && !sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
                                 !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym))
                             {
                                 ProxyServer.AddViaHeader(finalResponse.Headers, finalResponse.HttpVersion,
@@ -3422,13 +3439,6 @@ namespace Titanium.Web.Proxy.Http2
             _ => method.GetByteString()
         };
 
-        private static ByteString SchemeBytes(string scheme) => scheme switch
-        {
-            "https" => SchemeHttps,
-            "http" => SchemeHttp,
-            _ => scheme.GetByteString()
-        };
-
         /// <summary>
         ///     HPACK-encodes <paramref name="rr"/> into the direction's scratch stream. Must run on the
         ///     frame-read loop (or otherwise be serialized) so the dynamic table stays ordered.
@@ -3494,15 +3504,16 @@ namespace Titanium.Web.Proxy.Http2
 
             if (rr is Request request)
             {
-                var uri = request.RequestUri;
+                // Do NOT touch RequestUri/Url here: those allocate a Uri + string under writeLock
+                // (H1→H2 / H3→H2 origin SendAsync critical section). Prefer already-materialized
+                // Authority / IsHttps / RequestUriString8 from the bridge or HPACK decode.
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderMethod, MethodBytes(request.Method));
-                // For extended CONNECT, use the preserved authority bytes to avoid URI normalization
-                // stripping explicit ports (e.g. :443 on https) that the client originally sent.
-                var authorityValue = request.ExtendedConnectProtocol != null && request.Authority.Length > 0
+                var authorityValue = request.Authority.Length > 0
                     ? request.Authority
-                    : uri.Authority.GetByteString();
+                    : (request.Host ?? string.Empty).GetByteString();
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderAuhtority, authorityValue);
-                encoder.EncodeHeader(writer, StaticTable.KnownHeaderScheme, SchemeBytes(uri.Scheme));
+                encoder.EncodeHeader(writer, StaticTable.KnownHeaderScheme,
+                    request.IsHttps ? SchemeHttps : SchemeHttp);
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderPath, request.RequestUriString8, false,
                     HpackUtil.IndexType.None, false);
                 // RFC 8441 §5: :protocol must appear after the other pseudo-headers.
@@ -3548,6 +3559,155 @@ namespace Titanium.Web.Proxy.Http2
 
             writer.Flush();
             return GetMemoryStreamMemory(ms);
+        }
+
+        // HPACK static table: :scheme http = 6, :scheme https = 7 → Indexed Header Field bytes.
+        private const byte IndexedSchemeHttp = 0x86;
+        private const byte IndexedSchemeHttps = 0x87;
+
+        private static byte StaticIndexedSchemeByte(ByteString scheme)
+        {
+            if (scheme.Equals(ProxyServer.UriSchemeHttp8) || scheme.Equals(SchemeHttp))
+                return IndexedSchemeHttp;
+            if (scheme.Equals(ProxyServer.UriSchemeHttps8) || scheme.Equals(SchemeHttps))
+                return IndexedSchemeHttps;
+            return 0;
+        }
+
+        /// <summary>
+        ///     Walk a HEADER_TABLE_SIZE=0 HPACK block and rewrite a single Indexed Header Field for
+        ///     <c>:scheme</c> (static indices 6/7). Returns false when scheme is not indexed that way
+        ///     (literal encoding, absent, or ambiguous) so the caller can fall back to full re-encode.
+        /// </summary>
+        internal static bool TryPatchStaticIndexedScheme(byte[] block, ByteString fromScheme,
+            ByteString toScheme, out byte[] patched)
+        {
+            patched = null!;
+            var from = StaticIndexedSchemeByte(fromScheme);
+            var to = StaticIndexedSchemeByte(toScheme);
+            if (from == 0 || to == 0 || from == to)
+                return false;
+
+            var i = 0;
+            var foundAt = -1;
+            while (i < block.Length)
+            {
+                var b = block[i];
+                if ((b & 0x80) != 0)
+                {
+                    // Indexed Header Field — 7-bit index fits in one byte for static table (1–61).
+                    if ((b & 0x7f) == 0)
+                        return false; // 7-bit integer continuation; not used for indices 6/7
+                    if (b == from)
+                    {
+                        if (foundAt >= 0)
+                            return false;
+                        foundAt = i;
+                    }
+
+                    i++;
+                    continue;
+                }
+
+                if ((b & 0xe0) == 0x20)
+                {
+                    // Dynamic Table Size Update — skip 5-bit integer (always single-byte when size=0).
+                    if ((b & 0x1f) == 0x1f)
+                        return false;
+                    i++;
+                    continue;
+                }
+
+                // Literal Header Field (with/without indexing / never indexed): skip name + value.
+                if (!TrySkipHpackLiteral(block, ref i))
+                    return false;
+            }
+
+            if (foundAt < 0)
+                return false;
+
+            patched = new byte[block.Length];
+            Buffer.BlockCopy(block, 0, patched, 0, block.Length);
+            patched[foundAt] = to;
+            return true;
+        }
+
+        private static bool TrySkipHpackLiteral(byte[] block, ref int i)
+        {
+            if (i >= block.Length)
+                return false;
+            var b = block[i];
+            int nameIndex;
+            if ((b & 0xc0) == 0x40)
+            {
+                // Literal with incremental indexing — 6-bit name index
+                nameIndex = b & 0x3f;
+                i++;
+                if (nameIndex == 0x3f && !TrySkipHpackIntegerContinuation(block, ref i))
+                    return false;
+            }
+            else if ((b & 0xf0) == 0x00 || (b & 0xf0) == 0x10)
+            {
+                // Literal without indexing / never indexed — 4-bit name index
+                nameIndex = b & 0x0f;
+                i++;
+                if (nameIndex == 0x0f && !TrySkipHpackIntegerContinuation(block, ref i))
+                    return false;
+            }
+            else
+            {
+                return false;
+            }
+
+            if (nameIndex == 0)
+            {
+                // New name: length-prefixed string
+                if (!TrySkipHpackString(block, ref i))
+                    return false;
+            }
+
+            return TrySkipHpackString(block, ref i);
+        }
+
+        private static bool TrySkipHpackString(byte[] block, ref int i)
+        {
+            if (i >= block.Length)
+                return false;
+            var len = block[i] & 0x7f;
+            i++;
+            if (len == 0x7f)
+            {
+                // RFC 7541 §5.1: value = (2^N - 1) + continuation
+                if (!TrySkipHpackIntegerContinuation(block, ref i, out var extra))
+                    return false;
+                len = 127 + extra;
+            }
+
+            if (i + len > block.Length)
+                return false;
+            i += len;
+            return true;
+        }
+
+        private static bool TrySkipHpackIntegerContinuation(byte[] block, ref int i)
+            => TrySkipHpackIntegerContinuation(block, ref i, out _);
+
+        private static bool TrySkipHpackIntegerContinuation(byte[] block, ref int i, out int value)
+        {
+            value = 0;
+            var m = 0;
+            while (i < block.Length)
+            {
+                var b = block[i++];
+                value += (b & 0x7f) << m;
+                if ((b & 0x80) == 0)
+                    return true;
+                m += 7;
+                if (m > 28)
+                    return false;
+            }
+
+            return false;
         }
 
         /// <summary>

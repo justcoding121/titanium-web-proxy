@@ -102,7 +102,8 @@ public class Http2OriginActiveStreamCountTests
         using var proxy = new ProxyServer(false, false, false);
         var pool = proxy.Http2OriginConnectionPool;
         var connection = await CreateShellAsync(proxy);
-        SetActive(connection, 1);
+        // SoftStreamCapacity == PoolGrowActiveStreamThreshold (1): under-soft means zero active streams.
+        SetActive(connection, 0);
         pool.Offer("authority-under", connection);
 
         try

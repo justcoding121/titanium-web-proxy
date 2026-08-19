@@ -868,10 +868,8 @@ public partial class ProxyServer
     /// </summary>
     private static void PrepareRequestForOrigin(Request request)
     {
-        // `Http2Helper.SendHeader` resolves `:authority` from `request.RequestUri.Authority`, which itself
-        // falls back to the (about-to-be-removed) "Host" header when no CONNECT-tunnel `Authority` was
-        // recorded (i.e. transparent-mode sessions never went through a CONNECT request). Capture that value
-        // into `Authority` first so `:authority` still resolves correctly once "Host" is gone.
+        // EncodeHeaderBlock uses Authority / Host / IsHttps — never RequestUri (Uri alloc under writeLock).
+        // Capture Host into Authority before stripping hop-by-hop headers for the h2 origin.
         if (request.Authority.Length == 0)
         {
             var hostHeader = request.Host;

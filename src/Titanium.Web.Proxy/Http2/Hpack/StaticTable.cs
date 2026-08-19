@@ -176,7 +176,7 @@ internal static class StaticTable
             var entry = Get(index);
             if (!name.Equals(entry.NameData)) break;
 
-            if (Equals(value, entry.Value)) return index;
+            if (value.Equals(entry.ValueData)) return index;
 
             index++;
         }

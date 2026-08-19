@@ -6,7 +6,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http2.Hpack;
+using Titanium.Web.Proxy.Models;
 // System.Text also defines abstract Encoder/Decoder types (for char<->byte transcoding); alias the HPACK
 // ones explicitly so they win over those System.Text names brought in by the `using System.Text;` above.
 using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
@@ -118,6 +120,27 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.AreEqual(1, listener.Headers.Count);
             Assert.AreEqual("x-unique-name", listener.Headers[0].Item1);
             Assert.AreEqual("v1", listener.Headers[0].Item2);
+        }
+
+        [TestMethod]
+        public void StaticTable_GetIndex_MatchesNameAndValue()
+        {
+            Assert.AreEqual(2, StaticTable.GetIndex(StaticTable.KnownHeaderMethod, "GET".GetByteString()));
+            Assert.AreEqual(7, StaticTable.GetIndex(StaticTable.KnownHeaderScheme, "https".GetByteString()));
+            Assert.AreEqual(8, StaticTable.GetIndex(StaticTable.KnownHeaderStatus, "200".GetByteString()));
+        }
+
+        [TestMethod]
+        public void Encoder_TableSizeZero_UsesStaticIndexedScheme()
+        {
+            var encoder = new Encoder(0);
+            using var ms = new MemoryStream();
+            using var writer = new BinaryWriter(ms);
+            encoder.EncodeHeader(writer, StaticTable.KnownHeaderScheme, "https".GetByteString());
+            writer.Flush();
+            var bytes = ms.ToArray();
+            Assert.AreEqual(1, bytes.Length);
+            Assert.AreEqual(0x87, bytes[0]);
         }
 
         private static byte[] EncodeHeader(Encoder encoder, string name, string value,
