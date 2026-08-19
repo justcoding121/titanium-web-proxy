@@ -57,7 +57,7 @@ internal static class Http3RequestStream
         ProxyServer server,
         ILogger logger,
         CancellationToken cancellationToken,
-        Action<SessionEventArgs, Http3StreamState> onSessionCreated,
+        Action<SessionEventArgs?, Http3StreamState> onSessionCreated,
         Func<SessionEventArgs, Task> onBeforeRequest,
         Func<SessionEventArgs, Task> onBeforeResponse,
         Func<SessionEventArgs, Task> onAfterResponse,
@@ -105,6 +105,23 @@ internal static class Http3RequestStream
 
                 // Fast path gate is known before session construction when interception is off.
                 var interceptionOff = !server.NeedsHttpInterception(endPoint);
+                var normalizedPath = path ?? "/";
+                if (!normalizedPath.StartsWith('/'))
+                    normalizedPath = "/" + normalizedPath; // NOSONAR S1075 -- Slash is the HTTP origin-form delimiter, not a filesystem path.
+
+                // Session-less H3→H2 reverse tiny-GET: no SessionEventArgs / HttpWebClient / Null stream.
+                // YARP keeps only the inbound context + HttpRequestMessage; we keep Request for HPACK.
+                if (interceptionOff
+                    && authArgs.UpstreamHttpProtocol == UpstreamHttpProtocol.Http2
+                    && !server.EnableRfc8441
+                    && method is "GET" or "HEAD" or "DELETE" or "OPTIONS")
+                {
+                    await HandleH3H2FastPathAsync(
+                        stream, endPoint, authArgs, server, logger, cancellationToken,
+                        onSessionCreated, qpackContext, clientConnection,
+                        method, scheme, authority, normalizedPath, regularHeaders);
+                    return;
+                }
 
                 // 4. Create SessionEventArgs using a null-backed HttpClientStream, then populate
                 // the session's Request. SessionEventArgs always constructs its own Request; a
@@ -128,9 +145,6 @@ internal static class Http3RequestStream
                 // Mirror Http2Helper: keep :authority and :path separate (origin-form RequestUriString8).
                 // Storing an absolute URL here made transparent H3→H1 SendRequest write absolute-form
                 // request targets ("GET https://host/path HTTP/1.1"), which strict ASP.NET Core origins reject with 400.
-                var normalizedPath = path ?? "/";
-                if (!normalizedPath.StartsWith('/'))
-                    normalizedPath = "/" + normalizedPath; // NOSONAR S1075 -- Slash is the HTTP origin-form delimiter, not a filesystem path.
                 request.Authority = (ByteString)authority;
                 request.RequestUriString8 = (ByteString)normalizedPath;
                 request.HttpVersion = HttpHeader.Version30;
@@ -375,22 +389,108 @@ internal static class Http3RequestStream
                 if (streamState != null &&
                     Interlocked.CompareExchange(ref streamState.FinalizedFlag, 1, 0) == 0)
                 {
-                    try
+                    if (sessionArgs != null)
                     {
-                        await onAfterResponse(sessionArgs!);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "AfterResponse handler error on HTTP/3 stream {StreamId}", stream.Id);
-                    }
-                    finally
-                    {
-                        // MarkComplete covers all exit paths: normal, synthetic response, and exception.
-                        sessionArgs?.Timing?.MarkComplete();
-                        sessionArgs?.Dispose();
+                        try
+                        {
+                            await onAfterResponse(sessionArgs);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(ex, "AfterResponse handler error on HTTP/3 stream {StreamId}", stream.Id);
+                        }
+                        finally
+                        {
+                            sessionArgs.Timing?.MarkComplete();
+                            sessionArgs.Dispose();
+                        }
                     }
                 }
             }
+        }
+    }
+
+    /// <summary>
+    ///     Interception-off H3→H2 bodiless path: one <see cref="Request" /> + stream CTS, no
+    ///     <see cref="SessionEventArgs" /> graph (matches YARP's lack of a proxy session bag).
+    /// </summary>
+    private static async Task HandleH3H2FastPathAsync(
+        QuicStream stream,
+        ProxyEndPoint endPoint,
+        BeforeQuicAuthenticateEventArgs authArgs,
+        ProxyServer server,
+        ILogger logger,
+        CancellationToken cancellationToken,
+        Action<SessionEventArgs?, Http3StreamState> onSessionCreated,
+        QpackContext? qpackContext,
+        QuicClientConnection clientConnection,
+        string method,
+        string? scheme,
+        string authority,
+        string normalizedPath,
+        List<(string Name, string Value)> regularHeaders)
+    {
+        var cts = new CancellationTokenSource();
+        // Link so connection teardown cancels stream waits even before FinalizeAllStreams runs.
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
+        var streamToken = linkedCts.Token;
+
+        var request = new Request
+        {
+            Method = method,
+            Authority = (ByteString)authority,
+            RequestUriString8 = (ByteString)normalizedPath,
+            HttpVersion = HttpHeader.Version30,
+            IsHttps = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase),
+            IsBodyReceived = true,
+            Locked = true
+        };
+        foreach (var (name, value) in regularHeaders)
+            request.Headers.AddHeader(new HttpHeader(name, value));
+
+        var streamState = new Http3StreamState(stream.Id, sessionArgs: null, cts);
+        onSessionCreated(null, streamState);
+
+        try
+        {
+            await DrainClientFinOnlyAsync(stream, streamToken);
+            streamState.RequestClosed = true;
+
+            var fwd = new H3H2FastForward
+            {
+                Request = request,
+                ProxyEndPoint = endPoint,
+                CustomUpStreamProxy = authArgs.CustomUpStreamProxy,
+                UpStreamEndPoint = server.UpStreamEndPoint,
+                MaxBufferedBodyBytes = server.MaxBufferedBodyBytes
+            };
+
+            await Http3OriginBridge.ForwardOverHttp2FastAsync(fwd, server, logger, streamToken,
+                coldOpenSessionFactory: () =>
+                {
+                    // Cold pool miss only (after warmup the open callback is never invoked).
+                    var nullStream = new HttpClientStream(
+                        server, clientConnection, System.IO.Stream.Null,
+                        server.BufferPool, CancellationToken.None, rentReadBuffer: false);
+                    var stubCts = new CancellationTokenSource();
+                    var stub = new SessionEventArgs(server, endPoint, nullStream, null, stubCts);
+                    stub.IsFastPath = true;
+                    stub.CustomUpStreamProxy = authArgs.CustomUpStreamProxy;
+                    return stub;
+                });
+
+            var response = fwd.Response
+                           ?? new Response { StatusCode = 502, StatusDescription = "Bad Gateway", HttpVersion = HttpHeader.Version30 };
+            await SendResponseAsync(stream, response, qpackContext, streamToken);
+
+            qpackContext?.InFlightMinAbsoluteIndex.TryRemove(stream.Id, out _);
+            streamState.ResponseClosed = true;
+            stream.CompleteWrites();
+        }
+        finally
+        {
+            if (Interlocked.CompareExchange(ref streamState.FinalizedFlag, 1, 0) == 0)
+                cts.Dispose();
         }
     }
 

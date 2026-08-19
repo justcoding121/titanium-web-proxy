@@ -62,13 +62,34 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
         var originIsHttps = sessionArgs.ProxyEndPoint is not TransparentBaseProxyEndPoint { ForwardCleartext: true };
         var upStreamProxy = sessionArgs.CustomUpStreamProxyUsed
                             ?? (originIsHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
-        var effectiveProxy = TcpConnectionFactory.GetEffectiveUpstreamProxy(upStreamProxy, host, port);
         var upStreamEndPoint = sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint;
+        return BuildPoolKey(server, sessionArgs.ProxyEndPoint, upStreamProxy, upStreamEndPoint,
+            host, port, connectHost, connectPort);
+    }
+
+    /// <summary>
+    ///     Pool-key builder for the session-less H3→H2 fast path (no <see cref="SessionEventArgs" />).
+    /// </summary>
+    internal static string BuildPoolKey(
+        ProxyServer server,
+        ProxyEndPoint endPoint,
+        IExternalProxy? customUpStreamProxy,
+        IPEndPoint? upStreamEndPoint,
+        string host,
+        int port,
+        string? connectHost,
+        int? connectPort)
+    {
+        var originIsHttps = endPoint is not TransparentBaseProxyEndPoint { ForwardCleartext: true };
+        var upStreamProxy = customUpStreamProxy
+                            ?? (originIsHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
+        var effectiveProxy = TcpConnectionFactory.GetEffectiveUpstreamProxy(upStreamProxy, host, port);
+        var effectiveEndPoint = upStreamEndPoint ?? server.UpStreamEndPoint;
 
         return TcpConnectionFactory.GetConnectionCacheKey(
             host, port, originIsHttps,
             originIsHttps ? SslExtensions.Http2ProtocolAsList : null,
-            upStreamEndPoint, effectiveProxy,
+            effectiveEndPoint, effectiveProxy,
             connectHost, connectPort,
             server.UpStreamEndPointIPv4, server.UpStreamEndPointIPv6);
     }

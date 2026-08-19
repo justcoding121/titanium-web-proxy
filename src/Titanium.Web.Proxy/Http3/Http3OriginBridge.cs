@@ -556,6 +556,170 @@ internal static class Http3OriginBridge
     ///     transparent endpoint has <see cref="TransparentBaseProxyEndPoint.ForwardCleartext"/>,
     ///     in which case the origin is cleartext HTTP/2 prior-knowledge (h2c).
     /// </summary>
+    /// <summary>
+    ///     Session-less H3→H2 forward for the interception-off bodiless path.
+    ///     <paramref name="coldOpenSessionFactory"/> is invoked only when the shared H2 origin pool
+    ///     must open a new TCP+H2 session (warm-pool RPS never hits it).
+    /// </summary>
+    internal static async Task ForwardOverHttp2FastAsync(
+        H3H2FastForward fwd,
+        ProxyServer server,
+        ILogger logger,
+        CancellationToken cancellationToken,
+        Func<SessionEventArgs> coldOpenSessionFactory)
+    {
+        var request = fwd.Request;
+        var clientHttpVersion = request.HttpVersion;
+        request.HttpVersion = HttpHeader.Version20;
+
+        if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
+            request.IsHttps = false;
+
+        if (request.Authority.Length == 0 && !string.IsNullOrEmpty(request.Host))
+            request.Authority = request.Host.GetByteString();
+
+        string? connectHost = null;
+        int? connectPort = null;
+        if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint transparent
+            && !string.IsNullOrEmpty(transparent.ForwardHost))
+        {
+            connectHost = transparent.ForwardHost;
+            connectPort = transparent.ForwardPort;
+        }
+
+        string host;
+        int port;
+        string poolKey;
+        if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint fastEp
+            && fastEp.CachedH2OriginPoolKey != null
+            && request.Authority.Equals(fastEp.CachedH2OriginAuthority))
+        {
+            host = fastEp.CachedH2OriginHost!;
+            port = fastEp.CachedH2OriginPort;
+            poolKey = fastEp.CachedH2OriginPoolKey;
+        }
+        else
+        {
+            (host, port) = ResolveH2OriginAuthority(request);
+            poolKey = Http2OriginConnectionPool.BuildPoolKey(
+                server, fwd.ProxyEndPoint, fwd.CustomUpStreamProxy, fwd.UpStreamEndPoint,
+                host, port, connectHost, connectPort);
+            if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint cacheEp)
+            {
+                cacheEp.CachedH2OriginAuthority = request.Authority;
+                cacheEp.CachedH2OriginHost = host;
+                cacheEp.CachedH2OriginPort = port;
+                cacheEp.CachedH2OriginPoolKey = poolKey;
+            }
+        }
+
+        try
+        {
+            var target = new Http2OriginTarget(host, port, connectHost, connectPort, poolKey);
+            var exchange = await SendHttp2OriginFastWithGoAwayRetryAsync(
+                server, logger, fwd, target, coldOpenSessionFactory, cancellationToken);
+
+            var response = exchange.Response;
+            response.HttpVersion = HttpHeader.Version30;
+            response.RequestMethod = request.Method;
+            if (response.StreamBodyWriter == null)
+            {
+                response.IsBodyRead = true;
+                response.Body = exchange.Body;
+            }
+
+            if (exchange.TrailingHeaders != null && !response.HasTrailingHeaders)
+            {
+                foreach (var header in exchange.TrailingHeaders)
+                    response.TrailingHeaders.AddHeader(header);
+            }
+
+            fwd.Response = response;
+        }
+        finally
+        {
+            request.HttpVersion = clientHttpVersion;
+        }
+    }
+
+    private static async Task<Http2OriginExchange> SendHttp2OriginFastWithGoAwayRetryAsync(
+        ProxyServer server, ILogger logger, H3H2FastForward fwd,
+        Http2OriginTarget target,
+        Func<SessionEventArgs> coldOpenSessionFactory,
+        CancellationToken cancellationToken)
+    {
+        Http2OriginConnection? h2 = null;
+        try
+        {
+            h2 = await LeaseHttp2OriginFastAsync(server, logger, fwd, target, coldOpenSessionFactory,
+                cancellationToken);
+            return await h2.SendAsync(fwd.Request, on1xx: null, cancellationToken);
+        }
+        catch (Exception ex) when (ex is Http2OriginGoAwayException
+                                   || (ex is IOException && h2 is { IsUsable: false }))
+        {
+            if (h2 != null)
+                server.Http2OriginConnectionPool.Invalidate(target.PoolKey, h2);
+
+            if (!CanReplayHttp2OriginRequest(fwd.Request, copyRequestBody: null))
+                throw;
+
+            h2 = await LeaseHttp2OriginFastAsync(server, logger, fwd, target, coldOpenSessionFactory,
+                cancellationToken);
+            return await h2.SendAsync(fwd.Request, on1xx: null, cancellationToken);
+        }
+    }
+
+    private static async Task<Http2OriginConnection> LeaseHttp2OriginFastAsync(
+        ProxyServer server, ILogger logger, H3H2FastForward fwd,
+        Http2OriginTarget target,
+        Func<SessionEventArgs> coldOpenSessionFactory,
+        CancellationToken cancellationToken)
+    {
+        return await server.Http2OriginConnectionPool.RentAsync(target.PoolKey, async ct =>
+        {
+            // Cold open only: build a throwaway SessionEventArgs for TcpConnectionFactory cert hooks.
+            var sessionArgs = coldOpenSessionFactory();
+            try
+            {
+                var originIsHttps = fwd.ProxyEndPoint is not TransparentBaseProxyEndPoint { ForwardCleartext: true };
+                var upStreamProxy = fwd.CustomUpStreamProxy
+                                    ?? (originIsHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
+
+                var tcp = await server.TcpConnectionFactory.GetServerConnection(
+                    server, target.Host, target.Port, HttpHeader.Version20, originIsHttps,
+                    originIsHttps ? SslExtensions.Http2ProtocolAsList : null,
+                    false, sessionArgs, fwd.UpStreamEndPoint ?? server.UpStreamEndPoint,
+                    upStreamProxy,
+                    true, false, ct, target.ConnectHost, target.ConnectPort);
+
+                if (tcp != null && !originIsHttps)
+                    tcp.Http2Cleartext = true;
+
+                if (tcp == null ||
+                    (originIsHttps
+                        ? tcp.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2
+                        : !tcp.Http2Cleartext))
+                {
+                    if (tcp != null)
+                        await server.TcpConnectionFactory.Release(tcp, true);
+                    var how = originIsHttps ? "did not negotiate HTTP/2 via ALPN" : "did not accept cleartext HTTP/2 (h2c)";
+                    throw new ProxyHttpException(
+                        $"The origin '{target.Host}:{target.Port}' {how} for the H3→H2 bridge.",
+                        null, sessionArgs);
+                }
+
+                return await Http2OriginConnection.CreateAsync(tcp, logger,
+                    fwd.MaxBufferedBodyBytes, ct, server.ResourceLimits);
+            }
+            finally
+            {
+                sessionArgs.CancellationTokenSource.Dispose();
+                sessionArgs.Dispose();
+            }
+        }, cancellationToken);
+    }
+
     private static async Task ForwardOverHttp2Async(
         SessionEventArgs sessionArgs,
         ProxyServer server,

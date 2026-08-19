@@ -502,8 +502,11 @@ internal sealed class Http3Connection
             {
                 try
                 {
-                    await _onAfterResponse(state.SessionArgs);
-                    state.SessionArgs.Dispose();
+                    if (state.SessionArgs is { } args)
+                    {
+                        await _onAfterResponse(args);
+                        args.Dispose();
+                    }
                 }
                 catch (Exception ex)
                 {

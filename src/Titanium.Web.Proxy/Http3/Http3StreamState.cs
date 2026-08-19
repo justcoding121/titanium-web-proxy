@@ -11,17 +11,17 @@ namespace Titanium.Web.Proxy.Http3;
 internal sealed class Http3StreamState
 {
     /// <param name="streamId">QUIC stream ID for this HTTP/3 request/response stream.</param>
-    /// <param name="sessionArgs">Per-request event arguments carrying the request/response model and handler callbacks.</param>
+    /// <param name="sessionArgs">
+    ///     Per-request event arguments, or <see langword="null" /> on the H3→H2 request-only fast path
+    ///     that never constructs <see cref="SessionEventArgs" />.
+    /// </param>
     /// <param name="cancellation">
     ///     The <em>same</em> <see cref="CancellationTokenSource" /> <see cref="Http3RequestStream.HandleAsync" />
-    ///     created and linked its own <c>cancellationToken</c> parameter into - not a separate,
-    ///     unlinked instance. Passing a distinct CTS here would make <see cref="Cancellation" />
-    ///     purely decorative: cancelling it would not actually unblock any of the awaits inside
-    ///     <see cref="Http3RequestStream.HandleAsync" />, so a caller relying on it to interrupt a
-    ///     still-running stream before disposing shared connection state would silently race that
-    ///     state's disposal against the (never-actually-cancelled) stream task instead.
+    ///     created for this stream — not a separate, unlinked instance. Passing a distinct CTS here would
+    ///     make <see cref="Cancellation" /> purely decorative: cancelling it would not actually unblock
+    ///     awaits inside the stream handler.
     /// </param>
-    public Http3StreamState(long streamId, SessionEventArgs sessionArgs, CancellationTokenSource cancellation)
+    public Http3StreamState(long streamId, SessionEventArgs? sessionArgs, CancellationTokenSource cancellation)
     {
         StreamId = streamId;
         SessionArgs = sessionArgs;
@@ -31,8 +31,10 @@ internal sealed class Http3StreamState
     /// <summary>QUIC stream ID for this HTTP/3 request/response stream.</summary>
     public long StreamId { get; }
 
-    /// <summary>Per-request event arguments carrying the request/response model and handler callbacks.</summary>
-    public SessionEventArgs SessionArgs { get; }
+    /// <summary>
+    ///     Per-request event arguments, or <see langword="null" /> on the session-less H3→H2 fast path.
+    /// </summary>
+    public SessionEventArgs? SessionArgs { get; }
 
     /// <summary>
     ///     Cancelled when this stream is individually reset (QUIC STOP_SENDING / RESET_STREAM) or when
