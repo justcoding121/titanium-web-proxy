@@ -280,7 +280,9 @@ internal sealed class Http2OriginConnection : IDisposable
         var gate = concurrencyGate ?? throw new InvalidOperationException("Origin settings were never processed.");
         await gate.WaitAsync(cancellationToken);
 
-        var pending = new PendingStream(maxBufferedBodyBytes);
+        // Allocate InterimChannel only when the caller will drain 1xx (on1xx != null). Passthrough
+        // bridges wait on HeadersReceived instead — avoids per-request Channel/segment Gen0.
+        var pending = new PendingStream(maxBufferedBodyBytes, createInterimChannel: on1xx != null);
         var streamId = 0;
         var streamOpened = false;
         var bodyHandedOff = false;
@@ -405,11 +407,13 @@ internal sealed class Http2OriginConnection : IDisposable
             // Relay 1xx interim responses (e.g. 103 Early Hints) to the HTTP/1.1 client before reading
             // the body. ReadLoopAsync writes each interim into pending.InterimChannel and completes the
             // writer as soon as final response headers arrive, so this loop exits cleanly before
-            // body drainage begins. When on1xx is null (diag: TWP_DIAG_HEADERS_WAIT_TCS=1), wait on the
+            // body drainage begins. When on1xx is null (passthrough lite / no 1xx relay), wait on the
             // HeadersReceived TCS instead — otherwise we race ProcessHeaderBlock and synthesize 502.
             if (on1xx != null)
             {
-                await foreach (var interim in pending.InterimChannel.Reader.ReadAllAsync(cancellationToken))
+                var interimReader = pending.InterimChannel?.Reader
+                    ?? throw new InvalidOperationException("InterimChannel required when on1xx is set.");
+                await foreach (var interim in interimReader.ReadAllAsync(cancellationToken))
                     await on1xx(interim.StatusCode, interim.Headers, cancellationToken);
             }
             else
@@ -1271,10 +1275,9 @@ internal sealed class Http2OriginConnection : IDisposable
 
             if (statusCode is >= 100 and <= 199)
             {
-                // Queue this interim response for relay to the HTTP/1.1 client via SendAsync's on1xx callback.
-                // The channel writer is completed when the final response headers arrive (below), so SendAsync's
-                // ReadAllAsync loop exits naturally and proceeds to drain the body pipe.
-                pending.InterimChannel.Writer.TryWrite((statusCode, collected));
+                // Queue this interim response for relay when a caller registered on1xx (InterimChannel
+                // present). Passthrough lite drops 1xx — probe/no-intercept paths do not forward them.
+                pending.InterimChannel?.Writer.TryWrite((statusCode, collected));
                 return;
             }
 
@@ -1284,8 +1287,8 @@ internal sealed class Http2OriginConnection : IDisposable
                 foreach (var header in collected) response.Headers.AddHeader(header);
                 pending.Response = response;
                 // Signal that no more interim responses will arrive; unblocks SendAsync's interim drain loop.
-                pending.InterimChannel.Writer.TryComplete();
-                // Unblock OpenTunnelAsync waiting on the final response headers.
+                pending.InterimChannel?.Writer.TryComplete();
+                // Unblock OpenTunnelAsync / passthrough lite waiting on the final response headers.
                 pending.HeadersReceived.TrySetResult(true);
             }
         }
@@ -1337,7 +1340,7 @@ internal sealed class Http2OriginConnection : IDisposable
     private static void FailPending(PendingStream pending, Exception ex)
     {
         pending.BodyPipe.CompleteWriter(ex);
-        pending.InterimChannel.Writer.TryComplete(ex);
+        pending.InterimChannel?.Writer.TryComplete(ex);
         pending.TunnelDataChannel?.Writer.TryComplete(ex);
         pending.HeadersReceived.TrySetException(ex);
     }
@@ -1489,12 +1492,11 @@ internal sealed class Http2OriginConnection : IDisposable
         /// <summary>
         ///     Queue of 1xx interim responses written by <see cref="ProcessHeaderBlock" /> as they arrive from
         ///     the origin, and drained by <see cref="SendAsync" />'s <c>on1xx</c> callback relay loop.
-        ///     The writer is completed (without exception) when the final response headers are processed,
-        ///     or completed with an exception when the stream or connection fails.
+        ///     Null on passthrough lite (<c>on1xx</c> null) — those streams wait on
+        ///     <see cref="HeadersReceived" /> only. The writer is completed (without exception) when the
+        ///     final response headers are processed, or completed with an exception on stream/connection failure.
         /// </summary>
-        internal readonly Channel<(int StatusCode, HeaderCollection Headers)> InterimChannel =
-            Channel.CreateUnbounded<(int, HeaderCollection)>(
-                new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+        internal readonly Channel<(int StatusCode, HeaderCollection Headers)>? InterimChannel;
 
         /// <summary>
         ///     Completed when the final (non-1xx) response HEADERS arrive. Used by
@@ -1513,10 +1515,26 @@ internal sealed class Http2OriginConnection : IDisposable
         internal Response? Response;
         internal HeaderCollection? TrailingHeaders;
 
-        internal PendingStream(long maxBodyBytes = 0)
+        internal PendingStream(long maxBodyBytes)
+            : this(maxBodyBytes, createInterimChannel: true)
+        {
+        }
+
+        /// <param name="maxBodyBytes">Max buffered body bytes for <see cref="BodyPipe" />.</param>
+        /// <param name="createInterimChannel">
+        ///     When <see langword="true"/>, allocate the 1xx relay channel. Tests and interception paths
+        ///     that expect 1xx use this; <see cref="SendAsync" /> passes <see langword="false"/> when
+        ///     <c>on1xx</c> is null.
+        /// </param>
+        internal PendingStream(long maxBodyBytes, bool createInterimChannel)
         {
             IsTunnel = false;
             BodyPipe = new BoundedBodyPipe(maxBodyBytes);
+            if (createInterimChannel)
+            {
+                InterimChannel = Channel.CreateUnbounded<(int, HeaderCollection)>(
+                    new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+            }
         }
 
         private PendingStream(bool isTunnel)
@@ -1539,7 +1557,7 @@ internal sealed class Http2OriginConnection : IDisposable
         {
             BodyPipe.Dispose();
             // Release any reader blocking on WaitToReadAsync if Dispose is called without a prior Complete.
-            InterimChannel.Writer.TryComplete();
+            InterimChannel?.Writer.TryComplete();
             TunnelDataChannel?.Writer.TryComplete();
             HeadersReceived.TrySetCanceled();
         }

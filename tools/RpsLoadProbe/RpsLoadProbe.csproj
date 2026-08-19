@@ -30,4 +30,10 @@
     <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="results\**\*" />
+    <None Remove="results\**\*" />
+    <Content Remove="results\**\*" />
+    <EmbeddedResource Remove="results\**\*" />
+  </ItemGroup>
 </Project>

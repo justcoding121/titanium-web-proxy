@@ -271,6 +271,35 @@ public class Http2BodyWriterAndOriginSettingsTests
     }
 
     [TestMethod]
+    public async Task ProcessHeaderBlock_PassthroughLite_Drops1xxAndSignalsHeadersReceived()
+    {
+        using var origin = await CreateOriginConnectionShellAsync();
+        var pendingType = typeof(Http2OriginConnection).GetNestedType("PendingStream", BindingFlags.NonPublic)!;
+        var pending = Activator.CreateInstance(pendingType, BindingFlags.Instance | BindingFlags.NonPublic,
+            null, [1024L, false], null)!;
+        Assert.IsNull(pendingType.GetField("InterimChannel", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
+            .GetValue(pending));
+
+        var streams = typeof(Http2OriginConnection).GetField("streams", PrivateInstance)!.GetValue(origin)!;
+        Assert.IsTrue((bool)streams.GetType().GetMethod("TryAdd")!.Invoke(streams, [1, pending])!);
+
+        var process = GetProcessHeaderBlock(origin);
+        process(1, EncodeStatusBlock(100, ("x-hint", "1")), false);
+        process(1, EncodeStatusBlock(200, ("content-type", "text/plain")), false);
+
+        var response = (Response?)pendingType.GetField("Response", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
+            .GetValue(pending);
+        Assert.IsNotNull(response);
+        Assert.AreEqual(200, response!.StatusCode);
+
+        var headersReceived = (TaskCompletionSource<bool>)pendingType
+            .GetField("HeadersReceived", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
+            .GetValue(pending)!;
+        Assert.IsTrue(headersReceived.Task.IsCompletedSuccessfully);
+        Assert.IsTrue(await headersReceived.Task);
+    }
+
+    [TestMethod]
     public async Task ProcessHeaderBlock_TrailersWithoutStatus_Accumulate()
     {
         using var origin = await CreateOriginConnectionShellAsync();

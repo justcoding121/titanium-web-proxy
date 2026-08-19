@@ -491,13 +491,18 @@ public partial class ProxyServer
             // client as they arrive, before the final response is written via DeliverOriginExchangeAsync.
             // This callback is invoked from SendAsync on the current (caller) task - not from the background
             // read loop - so it is safe to write to clientStream without additional synchronization.
-            // Diag: TWP_DIAG_HEADERS_WAIT_TCS=1 skips the interim channel and waits on HeadersReceived TCS
-            // (probe origins do not emit 1xx; measures per-request Channel machinery cost).
-            var useTcsHeadersWait = string.Equals(
+            //
+            // Passthrough lite: when no session handlers are subscribed and RFC 8441 is off, skip the
+            // per-request InterimChannel (HeadersReceived TCS only). Probe origins do not emit 1xx;
+            // AllocTick showed Channel/segment Gen0 as a TWP-only tax vs YARP. Keep Channel+relay when
+            // interception is on so Early Hints still forward. Diag TWP_DIAG_HEADERS_WAIT_TCS=1 forces lite.
+            var forceLiteHeadersWait = string.Equals(
                 Environment.GetEnvironmentVariable("TWP_DIAG_HEADERS_WAIT_TCS"), "1",
                 StringComparison.Ordinal);
+            var useLiteHeadersWait = forceLiteHeadersWait
+                || (!NeedsHttpInterception(args.ProxyEndPoint) && !EnableRfc8441);
             Func<int, HeaderCollection, CancellationToken, Task>? relayInterim = null;
-            if (!useTcsHeadersWait)
+            if (!useLiteHeadersWait)
             {
                 var capturedClientStream = clientStream;
                 relayInterim = async (statusCode, headers, ct) =>
