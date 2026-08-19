@@ -1226,7 +1226,7 @@ public partial class ProxyServer : IDisposable
     ///     Defaults to <c>max(ProcessorCount * 2, 16)</c> so short loopback/proxy workloads are not
     ///     starved while the pool is still ramping workers.
     /// </summary>
-    public int ThreadPoolWorkerThread { get; set; } = Math.Max(Environment.ProcessorCount * 2, 16);
+    public int ThreadPoolWorkerThread { get; set; } = Math.Max(Environment.ProcessorCount * 8, 64);
 
     /// <summary>
     ///     Add a proxy end point.
@@ -2060,9 +2060,13 @@ public partial class ProxyServer : IDisposable
     private static void SetThreadPoolMinThread(int workerThreads)
     {
         ThreadPool.GetMinThreads(out var minWorkerThreads, out var minCompletionPortThreads);
-        ThreadPool.GetMaxThreads(out var maxWorkerThreads, out _);
+        ThreadPool.GetMaxThreads(out var maxWorkerThreads, out var maxCompletionPortThreads);
 
         minWorkerThreads = Math.Min(maxWorkerThreads, Math.Max(workerThreads, Environment.ProcessorCount));
+        // Mirror worker floor onto IOCP: H2 FrameWriter + SocketAsyncEventArgs compete on the
+        // completion-port pool; leaving IOCP at ProcessorCount starved reverse h2c (~0.5–0.7× YARP).
+        minCompletionPortThreads = Math.Min(maxCompletionPortThreads,
+            Math.Max(minCompletionPortThreads, minWorkerThreads));
 
         ThreadPool.SetMinThreads(minWorkerThreads, minCompletionPortThreads);
     }

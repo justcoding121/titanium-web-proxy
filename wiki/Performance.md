@@ -64,7 +64,7 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 | MITM | HTTP/2 · TLS | HTTP/2 · TLS | **51,455** | **51,455** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | Reverse | HTTP/2 · TLS | HTTP/2 · plain | **45,757** | **45,757** | *Not possible* | *Not possible* | **56,211** | **56,211** | **YARP** |
 | Reverse | HTTP/2 · plain | HTTP/1 · plain | **23,228** | **23,228** | *Not possible* | *Not possible* | **27,697** | **27,697** | **YARP** |
-| Reverse | HTTP/2 · plain | HTTP/2 · plain | **56,669** | **56,669** | *Not possible* | *Not possible* | **76,309** | **76,309** | **YARP** |
+| Reverse | HTTP/2 · plain | HTTP/2 · plain | **62,621** | **62,621** | *Not possible* | *Not possible* | **82,477** | **82,477** | **YARP** |
 | Reverse | HTTP/2 · plain | HTTP/2 · TLS | **27,943** | **27,943** | *Not possible* | *Not possible* | **49,202** | **49,202** | **YARP** |
 | Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **12,036** | **12,036** | *Not possible* (no QUIC) | *Not possible* | **14,817** | **14,817** | **YARP** |
 | Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **12,392** | **12,850** | *Not possible* (no QUIC) | *Not possible* | **14,181** | **17,238** | **YARP** |
@@ -80,7 +80,7 @@ Windows sources: matched-client cool pairs under `tools/RpsLoadProbe/results/mat
 
 **Load generators:** Reverse inbound H3 arms (H3→H1, H3→H2) use **`dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) on both TWP and YARP after dual-listen reverse H3. UDP-only MITM H3 still uses **`quic-http3`**. Older reverse-H3 ratios that used matched `quic-http3` are **not** comparable to these HttpClient numbers.
 
-**Matched HttpClient TWP÷YARP (cool):** H3→H1 ≈ **0.87** sustain (12,392 / 14,181). H3→H2 ≈ **0.83** (33,198 / 39,963; ≥0.80) — session-less H3→H2 reverse (`h3-lite-only/`). H1→H2 ≈ **0.85** (38,540 / 45,227; ≥0.80). H2 TLS→h2c ≈ **0.81** (45,757 / 56,211; ≥0.80). h2c→h2c ≈ **0.74** (56,669 / 76,309) — 2026-08-19 High-perf (`h2c-post-h3lite/`; still open).
+**Matched HttpClient TWP÷YARP (cool):** H3→H1 ≈ **0.87** sustain (12,392 / 14,181). H3→H2 ≈ **0.83** (33,198 / 39,963; ≥0.80) — session-less H3→H2 reverse (`h3-lite-only/`). H1→H2 ≈ **0.85** (38,540 / 45,227; ≥0.80). H2 TLS→h2c ≈ **0.81** (45,757 / 56,211; ≥0.80). h2c→h2c ≈ **0.76** (62,621 / 82,477) — 2026-08-19 High-perf IOCP ThreadPool floor (`h2c-iocp-min/`; still open vs ≥0.80).
 
 nginx/Windows is a limited port — use it for **same-OS** comparison only, not as the industry nginx baseline.
 

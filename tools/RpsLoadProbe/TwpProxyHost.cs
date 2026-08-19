@@ -517,7 +517,7 @@ internal sealed class TwpProxyHost : IDisposable
         proxy.EnableHttp3 = enableHttp3;
         proxy.EnableHttpsSvcbDnsDiscovery = false;
         // Saturation probe: raise floor so 4-vCPU Linux hosts are not stuck at OS defaults.
-        proxy.ThreadPoolWorkerThread = Math.Max(Environment.ProcessorCount * 4, 32);
+        proxy.ThreadPoolWorkerThread = Math.Max(Environment.ProcessorCount * 8, 64);
         proxy.MaxCachedConnections = maxCachedConnections ?? 256;
 
         return proxy;
