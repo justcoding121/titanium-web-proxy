@@ -69,7 +69,7 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 | Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **42,508** | **42,508** | *Not possible* (no QUIC) | *Not possible* | **43,520** | **43,520** | **YARP** |
 | Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **12,392** | **12,850** | *Not possible* (no QUIC) | *Not possible* | **14,181** | **17,238** | **YARP** |
 | Reverse | HTTP/3 · QUIC | HTTP/2 · TLS | **33,198** | **33,198** | *Not possible* (no QUIC) | *Not possible* | **39,963** | **39,963** | **YARP** |
-| MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **9,732** | **10,334** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
+| MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **22,999** | **22,999** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | MITM | HTTP/3 · QUIC | HTTP/2 · TLS | **30,518** | **30,518** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | MITM | HTTP/3 · QUIC | HTTP/3 · QUIC | **24,623** | **24,623** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | Reverse | HTTP/1 · TLS | HTTP/2 · TLS | **38,540** | **38,540** | *Not possible* | *Not possible* | **45,227** | **45,227** | **YARP** |
@@ -78,11 +78,11 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 
 Windows sources: prior matched cool pairs plus **2026-08-19** High-perf cool remasures under `residual-sub08/quiet-remeasure/` (`gap-audit/`, `gap-audit-yarp/`, `post-h2h1-smallbody/`, `h2h1-post-cts/`, `h2h1-vs-h2h2/`). Warmup 5s; measure 20s; concurrency 32. Absolute RPS swings with sequential-arm heat; prefer TWP÷YARP and MITM÷TWP-reverse-twin ratios over absolutes.
 
-**Load generators:** Reverse inbound H3 arms (H3→H1, H3→H2) use **`dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) on both TWP and YARP after dual-listen reverse H3. UDP-only MITM H3→H1 still uses **`quic-http3`**. MITM H3→H2 / H3→H3 reuse dual-listen transparent reverse (`reverse-http3-to-http2`, `reverse-http3`) — same decrypt + origin-crypto topology as MITM. Older reverse-H3 ratios that used matched `quic-http3` are **not** comparable to these HttpClient numbers.
+**Load generators:** Reverse inbound H3 arms (H3→H1, H3→H2) and matched H3→H1 MITM use **`dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) after dual-listen reverse H3. MITM H3→H2 / H3→H3 reuse dual-listen transparent reverse (`reverse-http3-to-http2`, `reverse-http3`). Older UDP-only `quic-http3` MITM H3→H1 numbers are **not** comparable to HttpClient reverse twins.
 
 **Matched HttpClient TWP÷YARP (cool):** H3→H1 ≈ **0.87** (12,392 / 14,181). H3→H2 ≈ **0.83** (33,198 / 39,963; ≥0.80). H1→H2 ≈ **0.85** (38,540 / 45,227; ≥0.80). H1 plain ≈ **1.19×** (31,350 / 26,348; TWP leads). H1 TLS terminate ≈ **0.91** (36,054 / 39,527; ≥0.80). H2 TLS→h2c ≈ **1.29×** (88,742 / 68,761; TWP leads). h2c→h2c ≈ **1.20×** (102,819 / 85,909; TWP leads). h2c→H2 TLS ≈ **1.29×** (89,043 / 69,282; TWP leads) — decode-free indexed `:scheme` override. H1→H3 ≈ **0.97**. h2c→H3 ≈ **0.98**.
 
-**MITM÷TWP reverse pass-through twin (cool):** Transparent H1 dual-TLS (`reverse-http1-mitm`) ÷ H1 TLS terminate ≈ **0.96** (39,415 / 40,980; ≥0.90). H2→H2 MITM ÷ H2 TLS→h2c ≈ **0.97+** (same-protocol compressed relay). H2→H1 MITM ÷ H2→H1 cleartext ≈ **0.82–0.86** (51.7k / 63.1k) — residual is per-stream H1 origin fan-out × dual TLS (same-protocol H2→H2 dual-TLS reaches **104k**). Explicit CONNECT `https-mitm` stays ~0.80× of terminate (CONNECT tax; not the fair twin).
+**MITM÷TWP reverse pass-through twin (cool):** Transparent H1 dual-TLS (`reverse-http1-mitm`) ÷ H1 TLS terminate ≈ **0.96** (39,415 / 40,980; ≥0.90). H2→H2 MITM ÷ H2 TLS→h2c ≈ **0.97+** (same-protocol compressed relay). H2→H1 MITM ÷ H2→H1 cleartext ≈ **0.82–0.86** (51.7k / 63.1k) — residual is per-stream H1 origin fan-out × dual TLS (same-protocol H2→H2 dual-TLS reaches **104k**). Matched-HttpClient H3→H1 MITM ÷ H3→H1 cleartext ≈ **0.84** (23.0k / 27.3k) after dual-listen MITM probe (was unfair `quic-http3` vs HttpClient). Explicit CONNECT `https-mitm` stays ~0.80× of terminate (CONNECT tax; not the fair twin).
 
 nginx/Windows is a limited port — use it for **same-OS** comparison only, not as the industry nginx baseline.
 

@@ -700,9 +700,9 @@ internal static class ServeHost
                         ResponseBytes = responseBytes
                     }, cancellationToken);
                     var twp = TwpProxyHost.StartMitmHttp3ToHttp1(origin.HttpsPort);
+                    // Matched HttpClient generator (same as reverse-http3-cleartext) for fair MITM÷twin ratios.
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, [], twp.ListenUrl, null,
-                        twp.ListenUrl, [twp.ListenUrl], null, "3.0", loadGenerator: "quic-http3",
-                        quicPort: twp.Port);
+                        twp.ListenUrl, [twp.ListenUrl], null, "3.0");
                 }
                 case ProbeMode.ReverseHttp3Cleartext:
                 {

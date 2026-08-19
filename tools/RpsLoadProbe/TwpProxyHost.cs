@@ -357,7 +357,8 @@ internal sealed class TwpProxyHost : IDisposable
     }
 
     /// <summary>
-    /// Client H3 QUIC → bridge → origin HTTPS HTTP/1 (MITM: decrypt client, TLS to origin).
+    /// Dual-listen reverse: client H3 (HttpClient) → decrypt → origin HTTPS HTTP/1 (MITM dual-crypto).
+    /// Fair twin of <see cref="StartReverseHttp3Cleartext"/>; same generator as reverse H3 arms.
     /// </summary>
     public static TwpProxyHost StartMitmHttp3ToHttp1(int originHttpsPort)
     {
@@ -367,10 +368,12 @@ internal sealed class TwpProxyHost : IDisposable
         var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: true);
         ConfigureSharedTestCa(proxy);
 
-        var endPoint = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
         {
+            EnableHttp3 = true,
             ForwardHost = "127.0.0.1",
             ForwardPort = originHttpsPort,
+            ForwardCleartext = false,
             GenericCertificateName = "localhost",
             MaxInboundBidirectionalStreams = 256,
             MaxCachedConnections = 256
@@ -381,8 +384,15 @@ internal sealed class TwpProxyHost : IDisposable
             args.AllowHttpProtocolTranslation = true;
             return Task.CompletedTask;
         };
+        endPoint.BeforeSslAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
         proxy.AddEndPoint(endPoint);
         proxy.Start();
+        WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
         return new TwpProxyHost(proxy, endPoint.Port, $"https://localhost:{endPoint.Port}/", isExplicitProxy: false);
     }
 
