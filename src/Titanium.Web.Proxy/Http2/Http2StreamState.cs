@@ -138,9 +138,15 @@ internal sealed class Http2StreamState
     internal void PrepareForPool()
     {
         SessionArgs = null;
-        try { Cancellation.Dispose(); }
-        catch { /* ignore */ }
-        Cancellation = new CancellationTokenSource();
+        // Prefer TryReset over dispose+new: compressed-relay streams churn one CTS per request
+        // otherwise (Cancel on finalize path, then Return).
+        if (!Cancellation.TryReset())
+        {
+            try { Cancellation.Dispose(); }
+            catch { /* ignore */ }
+            Cancellation = new CancellationTokenSource();
+        }
+
         ResetMutableFields(preserveCancellation: true);
     }
 
@@ -148,9 +154,12 @@ internal sealed class Http2StreamState
     {
         if (!preserveCancellation)
         {
-            try { Cancellation.Dispose(); }
-            catch { /* ignore */ }
-            Cancellation = new CancellationTokenSource();
+            if (!Cancellation.TryReset())
+            {
+                try { Cancellation.Dispose(); }
+                catch { /* ignore */ }
+                Cancellation = new CancellationTokenSource();
+            }
         }
 
         RequestClosed = false;

@@ -330,8 +330,7 @@ namespace Titanium.Web.Proxy.Http2
                         "The HTTP/2 connection was closed before this stream received a response.");
                 }
 
-                connectionState.PendingFinalizations.Add(
-                    FinalizeStreamAsync(leftover, onAfterResponse, logger, connectionState));
+                ScheduleFinalize(leftover, onAfterResponse, logger, connectionState);
             }
             connectionState.MultipartObservers.Clear();
 
@@ -449,11 +448,9 @@ namespace Titanium.Web.Proxy.Http2
                 return;
             }
 
-            // Compressed-relay streams never allocate SessionEventArgs.
+            // Compressed-relay streams never allocate SessionEventArgs. CTS is TryReset in PrepareForPool.
             if (state.SessionArgs == null)
             {
-                try { state.Cancellation.Dispose(); }
-                catch { /* ignore */ }
                 connectionState?.ReturnStreamState(state);
                 return;
             }
@@ -479,6 +476,27 @@ namespace Titanium.Web.Proxy.Http2
                 state.SessionArgs.Dispose();
                 connectionState?.ReturnStreamState(state);
             }
+        }
+
+        /// <summary>
+        ///     Schedules finalize. Compressed-relay finalize is synchronous (no SessionEventArgs) — avoid
+        ///     allocating a <see cref="Task"/> into <see cref="Http2ConnectionState.PendingFinalizations"/>.
+        /// </summary>
+        private static void ScheduleFinalize(Http2StreamState state,
+            Func<SessionEventArgs, Task> onAfterResponse, ILogger logger,
+            Http2ConnectionState connectionState)
+        {
+            if (state.IsCompressedRelay && state.SessionArgs == null)
+            {
+                // Inline hot path: FinalizedFlag + pool return. Prefer TryReset over dispose+new CTS.
+                if (Interlocked.CompareExchange(ref state.FinalizedFlag, 1, 0) != 0)
+                    return;
+                connectionState.ReturnStreamState(state);
+                return;
+            }
+
+            connectionState.PendingFinalizations.Add(
+                FinalizeStreamAsync(state, onAfterResponse, logger, connectionState));
         }
 
         /// <summary>
@@ -755,11 +773,12 @@ namespace Titanium.Web.Proxy.Http2
                     removedState.InboundTunnelChannel?.Writer.TryComplete(
                         new IOException("HTTP/2 stream removed due to protocol error."));
                     removedState.Cancellation.Cancel();
-                    removedState.Cancellation.Dispose();
+                    // Compressed-relay CTS is TryReset in PrepareForPool; disposing here forces a new CTS.
+                    if (!removedState.IsCompressedRelay)
+                        removedState.Cancellation.Dispose();
                     connectionState.ClientSendFlow.RemoveStream(removeStreamId);
                     connectionState.ServerSendFlow.RemoveStream(removeStreamId);
-                    connectionState.PendingFinalizations.Add(
-                        FinalizeStreamAsync(removedState, onAfterResponse, logger, connectionState));
+                    ScheduleFinalize(removedState, onAfterResponse, logger, connectionState);
                 }
             }
 
@@ -1885,8 +1904,7 @@ namespace Titanium.Web.Proxy.Http2
                             {
                                 connectionState.OriginRelayPool?.ReleaseStream(dataStreamId);
                                 connectionState.RemoveStream(dataStreamId);
-                                connectionState.PendingFinalizations.Add(
-                                    FinalizeStreamAsync(closingCompressed, onAfterResponse, logger, connectionState));
+                                ScheduleFinalize(closingCompressed, onAfterResponse, logger, connectionState);
                             }
                         }
 
@@ -3082,7 +3100,8 @@ namespace Titanium.Web.Proxy.Http2
                         // that is reading from the inbound channel so it can shut down promptly.
                         resetStream.InboundTunnelChannel?.Writer.TryComplete();
                         await resetStream.Cancellation.CancelAsync();
-                        resetStream.Cancellation.Dispose();
+                        if (!resetStream.IsCompressedRelay)
+                            resetStream.Cancellation.Dispose();
                         connectionState.ClientSendFlow.RemoveStream(streamId);
                         connectionState.ServerSendFlow.RemoveStream(streamId);
 
@@ -3102,8 +3121,7 @@ namespace Titanium.Web.Proxy.Http2
                                     : "Stream was reset by the origin before it received a response.");
                         }
 
-                        connectionState.PendingFinalizations.Add(
-                            FinalizeStreamAsync(resetStream, onAfterResponse, logger, connectionState));
+                        ScheduleFinalize(resetStream, onAfterResponse, logger, connectionState);
 
                         // Wire up args so the RST_STREAM error log below can include the request URL
                         // (args is only populated for DATA/HEADERS frames in the outer scope, so it is
@@ -3301,8 +3319,7 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             connectionState.OriginRelayPool?.ReleaseStream(streamId);
                             connectionState.RemoveStream(streamId);
-                            connectionState.PendingFinalizations.Add(
-                                FinalizeStreamAsync(closingStream, onAfterResponse, logger, connectionState));
+                            ScheduleFinalize(closingStream, onAfterResponse, logger, connectionState);
                         }
                     }
                 }
@@ -4624,8 +4641,7 @@ namespace Titanium.Web.Proxy.Http2
                 return;
 
             connectionState.RemoveStream(streamId);
-            connectionState.PendingFinalizations.Add(
-                FinalizeStreamAsync(streamState, onAfterResponse, logger, connectionState));
+            ScheduleFinalize(streamState, onAfterResponse, logger, connectionState);
         }
 
         private static async Task<int> ForceRead(Stream input, byte[] buffer, int offset, int bytesToRead,
