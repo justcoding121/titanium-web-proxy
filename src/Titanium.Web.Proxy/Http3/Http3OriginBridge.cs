@@ -1217,7 +1217,44 @@ internal static class Http3OriginBridge
             var response = sessionArgs.HttpClient.Response;
             // Stream the response unless a handler already buffered it. H3 client emit path
             // (SendResponseAsync) honours StreamBodyWriter the same way H2 EmitSynthetic does.
-            if (response.HasBody && !response.IsBodyRead)
+            // Tiny known-length bodies: buffer once (same H2→H1 bridge policy) to avoid
+            // LimitedStream + async pump per GET under dual-TLS MITM.
+            const int smallBodyBufferThreshold = 16 * 1024;
+            if (response.HasBody && !response.IsBodyRead
+                && !response.IsChunked
+                && response.ContentLength is >= 0 and <= smallBodyBufferThreshold)
+            {
+                byte[] bodyBytes;
+                if (response.ContentLength == 0)
+                {
+                    bodyBytes = Array.Empty<byte>();
+                }
+                else
+                {
+                    bodyBytes = new byte[response.ContentLength];
+                    using var limited = new LimitedStream(connection!.Stream, server.BufferPool,
+                        isChunked: false, response.ContentLength, response.TrailingHeaders);
+                    var offset = 0;
+                    while (offset < bodyBytes.Length)
+                    {
+                        var read = await limited.ReadAsync(bodyBytes.AsMemory(offset), cancellationToken);
+                        if (read == 0)
+                            break;
+                        offset += read;
+                    }
+
+                    await limited.Finish();
+                    if (offset != bodyBytes.Length)
+                        Array.Resize(ref bodyBytes, offset);
+                }
+
+                response.Body = bodyBytes;
+                response.IsBodyRead = true;
+                response.ContentLength = bodyBytes.Length;
+                response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+                response.StreamBodyWriter = null;
+            }
+            else if (response.HasBody && !response.IsBodyRead)
             {
                 var originConnection = connection;
                 var originIsChunked = response.IsChunked;
@@ -1227,7 +1264,7 @@ internal static class Http3OriginBridge
 
                 response.StreamBodyWriter = async (clientBodyStream, ct) =>
                 {
-                    IHttpStreamReader reader = originConnection.Stream;
+                    IHttpStreamReader reader = originConnection!.Stream;
                     using var limited = new LimitedStream(reader, server.BufferPool, originIsChunked,
                         originContentLength, response.TrailingHeaders);
                     var buffer = server.BufferPool.GetBuffer();
