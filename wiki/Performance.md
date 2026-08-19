@@ -62,9 +62,9 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 | Reverse | HTTP/2 · TLS | HTTP/1 · plain | **29,134** | **29,134** | **4,755** | **10,796** | **27,669** | **27,669** | **TWP** |
 | MITM | HTTP/2 · TLS | HTTP/1 · TLS | **35,673** | **35,823** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | MITM | HTTP/2 · TLS | HTTP/2 · TLS | **51,455** | **51,455** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
-| Reverse | HTTP/2 · TLS | HTTP/2 · plain | **31,895** | **31,895** | *Not possible* | *Not possible* | **48,302** | **48,302** | **YARP** |
+| Reverse | HTTP/2 · TLS | HTTP/2 · plain | **50,995** | **50,995** | *Not possible* | *Not possible* | **65,763** | **65,763** | **YARP** |
 | Reverse | HTTP/2 · plain | HTTP/1 · plain | **23,228** | **23,228** | *Not possible* | *Not possible* | **27,697** | **27,697** | **YARP** |
-| Reverse | HTTP/2 · plain | HTTP/2 · plain | **38,473** | **38,473** | *Not possible* | *Not possible* | **55,241** | **55,241** | **YARP** |
+| Reverse | HTTP/2 · plain | HTTP/2 · plain | **49,701** | **49,701** | *Not possible* | *Not possible* | **68,325** | **68,325** | **YARP** |
 | Reverse | HTTP/2 · plain | HTTP/2 · TLS | **27,943** | **27,943** | *Not possible* | *Not possible* | **49,202** | **49,202** | **YARP** |
 | Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **12,036** | **12,036** | *Not possible* (no QUIC) | *Not possible* | **14,817** | **14,817** | **YARP** |
 | Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **12,392** | **12,850** | *Not possible* (no QUIC) | *Not possible* | **14,181** | **17,238** | **YARP** |
@@ -80,7 +80,7 @@ Windows sources: matched-client cool pairs under `tools/RpsLoadProbe/results/mat
 
 **Load generators:** Reverse inbound H3 arms (H3→H1, H3→H2) use **`dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) on both TWP and YARP after dual-listen reverse H3. UDP-only MITM H3 still uses **`quic-http3`**. Older reverse-H3 ratios that used matched `quic-http3` are **not** comparable to these HttpClient numbers.
 
-**Matched HttpClient TWP÷YARP (cool):** H3→H1 ≈ **0.87** sustain (12,392 / 14,181). H3→H2 ≈ **0.73** (24,942 / 34,188, 2026-08-19). H1→H2 ≈ **0.89** (37,330 / 41,967, 2026-08-19; ≥0.80). Older matched pass H2 TLS→h2c ≈ **0.66**, h2c→h2c ≈ **0.70** (not remasured this pass).
+**Matched HttpClient TWP÷YARP (cool):** H3→H1 ≈ **0.87** sustain (12,392 / 14,181). H3→H2 ≈ **0.73** (24,942 / 34,188, 2026-08-19). H1→H2 ≈ **0.89** (37,330 / 41,967, 2026-08-19; ≥0.80). H2 TLS→h2c ≈ **0.78** (50,995 / 65,763), h2c→h2c ≈ **0.73** (49,701 / 68,325) — 2026-08-19 High-perf remasure (`passthrough-fresh/`).
 
 nginx/Windows is a limited port — use it for **same-OS** comparison only, not as the industry nginx baseline.
 
