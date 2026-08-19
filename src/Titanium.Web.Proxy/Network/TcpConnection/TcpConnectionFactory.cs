@@ -936,11 +936,16 @@ internal class TcpConnectionFactory : IDisposable
 
             await proxyServer.InvokeServerConnectionCreateEvent(tcpServerSocket);
 
-            stream = new HttpServerStream(proxyServer, new NetworkStream(tcpServerSocket, true), proxyServer.BufferPool,
-                cancellationToken);
+            var networkStream = new NetworkStream(tcpServerSocket, true);
 
+            // Direct HTTPS (no HTTP CONNECT hop): SslStream must wrap NetworkStream, not an
+            // intermediate HttpServerStream. Nesting HttpServerStream→SslStream→HttpServerStream
+            // (previous layout) forced 8 KiB inner reads that split TLS records and added a copy
+            // on every MITM origin write — cleartext only has one HttpServerStream layer.
             if (externalProxy != null && externalProxy.ProxyType == ExternalProxyType.Http && (isConnect || isHttps))
             {
+                stream = new HttpServerStream(proxyServer, networkStream, proxyServer.BufferPool, cancellationToken);
+
                 // Ordered two-hop chain (issue #909): CONNECT to NextHop through the first proxy,
                 // then CONNECT to the origin through that tunnel. Only HTTP hops are supported.
                 if (externalProxy.NextHop != null)
@@ -965,20 +970,54 @@ internal class TcpConnectionFactory : IDisposable
                 }
 
                 timing?.MarkUpstreamProxyConnected();
-            }
 
-            if (isHttps)
+                if (isHttps)
+                {
+                    // CONNECT tunnel: wrap TLS on the existing HttpServerStream (may hold buffered
+                    // bytes from the CONNECT response). leaveInnerOpen:false — disposing the outer
+                    // HttpServerStream tears down the chain.
+                    var sslStream = new SslStream(stream, leaveInnerStreamOpen: false,
+                        (sender, certificate, chain, sslPolicyErrors) =>
+                            proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
+                                sslPolicyErrors),
+                        (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
+                        {
+                            var clientCertificate = proxyServer.SelectClientCertificate(sender, sessionArgs,
+                                targetHost, localCertificates, remoteCertificate, acceptableIssuers);
+                            if (clientCertificate != null) usedClientCertificate = true;
+                            return clientCertificate!;
+                        });
+                    stream = new HttpServerStream(proxyServer, sslStream, proxyServer.BufferPool, cancellationToken);
+
+                    var options = new SslClientAuthenticationOptions
+                    {
+                        ApplicationProtocols = applicationProtocols,
+                        TargetHost = remoteHostName,
+                        ClientCertificates = null,
+                        EnabledSslProtocols = enabledSslProtocols,
+                        CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
+                    };
+
+                    ProxyLog.OriginHandshakeStarting(proxyServer.Logger, remoteHostName, remotePort,
+                        applicationProtocols);
+                    await sslStream.AuthenticateAsClientAsync(options, cancellationToken);
+                    negotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
+                    ProxyLog.OriginHandshakeSucceeded(proxyServer.Logger, remoteHostName, remotePort,
+                        negotiatedApplicationProtocol);
+                    timing?.MarkTlsHandshakeCompleted();
+                }
+            }
+            else if (isHttps)
             {
-                var sslStream = new SslStream(stream, false,
+                var sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false,
                     (sender, certificate, chain, sslPolicyErrors) =>
-                        proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain, sslPolicyErrors),
+                        proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
+                            sslPolicyErrors),
                     (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
                     {
                         var clientCertificate = proxyServer.SelectClientCertificate(sender, sessionArgs, targetHost,
                             localCertificates, remoteCertificate, acceptableIssuers);
-
                         if (clientCertificate != null) usedClientCertificate = true;
-
                         return clientCertificate!;
                     });
                 stream = new HttpServerStream(proxyServer, sslStream, proxyServer.BufferPool, cancellationToken);
@@ -995,9 +1034,13 @@ internal class TcpConnectionFactory : IDisposable
                 ProxyLog.OriginHandshakeStarting(proxyServer.Logger, remoteHostName, remotePort, applicationProtocols);
                 await sslStream.AuthenticateAsClientAsync(options, cancellationToken);
                 negotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
-                ProxyLog.OriginHandshakeSucceeded(proxyServer.Logger, remoteHostName, remotePort, negotiatedApplicationProtocol);
-
+                ProxyLog.OriginHandshakeSucceeded(proxyServer.Logger, remoteHostName, remotePort,
+                    negotiatedApplicationProtocol);
                 timing?.MarkTlsHandshakeCompleted();
+            }
+            else
+            {
+                stream = new HttpServerStream(proxyServer, networkStream, proxyServer.BufferPool, cancellationToken);
             }
         }
 #pragma warning disable SYSLIB0039 // TLS 1.0/1.1 are intentionally retained for legacy upstream compatibility fallback.

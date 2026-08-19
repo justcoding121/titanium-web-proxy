@@ -92,7 +92,8 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     {
         this.server = server;
 
-        if (baseStream is NetworkStream) IsNetworkStream = true;
+        if (baseStream is NetworkStream or SslStream)
+            IsNetworkStream = true;
 
         SupportsBodyWriteHook = baseStream is NetworkStream || baseStream is SslStream;
 
@@ -1271,10 +1272,10 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
         try
         {
-            // NetworkStream.FlushAsync is a no-op but still pays async machinery. Flush only when the
-            // base stream may buffer (SslStream / custom) so cleartext reverse keep-alive stays hot.
-            // When the socket write completes synchronously (common on loopback), return without a
-            // write state machine.
+            // NetworkStream.FlushAsync is a no-op but still pays async machinery. SslStream.Write
+            // already emits the TLS record for typical small writes — flushing after every origin
+            // header block was a per-request MITM tax vs cleartext (same H2→H1 bridge). Flush only
+            // for custom/buffered base streams that are neither NetworkStream nor SslStream.
             return WriteAsync(array, buffer.Offset, buffer.Count, flush: !IsNetworkStream, cancellationToken);
         }
         catch (IOException e)

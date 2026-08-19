@@ -169,7 +169,11 @@ internal class LimitedStream : Stream
 
     public async Task Finish()
     {
-        if (bytesRemaining == -1) return;
+        // Exact Content-Length drain leaves bytesRemaining == 0; nothing left to syphon.
+        // The previous unconditional loop rented an 8 KiB buffer and issued a dummy read —
+        // a per-response tax on every tiny-GET MITM / bridge path.
+        if (bytesRemaining is -1 or 0)
+            return;
 
         // Drain any unread framing bytes so the underlying keep-alive connection stays aligned.
         // (Previously this threw when leftover payload remained after decompression, which is
