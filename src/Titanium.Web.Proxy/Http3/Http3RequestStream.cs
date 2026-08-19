@@ -551,10 +551,10 @@ internal static class Http3RequestStream
     private static async Task SendInterimResponseAsync(
         QuicStream stream, Response response, QpackContext? qpackContext, CancellationToken ct)
     {
-        var headers = new List<(string, string)> { (":status", response.StatusCode.ToString()) };
-        foreach (var header in response.Headers.GetAllHeaders())
+        var headers = new List<(string, string)> { (":status", StatusCodeString(response.StatusCode)) };
+        foreach (var header in response.Headers)
         {
-            var name = header.Name.ToLowerInvariant();
+            var name = HasUpperAscii(header.Name) ? header.Name.ToLowerInvariant() : header.Name;
             if (name is "connection" or "keep-alive" or "proxy-connection"
                 or "transfer-encoding" or "upgrade")
                 continue;
@@ -570,18 +570,17 @@ internal static class Http3RequestStream
     /// </summary>
     private static async Task SendResponseAsync(QuicStream stream, Response response, QpackContext? qpackContext, CancellationToken ct)
     {
-        // Build QPACK-encoded response headers.
+        // Build QPACK-encoded response headers without GetAllHeaders() List alloc.
         var headers = new List<(string, string)>
         {
-            (":status", response.StatusCode.ToString())
+            (":status", StatusCodeString(response.StatusCode))
         };
 
-        foreach (var header in response.Headers.GetAllHeaders())
+        foreach (var header in response.Headers)
         {
-            var name = header.Name.ToLowerInvariant();
+            var name = HasUpperAscii(header.Name) ? header.Name.ToLowerInvariant() : header.Name;
             // Strip HTTP/1.x connection-specific headers that are forbidden in HTTP/3.
-            if (name == "connection" || name == "keep-alive" || name == "proxy-connection" ||
-                name == "transfer-encoding" || name == "upgrade")
+            if (name is "connection" or "keep-alive" or "proxy-connection" or "transfer-encoding" or "upgrade")
                 continue;
             headers.Add((name, header.Value));
         }
@@ -610,6 +609,32 @@ internal static class Http3RequestStream
         }
 
         await stream.FlushAsync(ct);
+    }
+
+    private static string StatusCodeString(int statusCode) => statusCode switch
+    {
+        200 => "200",
+        204 => "204",
+        301 => "301",
+        302 => "302",
+        304 => "304",
+        400 => "400",
+        404 => "404",
+        500 => "500",
+        502 => "502",
+        503 => "503",
+        _ => statusCode.ToString()
+    };
+
+    private static bool HasUpperAscii(string s)
+    {
+        for (var i = 0; i < s.Length; i++)
+        {
+            var c = s[i];
+            if (c is >= 'A' and <= 'Z') return true;
+        }
+
+        return false;
     }
 
     /// <summary>

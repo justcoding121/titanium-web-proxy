@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace Titanium.Web.Proxy.Http3.Qpack;
 
 /// <summary>
@@ -112,4 +115,27 @@ internal static class QpackStaticTable
         /* 97 */ ("x-frame-options", "deny"),
         /* 98 */ ("x-frame-options", "sameorigin"),
     };
+
+    private static readonly Dictionary<(string Name, string Value), int> ExactIndex;
+    private static readonly Dictionary<string, int> NameOnlyIndex;
+
+    static QpackStaticTable()
+    {
+        ExactIndex = new Dictionary<(string, string), int>(Entries.Length);
+        NameOnlyIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var i = 0; i < Entries.Length; i++)
+        {
+            var e = Entries[i];
+            ExactIndex[(e.Name, e.Value)] = i;
+            NameOnlyIndex.TryAdd(e.Name, i);
+        }
+    }
+
+    /// <summary>Exact static-table index, or -1.</summary>
+    public static int FindExact(string name, string value) =>
+        ExactIndex.TryGetValue((name, value), out var i) ? i : -1;
+
+    /// <summary>First static-table index for <paramref name="name"/>, or -1.</summary>
+    public static int FindName(string name) =>
+        NameOnlyIndex.TryGetValue(name, out var i) ? i : -1;
 }

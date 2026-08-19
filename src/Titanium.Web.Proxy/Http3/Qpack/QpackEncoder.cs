@@ -46,23 +46,15 @@ internal static class QpackEncoder
         {
             var lowerName = name; // names from the proxy are already lowercase
 
-            // 1. Try exact match in the static table.
-            int nameOnlyStaticIndex = -1;
-            bool foundExact = false;
-            for (var i = 0; i < QpackStaticTable.Entries.Length; i++)
+            // 1. Try exact match in the static table (O(1) dictionary — was O(n) scan).
+            var exact = QpackStaticTable.FindExact(lowerName, value);
+            if (exact >= 0)
             {
-                var entry = QpackStaticTable.Entries[i];
-                if (!string.Equals(entry.Name, lowerName, StringComparison.Ordinal)) continue;
-                if (nameOnlyStaticIndex < 0) nameOnlyStaticIndex = i;
-                if (string.Equals(entry.Value, value, StringComparison.Ordinal))
-                {
-                    // Indexed Header Field (static): 1 1 S=1 Index(6)
-                    WriteIndexed(body, (ulong)i);
-                    foundExact = true;
-                    break;
-                }
+                WriteIndexed(body, (ulong)exact);
+                continue;
             }
-            if (foundExact) continue;
+
+            var nameOnlyStaticIndex = QpackStaticTable.FindName(lowerName);
 
             // 2. Try dynamic table (when enabled).
             if (outboundTable != null && outboundTable.TryFind(lowerName, value, out ulong dynAbsIdx, out bool dynExact))
