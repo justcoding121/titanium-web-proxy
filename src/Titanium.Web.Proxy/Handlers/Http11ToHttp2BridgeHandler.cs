@@ -42,6 +42,13 @@ namespace Titanium.Web.Proxy;
 public partial class ProxyServer
 {
     /// <summary>
+    ///     When set, H1→H2 always uses HeadersReceived (no InterimChannel) for A/B. Read once at type init.
+    /// </summary>
+    private static readonly bool DiagForceLiteHeadersWait =
+        string.Equals(Environment.GetEnvironmentVariable("TWP_DIAG_HEADERS_WAIT_TCS"), "1",
+            StringComparison.Ordinal);
+
+    /// <summary>
     ///     Entry point for the HTTP/1.1-client-to-h2-origin bridge, invoked once per HTTP/1.1 client connection
     ///     from the explicit and transparent client handlers in place of the normal HTTP/1.1 pipeline
     ///     (<c>HandleHttpSessionRequest</c>) when <see cref="Http2NegotiationResult.RequiresH2OriginBridge" /> is
@@ -495,11 +502,9 @@ public partial class ProxyServer
             // Passthrough lite: when no session handlers are subscribed and RFC 8441 is off, skip the
             // per-request InterimChannel (HeadersReceived TCS only). Probe origins do not emit 1xx;
             // AllocTick showed Channel/segment Gen0 as a TWP-only tax vs YARP. Keep Channel+relay when
-            // interception is on so Early Hints still forward. Diag TWP_DIAG_HEADERS_WAIT_TCS=1 forces lite.
-            var forceLiteHeadersWait = string.Equals(
-                Environment.GetEnvironmentVariable("TWP_DIAG_HEADERS_WAIT_TCS"), "1",
-                StringComparison.Ordinal);
-            var useLiteHeadersWait = forceLiteHeadersWait
+            // interception is on so Early Hints still forward. Diag TWP_DIAG_HEADERS_WAIT_TCS=1 forces lite
+            // (cached at type init — do not GetEnvironmentVariable per request).
+            var useLiteHeadersWait = DiagForceLiteHeadersWait
                 || (!NeedsHttpInterception(args.ProxyEndPoint) && !EnableRfc8441);
             Func<int, HeaderCollection, CancellationToken, Task>? relayInterim = null;
             if (!useLiteHeadersWait)
