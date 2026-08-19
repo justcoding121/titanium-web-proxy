@@ -169,7 +169,8 @@ public partial class ProxyServer
                                 PrepareRequestHeaders(request.Headers);
                                 // Do NOT overwrite Host — the default was filled above and user overrides preserved.
 
-                                if (!string.IsNullOrEmpty(ViaHeaderPseudonym))
+                                // Fast path / no interception: skip Via (less HPACK under origin writeLock).
+                                if (NeedsHttpInterception(endPoint) && !string.IsNullOrEmpty(ViaHeaderPseudonym))
                                 {
                                     if (HasLoopedVia(request.Headers, ViaHeaderPseudonym))
                                     {
@@ -627,7 +628,7 @@ public partial class ProxyServer
         if (!args.IsTransparent && !args.IsSocks)
         {
             response.Headers.FixProxyHeaders();
-            if (!string.IsNullOrEmpty(ViaHeaderPseudonym))
+            if (NeedsHttpInterception(args.ProxyEndPoint) && !string.IsNullOrEmpty(ViaHeaderPseudonym))
             {
                 // The response was received from the origin over HTTP/2 even though
                 // it is translated to an HTTP/1.1 response for the client.

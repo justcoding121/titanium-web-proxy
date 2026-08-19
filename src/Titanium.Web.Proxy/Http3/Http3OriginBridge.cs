@@ -794,10 +794,25 @@ internal static class Http3OriginBridge
         request.Headers.RemoveHeader("TE");
         request.Headers.RemoveHeader(KnownHeaders.Host);
 
-        var snapshot = request.Headers.GetAllHeaders();
-        request.Headers.Clear();
-        foreach (var header in snapshot)
-            request.Headers.AddHeader(header.Name.ToLowerInvariant(), header.Value);
+        // Fast path when names are already lowercase (QPACK); otherwise rename in place.
+        if (request.Headers.Any(h =>
+            {
+                for (var i = 0; i < h.Name.Length; i++)
+                {
+                    var c = h.Name[i];
+                    if (c is >= 'A' and <= 'Z') return true;
+                }
+
+                return false;
+            }))
+        {
+            var renamed = request.Headers
+                .Select(h => (Name: h.Name.ToLowerInvariant(), h.Value))
+                .ToList();
+            request.Headers.Clear();
+            foreach (var (name, value) in renamed)
+                request.Headers.AddHeader(name, value);
+        }
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────

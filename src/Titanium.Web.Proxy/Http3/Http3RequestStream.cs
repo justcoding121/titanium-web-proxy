@@ -213,7 +213,9 @@ internal static class Http3RequestStream
                 }
 
                 // Inject Via header (RFC 9110 §7.6.3) on the request before forwarding.
-                if (!string.IsNullOrEmpty(server.ViaHeaderPseudonym))
+                // Fast path (no interception): skip — matches SessionEventArgs.IsFastPath contract and
+                // removes a dynamic-table-sensitive header from origin HPACK under writeLock.
+                if (!sessionArgs.IsFastPath && !string.IsNullOrEmpty(server.ViaHeaderPseudonym))
                     sessionArgs.HttpClient.Request.Headers.AddHeader(
                         new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
 
@@ -230,7 +232,7 @@ internal static class Http3RequestStream
                     }
 
                     await onBeforeResponse(sessionArgs);
-                    if (!string.IsNullOrEmpty(server.ViaHeaderPseudonym))
+                    if (!sessionArgs.IsFastPath && !string.IsNullOrEmpty(server.ViaHeaderPseudonym))
                         sessionArgs.HttpClient.Response.Headers.AddHeader(
                             new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
                     await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext, cancellationToken);
@@ -257,8 +259,17 @@ internal static class Http3RequestStream
                     }
 
                     // 7. Forward to origin using the appropriate protocol bridge (H3→H3, H3→H2, or H3→H1.1).
+                    // Passthrough lite: when no session interception and RFC 8441 is off, skip 1xx relay so
+                    // Http2OriginConnection.SendAsync does not allocate InterimChannel (same as H1→H2 lite).
+                    Func<Response, CancellationToken, Task>? onInterimResponse = null;
+                    if (server.NeedsHttpInterception(endPoint) || server.EnableRfc8441)
+                    {
+                        onInterimResponse = (interim, ct) =>
+                            SendInterimResponseAsync(stream, interim, qpackContext, ct);
+                    }
+
                     await Http3OriginBridge.ForwardAsync(sessionArgs, server, logger, cancellationToken,
-                        onInterimResponse: (interim, ct) => SendInterimResponseAsync(stream, interim, qpackContext, ct),
+                        onInterimResponse: onInterimResponse,
                         copyRequestBody: copyRequestBody);
 
                     // If the TCP fallback buffered via GetRequestBody / drain, RequestClosed may
@@ -268,8 +279,8 @@ internal static class Http3RequestStream
 
                     await onBeforeResponse(sessionArgs);
 
-                    // Inject Via header on the response (RFC 9110 §7.6.3).
-                    if (!string.IsNullOrEmpty(server.ViaHeaderPseudonym))
+                    // Inject Via header on the response (RFC 9110 §7.6.3). Skip on fast path.
+                    if (!sessionArgs.IsFastPath && !string.IsNullOrEmpty(server.ViaHeaderPseudonym))
                         sessionArgs.HttpClient.Response.Headers.AddHeader(
                             new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
                     await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext, cancellationToken);

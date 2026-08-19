@@ -3399,6 +3399,36 @@ namespace Titanium.Web.Proxy.Http2
             _ => statusCode.ToString().GetByteString()
         };
 
+        // Hot-path caches: avoid allocating ByteString for common :method / :scheme under writeLock.
+        private static readonly ByteString MethodGet = "GET".GetByteString();
+        private static readonly ByteString MethodHead = "HEAD".GetByteString();
+        private static readonly ByteString MethodPost = "POST".GetByteString();
+        private static readonly ByteString MethodPut = "PUT".GetByteString();
+        private static readonly ByteString MethodDelete = "DELETE".GetByteString();
+        private static readonly ByteString MethodOptions = "OPTIONS".GetByteString();
+        private static readonly ByteString MethodConnect = "CONNECT".GetByteString();
+        private static readonly ByteString SchemeHttps = "https".GetByteString();
+        private static readonly ByteString SchemeHttp = "http".GetByteString();
+
+        private static ByteString MethodBytes(string method) => method switch
+        {
+            "GET" => MethodGet,
+            "HEAD" => MethodHead,
+            "POST" => MethodPost,
+            "PUT" => MethodPut,
+            "DELETE" => MethodDelete,
+            "OPTIONS" => MethodOptions,
+            "CONNECT" => MethodConnect,
+            _ => method.GetByteString()
+        };
+
+        private static ByteString SchemeBytes(string scheme) => scheme switch
+        {
+            "https" => SchemeHttps,
+            "http" => SchemeHttp,
+            _ => scheme.GetByteString()
+        };
+
         /// <summary>
         ///     HPACK-encodes <paramref name="rr"/> into the direction's scratch stream. Must run on the
         ///     frame-read loop (or otherwise be serialized) so the dynamic table stays ordered.
@@ -3465,14 +3495,14 @@ namespace Titanium.Web.Proxy.Http2
             if (rr is Request request)
             {
                 var uri = request.RequestUri;
-                encoder.EncodeHeader(writer, StaticTable.KnownHeaderMethod, request.Method.GetByteString());
+                encoder.EncodeHeader(writer, StaticTable.KnownHeaderMethod, MethodBytes(request.Method));
                 // For extended CONNECT, use the preserved authority bytes to avoid URI normalization
                 // stripping explicit ports (e.g. :443 on https) that the client originally sent.
                 var authorityValue = request.ExtendedConnectProtocol != null && request.Authority.Length > 0
                     ? request.Authority
                     : uri.Authority.GetByteString();
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderAuhtority, authorityValue);
-                encoder.EncodeHeader(writer, StaticTable.KnownHeaderScheme, uri.Scheme.GetByteString());
+                encoder.EncodeHeader(writer, StaticTable.KnownHeaderScheme, SchemeBytes(uri.Scheme));
                 encoder.EncodeHeader(writer, StaticTable.KnownHeaderPath, request.RequestUriString8, false,
                     HpackUtil.IndexType.None, false);
                 // RFC 8441 §5: :protocol must appear after the other pseudo-headers.

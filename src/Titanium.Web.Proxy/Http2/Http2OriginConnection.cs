@@ -120,8 +120,10 @@ internal sealed class Http2OriginConnection : IDisposable
     ///     Profiled at c=16 with threshold 16: dumpasync showed a single
     ///     <c>ReadLoopAsync</c> and hundreds of <c>SemaphoreSlim</c> waiters — grow earlier so
     ///     low concurrency is not pinned to one origin TLS+H2 session.
+    ///     Soft=2 (was 4): more origin sessions sooner → more parallel writeLocks for HPACK encode
+    ///     (YARP EnableMultipleHttp2Connections fan-out mechanism, without changing TWP architecture).
     /// </summary>
-    internal const int PoolGrowActiveStreamThreshold = 4;
+    internal const int PoolGrowActiveStreamThreshold = 2;
 
     /// <summary>
     ///     Soft multiplex capacity used by <see cref="Http2OriginConnectionPool" /> to decide when to
