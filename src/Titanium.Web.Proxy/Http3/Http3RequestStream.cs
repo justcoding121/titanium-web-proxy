@@ -109,14 +109,17 @@ internal static class Http3RequestStream
                 if (!normalizedPath.StartsWith('/'))
                     normalizedPath = "/" + normalizedPath; // NOSONAR S1075 -- Slash is the HTTP origin-form delimiter, not a filesystem path.
 
-                // Session-less H3→H2 reverse tiny-GET: no SessionEventArgs / HttpWebClient / Null stream.
-                // YARP keeps only the inbound context + HttpRequestMessage; we keep Request for HPACK.
+                // Session-less H3→origin reverse tiny-GET: no SessionEventArgs / HttpWebClient / Null stream.
+                // Same playbook that beat YARP on H2 (lightweight session args): keep Request for
+                // HPACK/QPACK only. Covers forced H3→H2 / H3→H3 / H3→H1 reverse probes.
                 if (interceptionOff
-                    && authArgs.UpstreamHttpProtocol == UpstreamHttpProtocol.Http2
                     && !server.EnableRfc8441
-                    && method is "GET" or "HEAD" or "DELETE" or "OPTIONS")
+                    && method is "GET" or "HEAD" or "DELETE" or "OPTIONS"
+                    && authArgs.UpstreamHttpProtocol is UpstreamHttpProtocol.Http2
+                        or UpstreamHttpProtocol.Http3
+                        or UpstreamHttpProtocol.Http11)
                 {
-                    await HandleH3H2FastPathAsync(
+                    await HandleH3OriginFastPathAsync(
                         stream, endPoint, authArgs, server, logger, cancellationToken,
                         onSessionCreated, qpackContext, clientConnection,
                         method, scheme, authority, normalizedPath, regularHeaders);
@@ -411,10 +414,11 @@ internal static class Http3RequestStream
     }
 
     /// <summary>
-    ///     Interception-off H3→H2 bodiless path: one <see cref="Request" /> + stream CTS, no
+    ///     Interception-off H3→origin bodiless path: one <see cref="Request" /> + stream CTS, no
     ///     <see cref="SessionEventArgs" /> graph (matches YARP's lack of a proxy session bag).
+    ///     Dispatches to H3→H2 / H3→H3 / H3→H1 session-lite forwards.
     /// </summary>
-    private static async Task HandleH3H2FastPathAsync(
+    private static async Task HandleH3OriginFastPathAsync(
         QuicStream stream,
         ProxyEndPoint endPoint,
         BeforeQuicAuthenticateEventArgs authArgs,
@@ -456,28 +460,66 @@ internal static class Http3RequestStream
             await DrainClientFinOnlyAsync(stream, streamToken);
             streamState.RequestClosed = true;
 
+            var originAuthorityHost = authority;
+            var colon = authority.LastIndexOf(':');
+            if (colon > 0 && int.TryParse(authority.AsSpan(colon + 1), out _))
+                originAuthorityHost = authority[..colon];
+            else if (authority.Length > 0 && authority[0] == '[')
+            {
+                var closing = authority.IndexOf(']');
+                if (closing > 0)
+                    originAuthorityHost = authority[1..closing];
+            }
+
             var fwd = new H3H2FastForward
             {
                 Request = request,
                 ProxyEndPoint = endPoint,
                 CustomUpStreamProxy = authArgs.CustomUpStreamProxy,
                 UpStreamEndPoint = server.UpStreamEndPoint,
-                MaxBufferedBodyBytes = server.MaxBufferedBodyBytes
+                MaxBufferedBodyBytes = server.MaxBufferedBodyBytes,
+                OriginAuthorityHost = originAuthorityHost
             };
 
-            await Http3OriginBridge.ForwardOverHttp2FastAsync(fwd, server, logger, streamToken,
-                coldOpenSessionFactory: () =>
-                {
-                    // Cold pool miss only (after warmup the open callback is never invoked).
-                    var nullStream = new HttpClientStream(
-                        server, clientConnection, System.IO.Stream.Null,
-                        server.BufferPool, CancellationToken.None, rentReadBuffer: false);
-                    var stubCts = new CancellationTokenSource();
-                    var stub = new SessionEventArgs(server, endPoint, nullStream, null, stubCts);
-                    stub.IsFastPath = true;
-                    stub.CustomUpStreamProxy = authArgs.CustomUpStreamProxy;
-                    return stub;
-                });
+            SessionEventArgs ColdOpenSessionFactory()
+            {
+                // Cold pool miss only (after warmup the open callback is never invoked).
+                var nullStream = new HttpClientStream(
+                    server, clientConnection, System.IO.Stream.Null,
+                    server.BufferPool, CancellationToken.None, rentReadBuffer: false);
+                var stubCts = new CancellationTokenSource();
+                var stub = new SessionEventArgs(server, endPoint, nullStream, null, stubCts);
+                stub.IsFastPath = true;
+                stub.CustomUpStreamProxy = authArgs.CustomUpStreamProxy;
+                stub.UpstreamHttpProtocol = authArgs.UpstreamHttpProtocol;
+                return stub;
+            }
+
+            switch (authArgs.UpstreamHttpProtocol)
+            {
+                case UpstreamHttpProtocol.Http2:
+                    await Http3OriginBridge.ForwardOverHttp2FastAsync(fwd, server, logger, streamToken,
+                        ColdOpenSessionFactory);
+                    break;
+                case UpstreamHttpProtocol.Http3:
+                    var relayed = await Http3OriginBridge.ForwardOverQuicFastAsync(
+                        fwd, server, logger, streamToken, ColdOpenSessionFactory, stream);
+                    if (relayed)
+                    {
+                        qpackContext?.InFlightMinAbsoluteIndex.TryRemove(stream.Id, out _);
+                        streamState.ResponseClosed = true;
+                        stream.CompleteWrites();
+                        return;
+                    }
+                    break;
+                case UpstreamHttpProtocol.Http11:
+                    await Http3OriginBridge.ForwardOverTcpFastAsync(fwd, server, logger, streamToken,
+                        ColdOpenSessionFactory);
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        $"H3 origin fast path does not support {authArgs.UpstreamHttpProtocol}.");
+            }
 
             var response = fwd.Response
                            ?? new Response { StatusCode = 502, StatusDescription = "Bad Gateway", HttpVersion = HttpHeader.Version30 };

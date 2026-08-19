@@ -245,11 +245,10 @@ internal static class Http3OriginBridge
             }
 
             // Use the origin authority (sniHost) for the :authority pseudo-header, not the connect host.
-            var reqHeaders = BuildRequestHeaders(request, sniHost);
-            var encodedHeaders = QpackEncoder.Encode(reqHeaders);
-            await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, encodedHeaders, cancellationToken);
-            // HEADERS are on the wire — client DATA may be consumed next; retry is no longer safe.
-            requestSent = true;
+                    var encodedHeaders = QpackEncoder.EncodeRequest(request, sniHost);
+                    await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, encodedHeaders, cancellationToken);
+                    // HEADERS are on the wire — client DATA may be consumed next; retry is no longer safe.
+                    requestSent = true;
 
             if (pendingCopy != null)
             {
@@ -262,7 +261,9 @@ internal static class Http3OriginBridge
 
             // QuicStream WriteAsync may buffer; without Flush the peer can see the request hundreds of
             // ms late (observed ~450ms Cloudflare HTML TTFB with inFlight=1 after request "sent").
-            await originStream.FlushAsync(cancellationToken);
+            // Fast-path loopback GETs skip Flush — CompleteWrites is enough and Flush costs RPS.
+            if (!sessionArgs.IsFastPath)
+                await originStream.FlushAsync(cancellationToken);
             originStream.CompleteWrites();
             sessionArgs.Timing?.MarkRequestSent();
 
@@ -718,6 +719,229 @@ internal static class Http3OriginBridge
                 sessionArgs.Dispose();
             }
         }, cancellationToken);
+    }
+
+    /// <summary>
+    ///     Session-less H3→H3 forward for the interception-off bodiless path.
+    ///     Request: QPACK encode from the Request bag (authority rewrite for ForwardHost).
+    ///     Response: <b>verbatim frame relay</b> to <paramref name="clientStream"/> (H2 compressed-relay
+    ///     analogue) — no response QPACK decode/re-encode / <see cref="Response"/> graph.
+    ///     Returns <see langword="true"/> when the client response is already on the wire.
+    /// </summary>
+    internal static async Task<bool> ForwardOverQuicFastAsync(
+        H3H2FastForward fwd,
+        ProxyServer server,
+        ILogger logger,
+        CancellationToken cancellationToken,
+        Func<SessionEventArgs> coldOpenSessionFactory,
+        QuicStream clientStream)
+    {
+        var request = fwd.Request;
+        var sniHost = fwd.OriginAuthorityHost ?? "localhost";
+        var colon = sniHost.LastIndexOf(':');
+        if (colon > 0 && int.TryParse(sniHost.AsSpan(colon + 1), out _))
+            sniHost = sniHost[..colon];
+
+        string connectHost = sniHost;
+        var port = request.IsHttps ? 443 : 80;
+        if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint
+            {
+                ForwardHost: { Length: > 0 } forwardHost,
+                ForwardPort: { } forwardPort
+            })
+        {
+            connectHost = forwardHost;
+            port = forwardPort;
+        }
+        else if (request.Authority.Length > 0)
+        {
+            var authority = request.Authority.GetString();
+            var idx = authority.LastIndexOf(':');
+            if (idx > 0 && int.TryParse(authority.AsSpan(idx + 1), out var parsedPort))
+            {
+                connectHost = authority[..idx];
+                port = parsedPort;
+                sniHost = connectHost;
+            }
+            else
+            {
+                connectHost = authority;
+                sniHost = authority;
+            }
+        }
+
+        if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
+            request.IsHttps = false;
+
+        var upStreamEndPoint = fwd.UpStreamEndPoint ?? server.UpStreamEndPoint;
+        var upstreamProxy = fwd.CustomUpStreamProxy ?? server.UpStreamHttpsProxy;
+
+        QuicServerConnection? quicConn = null;
+        var reused = false;
+        var staleConnectionRetries = 0;
+        var requestSent = false;
+        SessionEventArgs? certSession = null;
+
+        try
+        {
+            while (true)
+            {
+                QuicStream? originStream = null;
+                try
+                {
+                    quicConn = await server.QuicConnectionPool.GetOrCreateAsync(
+                        connectHost, port, upStreamEndPoint, upstreamProxy,
+                        (sender, certificate, chain, errors) =>
+                        {
+                            certSession ??= coldOpenSessionFactory();
+                            return server.ValidateServerCertificate(
+                                sender, certSession, certificate, chain, errors);
+                        },
+                        cancellationToken,
+                        sniHost: sniHost);
+
+                    reused = !quicConn.ClaimFirstUse();
+                    originStream = await quicConn.OpenRequestStreamAsync(cancellationToken);
+
+                    var encodedHeaders = QpackEncoder.EncodeRequest(request, sniHost);
+                    await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, encodedHeaders, cancellationToken);
+                    requestSent = true;
+                    originStream.CompleteWrites();
+
+                    // Verbatim origin→client frame copy (HEADERS + DATA + trailers). Skip QPACK
+                    // decode/re-encode — same idea as H2 compressed same-protocol relay.
+                    var maxPayload = Math.Max(fwd.MaxBufferedBodyBytes, server.MaxDecodedHeaderListBytes);
+                    var sawFinalHeaders = false;
+                    while (true)
+                    {
+                        var frame = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload,
+                            cancellationToken);
+                        if (frame == null)
+                            break;
+                        try
+                        {
+                            if (frame.Type == Http3FrameType.Headers)
+                            {
+                                // Ignore interim 1xx on the fast path (probes never send them);
+                                // still forward the first HEADERS block and any trailers.
+                                await Http3Frame.WriteAsync(clientStream, Http3FrameType.Headers,
+                                    frame.Payload, cancellationToken);
+                                sawFinalHeaders = true;
+                                continue;
+                            }
+
+                            if (frame.Type == Http3FrameType.Data)
+                            {
+                                if (!sawFinalHeaders)
+                                    throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
+                                        "DATA frame received before response HEADERS.");
+                                if (frame.Payload.Length > 0)
+                                    await Http3Frame.WriteAsync(clientStream, Http3FrameType.Data,
+                                        frame.Payload, cancellationToken);
+                                continue;
+                            }
+
+                            if (IsForbiddenOnRequestStream(frame.Type))
+                                throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
+                                    $"Frame type 0x{frame.Type:X} not permitted on request stream.");
+                            // GREASE / unknown: drop
+                        }
+                        finally
+                        {
+                            frame.ReturnPayload();
+                        }
+                    }
+
+                    if (!sawFinalHeaders)
+                        throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
+                            "Expected HEADERS frame as first frame on origin response stream.");
+
+                    await originStream.DisposeAsync();
+                    return true;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    if (logger.IsEnabled(LogLevel.Debug))
+                        logger.LogDebug(ex, "H3→H3 fast forward failed for {Host}:{Port}", connectHost, port);
+
+                    if (originStream != null)
+                    {
+                        try { await originStream.DisposeAsync(); } catch { /* best effort */ }
+                        originStream = null;
+                    }
+
+                    if (quicConn != null)
+                    {
+                        await server.QuicConnectionPool.InvalidateAsync(quicConn);
+                        quicConn = null;
+                    }
+
+                    if (reused && !requestSent
+                        && staleConnectionRetries < QuicConnectionPool.MaxStaleConnectionRetries)
+                    {
+                        staleConnectionRetries++;
+                        requestSent = false;
+                        continue;
+                    }
+
+                    fwd.Response = MakeBadGatewayResponse(ex.Message);
+                    return false;
+                }
+            }
+        }
+        finally
+        {
+            if (quicConn != null)
+                await QuicConnectionPool.ReleaseAsync(quicConn);
+
+            if (certSession != null)
+            {
+                certSession.CancellationTokenSource.Dispose();
+                certSession.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Session-lite H3→H1 forward: Request bag + stub <see cref="SessionEventArgs"/> for
+    ///     <see cref="TcpConnectionFactory"/> / <see cref="HttpWebClient"/> only (no inbound H3
+    ///     pumps, BeforeRequest, or Via). Warm keep-alive still pools origin sockets.
+    /// </summary>
+    internal static async Task ForwardOverTcpFastAsync(
+        H3H2FastForward fwd,
+        ProxyServer server,
+        ILogger logger,
+        CancellationToken cancellationToken,
+        Func<SessionEventArgs> coldOpenSessionFactory)
+    {
+        var sessionArgs = coldOpenSessionFactory();
+        try
+        {
+            var stubRequest = sessionArgs.HttpClient.Request;
+            var src = fwd.Request;
+            stubRequest.Method = src.Method;
+            stubRequest.Authority = src.Authority;
+            stubRequest.RequestUriString8 = src.RequestUriString8;
+            stubRequest.HttpVersion = HttpHeader.Version30;
+            stubRequest.IsHttps = src.IsHttps;
+            stubRequest.IsBodyReceived = true;
+            stubRequest.Locked = true;
+            stubRequest.Headers.AddHeaders(src.Headers.GetAllHeaders());
+
+            sessionArgs.IsFastPath = true;
+            sessionArgs.CustomUpStreamProxy = fwd.CustomUpStreamProxy;
+            sessionArgs.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+
+            await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse: null);
+            fwd.Response = sessionArgs.HttpClient.Response;
+            if (fwd.Response != null)
+                fwd.Response.HttpVersion = HttpHeader.Version30;
+        }
+        finally
+        {
+            sessionArgs.CancellationTokenSource.Dispose();
+            sessionArgs.Dispose();
+        }
     }
 
     private static async Task ForwardOverHttp2Async(
@@ -1329,20 +1553,42 @@ internal static class Http3OriginBridge
     // Helpers
     // ────────────────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    ///     Builds the QPACK name/value list for an origin request (test seam + EncodeRequest source of truth).
+    /// </summary>
     private static List<(string, string)> BuildRequestHeaders(Request request, string authorityHost)
     {
+        var authority = request.Authority.Length > 0
+            ? request.Authority.GetString()
+            : (!string.IsNullOrEmpty(request.Host) ? request.Host! : authorityHost);
+        var path = request.RequestUriString8.Length > 0
+            ? request.RequestUriString8.GetString()
+            : "/";
+        if (UriExtensions.GetScheme(request.RequestUriString8).Length > 0)
+        {
+            try
+            {
+                var uri = request.RequestUri;
+                authority = uri.Authority;
+                path = uri.PathAndQuery;
+            }
+            catch
+            {
+                // Keep ByteString-derived authority/path.
+            }
+        }
+
         var headers = new List<(string, string)>
         {
             (":method", request.Method),
             (":scheme", request.IsHttps ? "https" : "http"),
-            (":authority", request.RequestUri?.Authority ?? authorityHost),
-            (":path", request.RequestUri?.PathAndQuery ?? "/")
+            (":authority", authority),
+            (":path", path.Length > 0 ? path : "/")
         };
 
         foreach (var header in request.Headers.GetAllHeaders())
         {
             var name = header.Name.ToLowerInvariant();
-            // Hop-by-hop / HTTP/1 semantics must not appear on H3. Host is superseded by :authority.
             if (name is "connection" or "keep-alive" or "proxy-connection"
                 or "transfer-encoding" or "upgrade" or "te" or "host"
                 or "http2-settings" or "proxy-authorization" or "proxy-authenticate")

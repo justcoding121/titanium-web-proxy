@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Http3.Qpack;
@@ -70,6 +71,61 @@ internal static class QpackEncoder
                 name = name.ToLowerInvariant();
             if (name is "connection" or "keep-alive" or "proxy-connection"
                 or "transfer-encoding" or "upgrade")
+                continue;
+            EncodeOne(body, outboundTable, ref maxRequiredInsertCount, name, header.Value);
+        }
+
+        return FinishBlock(body, maxRequiredInsertCount, outboundTable, context);
+    }
+
+    /// <summary>
+    ///     Encodes an HTTP request without building an intermediate header list (hot H3→origin path).
+    /// </summary>
+    public static byte[] EncodeRequest(Request request, string authorityHost, QpackContext? context = null)
+    {
+        var body = reusableBuffer ??= new MemoryStream();
+        body.SetLength(0);
+        var outboundTable = context != null && !context.OutboundTableDisabled && context.MaxTableCapacityFromPeer > 0
+            ? context.OutboundEncoderTable
+            : null;
+
+        ulong maxRequiredInsertCount = 0;
+
+        var authority = request.Authority.Length > 0
+            ? request.Authority.GetString()
+            : (!string.IsNullOrEmpty(request.Host) ? request.Host! : authorityHost);
+        var path = request.RequestUriString8.Length > 0
+            ? request.RequestUriString8.GetString()
+            : "/";
+        if (UriExtensions.GetScheme(request.RequestUriString8).Length > 0)
+        {
+            try
+            {
+                var uri = request.RequestUri;
+                authority = uri.Authority;
+                path = uri.PathAndQuery;
+            }
+            catch
+            {
+                // Keep ByteString-derived authority/path.
+            }
+        }
+
+        EncodeOne(body, outboundTable, ref maxRequiredInsertCount, ":method", request.Method);
+        EncodeOne(body, outboundTable, ref maxRequiredInsertCount, ":scheme",
+            request.IsHttps ? "https" : "http");
+        EncodeOne(body, outboundTable, ref maxRequiredInsertCount, ":authority", authority);
+        EncodeOne(body, outboundTable, ref maxRequiredInsertCount, ":path",
+            path.Length > 0 ? path : "/");
+
+        foreach (var header in request.Headers.GetAllHeaders())
+        {
+            var name = header.Name;
+            if (HasUpperAscii(name))
+                name = name.ToLowerInvariant();
+            if (name is "connection" or "keep-alive" or "proxy-connection"
+                or "transfer-encoding" or "upgrade" or "te" or "host"
+                or "http2-settings" or "proxy-authorization" or "proxy-authenticate")
                 continue;
             EncodeOne(body, outboundTable, ref maxRequiredInsertCount, name, header.Value);
         }
