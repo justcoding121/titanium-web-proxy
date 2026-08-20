@@ -16,6 +16,7 @@ using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3;
+using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Options;
@@ -740,5 +741,49 @@ public class SonarNewCodeCoverageTests
         {
             Assert.IsNotNull(ex);
         }
+    }
+
+    private delegate bool TryReadPrefixedIntDelegate(ReadOnlySpan<byte> data, int prefixBits, out ulong value,
+        out int consumed);
+    private delegate bool TryReadStringLiteralDelegate(ReadOnlySpan<byte> data, out string result, out int consumed);
+    private delegate string HuffmanDecodeDelegate(ReadOnlySpan<byte> data);
+
+    [TestMethod]
+    public void QpackDecoder_PrefixedIntAndLiteralEdges()
+    {
+        var prefixed = (TryReadPrefixedIntDelegate)Delegate.CreateDelegate(typeof(TryReadPrefixedIntDelegate),
+            typeof(QpackDecoder).GetMethod("TryReadPrefixedInt", PrivateStatic)!);
+        Assert.IsFalse(prefixed(ReadOnlySpan<byte>.Empty, 8, out _, out _));
+        Assert.IsTrue(prefixed(new byte[] { 0x05 }, 8, out var small, out var consumed));
+        Assert.AreEqual(5UL, small);
+        Assert.AreEqual(1, consumed);
+
+        var overflow = new byte[12];
+        overflow[0] = 0xFF;
+        for (var i = 1; i < overflow.Length; i++) overflow[i] = 0x80;
+        Assert.IsFalse(prefixed(overflow, 8, out _, out _));
+        Assert.IsFalse(prefixed(new byte[] { 0xFF, 0x80 }, 8, out _, out _));
+
+        var literal = (TryReadStringLiteralDelegate)Delegate.CreateDelegate(typeof(TryReadStringLiteralDelegate),
+            typeof(QpackDecoder).GetMethod("TryReadStringLiteral", PrivateStatic)!);
+        Assert.IsFalse(literal(ReadOnlySpan<byte>.Empty, out _, out _));
+        Assert.IsFalse(literal(new byte[] { 0x05, (byte)'a' }, out _, out _));
+        Assert.IsTrue(literal(new byte[] { 0x03, (byte)'a', (byte)'b', (byte)'c' }, out var plain, out _));
+        Assert.AreEqual("abc", plain);
+
+        var huffman = (HuffmanDecodeDelegate)Delegate.CreateDelegate(typeof(HuffmanDecodeDelegate),
+            typeof(QpackDecoder).GetMethod("HuffmanDecode", PrivateStatic)!);
+        Assert.AreEqual("", huffman(ReadOnlySpan<byte>.Empty));
+
+        using var proxy = new ProxyServer(false, false, false);
+        var stripMem = typeof(Http2OriginConnection).GetMethod("StripDataFramingMemory", PrivateStatic)!;
+        var unpadded = new byte[] { 1, 2, 3 };
+        var mem = (ReadOnlyMemory<byte>)stripMem.Invoke(null, [unpadded, 3, (Http2FrameFlag)0])!;
+        CollectionAssert.AreEqual(unpadded, mem.ToArray());
+        var padded = new byte[] { 1, 9, 0 };
+        mem = (ReadOnlyMemory<byte>)stripMem.Invoke(null, [padded, 3, Http2FrameFlag.Padded])!;
+        CollectionAssert.AreEqual(new byte[] { 9 }, mem.ToArray());
+        mem = (ReadOnlyMemory<byte>)stripMem.Invoke(null, [Array.Empty<byte>(), 0, Http2FrameFlag.Padded])!;
+        Assert.AreEqual(0, mem.Length);
     }
 }
