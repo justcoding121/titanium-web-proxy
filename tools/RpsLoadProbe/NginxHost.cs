@@ -183,6 +183,11 @@ internal sealed class NginxHost : IDisposable
             sendfile on;
             keepalive_timeout 65;
             client_max_body_size 10m;
+            client_body_temp_path temp/client_body;
+            proxy_temp_path temp/proxy;
+            fastcgi_temp_path temp/fastcgi;
+            uwsgi_temp_path temp/uwsgi;
+            scgi_temp_path temp/scgi;
             upstream origin {
                 server 127.0.0.1:{{originHttpPort}};
                 keepalive 32;
@@ -221,6 +226,11 @@ internal sealed class NginxHost : IDisposable
                     sendfile on;
                     keepalive_timeout 65;
                     client_max_body_size 10m;
+                    client_body_temp_path temp/client_body;
+                    proxy_temp_path temp/proxy;
+                    fastcgi_temp_path temp/fastcgi;
+                    uwsgi_temp_path temp/uwsgi;
+                    scgi_temp_path temp/scgi;
                     upstream origin {
                         server 127.0.0.1:{{originHttpPort}};
                         keepalive 32;
@@ -269,6 +279,11 @@ internal sealed class NginxHost : IDisposable
                     sendfile on;
                     keepalive_timeout 65;
                     client_max_body_size 10m;
+                    client_body_temp_path temp/client_body;
+                    proxy_temp_path temp/proxy;
+                    fastcgi_temp_path temp/fastcgi;
+                    uwsgi_temp_path temp/uwsgi;
+                    scgi_temp_path temp/scgi;
                     upstream origin {
                         server 127.0.0.1:{{originHttpPort}};
                         keepalive 32;
@@ -313,6 +328,11 @@ internal sealed class NginxHost : IDisposable
                     sendfile on;
                     keepalive_timeout 65;
                     client_max_body_size 10m;
+                    client_body_temp_path temp/client_body;
+                    proxy_temp_path temp/proxy;
+                    fastcgi_temp_path temp/fastcgi;
+                    uwsgi_temp_path temp/uwsgi;
+                    scgi_temp_path temp/scgi;
                     upstream origin {
                         server 127.0.0.1:{{originHttpPort}};
                         keepalive 32;
