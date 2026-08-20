@@ -26,9 +26,11 @@ public partial class ProxyServer
         {
             var args = new CertificateValidationEventArgs(sessionArgs, certificate, chain, sslPolicyErrors);
 
-            // why is the sender null?
-            ServerCertificateValidationCallback.InvokeAsync(this, args, logger)
-                .Wait(sessionArgs.CancellationToken);
+            // Prefer completing synchronously when handlers return completed tasks — .Wait() on the
+            // handshake path parked a worker even for Task.CompletedTask (probe loopback CA).
+            var pending = ServerCertificateValidationCallback.InvokeAsync(this, args, logger);
+            if (!pending.IsCompletedSuccessfully)
+                pending.GetAwaiter().GetResult();
             return args.IsValid;
         }
 

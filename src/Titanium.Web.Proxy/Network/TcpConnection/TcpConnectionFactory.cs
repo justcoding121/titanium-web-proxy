@@ -452,6 +452,10 @@ internal class TcpConnectionFactory : IDisposable
     /// <param name="noCache">Not from cache/create new connection.</param>
     /// <param name="prefetch">if set to <c>true</c> [prefetch].</param>
     /// <param name="cancellationToken">The cancellation token for this async task.</param>
+    /// <param name="createGate">
+    ///     When set, acquired only around <see cref="CreateServerConnection" /> after a pool miss
+    ///     (and released before return). Pool hits never wait. Used by H2→H1 HTTPS SoftCap.
+    /// </param>
     /// <returns></returns>
     internal async Task<TcpServerConnection?> GetServerConnection(ProxyServer proxyServer, string remoteHostName, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         int remotePort,
@@ -459,56 +463,104 @@ internal class TcpConnectionFactory : IDisposable
         SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
         bool noCache, bool prefetch, CancellationToken cancellationToken,
         string? connectHost = null, int? connectPort = null,
-        IPEndPoint? upStreamEndPointIPv4 = null, IPEndPoint? upStreamEndPointIPv6 = null)
+        IPEndPoint? upStreamEndPointIPv4 = null, IPEndPoint? upStreamEndPointIPv6 = null,
+        SemaphoreSlim? createGate = null,
+        string? precomputedCacheKey = null)
     {
         var sslProtocol = sessionArgs.ClientConnection.SslProtocol;
 
-        // Prefer explicitly passed family endpoints; otherwise take session/server configuration.
-        var configured = ResolveConfiguredUpStreamEndPoints(sessionArgs, proxyServer);
-        upStreamEndPoint ??= configured.Generic;
-        upStreamEndPointIPv4 ??= configured.IPv4;
-        upStreamEndPointIPv6 ??= configured.IPv6;
+        IPEndPoint? resolvedV4 = upStreamEndPointIPv4;
+        IPEndPoint? resolvedV6 = upStreamEndPointIPv6;
+        string cacheKey;
+        if (precomputedCacheKey != null)
+        {
+            // Transparent reverse fast path: endpoint already cached the pool key — skip
+            // GetConnectionCacheKey StringBuilder + bind-endpoint resolve + proxy bypass.
+            cacheKey = precomputedCacheKey;
+        }
+        else
+        {
+            // Prefer explicitly passed family endpoints; otherwise take session/server configuration.
+            var configured = ResolveConfiguredUpStreamEndPoints(sessionArgs, proxyServer);
+            upStreamEndPoint ??= configured.Generic;
+            resolvedV4 ??= configured.IPv4;
+            resolvedV6 ??= configured.IPv6;
 
-        // resolve the effective proxy (post-bypass) so that direct and proxied connections to the
-        // same destination don't collide in the pool, and so the connection's stored key matches.
-        externalProxy = GetEffectiveUpstreamProxy(externalProxy, remoteHostName, remotePort);
+            // resolve the effective proxy (post-bypass) so that direct and proxied connections to the
+            // same destination don't collide in the pool, and so the connection's stored key matches.
+            externalProxy = GetEffectiveUpstreamProxy(externalProxy, remoteHostName, remotePort);
 
-        var cacheKey = GetConnectionCacheKey(remoteHostName, remotePort,
-            isHttps, applicationProtocols, upStreamEndPoint, externalProxy, connectHost, connectPort,
-            upStreamEndPointIPv4, upStreamEndPointIPv6);
+            cacheKey = GetConnectionCacheKey(remoteHostName, remotePort,
+                isHttps, applicationProtocols, upStreamEndPoint, externalProxy, connectHost, connectPort,
+                resolvedV4, resolvedV6);
+        }
 
-        if (proxyServer.EnableConnectionPool && !noCache &&
-            cache.TryGetValue(cacheKey, out var existingConnections))
-            lock (existingConnections)
+        upStreamEndPointIPv4 = resolvedV4;
+        upStreamEndPointIPv6 = resolvedV6;
+
+        if (TryRentFromPool(proxyServer, cacheKey, noCache, applicationProtocols, out var pooled))
+            return pooled;
+
+        if (createGate != null)
+        {
+            await createGate.WaitAsync(cancellationToken);
+            try
             {
-                // +3 seconds for potential delay after getting connection
-                var cutOff = DateTime.UtcNow.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
-                while (!existingConnections.IsEmpty)
-                {
-                    if (existingConnections.TryDequeue(out var recentConnection))
-                    {
-                        if (recentConnection.LastAccess > cutOff
-                            && recentConnection.TcpSocket.IsGoodConnection()
-                            && IsNegotiatedProtocolCompatible(recentConnection, applicationProtocols))
-                        {
-                            if (!recentConnection.TryEnterLease())
-                                continue;
+                // Another waiter may have filled the pool while we queued.
+                if (TryRentFromPool(proxyServer, cacheKey, noCache, applicationProtocols, out pooled))
+                    return pooled;
 
-                            ProxyMetrics.PoolReused();
-                            return recentConnection;
-                        }
-
-                        if (recentConnection.TryScheduleDisposal())
-                            disposalBag.Add(recentConnection);
-                    }
-                }
+                return await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
+                    applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey,
+                    prefetch, cancellationToken, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
             }
+            finally
+            {
+                createGate.Release();
+            }
+        }
 
-        var connection = await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
+        return await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
             applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey,
             prefetch, cancellationToken, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
+    }
 
-        return connection;
+    private bool TryRentFromPool(ProxyServer proxyServer, string cacheKey, bool noCache,
+        List<SslApplicationProtocol>? applicationProtocols, out TcpServerConnection? connection)
+    {
+        connection = null;
+        if (!proxyServer.EnableConnectionPool || noCache ||
+            !cache.TryGetValue(cacheKey, out var existingConnections))
+            return false;
+
+        // Keep lock(queue) aligned with Release: lock-free TryDequeue raced ClearOutdated /
+        // Release trimming and produced noisy MITM dips (cool 3-rep median fell to ~0.85).
+        lock (existingConnections)
+        {
+            var cutOff = DateTime.UtcNow.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
+            while (!existingConnections.IsEmpty)
+            {
+                if (existingConnections.TryDequeue(out var recentConnection))
+                {
+                    if (recentConnection.LastAccess > cutOff
+                        && recentConnection.TcpSocket.IsGoodConnection()
+                        && IsNegotiatedProtocolCompatible(recentConnection, applicationProtocols))
+                    {
+                        if (!recentConnection.TryEnterLease())
+                            continue;
+
+                        ProxyMetrics.PoolReused();
+                        connection = recentConnection;
+                        return true;
+                    }
+
+                    if (recentConnection.TryScheduleDisposal())
+                        disposalBag.Add(recentConnection);
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

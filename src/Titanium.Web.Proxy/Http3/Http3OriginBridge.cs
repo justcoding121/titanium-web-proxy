@@ -1455,19 +1455,18 @@ internal static class Http3OriginBridge
                 }
                 else
                 {
+                    // Read CL bytes directly — LimitedStream wrapper was extra alloc per MITM GET.
                     bodyBytes = new byte[response.ContentLength];
-                    using var limited = new LimitedStream(connection!.Stream, server.BufferPool,
-                        isChunked: false, response.ContentLength, response.TrailingHeaders);
                     var offset = 0;
                     while (offset < bodyBytes.Length)
                     {
-                        var read = await limited.ReadAsync(bodyBytes.AsMemory(offset), cancellationToken);
+                        var read = await connection!.Stream.ReadAsync(
+                            bodyBytes.AsMemory(offset), cancellationToken);
                         if (read == 0)
                             break;
                         offset += read;
                     }
 
-                    await limited.Finish();
                     if (offset != bodyBytes.Length)
                         Array.Resize(ref bodyBytes, offset);
                 }

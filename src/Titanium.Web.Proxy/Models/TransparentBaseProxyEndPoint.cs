@@ -48,6 +48,20 @@ public abstract class TransparentBaseProxyEndPoint : ProxyEndPoint
     internal int CachedH2OriginPort;
     internal string? CachedH2OriginPoolKey;
 
+    /// <summary>
+    ///     Cached <c>Host</c> header derived from a stable client <c>:authority</c> (reverse probes).
+    ///     Avoids <c>Authority.GetString()</c> per H2→H1 stream.
+    /// </summary>
+    internal string? CachedForwardHttpHost;
+    internal ByteString CachedHostAuthority;
+
+    /// <summary>
+    ///     Cached TCP pool key for fixed-forward H1 origin (H2→H1 bridge). Avoids rebuilding the
+    ///     pool-key string on every multiplexed stream.
+    /// </summary>
+    internal string? CachedHttp11PoolKey;
+    internal bool CachedHttp11PoolIsHttps;
+
     internal abstract Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
         BeforeSslAuthenticateEventArgs connectArgs, ILogger logger);
 

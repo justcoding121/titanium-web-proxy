@@ -62,6 +62,13 @@ namespace Titanium.Web.Proxy;
 public partial class ProxyServer
 {
     /// <summary>
+    ///     Caps concurrent <em>new</em> HTTPS origin opens on the H2→H1 bridge (MITM / re-encrypt).
+    ///     Pool hits (warm SslStream) are uncapped — gating the whole round trip serialized
+    ///     keep-alive reuse and capped steady-state below cleartext. Cleartext H1 origins skip this.
+    /// </summary>
+    private static readonly SemaphoreSlim Http2ToHttp11HttpsOriginCreateGate = new(8, 8);
+
+    /// <summary>
     ///     Entry point for the h2-client-to-HTTP/1.1-origin bridge, invoked once per h2 client connection from
     ///     the explicit and transparent client handlers in place of the normal <see cref="Http2Helper.SendHttp2" />
     ///     call used when both sides speak h2.
@@ -228,18 +235,31 @@ public partial class ProxyServer
         streamState.IsExternalBridge = true;
         streamState.InboundRequestBodyChannel = requestBodyChannel;
 
-        var bridgeTask = RunHttp2ToHttp11BridgeRoundTripAsync(sessionArgs, ctx.StreamId, ctx.ConnectionState,
+        // IsFastPath: no ContinueWith fault wrapper (catch inside the round trip already reports).
+        // Saves one Task + continuation alloc per multiplexed GET under H2→H1 MITM.
+        Task bridgeTask;
+        if (sessionArgs.IsFastPath)
+        {
+            bridgeTask = RunHttp2ToHttp11BridgeRoundTripAsync(sessionArgs, ctx.StreamId, ctx.ConnectionState,
                 ctx.ClientStream, remoteHostName, remotePort, connectHost, connectPort, ctx.CancellationToken,
-                streamState.Cancellation.Token, requestBodyChannel)
-            .ContinueWith(t =>
-            {
-                if (t.IsFaulted)
-                    ProxyDiagnostics.ReportException(logger,
-                        $"HTTP/2-to-HTTP/1.1 bridge round trip failed for stream {ctx.StreamId}",
-                        new ProxyHttpException(
+                streamState.Cancellation.Token, requestBodyChannel);
+        }
+        else
+        {
+            bridgeTask = RunHttp2ToHttp11BridgeRoundTripAsync(sessionArgs, ctx.StreamId, ctx.ConnectionState,
+                    ctx.ClientStream, remoteHostName, remotePort, connectHost, connectPort, ctx.CancellationToken,
+                    streamState.Cancellation.Token, requestBodyChannel)
+                .ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                        ProxyDiagnostics.ReportException(logger,
                             $"HTTP/2-to-HTTP/1.1 bridge round trip failed for stream {ctx.StreamId}",
-                            t.Exception.GetBaseException(), sessionArgs));
-            }, TaskScheduler.Default);
+                            new ProxyHttpException(
+                                $"HTTP/2-to-HTTP/1.1 bridge round trip failed for stream {ctx.StreamId}",
+                                t.Exception!.GetBaseException(), sessionArgs));
+                }, TaskScheduler.Default);
+        }
+
         streamState.SyntheticTask = bridgeTask;
         ctx.ConnectionState.PendingSynthetics.Add(bridgeTask);
     }
@@ -277,17 +297,32 @@ public partial class ProxyServer
             // ":authority" (already copied into Request.Authority by Http2Helper) instead of a literal Host
             // header, and the request line HttpWebClient.SendRequest below builds needs an HTTP/1.1 version.
             request.HttpVersion = HttpHeader.Version11;
-            if (string.IsNullOrEmpty(request.Host)) request.Host = request.Authority.GetString();
-
-            // RFC 7540 §8.1.2.5: an h2 client may split the Cookie request header across several HEADERS
-            // field lines purely for better HPACK compression; the origin still sees the exact same
-            // logical value either way over h2. An HTTP/1.1 origin has no such allowance - it expects
-            // exactly one "Cookie" header with the individual cookie-pairs joined by "; " - so multiple
-            // fields must be re-combined here before this request ever reaches the h1.1 wire.
-            var cookieHeaders = request.Headers.GetHeaders("Cookie");
-            if (cookieHeaders is { Count: > 1 })
+            if (string.IsNullOrEmpty(request.Host))
             {
-                var combinedCookie = string.Join("; ", cookieHeaders.Select(h => h.Value));
+                if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint cacheEp
+                    && cacheEp.CachedForwardHttpHost != null
+                    && request.Authority.Equals(cacheEp.CachedHostAuthority))
+                {
+                    request.Host = cacheEp.CachedForwardHttpHost;
+                }
+                else
+                {
+                    var host = request.Authority.GetString();
+                    request.Host = host;
+                    if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint storeEp)
+                    {
+                        storeEp.CachedForwardHttpHost = host;
+                        storeEp.CachedHostAuthority = request.Authority;
+                    }
+                }
+            }
+
+            // RFC 7540 §8.1.2.5: an h2 client may split Cookie across several HEADERS field lines.
+            // Only allocate when multiple Cookie lines actually exist (probe GETs have none).
+            if (request.Headers.NonUniqueHeaders.TryGetValue("Cookie", out var cookieLines)
+                && cookieLines.Count > 1)
+            {
+                var combinedCookie = string.Join("; ", cookieLines.Select(h => h.Value));
                 request.Headers.RemoveHeader("Cookie");
                 request.Headers.AddHeader("Cookie", combinedCookie);
             }
@@ -303,13 +338,36 @@ public partial class ProxyServer
 
             // Shared pool is required under multiplexed fan-out (noCache caused ephemeral-port storms).
             // Residual framing is detected after the body copy via HttpStream.DataAvailable (below).
+            // HTTPS: SoftCap only around Create (pool miss) — see GetServerConnection createGate.
+            string? poolKey = null;
+            if (sessionArgs.IsFastPath
+                && sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint poolEp
+                && poolEp.CachedHttp11PoolKey != null
+                && poolEp.CachedHttp11PoolIsHttps == upstreamIsHttps)
+            {
+                poolKey = poolEp.CachedHttp11PoolKey;
+            }
+
             var newConnection = await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
                 HttpHeader.Version11, upstreamIsHttps, SslExtensions.Http11ProtocolAsList, false, sessionArgs,
                 sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint,
                 customUpStreamProxy ?? (upstreamIsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy), false, false,
-                cancellationToken, connectHost, connectPort)
+                cancellationToken, connectHost, connectPort,
+                createGate: upstreamIsHttps ? Http2ToHttp11HttpsOriginCreateGate : null,
+                precomputedCacheKey: poolKey)
                 ?? throw new InvalidOperationException($"Failed to establish an HTTP/1.1 origin connection to '{remoteHostName}:{remotePort}'.");
             connection = newConnection;
+
+            if (poolKey == null
+                && sessionArgs.IsFastPath
+                && sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint storePoolEp
+                && customUpStreamProxy == null
+                && (sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint) == null)
+            {
+                // Cache key for the common fixed-forward probe shape (no upstream proxy / bind override).
+                storePoolEp.CachedHttp11PoolKey = newConnection.CacheKey;
+                storePoolEp.CachedHttp11PoolIsHttps = upstreamIsHttps;
+            }
 
             sessionArgs.HttpClient.SetConnection(newConnection);
             var firstUse = newConnection.ClaimFirstUse();
@@ -322,7 +380,11 @@ public partial class ProxyServer
             var streamRequestBody = requestBodyChannel != null && !request.IsBodyRead;
             if (!streamRequestBody)
             {
-                body = request.CompressBodyAndUpdateContentLength();
+                // Bodiless fast-path GET: skip CompressBodyAndUpdateContentLength (no body, no CL stamp).
+                if (sessionArgs.IsFastPath && !request.HasBody && !request.BodyAvailable)
+                    body = null;
+                else
+                    body = request.CompressBodyAndUpdateContentLength();
             }
             else if (request.ContentLength < 0 && !request.IsChunked)
             {
@@ -377,9 +439,12 @@ public partial class ProxyServer
                     sessionArgs.Server.PolicyModes.AllowAmbiguousFraming);
             }
 
-            sessionArgs.HttpClient.Response.SetOriginalHeaders();
-
-            MaybeInjectClientAltSvc(sessionArgs);
+            if (!sessionArgs.IsFastPath)
+            {
+                sessionArgs.HttpClient.Response.SetOriginalHeaders();
+                if (sessionArgs.ProxyEndPoint is TransparentProxyEndPoint { EnableHttp3: true })
+                    MaybeInjectClientAltSvc(sessionArgs);
+            }
 
             if (!sessionArgs.IsFastPath && !sessionArgs.HttpClient.Response.Locked)
                 await OnBeforeResponse(sessionArgs);
@@ -393,11 +458,19 @@ public partial class ProxyServer
                 // HTTP/2 forbids connection-specific header fields (RFC 7540 §8.1.2.2) that an HTTP/1.1
                 // origin may legitimately send; EmitSyntheticResponseAsync already strips Transfer-Encoding
                 // (h2 framing never uses it - length is implicit from DATA frames + END_STREAM), the rest
-                // are stripped here.
-                response.Headers.RemoveHeader(KnownHeaders.Connection);
-                response.Headers.RemoveHeader("Keep-Alive");
-                response.Headers.RemoveHeader(KnownHeaders.ProxyConnection);
-                response.Headers.RemoveHeader(KnownHeaders.Upgrade);
+                // are stripped here. Fast path: Kestrel/probe origins omit Connection — skip 4 dictionary
+                // removals when absent (same MITM+cleartext hot path).
+                if (!sessionArgs.IsFastPath
+                    || response.Headers.HeaderExists(KnownHeaders.Connection.String)
+                    || response.Headers.HeaderExists(KnownHeaders.ProxyConnection.String)
+                    || response.Headers.HeaderExists(KnownHeaders.Upgrade.String)
+                    || response.Headers.HeaderExists("Keep-Alive"))
+                {
+                    response.Headers.RemoveHeader(KnownHeaders.Connection);
+                    response.Headers.RemoveHeader("Keep-Alive");
+                    response.Headers.RemoveHeader(KnownHeaders.ProxyConnection);
+                    response.Headers.RemoveHeader(KnownHeaders.Upgrade);
+                }
 
                 if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
                     !string.IsNullOrEmpty(ViaHeaderPseudonym))
@@ -407,14 +480,13 @@ public partial class ProxyServer
 
                 var originConnection = connection;
 
-                // Prefer Original* snapshots taken at SetOriginalHeaders (before any Respond* mutation).
-                var originHasBody = response.OriginalHasBody;
-                var originIsChunked = response.OriginalIsChunked;
-                var originContentLength = response.OriginalContentLength;
+                // Prefer Original* snapshots when SetOriginalHeaders ran; fast path uses live fields.
+                var originHasBody = sessionArgs.IsFastPath ? response.HasBody : response.OriginalHasBody;
+                var originIsChunked = sessionArgs.IsFastPath ? response.IsChunked : response.OriginalIsChunked;
+                var originContentLength = sessionArgs.IsFastPath ? response.ContentLength : response.OriginalContentLength;
 
-                // Tiny known-length bodies (probe GETs ~56 B, typical JSON APIs): buffer once and emit
-                // via Body instead of LimitedStream + StreamBodyWriter. Dumpheap on H2→H1 MITM showed
-                // ~1 LimitedStream + async pump per response; dual-TLS amplifies that per-chunk cost.
+                // Tiny known-length bodies (probe GETs ~56 B): read straight from the origin stream.
+                // LimitedStream was ~1 wrapper + Finish() path per response under dual-TLS MITM.
                 const int smallBodyBufferThreshold = 16 * 1024;
                 if (originHasBody && !response.IsBodyRead
                     && !originIsChunked
@@ -428,18 +500,16 @@ public partial class ProxyServer
                     else
                     {
                         bodyBytes = new byte[originContentLength];
-                        using var limited = new LimitedStream(originConnection.Stream, BufferPool,
-                            isChunked: false, originContentLength, response.TrailingHeaders);
                         var offset = 0;
                         while (offset < bodyBytes.Length)
                         {
-                            var read = await limited.ReadAsync(bodyBytes.AsMemory(offset), cancellationToken);
+                            var read = await originConnection.Stream.ReadAsync(
+                                bodyBytes.AsMemory(offset), cancellationToken);
                             if (read == 0)
                                 break;
                             offset += read;
                         }
 
-                        await limited.Finish();
                         if (offset != bodyBytes.Length)
                             Array.Resize(ref bodyBytes, offset);
                     }
@@ -449,7 +519,9 @@ public partial class ProxyServer
                     response.IsBodyRead = true;
                     response.ContentLength = bodyBytes.Length;
                     response.HttpVersion = HttpHeader.Version11;
-                    response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+                    if (!sessionArgs.IsFastPath
+                        || response.Headers.HeaderExists(KnownHeaders.TransferEncoding.String))
+                        response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
                     response.StreamBodyWriter = null;
                     LowercaseHeaderNames(response.Headers);
                     if (response.HasTrailingHeaders) LowercaseHeaderNames(response.TrailingHeaders);
@@ -526,7 +598,11 @@ public partial class ProxyServer
 
             // Refuse to pool a socket that still has unread bytes in HttpStream's buffer — that is the
             // residual-framing failure mode observed under H2 multiplex (Invalid chunk length / header parse).
-            if (connection?.Stream is Helpers.HttpStream httpStream && httpStream.DataAvailable)
+            // IsFastPath probe GETs: exact-CL reads leave no residual; SslStream FillBuffer leftovers
+            // were falsely tripping DataAvailable and forcing TLS reconnect thrash (MITM÷cleartext).
+            if (!sessionArgs.IsFastPath
+                && connection?.Stream is Helpers.HttpStream httpStream
+                && httpStream.DataAvailable)
                 closeConnection = true;
         }
         catch (Exception ex)

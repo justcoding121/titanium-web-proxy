@@ -4591,7 +4591,10 @@ namespace Titanium.Web.Proxy.Http2
             // The client must receive the connection SETTINGS frame (relayed from the server) before any
             // HEADERS frame, otherwise it treats the connection as a protocol error. Wait for that relay,
             // but honor cancellation so we never hang if the server never sends SETTINGS / closes early.
-            await connectionState.ServerSettingsRelayed.Task.WaitAsync(cancellationToken);
+            // Steady-state: SETTINGS already relayed — skip WaitAsync Task machinery per synthetic emit.
+            var settingsTask = connectionState.ServerSettingsRelayed.Task;
+            if (!settingsTask.IsCompletedSuccessfully)
+                await settingsTask.WaitAsync(cancellationToken);
 
             var streamBodyWriter = response.StreamBodyWriter;
             if (streamBodyWriter != null)

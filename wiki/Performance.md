@@ -60,7 +60,7 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 | Reverse | HTTP/1 · TLS | HTTP/1 · plain | **36,054** | **36,054** | **11,173** | **11,173** | **39,527** | **39,527** | **YARP** |
 | MITM | HTTP/1 · TLS | HTTP/1 · TLS | **39,415** | **39,415** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | Reverse | HTTP/2 · TLS | HTTP/1 · plain | **63,120** | **63,120** | **4,755** | **10,796** | **27,669** | **27,669** | **TWP** |
-| MITM | HTTP/2 · TLS | HTTP/1 · TLS | **51,746** | **51,746** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
+| MITM | HTTP/2 · TLS | HTTP/1 · TLS | **49,252** | **49,252** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | MITM | HTTP/2 · TLS | HTTP/2 · TLS | **103,815** | **103,815** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
 | Reverse | HTTP/2 · TLS | HTTP/2 · plain | **88,742** | **88,742** | *Not possible* | *Not possible* | **68,761** | **68,761** | **TWP** |
 | Reverse | HTTP/2 · plain | HTTP/1 · plain | **23,228** | **23,228** | *Not possible* | *Not possible* | **27,697** | **27,697** | **YARP** |
@@ -77,13 +77,13 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 | Reverse | HTTP/1 · TLS | HTTP/3 · QUIC | **31,951** | **31,951** | *Not possible* (no QUIC) | *Not possible* | **33,028** | **33,028** | **YARP** |
 | Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | **17,141** | **17,141** | *Not possible* (no QUIC) | *Not possible* | **13,473** | **13,473** | **TWP** |
 
-Windows sources: prior matched cool pairs plus **2026-08-19** High-perf cool remasures under `residual-sub08/quiet-remeasure/` (`h3-verbatim-fair/`, `h3-mitm-twin/`, `gap-audit/`, …). Warmup 5s; measure 20s; concurrency 32. Absolute RPS swings with sequential-arm heat; prefer TWP÷YARP and MITM÷TWP-reverse-twin ratios over absolutes.
+Windows sources: prior matched cool pairs plus **2026-08-20** High-perf cool remasures under `residual-sub08/quiet-remeasure/` (`h3-verbatim-fair/`, `h3-mitm-twin/`, `h2h1-final/`, …). Warmup 5–10s; measure 20s; concurrency 32. Absolute RPS swings with sequential-arm heat; prefer TWP÷YARP and MITM÷TWP-reverse-twin ratios over absolutes.
 
 **Load generators:** Reverse inbound H3 arms (H3→H1, H3→H2, H3→H3) and matched H3→H1 MITM use **`dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) after dual-listen reverse H3. MITM H3→H2 / H3→H3 reuse dual-listen transparent reverse (`reverse-http3-to-http2`, `reverse-http3`). Older UDP-only `quic-http3` MITM H3→H1 numbers are **not** comparable to HttpClient reverse twins.
 
 **Matched HttpClient TWP÷YARP (cool High-perf, YARP-first):** H3→H3 ≈ **1.14×** (29,601 / 25,968; TWP leads — session-lite + verbatim origin→client frame relay). H3→H2 ≈ **0.80** (28,887 / 36,040; ≥0.80). H3→H1 ≈ **0.80** (23,785 / 29,708; ≥0.80). H1→H2 ≈ **0.85** (38,540 / 45,227; ≥0.80). H1 plain ≈ **1.19×** (31,350 / 26,348; TWP leads). H1 TLS terminate ≈ **0.91** (36,054 / 39,527; ≥0.80). H2 TLS→h2c ≈ **1.29×** (88,742 / 68,761; TWP leads). h2c→h2c ≈ **1.20×** (102,819 / 85,909; TWP leads). h2c→H2 TLS ≈ **1.29×** (89,043 / 69,282; TWP leads) — decode-free indexed `:scheme` override. H1→H3 ≈ **0.97**. h2c→H3 ≈ **0.98**.
 
-**MITM÷TWP reverse pass-through twin (cool):** Transparent H1 dual-TLS (`reverse-http1-mitm`) ÷ H1 TLS terminate ≈ **0.96** (39,415 / 40,980; ≥0.90). H2→H2 MITM ÷ H2 TLS→h2c ≈ **0.97+** (same-protocol compressed relay). H2→H1 MITM ÷ H2→H1 cleartext ≈ **0.82–0.86** (51.7k / 63.1k) — residual is per-stream H1 origin fan-out × dual TLS (same-protocol H2→H2 dual-TLS reaches **104k**). Matched-HttpClient H3→H1 MITM ÷ H3→H1 cleartext ≈ **0.93** (21,626 / 23,341; ≥0.90). Explicit CONNECT `https-mitm` stays ~0.80× of terminate (CONNECT tax; not the fair twin).
+**MITM÷TWP reverse pass-through twin (cool):** Transparent H1 dual-TLS (`reverse-http1-mitm`) ÷ H1 TLS terminate ≈ **0.96** (39,415 / 40,980; ≥0.90). H2→H2 MITM ÷ H2 TLS→h2c ≈ **0.97+** (same-protocol compressed relay). H2→H1 MITM ÷ H2→H1 cleartext ≈ **0.90** (median of 5 cool pairs, mean **0.92**; `h2h1-final/` — create-only HTTPS SoftCap, cached TCP pool key, IsFastPath DataAvailable skip, sync cert validation). Matched-HttpClient H3→H1 MITM ÷ H3→H1 cleartext ≈ **0.93** (21,626 / 23,341; ≥0.90). Explicit CONNECT `https-mitm` stays ~0.80× of terminate (CONNECT tax; not the fair twin).
 
 **Why H3 absolute RPS ≪ H2 on this box:** tiny-GET loopback is not where H3 wins (see below). Cool YARP H3→H3 also tops out ~26–28k while TWP H2 same-protocol reaches ~90–100k — MsQuic + dual QUIC hops dominate, not TWP architecture. After the H2-style session-lite + verbatim response relay, TWP H3→H3 **leads** YARP.
 
