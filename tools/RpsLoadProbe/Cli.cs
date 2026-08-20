@@ -159,6 +159,8 @@ internal static class Cli
         }
         catch (Exception ex)
         {
+            // ChildProcessStack only reads stderr on early exit; ProbeLog is stdout.
+            Console.Error.WriteLine(ex.ToString());
             ProbeLog.Error(ex.ToString());
             return 1;
         }

@@ -290,8 +290,9 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             if (process.HasExited)
             {
                 var err = await process.StandardError.ReadToEndAsync(cancellationToken);
+                var leftover = string.Join('\n', map.Select(kv => $"{kv.Key}={kv.Value}"));
                 throw new InvalidOperationException(
-                    $"Child exited early (code {process.ExitCode}). stderr: {err}");
+                    $"Child exited early (code {process.ExitCode}). stderr: {err} stdout-keys: {leftover}");
             }
 
             var line = await process.StandardOutput.ReadLineAsync(cancellationToken);

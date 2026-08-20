@@ -130,10 +130,14 @@ internal sealed class NginxHost : IDisposable
         var conf = confBuilder(prefixDir, port);
         await File.WriteAllTextAsync(confPath, conf, Encoding.ASCII);
 
+        // Official nginx.org packages compile in /var/log/nginx/error.log and open it before
+        // reading -c. GHA runners are not root, so that path 13s and the master exits.
+        // -e overrides the compiled-in log for the whole process (nginx 1.19.5+).
+        var errorLog = Path.Combine(prefixDir, "logs", "error.log");
         var startInfo = new ProcessStartInfo
         {
             FileName = exe,
-            Arguments = $"-p \"{prefixDir}\" -c conf/nginx.conf",
+            Arguments = $"-p \"{prefixDir}\" -c conf/nginx.conf -e \"{errorLog}\"",
             WorkingDirectory = prefixDir,
             UseShellExecute = false,
             RedirectStandardOutput = true,
@@ -152,9 +156,10 @@ internal sealed class NginxHost : IDisposable
             if (process.HasExited)
             {
                 var err = await process.StandardError.ReadToEndAsync();
+                var logTail = TryReadLogTail(errorLog);
                 TryDeleteDir(prefixDir);
                 throw new InvalidOperationException(
-                    $"nginx exited early (code {process.ExitCode}). stderr: {err}");
+                    $"nginx exited early (code {process.ExitCode}). stderr: {err} log: {logTail}");
             }
 
             Thread.Sleep(50);
@@ -465,7 +470,7 @@ internal sealed class NginxHost : IDisposable
             using var quit = Process.Start(new ProcessStartInfo
             {
                 FileName = exe,
-                Arguments = $"-p \"{prefixDir}\" -c conf/nginx.conf -s quit",
+                Arguments = $"-p \"{prefixDir}\" -c conf/nginx.conf -e \"{Path.Combine(prefixDir, "logs", "error.log")}\" -s quit",
                 WorkingDirectory = prefixDir,
                 UseShellExecute = false,
                 CreateNoWindow = true
@@ -561,6 +566,20 @@ internal sealed class NginxHost : IDisposable
         catch
         {
             return false;
+        }
+    }
+
+    private static string TryReadLogTail(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return "(no error.log)";
+            var text = File.ReadAllText(path);
+            return text.Length <= 800 ? text.Trim() : text[^800..].Trim();
+        }
+        catch
+        {
+            return "(could not read error.log)";
         }
     }
 
