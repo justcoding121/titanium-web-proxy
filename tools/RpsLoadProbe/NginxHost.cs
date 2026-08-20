@@ -338,8 +338,10 @@ internal sealed class NginxHost : IDisposable
                         keepalive 32;
                     }
                     server {
-                        listen {{port}} ssl;
-                        listen {{port}} quic reuseport;
+                        listen 127.0.0.1:{{port}} ssl;
+                        listen [::1]:{{port}} ssl ipv6only=on;
+                        listen 127.0.0.1:{{port}} quic reuseport;
+                        listen [::1]:{{port}} quic reuseport ipv6only=on;
                         http3 on;
                         ssl_certificate {{certDest}};
                         ssl_certificate_key {{keyDest}};
