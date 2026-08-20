@@ -7942,6 +7942,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.MaxConcurrentClientConnections
   nameWithType: ProxyServer.MaxConcurrentClientConnections
+- uid: Titanium.Web.Proxy.ProxyServer.MaxConcurrentHttp11HttpsOriginCreates
+  name: MaxConcurrentHttp11HttpsOriginCreates
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_MaxConcurrentHttp11HttpsOriginCreates
+  commentId: P:Titanium.Web.Proxy.ProxyServer.MaxConcurrentHttp11HttpsOriginCreates
+  fullName: Titanium.Web.Proxy.ProxyServer.MaxConcurrentHttp11HttpsOriginCreates
+  nameWithType: ProxyServer.MaxConcurrentHttp11HttpsOriginCreates
+- uid: Titanium.Web.Proxy.ProxyServer.MaxConcurrentHttp11HttpsOriginCreates*
+  name: MaxConcurrentHttp11HttpsOriginCreates
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_MaxConcurrentHttp11HttpsOriginCreates_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.MaxConcurrentHttp11HttpsOriginCreates
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.MaxConcurrentHttp11HttpsOriginCreates
+  nameWithType: ProxyServer.MaxConcurrentHttp11HttpsOriginCreates
 - uid: Titanium.Web.Proxy.ProxyServer.MaxDecodedHeaderListBytes
   name: MaxDecodedHeaderListBytes
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_MaxDecodedHeaderListBytes
