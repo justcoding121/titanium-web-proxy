@@ -25,10 +25,10 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 | | |
 |---|---|
 | OS | Ubuntu 24.04.4 LTS |
-| CPU | AMD EPYC 7763 (4 logical processors on the VM) |
+| CPU | AMD EPYC (4 logical processors on the VM; runners this pass were 7763 / 9V74) |
 | RAM | 15.6 GiB |
 | Runtime | .NET 10.0.11 |
-| nginx | nginx/1.24.0 (Ubuntu) |
+| nginx | nginx/**1.31.4** (nginx.org mainline, `--with-http_v3_module`) |
 | YARP | Yarp.ReverseProxy **2.3.0** |
 | Harness | RpsLoadProbe Release; median of 3 repeats where noted |
 
@@ -93,36 +93,42 @@ nginx/Windows is a limited port — use it for **same-OS** comparison only, not 
 
 ## Linux — Titanium vs nginx vs YARP
 
-Median of **3 repeats** from Actions runs [32057531323](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32057531323) (`compare-same`), [32057536434](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32057536434) (`compare-terminate`), [32057541322](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32057541322) (`compare-bridges`). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** The RPS workflow installs `libmsquic` (`QuicListener.IsSupported=true` on `ubuntu-latest`).
+Median of **3 repeats** from Actions runs [32335537070](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32335537070) (`compare-same`), [32335538634](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32335538634) (`compare-terminate`), [32334393173](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32334393173) (`compare-bridges`), [32334395907](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32334395907) (`compare-mitm`). nginx HTTP/3 tiny-GET from [32337905168](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32337905168). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** The RPS workflow installs nginx.org mainline (`http_v3_module`) and `libmsquic` (`QuicListener.IsSupported=true` on `ubuntu-latest`).
 
-TWP÷nginx H1 plain reverse ≈ **0.67**; TWP÷YARP H1 plain ≈ **0.95**. Prefer ratios over absolute RPS on GHA VMs.
+TWP÷nginx H1 plain reverse ≈ **0.67**; TWP÷YARP H1 plain ≈ **0.94**. Prefer ratios over absolute RPS on GHA VMs.
 
 | Mode | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak | Winner |
 |---|---|---|---:|---:|---:|---:|---:|---:|---|
-| Reverse | HTTP/1 · plain | HTTP/1 · plain | **26,499** | **26,499** | **39,440** | **39,440** | **27,784** | **27,784** | **nginx** |
-| Reverse | HTTP/1 · TLS | HTTP/1 · plain | **18,863** | **18,863** | **27,696** | **27,696** | **20,270** | **20,270** | **nginx** |
-| MITM | HTTP/1 · TLS | HTTP/1 · TLS | **15,631** | **15,631** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
-| Reverse | HTTP/2 · TLS | HTTP/1 · plain | **11,420** | **11,489** | **13,543** | **19,093** | **29,784** | **29,784** | **YARP** |
-| MITM | HTTP/2 · TLS | HTTP/1 · TLS | **10,787** | **10,787** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
-| MITM | HTTP/2 · TLS | HTTP/2 · TLS | **5,189** | **5,189** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
-| Reverse | HTTP/2 · TLS | HTTP/2 · plain | **7,487** | **7,487** | *Not possible* | *Not possible* | **45,479** | **45,479** | **YARP** |
-| Reverse | HTTP/2 · plain | HTTP/1 · plain | **16,791** | **16,791** | *Not possible* | *Not possible* | **35,502** | **35,502** | **YARP** |
-| Reverse | HTTP/2 · plain | HTTP/2 · plain | **7,861** | **7,917** | *Not possible* | *Not possible* | **48,560** | **48,560** | **YARP** |
-| Reverse | HTTP/2 · plain | HTTP/2 · TLS | **5,731** | **5,731** | *Not possible* | *Not possible* | **40,314** | **40,314** | **YARP** |
-| Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **13,587** | **13,587** | *Not possible* (no QUIC) | *Not possible* | **20,553** | **20,553** | **YARP** |
-| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **13,545** | **13,545** | *Not possible* (no QUIC) | *Not possible* | **19,686** | **19,686** | **YARP** |
-| MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **12,076** | **12,076** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
-| MITM | HTTP/3 · QUIC | HTTP/2 · TLS | **2,187** | **6,265** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
-| MITM | HTTP/3 · QUIC | HTTP/3 · QUIC | **9,884** | **9,884** | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
-| Reverse | HTTP/1 · TLS | HTTP/2 · TLS | **12,681** | **12,681** | *Not possible* | *Not possible* | **28,423** | **28,423** | **YARP** |
-| Reverse | HTTP/1 · TLS | HTTP/3 · QUIC | **15,104** | **15,104** | *Not possible* (no QUIC) | *Not possible* | **16,151** | **16,151** | **YARP** |
-| Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | **10,593** | **10,593** | *Not possible* (no QUIC) | *Not possible* | **21,171** | **21,171** | **YARP** |
+| Reverse | HTTP/1 · plain | HTTP/1 · plain | **26,808** | **26,808** | **39,886** | **39,886** | **28,662** | **28,662** | **nginx** |
+| Reverse | HTTP/1 · TLS | HTTP/1 · plain | **22,592** | **22,592** | **32,234** | **32,234** | **25,863** | **25,863** | **nginx** |
+| MITM | HTTP/1 · TLS | HTTP/1 · TLS | **30,703** | **30,703** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
+| Reverse | HTTP/2 · TLS | HTTP/1 · plain | **38,702** | **38,702** | **16,257** | **22,708** | **34,189** | **34,189** | **TWP** |
+| MITM | HTTP/2 · TLS | HTTP/1 · TLS | **38,764** | **38,764** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
+| MITM | HTTP/2 · TLS | HTTP/2 · TLS | **52,372** | **52,372** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
+| Reverse | HTTP/2 · TLS | HTTP/2 · plain | **59,721** | **59,721** | *Not possible* | *Not possible* | **40,008** | **40,008** | **TWP** |
+| Reverse | HTTP/2 · plain | HTTP/1 · plain | **40,459** | **40,459** | *Not possible* | *Not possible* | **40,441** | **40,441** | **TWP** |
+| Reverse | HTTP/2 · plain | HTTP/2 · plain | **66,345** | **66,345** | *Not possible* | *Not possible* | **49,812** | **49,812** | **TWP** |
+| Reverse | HTTP/2 · plain | HTTP/2 · TLS | **54,696** | **54,696** | *Not possible* | *Not possible* | **41,854** | **41,854** | **TWP** |
+| Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **29,621** | **29,621** | *Not possible* (no H3 origin) | *Not possible* | **27,928** | **27,928** | **TWP** |
+| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **22,567** | **22,567** | **0** | **18,996** | **22,002** | **22,002** | **TWP** |
+| Reverse | HTTP/3 · QUIC | HTTP/2 · TLS | **24,708** | **24,708** | *Not possible* (no H3→H2) | *Not possible* | **21,754** | **21,754** | **TWP** |
+| Reverse | HTTP/3 · QUIC | HTTP/3 · QUIC | **20,587** | **20,587** | *Not possible* (no H3 origin) | *Not possible* | **16,736** | **16,736** | **TWP** |
+| MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **24,036** | **24,036** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
+| MITM | HTTP/3 · QUIC | HTTP/2 · TLS | **26,746** | **26,746** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
+| MITM | HTTP/3 · QUIC | HTTP/3 · QUIC | **22,346** | **22,346** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
+| Reverse | HTTP/1 · TLS | HTTP/2 · TLS | **18,401** | **18,401** | *Not possible* | *Not possible* | **23,194** | **23,194** | **YARP** |
+| Reverse | HTTP/1 · TLS | HTTP/3 · QUIC | **17,030** | **17,030** | *Not possible* (no H3 origin) | *Not possible* | **17,630** | **17,630** | **YARP** |
+| Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | **28,063** | **28,063** | *Not possible* (no H3 origin) | *Not possible* | **23,698** | **23,698** | **TWP** |
 
-On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.67** (26,499 / 39,440). H1 TLS terminate ≈ **0.68** (18,863 / 27,696). TWP÷YARP H1 plain ≈ **0.95**. Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**. MITM H2→H1 / H3→H1 dual-crypto cells reuse prior `compare-mitm` numbers (not re-run this pass).
+On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.67** (26,808 / 39,886). H1 TLS terminate ≈ **0.70** (22,592 / 32,234). TWP÷YARP H1 plain ≈ **0.94**. Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**.
+
+**nginx HTTP/3:** inbound QUIC terminate → cleartext H1 is now in the harness (`nginx-reverse-http3-cleartext`, nginx.org 1.31.4). HttpClient/MsQuic negotiates `3.0` and peaks at **~19k** RPS, but the error rate stays above the 0.1% SLO (sustain **0**). nginx still cannot speak HTTP/3 to an origin (no H3 upstream in this conf), so H3-origin rows stay blank.
+
+**YARP HTTP/3:** `compare-same` now includes H3→H3; `compare-bridges` fills H3→H2. TWP leads both (20,587 / 16,736 and 24,708 / 21,754).
 
 ### Tiny JSON reverse is nginx’s best case on Linux
 
-The tables above use **~64 B keep-alive GET** on loopback. On Linux H1 reverse, nginx leads; YARP sits near TWP. Heavier bodies, POSTs, TLS handshake cost, and lossy/HOL workloads (below) change the picture. MITM and many H3/h2c/bridge rows remain TWP-only or TWP+YARP (nginx cannot MITM or speak QUIC in this harness).
+The tables above use **~64 B keep-alive GET** on loopback. On Linux H1 reverse, nginx leads; YARP sits near TWP. Heavier bodies, POSTs, TLS handshake cost, and lossy/HOL workloads (below) change the picture. MITM rows remain TWP-only. nginx HTTP/3 is inbound-terminate only (see note above).
 
 ### Why isn’t HTTP/3 > HTTP/2 > HTTP/1 in raw RPS?
 
@@ -151,18 +157,18 @@ nginx/Windows collapses on large reverse bodies in this harness; treat as same-O
 
 ### Linux — heavier reverse GET (64 KiB / 256 KiB)
 
-Median of **3** repeats. Source: Actions [32057545720](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32057545720) (`compare-bodies`). Warmup 2s / measure 8s.
+Median of **3** repeats. Source: Actions [32335540288](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32335540288) (`compare-bodies`). Warmup 2s / measure 8s.
 
 | Body | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak | Winner |
 |---|---|---|---:|---:|---:|---:|---:|---:|---|
-| 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | **7,016** | **7,016** | **8,791** | **8,862** | **7,000** | **7,120** | **nginx** |
-| 64 KiB | HTTP/2 · TLS | HTTP/1 · plain | **4,074** | **4,074** | **3,937** | **3,937** | **5,262** | **5,262** | **YARP** |
-| 64 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **3,648** | **3,648** | *Not possible* (no QUIC) | *Not possible* | **4,616** | **4,616** | **YARP** |
-| 256 KiB | HTTP/1 · TLS | HTTP/1 · plain | **2,178** | **2,178** | **2,764** | **2,764** | **2,255** | **2,255** | **nginx** |
-| 256 KiB | HTTP/2 · TLS | HTTP/1 · plain | **1,062** | **1,062** | **0** | **3** | **1,454** | **1,472** | **YARP** |
-| 256 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **1,106** | **1,106** | *Not possible* (no QUIC) | *Not possible* | **1,304** | **1,326** | **YARP** |
+| 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | **6,213** | **6,241** | **7,874** | **7,904** | **6,339** | **6,383** | **nginx** |
+| 64 KiB | HTTP/2 · TLS | HTTP/1 · plain | **4,612** | **4,612** | **3,417** | **3,433** | **4,735** | **4,735** | **YARP** |
+| 64 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **3,181** | **3,181** | *Not measured* | *Not measured* | **4,201** | **4,201** | **YARP** |
+| 256 KiB | HTTP/1 · TLS | HTTP/1 · plain | **2,068** | **2,068** | **2,607** | **2,607** | **2,114** | **2,114** | **nginx** |
+| 256 KiB | HTTP/2 · TLS | HTTP/1 · plain | **1,354** | **1,354** | **910** | **935** | **1,338** | **1,338** | **TWP** |
+| 256 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **1,184** | **1,184** | *Not measured* | *Not measured* | **1,238** | **1,238** | **YARP** |
 
-On Linux H1 TLS, TWP÷nginx ≈ **0.80** at 64 KiB and ≈ **0.79** at 256 KiB — better than the tiny-GET ≈0.67 ratio, but nginx still leads sustain when both stay healthy. nginx H2 at 256 KiB failed this harness (~100% errors); TWP and YARP H2/H3 completed.
+On Linux H1 TLS, TWP÷nginx ≈ **0.79** at 64 KiB and ≈ **0.79** at 256 KiB — better than the tiny-GET ≈0.67 ratio, but nginx still leads sustain when both stay healthy. nginx H2 at 256 KiB stayed healthy this pass (~910 sustain). nginx HTTP/3 body arms ran before the dual-stack QUIC listen fix and never negotiated `h3` — left unmeasured rather than published as a fair zero.
 
 ### Windows — POST 64 KiB request + 64 KiB response
 
@@ -178,15 +184,15 @@ TWP wins the H1 and H3 POST arms and sits at ~**0.87** of YARP sustain on H2 POS
 
 ### Linux — POST 64 KiB request + 64 KiB response
 
-Median of **3** repeats. Source: Actions [32059387716](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32059387716) (`compare-post`).
+Median of **3** repeats. Source: Actions [32335541836](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32335541836) (`compare-post`).
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak | Winner |
 |---|---|---:|---:|---:|---:|---:|---:|---|
-| HTTP/1 · TLS | HTTP/1 · plain | **3,733** | **3,733** | **0** | **0** | **3,082** | **3,082** | **TWP** |
-| HTTP/2 · TLS | HTTP/1 · plain | **95** | **275** | **0** | **0** | **2,526** | **2,526** | **YARP** |
-| HTTP/3 · QUIC | HTTP/1 · plain | **0** | **0** | *Not possible* | *Not possible* | **2,550** | **2,550** | **YARP** |
+| HTTP/1 · TLS | HTTP/1 · plain | **3,885** | **3,885** | **4,041** | **4,041** | **3,112** | **3,112** | **nginx** |
+| HTTP/2 · TLS | HTTP/1 · plain | **2,763** | **2,763** | **1,929** | **1,990** | **2,468** | **2,525** | **TWP** |
+| HTTP/3 · QUIC | HTTP/1 · plain | **0** | **2,033** | *Not measured* | *Not measured* | **2,592** | **2,592** | **YARP** |
 
-Linux nginx returned **100% errors** on 64 KiB POST in this harness (Windows nginx did complete). Prefer TWP/YARP H1 POST as working reverse paths; do not read the nginx zero as a fair peak contest until the nginx POST arm is healthy on Ubuntu.
+Linux nginx H1/H2 POST completed this pass (nginx.org 1.31.4; the previous Ubuntu 1.24 arm returned 100% errors). TWP H3 POST peaked at **2,033** but did not hold the error/latency SLO (sustain **0**). nginx HTTP/3 POST used the pre-fix IPv4-only QUIC listen and is left unmeasured.
 
 ### Windows — lossy / high-RTT (H2 HOL)
 
@@ -201,12 +207,12 @@ H1 scales with concurrency; H2 collapses under connection stalls (HOL). Absolute
 
 ### Linux — lossy / high-RTT (H2 HOL)
 
-Median of **3** repeats. Source: Actions [32057553398](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32057553398) (`compare-lossy`).
+Median of **3** repeats. Source: Actions [32335543372](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32335543372) (`compare-lossy`).
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak | Winner |
 |---|---|---:|---:|---:|---:|---:|---:|---|
-| HTTP/1 · TLS | HTTP/1 · plain | **1,114** | **1,114** | **1,211** | **1,211** | **1,195** | **1,195** | **nginx** |
-| HTTP/2 · TLS | HTTP/1 · plain | **40** | **45** | **44** | **45** | **40** | **42** | **nginx** |
+| HTTP/1 · TLS | HTTP/1 · plain | **1,168** | **1,168** | **1,220** | **1,220** | **1,217** | **1,217** | **nginx** |
+| HTTP/2 · TLS | HTTP/1 · plain | **40** | **44** | **40** | **44** | **40** | **40** | **nginx** |
 
 Same story as Windows: H1 stays usable; H2 falls to tens of RPS for all three products. Tiny-GET H1 leadership does not carry over.
 
@@ -226,15 +232,15 @@ Source: local `compare-tls-cost` (`rps-ramp-20260817-191143`).
 
 #### Linux
 
-Median of **3** repeats. Source: Actions [32057558279](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32057558279) (`compare-tls-cost`).
+Median of **3** repeats. Source: Actions [32335545066](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32335545066) (`compare-tls-cost`).
 
 | Workload | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak | Winner |
 |---|---:|---:|---:|---:|---:|---:|---|
-| Keep-alive · tiny GET | **19,682** | **19,682** | **27,711** | **27,711** | **21,165** | **21,165** | **nginx** |
-| New-connection · tiny GET | **1,150** | **1,161** | **1,020** | **1,020** | **981** | **981** | **TWP** |
-| Keep-alive · 256 KiB GET | **2,155** | **2,155** | **2,674** | **2,674** | **2,197** | **2,197** | **nginx** |
+| Keep-alive · tiny GET | **18,880** | **18,880** | **28,245** | **28,245** | **20,746** | **20,746** | **nginx** |
+| New-connection · tiny GET | **1,106** | **1,113** | **1,005** | **1,009** | **957** | **957** | **TWP** |
+| Keep-alive · 256 KiB GET | **2,126** | **2,126** | **2,627** | **2,627** | **2,134** | **2,134** | **nginx** |
 
-**Verdict (Linux, authoritative nginx):** On keep-alive tiny terminate, TWP is ~**0.71×** nginx and ~**0.93×** YARP. On **new-connection** terminate, TWP is **ahead** of both (~1.13× nginx, ~1.17× YARP). With **256 KiB** bodies, nginx still leads sustain when all three are healthy.
+**Verdict (Linux, authoritative nginx):** On keep-alive tiny terminate, TWP is ~**0.67×** nginx and ~**0.91×** YARP. On **new-connection** terminate, TWP is **ahead** of both (~1.10× nginx, ~1.16× YARP). With **256 KiB** bodies, nginx still leads sustain when all three are healthy.
 
 ## Other measurements
 
