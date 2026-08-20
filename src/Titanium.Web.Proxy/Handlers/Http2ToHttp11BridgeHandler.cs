@@ -433,11 +433,11 @@ public partial class ProxyServer
             }
 
             if (!sessionArgs.IsFastPath)
-            {
                 sessionArgs.HttpClient.Response.SetOriginalHeaders();
-                if (sessionArgs.ProxyEndPoint is TransparentProxyEndPoint { EnableHttp3: true })
-                    MaybeInjectClientAltSvc(sessionArgs);
-            }
+
+            // Dual-listen reverse H3 must advertise Alt-Svc on the H2 response even when
+            // interception is off (IsFastPath). Same policy as ResponseHandler / H1→H2.
+            MaybeInjectClientAltSvc(sessionArgs);
 
             if (!sessionArgs.IsFastPath && !sessionArgs.HttpClient.Response.Locked)
                 await OnBeforeResponse(sessionArgs);
