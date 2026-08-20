@@ -229,11 +229,19 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
     /// </summary>
     internal async ValueTask DrainAsync()
     {
-        await drainGate.WaitAsync().ConfigureAwait(false);
+        await drainGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {
             draining = true;
-            cleanupCts.Cancel();
+            try
+            {
+                cleanupCts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // DrainAsync is idempotent (Stop then Dispose).
+            }
+
             try
             {
                 await cleanupTask.ConfigureAwait(false);
@@ -268,6 +276,7 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
             }
 
             pool.Clear();
+            cleanupCts.Dispose();
         }
         finally
         {

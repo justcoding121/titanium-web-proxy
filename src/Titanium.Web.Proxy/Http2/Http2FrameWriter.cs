@@ -39,7 +39,7 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
             SingleWriter = false,
             AllowSynchronousContinuations = false
         });
-        drainTask = Task.Run(() => DrainAsync(cts.Token));
+        drainTask = Task.Run(() => DrainAsync(cts.Token), cts.Token);
     }
 
     /// <summary>
@@ -169,14 +169,14 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         channel.Writer.TryComplete();
         try
         {
-            await drainTask.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            await drainTask.WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
             try { cts.Cancel(); }
             catch { /* ignore */ }
 
-            try { await drainTask.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false); }
+            try { await drainTask.WaitAsync(TimeSpan.FromSeconds(1), CancellationToken.None).ConfigureAwait(false); }
             catch { /* drain may fault if socket already closed */ }
         }
         catch

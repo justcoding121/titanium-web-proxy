@@ -1466,7 +1466,7 @@ namespace Titanium.Web.Proxy.Http2
                         }
 
                         request.Locked = true;
-                    });
+                    }, cancellationToken);
                     requestDispatchChain = dispatchTask;
                     request.Http2BeforeHandlerTask = dispatchTask;
                     pendingSynthetics.Add(dispatchTask);
