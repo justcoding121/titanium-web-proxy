@@ -501,10 +501,10 @@ public partial class ProxyServer
             // read loop - so it is safe to write to clientStream without additional synchronization.
             //
             // Passthrough lite: when no session handlers are subscribed and RFC 8441 is off, skip the
-            // per-request InterimChannel (HeadersReceived TCS only). Probe origins do not emit 1xx;
+            // per-request InterimChannel and wait only on HeadersReceived. Probe origins do not emit 1xx.
             // AllocTick showed Channel/segment Gen0 as a TWP-only tax vs YARP. Keep Channel+relay when
-            // interception is on so Early Hints still forward. Diag TWP_DIAG_HEADERS_WAIT_TCS=1 forces lite
-            // (cached at type init — do not GetEnvironmentVariable per request).
+            // interception is on so Early Hints still forward. Diag env TWP_DIAG_HEADERS_WAIT_TCS set to 1
+            // forces lite (cached at type init, not looked up per request).
             var useLiteHeadersWait = DiagForceLiteHeadersWait
                 || (!NeedsHttpInterception(args.ProxyEndPoint) && !EnableRfc8441);
             Func<int, HeaderCollection, CancellationToken, Task>? relayInterim = null;

@@ -1870,11 +1870,10 @@ namespace Titanium.Web.Proxy.Http2
                         }
 
                         Http2FrameWriter? dedicatedWriter = null;
-                        var wireStreamId = dataStreamId;
                         if (isClient && connectionState.OriginRelayPool != null
                             && connectionState.OriginRelayPool.TryGetAssignment(dataStreamId, out var assignment))
                         {
-                            wireStreamId = assignment.OriginStreamId;
+                            var wireStreamId = assignment.OriginStreamId;
                             dedicatedWriter = assignment.Leg.Writer;
                             await assignment.Leg.SendFlow
                                 .ReserveAsync(wireStreamId, length, cancellationToken)
@@ -2004,9 +2003,9 @@ namespace Titanium.Web.Proxy.Http2
                 // toward the origin leg - which for bridge connections is a NullOriginStream that never
                 // grants WINDOW_UPDATE, permanently leaking the 64 KiB connection window and deadlocking the
                 // whole frame loop in ReserveAsync (uploads and every response writer stall together). The
-                // dispatch completes even when the user handler is still waiting on the request body
-                // (ReadHttp2BeforeHandlerTaskCompletionSource unblocks it), so awaiting here cannot deadlock;
-                // the END_STREAM/SendBody path below already relies on the same contract.
+                // The dispatch completes even when the user handler is still waiting on the request body
+                // (ReadHttp2BeforeHandlerTaskCompletionSource unblocks it), so awaiting here cannot deadlock.
+                // The END_STREAM/SendBody path below already relies on the same contract.
                 if (isClient && type == Http2FrameType.Data
                     && args?.HttpClient.Request.Http2BeforeHandlerTask is { IsCompleted: false } dataDispatch)
                 {
@@ -2084,7 +2083,6 @@ namespace Titanium.Web.Proxy.Http2
                             {
                                 await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
                                     streamId, Http2ErrorCode.RefusedStream, input));
-                                sendPacket = false;
                                 continue;
                             }
 
@@ -2092,7 +2090,6 @@ namespace Titanium.Web.Proxy.Http2
                             {
                                 await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
                                     streamId, Http2ErrorCode.RefusedStream, input));
-                                sendPacket = false;
                                 continue;
                             }
 
@@ -2102,7 +2099,6 @@ namespace Titanium.Web.Proxy.Http2
                                 RemoveAndFinalizeStream(streamId);
                                 await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(), new byte[9],
                                     streamId, Http2ErrorCode.RefusedStream, input));
-                                sendPacket = false;
                                 continue;
                             }
                         }
@@ -4769,7 +4765,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     Bounded by <paramref name="length" /> and a short timeout so a peer that declares a huge length and
         ///     then stalls cannot use this to hang the relay.
         /// </summary>
-        private static async Task DiscardRejectedFramePayloadAsync(Stream input, int length,
+        private static async Task DiscardRejectedFramePayloadAsync(Stream input, int length, // NOSONAR S1144 -- reflection test seam
             CancellationToken cancellationToken)
         {
             try
@@ -4914,7 +4910,7 @@ namespace Titanium.Web.Proxy.Http2
         /// </summary>
         private sealed class NoOpHeaderListener : IHeaderListener
         {
-            public static readonly NoOpHeaderListener Instance = new();
+            public static readonly NoOpHeaderListener Instance = new(); // NOSONAR S1144 -- reserved singleton for compressed-relay decode
 
             public void AddHeader(ByteString name, ByteString value, bool sensitive)
             {

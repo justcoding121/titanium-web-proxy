@@ -1111,7 +1111,7 @@ internal sealed class Http2OriginConnection : IDisposable
         }
     }
 
-    private void ApplySettings(byte[] payload) => ApplySettings(payload.AsSpan());
+    private void ApplySettings(byte[] payload) => ApplySettings(payload.AsSpan()); // NOSONAR S1144 -- reflection test seam
 
     private void ApplySettings(ReadOnlySpan<byte> payload)
     {
@@ -1204,7 +1204,7 @@ internal sealed class Http2OriginConnection : IDisposable
     }
 
     /// <summary>Byte[] overload kept for unit tests via reflection; allocates a copy of the header block.</summary>
-    private static byte[] StripHeadersFraming(byte[] payload, Http2FrameFlag flags)
+    private static byte[] StripHeadersFraming(byte[] payload, Http2FrameFlag flags) // NOSONAR S1144 -- reflection test seam
         => StripHeadersFraming(payload.AsSpan(), flags).ToArray();
 
     /// <summary>Strips DATA PADDED framing into a new array (tunnel channel ownership).</summary>

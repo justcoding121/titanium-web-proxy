@@ -40,6 +40,7 @@ public class Http2OriginConnectionPoolTests
         var pool = proxy.Http2OriginConnectionPool;
         await pool.DrainAsync();
         await pool.DrainAsync();
+        Assert.IsNotNull(pool);
     }
 
     [TestMethod]
@@ -74,5 +75,6 @@ public class Http2OriginConnectionPoolTests
         // connection never offered must still dispose without throwing.
         // Skip real CreateAsync here — covered by bridge integration tests.
         await pool.DrainAsync();
+        Assert.IsNotNull(pool);
     }
 }

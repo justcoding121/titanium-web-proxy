@@ -822,8 +822,8 @@ internal static class Http3OriginBridge
                         {
                             if (frame.Type == Http3FrameType.Headers)
                             {
-                                // Ignore interim 1xx on the fast path (probes never send them);
-                                // still forward the first HEADERS block and any trailers.
+                                // Ignore interim 1xx on the fast path (probes never send them).
+                                // Still forward the first HEADERS block and any trailers.
                                 await Http3Frame.WriteAsync(clientStream, Http3FrameType.Headers,
                                     frame.Payload, cancellationToken);
                                 sawFinalHeaders = true;
@@ -867,7 +867,6 @@ internal static class Http3OriginBridge
                     if (originStream != null)
                     {
                         try { await originStream.DisposeAsync(); } catch { /* best effort */ }
-                        originStream = null;
                     }
 
                     if (quicConn != null)
@@ -1542,7 +1541,6 @@ internal static class Http3OriginBridge
                             await server.TcpConnectionFactory.Release(owned, shouldClose);
                         }
                     };
-                    connection = null;
                 }
                 else
                 {
@@ -1563,7 +1561,7 @@ internal static class Http3OriginBridge
     /// <summary>
     ///     Builds the QPACK name/value list for an origin request (test seam + EncodeRequest source of truth).
     /// </summary>
-    private static List<(string, string)> BuildRequestHeaders(Request request, string authorityHost)
+    private static List<(string, string)> BuildRequestHeaders(Request request, string authorityHost) // NOSONAR S1144 -- reflection test seam
     {
         var authority = request.Authority.Length > 0
             ? request.Authority.GetString()
