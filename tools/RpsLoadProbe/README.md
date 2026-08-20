@@ -16,7 +16,8 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-same
 | `reverse-http1-tls` | H1 TLS terminate → H1 cleartext |
 | `https-mitm` | Explicit H1 TLS MITM → HTTPS H1 |
 | `reverse-http2` | H2 TLS MITM → HTTPS H2 |
-| `reverse-http3` | H3 QUIC MITM → H3 |
+| `reverse-http3` | H3 QUIC → H3 origin (dual-listen reverse) |
+| `yarp-reverse-http3-to-http3` | Managed reverse peer H3 → H3 |
 
 **Not supported:** `Upgrade: h2c`. Explicit-proxy inbound h2c is not implemented. Outbound and inbound prior-knowledge h2c on transparent reverse are supported. H3 is always QUIC/TLS for TWP.
 
@@ -77,6 +78,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-bridges
 | `reverse-http1-to-http3` | H1 TLS → H1→H3 → QUIC/h3 |
 | `reverse-http2-to-http3` | H2 TLS → H2→H3 → QUIC/h3 |
 | `reverse-http3-cleartext` | H3 → cleartext H1 |
+| `nginx-reverse-http3-cleartext` | Native reverse H3 → cleartext H1 (`http_v3_module`) |
 | `reverse-http3-to-http2` | H3 → H3→H2 → HTTPS h2 |
 
 Also: `reverse-h2c` (h2c → HTTPS h2) in `compare-same`.

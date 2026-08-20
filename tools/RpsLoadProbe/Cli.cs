@@ -297,6 +297,9 @@ internal static class Cli
             case "nginx-reverse-http2":
                 mode = ProbeMode.NginxReverseHttp2;
                 return true;
+            case "nginx-reverse-http3-cleartext":
+                mode = ProbeMode.NginxReverseHttp3Cleartext;
+                return true;
             case "yarp-reverse-http2":
                 mode = ProbeMode.YarpReverseHttp2;
                 return true;
@@ -431,6 +434,7 @@ internal static class Cli
               reverse-h2c-to-h3       TWP cleartext h2c reverse -> H2→H3 bridge -> Quic/h3 origin
               yarp-reverse-h2c-to-h3  Control arm: cleartext h2c -> HTTP/3 origin
               nginx-reverse-http2     Control arm: ssl+http2 -> cleartext HTTP/1 origin
+              nginx-reverse-http3-cleartext Control arm: QUIC/h3 -> cleartext HTTP/1 (needs http_v3_module)
               yarp-reverse-http2      Control arm: TLS+h2 -> cleartext HTTP/1 origin
               reverse-http3           TWP TransparentQuic (h3) -> Quic HTTPS/h3 origin
               reverse-http3-cleartext TWP QUIC/h3 terminate -> cleartext HTTP/1 origin

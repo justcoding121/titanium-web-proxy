@@ -17,7 +17,7 @@ param(
         'reverse-http2', 'reverse-http2-cleartext', 'reverse-http2-to-h2c', 'yarp-reverse-http2-to-h2c',
         'reverse-h2c', 'yarp-reverse-h2c', 'reverse-h2c-to-h2c', 'yarp-reverse-h2c-to-h2c',
         'reverse-h2c-to-h1', 'yarp-reverse-h2c-to-h1', 'reverse-h2c-to-h3', 'yarp-reverse-h2c-to-h3',
-        'nginx-reverse-http2', 'yarp-reverse-http2',
+        'nginx-reverse-http2', 'nginx-reverse-http3-cleartext', 'yarp-reverse-http2',
         'reverse-http3', 'reverse-http3-cleartext', 'yarp-reverse-http3-cleartext',
         'reverse-http11-to-http2', 'yarp-reverse-http11-to-http2',
         'reverse-http1-to-http3', 'yarp-reverse-http1-to-http3',

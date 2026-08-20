@@ -105,6 +105,7 @@ internal sealed class WorkloadOptions
                 or ProbeMode.MitmHttp2ToHttp1 =>
                 http2,
             ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3Cleartext
+                or ProbeMode.NginxReverseHttp3Cleartext
                 or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
                 or ProbeMode.YarpReverseHttp3ToHttp3
                 or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3

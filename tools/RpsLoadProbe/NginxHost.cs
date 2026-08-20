@@ -76,15 +76,49 @@ internal sealed class NginxHost : IDisposable
         }
     }
 
+    /// <summary>
+    /// Client QUIC/h3 (plus TCP TLS for readiness) → cleartext HTTP/1 origin.
+    /// Returns <see langword="null"/> when nginx is missing or was not built with <c>http_v3_module</c>
+    /// (Ubuntu 24.04 distro nginx 1.24; nginx/Windows). Official nginx.org mainline packages include it.
+    /// </summary>
+    public static async Task<NginxHost?> TryStartHttp3CleartextAsync(int originHttpPort, string? nginxPath)
+    {
+        var exe = ResolveNginxExecutable(nginxPath);
+        if (exe == null)
+            return null;
+        if (!SupportsHttp3Module(ReadConfigureArguments(exe)))
+            return null;
+
+        var prefixProbe = Path.Combine(Path.GetTempPath(), "twp-rps-nginx-certs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(prefixProbe);
+        try
+        {
+            var (certPem, keyPem) = await ExportLoopbackPemAsync(prefixProbe);
+            return await TryStartAsync(BuildHttp3CleartextConf(originHttpPort, certPem, keyPem),
+                listenScheme: "https", nginxPath, listenHost: "localhost", requireUdp: true);
+        }
+        finally
+        {
+            TryDeleteDir(prefixProbe);
+        }
+    }
+
+    /// <summary>True when <paramref name="nginxPath"/> (or PATH) resolves to a binary built with HTTP/3.</summary>
+    public static bool IsHttp3Capable(string? nginxPath)
+    {
+        var exe = ResolveNginxExecutable(nginxPath);
+        return exe != null && SupportsHttp3Module(ReadConfigureArguments(exe));
+    }
+
     private static async Task<NginxHost?> TryStartAsync(Func<string, int, string> confBuilder, string listenScheme,
-        string? nginxPath)
+        string? nginxPath, string listenHost = "127.0.0.1", bool requireUdp = false)
     {
         var exe = ResolveNginxExecutable(nginxPath);
         if (exe == null)
             return null;
 
         var version = ReadVersion(exe);
-        var port = GetFreeTcpPort();
+        var port = requireUdp ? GetFreeDualStackPort() : GetFreeTcpPort();
         var prefixDir = Path.Combine(Path.GetTempPath(), "twp-rps-nginx-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(prefixDir);
         Directory.CreateDirectory(Path.Combine(prefixDir, "logs"));
@@ -114,7 +148,7 @@ internal sealed class NginxHost : IDisposable
         while (DateTime.UtcNow < deadline)
         {
             if (IsPortOpen(port))
-                return new NginxHost(process, prefixDir, port, $"{listenScheme}://127.0.0.1:{port}/", version);
+                return new NginxHost(process, prefixDir, port, $"{listenScheme}://{listenHost}:{port}/", version);
             if (process.HasExited)
             {
                 var err = await process.StandardError.ReadToEndAsync();
@@ -250,6 +284,58 @@ internal sealed class NginxHost : IDisposable
                 """;
         };
 
+    private static Func<string, int, string> BuildHttp3CleartextConf(int originHttpPort, string certPem, string keyPem) =>
+        (prefixDir, port) =>
+        {
+            var certDest = Path.Combine(prefixDir, "certs", "server.crt");
+            var keyDest = Path.Combine(prefixDir, "certs", "server.key");
+            File.Copy(certPem, certDest, overwrite: true);
+            File.Copy(keyPem, keyDest, overwrite: true);
+            certDest = certDest.Replace('\\', '/');
+            keyDest = keyDest.Replace('\\', '/');
+            // Bind all interfaces so HttpClient "localhost" (::1 first) reaches QUIC, matching YARP ListenAnyIP.
+            // Dual listen: TCP SSL for readiness; UDP QUIC for the HTTP/3 client.
+            return $$"""
+                worker_processes auto;
+                daemon off;
+                error_log logs/error.log error;
+                pid nginx.pid;
+                events {
+                    worker_connections 4096;
+                }
+                http {
+                    access_log off;
+                    sendfile on;
+                    keepalive_timeout 65;
+                    client_max_body_size 10m;
+                    upstream origin {
+                        server 127.0.0.1:{{originHttpPort}};
+                        keepalive 32;
+                    }
+                    server {
+                        listen {{port}} ssl;
+                        listen {{port}} quic reuseport;
+                        http3 on;
+                        ssl_certificate {{certDest}};
+                        ssl_certificate_key {{keyDest}};
+                        ssl_protocols TLSv1.3;
+                        add_header Alt-Svc 'h3=":{{port}}"; ma=86400';
+                        location / {
+                            proxy_http_version 1.1;
+                            proxy_set_header Connection "";
+                            proxy_set_header Host $host;
+                            proxy_pass http://origin;
+                        }
+                    }
+                }
+                """;
+        };
+
+    /// <summary>True when <c>nginx -V</c> configure args include <c>http_v3_module</c>.</summary>
+    internal static bool SupportsHttp3Module(string configureOrVersionText) =>
+        configureOrVersionText.Contains("http_v3_module", StringComparison.OrdinalIgnoreCase)
+        || configureOrVersionText.Contains("http_quic_module", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>True when the binary supports the <c>http2 on;</c> directive (1.25.1+).</summary>
     internal static bool SupportsHttp2OnDirective(string versionText)
     {
@@ -332,19 +418,26 @@ internal sealed class NginxHost : IDisposable
         TWP arms will still run. To enable the same-machine nginx control arm:
           Windows: download the official Windows zip from https://nginx.org/en/docs/windows.html
                    or run: scoop install nginx   /   choco install nginx
-          Linux:   sudo apt-get install -y nginx
+          Linux:   install nginx.org mainline (includes --with-http_v3_module), or
+                   sudo apt-get install -y nginx  (Ubuntu 24.04 is 1.24, HTTP/2 only)
         Then re-run with nginx on PATH, or pass --nginx-path <path-to-nginx[.exe]>.
         Note: nginx/Windows has HTTP/2 (ssl) but not HTTP/3/QUIC (UDP unsupported).
+        HTTP/3 terminate needs a build with --with-http_v3_module (nginx.org mainline on Linux).
         """;
 
-    private static string ReadVersion(string exe)
+    private static string ReadVersion(string exe) => ReadNginxOutput(exe, "-v");
+
+    /// <summary><c>nginx -V</c> includes configure arguments (used to detect <c>http_v3_module</c>).</summary>
+    internal static string ReadConfigureArguments(string exe) => ReadNginxOutput(exe, "-V");
+
+    private static string ReadNginxOutput(string exe, string arguments)
     {
         try
         {
             using var p = Process.Start(new ProcessStartInfo
             {
                 FileName = exe,
-                Arguments = "-v",
+                Arguments = arguments,
                 UseShellExecute = false,
                 RedirectStandardError = true,
                 RedirectStandardOutput = true,
@@ -355,6 +448,8 @@ internal sealed class NginxHost : IDisposable
             var stdout = p.StandardOutput.ReadToEnd();
             p.WaitForExit(5000);
             var text = string.IsNullOrWhiteSpace(err) ? stdout : err;
+            if (!string.IsNullOrWhiteSpace(stdout) && !string.IsNullOrWhiteSpace(err))
+                text = err + " " + stdout;
             return text.Trim().Replace('\n', ' ');
         }
         catch
@@ -442,6 +537,31 @@ internal sealed class NginxHost : IDisposable
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
         return port;
+    }
+
+    private static int GetFreeDualStackPort()
+    {
+        for (var i = 0; i < 20; i++)
+        {
+            var port = GetFreeTcpPort();
+            if (IsUdpPortFree(port))
+                return port;
+        }
+
+        return GetFreeTcpPort();
+    }
+
+    private static bool IsUdpPortFree(int port)
+    {
+        try
+        {
+            using var udp = new UdpClient(new IPEndPoint(IPAddress.Loopback, port));
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static void TryDeleteDir(string dir)

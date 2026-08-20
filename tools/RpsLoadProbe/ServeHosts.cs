@@ -248,6 +248,19 @@ internal static class ServeProxyHost
                 nginxVersion = nginx.Version;
                 break;
             }
+            case ProbeMode.NginxReverseHttp3Cleartext:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var nginx = await NginxHost.TryStartHttp3CleartextAsync(originHttpPort, nginxPath)
+                            ?? throw new InvalidOperationException(
+                                "nginx HTTP/3 is not available (need --with-http_v3_module). " +
+                                NginxHost.NginxMissingMessage());
+                proxy = nginx;
+                listenUrl = nginx.ListenUrl;
+                targetForClient = nginx.ListenUrl;
+                nginxVersion = nginx.Version;
+                break;
+            }
             case ProbeMode.ReverseHttp3Cleartext:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
@@ -278,7 +291,8 @@ internal static class ServeProxyHost
                 or ProbeMode.ReverseH2c or ProbeMode.ReverseH2cToH2c or ProbeMode.ReverseH2cToH1
                 or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2c or ProbeMode.YarpReverseH2cToH2c
                 or ProbeMode.YarpReverseH2cToH1 or ProbeMode.YarpReverseH2cToH3 => "2.0",
-            ProbeMode.ReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3Cleartext => "3.0",
+            ProbeMode.ReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3Cleartext
+                or ProbeMode.NginxReverseHttp3Cleartext => "3.0",
             _ => "1.1"
         };
         // Dual-listen reverse H3 (TWP TransparentProxyEndPoint.EnableHttp3 and reference .NET server stack) use HttpClient.
@@ -340,6 +354,7 @@ internal static class ServeProxyHost
         ProbeMode.ReverseH2cToH3 => "reverse-h2c-to-h3",
         ProbeMode.YarpReverseH2cToH3 => "yarp-reverse-h2c-to-h3",
         ProbeMode.NginxReverseHttp2 => "nginx-reverse-http2",
+        ProbeMode.NginxReverseHttp3Cleartext => "nginx-reverse-http3-cleartext",
         ProbeMode.YarpReverseHttp2 => "yarp-reverse-http2",
         ProbeMode.ReverseHttp3 => "reverse-http3",
         ProbeMode.ReverseHttp3Cleartext => "reverse-http3-cleartext",
@@ -390,7 +405,8 @@ internal static class ServeHost
             return 2;
         }
 
-        if ((mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp1Tls or ProbeMode.NginxReverseHttp2)
+        if ((mode is ProbeMode.NginxReverseHttp1 or ProbeMode.NginxReverseHttp1Tls or ProbeMode.NginxReverseHttp2
+                or ProbeMode.NginxReverseHttp3Cleartext)
             && NginxHost.ResolveNginxExecutable(nginxPath) == null)
         {
             ProbeLog.Error(NginxHost.NginxMissingMessage());
@@ -675,6 +691,18 @@ internal static class ServeHost
                                 ?? throw new InvalidOperationException("nginx not available.");
                     return new ServeStack(origin, nginx, null, origin.HttpUrl, null, [], nginx.ListenUrl,
                         null, nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "2.0");
+                }
+                case ProbeMode.NginxReverseHttp3Cleartext:
+                {
+                    if (!System.Net.Quic.QuicListener.IsSupported)
+                        throw new PlatformNotSupportedException("QuicListener is not supported.");
+
+                    var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
+                    var nginx = await NginxHost.TryStartHttp3CleartextAsync(origin.HttpPort, nginxPath)
+                                ?? throw new InvalidOperationException(
+                                    "nginx HTTP/3 is not available (need --with-http_v3_module).");
+                    return new ServeStack(origin, nginx, null, origin.HttpUrl, null, [], nginx.ListenUrl,
+                        null, nginx.ListenUrl, [nginx.ListenUrl], nginx.Version, "3.0");
                 }
                 case ProbeMode.ReverseHttp3:
                 {

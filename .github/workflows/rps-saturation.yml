@@ -62,6 +62,7 @@ on:
           - reverse-http3-to-http2
           - yarp-reverse-http3-to-http2
           - nginx-reverse-http2
+          - nginx-reverse-http3-cleartext
           - yarp-reverse-http2
       concurrency:
         description: 'Comma-separated concurrency steps'
@@ -94,13 +95,31 @@ jobs:
           dotnet-version: |
             10.0.x
 
-      - name: Install nginx
+      # Ubuntu 24.04 distro nginx is 1.24 without HTTP/3. Official nginx.org mainline
+      # packages are built with --with-http_v3_module so the H3 terminate arm can run.
+      - name: Install nginx (HTTP/3-capable)
         run: |
+          set -euo pipefail
+          . /etc/os-release
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates curl gnupg
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            https://nginx.org/keys/nginx_signing.key \
+            | gpg --dearmor \
+            | sudo tee /usr/share/keyrings/nginx-archive-keyring.gpg >/dev/null
+          echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://nginx.org/packages/mainline/${ID} ${VERSION_CODENAME} nginx" \
+            | sudo tee /etc/apt/sources.list.d/nginx.list
+          printf 'Package: *\nPin: origin nginx.org\nPin-Priority: 900\n' \
+            | sudo tee /etc/apt/preferences.d/99nginx
           sudo apt-get update
           sudo apt-get install -y nginx
-          # Stop the distro default site so our temp-prefix nginx owns the ports we pick.
+          # Stop the distro/package default site so our temp-prefix nginx owns the ports we pick.
           sudo systemctl stop nginx || true
           nginx -v
+          if ! nginx -V 2>&1 | grep -q http_v3_module; then
+            echo "nginx was installed but lacks --with-http_v3_module; HTTP/3 native reverse arms will be skipped." >&2
+            nginx -V
+          fi
 
       # .NET System.Net.Quic on Linux requires native libmsquic (shipped in-box on Windows only).
       - name: Install libmsquic (HTTP/3)
