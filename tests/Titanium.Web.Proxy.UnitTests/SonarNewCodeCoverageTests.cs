@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -542,5 +543,131 @@ public class SonarNewCodeCoverageTests
         client.Http2CleartextClient = true;
         apply.Invoke(null, [request, httpsOrigin, client]);
         Assert.IsTrue(request.IsHttps);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Extra new-code lines to cross the 80% gate
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void DiagPickStats_WhenForcedEnabled_RecordsAndFormats()
+    {
+        var diag = typeof(Http2OriginConnectionPool).GetNestedType("DiagPickStats", BindingFlags.NonPublic)!;
+        var enabled = diag.GetField("Enabled", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var original = (bool)enabled.GetValue(null)!;
+        var outPath = Path.Combine(Path.GetTempPath(), $"twp-diag-pick-{Guid.NewGuid():N}.log");
+        Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT", outPath);
+        try
+        {
+            enabled.SetValue(null, true);
+            diag.GetMethod("OnRent", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, null);
+            diag.GetMethod("OnTryPick", BindingFlags.Static | BindingFlags.NonPublic)!
+                .Invoke(null, [2, 1, 3, true]);
+            diag.GetMethod("OnTryPick", BindingFlags.Static | BindingFlags.NonPublic)!
+                .Invoke(null, [1, 1, 1, false]);
+            diag.GetMethod("OnCreationGate", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, null);
+            diag.GetMethod("OnTryPickAny", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, null);
+            diag.GetMethod("OnOpen", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, null);
+            diag.GetMethod("Emit", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, ["test"]);
+
+            var summary = Http2OriginConnectionPool.DiagPickStats.FormatSummary();
+            Assert.IsTrue(summary.Contains("tryPick="));
+            Assert.IsTrue(File.Exists(outPath));
+        }
+        finally
+        {
+            enabled.SetValue(null, original);
+            Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT", null);
+            if (File.Exists(outPath)) File.Delete(outPath);
+        }
+    }
+
+    [TestMethod]
+    public async Task OriginConnection_CreditFailAndUnusableSend()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        using var connection = await CreateShellAsync(proxy);
+
+        typeof(Http2OriginConnection).GetField("concurrencyGateCapacity", PrivateInstance)!
+            .SetValue(connection, 16);
+        Assert.AreEqual(Http2OriginConnection.PoolGrowActiveStreamThreshold, connection.SoftStreamCapacity);
+
+        typeof(Http2OriginConnection).GetMethod("AttachExclusiveFrameWriter", PrivateInstance)!
+            .Invoke(connection, null);
+
+        var grant = typeof(Http2OriginConnection).GetMethod("GrantReceiveCreditAsync", PrivateInstance)!;
+        await (Task)grant.Invoke(connection, [1, 0, false, CancellationToken.None])!;
+        await (Task)grant.Invoke(connection, [1, 16, false, CancellationToken.None])!;
+        await (Task)grant.Invoke(connection, [1, Http2Helper.ReceiveCreditBatchThreshold, false, CancellationToken.None])!;
+        await (Task)grant.Invoke(connection, [1, 0, true, CancellationToken.None])!;
+
+        var fail = typeof(Http2OriginConnection).GetMethod("Fail", PrivateInstance)!;
+        fail.Invoke(connection, [new IOException("peer closed"), true]);
+        fail.Invoke(connection, [new IOException("HTTP/2 protocol error: bad settings"), true]);
+        fail.Invoke(connection, [new ProxyHttpException("wrapped", new IOException("x"), null), false]);
+        Assert.IsFalse(connection.IsUsable);
+
+        await Assert.ThrowsExactlyAsync<Http2OriginGoAwayException>(() =>
+            connection.SendAsync(new Request { Method = "GET" }, null, CancellationToken.None));
+
+        var violation = typeof(Http2OriginConnection).GetMethod("IsHttp2ProtocolViolation", PrivateStatic)!;
+        Assert.IsTrue((bool)violation.Invoke(null, [new IOException("HTTP/2 protocol error: x")])!);
+        Assert.IsFalse((bool)violation.Invoke(null, [new IOException("reset")])!);
+    }
+
+    [TestMethod]
+    public async Task Http2OriginRelayPool_AssignReleaseAndFailedOpen()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        using var shell = await CreateShellAsync(proxy);
+        await using var relay = new Http2OriginRelayPool(
+            shell.ServerConnection,
+            _ => throw new IOException("cannot open another origin"),
+            ProxyResourceLimits.Default,
+            NullLogger.Instance,
+            new SemaphoreSlim(1, 1));
+
+        Assert.AreEqual(1, relay.LegCount);
+        Assert.IsNotNull(relay.PrimaryLeg);
+        Assert.AreEqual(1, relay.SnapshotLegs().Count);
+
+        var first = await relay.AssignStreamAsync(1, CancellationToken.None);
+        var again = await relay.AssignStreamAsync(1, CancellationToken.None);
+        Assert.AreEqual(first.OriginStreamId, again.OriginStreamId);
+        Assert.IsTrue(relay.TryGetAssignment(1, out var found));
+        Assert.AreEqual(first.OriginStreamId, found.OriginStreamId);
+
+        typeof(Http2OriginRelayPool.OriginLeg).GetField("ActiveStreams")!
+            .SetValue(relay.PrimaryLeg, 10_000);
+        var second = await relay.AssignStreamAsync(3, CancellationToken.None);
+        Assert.IsTrue(second.OriginStreamId > 0);
+
+        relay.ReleaseStream(1);
+        relay.ReleaseStream(99);
+        Assert.IsFalse(relay.TryGetAssignment(1, out _));
+    }
+
+    [TestMethod]
+    public void TryRejectLoopedVia_CoversFastPathAndLoop()
+    {
+        using var proxy = new ProxyServer(false, false, false) { ViaHeaderPseudonym = "twp-test" };
+        var reject = typeof(ProxyServer).GetMethod("TryRejectLoopedVia", PrivateInstance)!;
+
+        using var fast = MakeSession(proxy);
+        fast.IsFastPath = true;
+        Assert.IsFalse((bool)reject.Invoke(proxy, [fast])!);
+
+        using var unnamed = new ProxyServer(false, false, false);
+        using var emptyName = MakeSession(unnamed);
+        Assert.IsFalse((bool)reject.Invoke(unnamed, [emptyName])!);
+
+        using var ok = MakeSession(proxy);
+        Assert.IsFalse((bool)reject.Invoke(proxy, [ok])!);
+        Assert.IsNotNull(ok.HttpClient.Request.Headers.GetHeaderValueOrNull("Via"));
+
+        using var looped = MakeSession(proxy);
+        looped.HttpClient.Request.Headers.AddHeader("Via", "2.0 twp-test");
+        Assert.IsTrue((bool)reject.Invoke(proxy, [looped])!);
+        Assert.AreEqual(508, looped.HttpClient.Response.StatusCode);
     }
 }
