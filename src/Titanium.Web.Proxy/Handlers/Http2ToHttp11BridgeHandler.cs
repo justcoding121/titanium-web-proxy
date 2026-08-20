@@ -62,13 +62,6 @@ namespace Titanium.Web.Proxy;
 public partial class ProxyServer
 {
     /// <summary>
-    ///     Caps concurrent <em>new</em> HTTPS origin opens on the H2→H1 bridge (MITM / re-encrypt).
-    ///     Pool hits (warm SslStream) are uncapped — gating the whole round trip serialized
-    ///     keep-alive reuse and capped steady-state below cleartext. Cleartext H1 origins skip this.
-    /// </summary>
-    private static readonly SemaphoreSlim Http2ToHttp11HttpsOriginCreateGate = new(8, 8);
-
-    /// <summary>
     ///     Entry point for the h2-client-to-HTTP/1.1-origin bridge, invoked once per h2 client connection from
     ///     the explicit and transparent client handlers in place of the normal <see cref="Http2Helper.SendHttp2" />
     ///     call used when both sides speak h2.
@@ -364,7 +357,7 @@ public partial class ProxyServer
                 && customUpStreamProxy == null
                 && (sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint) == null)
             {
-                // Cache key for the common fixed-forward probe shape (no upstream proxy / bind override).
+                // Cache key for the common fixed-forward reverse shape (no upstream proxy / bind override).
                 storePoolEp.CachedHttp11PoolKey = newConnection.CacheKey;
                 storePoolEp.CachedHttp11PoolIsHttps = upstreamIsHttps;
             }
@@ -458,8 +451,7 @@ public partial class ProxyServer
                 // HTTP/2 forbids connection-specific header fields (RFC 7540 §8.1.2.2) that an HTTP/1.1
                 // origin may legitimately send; EmitSyntheticResponseAsync already strips Transfer-Encoding
                 // (h2 framing never uses it - length is implicit from DATA frames + END_STREAM), the rest
-                // are stripped here. Fast path: Kestrel/probe origins omit Connection — skip 4 dictionary
-                // removals when absent (same MITM+cleartext hot path).
+                // are stripped here. Skip RemoveHeader work when none of these fields are present.
                 if (!sessionArgs.IsFastPath
                     || response.Headers.HeaderExists(KnownHeaders.Connection.String)
                     || response.Headers.HeaderExists(KnownHeaders.ProxyConnection.String)
@@ -485,12 +477,14 @@ public partial class ProxyServer
                 var originIsChunked = sessionArgs.IsFastPath ? response.IsChunked : response.OriginalIsChunked;
                 var originContentLength = sessionArgs.IsFastPath ? response.ContentLength : response.OriginalContentLength;
 
-                // Tiny known-length bodies (probe GETs ~56 B): read straight from the origin stream.
-                // LimitedStream was ~1 wrapper + Finish() path per response under dual-TLS MITM.
-                const int smallBodyBufferThreshold = 16 * 1024;
+                // Eager-buffer known-CL bodies up to min(16 KiB, MaxBufferedBodyBytes); larger bodies
+                // stream via LimitedStream. No assumption about typical response size.
+                var eagerBodyThreshold = EagerBufferBodyThreshold(
+                    sessionArgs.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes);
                 if (originHasBody && !response.IsBodyRead
                     && !originIsChunked
-                    && originContentLength is >= 0 and <= smallBodyBufferThreshold)
+                    && originContentLength >= 0
+                    && originContentLength <= eagerBodyThreshold)
                 {
                     byte[] bodyBytes;
                     if (originContentLength == 0)
@@ -511,7 +505,11 @@ public partial class ProxyServer
                         }
 
                         if (offset != bodyBytes.Length)
+                        {
+                            // Short read: do not pool — framing is ambiguous.
+                            closeConnection = true;
                             Array.Resize(ref bodyBytes, offset);
+                        }
                     }
 
                     response.HttpVersion = clientHttpVersion;
@@ -596,13 +594,10 @@ public partial class ProxyServer
             if (restoreResponseVersionAfterEmit)
                 sessionArgs.HttpClient.Response.HttpVersion = HttpHeader.Version11;
 
-            // Refuse to pool a socket that still has unread bytes in HttpStream's buffer — that is the
-            // residual-framing failure mode observed under H2 multiplex (Invalid chunk length / header parse).
-            // IsFastPath probe GETs: exact-CL reads leave no residual; SslStream FillBuffer leftovers
-            // were falsely tripping DataAvailable and forcing TLS reconnect thrash (MITM÷cleartext).
-            if (!sessionArgs.IsFastPath
-                && connection?.Stream is Helpers.HttpStream httpStream
-                && httpStream.DataAvailable)
+            // Refuse to pool a socket that still has unread bytes in HttpStream's buffer — residual
+            // framing (pipelined bytes, trailers, CL mismatch). Always close; do not special-case
+            // IsFastPath (pooling with unread bytes corrupts the next keep-alive exchange).
+            if (connection?.Stream is Helpers.HttpStream httpStream && httpStream.DataAvailable)
                 closeConnection = true;
         }
         catch (Exception ex)
@@ -1041,6 +1036,13 @@ public partial class ProxyServer
     }
 
     private static readonly char[] separator = new[] { ' ' };
+
+    /// <summary>
+    ///     Eager-buffer known-CL bodies up to min(16 KiB, <paramref name="maxBufferedBodyBytes" />).
+    ///     Above that threshold, stream via <see cref="LimitedStream" />.
+    /// </summary>
+    private static int EagerBufferBodyThreshold(int maxBufferedBodyBytes) =>
+        Math.Min(16 * 1024, Math.Max(0, maxBufferedBodyBytes));
 
     private static bool TryParseHttp11StatusLine(string? line, out int statusCode)
     {

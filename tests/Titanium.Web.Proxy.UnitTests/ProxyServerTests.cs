@@ -181,5 +181,33 @@ namespace Titanium.Web.Proxy.UnitTests
 
             Assert.ThrowsExactly<ArgumentNullException>(() => proxy.PolicyModes = null!);
         }
+
+        [TestMethod]
+        public void MaxConcurrentHttp11HttpsOriginCreates_Default_IsProcessorCountClampedTo4Through32()
+        {
+            var proxy = new ProxyServer();
+            var expected = Math.Clamp(Environment.ProcessorCount, 4, 32);
+
+            Assert.AreEqual(expected, proxy.MaxConcurrentHttp11HttpsOriginCreates);
+            Assert.IsTrue(proxy.MaxConcurrentHttp11HttpsOriginCreates is >= 4 and <= 32);
+        }
+
+        [TestMethod]
+        public void MaxConcurrentHttp11HttpsOriginCreates_Setter_RejectsZero()
+        {
+            var proxy = new ProxyServer();
+
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+                proxy.MaxConcurrentHttp11HttpsOriginCreates = 0);
+        }
+
+        [TestMethod]
+        public void MaxConcurrentHttp11HttpsOriginCreates_Setter_AcceptsCustomValueBeforeGateUse()
+        {
+            var proxy = new ProxyServer { MaxConcurrentHttp11HttpsOriginCreates = 12 };
+
+            Assert.AreEqual(12, proxy.MaxConcurrentHttp11HttpsOriginCreates);
+            Assert.AreEqual(12, proxy.Http2ToHttp11HttpsOriginCreateGate.CurrentCount);
+        }
     }
 }

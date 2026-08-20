@@ -1441,12 +1441,13 @@ internal static class Http3OriginBridge
             var response = sessionArgs.HttpClient.Response;
             // Stream the response unless a handler already buffered it. H3 client emit path
             // (SendResponseAsync) honours StreamBodyWriter the same way H2 EmitSynthetic does.
-            // Tiny known-length bodies: buffer once (same H2→H1 bridge policy) to avoid
-            // LimitedStream + async pump per GET under dual-TLS MITM.
-            const int smallBodyBufferThreshold = 16 * 1024;
+            // Eager-buffer known-CL bodies up to min(16 KiB, MaxBufferedBodyBytes); larger stream.
+            var eagerBodyThreshold = Math.Min(16 * 1024,
+                Math.Max(0, sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes));
             if (response.HasBody && !response.IsBodyRead
                 && !response.IsChunked
-                && response.ContentLength is >= 0 and <= smallBodyBufferThreshold)
+                && response.ContentLength >= 0
+                && response.ContentLength <= eagerBodyThreshold)
             {
                 byte[] bodyBytes;
                 if (response.ContentLength == 0)
@@ -1455,7 +1456,7 @@ internal static class Http3OriginBridge
                 }
                 else
                 {
-                    // Read CL bytes directly — LimitedStream wrapper was extra alloc per MITM GET.
+                    // Read CL bytes directly — avoids LimitedStream wrapper for small known-CL bodies.
                     bodyBytes = new byte[response.ContentLength];
                     var offset = 0;
                     while (offset < bodyBytes.Length)
@@ -1468,7 +1469,10 @@ internal static class Http3OriginBridge
                     }
 
                     if (offset != bodyBytes.Length)
+                    {
+                        closeConnection = true;
                         Array.Resize(ref bodyBytes, offset);
+                    }
                 }
 
                 response.Body = bodyBytes;
@@ -1506,6 +1510,10 @@ internal static class Http3OriginBridge
             }
 
             closeConnection = !response.KeepAlive;
+
+            // Same H2→H1 policy: unread HttpStream bytes mean residual framing — do not pool.
+            if (connection?.Stream is Helpers.HttpStream httpStream && httpStream.DataAvailable)
+                closeConnection = true;
         }
         finally
         {

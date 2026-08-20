@@ -717,6 +717,52 @@ public partial class ProxyServer : IDisposable
     private int maxCachedConnections = 128;
 
     /// <summary>
+    ///     Caps concurrent <em>new</em> HTTPS origin TCP/TLS opens on the H2→H1 bridge only
+    ///     (MITM / re-encrypt). Pool hits (warm keep-alive) are uncapped. Cleartext H1 origins
+    ///     are not gated. Default is <c>Clamp(ProcessorCount, 4, 32)</c>. Set before the first
+    ///     H2→H1 HTTPS origin open (typically before <see cref="Start" />); changing the value
+    ///     after the create gate has been used has no effect on the live semaphore.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The assigned value is less than 1.</exception>
+    public int MaxConcurrentHttp11HttpsOriginCreates
+    {
+        get => maxConcurrentHttp11HttpsOriginCreates;
+        set
+        {
+            if (value < 1)
+                throw new ArgumentOutOfRangeException(nameof(value), value,
+                    "MaxConcurrentHttp11HttpsOriginCreates must be at least 1.");
+
+            maxConcurrentHttp11HttpsOriginCreates = value;
+        }
+    }
+
+    private int maxConcurrentHttp11HttpsOriginCreates = Math.Clamp(Environment.ProcessorCount, 4, 32);
+
+    private SemaphoreSlim? http2ToHttp11HttpsOriginCreateGate;
+    private readonly object http2ToHttp11HttpsOriginCreateGateLock = new();
+
+    /// <summary>
+    ///     Instance create SoftCap for H2→H1 HTTPS origin opens. Sized from
+    ///     <see cref="MaxConcurrentHttp11HttpsOriginCreates" /> on first use.
+    /// </summary>
+    internal SemaphoreSlim Http2ToHttp11HttpsOriginCreateGate
+    {
+        get
+        {
+            var existing = http2ToHttp11HttpsOriginCreateGate;
+            if (existing != null)
+                return existing;
+
+            lock (http2ToHttp11HttpsOriginCreateGateLock)
+            {
+                return http2ToHttp11HttpsOriginCreateGate ??= new SemaphoreSlim(
+                    maxConcurrentHttp11HttpsOriginCreates, maxConcurrentHttp11HttpsOriginCreates);
+            }
+        }
+    }
+
+    /// <summary>
     ///     SO_LINGER timeout in seconds applied to client and upstream sockets via
     ///     <see cref="LingerOption" /> (enabled with this timeout).
     ///     This is <b>not</b> the kernel TCP TIME_WAIT duration — TIME_WAIT is controlled by the OS.
