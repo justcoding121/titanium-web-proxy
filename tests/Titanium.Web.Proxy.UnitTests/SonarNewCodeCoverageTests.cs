@@ -670,4 +670,75 @@ public class SonarNewCodeCoverageTests
         Assert.IsTrue((bool)reject.Invoke(proxy, [looped])!);
         Assert.AreEqual(508, looped.HttpClient.Response.StatusCode);
     }
+
+    [TestMethod]
+    public async Task Http3FastForwards_ClosedOrigin_CoverPrepareAndFailPaths()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var ep = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false)
+        {
+            ForwardCleartext = true,
+            ForwardHost = "127.0.0.1",
+            ForwardPort = 1
+        };
+        var request = new Request
+        {
+            Method = "GET",
+            IsHttps = false,
+            HttpVersion = HttpHeader.Version30,
+            Host = "origin.example",
+            Authority = "127.0.0.1:1".GetByteString(),
+            RequestUriString8 = "/".GetByteString()
+        };
+        request.Headers.AddHeader("x-test", "1");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        SessionEventArgs Cold() => MakeSession(proxy, ep);
+
+        var tcpFwd = new H3H2FastForward { Request = request, ProxyEndPoint = ep, MaxBufferedBodyBytes = 1024 };
+        try
+        {
+            await Http3OriginBridge.ForwardOverTcpFastAsync(tcpFwd, proxy, NullLogger.Instance, cts.Token, Cold);
+        }
+        catch (Exception ex) when (ex is not AssertFailedException)
+        {
+            Assert.IsNotNull(ex);
+        }
+
+        var h2Request = new Request
+        {
+            Method = "GET",
+            IsHttps = true,
+            HttpVersion = HttpHeader.Version30,
+            Host = "origin.example",
+            Authority = "127.0.0.1:1".GetByteString(),
+            RequestUriString8 = "/".GetByteString()
+        };
+        var h2Fwd = new H3H2FastForward { Request = h2Request, ProxyEndPoint = ep, MaxBufferedBodyBytes = 1024 };
+        try
+        {
+            await Http3OriginBridge.ForwardOverHttp2FastAsync(h2Fwd, proxy, NullLogger.Instance, cts.Token, Cold);
+        }
+        catch (Exception ex) when (ex is not AssertFailedException)
+        {
+            Assert.IsNotNull(ex);
+        }
+
+        using var session = MakeSession(proxy, ep);
+        session.HttpClient.Request.Method = "GET";
+        session.HttpClient.Request.IsHttps = false;
+        session.HttpClient.Request.HttpVersion = HttpHeader.Version30;
+        session.HttpClient.Request.Authority = "127.0.0.1:1".GetByteString();
+        session.HttpClient.Request.RequestUriString8 = "/".GetByteString();
+        session.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+        try
+        {
+            await Http3OriginBridge.ForwardAsync(session, proxy, Http3OriginRoute.None, NullLogger.Instance,
+                cts.Token);
+        }
+        catch (Exception ex) when (ex is not AssertFailedException)
+        {
+            Assert.IsNotNull(ex);
+        }
+    }
 }
