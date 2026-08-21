@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Text;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
@@ -266,32 +267,96 @@ public class Request : RequestResponseBase
     internal static void ParseRequestLine(string httpCmd, out string method, out ByteString requestUri,
         out Version version)
     {
+        ParseRequestLine(httpCmd.AsSpan(), out method, out requestUri, out version);
+    }
+
+    /// <summary>
+    ///     Parse a request line from UTF-8/ASCII bytes without allocating the full line string.
+    /// </summary>
+    internal static void ParseRequestLine(ReadOnlySpan<byte> httpCmd, out string method, out ByteString requestUri,
+        out Version version)
+    {
+        var firstSpace = httpCmd.IndexOf((byte)' ');
+        if (firstSpace == -1)
+            throw new FormatException("Invalid HTTP request line.");
+
+        var lastSpace = httpCmd.LastIndexOf((byte)' ');
+
+        method = InternMethod(httpCmd.Slice(0, firstSpace));
+        version = HttpHeader.Version11;
+
+        if (firstSpace == lastSpace)
+        {
+            requestUri = InternTarget(httpCmd.Slice(firstSpace + 1));
+        }
+        else
+        {
+            requestUri = InternTarget(httpCmd.Slice(firstSpace + 1, lastSpace - firstSpace - 1));
+
+            var httpVersion = httpCmd.Slice(lastSpace + 1);
+            if (IsHttp10(httpVersion))
+                version = HttpHeader.Version10;
+        }
+    }
+
+    private static bool IsHttp10(ReadOnlySpan<byte> httpVersion)
+    {
+        if (httpVersion.Length != 8) return false;
+        ReadOnlySpan<byte> expected = "HTTP/1.0"u8;
+        for (var i = 0; i < 8; i++)
+        {
+            var c = httpVersion[i];
+            if (c is >= (byte)'a' and <= (byte)'z') c = (byte)(c - 32);
+            if (c != expected[i]) return false;
+        }
+
+        return true;
+    }
+
+    internal static void ParseRequestLine(ReadOnlySpan<char> httpCmd, out string method, out ByteString requestUri,
+        out Version version)
+    {
         var firstSpace = httpCmd.IndexOf(' ');
         if (firstSpace == -1)
             // does not contain at least 2 parts
-            throw new FormatException("Invalid HTTP request line: " + httpCmd);
+            throw new FormatException("Invalid HTTP request line.");
 
         var lastSpace = httpCmd.LastIndexOf(' ');
 
         // break up the line into three components (method, remote URL & Http Version)
 
-        method = InternMethod(httpCmd.AsSpan(0, firstSpace));
+        method = InternMethod(httpCmd.Slice(0, firstSpace));
 
         version = HttpHeader.Version11;
 
         if (firstSpace == lastSpace)
         {
-            requestUri = InternTarget(httpCmd.AsSpan(firstSpace + 1));
+            requestUri = InternTarget(httpCmd.Slice(firstSpace + 1));
         }
         else
         {
-            requestUri = InternTarget(httpCmd.AsSpan(firstSpace + 1, lastSpace - firstSpace - 1));
+            requestUri = InternTarget(httpCmd.Slice(firstSpace + 1, lastSpace - firstSpace - 1));
 
             // parse the HTTP version
-            var httpVersion = httpCmd.AsSpan(lastSpace + 1);
+            var httpVersion = httpCmd.Slice(lastSpace + 1);
 
             if (httpVersion.EqualsIgnoreCase("HTTP/1.0".AsSpan(0))) version = HttpHeader.Version10;
         }
+    }
+
+    private static string InternMethod(ReadOnlySpan<byte> method)
+    {
+        if (method.SequenceEqual("GET"u8)) return "GET";
+        if (method.SequenceEqual("POST"u8)) return "POST";
+        if (method.SequenceEqual("HEAD"u8)) return "HEAD";
+        if (method.SequenceEqual("PUT"u8)) return "PUT";
+        if (method.SequenceEqual("DELETE"u8)) return "DELETE";
+        if (method.SequenceEqual("OPTIONS"u8)) return "OPTIONS";
+        if (method.SequenceEqual("PATCH"u8)) return "PATCH";
+        if (method.SequenceEqual("CONNECT"u8)) return "CONNECT";
+
+        var allocated = Encoding.ASCII.GetString(method);
+        return IsAllUpper(allocated) ? allocated : allocated.ToUpperInvariant();
     }
 
     private static string InternMethod(ReadOnlySpan<char> method)
@@ -307,6 +372,17 @@ public class Request : RequestResponseBase
 
         var allocated = method.ToString();
         return IsAllUpper(allocated) ? allocated : allocated.ToUpperInvariant();
+    }
+
+    private static ByteString InternTarget(ReadOnlySpan<byte> target)
+    {
+        if (target.Length == 1)
+        {
+            if (target[0] == (byte)'/') return OriginFormRoot;
+            if (target[0] == (byte)'*') return AsteriskForm;
+        }
+
+        return new ByteString(target.ToArray());
     }
 
     private static ByteString InternTarget(ReadOnlySpan<char> target)

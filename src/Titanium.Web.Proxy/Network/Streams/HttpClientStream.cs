@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Http;
@@ -78,28 +79,42 @@ internal sealed class HttpClientStream : HttpStream
     internal ValueTask<(RequestStatusInfo Status, bool Cancelled)> ReadRequestLineWithResultAsync(
         CancellationToken cancellationToken = default)
     {
-        var lineVt = ReadLineWithResultAsync(cancellationToken);
-        if (lineVt.IsCompletedSuccessfully)
+        // Parse GET / HTTP/1.1 from bytes when the LF is already buffered (keep-alive leftover).
+        if (TryParseRequestLineFromBuffer(out var method, out var requestUri, out var version, out var emptyLine))
+        {
+            if (emptyLine)
+                return new ValueTask<(RequestStatusInfo Status, bool Cancelled)>((default, false));
+
             return new ValueTask<(RequestStatusInfo Status, bool Cancelled)>(
-                ParseRequestLineResult(lineVt.Result));
+                (new RequestStatusInfo { Method = method, RequestUri = requestUri, Version = version }, false));
+        }
 
-        return ReadRequestLineWithResultSlowAsync(lineVt);
+        return ReadRequestLineFillAsync(cancellationToken);
     }
 
-    private static async ValueTask<(RequestStatusInfo Status, bool Cancelled)> ReadRequestLineWithResultSlowAsync(
-        ValueTask<(string? Line, bool Cancelled)> lineVt)
+    private async ValueTask<(RequestStatusInfo Status, bool Cancelled)> ReadRequestLineFillAsync(
+        CancellationToken cancellationToken)
     {
-        return ParseRequestLineResult(await lineVt);
-    }
+        while (true)
+        {
+            try
+            {
+                if (!await FillBufferAsync(cancellationToken))
+                    return (default, false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return (default, true);
+            }
 
-    private static (RequestStatusInfo Status, bool Cancelled) ParseRequestLineResult(
-        (string? httpCmd, bool cancelled) line)
-    {
-        if (line.cancelled) return (default, true);
-        if (string.IsNullOrEmpty(line.httpCmd)) return (default, false);
+            if (TryParseRequestLineFromBuffer(out var method, out var requestUri, out var version, out var emptyLine))
+            {
+                if (emptyLine)
+                    return (default, false);
 
-        Request.ParseRequestLine(line.httpCmd, out var method, out var requestUri, out var version);
-
-        return (new RequestStatusInfo { Method = method, RequestUri = requestUri, Version = version }, false);
+                return (new RequestStatusInfo { Method = method, RequestUri = requestUri, Version = version },
+                    false);
+            }
+        }
     }
 }
