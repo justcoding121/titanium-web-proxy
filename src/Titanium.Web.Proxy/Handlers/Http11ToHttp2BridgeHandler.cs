@@ -958,9 +958,9 @@ public partial class ProxyServer
     }
 
     /// <summary>
-    ///     Strips hop-by-hop/connection-specific header fields (RFC 7540 §8.1.2.2) that an HTTP/1.1 client may
-    ///     legitimately send but that an h2 origin forbids, and lowercases every remaining field name (RFC
-    ///     7540 §8.1.2) before <see cref="Http2Helper.SendBody" /> HPACK-encodes them.
+    ///     Strips hop-by-hop Host for the h2 origin and captures <c>:authority</c>. Remaining field
+    ///     names are ASCII-lowercased before encode so <c>EncodeHeaderBlock</c> stays free of
+    ///     per-header work under origin <c>writeLock</c>.
     /// </summary>
     private static void PrepareRequestForOrigin(Request request)
     {
@@ -976,8 +976,6 @@ public partial class ProxyServer
         // Connection / Keep-Alive / Proxy-Connection / Transfer-Encoding / Upgrade / TE are omitted
         // by Http2Helper.EncodeHeaderBlock (ShouldOmitHttp2Header) — avoid six RemoveHeader lookups.
 
-        // RFC 7540 §8.1.2: HTTP/2 field names must be lowercase. (LowercaseHeaderNames is shared with the
-        // h2-to-HTTP/1.1 bridge - see Http2ToHttp11BridgeHandler.)
         LowercaseHeaderNames(request.Headers);
         request.HeaderNamesAreHttp2Normalized = true;
     }

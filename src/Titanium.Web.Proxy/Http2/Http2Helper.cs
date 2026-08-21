@@ -3530,6 +3530,23 @@ namespace Titanium.Web.Proxy.Http2
             return false;
         }
 
+        /// <summary>
+        ///     ASCII lowercase copy for HPACK wire names — no <see cref="string.ToLowerInvariant"/> /
+        ///     encoding round-trip (those allocated under origin <c>writeLock</c> on H1→H2).
+        /// </summary>
+        private static ByteString AsciiToLowerByteString(ByteString name)
+        {
+            var span = name.Span;
+            var buf = new byte[span.Length];
+            for (var i = 0; i < span.Length; i++)
+            {
+                var c = span[i];
+                buf[i] = c is >= (byte)'A' and <= (byte)'Z' ? (byte)(c + 32) : c;
+            }
+
+            return new ByteString(buf);
+        }
+
         private static readonly ByteString ViaHeaderLower = "via".GetByteString();
 
         /// <summary>
@@ -3721,7 +3738,7 @@ namespace Titanium.Web.Proxy.Http2
                 // verbatim and manifests as a client RST_STREAM(PROTOCOL_ERROR).
                 var nameData = header.NameData;
                 if (!rr.HeaderNamesAreHttp2Normalized && HasUpperCaseAscii(nameData))
-                    nameData = header.Name.ToLowerInvariant().GetByteString();
+                    nameData = AsciiToLowerByteString(nameData);
 
                 // Strip hop-by-hop / Host here so PrepareRequestForOrigin need not RemoveHeader seven
                 // times under the H1→H2 path (still strips Host for Authority capture separately).
@@ -4015,9 +4032,9 @@ namespace Titanium.Web.Proxy.Http2
                 foreach (var header in headers)
                 {
                     // RFC 7540 §8.1.2: names must be lowercase on the wire (same guard as EncodeHeaderBlock).
-                    var nameData = HasUpperCaseAscii(header.Name)
-                        ? header.Name.ToLowerInvariant().GetByteString()
-                        : header.NameData;
+                    var nameData = header.NameData;
+                    if (HasUpperCaseAscii(nameData))
+                        nameData = AsciiToLowerByteString(nameData);
                     encoder.EncodeHeader(writer, nameData, header.ValueData);
                 }
 
@@ -4140,7 +4157,9 @@ namespace Titanium.Web.Proxy.Http2
             foreach (var header in trailingHeaders)
             {
                 // See the matching comment in SendHeader: field names must be lowercase on the wire.
-                var nameData = HasUpperCaseAscii(header.Name) ? header.Name.ToLowerInvariant().GetByteString() : header.NameData;
+                var nameData = header.NameData;
+                if (HasUpperCaseAscii(nameData))
+                    nameData = AsciiToLowerByteString(nameData);
                 encoder.EncodeHeader(writer, nameData, header.ValueData);
             }
 
@@ -4473,9 +4492,9 @@ namespace Titanium.Web.Proxy.Http2
 
             foreach (var header in trailingHeaders)
             {
-                var nameData = HasUpperCaseAscii(header.Name)
-                    ? header.Name.ToLowerInvariant().GetByteString()
-                    : header.NameData;
+                var nameData = header.NameData;
+                if (HasUpperCaseAscii(nameData))
+                    nameData = AsciiToLowerByteString(nameData);
                 encoder.EncodeHeader(writerBuf, nameData, header.ValueData);
             }
 

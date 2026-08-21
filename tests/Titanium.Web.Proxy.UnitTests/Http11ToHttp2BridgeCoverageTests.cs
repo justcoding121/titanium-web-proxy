@@ -28,7 +28,7 @@ public class Http11ToHttp2BridgeCoverageTests
         (bool)PrivateBridgeMethod("ClientRequestedConnectionClose").Invoke(null, [request])!;
 
     [TestMethod]
-    public void PrepareRequestForOrigin_CapturesAuthority_StripsHopByHop_AndLowercases()
+    public void PrepareRequestForOrigin_CapturesAuthority_StripsHost_AndLowercases()
     {
         var request = new Request
         {
@@ -48,11 +48,10 @@ public class Http11ToHttp2BridgeCoverageTests
         PrepareRequest(request);
 
         Assert.AreEqual("origin.example:8443", request.Authority.GetString());
-        foreach (var forbidden in new[]
-                 {
-                     "host", "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te"
-                 })
-            Assert.IsNull(request.Headers.GetHeaderValueOrNull(forbidden), $"{forbidden} must be removed.");
+        Assert.IsNull(request.Headers.GetHeaderValueOrNull("host"), "host must be removed.");
+        // Hop-by-hop stay on the Request for ClientRequestedConnectionClose / diagnostics;
+        // EncodeHeaderBlock.ShouldOmitHttp2Header drops them on the wire.
+        Assert.IsNotNull(request.Headers.GetHeaderValueOrNull("connection"));
         Assert.AreEqual("kept", request.Headers.GetHeaderValueOrNull("x-mixed-case"));
         Assert.IsTrue(request.Headers.All(h =>
             string.Equals(h.Name, h.Name.ToLowerInvariant(), StringComparison.Ordinal)));

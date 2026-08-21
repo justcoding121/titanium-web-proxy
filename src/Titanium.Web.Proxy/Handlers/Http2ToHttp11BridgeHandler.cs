@@ -1071,7 +1071,7 @@ public partial class ProxyServer
         var needsRename = false;
         foreach (var header in headers)
         {
-            if (HeaderNameHasUpperCaseAscii(header.Name))
+            if (HeaderNameDataHasUpperCaseAscii(header.NameData))
             {
                 needsRename = true;
                 break;
@@ -1081,13 +1081,44 @@ public partial class ProxyServer
         if (!needsRename)
             return;
 
-        // Rare mixed-case path: materialize then rewrite (Header.NameData is immutable).
-        var renamed = new List<(string Name, string Value)>(8);
+        // Rare mixed-case path: rewrite NameData via ASCII byte copy (no string.ToLowerInvariant).
+        var renamed = new List<HttpHeader>(8);
         foreach (var header in headers)
-            renamed.Add((header.Name.ToLowerInvariant(), header.Value));
+        {
+            var nameData = header.NameData;
+            if (HeaderNameDataHasUpperCaseAscii(nameData))
+                nameData = AsciiToLowerByteString(nameData);
+            renamed.Add(new HttpHeader(nameData, header.ValueData));
+        }
+
         headers.Clear();
-        foreach (var (name, value) in renamed)
-            headers.AddHeader(name, value);
+        foreach (var header in renamed)
+            headers.AddHeader(header);
+    }
+
+    private static bool HeaderNameDataHasUpperCaseAscii(ByteString name)
+    {
+        var span = name.Span;
+        for (var i = 0; i < span.Length; i++)
+        {
+            if (span[i] is >= (byte)'A' and <= (byte)'Z')
+                return true;
+        }
+
+        return false;
+    }
+
+    private static ByteString AsciiToLowerByteString(ByteString name)
+    {
+        var span = name.Span;
+        var buf = new byte[span.Length];
+        for (var i = 0; i < span.Length; i++)
+        {
+            var c = span[i];
+            buf[i] = c is >= (byte)'A' and <= (byte)'Z' ? (byte)(c + 32) : c;
+        }
+
+        return new ByteString(buf);
     }
 
     private static bool HeaderNameHasUpperCaseAscii(string name)
