@@ -404,10 +404,9 @@ internal sealed class Http2OriginConnection : IDisposable
 
         try
         {
-            // Register cancellation: complete the pipe writer so CopyToAsync unblocks and throws.
-            // When the body is handed off via StreamBodyWriter, that callback disposes the registration.
-            var registration = cancellationToken.Register(() =>
-                pending.BodyPipe.CompleteWriter(new OperationCanceledException(cancellationToken)));
+            // Do not Register on BodyPipe until after headers: WaitAsync already cancels the TTFB
+            // wait, and probe GETs dispose the registration immediately on no-body responses.
+            CancellationTokenRegistration bodyCancelRegistration = default;
 
             // Relay 1xx interim responses (e.g. 103 Early Hints) to the HTTP/1.1 client before reading
             // the body. ReadLoopAsync writes each interim into pending.InterimChannel and completes the
@@ -446,7 +445,6 @@ internal sealed class Http2OriginConnection : IDisposable
                          || response.ContentLength == 0;
             if (noBody)
             {
-                registration.Dispose();
                 response.IsBodyRead = true;
                 response.Body = Array.Empty<byte>();
                 return new Http2OriginExchange(response, Array.Empty<byte>(), pending.TrailingHeaders);
@@ -455,6 +453,8 @@ internal sealed class Http2OriginConnection : IDisposable
             // Stream origin DATA to the caller instead of materializing ToArray().
             var bodyPipe = pending.BodyPipe;
             var trailers = pending.TrailingHeaders;
+            bodyCancelRegistration = cancellationToken.Register(() =>
+                bodyPipe.CompleteWriter(new OperationCanceledException(cancellationToken)));
             bodyHandedOff = true;
 
             response.StreamBodyWriter = async (dest, ct) =>
@@ -465,7 +465,7 @@ internal sealed class Http2OriginConnection : IDisposable
                 }
                 finally
                 {
-                    registration.Dispose();
+                    bodyCancelRegistration.Dispose();
                     TryUnregisterStream(streamId, out _);
                     pending.Dispose();
                     sendFlow.RemoveStream(streamId);
@@ -1249,11 +1249,13 @@ internal sealed class Http2OriginConnection : IDisposable
         var collected = new HeaderCollection();
         ByteString status = default;
 
+        // Avoid GetString() on every field name — ReadLoop must get back to Fill quickly so sibling
+        // multiplexed streams' HeadersReceived can fire (c=32 dump: 8 ReadLoops, 32 waiters).
         var listener = new HeaderCollectorListener((name, value) =>
         {
             if (name.Length > 0 && name.Span[0] == (byte)':')
             {
-                if (name.GetString() == ":status") status = value;
+                if (name.Equals(StaticTable.KnownHeaderStatus)) status = value;
                 return;
             }
 
@@ -1276,7 +1278,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
         if (status.Length > 0)
         {
-            var statusCode = int.TryParse(status.GetString(), out var parsed) ? parsed : 502;
+            var statusCode = TryParseAsciiStatusCode(status.Span, out var parsed) ? parsed : 502;
 
             if (statusCode is >= 100 and <= 199)
             {
@@ -1316,6 +1318,20 @@ internal sealed class Http2OriginConnection : IDisposable
         }
 
         if (endStream) CompleteStream(streamId);
+    }
+
+    private static bool TryParseAsciiStatusCode(ReadOnlySpan<byte> digits, out int statusCode)
+    {
+        statusCode = 0;
+        if (digits.Length is 0 or > 3) return false;
+        for (var i = 0; i < digits.Length; i++)
+        {
+            var c = digits[i];
+            if (c is < (byte)'0' or > (byte)'9') return false;
+            statusCode = statusCode * 10 + (c - (byte)'0');
+        }
+
+        return true;
     }
 
     private void CompleteStream(int streamId)
