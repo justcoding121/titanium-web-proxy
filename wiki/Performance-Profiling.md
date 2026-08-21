@@ -147,6 +147,7 @@ When a comparable managed reverse peer is faster, read its source to answer **na
 
 ## Guardrails while optimizing
 
+- **Real proxy improvements only — do not game the RPS harness.** YARP (and nginx) are the *yardstick*, not the product. Land changes that reduce real work on the hot path for general reverse-proxy / keep-alive traffic: fewer allocations, fewer syscalls, less protocol waste, less interception tax when unused. Do **not** land knobs, special cases, or architecture copies whose only purpose is to inflate TWP÷YARP on the tiny-GET probe. Use the probe to find where time burns; revert experiments that do not help the proxy itself even if a noisy pair looks green.
 - **Full unit + integration suites after every change.** Several perf changes introduced real regressions (the scheme mismatch, the DATA race, HTTP-version and Content-Length bugs on the bridges); the suites and the benchmark's own error SLO caught all of them the same day.
 - **A standalone external repro** (`tools/H2ExternalRepro`) validates against real internet sites, which surface flow-control and settings behavior loopback benchmarks never exercise.
 - **Wiki numbers carry their run IDs** and an explanation of *why* each number moved, so a future regression has a baseline with provenance.
@@ -158,4 +159,5 @@ When a comparable managed reverse peer is faster, read its source to answer **na
 3. `dumpasync` for where requests *wait*; `dotnet-trace` for where cycles *burn*.
 4. Decompose internal vs client-observed latency (`TWP_RPS_STAGE_TIMING`); a large gap means queueing upstream of the pipeline.
 5. Read the faster system's source to answer named hypotheses; keep TWP's architecture.
-6. Run the full test suites and the external repro before publishing; record run IDs in the wiki.
+6. Before keeping a change: confirm it is a real proxy improvement (less work / alloc / I/O on a general hot path), not a probe-only tweak to beat YARP.
+7. Run the full test suites and the external repro before publishing; record run IDs in the wiki.
