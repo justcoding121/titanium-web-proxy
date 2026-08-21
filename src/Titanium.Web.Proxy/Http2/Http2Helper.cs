@@ -3518,6 +3518,56 @@ namespace Titanium.Web.Proxy.Http2
             return false;
         }
 
+        private static bool HasUpperCaseAscii(ByteString name)
+        {
+            var span = name.Span;
+            for (var i = 0; i < span.Length; i++)
+            {
+                if (span[i] is >= (byte)'A' and <= (byte)'Z')
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static readonly ByteString ViaHeaderLower = "via".GetByteString();
+
+        /// <summary>
+        ///     Hop-by-hop / connection-specific names RFC 7540 §8.1.2.2 forbids on HTTP/2 (plus Host, which
+        ///     becomes :authority). Compared on <see cref="ByteString"/> so EncodeHeaderBlock does not
+        ///     force <c>header.Name</c> GetString under writeLock.
+        /// </summary>
+        private static bool ShouldOmitHttp2Header(ByteString name)
+        {
+            var span = name.Span;
+            return span.Length switch
+            {
+                2 => EqualsAsciiIgnoreCase(span, "te"u8),
+                4 => EqualsAsciiIgnoreCase(span, "host"u8),
+                7 => EqualsAsciiIgnoreCase(span, "upgrade"u8),
+                10 => EqualsAsciiIgnoreCase(span, "connection"u8)
+                      || EqualsAsciiIgnoreCase(span, "keep-alive"u8),
+                16 => EqualsAsciiIgnoreCase(span, "proxy-connection"u8),
+                17 => EqualsAsciiIgnoreCase(span, "transfer-encoding"u8),
+                _ => false
+            };
+        }
+
+        private static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b)
+        {
+            if (a.Length != b.Length) return false;
+            for (var i = 0; i < a.Length; i++)
+            {
+                var x = a[i];
+                var y = b[i];
+                if (x is >= (byte)'A' and <= (byte)'Z') x = (byte)(x + 32);
+                if (y is >= (byte)'A' and <= (byte)'Z') y = (byte)(y + 32);
+                if (x != y) return false;
+            }
+
+            return true;
+        }
+
         // Common :status values (StaticTable also indexes several of these).
         private static readonly ByteString Status200 = "200".GetByteString();
         private static readonly ByteString Status204 = "204".GetByteString();
@@ -3669,9 +3719,14 @@ namespace Titanium.Web.Proxy.Http2
                 // header actually gets HPACK-encoded onto an h2 wire, closes that gap regardless of
                 // which upstream code path is responsible - a mixed-case name here reaches the peer
                 // verbatim and manifests as a client RST_STREAM(PROTOCOL_ERROR).
-                var nameData = rr.HeaderNamesAreHttp2Normalized || !HasUpperCaseAscii(header.Name)
-                    ? header.NameData
-                    : header.Name.ToLowerInvariant().GetByteString();
+                var nameData = header.NameData;
+                if (!rr.HeaderNamesAreHttp2Normalized && HasUpperCaseAscii(nameData))
+                    nameData = header.Name.ToLowerInvariant().GetByteString();
+
+                // Strip hop-by-hop / Host here so PrepareRequestForOrigin need not RemoveHeader seven
+                // times under the H1→H2 path (still strips Host for Authority capture separately).
+                if (ShouldOmitHttp2Header(nameData))
+                    continue;
 
                 // Via is added by the proxy itself on every request and varies across hops; it must
                 // not enter the HPACK dynamic table.  If it did, stream N would encode it as a
@@ -3681,7 +3736,7 @@ namespace Titanium.Web.Proxy.Http2
                 // IndexType.None means "literal without indexing" — the encoder skips Add() so
                 // the entry never lands in the dynamic table, and every subsequent stream gets a
                 // fresh literal representation instead of a back-reference.
-                if (header.Name.Equals("via", StringComparison.OrdinalIgnoreCase))
+                if (nameData.Equals(ViaHeaderLower) || nameData.EqualsIgnoreCaseAscii(ViaHeaderLower))
                     encoder.EncodeHeader(writer, nameData, header.ValueData, false,
                         HpackUtil.IndexType.None);
                 else

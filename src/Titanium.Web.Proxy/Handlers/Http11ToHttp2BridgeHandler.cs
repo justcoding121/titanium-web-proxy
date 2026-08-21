@@ -916,20 +916,16 @@ public partial class ProxyServer
     private static void PrepareRequestForOrigin(Request request)
     {
         // EncodeHeaderBlock uses Authority / Host / IsHttps — never RequestUri (Uri alloc under writeLock).
-        // Capture Host into Authority before stripping hop-by-hop headers for the h2 origin.
+        // Capture Host into Authority before stripping it for the h2 origin.
         if (request.Authority.Length == 0)
         {
             var hostHeader = request.Host;
             if (!string.IsNullOrEmpty(hostHeader)) request.Authority = hostHeader.GetByteString();
         }
 
-        request.Headers.RemoveHeader(KnownHeaders.Connection);
-        request.Headers.RemoveHeader("Keep-Alive");
-        request.Headers.RemoveHeader(KnownHeaders.ProxyConnection);
-        request.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
-        request.Headers.RemoveHeader(KnownHeaders.Upgrade);
-        request.Headers.RemoveHeader("TE");
         request.Headers.RemoveHeader(KnownHeaders.Host);
+        // Connection / Keep-Alive / Proxy-Connection / Transfer-Encoding / Upgrade / TE are omitted
+        // by Http2Helper.EncodeHeaderBlock (ShouldOmitHttp2Header) — avoid six RemoveHeader lookups.
 
         // RFC 7540 §8.1.2: HTTP/2 field names must be lowercase. (LowercaseHeaderNames is shared with the
         // h2-to-HTTP/1.1 bridge - see Http2ToHttp11BridgeHandler.)

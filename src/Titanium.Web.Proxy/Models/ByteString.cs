@@ -70,4 +70,45 @@ internal struct ByteString : IEquatable<ByteString>
     }
 
     public byte this[int i] => Span[i];
+
+    /// <summary>ASCII case-insensitive equality (HTTP header tokens).</summary>
+    internal bool EqualsIgnoreCaseAscii(ByteString other)
+    {
+        var a = Span;
+        var b = other.Span;
+        if (a.Length != b.Length) return false;
+        for (var i = 0; i < a.Length; i++)
+        {
+            if (ToLowerAscii(a[i]) != ToLowerAscii(b[i])) return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>ASCII case-insensitive substring search (e.g. Transfer-Encoding: chunked).</summary>
+    internal bool SpanContainsIgnoreCaseAscii(ReadOnlySpan<byte> needle)
+    {
+        var hay = Span;
+        if (needle.Length == 0) return true;
+        if (needle.Length > hay.Length) return false;
+        var last = hay.Length - needle.Length;
+        for (var i = 0; i <= last; i++)
+        {
+            var match = true;
+            for (var j = 0; j < needle.Length; j++)
+            {
+                if (ToLowerAscii(hay[i + j]) != ToLowerAscii(needle[j]))
+                {
+                    match = false;
+                    break;
+                }
+            }
+
+            if (match) return true;
+        }
+
+        return false;
+    }
+
+    private static byte ToLowerAscii(byte c) => c is >= (byte)'A' and <= (byte)'Z' ? (byte)(c + 32) : c;
 }
