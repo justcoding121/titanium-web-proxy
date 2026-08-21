@@ -50,6 +50,20 @@ public class Response : RequestResponseBase
     internal Func<Stream, CancellationToken, Task>? StreamBodyWriter { get; set; }
 
     /// <summary>
+    ///     Clears wire state so this instance can carry the next keep-alive response.
+    ///     Must zero <see cref="StatusCode"/> and drop <see cref="StreamBodyWriter"/> —
+    ///     <c>ReceiveResponse</c> no-ops when StatusCode != 0, and a leftover writer hangs the next GET.
+    /// </summary>
+    internal void ResetForKeepAlive()
+    {
+        ResetWireState();
+        StatusCode = 0;
+        StatusDescription = string.Empty;
+        RequestMethod = string.Empty;
+        StreamBodyWriter = null;
+    }
+
+    /// <summary>
     ///     Has response body?
     /// </summary>
     public override bool HasBody

@@ -77,7 +77,7 @@ public class UpstreamConnectionBindTests
     }
 
     [TestMethod]
-    public void ResetForKeepAlive_UnbindsAndReplacesResponse()
+    public void ResetForKeepAlive_UnbindsAndResetsResponseInPlace()
     {
         var request = new Request { Method = "GET" };
         request.Headers.AddHeader("Host", "example.test");
@@ -96,7 +96,7 @@ public class UpstreamConnectionBindTests
         Assert.IsFalse(client.CloseServerConnection);
         Assert.AreEqual(string.Empty, client.Request.Method);
         Assert.AreEqual(0, client.Request.Headers.Count());
-        Assert.AreNotSame(previousResponse, client.Response);
+        Assert.AreSame(previousResponse, client.Response);
         Assert.AreEqual(0, client.Response.StatusCode);
         Assert.IsFalse(client.Response.Locked);
     }

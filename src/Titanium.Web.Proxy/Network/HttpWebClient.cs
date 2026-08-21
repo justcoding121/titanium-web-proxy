@@ -353,9 +353,7 @@ public class HttpWebClient
     }
 
     /// <summary>
-    ///     Unbinds the origin socket and resets the request in place. Replaces <see cref="Response"/>
-    ///     so leftover <c>StreamBodyWriter</c> / Locked state cannot stall the next keep-alive GET
-    ///     (that leftover was the prior recycle hang).
+    ///     Unbinds the origin socket and resets request/response in place for the next keep-alive GET.
     /// </summary>
     internal void ResetForKeepAlive()
     {
@@ -365,7 +363,7 @@ public class HttpWebClient
         upstreamConnectionTiming = null;
         CloseServerConnection = false;
         Request.ResetForKeepAlive();
-        Response = new Response();
+        Response.ResetForKeepAlive();
         Data.Clear();
         UserData = null;
     }

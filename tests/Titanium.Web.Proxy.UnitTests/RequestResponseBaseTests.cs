@@ -2,6 +2,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -160,6 +161,31 @@ namespace Titanium.Web.Proxy.UnitTests
             Assert.IsFalse(request.HeaderNamesAreHttp2Normalized);
             Assert.AreEqual(0, request.Headers.Count());
             Assert.IsFalse(request.HasTrailingHeaders);
+        }
+
+        [TestMethod]
+        public void Response_ResetForKeepAlive_ZerosStatusAndClearsWriter()
+        {
+            var response = new Response
+            {
+                StatusCode = 200,
+                StatusDescription = "OK",
+                RequestMethod = "GET",
+                Locked = true,
+                HttpVersion = HttpHeader.Version11
+            };
+            response.Headers.AddHeader("Content-Length", "0");
+            response.StreamBodyWriter = (_, _) => Task.CompletedTask;
+
+            response.ResetForKeepAlive();
+
+            Assert.AreEqual(0, response.StatusCode);
+            Assert.AreEqual(string.Empty, response.StatusDescription);
+            Assert.AreEqual(string.Empty, response.RequestMethod);
+            Assert.IsNull(response.StreamBodyWriter);
+            Assert.IsFalse(response.Locked);
+            Assert.AreEqual(0, response.Headers.Count());
+            Assert.AreEqual(HttpHeader.VersionUnknown, response.HttpVersion);
         }
     }
 }
