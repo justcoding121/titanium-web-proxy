@@ -648,7 +648,11 @@ public partial class ProxyServer
             if (response.HasTrailingHeaders)
                 response.IsChunked = true;
             else if (response.StreamBodyWriter == null)
+            {
                 response.ContentLength = fastBody.Length;
+                // So WriteResponseAsync can coalesce headers+body into one TLS write.
+                response.Body = fastBody;
+            }
             else if (response.ContentLength < 0 && !response.IsChunked)
             {
                 var buffered = new MemoryStream();
@@ -657,6 +661,7 @@ public partial class ProxyServer
                 await streamBody(buffered, cancellationToken);
                 fastBody = buffered.ToArray();
                 response.ContentLength = fastBody.Length;
+                response.Body = fastBody;
             }
 
             await clientStream.WriteResponseAsync(response, cancellationToken);
@@ -669,7 +674,7 @@ public partial class ProxyServer
                     cancellationToken);
                 response.IsBodySent = true;
             }
-            else if (response.HasBody || response.HasTrailingHeaders)
+            else if (!response.IsBodySent && (response.HasBody || response.HasTrailingHeaders))
             {
                 await clientStream.WriteBodyAsync(fastBody, response.IsChunked,
                     response.HasTrailingHeaders ? response.TrailingHeaders : null, cancellationToken);

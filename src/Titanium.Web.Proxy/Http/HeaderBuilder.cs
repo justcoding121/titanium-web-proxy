@@ -180,6 +180,13 @@ internal class HeaderBuilder
         stream.Write(span);
     }
 
+    /// <summary>Appends raw bytes (e.g. a tiny response body after the header block).</summary>
+    public void WriteRaw(ReadOnlySpan<byte> data)
+    {
+        if (data.Length == 0) return;
+        stream.Write(data);
+    }
+
     /// <summary>Writes an ASCII literal without ArrayPool rent (status lines / separators).</summary>
     private void WriteAscii(ReadOnlySpan<char> ascii)
     {

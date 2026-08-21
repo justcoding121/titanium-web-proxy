@@ -1920,6 +1920,20 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     {
         var body = requestResponse.CompressBodyAndUpdateContentLength();
         headerBuilder.WriteHeaders(requestResponse.Headers);
+
+        // Tiny fixed-length body: one SslStream/NetworkStream write (headers+body) instead of two
+        // TLS records — H1→H2 / H1 reverse probe GETs are ~56 B.
+        if (body != null
+            && body.Length <= 8 * 1024
+            && !requestResponse.IsChunked
+            && !requestResponse.HasTrailingHeaders)
+        {
+            headerBuilder.WriteRaw(body);
+            await WriteHeadersAsync(headerBuilder, cancellationToken);
+            requestResponse.IsBodySent = true;
+            return;
+        }
+
         await WriteHeadersAsync(headerBuilder, cancellationToken);
 
         if (body != null)
