@@ -1028,14 +1028,27 @@ internal sealed class Http2OriginConnection : IDisposable
                                     ArrayPool<byte>.Shared.Return(rented);
                             }
 
-                            await GrantReceiveCreditAsync(streamId, length, forceFlush: false,
-                                cancellationToken).ConfigureAwait(false);
-
                             if ((flags & Http2FrameFlag.EndStream) != 0)
                             {
-                                await GrantReceiveCreditAsync(streamId, 0, forceFlush: true,
-                                    cancellationToken).ConfigureAwait(false);
+                                // Tiny-GET hot path: END_STREAM closes the stream — skip stream
+                                // WINDOW_UPDATE and do not force-flush connection credit (was one
+                                // WINDOW_UPDATE pair per ~56 B response). Matches Http2Helper
+                                // compressed-relay DATA END_STREAM (h2c→h2c gain).
+                                if (length > 0)
+                                    pendingConnectionReceiveCredit += length;
+                                pendingStreamReceiveCredit.Remove(streamId);
+                                if (pendingConnectionReceiveCredit >= Http2Helper.ReceiveCreditBatchThreshold)
+                                {
+                                    await GrantReceiveCreditAsync(0, 0, forceFlush: true, cancellationToken)
+                                        .ConfigureAwait(false);
+                                }
+
                                 CompleteStream(streamId);
+                            }
+                            else
+                            {
+                                await GrantReceiveCreditAsync(streamId, length, forceFlush: false,
+                                    cancellationToken).ConfigureAwait(false);
                             }
 
                             continue;
