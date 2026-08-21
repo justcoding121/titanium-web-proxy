@@ -911,6 +911,46 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     }
 
     /// <summary>
+    ///     When a complete header line is already buffered, consume it without <c>Encoding.GetString</c>.
+    ///     Returns <see langword="false"/> when more socket data is needed. On success, <paramref name="emptyLine"/>
+    ///     is true for the blank line that ends the header block; otherwise <paramref name="lineBytes"/> is the
+    ///     line without CR/LF (still pointing into the stream buffer — copy before the next consume).
+    /// </summary>
+    internal bool TryConsumeHeaderLineFromBuffer(out bool emptyLine, out ReadOnlySpan<byte> lineBytes)
+    {
+        emptyLine = false;
+        lineBytes = default;
+
+        var maxLineBytes = server.ResourceLimits.MaxHeaderLineBytes;
+        var window = streamBuffer.AsSpan(bufferPos, Available);
+        var lfIndex = window.IndexOf((byte)'\n');
+        if (lfIndex < 0)
+            return false;
+
+        if (lfIndex > maxLineBytes)
+            throw new ProxyHttpException(
+                $"HTTP header/request line exceeded the configured maximum of {maxLineBytes:N0} bytes.",
+                null, null);
+
+        var line = window.Slice(0, lfIndex);
+        if (line.Length > 0 && line[^1] == (byte)'\r')
+            line = line[..^1];
+
+        var consumed = lfIndex + 1;
+        bufferPos += consumed;
+        Available -= consumed;
+
+        if (line.Length == 0)
+        {
+            emptyLine = true;
+            return true;
+        }
+
+        lineBytes = line;
+        return true;
+    }
+
+    /// <summary>
     ///     Tries to decode one complete line from the unread window when an LF is already buffered.
     ///     Returns <see langword="false" /> when more socket data is needed (no LF yet).
     /// </summary>

@@ -114,7 +114,59 @@ public static class KnownHeaders
         }
     }
 
+    /// <summary>Byte-span overload for header lines parsed without <c>Encoding.GetString</c>.</summary>
+    internal static bool TryMatchName(ReadOnlySpan<byte> name, out KnownHeader header)
+    {
+        name = TrimAscii(name);
+        header = null!;
+        switch (name.Length)
+        {
+            case 3:
+                return TryAssign(name, Via, out header);
+            case 4:
+                return TryAssign(name, Host, Date, out header);
+            case 6:
+                return TryAssign(name, Accept, Cookie, Expect, Server, out header);
+            case 7:
+                return TryAssign(name, Upgrade, Trailer, out header);
+            case 8:
+                return TryAssign(name, Location, out header);
+            case 10:
+                return TryAssign(name, Connection, UserAgent, KeepAlive, out header);
+            case 12:
+                return TryAssign(name, ContentType, out header);
+            case 13:
+                return TryAssign(name, Authorization, out header);
+            case 14:
+                return TryAssign(name, ContentLength, ContentLengthHttp2, out header);
+            case 15:
+                return TryAssign(name, AcceptEncoding, AcceptLanguage, out header);
+            case 16:
+                return TryAssign(name, ContentEncoding, ProxyConnection, out header);
+            case 17:
+                return TryAssign(name, TransferEncoding, out header);
+            case 18:
+                return TryAssign(name, ProxyAuthenticate, out header);
+            case 19:
+                return TryAssign(name, ProxyAuthorization, out header);
+            default:
+                return false;
+        }
+    }
+
     private static bool TryAssign(ReadOnlySpan<char> name, KnownHeader candidate, out KnownHeader header)
+    {
+        if (candidate.Equals(name))
+        {
+            header = candidate;
+            return true;
+        }
+
+        header = null!;
+        return false;
+    }
+
+    private static bool TryAssign(ReadOnlySpan<byte> name, KnownHeader candidate, out KnownHeader header)
     {
         if (candidate.Equals(name))
         {
@@ -129,11 +181,25 @@ public static class KnownHeaders
     private static bool TryAssign(ReadOnlySpan<char> name, KnownHeader first, KnownHeader second, out KnownHeader header)
         => TryAssign(name, first, out header) || TryAssign(name, second, out header);
 
+    private static bool TryAssign(ReadOnlySpan<byte> name, KnownHeader first, KnownHeader second, out KnownHeader header)
+        => TryAssign(name, first, out header) || TryAssign(name, second, out header);
+
     private static bool TryAssign(ReadOnlySpan<char> name, KnownHeader first, KnownHeader second, KnownHeader third,
         out KnownHeader header)
         => TryAssign(name, first, out header) || TryAssign(name, second, third, out header);
 
+    private static bool TryAssign(ReadOnlySpan<byte> name, KnownHeader first, KnownHeader second, KnownHeader third,
+        out KnownHeader header)
+        => TryAssign(name, first, out header) || TryAssign(name, second, third, out header);
+
     private static bool TryAssign(ReadOnlySpan<char> name, KnownHeader first, KnownHeader second, KnownHeader third,
+        KnownHeader fourth, out KnownHeader header)
+        => TryAssign(name, first, out header)
+           || TryAssign(name, second, out header)
+           || TryAssign(name, third, out header)
+           || TryAssign(name, fourth, out header);
+
+    private static bool TryAssign(ReadOnlySpan<byte> name, KnownHeader first, KnownHeader second, KnownHeader third,
         KnownHeader fourth, out KnownHeader header)
         => TryAssign(name, first, out header)
            || TryAssign(name, second, out header)
@@ -171,5 +237,46 @@ public static class KnownHeaders
             default:
                 return false;
         }
+    }
+
+    internal static bool TryMatchValue(ReadOnlySpan<byte> value, out KnownHeader header)
+    {
+        value = TrimAscii(value);
+        header = null!;
+        switch (value.Length)
+        {
+            case 2:
+                if (ContentEncodingBrotli.Equals(value)) { header = ContentEncodingBrotli; return true; }
+                return false;
+            case 4:
+                if (ContentEncodingGzip.Equals(value)) { header = ContentEncodingGzip; return true; }
+                return false;
+            case 5:
+                if (ConnectionClose.Equals(value)) { header = ConnectionClose; return true; }
+                return false;
+            case 7:
+                if (TransferEncodingChunked.Equals(value)) { header = TransferEncodingChunked; return true; }
+                if (ContentEncodingDeflate.Equals(value)) { header = ContentEncodingDeflate; return true; }
+                return false;
+            case 8:
+                if (ContentEncodingIdentity.Equals(value)) { header = ContentEncodingIdentity; return true; }
+                return false;
+            case 10:
+                if (ConnectionKeepAlive.Equals(value)) { header = ConnectionKeepAlive; return true; }
+                return false;
+            default:
+                return false;
+        }
+    }
+
+    private static ReadOnlySpan<byte> TrimAscii(ReadOnlySpan<byte> value)
+    {
+        var start = 0;
+        while (start < value.Length && value[start] is (byte)' ' or (byte)'\t')
+            start++;
+        var end = value.Length;
+        while (end > start && value[end - 1] is (byte)' ' or (byte)'\t')
+            end--;
+        return value.Slice(start, end - start);
     }
 }
