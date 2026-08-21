@@ -195,8 +195,8 @@ public partial class ProxyServer
             })
             return (forwardHost, forwardPort);
 
-        return (sessionArgs.HttpClient.Request.RequestUri?.Host ?? remoteHostName,
-            sessionArgs.HttpClient.Request.RequestUri?.Port ?? remotePort);
+        var (host, port) = sessionArgs.HttpClient.Request.GetOriginHostPort(remotePort);
+        return (string.IsNullOrEmpty(host) ? remoteHostName : host, port);
     }
 
     /// <returns><see langword="true"/> when a Via loop was detected and a 508 response was synthesized.</returns>

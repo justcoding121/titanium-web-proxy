@@ -74,6 +74,17 @@ public partial class ProxyServer
     {
         var cancellationToken = cancellationTokenSource.Token;
         var seedOffered = false;
+        string? cachedPoolKey = null;
+        SessionEventArgs? reusable = null;
+        SessionEventArgs openSession = null!;
+        // One open factory per H1 client connection — RentAsync only invokes it on a pool miss.
+        Func<CancellationToken, Task<Http2OriginConnection>> openFactory = async ct =>
+        {
+            var tcp = await EstablishHttp2OriginTcpConnectionAsync(openSession, remoteHostName, remotePort,
+                connectHost, connectPort, ct);
+            return await Http2OriginConnection.CreateAsync(tcp, logger,
+                openSession.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes, ct, ResourceLimits);
+        };
 
         try
         {
@@ -86,10 +97,25 @@ public partial class ProxyServer
                 var requestLine = requestLineRead.Status;
                 if (requestLine.IsEmpty()) return;
 
-                var args = new SessionEventArgs(this, endPoint, clientStream, connectRequest, cancellationTokenSource)
+                SessionEventArgs args;
+                if (reusable != null)
                 {
-                    UserData = userData
-                };
+                    args = reusable;
+                    reusable = null;
+                    args.ResetForKeepAlive(null, null);
+                    args.UserData = userData;
+                }
+                else
+                {
+                    args = new SessionEventArgs(this, endPoint, clientStream, connectRequest, cancellationTokenSource)
+                    {
+                        UserData = userData
+                    };
+                }
+
+                // Same gate as RequestHandler: probe reverse has no session handlers, so skip
+                // BeforeRequest/BeforeResponse and allow keep-alive reuse.
+                args.IsFastPath = !NeedsHttpInterception(endPoint);
 
                 var request = args.HttpClient.Request;
                 request.IsHttps = true;
@@ -217,7 +243,7 @@ public partial class ProxyServer
                             }
                             else
                             {
-                                var poolKey = Http2OriginConnectionPool.BuildPoolKey(this, args, remoteHostName,
+                                var poolKey = cachedPoolKey ??= ResolveHttp11ToHttp2PoolKey(args, remoteHostName,
                                     remotePort, connectHost, connectPort);
                                 if (!seedOffered && retainedConnectionTask != null)
                                 {
@@ -227,8 +253,9 @@ public partial class ProxyServer
                                     seedOffered = true;
                                 }
 
-                                var originConnection = await RentHttp2OriginConnectionAsync(args, poolKey,
-                                    remoteHostName, remotePort, connectHost, connectPort, cancellationToken);
+                                openSession = args;
+                                var originConnection = await Http2OriginConnectionPool.RentAsync(poolKey,
+                                    openFactory, cancellationToken);
 
                                 if (originConnection.EnableConnectProtocol)
                                 {
@@ -251,7 +278,7 @@ public partial class ProxyServer
 
                         if (keepGoing)
                         {
-                            var poolKey = Http2OriginConnectionPool.BuildPoolKey(this, args, remoteHostName,
+                            var poolKey = cachedPoolKey ??= ResolveHttp11ToHttp2PoolKey(args, remoteHostName,
                                 remotePort, connectHost, connectPort);
                             if (!seedOffered && retainedConnectionTask != null)
                             {
@@ -261,8 +288,9 @@ public partial class ProxyServer
                                 seedOffered = true;
                             }
 
-                            await RunHttp11ToHttp2ExchangeAsync(args, poolKey, remoteHostName, remotePort,
-                                connectHost, connectPort, cancellationToken);
+                            openSession = args;
+                            await RunHttp11ToHttp2ExchangeAsync(args, poolKey, openFactory, remoteHostName,
+                                remotePort, connectHost, connectPort, cancellationToken);
 
                             if (!args.HttpClient.Response.KeepAlive || clientRequestedClose) closeConnection = true;
                         }
@@ -292,14 +320,23 @@ public partial class ProxyServer
                 finally
                 {
                     await OnAfterResponse(args);
-                    args.Dispose();
+                    if (args.Exception == null && args.IsFastPath && !closeConnection)
+                        reusable = args;
+                    else
+                        args.Dispose();
                 }
 
-                if (closeConnection) return;
+                if (closeConnection)
+                {
+                    reusable?.Dispose();
+                    reusable = null;
+                    return;
+                }
             }
         }
         finally
         {
+            reusable?.Dispose();
             if (retainedConnectionTask != null) await TcpConnectionFactory.Release(retainedConnectionTask, true);
         }
     }
@@ -357,20 +394,28 @@ public partial class ProxyServer
     }
 
     /// <summary>
-    ///     Rents a shared origin h2 connection from <see cref="Http2OriginConnectionPool" />, opening a
-    ///     fresh TCP+H2 session when the authority has no usable member under soft capacity.
+    ///     Stable reverse-probe pool key: reuse <see cref="TransparentBaseProxyEndPoint.CachedH2OriginPoolKey" />
+    ///     when host/port match (same cache as H3→H2 lite).
     /// </summary>
-    private ValueTask<Http2OriginConnection> RentHttp2OriginConnectionAsync(SessionEventArgs args,
-        string poolKey, string remoteHostName, int remotePort, string? connectHost, int? connectPort,
-        CancellationToken cancellationToken)
+    private string ResolveHttp11ToHttp2PoolKey(SessionEventArgs args, string remoteHostName, int remotePort,
+        string? connectHost, int? connectPort)
     {
-        return Http2OriginConnectionPool.RentAsync(poolKey, async ct =>
+        if (args.ProxyEndPoint is TransparentBaseProxyEndPoint cacheEp
+            && cacheEp.CachedH2OriginPoolKey != null
+            && string.Equals(cacheEp.CachedH2OriginHost, remoteHostName, StringComparison.Ordinal)
+            && cacheEp.CachedH2OriginPort == remotePort)
+            return cacheEp.CachedH2OriginPoolKey;
+
+        var poolKey = Http2OriginConnectionPool.BuildPoolKey(this, args, remoteHostName, remotePort,
+            connectHost, connectPort);
+        if (args.ProxyEndPoint is TransparentBaseProxyEndPoint storeEp)
         {
-            var tcp = await EstablishHttp2OriginTcpConnectionAsync(args, remoteHostName, remotePort,
-                connectHost, connectPort, ct);
-            return await Http2OriginConnection.CreateAsync(tcp, logger,
-                args.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes, ct, ResourceLimits);
-        }, cancellationToken);
+            storeEp.CachedH2OriginHost = remoteHostName;
+            storeEp.CachedH2OriginPort = remotePort;
+            storeEp.CachedH2OriginPoolKey = poolKey;
+        }
+
+        return poolKey;
     }
 
     /// <summary>
@@ -432,14 +477,15 @@ public partial class ProxyServer
     ///     invalidates that connection and retries once on a freshly rented member.
     /// </summary>
     private async Task RunHttp11ToHttp2ExchangeAsync(SessionEventArgs args, string poolKey,
+        Func<CancellationToken, Task<Http2OriginConnection>> openFactory,
         string remoteHostName, int remotePort, string? connectHost, int? connectPort,
         CancellationToken cancellationToken)
     {
         var request = args.HttpClient.Request;
         var clientStream = args.ClientStream;
 
-        var originConnection = await RentHttp2OriginConnectionAsync(args, poolKey, remoteHostName, remotePort,
-            connectHost, connectPort, cancellationToken);
+        var originConnection = await Http2OriginConnectionPool.RentAsync(poolKey, openFactory,
+            cancellationToken);
 
         // Bind shared h2 origin identity without SetConnection: this bridge owns frame I/O via
         // Http2OriginConnection, and HasConnection must stay false so H1 syphon paths never run.
@@ -540,8 +586,8 @@ public partial class ProxyServer
                     throw;
 
                 Http2OriginConnectionPool.Invalidate(poolKey, originConnection);
-                originConnection = await RentHttp2OriginConnectionAsync(args, poolKey, remoteHostName,
-                    remotePort, connectHost, connectPort, cancellationToken);
+                originConnection = await Http2OriginConnectionPool.RentAsync(poolKey, openFactory,
+                    cancellationToken);
 
                 var retriedConnection = originConnection.ServerConnection;
                 args.HttpClient.BindUpstreamConnection(retriedConnection);
@@ -859,6 +905,7 @@ public partial class ProxyServer
         request.Headers.RemoveHeader("Sec-WebSocket-Accept");
 
         LowercaseHeaderNames(request.Headers);
+        request.HeaderNamesAreHttp2Normalized = true;
     }
 
     /// <summary>
@@ -887,6 +934,7 @@ public partial class ProxyServer
         // RFC 7540 §8.1.2: HTTP/2 field names must be lowercase. (LowercaseHeaderNames is shared with the
         // h2-to-HTTP/1.1 bridge - see Http2ToHttp11BridgeHandler.)
         LowercaseHeaderNames(request.Headers);
+        request.HeaderNamesAreHttp2Normalized = true;
     }
 
     /// <summary>

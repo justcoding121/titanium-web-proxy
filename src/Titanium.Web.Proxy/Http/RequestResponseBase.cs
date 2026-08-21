@@ -241,6 +241,12 @@ public abstract class RequestResponseBase
     /// </summary>
     internal bool Locked { get; set; }
 
+    /// <summary>
+    ///     True when field names were already lowercased for HTTP/2 (bridge prepare).
+    ///     EncodeHeaderBlock can skip the per-header ASCII scan under writeLock.
+    /// </summary>
+    internal bool HeaderNamesAreHttp2Normalized { get; set; }
+
     internal bool BodyAvailable => BodyInternal != null;
 
     internal bool IsBodyReceived { get; set; }
@@ -341,6 +347,37 @@ public abstract class RequestResponseBase
             BodyInternal = null;
             bodyString = null;
         }
+    }
+
+    /// <summary>
+    ///     Clears wire/body state so this instance can carry the next keep-alive message.
+    ///     Does not replace <see cref="Headers"/> — the collection is reused.
+    /// </summary>
+    internal void ResetWireState()
+    {
+        Headers.Clear();
+        trailingHeaders?.Clear();
+        trailingHeaders = null;
+        BodyInternal = null;
+        bodyString = null;
+        IsBodyRead = false;
+        IsBodyReceived = false;
+        IsBodySent = false;
+        Locked = false;
+        KeepBody = false;
+        HeaderNamesAreHttp2Normalized = false;
+        OriginalHasBody = false;
+        OriginalContentLength = 0;
+        OriginalIsChunked = false;
+        OriginalContentEncoding = null;
+        HttpVersion = HttpHeader.VersionUnknown;
+        Http2BeforeHandlerTask = null;
+        Http2BodyData?.Dispose();
+        Http2BodyData = null;
+        Http2IgnoreBodyFrames = false;
+        Priority = null;
+        ReadHttp2BeforeHandlerTaskCompletionSource = null;
+        ReadHttp2BodyTaskCompletionSource = null;
     }
 
     public override string ToString()

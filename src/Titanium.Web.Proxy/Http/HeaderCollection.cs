@@ -204,6 +204,18 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     }
 
     /// <summary>
+    ///     True when exactly one header of this name exists (not the duplicate/non-unique bag).
+    /// </summary>
+    internal bool TryGetUniqueHeader(KnownHeader name, out HttpHeader header)
+    {
+        if (headers.TryGetValue(name.String, out header!))
+            return true;
+
+        header = null!;
+        return false;
+    }
+
+    /// <summary>
     ///     Returns all headers
     /// </summary>
     /// <returns></returns>

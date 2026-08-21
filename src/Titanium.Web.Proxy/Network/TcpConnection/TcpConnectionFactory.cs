@@ -307,13 +307,13 @@ internal class TcpConnectionFactory : IDisposable
 
         session.CustomUpStreamProxyUsed = customUpStreamProxy;
 
-        var uri = session.HttpClient.Request.RequestUri;
+        var (originHost, originPort) = session.HttpClient.Request.GetOriginHostPort(isHttps ? 443 : 80);
         var (upStreamEndPoint, upStreamEndPointIPv4, upStreamEndPointIPv6) =
             ResolveConfiguredUpStreamEndPoints(session, server);
         var upStreamProxy = customUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
 
         // resolve the effective proxy (post-bypass) so the key matches the connection's actual route
-        upStreamProxy = GetEffectiveUpstreamProxy(upStreamProxy, uri.Host, uri.Port);
+        upStreamProxy = GetEffectiveUpstreamProxy(upStreamProxy, originHost, originPort);
 
         // Mirror the connectHost/connectPort logic from GetServerConnection so that the key
         // computed here is identical to the key stored on connections created by that method.
@@ -326,7 +326,7 @@ internal class TcpConnectionFactory : IDisposable
             connectPort = transparentEndPoint.ForwardPort;
         }
 
-        return GetConnectionCacheKey(uri.Host, uri.Port, isHttps, applicationProtocols, upStreamEndPoint,
+        return GetConnectionCacheKey(originHost, originPort, isHttps, applicationProtocols, upStreamEndPoint,
             upStreamProxy, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
     }
 
@@ -387,33 +387,11 @@ internal class TcpConnectionFactory : IDisposable
         session.CustomUpStreamProxyUsed = customUpStreamProxy;
 
         var request = session.HttpClient.Request;
-        string host;
-        int port;
-        if (request.Authority.Length > 0)
-        {
-            var authority = request.Authority;
-            var idx = authority.IndexOf((byte)':');
-            if (idx == -1)
-            {
-                // H2/H3 :authority is typically hostname-only for the default port.
-                // Defaulting to 80 here made HTTPS TCP fallbacks (e.g. H2→H3 bridge after
-                // QUIC failure) attempt TLS against port 80, which surfaces as
-                // AuthenticationException: "Cannot determine the frame size or a corrupted frame".
-                host = authority.GetString();
-                port = isHttps ? 443 : 80;
-            }
-            else
-            {
-                host = authority.Slice(0, idx).GetString();
-                port = int.Parse(authority.Slice(idx + 1).GetString());
-            }
-        }
-        else
-        {
-            var uri = request.RequestUri;
-            host = uri.Host;
-            port = uri.Port;
-        }
+        // H2/H3 :authority is typically hostname-only for the default port.
+        // Defaulting to 80 here made HTTPS TCP fallbacks (e.g. H2→H3 bridge after
+        // QUIC failure) attempt TLS against port 80, which surfaces as
+        // AuthenticationException: "Cannot determine the frame size or a corrupted frame".
+        var (host, port) = request.GetOriginHostPort(isHttps ? 443 : 80);
 
         var (upStreamEndPoint, upStreamEndPointIPv4, upStreamEndPointIPv6) =
             ResolveConfiguredUpStreamEndPoints(session, proxyServer);
@@ -524,6 +502,13 @@ internal class TcpConnectionFactory : IDisposable
             applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey,
             prefetch, cancellationToken, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
     }
+
+    /// <summary>
+    ///     Pool hit without a <see cref="SessionEventArgs" /> (H3→H1 session-lite warm path).
+    /// </summary>
+    internal bool TryRentPooled(ProxyServer proxyServer, string cacheKey,
+        List<SslApplicationProtocol>? applicationProtocols, out TcpServerConnection? connection)
+        => TryRentFromPool(proxyServer, cacheKey, noCache: false, applicationProtocols, out connection);
 
     private bool TryRentFromPool(ProxyServer proxyServer, string cacheKey, bool noCache,
         List<SslApplicationProtocol>? applicationProtocols, out TcpServerConnection? connection)

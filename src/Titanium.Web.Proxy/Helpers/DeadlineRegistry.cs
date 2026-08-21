@@ -48,14 +48,33 @@ internal sealed class DeadlineRegistry
     private readonly object gate = new();
     private ProxyTimeoutKind? firedKind;
     private long firedTimestamp;
+    private Deadline? passthrough0;
+    private Deadline? passthrough1;
+    private int passthroughInUse;
 
     /// <summary>
     ///     Starts a new deadline against <paramref name="parentToken" />. Dispose the returned scope in a
     ///     <c>finally</c>/<c>using</c> block once the bounded operation completes.
+    ///     When <paramref name="timeout"/> is null or non-positive (all probe defaults), reuses up to two
+    ///     cached scopes so keep-alive GETs do not allocate a <see cref="Deadline"/> per Start.
     /// </summary>
     public Deadline Start(CancellationToken parentToken, TimeSpan? timeout, ProxyTimeoutKind kind) // NOSONAR CA1068 -- Parameter order is retained to avoid churn across deadline call sites.
     {
-        return new Deadline(this, parentToken, timeout, kind);
+        if (timeout is not { } d || d <= TimeSpan.Zero)
+        {
+            if (passthroughInUse < 2)
+            {
+                var index = passthroughInUse++;
+                ref var slot = ref index == 0 ? ref passthrough0 : ref passthrough1;
+                if (slot == null)
+                    slot = new Deadline(this, parentToken, null, kind, cachedPassthrough: true);
+                else
+                    slot.ReusePassthrough(parentToken, kind);
+                return slot;
+            }
+        }
+
+        return new Deadline(this, parentToken, timeout, kind, cachedPassthrough: false);
     }
 
     /// <summary>
@@ -120,14 +139,16 @@ internal sealed class DeadlineRegistry
     public sealed class Deadline : IDisposable
     {
         private readonly DeadlineRegistry registry;
-        private readonly CancellationToken parentToken;
+        private readonly bool cachedPassthrough;
+        private CancellationToken parentToken;
         private readonly CancellationTokenSource? linkedCts;
         private bool disposed;
 
         internal Deadline(DeadlineRegistry registry, CancellationToken parentToken, TimeSpan? timeout, // NOSONAR CA1068 -- Constructor mirrors Start parameter order.
-            ProxyTimeoutKind kind)
+            ProxyTimeoutKind kind, bool cachedPassthrough = false)
         {
             this.registry = registry;
+            this.cachedPassthrough = cachedPassthrough;
             this.parentToken = parentToken;
             Kind = kind;
 
@@ -142,11 +163,19 @@ internal sealed class DeadlineRegistry
             Token = linkedCts.Token;
         }
 
+        internal void ReusePassthrough(CancellationToken parent, ProxyTimeoutKind kind)
+        {
+            parentToken = parent;
+            Token = parent;
+            Kind = kind;
+            disposed = false;
+        }
+
         /// <summary>Token to pass into the timed operation (the parent token when no deadline is active).</summary>
-        public CancellationToken Token { get; }
+        public CancellationToken Token { get; private set; }
 
         /// <summary>Timeout kind attributed if this deadline's own timer elapses.</summary>
-        public ProxyTimeoutKind Kind { get; }
+        public ProxyTimeoutKind Kind { get; private set; }
 
         /// <summary>True when a positive deadline was actually applied.</summary>
         public bool HasDeadline => linkedCts != null;
@@ -217,6 +246,8 @@ internal sealed class DeadlineRegistry
             if (IsTimedOut) registry.Record(Kind, Stopwatch.GetTimestamp());
 
             linkedCts?.Dispose();
+            if (cachedPassthrough && registry.passthroughInUse > 0)
+                registry.passthroughInUse--;
         }
     }
 }

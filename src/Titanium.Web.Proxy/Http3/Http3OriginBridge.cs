@@ -64,7 +64,7 @@ internal static class Http3OriginBridge
         Func<QuicStream, CancellationToken, Task>? copyRequestBody = null)
     {
         var request = sessionArgs.HttpClient.Request;
-        var sniHost = request.RequestUri?.Host ?? string.Empty;
+        var sniHost = request.GetOriginHostPort(request.IsHttps ? 443 : 80).Host;
 
         if (route.UseH3)
         {
@@ -122,8 +122,7 @@ internal static class Http3OriginBridge
         Func<QuicStream, CancellationToken, Task>? copyRequestBody = null)
     {
         var request = sessionArgs.HttpClient.Request;
-        var host = request.RequestUri?.Host ?? string.Empty;
-        var port = request.RequestUri?.Port ?? 443;
+        var (host, port) = request.GetOriginHostPort(443);
 
         // Delegate route resolution to the centralised authority; background SVCB warming is safe
         // here since we are not inside an H2 frame-reading loop.
@@ -327,7 +326,7 @@ internal static class Http3OriginBridge
                 var entries = AltSvcParser.Parse(altSvc);
                 if (entries.Count > 0 && entries[0].MaxAgeSeconds > 0)
                 {
-                    var originPort = request.RequestUri?.Port ?? port;
+                    var originPort = request.GetOriginHostPort(port).Port;
                     var ttlSeconds = Math.Min(entries[0].MaxAgeSeconds, Http3OriginCapabilityCache.DefaultTtl.TotalSeconds * 2);
                     var ttl = TimeSpan.FromSeconds(ttlSeconds);
                     server.Http3OriginCapabilityCache.Set($"{sniHost}:{originPort}",
@@ -512,7 +511,7 @@ internal static class Http3OriginBridge
                 // Auto policy: the cached H3 capability is stale or unusable — evict and fall back to TCP.
                 // Evict by origin identity (request URI port), not the QUIC connect port, which may
                 // differ when Alt-Svc / SVCB advertised an alternative port.
-                var originPort = request.RequestUri?.Port ?? port;
+                var originPort = request.GetOriginHostPort(port).Port;
                 var hostAndPort = $"{sniHost}:{originPort}";
                 server.Http3OriginCapabilityCache.Evict(hostAndPort);
                 if (logger.IsEnabled(LogLevel.Debug))
@@ -906,6 +905,8 @@ internal static class Http3OriginBridge
     ///     <see cref="TcpConnectionFactory"/> / <see cref="HttpWebClient"/> only (no inbound H3
     ///     pumps, BeforeRequest, or Via). Warm keep-alive still pools origin sockets.
     /// </summary>
+    private static readonly Lazy<int> TcpFastProcessId = new(() => 0);
+
     internal static async Task ForwardOverTcpFastAsync(
         H3H2FastForward fwd,
         ProxyServer server,
@@ -913,34 +914,139 @@ internal static class Http3OriginBridge
         CancellationToken cancellationToken,
         Func<SessionEventArgs> coldOpenSessionFactory)
     {
-        var sessionArgs = coldOpenSessionFactory();
+        var request = fwd.Request;
+        request.HttpVersion = HttpHeader.Version11;
+        request.IsBodyReceived = true;
+        request.Locked = true;
+        if (string.IsNullOrEmpty(request.Host) && request.Authority.Length > 0)
+            request.Host = request.Authority.GetString();
+
+        var isHttps = request.IsHttps;
+        string host;
+        int port;
+        string? connectHost = null;
+        int? connectPort = null;
+        if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint ep)
+        {
+            if (ep.ForwardCleartext)
+                isHttps = false;
+            if (!string.IsNullOrEmpty(ep.ForwardHost))
+            {
+                connectHost = ep.ForwardHost;
+                connectPort = ep.ForwardPort;
+            }
+        }
+
+        if (connectHost != null && connectPort is { } fwdPort)
+        {
+            host = connectHost;
+            port = fwdPort;
+        }
+        else
+        {
+            (host, port) = request.GetOriginHostPort(isHttps ? 443 : 80);
+        }
+
+        string? poolKey = null;
+        if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint poolEp
+            && poolEp.CachedHttp11PoolKey != null
+            && poolEp.CachedHttp11PoolIsHttps == isHttps)
+            poolKey = poolEp.CachedHttp11PoolKey;
+
+        TcpServerConnection? connection = null;
+        SessionEventArgs? openSession = null;
+        var closeConnection = false;
         try
         {
-            var stubRequest = sessionArgs.HttpClient.Request;
-            var src = fwd.Request;
-            stubRequest.Method = src.Method;
-            stubRequest.Authority = src.Authority;
-            stubRequest.RequestUriString8 = src.RequestUriString8;
-            stubRequest.HttpVersion = HttpHeader.Version30;
-            stubRequest.IsHttps = src.IsHttps;
-            stubRequest.IsBodyReceived = true;
-            stubRequest.Locked = true;
-            stubRequest.Headers.AddHeaders(src.Headers.GetAllHeaders());
+            if (poolKey != null)
+                server.TcpConnectionFactory.TryRentPooled(server, poolKey,
+                    SslExtensions.Http11ProtocolAsList, out connection);
 
-            sessionArgs.IsFastPath = true;
-            sessionArgs.CustomUpStreamProxy = fwd.CustomUpStreamProxy;
-            sessionArgs.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            if (connection == null)
+            {
+                openSession = coldOpenSessionFactory();
+                connection = await server.TcpConnectionFactory.GetServerConnection(
+                    server, host, port, HttpHeader.Version11, isHttps,
+                    SslExtensions.Http11ProtocolAsList, false, openSession,
+                    fwd.UpStreamEndPoint ?? server.UpStreamEndPoint,
+                    fwd.CustomUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy),
+                    false, false, cancellationToken, connectHost, connectPort,
+                    precomputedCacheKey: poolKey)
+                    ?? throw new InvalidOperationException(
+                        $"Failed to establish an HTTP/1.1 origin connection to '{host}:{port}'.");
 
-            await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse: null);
-            fwd.Response = sessionArgs.HttpClient.Response;
-            if (fwd.Response != null)
-                fwd.Response.HttpVersion = HttpHeader.Version30;
+                if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint store
+                    && fwd.CustomUpStreamProxy == null
+                    && (fwd.UpStreamEndPoint ?? server.UpStreamEndPoint) == null)
+                {
+                    store.CachedHttp11PoolKey = connection.CacheKey;
+                    store.CachedHttp11PoolIsHttps = isHttps;
+                }
+            }
+
+            var http = new HttpWebClient(null, request, TcpFastProcessId);
+            http.SetConnection(connection);
+            await http.SendRequest(false, isTransparent: true, server.OriginHttpVersionPolicy,
+                cancellationToken);
+            await http.ReceiveResponse(cancellationToken);
+
+            var response = http.Response;
+            if (response.HasBody && !response.IsBodyRead
+                && !response.IsChunked
+                && response.ContentLength >= 0
+                && response.ContentLength <= 16 * 1024)
+            {
+                if (response.ContentLength == 0)
+                {
+                    response.Body = [];
+                }
+                else
+                {
+                    var bodyBytes = new byte[response.ContentLength];
+                    var offset = 0;
+                    while (offset < bodyBytes.Length)
+                    {
+                        var read = await connection.Stream.ReadAsync(bodyBytes.AsMemory(offset),
+                            cancellationToken);
+                        if (read == 0)
+                            break;
+                        offset += read;
+                    }
+
+                    if (offset != bodyBytes.Length)
+                    {
+                        closeConnection = true;
+                        Array.Resize(ref bodyBytes, offset);
+                    }
+
+                    response.Body = bodyBytes;
+                }
+
+                response.IsBodyRead = true;
+                response.ContentLength = response.Body.Length;
+                response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+            }
+
+            response.HttpVersion = HttpHeader.Version30;
+            fwd.Response = response;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            closeConnection = true;
+            throw;
         }
         finally
         {
-            sessionArgs.CancellationTokenSource.Dispose();
-            sessionArgs.Dispose();
+            if (connection != null)
+                await server.TcpConnectionFactory.Release(connection, closeConnection);
+            if (openSession != null)
+            {
+                openSession.CancellationTokenSource.Dispose();
+                openSession.Dispose();
+            }
         }
+
+        _ = logger;
     }
 
     private static async Task ForwardOverHttp2Async(
@@ -1066,20 +1172,7 @@ internal static class Http3OriginBridge
     }
 
     private static (string Host, int Port) ResolveH2OriginAuthority(Request request)
-    {
-        if (request.Authority.Length > 0)
-        {
-            var authority = request.Authority;
-            var idx = authority.IndexOf((byte)':');
-            if (idx == -1)
-                return (authority.GetString(), 443);
-
-            return (authority.Slice(0, idx).GetString(),
-                int.Parse(authority.Slice(idx + 1).GetString()));
-        }
-
-        return (request.RequestUri?.Host ?? string.Empty, request.RequestUri?.Port ?? 443);
-    }
+        => request.GetOriginHostPort(443);
 
     private static (string? ConnectHost, int? ConnectPort) ResolveTransparentForwardTarget(
         SessionEventArgs sessionArgs)
@@ -1232,6 +1325,8 @@ internal static class Http3OriginBridge
             foreach (var (name, value) in renamed)
                 request.Headers.AddHeader(name, value);
         }
+
+        request.HeaderNamesAreHttp2Normalized = true;
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────
@@ -1323,29 +1418,7 @@ internal static class Http3OriginBridge
             if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
                 isHttps = false;
 
-            string host;
-            int port;
-            var requestUri = request.RequestUri;
-            if (request.Authority.Length > 0)
-            {
-                var authority = request.Authority;
-                var idx = authority.IndexOf((byte)':');
-                if (idx == -1)
-                {
-                    host = authority.GetString();
-                    port = isHttps ? 443 : 80;
-                }
-                else
-                {
-                    host = authority.Slice(0, idx).GetString();
-                    port = int.Parse(authority.Slice(idx + 1).GetString());
-                }
-            }
-            else
-            {
-                host = requestUri?.Host ?? string.Empty;
-                port = requestUri?.Port ?? (isHttps ? 443 : 80);
-            }
+            var (host, port) = request.GetOriginHostPort(isHttps ? 443 : 80);
 
             var (connectHost, connectPort) = ResolveTransparentForwardTarget(sessionArgs);
 

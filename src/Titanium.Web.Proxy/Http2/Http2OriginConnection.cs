@@ -282,7 +282,8 @@ internal sealed class Http2OriginConnection : IDisposable
         await initialSettingsReceived.Task.WaitAsync(cancellationToken);
 
         var gate = concurrencyGate ?? throw new InvalidOperationException("Origin settings were never processed.");
-        await gate.WaitAsync(cancellationToken);
+        if (!gate.Wait(0))
+            await gate.WaitAsync(cancellationToken);
 
         // Allocate InterimChannel only when the caller will drain 1xx (on1xx != null). Passthrough
         // bridges wait on HeadersReceived instead — avoids per-request Channel/segment Gen0.
@@ -307,7 +308,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
             // RFC 7540 §5.1.1: allocate stream id + encode first HEADERS + enqueue as one
             // critical section. Socket I/O happens on the exclusive frame-writer drain.
-            await writeLock.WaitAsync(cancellationToken);
+            await WaitWriteLockAsync(cancellationToken);
             try
             {
                 streamId = Interlocked.Add(ref lastStreamId, 2);
@@ -337,7 +338,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
             if (enqueueBufferedTrailers)
             {
-                await writeLock.WaitAsync(cancellationToken);
+                await WaitWriteLockAsync(cancellationToken);
                 try
                 {
                     Http2Helper.EnqueueTrailer(originSettings, frameHeader, frameHeaderBuffer, streamId,
@@ -362,7 +363,7 @@ internal sealed class Http2OriginConnection : IDisposable
 
                 if (request.HasTrailingHeaders && request.TrailingHeaders.Any())
                 {
-                    await writeLock.WaitAsync(cancellationToken);
+                    await WaitWriteLockAsync(cancellationToken);
                     try
                     {
                         Http2Helper.EnqueueTrailer(originSettings, frameHeader, frameHeaderBuffer, streamId,
@@ -537,7 +538,7 @@ internal sealed class Http2OriginConnection : IDisposable
             var frameHeader = new Http2FrameHeader();
             var frameHeaderBuffer = new byte[9];
 
-            await writeLock.WaitAsync(cancellationToken);
+            await WaitWriteLockAsync(cancellationToken);
             try
             {
                 streamId = Interlocked.Add(ref lastStreamId, 2);
@@ -1418,6 +1419,18 @@ internal sealed class Http2OriginConnection : IDisposable
         writeLock.Dispose();
         concurrencyGate?.Dispose();
         connection.Dispose();
+    }
+
+    /// <summary>
+    ///     Prefer a non-allocating uncontended take. WaitAsync alone allocates a Task waiter even when
+    ///     the lock is free; tiny-GET H1→H2 hits this on every stream open.
+    /// </summary>
+    private ValueTask WaitWriteLockAsync(CancellationToken cancellationToken)
+    {
+        if (writeLock.Wait(0))
+            return default;
+
+        return new ValueTask(writeLock.WaitAsync(cancellationToken));
     }
 
     private async ValueTask EnqueueDataWithFlowAsync(int streamId, ReadOnlyMemory<byte> data, bool endStream,

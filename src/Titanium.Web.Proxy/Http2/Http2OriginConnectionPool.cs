@@ -114,7 +114,10 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
         {
             DiagPickStats.OnRent();
             var limits = proxyServer.ResourceLimits;
-            var picked = TryPick(entry, limits);
+            // One ToArray: grow=1 makes every in-flight stream a TryPick miss, then the
+            // at-max path used to snapshot again (dump: thousands of Http2OriginConnection[]).
+            var snapshot = SnapshotMembers(entry);
+            var picked = TryPickFromSnapshot(snapshot, limits);
             if (picked != null)
                 return picked;
 
@@ -124,7 +127,7 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
             if (!CanOpenAnother(entry, limits))
             {
                 DiagPickStats.OnTryPickAny();
-                picked = TryPickAnyUsable(entry);
+                picked = TryPickAnyFromSnapshot(snapshot);
                 if (picked != null)
                     return picked;
             }
@@ -136,14 +139,15 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
                 if (draining)
                     throw new ObjectDisposedException(nameof(Http2OriginConnectionPool));
 
-                picked = TryPick(entry, limits);
+                snapshot = SnapshotMembers(entry);
+                picked = TryPickFromSnapshot(snapshot, limits);
                 if (picked != null)
                     return picked;
 
                 if (!CanOpenAnother(entry, limits))
                 {
                     DiagPickStats.OnTryPickAny();
-                    picked = TryPickAnyUsable(entry);
+                    picked = TryPickAnyFromSnapshot(snapshot);
                     if (picked != null)
                         return picked;
                 }
@@ -287,8 +291,14 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
     public async ValueTask DisposeAsync() => await DrainAsync().ConfigureAwait(false);
 
     private static Http2OriginConnection? TryPick(AuthorityEntry entry, ProxyResourceLimits limits)
+        => TryPickFromSnapshot(SnapshotMembers(entry), limits);
+
+    private static Http2OriginConnection? TryPickAnyUsable(AuthorityEntry entry)
+        => TryPickAnyFromSnapshot(SnapshotMembers(entry));
+
+    private static Http2OriginConnection? TryPickFromSnapshot(
+        Http2OriginConnection[] snapshot, ProxyResourceLimits limits)
     {
-        var snapshot = SnapshotMembers(entry);
         Http2OriginConnection? best = null;
         var bestActive = int.MaxValue;
         var activeSum = 0;
@@ -318,9 +328,8 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
         return best;
     }
 
-    private static Http2OriginConnection? TryPickAnyUsable(AuthorityEntry entry)
+    private static Http2OriginConnection? TryPickAnyFromSnapshot(Http2OriginConnection[] snapshot)
     {
-        var snapshot = SnapshotMembers(entry);
         Http2OriginConnection? best = null;
         var bestActive = int.MaxValue;
         foreach (var c in snapshot)

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Diagnostics;
@@ -73,5 +74,30 @@ public class UpstreamConnectionBindTests
         Assert.IsNull(client.UpstreamRemoteEndPoint);
         Assert.IsNull(client.UpstreamConnectionTiming);
         Assert.IsFalse(client.HasConnection);
+    }
+
+    [TestMethod]
+    public void ResetForKeepAlive_UnbindsAndReplacesResponse()
+    {
+        var request = new Request { Method = "GET" };
+        request.Headers.AddHeader("Host", "example.test");
+        var client = new HttpWebClient(null, request, new Lazy<int>(() => 0));
+        client.BindUpstreamConnection(9, new IPEndPoint(IPAddress.Loopback, 80),
+            new UpstreamConnectionTiming(DateTime.UtcNow));
+        client.Response.StatusCode = 200;
+        client.Response.Locked = true;
+        client.CloseServerConnection = true;
+
+        var previousResponse = client.Response;
+        client.ResetForKeepAlive();
+
+        Assert.IsNull(client.UpstreamConnectionId);
+        Assert.IsFalse(client.HasConnection);
+        Assert.IsFalse(client.CloseServerConnection);
+        Assert.AreEqual(string.Empty, client.Request.Method);
+        Assert.AreEqual(0, client.Request.Headers.Count());
+        Assert.AreNotSame(previousResponse, client.Response);
+        Assert.AreEqual(0, client.Response.StatusCode);
+        Assert.IsFalse(client.Response.Locked);
     }
 }

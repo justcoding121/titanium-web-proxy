@@ -103,6 +103,25 @@ internal static class Http1FramingValidator
     /// </summary>
     private static void NormalizeContentLength(HeaderCollection headers)
     {
+        // Common path: one well-formed Content-Length. Do not allocate GetHeaders()'s List,
+        // Split, or rewrite the header — that was a per-response tax on every tiny GET.
+        if (headers.TryGetUniqueHeader(KnownHeaders.ContentLength, out var unique))
+        {
+            var raw = unique.Value;
+            if (raw.IndexOf(',') < 0)
+            {
+                var token = raw.AsSpan().Trim();
+                if (token.Length == raw.Length)
+                {
+                    if (!TryParseStrictDigits(raw, out _))
+                        throw new Http1FramingException(
+                            $"Ambiguous framing: Content-Length value '{raw}' is not a valid 1*DIGIT.",
+                            HttpStatusCode.BadRequest);
+                    return;
+                }
+            }
+        }
+
         var entries = headers.GetHeaders(KnownHeaders.ContentLength.String);
         if (entries == null) return;
 

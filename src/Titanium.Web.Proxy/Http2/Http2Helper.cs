@@ -3669,7 +3669,9 @@ namespace Titanium.Web.Proxy.Http2
                 // header actually gets HPACK-encoded onto an h2 wire, closes that gap regardless of
                 // which upstream code path is responsible - a mixed-case name here reaches the peer
                 // verbatim and manifests as a client RST_STREAM(PROTOCOL_ERROR).
-                var nameData = HasUpperCaseAscii(header.Name) ? header.Name.ToLowerInvariant().GetByteString() : header.NameData;
+                var nameData = rr.HeaderNamesAreHttp2Normalized || !HasUpperCaseAscii(header.Name)
+                    ? header.NameData
+                    : header.Name.ToLowerInvariant().GetByteString();
 
                 // Via is added by the proxy itself on every request and varies across hops; it must
                 // not enter the HPACK dynamic table.  If it did, stream N would encode it as a
@@ -4363,18 +4365,29 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         /// <summary>
+        ///     HPACK-encodes <paramref name="rr"/> into a rented framed HEADERS/CONTINUATION block.
+        ///     Caller must hold the origin write lock across encode (dynamic table + RFC 7540 §5.1.1
+        ///     stream-id order). Enqueue may happen after the lock is released so the exclusive drain
+        ///     can write TLS without pinning HPACK.
+        /// </summary>
+        internal static ArraySegment<byte> RentFramedHeaders(Http2Settings settings, Http2FrameHeader frameHeader,
+            byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, bool pushPromise = false)
+        {
+            var block = EncodeHeaderBlock(settings, rr);
+            return RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, frameHeader.StreamId,
+                pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers, endStream,
+                rr.Priority.HasValue, block, settings.MaxFrameSize);
+        }
+
+        /// <summary>
         ///     HPACK-encodes <paramref name="rr"/> and enqueues the framed HEADERS/CONTINUATION bytes.
-        ///     Caller must hold the origin write lock across this call so encode + enqueue stay atomic
-        ///     (dynamic table + RFC 7540 §5.1.1 stream-id order).
+        ///     Caller must hold the origin write lock across encode; enqueue may be after unlock.
         /// </summary>
         internal static void EnqueueHeader(Http2Settings settings, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Http2FrameWriter writer,
             bool pushPromise = false)
         {
-            var block = EncodeHeaderBlock(settings, rr);
-            var framed = RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, frameHeader.StreamId,
-                pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers, endStream,
-                rr.Priority.HasValue, block, settings.MaxFrameSize);
+            var framed = RentFramedHeaders(settings, frameHeader, frameHeaderBuffer, rr, endStream, pushPromise);
             writer.EnqueueRented(framed.Array!, framed.Count);
         }
 
@@ -4382,9 +4395,8 @@ namespace Titanium.Web.Proxy.Http2
         ///     HPACK-encodes trailing headers and enqueues the framed HEADERS block. Same lock contract
         ///     as <see cref="EnqueueHeader"/>.
         /// </summary>
-        internal static void EnqueueTrailer(Http2Settings settings, Http2FrameHeader frameHeader,
-            byte[] frameHeaderBuffer, int streamId, HeaderCollection trailingHeaders, bool endStream,
-            Http2FrameWriter writer)
+        internal static ArraySegment<byte> RentFramedTrailers(Http2Settings settings, Http2FrameHeader frameHeader,
+            byte[] frameHeaderBuffer, int streamId, HeaderCollection trailingHeaders, bool endStream)
         {
             var encoder = settings.Encoder;
             if (encoder == null)
@@ -4414,8 +4426,16 @@ namespace Titanium.Web.Proxy.Http2
 
             writerBuf.Flush();
 
-            var framed = RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, streamId,
+            return RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, streamId,
                 Http2FrameType.Headers, endStream, false, GetMemoryStreamMemory(ms), settings.MaxFrameSize);
+        }
+
+        internal static void EnqueueTrailer(Http2Settings settings, Http2FrameHeader frameHeader,
+            byte[] frameHeaderBuffer, int streamId, HeaderCollection trailingHeaders, bool endStream,
+            Http2FrameWriter writer)
+        {
+            var framed = RentFramedTrailers(settings, frameHeader, frameHeaderBuffer, streamId,
+                trailingHeaders, endStream);
             writer.EnqueueRented(framed.Array!, framed.Count);
         }
 

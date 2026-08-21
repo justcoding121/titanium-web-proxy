@@ -361,6 +361,12 @@ public class SonarNewCodeCoverageTests
         parsed = ((string Host, int Port))BridgeMethod("ResolveH2OriginAuthority").Invoke(null, [fromUri])!;
         Assert.AreEqual("uri.example", parsed.Host);
         Assert.AreEqual(9443, parsed.Port);
+
+        var fromHost = new Request { RequestUriString = "/x" };
+        fromHost.Headers.AddHeader("Host", "host.example:7443");
+        parsed = ((string Host, int Port))BridgeMethod("ResolveH2OriginAuthority").Invoke(null, [fromHost])!;
+        Assert.AreEqual("host.example", parsed.Host);
+        Assert.AreEqual(7443, parsed.Port);
     }
 
     [TestMethod]

@@ -75,9 +75,12 @@ public class Response : RequestResponseBase
             // If content length is set to 0 the response has no body
             if (contentLength == 0) return false;
 
-            // Has body only if response is chunked or content length >0
-            // If none are true then check if connection:close header exist, if so write response until server or client terminates the connection
-            if (IsChunked || contentLength > 0 || !KeepAlive) return true;
+            // Positive CL is the common keep-alive tiny-GET case — check it before IsChunked /
+            // KeepAlive so we do not pay two more header lookups per response.
+            if (contentLength > 0) return true;
+
+            // Chunked, or connection:close with no length (read until peer closes).
+            if (IsChunked || !KeepAlive) return true;
 
             // HTTP/2 and HTTP/3 may omit Content-Length; body length is framed by DATA/END_STREAM
             // (or QUIC stream fin), not by Content-Length / Transfer-Encoding.

@@ -31,6 +31,22 @@ public class Http1FramingValidatorIsolationTests
         return new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
     }
 
+    [TestMethod]
+    public void WireSources_SingleWellFormedContentLength_DoesNotRewriteHeader()
+    {
+        foreach (var source in WireSources)
+        {
+            var request = MakeRequest();
+            request.Headers.AddHeader("Content-Length", "56");
+            var original = request.Headers.GetFirstHeader("Content-Length");
+
+            Http1FramingValidator.Validate(request, source);
+
+            Assert.AreSame(original, request.Headers.GetFirstHeader("Content-Length"), $"source={source}");
+            Assert.AreEqual(56, request.ContentLength, $"source={source}");
+        }
+    }
+
     // ---- Positive cases: the wire validator runs and enforces every rule, for every wire source ----
 
     [TestMethod]

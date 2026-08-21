@@ -27,8 +27,8 @@ public partial class ProxyServer
         {
             if (altSvc == "clear")
             {
-                var clearKey =
-                    $"{args.HttpClient.Request.RequestUri?.Host}:{args.HttpClient.Request.RequestUri?.Port}";
+                var (clearHost, clearPort) = args.HttpClient.Request.GetOriginHostPort(443);
+                var clearKey = $"{clearHost}:{clearPort}";
                 Http3OriginCapabilityCache.Evict(clearKey);
                 // Prevent a late background SVCB completion from undoing the clear.
                 _svcbDiscoveryCoordinator?.Invalidate(clearKey);
@@ -40,8 +40,7 @@ public partial class ProxyServer
         var entries = AltSvcParser.Parse(altSvc);
         if (entries.Count == 0) return;
 
-        var host = args.HttpClient.Request.RequestUri?.Host;
-        var port = args.HttpClient.Request.RequestUri?.Port ?? 443;
+        var (host, port) = args.HttpClient.Request.GetOriginHostPort(443);
         if (string.IsNullOrEmpty(host)) return;
 
         var hostAndPort = $"{host}:{port}";
@@ -158,8 +157,7 @@ public partial class ProxyServer
     /// </summary>
     internal bool ShouldUseHttp3Origin(SessionEventArgs args)
     {
-        var host = args.HttpClient.Request.RequestUri?.Host ?? string.Empty;
-        var port = args.HttpClient.Request.RequestUri?.Port ?? 443;
+        var (host, port) = args.HttpClient.Request.GetOriginHostPort(443);
 
         return ResolveHttp3Origin(host, port, args.UpstreamHttpProtocol, allowDnsProbe: false).UseH3;
     }

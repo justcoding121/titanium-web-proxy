@@ -47,6 +47,7 @@ public partial class ProxyServer
         var prefetchTask = prefetchConnectionTask;
         TcpServerConnection? connection = null;
         var closeServerConnection = false;
+        SessionEventArgs? reusable = null;
 
         try
         {
@@ -88,13 +89,23 @@ public partial class ProxyServer
                         requestLine = requestLineRead.Status;
                         if (requestLine.IsEmpty()) return;
 
-                        args = new SessionEventArgs(this, endPoint, clientStream, connectRequest,
-                            cancellationTokenSource)
+                        if (reusable != null)
                         {
-                            UserData = connectArgs?.UserData,
-                            // Transparent BeforeSslAuthenticate / explicit CONNECT policy for H1→H3 etc.
-                            UpstreamHttpProtocol = upstreamHttpProtocol ?? connectArgs?.UpstreamHttpProtocol
-                        };
+                            args = reusable;
+                            reusable = null;
+                            args.ResetForKeepAlive(connectArgs,
+                                upstreamHttpProtocol ?? connectArgs?.UpstreamHttpProtocol);
+                        }
+                        else
+                        {
+                            args = new SessionEventArgs(this, endPoint, clientStream, connectRequest,
+                                cancellationTokenSource)
+                            {
+                                UserData = connectArgs?.UserData,
+                                // Transparent BeforeSslAuthenticate / explicit CONNECT policy for H1→H3 etc.
+                                UpstreamHttpProtocol = upstreamHttpProtocol ?? connectArgs?.UpstreamHttpProtocol
+                            };
+                        }
 
                         // Read the request headers in to unique and non-unique header collections
                         if (!await HeaderParser.TryReadHeadersAsync(clientStream, args.HttpClient.Request.Headers,
@@ -181,23 +192,34 @@ public partial class ProxyServer
                                 request.Host = rawAuthority;
                         }
 
-                        var interceptionCtx = new HttpInterceptionContext
+                        // Probe / no-handlers: NeedsHttpInterception is false — do not touch
+                        // RequestUri (new Uri(Url) per get) or allocate PathAndQuery strings.
+                        bool fastPath;
+                        if (!NeedsHttpInterception(endPoint))
                         {
-                            Hostname = request.RequestUri?.Host
-                                        ?? request.Host
-                                        ?? string.Empty,
-                            Port = request.RequestUri?.Port
-                                   ?? connectRequest?.RequestUri?.Port
-                                   ?? endPoint.Port,
-                            IsHttps = isHttps || request.IsHttps,
-                            Method = request.Method ?? string.Empty,
-                            PathAndQuery = request.RequestUriString8.GetString(),
-                            HttpVersion = request.HttpVersion,
-                            ProxyEndPoint = endPoint,
-                            ClientRemoteEndPoint = args.ClientRemoteEndPoint,
-                            ClientProcessId = null
-                        };
-                        var fastPath = !ShouldIntercept(interceptionCtx, endPoint);
+                            fastPath = true;
+                        }
+                        else
+                        {
+                            var interceptionCtx = new HttpInterceptionContext
+                            {
+                                Hostname = request.Host
+                                           ?? UriExtensions.GetRawAuthority(request.RequestUriString8)
+                                           ?? (request.Authority.Length > 0
+                                               ? request.Authority.GetString()
+                                               : string.Empty),
+                                Port = connectRequest?.RequestUri?.Port ?? endPoint.Port,
+                                IsHttps = isHttps || request.IsHttps,
+                                Method = request.Method ?? string.Empty,
+                                PathAndQuery = request.RequestUriString8.GetString(),
+                                HttpVersion = request.HttpVersion,
+                                ProxyEndPoint = endPoint,
+                                ClientRemoteEndPoint = args.ClientRemoteEndPoint,
+                                ClientProcessId = null
+                            };
+                            fastPath = !ShouldIntercept(interceptionCtx, endPoint);
+                        }
+
                         args.IsFastPath = fastPath;
 
                         // If user requested interception do it
@@ -358,12 +380,18 @@ public partial class ProxyServer
                                 // Poll(0): non-blocking half-close check. Poll(1000) waited up to 1ms
                                 // whenever the origin socket was idle — catastrophic for sticky reverse
                                 // keep-alive (every GET paid that delay; Linux H1 plain dropped ~20%).
-                                var socket = connection.TcpSocket;
-                                if (socket.Poll(0, SelectMode.SelectRead) && socket.Available == 0)
+                                // Skip on a hot sticky socket: LastAccess is updated on SetConnection
+                                // each GET, so under load this avoids a kernel poll per request.
+                                // Idle (>1s) still polls; write-fail retries handle a rare stale miss.
+                                var idleMs = (DateTime.UtcNow - connection.LastAccess).TotalMilliseconds;
+                                if (idleMs >= 1000)
                                 {
-                                    // connection is closed
-                                    await TcpConnectionFactory.Release(connection, true);
-                                    connection = null;
+                                    var socket = connection.TcpSocket;
+                                    if (socket.Poll(0, SelectMode.SelectRead) && socket.Available == 0)
+                                    {
+                                        await TcpConnectionFactory.Release(connection, true);
+                                        connection = null;
+                                    }
                                 }
                             }
 
@@ -482,12 +510,18 @@ public partial class ProxyServer
                 finally
                 {
                     await OnAfterResponse(args);
-                    args.Dispose();
+                    // Fast-path keep-alive: reuse the session shell + request HeaderCollection.
+                    // Always replace Response (StreamBodyWriter leftover hung a prior recycle).
+                    if (args.Exception == null && args.IsFastPath && !closeServerConnection)
+                        reusable = args;
+                    else
+                        args.Dispose();
                 }
             }
         }
         finally
         {
+            reusable?.Dispose();
             if (connection != null) await TcpConnectionFactory.Release(connection, closeServerConnection);
 
             await TcpConnectionFactory.Release(prefetchTask, closeServerConnection);
@@ -521,8 +555,7 @@ public partial class ProxyServer
             }
             else
             {
-                reqHost = args.HttpClient.Request.RequestUri?.Host ?? string.Empty;
-                reqPort = args.HttpClient.Request.RequestUri?.Port ?? 443;
+                (reqHost, reqPort) = args.HttpClient.Request.GetOriginHostPort(443);
             }
 
             var h3Route = ResolveHttp3Origin(
@@ -696,6 +729,87 @@ public partial class ProxyServer
     {
         var cancellationToken = args.CancellationToken;
         var request = args.HttpClient.Request;
+
+        // Transparent reverse tiny GET: send + receive + write without WinAuth / 1xx loop /
+        // SetOriginalHeaders / BeforeResponse. Probe and no-interception servers hit this.
+        if (args.IsFastPath
+            && !request.HasBody
+            && !Enable100ContinueBehaviour
+            && !args.EnableWinAuth)
+        {
+            await args.HttpClient.SendRequest(false, args.IsTransparent,
+                args.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy, cancellationToken);
+            args.Timing?.MarkRequestSent();
+
+            await args.HttpClient.ReceiveResponse(cancellationToken);
+            var fastResponse = args.HttpClient.Response;
+            if (fastResponse.StatusCode is >= 100 and <= 199)
+            {
+                await HandleHttpSessionResponse(args);
+                return;
+            }
+
+            try
+            {
+                Http1FramingValidator.Validate(fastResponse, ResolveHttp1WireFramingSource(args),
+                    args.Server.PolicyModes.AllowAmbiguousFraming);
+            }
+            catch (Http1FramingException framingEx)
+            {
+                ProxyMetrics.ParserError("framing");
+                args.Exception = framingEx;
+                ProxyDiagnostics.ReportBenign(logger, "Origin response has ambiguous HTTP/1 framing", framingEx);
+                args.GenericResponse($"Bad Gateway. {framingEx.Message}", HttpStatusCode.BadGateway,
+                    closeServerConnection: true);
+                await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                args.IsClientResponseCommitted = true;
+                return;
+            }
+
+            MaybeInjectClientAltSvc(args);
+            fastResponse.Locked = true;
+            if (!args.IsTransparent && !args.IsSocks)
+                fastResponse.Headers.FixProxyHeaders();
+            // Transparent/SOCKS: FramingValidator already ran wire rules (CL/TE). Skip
+            // NormalizeMessageFraming — it only repeats those checks and can allocate on TE.
+
+            if (request.HttpVersion == HttpHeader.Version10 && fastResponse.IsChunked)
+            {
+                await args.GetResponseBody(cancellationToken);
+                fastResponse.ContentLength = fastResponse.Body.Length;
+            }
+
+            await args.ClientStream.WriteResponseAsync(fastResponse, cancellationToken);
+            args.IsClientResponseCommitted = true;
+
+            if (fastResponse.HasBody)
+            {
+                var serverStream = args.HttpClient.Connection.Stream;
+                try
+                {
+                    using var idleDeadline = args.Deadlines.Start(cancellationToken,
+                        ResolveIdleReadTimeout(args), ProxyTimeoutKind.IdleRead);
+                    try
+                    {
+                        await serverStream.CopyBodyAsync(fastResponse, false, args.ClientStream,
+                            TransformationMode.None, false, args, idleDeadline.Token);
+                    }
+                    catch (OperationCanceledException ex)
+                    {
+                        idleDeadline.ThrowIfTimedOut(ex);
+                    }
+                }
+                catch (ProxyTimeoutException ex)
+                {
+                    await HandleProxyTimeoutAsync(args, ex, cancellationToken);
+                    return;
+                }
+
+                fastResponse.IsBodyReceived = true;
+            }
+
+            return;
+        }
 
         var body = request.CompressBodyAndUpdateContentLength();
 

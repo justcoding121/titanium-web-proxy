@@ -195,6 +195,27 @@ public class ProxyTimeoutTests
         }
     }
 
+    [TestMethod]
+    public void DeadlineRegistry_Reuses_Passthrough_Scopes_When_Timeout_Disabled()
+    {
+        using var parent = new CancellationTokenSource();
+        var registry = new DeadlineRegistry();
+
+        DeadlineRegistry.Deadline first;
+        DeadlineRegistry.Deadline nested;
+        using (first = registry.Start(parent.Token, null, ProxyTimeoutKind.ClientHeader))
+        using (nested = registry.Start(parent.Token, TimeSpan.Zero, ProxyTimeoutKind.Request))
+        {
+            Assert.AreEqual(parent.Token, first.Token);
+            Assert.AreEqual(parent.Token, nested.Token);
+            Assert.AreNotSame(first, nested);
+        }
+
+        using var again = registry.Start(parent.Token, null, ProxyTimeoutKind.IdleWrite);
+        Assert.AreSame(first, again);
+        Assert.AreEqual(parent.Token, again.Token);
+    }
+
     private static void ThrowHelper()
     {
         throw new OperationCanceledException();

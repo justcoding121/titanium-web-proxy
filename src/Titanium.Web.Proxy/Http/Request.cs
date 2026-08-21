@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http;
@@ -103,14 +104,34 @@ public class Request : RequestResponseBase
             // If content length is set to 0 the request has no body
             if (contentLength == 0) return false;
 
-            // Has body only if request is chunked or content length >0
-            if (IsChunked || contentLength > 0) return true;
+            // Positive CL first (avoid IsChunked header lookup on every bodiless keep-alive GET).
+            if (contentLength > 0) return true;
+            if (IsChunked) return true;
 
             // has body if POST and when version is http/1.0
             if (Method == "POST" && HttpVersion == HttpHeader.Version10) return true;
 
             return false;
         }
+    }
+
+    /// <summary>
+    ///     Origin host/port from <see cref="Authority"/> or the Host header — no <see cref="Uri"/> alloc.
+    ///     Falls back to <see cref="RequestUri"/> only for absolute-form targets with neither field set.
+    /// </summary>
+    internal (string Host, int Port) GetOriginHostPort(int defaultPort)
+    {
+        if (Authority.Length > 0 &&
+            AuthorityParser.TryParse(Authority.GetString(), defaultPort, out var host, out var port))
+            return (host, port);
+
+        var header = Host;
+        if (!string.IsNullOrEmpty(header) &&
+            AuthorityParser.TryParse(header, defaultPort, out host, out port))
+            return (host, port);
+
+        var uri = RequestUri;
+        return (uri.Host, uri.Port > 0 ? uri.Port : defaultPort);
     }
 
     /// <summary>
@@ -221,6 +242,22 @@ public class Request : RequestResponseBase
                                     "Use SessionEventArgs.GetRequestBody() or SessionEventArgs.GetRequestBodyAsString() " +
                                     "method to read the request body.");
         }
+    }
+
+    /// <summary>
+    ///     Reuse this request object for the next keep-alive GET on the same client connection.
+    /// </summary>
+    internal void ResetForKeepAlive()
+    {
+        ResetWireState();
+        Method = string.Empty;
+        requestUriString8 = default;
+        Authority = default;
+        IsHttps = false;
+        CancelRequest = false;
+        ExtendedConnectProtocol = null;
+        ExpectationSucceeded = false;
+        ExpectationFailed = false;
     }
 
     internal static readonly ByteString OriginFormRoot = (ByteString)"/";

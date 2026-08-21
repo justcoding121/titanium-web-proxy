@@ -42,6 +42,41 @@ public class SessionEventArgs : SessionEventArgsBase
     }
 
     /// <summary>
+    ///     Recycles this session for the next keep-alive request on the same client connection.
+    ///     Call only after a successful fast-path exchange (no exception). Must not run after
+    ///     <see cref="Dispose"/>.
+    /// </summary>
+    internal void ResetForKeepAlive(TunnelConnectSessionEventArgs? connectArgs,
+        Models.UpstreamHttpProtocol? upstreamHttpProtocol)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+
+        OperationCancellationToken = null;
+        Exception = null;
+        IsClientResponseCommitted = false;
+        IsFastPath = false;
+        IsPromise = false;
+        Http3BufferedBodyReader = null;
+        Http3RequestBodyPump = null;
+        ResponseHeaderTimeout = null;
+        IdleReadTimeout = null;
+        IdleWriteTimeout = null;
+        RequestTimeout = null;
+        MaxBufferedBodyBytes = null;
+        NetworkFailureRetryAttempts = null;
+        MaxWebSocketFramePayloadBytes = null;
+        OriginHttpVersionPolicy = null;
+        UpstreamHttpProtocol = upstreamHttpProtocol ?? connectArgs?.UpstreamHttpProtocol;
+        reRequest = false;
+        ConnectTimeout = null;
+        CustomUpStreamProxy = null;
+        CustomUpStreamProxyUsed = null;
+        Deadlines.Reset();
+        UserData = connectArgs?.UserData;
+        HttpClient.ResetForKeepAlive();
+    }
+
+    /// <summary>
     ///     Is this session a HTTP/2 promise?
     /// </summary>
     public bool IsPromise { get; internal set; }
