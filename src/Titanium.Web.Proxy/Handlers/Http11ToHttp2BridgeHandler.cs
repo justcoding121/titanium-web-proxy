@@ -636,6 +636,50 @@ public partial class ProxyServer
             foreach (var header in exchange.TrailingHeaders)
                 response.TrailingHeaders.AddHeader(header);
 
+        // Transparent / no-intercept: skip SetOriginalHeaders / BeforeResponse / Normalize — same
+        // shape as H1 IsFastPath. Probe GETs never subscribe handlers on this path.
+        if (args.IsFastPath)
+        {
+            args.HttpClient.Response = response;
+            MaybeInjectClientAltSvc(args);
+            response.Locked = true;
+
+            var fastBody = exchange.Body;
+            if (response.HasTrailingHeaders)
+                response.IsChunked = true;
+            else if (response.StreamBodyWriter == null)
+                response.ContentLength = fastBody.Length;
+            else if (response.ContentLength < 0 && !response.IsChunked)
+            {
+                var buffered = new MemoryStream();
+                var streamBody = response.StreamBodyWriter;
+                response.StreamBodyWriter = null;
+                await streamBody(buffered, cancellationToken);
+                fastBody = buffered.ToArray();
+                response.ContentLength = fastBody.Length;
+            }
+
+            await clientStream.WriteResponseAsync(response, cancellationToken);
+
+            if (response.StreamBodyWriter != null && !response.IsBodySent)
+            {
+                var bodyWriter = new BodyStreamWriter(clientStream, response.IsChunked);
+                await response.StreamBodyWriter(bodyWriter, cancellationToken);
+                await bodyWriter.CompleteAsync(response.HasTrailingHeaders ? response.TrailingHeaders : null,
+                    cancellationToken);
+                response.IsBodySent = true;
+            }
+            else if (response.HasBody || response.HasTrailingHeaders)
+            {
+                await clientStream.WriteBodyAsync(fastBody, response.IsChunked,
+                    response.HasTrailingHeaders ? response.TrailingHeaders : null, cancellationToken);
+            }
+
+            response.IsBodyReceived = true;
+            response.IsBodySent = true;
+            return;
+        }
+
         // This response was decoded from real HTTP/2 frames (Http2OriginConnection), never from
         // HttpStream-read bytes, so it is explicitly out of scope for the HTTP/1 wire validator - see
         // Http1FramingValidator's remarks. The call is still made (as a documented no-op) so this
