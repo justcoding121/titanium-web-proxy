@@ -89,6 +89,10 @@ internal sealed class Http2OriginConnection : IDisposable
     private int activeStreamCount;
     private long lastUsedUtcTicks = DateTime.UtcNow.Ticks;
 
+    // Reused only under writeLock (single encoder critical section).
+    private Http2FrameHeader? encodeFrameHeader;
+    private readonly byte[] encodeFrameHeaderBuffer = new byte[9];
+
     private Http2OriginConnection(TcpServerConnection connection, ILogger logger, long maxBufferedBodyBytes,
         ProxyResourceLimits resourceLimits)
     {
@@ -293,16 +297,21 @@ internal sealed class Http2OriginConnection : IDisposable
         var bodyHandedOff = false;
         try
         {
-            var frameHeader = new Http2FrameHeader();
-            var frameHeaderBuffer = new byte[9];
+            var frameHeader = encodeFrameHeader ??= new Http2FrameHeader();
+            var frameHeaderBuffer = encodeFrameHeaderBuffer;
 
             var streamRequest = copyRequestBody != null && !request.IsBodyRead && !request.BodyAvailable;
             byte[]? bufferedBody = null;
             var enqueueBufferedTrailers = false;
             if (!streamRequest)
             {
-                var body = request.CompressBodyAndUpdateContentLength();
-                bufferedBody = request.HasBody && request.IsBodyRead ? body : null;
+                // Tiny GET: HasBody is false — skip CompressBodyAndUpdateContentLength (header scans).
+                if (request.HasBody)
+                {
+                    var body = request.CompressBodyAndUpdateContentLength();
+                    bufferedBody = request.IsBodyRead ? body : null;
+                }
+
                 enqueueBufferedTrailers = request.HasTrailingHeaders && request.TrailingHeaders.Any();
             }
 
