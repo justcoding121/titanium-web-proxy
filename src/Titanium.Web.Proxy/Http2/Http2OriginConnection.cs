@@ -459,9 +459,28 @@ internal sealed class Http2OriginConnection : IDisposable
                 return new Http2OriginExchange(response, Array.Empty<byte>(), pending.TrailingHeaders);
             }
 
-            // Stream origin DATA to the caller instead of materializing ToArray().
             var bodyPipe = pending.BodyPipe;
             var trailers = pending.TrailingHeaders;
+
+            // Tiny fixed-length bodies (probe GET ~56 B): buffer then return so H1 deliver can
+            // coalesce headers+body in one write. Streaming via StreamBodyWriter pays an extra
+            // pipe+async hop per request for these.
+            if (response.ContentLength is >= 0 and <= 8 * 1024)
+            {
+                var ms = new MemoryStream((int)response.ContentLength);
+                await bodyPipe.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
+                var body = ms.Length == 0 ? Array.Empty<byte>() : ms.ToArray();
+                response.IsBodyRead = true;
+                response.Body = body;
+                if (trailers != null)
+                {
+                    foreach (var header in trailers)
+                        response.TrailingHeaders.AddHeader(header);
+                }
+
+                return new Http2OriginExchange(response, body, trailers);
+            }
+
             bodyCancelRegistration = cancellationToken.Register(() =>
                 bodyPipe.CompleteWriter(new OperationCanceledException(cancellationToken)));
             bodyHandedOff = true;
