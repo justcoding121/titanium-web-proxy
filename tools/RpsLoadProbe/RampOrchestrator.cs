@@ -564,10 +564,9 @@ internal static class RampOrchestrator
                 HeavierReverseArms(nginxAvailable, nginxHttp3Available,
                     WorkloadOptions.ForPost(64 * 1024, 64 * 1024), "post64k"),
             ProbeMode.CompareLossy =>
-                // Userspace UDP shim + MsQuic under multi-connection load hangs; H1/H2 TCP tell the HOL story.
+                // H1/H2: TCP delay + connection stall (HOL). H3: UDP delay + datagram drop (QUIC).
                 HeavierReverseArms(nginxAvailable, nginxHttp3Available,
-                    WorkloadOptions.ForLossy(64 * 1024, 5, 1.0), "lossy",
-                    includeHttp3: false),
+                    WorkloadOptions.ForLossy(64 * 1024, 5, 1.0), "lossy"),
             ProbeMode.CompareTlsCost => BuildTlsCostArms(nginxAvailable),
             ProbeMode.CompareArch => BuildArchArms(nginxAvailable, nginxHttp3Available),
             ProbeMode.YarpReverseHttp2ToHttps =>
@@ -646,14 +645,23 @@ internal static class RampOrchestrator
         {
             if (workload.IsLossy)
             {
-                var useQuicLink = string.Equals(stack.LoadGenerator, "quic-http3", StringComparison.OrdinalIgnoreCase)
-                                  && stack.QuicPort is > 0;
-                if (useQuicLink)
+                var useQuicGenerator = string.Equals(stack.LoadGenerator, "quic-http3",
+                    StringComparison.OrdinalIgnoreCase);
+                var http3Client = stack.RequestHttpVersion.Major >= 3;
+                var backendQuicPort = stack.QuicPort ?? (http3Client ? stack.TargetUri.Port : (int?)null);
+                if ((useQuicGenerator || http3Client) && backendQuicPort is > 0)
                 {
-                    udpLink = LossyUdpLink.Start(stack.QuicPort!.Value, workload.DelayMs, workload.LossPercent);
+                    udpLink = LossyUdpLink.Start(backendQuicPort.Value, workload.DelayMs, workload.LossPercent);
                     quicPort = udpLink.Port;
+                    // Dual-listen HttpClient H3: retarget the URI so QUIC hits the UDP shim.
+                    if (!useQuicGenerator)
+                    {
+                        targetUri = new Uri(udpLink.ListenUrlHttps);
+                        targetUris = null;
+                    }
+
                     ProbeLog.Info(
-                        $"  lossy-udp port={udpLink.Port} -> quic={stack.QuicPort} delay={workload.DelayMs}ms loss={workload.LossPercent}%");
+                        $"  lossy-udp port={udpLink.Port} -> quic={backendQuicPort} delay={workload.DelayMs}ms loss={workload.LossPercent}%");
                 }
                 else
                 {

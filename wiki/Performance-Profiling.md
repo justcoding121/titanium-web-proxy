@@ -158,18 +158,19 @@ nginx/Windows collapses on large reverse bodies in this harness; treat as same-O
 
 H1 POST: TWP 🟢 (heated and cool). H2 POST: YARP 🟢 — heated ≈ **0.74×**, cool ≈ **~0.88–0.95×** with c=1 TWP ahead (~**1.2×**); residual is multiplex scaling, not single-stream cost. H3 POST: YARP 🟢 (TWP sustain **0**).
 
-### Lossy / high-RTT (H2 HOL)
+### Lossy / high-RTT (H2 HOL / H3 packet loss)
 
-Userspace **5 ms** one-way delay + **1%** connection stall; **64 KiB** GET. 1-repeat. Source: `windows-20260820-quick/compare-lossy`.
-
-
-| Client       | Origin         | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
-| ------------ | -------------- | ----------- | -------- | ------------- | ---------- | ------------ | --------- |
-| HTTP/1 · TLS | HTTP/1 · plain | **287**     | **536**  | **674**       | **674**    | 🟢 **678**   | **678**   |
-| HTTP/2 · TLS | HTTP/1 · plain | **14**      | **14**   | **14**        | **15**     | 🟢 **15**    | **15**    |
+Userspace **5 ms** one-way delay + **1%** stall (TCP) or datagram drop (UDP/QUIC); **64 KiB** GET. 1-repeat; warmup 2s / measure 8s; c=8–64. Source: `windows-20260822-lossy-h3/`.
 
 
-H1 stays usable; H2 collapses under connection stalls (HOL). Absolute RPS is low because the shim delays every buffer — the point is the **protocol shape**, not competing with the tiny-GET table.
+| Client        | Origin         | TWP sustain   | TWP peak   | nginx sustain | nginx peak | YARP sustain | YARP peak |
+| ------------- | -------------- | ------------- | ---------- | ------------- | ---------- | ------------ | --------- |
+| HTTP/1 · TLS  | HTTP/1 · plain | **584**       | **584**    | **648**       | **648**    | 🟢 **680**   | **680**   |
+| HTTP/2 · TLS  | HTTP/1 · plain | 🟢 **15**     | **16**     | **14**        | **14**     | 🟢 **15**    | **15**    |
+| HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **1,308**  | **1,308**  | *Not possible* (no QUIC) | *Not possible* | **8** | **9** |
+
+
+H1 stays usable; H2 collapses under connection stalls (HOL). **H3 is the protocol-shape win**: TWP H3 sustain ≈ **87×** H2 on the same lossy session (datagram drop, not HOL). YARP H3 stayed soft under this userspace UDP shim (sustain **8**) — treat as same-session measurement, not a capability claim. Absolute RPS is low because the shim delays every buffer/datagram.
 
 ### Architecture-sensitive
 

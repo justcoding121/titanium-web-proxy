@@ -161,6 +161,7 @@ internal sealed class LossyTcpLink : IAsyncDisposable
 /// <summary>
 /// Userspace UDP delay + datagram-drop shim for HTTP/3 / QUIC.
 /// Per-client ephemeral sockets demux replies back to the correct peer.
+/// Delays are scheduled off the receive loops so MsQuic keeps pacing.
 /// </summary>
 internal sealed class LossyUdpLink : IAsyncDisposable
 {
@@ -187,12 +188,20 @@ internal sealed class LossyUdpLink : IAsyncDisposable
 
     public static LossyUdpLink Start(int backendPort, int delayMs, double lossPercent)
     {
-        var listener = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        // Dual-stack so HttpClient "localhost" (::1 first) still hits the shim.
+        var socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp)
+        {
+            DualMode = true
+        };
+        socket.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
+        var listener = new UdpClient { Client = socket };
         var link = new LossyUdpLink(listener, new IPEndPoint(IPAddress.Loopback, backendPort), delayMs,
             lossPercent);
         link.loop = link.AcceptLoopAsync();
         return link;
     }
+
+    public string ListenUrlHttps => $"https://localhost:{Port}/";
 
     private async Task AcceptLoopAsync()
     {
@@ -214,34 +223,26 @@ internal sealed class LossyUdpLink : IAsyncDisposable
 
             var key = result.RemoteEndPoint.ToString() ?? "unknown";
             var clientEp = result.RemoteEndPoint;
-            var socket = clientSockets.GetOrAdd(key, static _ => new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)));
+            var socket = clientSockets.GetOrAdd(key, static _ => CreateClientSocket());
             if (relayStarted.TryAdd(key, 0))
                 _ = RelayBackendToClientAsync(socket, clientEp);
 
             if (ShouldDrop())
                 continue;
 
-            if (delayMs > 0)
-            {
-                try
-                {
-                    await Task.Delay(delayMs, cts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    return;
-                }
-            }
-
-            try
-            {
-                await socket.SendAsync(result.Buffer, backend, cts.Token);
-            }
-            catch
-            {
-                // ignore
-            }
+            var payload = result.Buffer;
+            _ = ForwardAsync(socket, payload, backend, cts.Token);
         }
+    }
+
+    private static UdpClient CreateClientSocket()
+    {
+        var socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp)
+        {
+            DualMode = true
+        };
+        socket.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
+        return new UdpClient { Client = socket };
     }
 
     private async Task RelayBackendToClientAsync(UdpClient socket, IPEndPoint client)
@@ -265,26 +266,27 @@ internal sealed class LossyUdpLink : IAsyncDisposable
             if (ShouldDrop())
                 continue;
 
-            if (delayMs > 0)
-            {
-                try
-                {
-                    await Task.Delay(delayMs, cts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    return;
-                }
-            }
+            var payload = result.Buffer;
+            _ = ForwardAsync(listener, payload, client, cts.Token);
+        }
+    }
 
-            try
-            {
-                await listener.SendAsync(result.Buffer, client, cts.Token);
-            }
-            catch
-            {
-                // ignore
-            }
+    private async Task ForwardAsync(UdpClient socket, byte[] payload, IPEndPoint destination,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (delayMs > 0)
+                await Task.Delay(delayMs, cancellationToken);
+            await socket.SendAsync(payload, destination, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // ignore
+        }
+        catch
+        {
+            // ignore
         }
     }
 

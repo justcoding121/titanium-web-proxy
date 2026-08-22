@@ -20,8 +20,8 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
     - [Linux — heavier reverse GET (64 KiB / 256 KiB)](#linux--heavier-reverse-get-64-kib--256-kib)
     - [Windows — POST 64 KiB request + 64 KiB response](#windows--post-64-kib-request--64-kib-response)
     - [Linux — POST 64 KiB request + 64 KiB response](#linux--post-64-kib-request--64-kib-response)
-    - [Windows — lossy / high-RTT (H2 HOL)](#windows--lossy--high-rtt-h2-hol)
-    - [Linux — lossy / high-RTT (H2 HOL)](#linux--lossy--high-rtt-h2-hol)
+    - [Windows — lossy / high-RTT (H2 HOL / H3 loss)](#windows--lossy--high-rtt-h2-hol--h3-loss)
+    - [Linux — lossy / high-RTT (H2 HOL / H3 loss)](#linux--lossy--high-rtt-h2-hol--h3-loss)
     - [Architecture-sensitive](#architecture-sensitive)
     - [TLS termination cost (H1 TLS → cleartext origin)](#tls-termination-cost-h1-tls--cleartext-origin)
 - [Other measurements](#other-measurements)
@@ -169,7 +169,7 @@ For **tiny JSON responses** (~64 B) on loopback, that ordering is **not** expect
 
 Separate from the tiny-GET matrix. Same measurement environments. Modes: `compare-bodies`, `compare-post`, `compare-lossy`, `compare-tls-cost`, `compare-arch` in [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe). **PUT with the same body is the same proxy work as POST; DELETE with no body matches GET** — only POST is published. Bodies/POST/lossy stay **half-duplex**. `compare-arch` is the slow-consumer / early-response / duplex set. Laptop numbers are on [Performance-Profiling](Performance-Profiling#architecture-sensitive); CI medians go in the tables below.
 
-Lossy link = **userspace** shim (not kernel `netem`): TCP gets per-buffer delay + occasional whole-connection stalls (honest HOL for multiplexed H2); UDP datagram drop exists in the harness but **H3 lossy is not published** — rechecked at concurrency 8 after H2/H3 streaming work (`rps-ramp-20260817-212421`): TWP H3 through the UDP shim stayed at **0** sustain (multi-second p99); YARP H3 via the TCP shim also failed to establish. Treat as a **measurement limitation** (MsQuic + lossy shim), not a capability claim.
+Lossy link = **userspace** shim (not kernel `netem`): TCP gets per-buffer delay + occasional whole-connection stalls (honest HOL for multiplexed H2); UDP gets per-datagram delay + drops (QUIC). `compare-lossy` publishes H1/H2/H3; H3 is where the protocol design is supposed to matter.
 
 ### Windows — heavier reverse GET (64 KiB / 256 KiB)
 
@@ -225,27 +225,29 @@ Median of **3** repeats. Source: Actions [32570360081](https://github.com/justco
 
 Linux nginx H1/H2/H3 POST completed this pass (nginx.org mainline). TWP H3 POST peaked at **1,989** but did not hold the error/latency SLO (sustain **0**).
 
-### Windows — lossy / high-RTT (H2 HOL)
+### Windows — lossy / high-RTT (H2 HOL / H3 loss)
 
-Userspace **5 ms** one-way delay + **1%** connection stall; **64 KiB** GET. Median of **3** repeats on `windows-latest`. Source: Actions [32570361456](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32570361456) (`compare-lossy`).
+Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest`. Source: Actions pending (`compare-lossy` remasure with H3).
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
 | HTTP/1 · TLS | HTTP/1 · plain | **567** | **567** | **638** | **638** | 🟢 **663** | **663** |
 | HTTP/2 · TLS | HTTP/1 · plain | **16** | **18** | **16** | **18** | 🟢 **18** | **18** |
+| HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | *Not measured* | *Not measured* |
 
-H1 stays usable; H2 collapses under connection stalls (HOL). Absolute RPS is low because the shim delays every buffer — the point is the **protocol shape**, not competing with the tiny-GET table.
+H1 stays usable; H2 collapses under connection stalls (HOL). H3 cells await the remasure that routes HttpClient through the UDP shim. Laptop preview: TWP H3 ≈ **1,308** sustain vs H2 ≈ **15** (`windows-20260822-lossy-h3/`). Absolute RPS is low because the shim delays every buffer/datagram — the point is the **protocol shape**.
 
-### Linux — lossy / high-RTT (H2 HOL)
+### Linux — lossy / high-RTT (H2 HOL / H3 loss)
 
-Median of **3** repeats. Source: Actions [32570361456](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32570361456) (`compare-lossy`).
+Median of **3** repeats. Source: Actions pending (`compare-lossy` remasure with H3).
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
 | HTTP/1 · TLS | HTTP/1 · plain | **1,105** | **1,105** | 🟢 **1,207** | **1,207** | **1,192** | **1,192** |
 | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **40** | **45** | 🟢 **40** | **44** | 🟢 **40** | **44** |
+| HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
 
-Same story as Windows: H1 stays usable; H2 falls to tens of RPS for all three products. Tiny-GET H1 leadership does not carry over.
+Same H1/H2 story as Windows. H3 (and Linux nginx H3 terminate under loss) filled after CI.
 
 ### Architecture-sensitive
 
