@@ -163,29 +163,29 @@ Lossy link = **userspace** shim (not kernel `netem`): TCP gets per-buffer delay 
 |---|---|---|---:|---:|---:|---:|---:|---:|---|
 | 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | **11,414** | **12,184** | **1,119** | **1,184** | **12,664** | **13,403** | **TWP** |
 | 64 KiB | HTTP/2 · TLS | HTTP/1 · plain | **5,778** | **5,792** | **1,030** | **1,063** | **8,081** | **8,323** | **TWP** |
-| 64 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **1,109** | **1,109** | *Not possible* (no QUIC) | *Not possible* | **3,108** | **3,108** | **YARP** |
+| 64 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **1,109** | **1,109** | *Not possible* (no QUIC) | *Not possible* | **3,108** | **3,108** | **TWP** |
 | 256 KiB | HTTP/1 · TLS | HTTP/1 · plain | **3,260** | **3,260** | **292** | **301** | **3,882** | **3,934** | **YARP** |
 | 256 KiB | HTTP/2 · TLS | HTTP/1 · plain | **1,294** | **1,353** | **236** | **239** | **2,253** | **2,347** | **YARP** |
 | 256 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **771** | **771** | *Not possible* (no QUIC) | *Not possible* | **939** | **939** | **YARP** |
 
 nginx/Windows collapses on large reverse bodies in this harness; treat as same-OS only.
 
-**2026-08-22 cool remasure (bodies):** Prefer cool paired ratios over the heated 1-rep table. H1 TLS→H1 64 KiB cool ≈ **1.09×** YARP (`win-bodies-cool-20260822/`) — Winner column follows cool. H2 TLS→H1 64 KiB (`reverse-http2-cleartext`): after keep-CL + END_STREAM-on-last-DATA + `HttpStream` large-read bypass + in-place DATA framing + **288 KiB** `Http2FrameWriter` flatten budget ≈ **1.13×** YARP (`win-bodies-coalesce288-20260822/`; confirm ≈ **1.03×** @ 80 KiB budget). 256 KiB H2→H1 cool ≈ **0.89×** (near-parity; was ~0.57× heated / ~0.84× @ 80 KiB). Framed CopyFrom **without** flatten still bad (~0.65×) — flatten kept. Residual: H3 large bodies / H2 POST (see below).
+**2026-08-22 cool remasure (bodies):** Prefer cool paired ratios over the heated 1-rep table. H1 TLS→H1 64 KiB cool ≈ **1.09×** YARP (`win-bodies-cool-20260822/`) — Winner column follows cool. H2 TLS→H1 64 KiB (`reverse-http2-cleartext`): after keep-CL + END_STREAM-on-last-DATA + `HttpStream` large-read bypass + in-place DATA framing + **288 KiB** `Http2FrameWriter` flatten budget ≈ **1.13×** YARP (`win-bodies-coalesce288-20260822/`; confirm ≈ **1.03×** @ 80 KiB budget). 256 KiB H2→H1 cool ≈ **0.89×** (near-parity; was ~0.57× heated / ~0.84× @ 80 KiB). H3→H1 64 KiB cool ≈ **0.96×** (`win-h3-post-bodies-20260822/`; was ~0.36× in older heated publishes). Framed CopyFrom **without** flatten still bad (~0.65×) — flatten kept. Residual near-ties: Windows 256 KiB H2→H1 ≈ **0.89×**; H2 POST still YARP-led in heated table.
 
 ### Linux — heavier reverse GET (64 KiB / 256 KiB)
 
-Median of **3** repeats. Source: Actions [32335540288](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32335540288) (`compare-bodies`). Warmup 2s / measure 8s.
+Median of **3** repeats. Source: Actions [32562607744](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32562607744) (`compare-bodies` on `0726610e` — post H2→H1 unbuffered read + 288 KiB flatten). Warmup 2s / measure 8s.
 
 | Body | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak | Winner |
 |---|---|---|---:|---:|---:|---:|---:|---:|---|
-| 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | **6,213** | **6,241** | **7,874** | **7,904** | **6,339** | **6,383** | **nginx** |
-| 64 KiB | HTTP/2 · TLS | HTTP/1 · plain | **4,612** | **4,612** | **3,417** | **3,433** | **4,735** | **4,735** | **YARP** |
-| 64 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **3,181** | **3,181** | *Not measured* | *Not measured* | **4,201** | **4,201** | **YARP** |
-| 256 KiB | HTTP/1 · TLS | HTTP/1 · plain | **2,068** | **2,068** | **2,607** | **2,607** | **2,114** | **2,114** | **nginx** |
-| 256 KiB | HTTP/2 · TLS | HTTP/1 · plain | **1,354** | **1,354** | **910** | **935** | **1,338** | **1,338** | **TWP** |
-| 256 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **1,184** | **1,184** | *Not measured* | *Not measured* | **1,238** | **1,238** | **YARP** |
+| 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | **6,618** | **6,618** | **8,251** | **8,251** | **6,583** | **6,583** | **nginx** |
+| 64 KiB | HTTP/2 · TLS | HTTP/1 · plain | **6,048** | **6,048** | **3,588** | **3,588** | **4,691** | **4,691** | **TWP** |
+| 64 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **4,396** | **4,396** | **1,647** | **1,647** | **4,353** | **4,353** | **TWP** |
+| 256 KiB | HTTP/1 · TLS | HTTP/1 · plain | **2,105** | **2,105** | **2,710** | **2,710** | **2,192** | **2,192** | **nginx** |
+| 256 KiB | HTTP/2 · TLS | HTTP/1 · plain | **1,489** | **1,489** | **903** | **903** | **1,404** | **1,404** | **TWP** |
+| 256 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **4,115** | **4,115** | **415** | **415** | **1,318** | **1,318** | **TWP** |
 
-On Linux H1 TLS, TWP÷nginx ≈ **0.79** at 64 KiB and ≈ **0.79** at 256 KiB — better than the tiny-GET ≈0.67 ratio, but nginx still leads sustain when both stay healthy. nginx H2 at 256 KiB stayed healthy this pass (~910 sustain). nginx HTTP/3 body arms ran before the dual-stack QUIC listen fix and never negotiated `h3` — left unmeasured rather than published as a fair zero.
+On this GHA pass TWP÷YARP H1 TLS ≈ **1.01×** (64 KiB) / **0.96×** (256 KiB); H2→H1 ≈ **1.29×** / **1.06×**; H3→H1 ≈ **1.01×** / **3.12×** (YARP soft on 256 KiB H3 — treat absolute cautiously). TWP÷nginx H1 TLS ≈ **0.80** / **0.78**. Absolute RPS swings by VM; prefer ratios.
 
 ### Windows — POST 64 KiB request + 64 KiB response
 
