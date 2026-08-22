@@ -1030,47 +1030,53 @@ internal static class Http3OriginBridge
                     response.ContentLength = response.Body.Length;
                     response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
                 }
-                else if (response.IsChunked
-                         || response.ContentLength < 0
-                         || response.ContentLength <= 16 * 1024)
-                {
-                    // Chunked / connection-close / mid-size CL: drain via LimitedStream into a
-                    // MemoryStream (fast path releases the socket before SendResponseAsync).
-                    using var ms = new MemoryStream();
-                    using var limited = new LimitedStream(connection.Stream, server.BufferPool,
-                        response.IsChunked, response.ContentLength, response.TrailingHeaders);
-                    var buffer = server.BufferPool.GetBuffer();
-                    try
-                    {
-                        int read;
-                        while ((read = await limited.ReadAsync(buffer.AsMemory(), cancellationToken)) > 0)
-                        {
-                            if (ms.Length + read > 16 * 1024)
-                            {
-                                closeConnection = true;
-                                throw new InvalidOperationException(
-                                    "H3→H1 fast path does not buffer origin bodies larger than 16 KiB.");
-                            }
-
-                            ms.Write(buffer, 0, read);
-                        }
-
-                        await limited.Finish();
-                    }
-                    finally
-                    {
-                        server.BufferPool.ReturnBuffer(buffer);
-                    }
-
-                    response.Body = ms.ToArray();
-                    response.IsBodyRead = true;
-                    response.ContentLength = response.Body.Length;
-                    response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
-                }
                 else
                 {
-                    // Large known-length body: do not keep unread bytes on a pooled socket.
-                    closeConnection = true;
+                    // Large / chunked / close-delimited: stream via StreamBodyWriter so
+                    // SendResponseAsync emits DATA. Closing the socket here left Content-Length
+                    // with zero body bytes (H3 slow-consumer sustain 0).
+                    var originConnection = connection;
+                    var originIsChunked = response.IsChunked;
+                    var originContentLength = response.ContentLength;
+                    if (response.ContentLength < 0 && !response.IsChunked)
+                        response.Headers.AddHeader(KnownHeaders.TransferEncoding, "chunked");
+
+                    response.StreamBodyWriter = async (clientBodyStream, ct) =>
+                    {
+                        IHttpStreamReader reader = originConnection!.Stream;
+                        using var limited = new LimitedStream(reader, server.BufferPool, originIsChunked,
+                            originContentLength, response.TrailingHeaders);
+                        const int frameBytes = 16 * 1024;
+                        var buffer = server.BufferPool.GetBuffer(frameBytes);
+                        try
+                        {
+                            var filled = 0;
+                            while (true)
+                            {
+                                var read = await limited.ReadAsync(
+                                    buffer.AsMemory(filled, frameBytes - filled), ct);
+                                if (read == 0)
+                                {
+                                    if (filled > 0)
+                                        await clientBodyStream.WriteAsync(buffer.AsMemory(0, filled), ct);
+                                    break;
+                                }
+
+                                filled += read;
+                                if (filled == frameBytes)
+                                {
+                                    await clientBodyStream.WriteAsync(buffer.AsMemory(0, filled), ct);
+                                    filled = 0;
+                                }
+                            }
+
+                            await limited.Finish();
+                        }
+                        finally
+                        {
+                            server.BufferPool.ReturnBuffer(buffer);
+                        }
+                    };
                 }
             }
             // H1 Title-Case → lowercase once so EncodeResponse skips ToLowerInvariant (same as H3→H2).
@@ -1087,7 +1093,33 @@ internal static class Http3OriginBridge
         finally
         {
             if (connection != null)
-                await server.TcpConnectionFactory.Release(connection, closeConnection);
+            {
+                // StreamBodyWriter owns the socket until SendResponseAsync finishes the copy.
+                if (fwd.Response?.StreamBodyWriter != null && !fwd.Response.IsBodyRead)
+                {
+                    var owned = connection;
+                    var shouldClose = closeConnection;
+                    var inner = fwd.Response.StreamBodyWriter;
+                    fwd.Response.StreamBodyWriter = async (dest, ct) =>
+                    {
+                        try
+                        {
+                            await inner!(dest, ct);
+                        }
+                        finally
+                        {
+                            if (owned.Stream is Helpers.HttpStream residual && residual.DataAvailable)
+                                shouldClose = true;
+                            await server.TcpConnectionFactory.Release(owned, shouldClose);
+                        }
+                    };
+                }
+                else
+                {
+                    await server.TcpConnectionFactory.Release(connection, closeConnection);
+                }
+            }
+
             if (openSession != null)
             {
                 openSession.CancellationTokenSource.Dispose();
