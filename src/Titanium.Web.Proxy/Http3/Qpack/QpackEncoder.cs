@@ -67,7 +67,7 @@ internal static class QpackEncoder
         foreach (var header in response.Headers)
         {
             var name = header.Name;
-            if (HasUpperAscii(name))
+            if (!response.HeaderNamesAreHttp2Normalized && HasUpperAscii(name))
                 name = name.ToLowerInvariant();
             if (name is "connection" or "keep-alive" or "proxy-connection"
                 or "transfer-encoding" or "upgrade")

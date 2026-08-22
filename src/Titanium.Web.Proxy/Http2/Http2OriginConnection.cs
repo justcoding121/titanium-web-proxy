@@ -1349,7 +1349,14 @@ internal sealed class Http2OriginConnection : IDisposable
 
             if (pending.Response == null)
             {
-                var response = new Response { StatusCode = statusCode, StatusDescription = string.Empty, HttpVersion = HttpHeader.Version11 };
+                var response = new Response
+                {
+                    StatusCode = statusCode,
+                    StatusDescription = string.Empty,
+                    HttpVersion = HttpHeader.Version11,
+                    // HPACK field names are lowercase (RFC 9113); QPACK EncodeResponse can skip ToLower.
+                    HeaderNamesAreHttp2Normalized = true
+                };
                 foreach (var header in collected) response.Headers.AddHeader(header);
                 pending.Response = response;
                 // Signal that no more interim responses will arrive; unblocks SendAsync's interim drain loop.

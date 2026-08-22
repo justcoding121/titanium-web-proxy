@@ -779,8 +779,10 @@ internal static class Http3RequestStream
     /// </summary>
     private static async Task SendResponseAsync(QuicStream stream, Response response, QpackContext? qpackContext, CancellationToken ct)
     {
-        // HTTP/3 frames the body with DATA; Transfer-Encoding is never used on the wire.
-        response.Headers.RemoveHeader("transfer-encoding");
+        // EncodeResponse already omits transfer-encoding; avoid a RemoveHeader scan on the hot path
+        // when HPACK already produced lowercase names (H3→H2).
+        if (!response.HeaderNamesAreHttp2Normalized)
+            response.Headers.RemoveHeader("transfer-encoding");
 
         var qpackHeaders = QpackEncoder.EncodeResponse(response, qpackContext);
         await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
