@@ -1,5 +1,6 @@
 #pragma warning disable CA1416
 using System;
+using System.Buffers;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -142,10 +143,10 @@ public partial class ProxyServer
 
         // Stream unread request DATA to the H3 origin unless BeforeRequest already buffered via
         // GetRequestBody. Create the channel before returning so Http2Helper can route DATA into it.
-        Channel<ReadOnlyMemory<byte>>? requestBodyChannel = null;
+        Channel<(byte[] Buffer, int Length)>? requestBodyChannel = null;
         if (sessionArgs.HttpClient.Request.HasBody && !sessionArgs.HttpClient.Request.IsBodyRead)
         {
-            requestBodyChannel = Channel.CreateBounded<ReadOnlyMemory<byte>>(
+            requestBodyChannel = Channel.CreateBounded<(byte[] Buffer, int Length)>(
                 new BoundedChannelOptions(256)
                 {
                     SingleReader = true,
@@ -244,7 +245,7 @@ public partial class ProxyServer
         Http3OriginRoute h3Route,
         CancellationToken connectionToken,
         CancellationToken streamToken,
-        Channel<ReadOnlyMemory<byte>>? requestBodyChannel)
+        Channel<(byte[] Buffer, int Length)>? requestBodyChannel)
     {
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(connectionToken, streamToken);
         var cancellationToken = linkedCts.Token;
@@ -258,8 +259,16 @@ public partial class ProxyServer
                 {
                     await foreach (var chunk in requestBodyChannel.Reader.ReadAllAsync(ct))
                     {
-                        if (!chunk.IsEmpty)
-                            await Http3Frame.WriteAsync(originStream, Http3FrameType.Data, chunk, ct);
+                        try
+                        {
+                            if (chunk.Length > 0)
+                                await Http3Frame.WriteAsync(originStream, Http3FrameType.Data,
+                                    chunk.Buffer.AsMemory(0, chunk.Length), ct);
+                        }
+                        finally
+                        {
+                            ArrayPool<byte>.Shared.Return(chunk.Buffer);
+                        }
                     }
 
                     sessionArgs.HttpClient.Request.IsBodyReceived = true;

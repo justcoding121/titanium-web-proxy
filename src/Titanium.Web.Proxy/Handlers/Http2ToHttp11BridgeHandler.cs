@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -203,10 +204,10 @@ public partial class ProxyServer
         // Stream the request body unless a BeforeRequest handler already buffered it via
         // GetRequestBody. Open the origin on HEADERS and pump DATA live (same invariant as
         // native H2↔H2 / H3↔H3). Calling GetRequestBody here would force store-and-forward.
-        Channel<ReadOnlyMemory<byte>>? requestBodyChannel = null;
+        Channel<(byte[] Buffer, int Length)>? requestBodyChannel = null;
         if (sessionArgs.HttpClient.Request.HasBody && !sessionArgs.HttpClient.Request.IsBodyRead)
         {
-            requestBodyChannel = Channel.CreateBounded<ReadOnlyMemory<byte>>(
+            requestBodyChannel = Channel.CreateBounded<(byte[] Buffer, int Length)>(
                 new BoundedChannelOptions(256)
                 {
                     SingleReader = true,
@@ -268,7 +269,7 @@ public partial class ProxyServer
     private async Task RunHttp2ToHttp11BridgeRoundTripAsync(SessionEventArgs sessionArgs, int streamId, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         Http2ConnectionState connectionState, System.IO.Stream clientStream, string remoteHostName, int remotePort,
         string? connectHost, int? connectPort, CancellationToken connectionToken, CancellationToken streamToken,
-        Channel<ReadOnlyMemory<byte>>? requestBodyChannel)
+        Channel<(byte[] Buffer, int Length)>? requestBodyChannel)
     {
         // Stream CTS is cancelled on RST_STREAM and when the connection tears down (all streams
         // cancelled in CopyHttp2FrameAsync). Skip CreateLinkedTokenSource — dumpheap on H2→H1 MITM
@@ -399,8 +400,16 @@ public partial class ProxyServer
                     var bodyWriter = new Helpers.BodyStreamWriter(connection.Stream, request.IsChunked);
                     await foreach (var chunk in requestBodyChannel!.Reader.ReadAllAsync(cancellationToken))
                     {
-                        if (!chunk.IsEmpty)
-                            await bodyWriter.WriteAsync(chunk, cancellationToken);
+                        try
+                        {
+                            if (chunk.Length > 0)
+                                await bodyWriter.WriteAsync(chunk.Buffer.AsMemory(0, chunk.Length),
+                                    cancellationToken);
+                        }
+                        finally
+                        {
+                            ArrayPool<byte>.Shared.Return(chunk.Buffer);
+                        }
                     }
 
                     await bodyWriter.CompleteAsync(

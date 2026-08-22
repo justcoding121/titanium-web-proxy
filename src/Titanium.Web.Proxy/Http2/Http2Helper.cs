@@ -2362,11 +2362,13 @@ namespace Titanium.Web.Proxy.Http2
                             if (dataLen < 0) dataLen = 0;
                             if (dataLen > 0)
                             {
-                                var chunk = new byte[dataLen];
-                                Buffer.BlockCopy(buffer, dataOff, chunk, 0, dataLen);
-                                if (!synthState.InboundRequestBodyChannel.Writer.TryWrite(
-                                        new ReadOnlyMemory<byte>(chunk)))
+                                var rented = ArrayPool<byte>.Shared.Rent(dataLen);
+                                Buffer.BlockCopy(buffer, dataOff, rented, 0, dataLen);
+                                // TryWrite only — never await on the frame loop (HOL for every stream
+                                // on this connection). Bound is large; full means the origin pump stalled.
+                                if (!synthState.InboundRequestBodyChannel.Writer.TryWrite((rented, dataLen)))
                                 {
+                                    ArrayPool<byte>.Shared.Return(rented);
                                     ReportException(logger, new ProxyHttpException(
                                         "HTTP/2 bridge stream exceeded its bounded request-body buffer.",
                                         null, args));
@@ -5007,10 +5009,8 @@ namespace Titanium.Web.Proxy.Http2
             }
 
             /// <summary>
-            ///     Reads origin bytes into a pre-framed ArrayPool buffer (9-byte header + payload) so
-            ///     <see cref="QueueDataFrame"/>'s payload memcpy is skipped. Callers must keep
-            ///     <see cref="Http2FrameWriter"/> flatten-coalesce — dropping it for many small SslStream
-            ///     writes regressed cool H2→H1 64 KiB to ~0.65×.
+            ///     Reads origin bytes directly into pre-sized DATA frame buffers (header + payload),
+            ///     reserves flow-control credit, and enqueues for the client frame writer.
             /// </summary>
             internal async Task CopyFromAsync(Func<Memory<byte>, CancellationToken, ValueTask<int>> readAsync,
                 CancellationToken cancellationToken)
@@ -5045,7 +5045,10 @@ namespace Titanium.Web.Proxy.Http2
                         }
 
                         var endStream = expectedLength >= 0 && BytesWritten + read >= expectedLength;
-                        await flow.ReserveAsync(streamId, read, this.cancellationToken).ConfigureAwait(false);
+                        // Prefer non-blocking reserve when the peer window already has room (typical
+                        // after SETTINGS / WINDOW_UPDATE); avoid a Task alloc per 16 KiB frame.
+                        if (!flow.TryReserve(streamId, read))
+                            await flow.ReserveAsync(streamId, read, this.cancellationToken).ConfigureAwait(false);
                         var dataFrameHeader = new Http2FrameHeader
                         {
                             StreamId = streamId,

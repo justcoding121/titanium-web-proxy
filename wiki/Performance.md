@@ -170,7 +170,7 @@ Lossy link = **userspace** shim (not kernel `netem`): TCP gets per-buffer delay 
 
 nginx/Windows collapses on large reverse bodies in this harness; treat as same-OS only.
 
-**2026-08-22 cool remasure (bodies):** Prefer cool paired ratios over the heated 1-rep table. H1 TLS→H1 64 KiB cool ≈ **1.09×** YARP (`win-bodies-cool-20260822/`) — Winner column follows cool. H2 TLS→H1 64 KiB (`reverse-http2-cleartext`): after keep-CL + END_STREAM-on-last-DATA + `HttpStream` large-read bypass + in-place DATA framing + **288 KiB** `Http2FrameWriter` flatten budget ≈ **1.13×** YARP (`win-bodies-coalesce288-20260822/`; confirm ≈ **1.03×** @ 80 KiB budget). 256 KiB H2→H1 cool ≈ **0.89×** (near-parity; was ~0.57× heated / ~0.84× @ 80 KiB). H3→H1 64 KiB cool ≈ **0.96×** (`win-h3-post-bodies-20260822/`; was ~0.36× in older heated publishes). Framed CopyFrom **without** flatten still bad (~0.65×) — flatten kept. Residual near-ties: Windows 256 KiB H2→H1 ≈ **0.89×**; H2 POST still YARP-led in heated table.
+**2026-08-22 cool remasure (bodies):** Prefer cool paired ratios over the heated 1-rep table. H1 TLS→H1 64 KiB cool ≈ **1.09×** YARP (`win-bodies-cool-20260822/`) — Winner column follows cool. H2 TLS→H1 64 KiB (`reverse-http2-cleartext`): after keep-CL + END_STREAM-on-last-DATA + `HttpStream` large-read bypass + in-place DATA framing + **288 KiB** `Http2FrameWriter` flatten budget ≈ **1.13×** YARP (`win-bodies-coalesce288-20260822/`; confirm ≈ **1.03×** @ 80 KiB budget). 256 KiB H2→H1 cool ≈ **0.89×** (near-parity; was ~0.57× heated / ~0.84× @ 80 KiB). H3→H1 64 KiB cool ≈ **0.96×** (`win-h3-post-bodies-20260822/`; was ~0.36× in older heated publishes). Framed CopyFrom **without** flatten still bad (~0.65×) — flatten kept. **Kept (2026-08-22):** ArrayPool for H2→H1/H2→H3 request-body channel chunks; `TryReserve` before `ReserveAsync` on known-CL `CopyFromAsync`. **Reverted:** whole-body flow-control reserve before enqueue (deadlock); hybrid flatten/sequential batches (multi-stream regress); 64 KiB origin POST coalesce (no RPS win); priority WINDOW_UPDATE sliced into coalesced DATA (~55% POST errors — framing corruption). Residual near-ties: Windows 256 KiB H2→H1 ≈ **~0.90×**; cool H2 POST ≈ **~0.88–0.95×** when YARP is healthy (c=1 TWP leads ~**1.2×** — multiplex scaling).
 
 ### Linux — heavier reverse GET (64 KiB / 256 KiB)
 
@@ -197,7 +197,7 @@ On this GHA pass TWP÷YARP H1 TLS ≈ **1.01×** (64 KiB) / **0.96×** (256 KiB)
 | HTTP/2 · TLS | HTTP/1 · plain | **3,519** | **3,519** | **357** | **389** | **4,741** | **4,871** | **YARP** |
 | HTTP/3 · QUIC | HTTP/1 · plain | **0** | **185** | *Not possible* | *Not possible* | **1,890** | **1,890** | **YARP** |
 
-TWP wins H1 POST (~**1.14×** YARP) and sits at ~**0.74** of YARP on H2 POST. H3 POST did not hold the SLO (sustain **0**).
+TWP wins H1 POST (~**1.14×** YARP). Heated H2 POST ≈ **0.74×**; **cool** paired H2 POST ≈ **~0.88–0.95×** YARP with c=1 TWP ahead (~**1.2×**) — residual is multiplex scaling. H3 POST did not hold the SLO (sustain **0**).
 
 ### Linux — POST 64 KiB request + 64 KiB response
 

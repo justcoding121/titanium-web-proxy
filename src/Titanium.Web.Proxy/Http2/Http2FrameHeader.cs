@@ -1,4 +1,6 @@
-﻿namespace Titanium.Web.Proxy.Http2;
+﻿using System;
+
+namespace Titanium.Web.Proxy.Http2;
 
 internal class Http2FrameHeader
 {
@@ -9,7 +11,9 @@ internal class Http2FrameHeader
 
     public Http2FrameType Type;
 
-    public void CopyToBuffer(byte[] buf)
+    public void CopyToBuffer(byte[] buf) => CopyToBuffer(buf.AsSpan());
+
+    public void CopyToBuffer(Span<byte> buf)
     {
         var length = Length;
         buf[0] = (byte)((length >> 16) & 0xff);
