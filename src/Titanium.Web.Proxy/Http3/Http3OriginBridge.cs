@@ -1451,12 +1451,12 @@ internal static class Http3OriginBridge
             }
             else if (request.ContentLength < 0 && !request.IsChunked)
             {
+                // Unknown length over H3 → chunked on the H1 wire.
                 request.Headers.AddHeader(KnownHeaders.TransferEncoding, "chunked");
             }
-            else
-            {
-                request.UpdateContentLength();
-            }
+            // else: client-declared content-length is already correct for the streamed body.
+            // UpdateContentLength() must NOT run here — it stamps BodyInternal?.Length ?? 0 and
+            // would rewrite content-length to 0 (same bug H2→H1 already documents).
         }
 
         TcpServerConnection? connection = null;
@@ -1470,6 +1470,15 @@ internal static class Http3OriginBridge
             var (host, port) = request.GetOriginHostPort(isHttps ? 443 : 80);
 
             var (connectHost, connectPort) = ResolveTransparentForwardTarget(sessionArgs);
+
+            // Shared pool under multiplexed H3 fan-out — same as H2→H1 (noCache caused port storms).
+            string? poolKey = null;
+            if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint poolEp
+                && poolEp.CachedHttp11PoolKey != null
+                && poolEp.CachedHttp11PoolIsHttps == isHttps)
+            {
+                poolKey = poolEp.CachedHttp11PoolKey;
+            }
 
             // Phase 3: when streaming an upload, start reading client DATA into a channel in
             // parallel with the origin TCP/TLS connect so MsQuic is not stalled on a full window.
@@ -1498,11 +1507,36 @@ internal static class Http3OriginBridge
                 }, TaskScheduler.Default);
             }
 
-            connection = await server.TcpConnectionFactory.GetServerConnection(
-                server, host, port, HttpHeader.Version11, isHttps, SslExtensions.Http11ProtocolAsList,
-                false, sessionArgs, sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
-                sessionArgs.CustomUpStreamProxyUsed ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy),
-                false, false, cancellationToken, connectHost, connectPort);
+            try
+            {
+                connection = await server.TcpConnectionFactory.GetServerConnection(
+                    server, host, port, HttpHeader.Version11, isHttps, SslExtensions.Http11ProtocolAsList,
+                    false, sessionArgs, sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
+                    sessionArgs.CustomUpStreamProxyUsed ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy),
+                    false, false, cancellationToken, connectHost, connectPort,
+                    precomputedCacheKey: poolKey);
+            }
+            catch
+            {
+                // Connect failed: stop the early pump so MsQuic is not left with unread DATA.
+                earlyBodyChannel?.Writer.TryComplete();
+                if (earlyBodyPump != null)
+                {
+                    try { await earlyBodyPump; }
+                    catch { /* best effort */ }
+                }
+
+                throw;
+            }
+
+            if (poolKey == null
+                && sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint storePoolEp
+                && sessionArgs.CustomUpStreamProxyUsed == null
+                && (sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint) == null)
+            {
+                storePoolEp.CachedHttp11PoolKey = connection!.CacheKey;
+                storePoolEp.CachedHttp11PoolIsHttps = isHttps;
+            }
 
             sessionArgs.HttpClient.SetConnection(connection
                 ?? throw new InvalidOperationException(
@@ -1632,8 +1666,13 @@ internal static class Http3OriginBridge
 
             closeConnection = !response.KeepAlive;
 
-            // Same H2→H1 policy: unread HttpStream bytes mean residual framing — do not pool.
-            if (connection?.Stream is Helpers.HttpStream httpStream && httpStream.DataAvailable)
+            // Do NOT check HttpStream.DataAvailable here when StreamBodyWriter still owns the
+            // origin body — loopback already has response DATA buffered after headers, which would
+            // look like "residual framing" and force-close every keep-alive (ephemeral-port storm
+            // under H3 multiplexed POST). Check after the body drain instead (eager path below;
+            // StreamBodyWriter wrapper in finally).
+            if (sessionArgs.HttpClient.Response.StreamBodyWriter == null
+                && connection?.Stream is Helpers.HttpStream httpStream && httpStream.DataAvailable)
                 closeConnection = true;
         }
         finally
@@ -1660,6 +1699,9 @@ internal static class Http3OriginBridge
                         }
                         finally
                         {
+                            // Residual framing after a full body drain — do not pool.
+                            if (owned.Stream is Helpers.HttpStream residual && residual.DataAvailable)
+                                shouldClose = true;
                             await server.TcpConnectionFactory.Release(owned, shouldClose);
                         }
                     };
