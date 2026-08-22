@@ -464,12 +464,30 @@ internal sealed class Http2OriginConnection : IDisposable
 
             // Tiny fixed-length bodies (probe GET ~56 B): buffer then return so H1 deliver can
             // coalesce headers+body in one write. Streaming via StreamBodyWriter pays an extra
-            // pipe+async hop per request for these.
+            // pipe+async hop per request for these. Read into an exact-size buffer (no
+            // MemoryStream + ToArray double copy).
             if (response.ContentLength is >= 0 and <= 8 * 1024)
             {
-                var ms = new MemoryStream((int)response.ContentLength);
-                await bodyPipe.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
-                var body = ms.Length == 0 ? Array.Empty<byte>() : ms.ToArray();
+                var expected = (int)response.ContentLength;
+                byte[] body;
+                if (expected == 0)
+                {
+                    body = Array.Empty<byte>();
+                    await bodyPipe.CopyToAsync(Stream.Null, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    body = new byte[expected];
+                    var read = await bodyPipe.ReadExactAsync(body, cancellationToken).ConfigureAwait(false);
+                    if (read != expected)
+                    {
+                        if (read == 0)
+                            body = Array.Empty<byte>();
+                        else
+                            Array.Resize(ref body, read);
+                    }
+                }
+
                 response.IsBodyRead = true;
                 response.Body = body;
                 if (trailers != null)

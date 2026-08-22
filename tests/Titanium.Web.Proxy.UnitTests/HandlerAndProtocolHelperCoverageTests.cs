@@ -232,7 +232,8 @@ public class HandlerAndProtocolHelperCoverageTests
     [DataRow("", false)]
     public void HasUpperCaseAscii_DetectsLatinUppercase(string value, bool expected)
     {
-        var method = typeof(Http2Helper).GetMethod("HasUpperCaseAscii", PrivateStatic)!;
+        var method = typeof(Http2Helper).GetMethod(
+            "HasUpperCaseAscii", PrivateStatic, binder: null, [typeof(string)], modifiers: null)!;
         Assert.AreEqual(expected, (bool)method.Invoke(null, [value])!);
     }
 

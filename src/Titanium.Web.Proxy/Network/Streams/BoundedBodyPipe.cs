@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.IO;
 using System.IO.Pipelines;
 using System.Threading;
@@ -110,6 +111,40 @@ internal sealed class BoundedBodyPipe : IDisposable
     {
         await pipe.Reader.CopyToAsync(destination, cancellationToken);
         await pipe.Reader.CompleteAsync();
+    }
+
+    /// <summary>
+    ///     Reads exactly <paramref name="destination"/>.Length bytes (or fewer if the writer
+    ///     completes early). Avoids <see cref="MemoryStream"/> + <c>ToArray</c> on the tiny
+    ///     fixed-length origin body path. Completes the reader when done.
+    /// </summary>
+    /// <returns>Number of bytes written into <paramref name="destination"/>.</returns>
+    internal async Task<int> ReadExactAsync(Memory<byte> destination, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        var offset = 0;
+        while (offset < destination.Length)
+        {
+            var result = await pipe.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+            var buffer = result.Buffer;
+            if (buffer.Length == 0)
+            {
+                pipe.Reader.AdvanceTo(buffer.Start, buffer.End);
+                if (result.IsCompleted)
+                    break;
+                continue;
+            }
+
+            var toCopy = (int)Math.Min(buffer.Length, destination.Length - offset);
+            buffer.Slice(0, toCopy).CopyTo(destination.Span.Slice(offset, toCopy));
+            offset += toCopy;
+            pipe.Reader.AdvanceTo(buffer.GetPosition(toCopy));
+            if (result.IsCompleted && offset < destination.Length)
+                break;
+        }
+
+        await pipe.Reader.CompleteAsync().ConfigureAwait(false);
+        return offset;
     }
 
     public void Dispose()

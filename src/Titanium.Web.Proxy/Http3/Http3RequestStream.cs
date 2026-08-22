@@ -447,7 +447,10 @@ internal static class Http3RequestStream
             HttpVersion = HttpHeader.Version30,
             IsHttps = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase),
             IsBodyReceived = true,
-            Locked = true
+            Locked = true,
+            // QPACK decode always yields lowercase names (RFC 9114); skip HPACK AsciiToLower
+            // scans under the origin writeLock on H3→H2.
+            HeaderNamesAreHttp2Normalized = true
         };
         foreach (var (name, value) in regularHeaders)
             request.Headers.AddHeader(new HttpHeader(name, value));
