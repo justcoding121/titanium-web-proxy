@@ -71,7 +71,7 @@ This box is **8 logical / ~32 GiB** — not the 4 vCPU / 16 GiB GHA class. Treat
 
 Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS` = encrypted, `QUIC` = HTTP/3).
 
-Reverse TWP/YARP cells for cool-audited arms are **cool paired means** (see notes). nginx cells remain the older heated High-perf baseline (nginx was not in the cool pairs). MITM / other reverse rows without a cool paste stay heated matrix-fill until remasured.
+Reverse TWP/YARP cells for cool-audited arms are **cool paired means** (see notes). nginx cells remain the older heated High-perf baseline (nginx was not in the cool pairs). MITM rows are heated 1-rep full matrix (`windows-20260822-mitm-full/`, probe @ `1b5ca9f9`) — same **15** Client×Origin pairs as Reverse plus dual-crypto extras.
 
 
 | Mode    | Client         | Origin         | TWP sustain    | TWP peak    | nginx sustain            | nginx peak     | YARP sustain             | YARP peak      |
@@ -91,25 +91,37 @@ Reverse TWP/YARP cells for cool-audited arms are **cool paired means** (see note
 | Reverse | HTTP/3 · QUIC  | HTTP/1 · plain | **22,325**     | **22,325**  | *Not possible* (no QUIC) | *Not possible* | 🟢 **23,773**            | **23,773**     |
 | Reverse | HTTP/3 · QUIC  | HTTP/2 · TLS   | 🟢 **22,297**  | **22,297**  | *Not possible* (no QUIC) | *Not possible* | **21,914**               | **21,914**     |
 | Reverse | HTTP/3 · QUIC  | HTTP/3 · QUIC  | 🟢 **26,299**  | **26,299**  | *Not possible* (no QUIC) | *Not possible* | **14,942**               | **14,942**     |
-| MITM    | HTTP/1 · plain | HTTP/1 · plain | **31,307**     | **31,307**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
-| MITM    | HTTP/1 · plain | HTTP/1 · TLS   | **27,204**     | **27,204**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
-| MITM    | HTTP/1 · TLS   | HTTP/1 · TLS   | **30,244**     | **30,244**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
-| MITM    | HTTP/2 · plain | HTTP/2 · plain | **91,005**     | **91,005**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
-| MITM    | HTTP/2 · plain | HTTP/2 · TLS   | **85,618**     | **85,618**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
-| MITM    | HTTP/2 · TLS   | HTTP/1 · TLS   | **40,498**     | **40,498**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
-| MITM    | HTTP/2 · TLS   | HTTP/2 · TLS   | **76,719**     | **76,719**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
-| MITM    | HTTP/3 · QUIC  | HTTP/1 · TLS   | **20,134**     | **20,418**  | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
-| MITM    | HTTP/3 · QUIC  | HTTP/2 · TLS   | **35,460**     | **35,460**  | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
-| MITM    | HTTP/3 · QUIC  | HTTP/3 · QUIC  | **26,147**     | **26,147**  | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/1 · plain | HTTP/1 · plain | **33,484**     | **33,484**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/1 · plain | HTTP/1 · TLS   | **38,193**     | **38,193**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/1 · TLS   | HTTP/1 · plain | **36,037**     | **36,037**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/1 · TLS   | HTTP/2 · TLS   | **42,652**     | **42,652**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/1 · TLS   | HTTP/3 · QUIC  | **28,114**     | **28,114**  | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/2 · plain | HTTP/1 · plain | **45,905**     | **45,905**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/2 · plain | HTTP/2 · plain | **98,069**     | **98,069**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/2 · plain | HTTP/2 · TLS   | **89,055**     | **89,055**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/2 · plain | HTTP/3 · QUIC  | **41,662**     | **41,662**  | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/2 · TLS   | HTTP/1 · plain | **51,042**     | **51,042**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/2 · TLS   | HTTP/2 · plain | **97,015**     | **97,015**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/2 · TLS   | HTTP/3 · QUIC  | **40,358**     | **40,358**  | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/3 · QUIC  | HTTP/1 · plain | **22,792**     | **22,792**  | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/3 · QUIC  | HTTP/2 · TLS   | **34,225**     | **34,225**  | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/3 · QUIC  | HTTP/3 · QUIC  | **21,164**     | **21,164**  | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/1 · plain (CONNECT) | HTTP/1 · TLS | **27,238** | **27,238** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/1 · TLS   | HTTP/1 · TLS   | **29,186**     | **29,186**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/2 · TLS   | HTTP/2 · TLS   | **79,070**     | **79,070**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/2 · TLS   | HTTP/1 · TLS   | **38,943**     | **38,943**  | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
+| MITM    | HTTP/3 · QUIC  | HTTP/1 · TLS   | **19,571**     | **19,571**  | *Not possible* (no QUIC) | *Not possible* | *Not possible* (no MITM) | *Not possible* |
 
 
 Windows reverse tiny-GET: base matrix **2026-08-20** High-perf, Linux-matched harness (warmup 2s / measure 8s; concurrency 8, 16, 32, 64; median of 3 repeats except H2 TLS→H3 and H3→H1/H2, which have 2). CSVs under `tools/RpsLoadProbe/results/windows-20260820/` (`compare-same`, `compare-bridges`). MITM and heavier reverse: 1-repeat follow-up under `windows-20260820-quick/`. Absolute RPS swings with sequential-arm heat; prefer TWP÷YARP ratios.
 
 **2026-08-21 remasure (through exact-body + H3 QPACK-normalized names):** H1 plain, H1 TLS, H1→H2, H3→H1, H3→H2 refreshed as mean of both arm orders at c=32 (`win-final-`*). Exact-size H2 origin body materialize (no MemoryStream+ToArray) and `HeaderNamesAreHttp2Normalized` on the H3 fast Request. Other reverse Windows rows still **2026-08-20** unless noted.
 
-**2026-08-22 matrix fill (missing plain + MITM cells):** Library fix so cleartext-listen reverse (`DecryptSsl=false`) honors `ForwardCleartext=false` as origin HTTPS (H1 plain→HTTPS). New probe arms: `reverse-http1-to-https` / `yarp-reverse-http1-to-https`, `http-mitm` (explicit plain→plain). Full Windows `compare-same` + `compare-bridges` + `compare-mitm` + plain twins under `tools/RpsLoadProbe/results/windows-20260822-matrix/` (1-rep; warmup 2s / measure 8s; c=8,16,32,64). New/updated table cells above use that run. H2 plain MITM rows use the inspectable transparent reverse path (client already cleartext; same topology as reverse h2c arms from `compare-same`).
+**2026-08-22 matrix fill (missing plain cells):** Library fix so cleartext-listen reverse (`DecryptSsl=false`) honors `ForwardCleartext=false` as origin HTTPS (H1 plain→HTTPS). New probe arms: `reverse-http1-to-https` / `yarp-reverse-http1-to-https`, `http-mitm` (explicit plain→plain). Full Windows `compare-same` + `compare-bridges` + plain twins under `tools/RpsLoadProbe/results/windows-20260822-matrix/` (1-rep; warmup 2s / measure 8s; c=8,16,32,64).
 
-**Load generators:** Reverse inbound H3 arms use `**dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) after dual-listen reverse H3. MITM H3→H2 / H3→H3 reuse dual-listen transparent reverse (`reverse-http3-to-http2`, `reverse-http3`). Older UDP-only `quic-http3` MITM H3→H1 numbers are **not** comparable to HttpClient reverse twins.
+**2026-08-22 MITM full matrix:** `CompareMitm` matches Reverse’s **15** Client×Origin pairs (inspectable/decrypt) plus CONNECT / TLS↔TLS extras. Laptop 1-rep CSV: `tools/RpsLoadProbe/results/windows-20260822-mitm-full/`. Publishable CI medians (Win+Linux, 3-rep): [32588707712](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32588707712) @ `1b5ca9f9` — see [Performance](Performance#windows--titanium-vs-nginx-vs-yarp).
+
+**Load generators:** Reverse inbound H3 arms use `**dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) after dual-listen reverse H3. MITM H3→H2 / H3→H3 / H3→H1 plain reuse the same dual-listen transparent reverse path as their reverse twins (`ForwardCleartext` / decrypt knobs). Older UDP-only `quic-http3` MITM H3→H1 TLS numbers are dual-crypto extras (`mitm-http3-to-http1`).
 
 **Matched HttpClient TWP÷YARP — table cells are cool absolutes where cited:** **parity audit** `win-parity-audit-20260822-004214/` (both orders @ c=32): H1 plain **41,390 / 38,772** ≈ **1.07×**; H1 TLS **35,205 / 29,750** ≈ **1.18×**; H1→H3 **21,819 / 20,712** ≈ **1.05×**; H3→H3 **26,299 / 14,942** ≈ **1.76×** (YARP soft — treat absolute cautiously). **2026-08-22 cool paste** `win-cool-paste-20260822-063226/` (both orders @ c=32): H1→H2 **25,540 / 24,920** ≈ **1.02×**; H1 plain→HTTPS **30,844 / 30,621** ≈ **1.01×**; h2c→H3 **27,493 / 24,535** ≈ **1.12×**; H2 TLS→H3 **30,813 / 24,039** ≈ **1.28×**; h2c→H1 **46,517 / 42,994** ≈ **1.08×**; H3→H1 **22,325 / 23,773** ≈ **0.94×**; H3→H2 **22,297 / 21,914** ≈ **1.02×**. TWP-led H2 same-protocol rows unchanged (h2c↔h2c ≈ **1.17×**, etc.). Remaining local gaps vs YARP are **H3→H1** (~0.94×) plus **heavier reverse bodies / POST**.
 
@@ -117,7 +129,7 @@ Windows reverse tiny-GET: base matrix **2026-08-20** High-perf, Linux-matched ha
 
 **2026-08-22 H3 bridge hot-path (kept):** Decode H2 origin HEADERS into the Response `HeaderCollection` (no second collection + copy). H3→H1 fast path: drain chunked/connection-close origin bodies before pool Release (Kestrel `WriteAsync` often chunked — empty DATA was a correctness bug); lowercase H1 response names once for QPACK; skip `GetOriginHostPort` on warm pool hit. Cool CSVs: `tools/RpsLoadProbe/results/win-h3h1-postfix-20260821-231146/`, `win-h3h1-yarpfirst-20260821-231420/`.
 
-**MITM÷TWP reverse twin (2026-08-22):** Explicit plain→plain (`http-mitm`) ÷ H1 plain reverse ≈ **0.66** of the heated compare-same H1 plain absolute (31,307 vs 47,122 in-session) — prefer same-session twins. Transparent H1 dual-TLS (`reverse-http1-mitm`) ≈ **30,244**. Explicit CONNECT `https-mitm` (plain client → TLS origin) ≈ **27,204**. H2→H1 MITM ≈ **40,498**. H2 TLS↔H2 TLS MITM ≈ **76,719** (heat vs earlier ~99k peak publishes).
+**MITM÷TWP reverse twin (2026-08-22 full matrix):** Prefer same-session ratios. Heated `mitm-full` absolutes: plain→plain (`http-mitm`) **33,484**; CONNECT `https-mitm` **27,238**; H1 TLS↔TLS **29,186**; H2 TLS↔TLS **79,070**; H2→H1 TLS **38,943**; H3→H1 TLS **19,571**. Matched Client×Origin MITM cells sit near their reverse twins when topology is inspectable-cleartext (e.g. h2c↔h2c MITM **98,069** vs reverse cool **100,568**).
 
 **Why H3 absolute RPS ≪ H2 on this box:** tiny-GET loopback is not where H3 wins. Cool paired H3→H3 now leads YARP (~1.76× on the soft 2026-08-22 audit; High-perf matrix still shows ~0.95×). MsQuic + dual QUIC hops dominate absolute RPS vs H2 same-protocol (~90–100k), not TWP architecture.
 
