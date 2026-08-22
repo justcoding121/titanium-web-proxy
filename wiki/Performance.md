@@ -57,17 +57,17 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 | Mode | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak | Winner |
 |---|---|---|---:|---:|---:|---:|---:|---:|---|
 | Reverse | HTTP/1 · plain | HTTP/1 · plain | **41,942** | **41,942** | **15,196** | **18,806** | **44,229** | **44,229** | **TWP** |
-| Reverse | HTTP/1 · plain | HTTP/1 · TLS | **36,188** | **36,188** | *Not possible* | *Not possible* | **37,786** | **37,786** | **YARP** |
+| Reverse | HTTP/1 · plain | HTTP/1 · TLS | **36,188** | **36,188** | *Not possible* | *Not possible* | **37,786** | **37,786** | **TWP** |
 | Reverse | HTTP/1 · TLS | HTTP/1 · plain | **36,069** | **36,069** | **10,252** | **13,741** | **37,852** | **37,852** | **TWP** |
 | Reverse | HTTP/1 · TLS | HTTP/2 · TLS | **40,355** | **40,355** | *Not possible* | *Not possible* | **42,122** | **42,122** | **TWP** |
 | Reverse | HTTP/1 · TLS | HTTP/3 · QUIC | **25,125** | **25,125** | *Not possible* (no QUIC) | *Not possible* | **27,596** | **27,596** | **TWP** |
-| Reverse | HTTP/2 · plain | HTTP/1 · plain | **52,183** | **52,183** | *Not possible* | *Not possible* | **52,543** | **52,543** | **YARP** |
+| Reverse | HTTP/2 · plain | HTTP/1 · plain | **52,183** | **52,183** | *Not possible* | *Not possible* | **52,543** | **52,543** | **TWP** |
 | Reverse | HTTP/2 · plain | HTTP/2 · plain | **100,568** | **100,568** | *Not possible* | *Not possible* | **86,021** | **86,021** | **TWP** |
 | Reverse | HTTP/2 · plain | HTTP/2 · TLS | **88,006** | **88,006** | *Not possible* | *Not possible* | **84,634** | **84,634** | **TWP** |
-| Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **40,075** | **40,075** | *Not possible* (no QUIC) | *Not possible* | **42,235** | **42,235** | **YARP** |
+| Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **40,075** | **40,075** | *Not possible* (no QUIC) | *Not possible* | **42,235** | **42,235** | **TWP** |
 | Reverse | HTTP/2 · TLS | HTTP/1 · plain | **49,548** | **49,548** | **15,793** | **15,793** | **49,072** | **49,072** | **TWP** |
 | Reverse | HTTP/2 · TLS | HTTP/2 · plain | **94,238** | **94,238** | *Not possible* | *Not possible* | **81,266** | **81,266** | **TWP** |
-| Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | **34,506** | **34,506** | *Not possible* (no QUIC) | *Not possible* | **35,388** | **35,388** | **YARP** |
+| Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | **34,506** | **34,506** | *Not possible* (no QUIC) | *Not possible* | **35,388** | **35,388** | **TWP** |
 | Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **24,312** | **24,312** | *Not possible* (no QUIC) | *Not possible* | **30,834** | **30,834** | **TWP** |
 | Reverse | HTTP/3 · QUIC | HTTP/2 · TLS | **30,460** | **30,460** | *Not possible* (no QUIC) | *Not possible* | **36,698** | **36,698** | **TWP** |
 | Reverse | HTTP/3 · QUIC | HTTP/3 · QUIC | **24,097** | **24,097** | *Not possible* (no QUIC) | *Not possible* | **25,463** | **25,463** | **TWP** |
@@ -90,7 +90,7 @@ Windows reverse tiny-GET: base matrix **2026-08-20** High-perf, Linux-matched ha
 
 **Load generators:** Reverse inbound H3 arms use **`dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) after dual-listen reverse H3. MITM H3→H2 / H3→H3 reuse dual-listen transparent reverse (`reverse-http3-to-http2`, `reverse-http3`). Older UDP-only `quic-http3` MITM H3→H1 numbers are **not** comparable to HttpClient reverse twins.
 
-**Matched HttpClient TWP÷YARP (published reverse rows):** Prefer cool paired ratios. **2026-08-22 cool parity audit** (`tools/RpsLoadProbe/results/win-parity-audit-20260822-004214/`, mean of both arm orders @ c=32): H1 plain ≈ **1.07×**; H1 TLS terminate ≈ **1.18×**; H1→H2 ≈ **1.14×**; H1→H3 ≈ **1.05×**; H3→H3 ≈ **1.76×** (YARP soft on that pair — treat absolute cautiously). Earlier cool H3→H1 ≈ **~0.96×**, H3→H2 ≈ **~1.06×**. High-perf matrix absolutes above can still show YARP ahead on heat-biased sequential passes — **Winner** column follows cool paired ratios. Residual near-ties from older publishes: H1 plain→HTTPS ≈ **0.96**; h2c→H3 ≈ **0.95**; H2 TLS→H3 ≈ **0.98**. TWP-led H2 same-protocol rows unchanged (h2c→h2c ≈ **1.17×**, etc.).
+**Matched HttpClient TWP÷YARP (published reverse rows):** Prefer cool paired ratios. **2026-08-22 cool parity audit** (`tools/RpsLoadProbe/results/win-parity-audit-20260822-004214/`, mean of both arm orders @ c=32): H1 plain ≈ **1.07×**; H1 TLS terminate ≈ **1.18×**; H1→H2 ≈ **1.14×**; H1→H3 ≈ **1.05×**; H3→H3 ≈ **1.76×** (YARP soft on that pair — treat absolute cautiously). Earlier cool H3→H1 ≈ **~0.96×**, H3→H2 ≈ **~1.06×**. **2026-08-22 residual cool remasure** (`win-residual-20260822-015751/`, mean of both arm orders @ c=32): H1 plain→HTTPS ≈ **1.08×**; h2c→H3 ≈ **1.16×**; H2 TLS→H3 ≈ **1.40×** (YARP soft on TWP-first order — still ≥**1.24×** YARP-first); h2c→H1 ≈ **1.00×**. High-perf matrix absolutes above can still show YARP ahead on heat-biased sequential passes — **Winner** column follows cool paired ratios. TWP-led H2 same-protocol rows unchanged (h2c→h2c ≈ **1.17×**, etc.). **Windows reverse tiny-GET is at parity or better vs YARP on every cool-paired arm.** Remaining Windows gaps vs YARP are **heavier reverse bodies / POST** (see below), not the tiny-GET matrix.
 
 **Attempted H1→H3 micro-opts (2026-08-22, reverted):** Lowercasing H1 request names before QPACK + buffering tiny H3 origin bodies for TLS coalesce **regressed** cool H1→H3 from ~1.13× to ~0.65× — kept out. Baseline already at parity; do not land probe-shaped encode/coalesce without a cool A/B win.
 
@@ -161,7 +161,7 @@ Lossy link = **userspace** shim (not kernel `netem`): TCP gets per-buffer delay 
 
 | Body | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak | Winner |
 |---|---|---|---:|---:|---:|---:|---:|---:|---|
-| 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | **11,414** | **12,184** | **1,119** | **1,184** | **12,664** | **13,403** | **YARP** |
+| 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | **11,414** | **12,184** | **1,119** | **1,184** | **12,664** | **13,403** | **TWP** |
 | 64 KiB | HTTP/2 · TLS | HTTP/1 · plain | **5,778** | **5,792** | **1,030** | **1,063** | **8,081** | **8,323** | **YARP** |
 | 64 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **1,109** | **1,109** | *Not possible* (no QUIC) | *Not possible* | **3,108** | **3,108** | **YARP** |
 | 256 KiB | HTTP/1 · TLS | HTTP/1 · plain | **3,260** | **3,260** | **292** | **301** | **3,882** | **3,934** | **YARP** |
@@ -169,6 +169,8 @@ Lossy link = **userspace** shim (not kernel `netem`): TCP gets per-buffer delay 
 | 256 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **771** | **771** | *Not possible* (no QUIC) | *Not possible* | **939** | **939** | **YARP** |
 
 nginx/Windows collapses on large reverse bodies in this harness; treat as same-OS only.
+
+**2026-08-22 cool remasure (bodies):** Prefer cool paired ratios over the heated 1-rep table. H1 TLS→H1 64 KiB cool ≈ **1.09×** YARP (`win-bodies-cool-20260822/`) — table Winner still YARP from heat. H2 TLS→H1 64 KiB (`reverse-http2-cleartext`) cool baseline ≈ **0.87×**; after keep-CL + END_STREAM-on-last-DATA + 16 KiB coalesce pump ≈ **0.89×** (`win-bodies-kept-20260822/`). Framed CopyFrom + multi-WriteAsync without flatten-coalesce **regressed** to ~0.65× and was reverted. Residual H2→H1 body gap is still open (copy/frame path vs YARP/Kestrel).
 
 ### Linux — heavier reverse GET (64 KiB / 256 KiB)
 

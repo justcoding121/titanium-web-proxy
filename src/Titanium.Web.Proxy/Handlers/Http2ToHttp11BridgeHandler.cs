@@ -545,12 +545,32 @@ public partial class ProxyServer
                         IHttpStreamReader reader = originConnection.Stream;
                         using var limited = new LimitedStream(reader, BufferPool, originIsChunked,
                             originContentLength, response.TrailingHeaders);
-                        var buffer = BufferPool.GetBuffer();
+                        // Coalesce origin reads into full HTTP/2 DATA frames (default max 16 KiB).
+                        // Cleartext HttpStream often returns 8 KiB fills; writing those through
+                        // immediately doubles frame/ReserveAsync/queue traffic vs one 16 KiB DATA.
+                        const int frameBytes = 16 * 1024;
+                        var buffer = BufferPool.GetBuffer(frameBytes);
                         try
                         {
-                            int read;
-                            while ((read = await limited.ReadAsync(buffer.AsMemory(), ct)) > 0)
-                                await clientBodyStream.WriteAsync(buffer.AsMemory(0, read), ct);
+                            var filled = 0;
+                            while (true)
+                            {
+                                var read = await limited.ReadAsync(buffer.AsMemory(filled, frameBytes - filled), ct);
+                                if (read == 0)
+                                {
+                                    if (filled > 0)
+                                        await clientBodyStream.WriteAsync(buffer.AsMemory(0, filled), ct);
+                                    break;
+                                }
+
+                                filled += read;
+                                if (filled == frameBytes)
+                                {
+                                    await clientBodyStream.WriteAsync(buffer.AsMemory(0, filled), ct);
+                                    filled = 0;
+                                }
+                            }
+
                             await limited.Finish();
                         }
                         finally

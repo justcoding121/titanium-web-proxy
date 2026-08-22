@@ -37,8 +37,9 @@ public class Http2BodyWriterAndOriginSettingsTests
         var flow = new Http2FlowController();
         flow.RegisterStream(1);
 
+        // expectedLength=-1 → empty END_STREAM DATA after payload (chunked/unknown-length path).
         var writer = Activator.CreateInstance(writerType, PrivateInstance, binder: null,
-            args: [1, connectionState, ms, flow, CancellationToken.None], culture: null)!;
+            args: [1, connectionState, ms, flow, CancellationToken.None, -1L, 16384], culture: null)!;
 
         Assert.IsFalse((bool)writerType.GetProperty("CanRead")!.GetValue(writer)!);
         Assert.IsFalse((bool)writerType.GetProperty("CanSeek")!.GetValue(writer)!);
@@ -97,6 +98,39 @@ public class Http2BodyWriterAndOriginSettingsTests
         // Final empty END_STREAM frame
         Assert.AreEqual((byte)Http2FrameType.Data, wire[wire.Length - 6]);
         Assert.AreEqual((byte)Http2FrameFlag.EndStream, wire[wire.Length - 5]);
+    }
+
+    [TestMethod]
+    public async Task Http2BodyStreamWriter_KnownLength_PutsEndStreamOnLastData()
+    {
+        var writerType = typeof(Http2Helper).GetNestedType("Http2BodyStreamWriter", BindingFlags.NonPublic)!;
+        using var ms = new MemoryStream();
+        using var cts = new CancellationTokenSource();
+        var connectionState = new Http2ConnectionState(1, cts, 100);
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+
+        const int length = 20000;
+        var writer = Activator.CreateInstance(writerType, PrivateInstance, binder: null,
+            args: [1, connectionState, ms, flow, CancellationToken.None, (long)length, 16384], culture: null)!;
+
+        var payload = new byte[length];
+        var writeAsync = writerType.GetMethod("WriteAsync",
+            [typeof(byte[]), typeof(int), typeof(int), typeof(CancellationToken)])!;
+        await (Task)writeAsync.Invoke(writer, [payload, 0, payload.Length, CancellationToken.None])!;
+
+        var complete = writerType.GetMethod("CompleteAsync", BindingFlags.Instance | BindingFlags.NonPublic |
+                                                            BindingFlags.Public)!;
+        await (Task)complete.Invoke(writer, null)!;
+
+        await connectionState.ClientWriteChain;
+
+        var wire = ms.ToArray();
+        // Two DATA frames (16384 + 3616); END_STREAM on the last payload frame — no empty trailer.
+        Assert.AreEqual(9 + 16384 + 9 + (length - 16384), wire.Length);
+        Assert.AreEqual((byte)Http2FrameType.Data, wire[3]);
+        Assert.AreEqual(0, wire[4] & (byte)Http2FrameFlag.EndStream); // first frame not end
+        Assert.AreEqual((byte)Http2FrameFlag.EndStream, wire[9 + 16384 + 4]);
     }
 
     [TestMethod]

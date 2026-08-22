@@ -4713,14 +4713,11 @@ namespace Titanium.Web.Proxy.Http2
             // HTTP/2 does not use chunked transfer-encoding; body framing is done via DATA frames + END_STREAM.
             response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
 
-            // Streamed bridge bodies (notably H2↔H3) are delimited by END_STREAM. Relaying the
-            // origin Content-Length is unsafe: if the QUIC/H3 copy finishes short (or is
-            // cancelled) and we still END_STREAM, Chrome fails with ERR_HTTP2_PROTOCOL_ERROR
-            // (RST PROTOCOL_ERROR) and can poison the whole client H2 connection — which is
-            // what left YouTube as a blank page after new-tab navigation.
+            // Keep origin Content-Length when known. Short delivery used to END_STREAM with a
+            // truncated body and poison Chrome (YouTube blank tab); we now RST on length mismatch
+            // instead, so advertising CL is safe and matches Kestrel/YARP (and avoids an extra empty
+            // END_STREAM DATA when the last payload frame can carry the flag).
             var advertisedLength = response.ContentLength;
-            if (advertisedLength >= 0)
-                response.Headers.RemoveHeader(KnownHeaders.ContentLength);
 
             // HEADERS and every DATA frame for this stream flow through the dedicated client frame
             // writer's FIFO (QueueSendHeader + Http2BodyStreamWriter), which guarantees both that this
@@ -4733,8 +4730,11 @@ namespace Titanium.Web.Proxy.Http2
                 connectionState.ClientSettings, frameHeader, frameHeaderBuffer, response, false,
                 clientStream, false);
 
+            var maxFrameSize = connectionState.ClientSettings.MaxFrameSize;
+            if (maxFrameSize <= 0) maxFrameSize = 16384;
+
             var bodyWriter = new Http2BodyStreamWriter(streamId, connectionState, clientStream, clientSendFlow,
-                cancellationToken);
+                cancellationToken, advertisedLength, maxFrameSize);
 
             await streamBodyWriter(bodyWriter, cancellationToken);
 
@@ -4895,27 +4895,34 @@ namespace Titanium.Web.Proxy.Http2
         /// </summary>
         private sealed class Http2BodyStreamWriter : Stream
         {
-            // every HTTP/2 endpoint must accept frames up to 16384 octets, so this is always safe.
-            private const int SafeMaxFrameSize = 16384;
-
             private readonly int streamId;
             private readonly Http2ConnectionState connectionState;
             private readonly Stream clientStream;
             private readonly Http2FlowController flow;
             private readonly CancellationToken cancellationToken;
+            private readonly long expectedLength;
+            private readonly int maxFrameSize;
+            private bool endStreamSent;
             private bool completed;
 
+            /// <param name="expectedLength">
+            ///     Known Content-Length (≥0) so the last DATA can carry END_STREAM; −1 for
+            ///     chunked/close-delimited bodies that need an empty END_STREAM DATA after the pump.
+            /// </param>
             internal Http2BodyStreamWriter(int streamId, Http2ConnectionState connectionState, Stream clientStream,
-                Http2FlowController flow, CancellationToken cancellationToken)
+                Http2FlowController flow, CancellationToken cancellationToken, long expectedLength = -1,
+                int maxFrameSize = 16384)
             {
                 this.streamId = streamId;
                 this.connectionState = connectionState;
                 this.clientStream = clientStream;
                 this.flow = flow;
                 this.cancellationToken = cancellationToken;
+                this.expectedLength = expectedLength;
+                this.maxFrameSize = maxFrameSize > 0 ? maxFrameSize : 16384;
             }
 
-            /// <summary>Total body octets written as DATA (excludes the empty END_STREAM frame).</summary>
+            /// <summary>Total body octets written as DATA (excludes any empty END_STREAM frame).</summary>
             internal long BytesWritten { get; private set; }
 
             public override bool CanRead => false;
@@ -4976,14 +4983,27 @@ namespace Titanium.Web.Proxy.Http2
                 var pos = 0;
                 while (pos < buffer.Length)
                 {
-                    var frameLength = Math.Min(SafeMaxFrameSize, buffer.Length - pos);
+                    var frameLength = Math.Min(maxFrameSize, buffer.Length - pos);
+                    var endStream = false;
+                    if (expectedLength >= 0)
+                    {
+                        var remaining = expectedLength - BytesWritten - pos;
+                        if (remaining <= 0)
+                            break;
+                        if (frameLength > remaining)
+                            frameLength = (int)remaining;
+                        endStream = BytesWritten + pos + frameLength >= expectedLength;
+                    }
+
                     await flow.ReserveAsync(streamId, frameLength, this.cancellationToken);
                     QueueDataFrame(connectionState, clientStream, streamId, buffer.Slice(pos, frameLength),
-                        endStream: false);
+                        endStream);
+                    if (endStream)
+                        endStreamSent = true;
                     pos += frameLength;
                 }
 
-                BytesWritten += buffer.Length;
+                BytesWritten += pos;
             }
 
             internal Task CompleteAsync()
@@ -4991,9 +5011,14 @@ namespace Titanium.Web.Proxy.Http2
                 if (completed) return Task.CompletedTask;
                 completed = true;
 
-                // Empty END_STREAM needs no flow-control credit.
+                // Known-CL path already put END_STREAM on the last payload DATA.
+                if (endStreamSent)
+                    return Task.CompletedTask;
+
+                // Empty END_STREAM needs no flow-control credit (chunked / unknown length / empty body).
                 QueueDataFrame(connectionState, clientStream, streamId, ReadOnlyMemory<byte>.Empty,
                     endStream: true);
+                endStreamSent = true;
                 return Task.CompletedTask;
             }
         }
