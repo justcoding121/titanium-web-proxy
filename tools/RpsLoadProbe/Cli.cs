@@ -245,11 +245,17 @@ internal static class Cli
             case "https-mitm":
                 mode = ProbeMode.HttpsMitm;
                 return true;
+            case "http-mitm":
+                mode = ProbeMode.HttpMitm;
+                return true;
             case "reverse-http1-mitm":
                 mode = ProbeMode.ReverseHttp1Mitm;
                 return true;
             case "reverse-http1-tls":
                 mode = ProbeMode.ReverseHttp1Tls;
+                return true;
+            case "reverse-http1-to-https":
+                mode = ProbeMode.ReverseHttp1ToHttps;
                 return true;
             case "bare-reverse-http1-tls":
                 mode = ProbeMode.BareReverseHttp1Tls;
@@ -259,6 +265,9 @@ internal static class Cli
                 return true;
             case "yarp-reverse-http1-tls":
                 mode = ProbeMode.YarpReverseHttp1Tls;
+                return true;
+            case "yarp-reverse-http1-to-https":
+                mode = ProbeMode.YarpReverseHttp1ToHttps;
                 return true;
             case "reverse-http2":
                 mode = ProbeMode.ReverseHttp2;
@@ -416,11 +425,15 @@ internal static class Cli
               bare-reverse-http1      Thin C# HTTP/1 reverse (runtime-ceiling control)
               nginx-reverse-http1     Control arm: native reverse -> same Kestrel HTTP/1 origin
               yarp-reverse-http1      Control arm: managed reverse -> same Kestrel HTTP/1 origin
-              reverse-http1-tls       TWP TLS-terminating reverse -> Kestrel HTTPS (h1)
+              reverse-http1-tls       TWP TLS terminate -> cleartext HTTP/1 origin
+              reverse-http1-to-https  TWP cleartext HTTP/1 -> HTTPS HTTP/1 origin
               bare-reverse-http1-tls  Thin C# TLS-terminate HTTP/1 reverse
-              nginx-reverse-http1-tls Control arm: TLS reverse -> same Kestrel HTTPS origin (h1)
-              yarp-reverse-http1-tls  Control arm: TLS reverse -> cleartext HTTP/1 origin
-              https-mitm              TWP Explicit MITM -> Kestrel HTTPS
+              nginx-reverse-http1-tls Control arm: TLS reverse -> cleartext HTTP/1 origin
+              yarp-reverse-http1-tls  Control arm: TLS terminate -> cleartext HTTP/1 origin
+              yarp-reverse-http1-to-https Control arm: cleartext HTTP/1 -> HTTPS HTTP/1
+              https-mitm              TWP Explicit CONNECT MITM -> Kestrel HTTPS
+              http-mitm               TWP Explicit intercepting proxy -> cleartext HTTP/1 origin
+              reverse-http1-mitm      TWP transparent dual-TLS H1 MITM -> Kestrel HTTPS
               mitm-http2-to-http1     TWP H2 TLS MITM -> H2→H1 bridge -> Kestrel HTTPS/h1
               mitm-http3-to-http1     TWP H3 MITM -> bridge -> Kestrel HTTPS/h1
               reverse-http2           TWP Transparent TLS+h2 MITM -> Kestrel HTTPS (h2)

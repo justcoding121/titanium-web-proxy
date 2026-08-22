@@ -30,6 +30,8 @@ internal sealed class TwpProxyHost : IDisposable
         {
             ForwardHost = "127.0.0.1",
             ForwardPort = originHttpPort,
+            // Must be explicit: cleartext H1 uses !ForwardCleartext as originIsHttps.
+            ForwardCleartext = true,
             MaxCachedConnections = 256
         };
         proxy.AddEndPoint(endPoint);
@@ -58,6 +60,34 @@ internal sealed class TwpProxyHost : IDisposable
         proxy.Start();
         WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
         return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
+    /// <summary>
+    /// Cleartext reverse: client HTTP/1 plain → HTTPS HTTP/1 origin (outbound TLS only; no client decrypt).
+    /// Completes the H1 plain/TLS × reverse square with <see cref="StartReverseHttp1"/> /
+    /// <see cref="StartReverseHttp1Tls"/>; twin of <see cref="StartReverseH2c"/> for H1.
+    /// </summary>
+    public static TwpProxyHost StartReverseHttp1ToHttps(int originHttpsPort)
+    {
+        var proxy = CreateBaseProxy(enableHttp2: false, enableHttp3: false);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpsPort,
+            ForwardCleartext = false,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeHttpAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 
     /// <summary>
@@ -402,6 +432,19 @@ internal sealed class TwpProxyHost : IDisposable
         ConfigureSharedTestCa(proxy);
 
         var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true);
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: true);
+    }
+
+    /// <summary>
+    /// Explicit intercepting proxy: client speaks cleartext HTTP to the proxy, origin is cleartext HTTP/1.
+    /// Plain-client MITM twin of <see cref="StartReverseHttp1"/> (inspectable both legs; no forged cert).
+    /// </summary>
+    public static TwpProxyHost StartHttpMitm(int? maxCachedConnections = null)
+    {
+        var proxy = CreateBaseProxy(enableHttp2: false, enableHttp3: false, maxCachedConnections);
+        var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false);
         proxy.AddEndPoint(endPoint);
         proxy.Start();
         return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: true);

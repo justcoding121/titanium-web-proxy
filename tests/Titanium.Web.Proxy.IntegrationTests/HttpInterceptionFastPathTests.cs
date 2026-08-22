@@ -224,4 +224,43 @@ public class HttpInterceptionFastPathTests
             proxy.Dispose();
         }
     }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task H1_Cleartext_Reverse_To_Https_Origin_Succeeds()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("h1-to-https-ok"));
+
+        var proxy = new ProxyServer(false, false, false);
+        proxy.CertificateManager.RootCertificateName = TestCertificateAuthority.RootCertificateName;
+        proxy.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
+        proxy.CertificateManager.SaveFakeCertificates = false;
+        proxy.ServerCertificateValidationCallback += (_, args) =>
+        {
+            args.IsValid = TestCertificateAuthority.Validate(args.Certificate, args.SslPolicyErrors);
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = new Uri(server.ListeningHttpsUrl).Port,
+            ForwardCleartext = false,
+            GenericCertificateName = "localhost"
+        });
+        proxy.Start();
+        try
+        {
+            using var client = testSuite.GetReverseProxyClient();
+            var response = await client.GetAsync($"http://localhost:{proxy.ProxyEndPoints[0].Port}/");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            Assert.AreEqual("h1-to-https-ok", await response.Content.ReadAsStringAsync());
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
 }

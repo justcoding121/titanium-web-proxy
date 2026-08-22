@@ -480,6 +480,12 @@ public partial class ProxyServer
                 }
             }
 
+            // Cleartext-listen reverse (DecryptSsl=false): origin TLS follows ForwardCleartext,
+            // matching inbound-h2c (originIsHttps: !ForwardCleartext). DecryptSsl=true endpoints that
+            // still receive plain HTTP keep isHttps=false (existing reverse-proxy test fixture shape).
+            if (!isHttps && !endPoint.DecryptSsl && !string.IsNullOrEmpty(endPoint.ForwardHost))
+                isHttps = !endPoint.ForwardCleartext;
+
             await HandleHttpSessionRequest(endPoint, clientStream, cancellationTokenSource,
                 prefetchConnectionTask: prefetchTask, isHttps: isHttps,
                 upstreamHttpProtocol: transparentUpstreamProtocol);

@@ -71,6 +71,18 @@ internal sealed class YarpProxyHost : IDisposable
             OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact
         });
 
+    /// <summary>H1 cleartext → HTTPS HTTP/1 origin.</summary>
+    public static Task<YarpProxyHost> StartHttp1ToHttpsAsync(int originHttpsPort) =>
+        StartAsync(new YarpListenOptions
+        {
+            UseTls = false,
+            InboundProtocols = HttpProtocols.Http1,
+            DestinationAddress = $"https://127.0.0.1:{originHttpsPort}/",
+            OutboundVersion = HttpVersion.Version11,
+            OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            AcceptAnyServerCertificate = true
+        });
+
     /// <summary>H2 TLS → H1 cleartext (native reverse peer parity).</summary>
     public static Task<YarpProxyHost> StartHttp2ToH1Async(int originHttpPort) =>
         StartAsync(new YarpListenOptions

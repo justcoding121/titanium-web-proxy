@@ -67,6 +67,7 @@ internal static class ServeProxyHost
             or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
             or ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1
             or ProbeMode.HttpsMitm or ProbeMode.ReverseHttp1Mitm
+            or ProbeMode.ReverseHttp1ToHttps or ProbeMode.YarpReverseHttp1ToHttps
             or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi)
         {
             ProbeLog.Error(
@@ -120,6 +121,16 @@ internal static class ServeProxyHost
                 listenUrl = yarp.ListenUrl;
                 targetForClient = yarp.ListenUrl;
                 yarpVersion = yarp.Version;
+                break;
+            }
+            case ProbeMode.HttpMitm:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var twp = TwpProxyHost.StartHttpMitm();
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                explicitProxy = twp.ListenUrl;
+                targetForClient = $"http://127.0.0.1:{originHttpPort}/";
                 break;
             }
             case ProbeMode.ReverseHttp1Tls:
@@ -336,10 +347,13 @@ internal static class ServeProxyHost
         ProbeMode.NginxReverseHttp1 => "nginx-reverse-http1",
         ProbeMode.YarpReverseHttp1 => "yarp-reverse-http1",
         ProbeMode.ReverseHttp1Tls => "reverse-http1-tls",
+        ProbeMode.ReverseHttp1ToHttps => "reverse-http1-to-https",
         ProbeMode.BareReverseHttp1Tls => "bare-reverse-http1-tls",
         ProbeMode.NginxReverseHttp1Tls => "nginx-reverse-http1-tls",
         ProbeMode.YarpReverseHttp1Tls => "yarp-reverse-http1-tls",
+        ProbeMode.YarpReverseHttp1ToHttps => "yarp-reverse-http1-to-https",
         ProbeMode.HttpsMitm => "https-mitm",
+        ProbeMode.HttpMitm => "http-mitm",
         ProbeMode.ReverseHttp1Mitm => "reverse-http1-mitm",
         ProbeMode.ReverseHttp2 => "reverse-http2",
         ProbeMode.ReverseHttp2Cleartext => "reverse-http2-cleartext",
@@ -562,6 +576,13 @@ internal static class ServeHost
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, [], twp.ListenUrl,
                         twp.ListenUrl, origin.HttpsUrl, [origin.HttpsUrl], null, "1.1");
                 }
+                case ProbeMode.HttpMitm:
+                {
+                    var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
+                    var twp = TwpProxyHost.StartHttpMitm(maxCachedConnections);
+                    return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl,
+                        twp.ListenUrl, origin.HttpUrl, [origin.HttpUrl], null, "1.1");
+                }
                 case ProbeMode.ReverseHttp1Mitm:
                 {
                     var origin = await OriginServer.StartAsync(true, responseBytes, cancellationToken);
@@ -574,6 +595,13 @@ internal static class ServeHost
                     var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
                     var twp = TwpProxyHost.StartReverseHttp1Tls(origin.HttpPort);
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
+                        twp.ListenUrl, [twp.ListenUrl], null, "1.1");
+                }
+                case ProbeMode.ReverseHttp1ToHttps:
+                {
+                    var origin = await OriginServer.StartAsync(true, responseBytes, cancellationToken);
+                    var twp = TwpProxyHost.StartReverseHttp1ToHttps(origin.HttpsPort);
+                    return new ServeStack(origin, twp, twp, origin.HttpUrl, origin.HttpsUrl, [], twp.ListenUrl, null,
                         twp.ListenUrl, [twp.ListenUrl], null, "1.1");
                 }
                 case ProbeMode.BareReverseHttp1Tls:
@@ -806,6 +834,13 @@ internal static class ServeHost
                     var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken);
                     var yarp = await YarpProxyHost.StartHttp1TlsAsync(origin.HttpPort);
                     return new ServeStack(origin, yarp, null, origin.HttpUrl, null, [], yarp.ListenUrl, null,
+                        yarp.ListenUrl, [yarp.ListenUrl], null, "1.1", yarpVersion: yarp.Version);
+                }
+                case ProbeMode.YarpReverseHttp1ToHttps:
+                {
+                    var origin = await OriginServer.StartAsync(true, responseBytes, cancellationToken);
+                    var yarp = await YarpProxyHost.StartHttp1ToHttpsAsync(origin.HttpsPort);
+                    return new ServeStack(origin, yarp, null, origin.HttpUrl, origin.HttpsUrl, [], yarp.ListenUrl, null,
                         yarp.ListenUrl, [yarp.ListenUrl], null, "1.1", yarpVersion: yarp.Version);
                 }
                 case ProbeMode.YarpReverseHttp2:

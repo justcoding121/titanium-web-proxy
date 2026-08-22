@@ -9,11 +9,16 @@ internal enum ProbeMode
     NginxReverseHttp1,
     YarpReverseHttp1,
     HttpsMitm,
+    /// <summary>Explicit intercepting proxy: cleartext client → cleartext HTTP/1 origin.</summary>
+    HttpMitm,
     ReverseHttp1Mitm,
     ReverseHttp1Tls,
+    /// <summary>Client HTTP/1 plain → HTTPS HTTP/1 origin (outbound TLS only).</summary>
+    ReverseHttp1ToHttps,
     BareReverseHttp1Tls,
     NginxReverseHttp1Tls,
     YarpReverseHttp1Tls,
+    YarpReverseHttp1ToHttps,
     ReverseHttp2,
     /// <summary>TWP client TLS+h2 → ForwardCleartext H2→H1 bridge → cleartext HTTP/1 origin.</summary>
     ReverseHttp2Cleartext,
@@ -284,13 +289,16 @@ internal static class RampOrchestrator
                 : [],
             ProbeMode.YarpReverseHttp1 => [new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null)],
             ProbeMode.HttpsMitm => [new("twp-https-mitm", ProbeMode.HttpsMitm, null)],
+            ProbeMode.HttpMitm => [new("twp-http-mitm", ProbeMode.HttpMitm, null)],
             ProbeMode.ReverseHttp1Mitm => [new("twp-reverse-http1-mitm", ProbeMode.ReverseHttp1Mitm, null)],
             ProbeMode.ReverseHttp1Tls => [new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null)],
+            ProbeMode.ReverseHttp1ToHttps => [new("twp-reverse-http1-to-https", ProbeMode.ReverseHttp1ToHttps, null)],
             ProbeMode.BareReverseHttp1Tls => [new("bare-reverse-http1-tls", ProbeMode.BareReverseHttp1Tls, null)],
             ProbeMode.NginxReverseHttp1Tls => nginxAvailable
                 ? [new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null)]
                 : [],
             ProbeMode.YarpReverseHttp1Tls => [new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null)],
+            ProbeMode.YarpReverseHttp1ToHttps => [new("yarp-reverse-http1-to-https", ProbeMode.YarpReverseHttp1ToHttps, null)],
             ProbeMode.ReverseHttp2 => [new("twp-reverse-http2", ProbeMode.ReverseHttp2, null)],
             ProbeMode.ReverseHttp2Cleartext =>
                 [new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null)],
@@ -433,6 +441,8 @@ internal static class RampOrchestrator
                     new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
                     new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null),
                     new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
+                    new("twp-reverse-http1-to-https", ProbeMode.ReverseHttp1ToHttps, null),
+                    new("yarp-reverse-http1-to-https", ProbeMode.YarpReverseHttp1ToHttps, null),
                     new("twp-https-mitm", ProbeMode.HttpsMitm, null),
                     new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
                     new("twp-reverse-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null),
@@ -450,6 +460,8 @@ internal static class RampOrchestrator
                     new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
                     new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
                     new("yarp-reverse-http1-tls", ProbeMode.YarpReverseHttp1Tls, null),
+                    new("twp-reverse-http1-to-https", ProbeMode.ReverseHttp1ToHttps, null),
+                    new("yarp-reverse-http1-to-https", ProbeMode.YarpReverseHttp1ToHttps, null),
                     new("twp-https-mitm", ProbeMode.HttpsMitm, null),
                     new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
                     new("twp-reverse-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null),
@@ -486,8 +498,12 @@ internal static class RampOrchestrator
             ],
             ProbeMode.CompareMitm =>
             [
+                new("twp-http-mitm", ProbeMode.HttpMitm, null),
                 new("twp-https-mitm", ProbeMode.HttpsMitm, null),
                 new("twp-reverse-http1-mitm", ProbeMode.ReverseHttp1Mitm, null),
+                // Plain-client H2: transparent reverse is already fully inspectable (no client TLS to forge).
+                new("twp-reverse-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null),
+                new("twp-reverse-h2c", ProbeMode.ReverseH2c, null),
                 new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
                 new("twp-mitm-http2-to-http1", ProbeMode.MitmHttp2ToHttp1, null),
                 new("twp-reverse-http3", ProbeMode.ReverseHttp3, null),
