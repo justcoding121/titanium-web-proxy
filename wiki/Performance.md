@@ -134,7 +134,7 @@ TWP÷nginx H1 plain reverse ≈ **0.69** (30,709 / 44,687); TWP÷YARP H1 plain �
 | Reverse | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **35,960** | **35,960** | **16,364** | **22,840** | **30,206** | **30,206** |
 | Reverse | HTTP/2 · TLS | HTTP/2 · plain | 🟢 **62,192** | **62,192** | *Not possible* | *Not possible* | **40,803** | **40,803** |
 | Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | 🟢 **28,636** | **28,636** | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **24,268** | **24,268** |
-| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **19,551** | **19,551** | *Not measured* | *Not measured* | **19,332** | **19,332** |
+| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **19,551** | **19,551** | **0** | **14,848** | **19,332** | **19,332** |
 | Reverse | HTTP/3 · QUIC | HTTP/2 · TLS | 🟢 **27,350** | **27,350** | *Not possible* (no H3→H2) | *Not possible* (no H3→H2) | **22,019** | **22,019** |
 | Reverse | HTTP/3 · QUIC | HTTP/3 · QUIC | 🟢 **21,703** | **21,703** | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **18,574** | **18,574** |
 | MITM | HTTP/1 · plain | HTTP/1 · plain | **49,778** | **49,778** | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) |
@@ -150,7 +150,7 @@ TWP÷nginx H1 plain reverse ≈ **0.69** (30,709 / 44,687); TWP÷YARP H1 plain �
 
 On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.69** (30,709 / 44,687). H1 TLS terminate ≈ **0.75** (23,822 / 31,910). TWP÷YARP H1 plain ≈ **0.96**; H1 TLS terminate ≈ **0.94**. Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**.
 
-**nginx HTTP/3:** inbound QUIC terminate → cleartext H1 exists in the harness (`nginx-reverse-http3-cleartext`) but was **not** in this `compare-bridges` suite — H3→H1 nginx cells are *Not measured* here. nginx still cannot speak HTTP/3 to an origin (no H3 upstream in this conf).
+**nginx HTTP/3:** inbound QUIC terminate → cleartext H1 (`nginx-reverse-http3-cleartext`) is in `compare-bridges` as of [32577474009](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32577474009) @ `629fb878`. Sustain **0** (did not hold the SLO); peak **14,848**. TWP/YARP H3→H1 cells on this row stay from the `02dcbdbf` matrix above. nginx still cannot speak HTTP/3 to an origin (no H3 upstream in this conf).
 
 **YARP HTTP/3 (this matrix):** TWP leads H3→H1 ≈ **1.01×** (19,551 / 19,332), H3→H2 ≈ **1.24×** (27,350 / 22,019), H3→H3 ≈ **1.17×** (21,703 / 18,574). H1→H2 ≈ **1.08×** (25,603 / 23,757). Near-ties: H1→H3 ≈ **0.99×**, h2c→H3 ≈ **1.06×**.
 
@@ -249,7 +249,9 @@ Same story as Windows: H1 stays usable; H2 falls to tens of RPS for all three pr
 
 ### Architecture-sensitive
 
-`compare-arch` isolates slow app readers, origin-early response, H2 duplex, and WebSocket echo. See [TWP vs YARP IO model](Performance-Profiling#twp-vs-yarp-io-model). Laptop 1-rep numbers are on [Performance-Profiling](Performance-Profiling#architecture-sensitive). Windows/Linux cells stay *Not measured* until a GHA median is pasted.
+`compare-arch` isolates slow app readers, origin-early response, H2 duplex, and WebSocket echo. See [TWP vs YARP IO model](Performance-Profiling#twp-vs-yarp-io-model). Laptop 1-rep numbers are on [Performance-Profiling](Performance-Profiling#architecture-sensitive).
+
+Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `629fb878`. Source: [32577472805](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32577472805) (`compare-arch`). Slow consumer = 256 KiB GET, 16 KiB read + 8 ms sleep. Early response = 64 KiB POST, origin writes after 8 KiB. Duplex H2 = overlapping 64 KiB POST on H2 TLS↔H2 TLS. WebSocket = echo round-trips/sec.
 
 `compare-lossy` (slow **network**) is already published above; it is not a slow **app** reader.
 
@@ -257,29 +259,29 @@ Same story as Windows: H1 stays usable; H2 falls to tens of RPS for all three pr
 
 | Scenario | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---|---:|---:|---:|---:|---:|---:|
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | *Not measured* | *Not measured* |
-| Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | *Not measured* | *Not measured* |
-| Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* | *Not possible* | *Not measured* | *Not measured* |
-| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **248** | **248** | **230** | **230** | 🟢 **248** | **248** |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | **249** | **249** | **213** | **213** | 🟢 **256** | **256** |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | **0** | **0** | *Not possible* (no QUIC) | *Not possible* | 🟢 **236** | **236** |
+| Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **7,099** | **7,531** | **374** | **443** | **5,222** | **5,812** |
+| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **6,501** | **6,501** | **0** | **427** | **3,775** | **4,463** |
+| Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | **1,372** | **1,372** | *Not possible* (no QUIC) | *Not possible* | 🟢 **1,808** | **1,808** |
+| Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | 🟢 **1,299** | **1,299** | *Not possible* | *Not possible* | **28** | **3,069** |
+| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **41,615** | **41,615** | **24,184** | **25,549** | **40,191** | **40,191** |
 
 #### Linux
 
 | Scenario | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---|---:|---:|---:|---:|---:|---:|
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* | *Not possible* | *Not measured* | *Not measured* |
-| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | **453** | **453** | 🟢 **472** | **472** | **407** | **407** |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **477** | **477** | **476** | **476** | **474** | **474** |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | **0** | **0** | **286** | **286** | 🟢 **432** | **432** |
+| Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **4,089** | **4,089** | **3,942** | **4,039** | **3,145** | **3,145** |
+| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **3,215** | **3,215** | **0** | **1,996** | **2,231** | **2,338** |
+| Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **2,157** | **2,157** | **0** | **728** | **2,116** | **2,116** |
+| Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | 🟢 **40** | **602** | *Not possible* | *Not possible* | **24** | **1,745** |
+| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | **28,700** | **28,700** | 🟢 **32,650** | **32,650** | **27,717** | **27,717** |
 
-nginx HTTP/2 origin is *Not possible* on the duplex H2↔H2 row (same as the tiny-GET matrix). Linux nginx HTTP/3 inbound exists for terminate; the slow-consumer / early-response H3 rows can use that listen once the arm exists.
+Slow consumer is sleep-bound; H1/H2 sit in the same band. TWP H3 slow-consumer sustain **0** (HttpClient sees `Content-Length` but no body bytes). Early-response H1/H2: TWP 🟢 on both OS. Duplex H2: TWP holds a higher sustain than YARP on this pass (YARP peaks higher). WebSocket: TWP 🟢 on Windows; Linux nginx 🟢. nginx HTTP/2 origin is *Not possible* on the duplex H2↔H2 row.
 
 ### TLS termination cost (H1 TLS → cleartext origin)
 
