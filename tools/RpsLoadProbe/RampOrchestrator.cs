@@ -640,25 +640,25 @@ internal static class RampOrchestrator
         Uri targetUri = stack.TargetUri;
         IReadOnlyList<Uri>? targetUris = stack.TargetUris.Count > 1 ? stack.TargetUris : null;
         int? quicPort = stack.QuicPort;
+        var stackUsesQuicGenerator = string.Equals(stack.LoadGenerator, "quic-http3",
+            StringComparison.OrdinalIgnoreCase);
+        var http3Client = stack.RequestHttpVersion.Major >= 3;
+        // Lossy H3: force raw QuicConnection client. HttpClient+UDP-shim works on Linux/laptop
+        // but collapses on windows-latest GHA (sustain ~1).
+        var forceLossyQuicGenerator = workload.IsLossy && http3Client;
 
         try
         {
             if (workload.IsLossy)
             {
-                var useQuicGenerator = string.Equals(stack.LoadGenerator, "quic-http3",
-                    StringComparison.OrdinalIgnoreCase);
-                var http3Client = stack.RequestHttpVersion.Major >= 3;
                 var backendQuicPort = stack.QuicPort ?? (http3Client ? stack.TargetUri.Port : (int?)null);
-                if ((useQuicGenerator || http3Client) && backendQuicPort is > 0)
+                if ((stackUsesQuicGenerator || http3Client) && backendQuicPort is > 0)
                 {
                     udpLink = LossyUdpLink.Start(backendQuicPort.Value, workload.DelayMs, workload.LossPercent);
                     quicPort = udpLink.Port;
-                    // Dual-listen HttpClient H3: retarget the URI so QUIC hits the UDP shim.
-                    if (!useQuicGenerator)
-                    {
-                        targetUri = new Uri(udpLink.ListenUrlHttps);
-                        targetUris = null;
-                    }
+                    // Log URI points at the shim; quic-http3 dials quicPort directly.
+                    targetUri = new Uri(udpLink.ListenUrlHttps);
+                    targetUris = null;
 
                     ProbeLog.Info(
                         $"  lossy-udp port={udpLink.Port} -> quic={backendQuicPort} delay={workload.DelayMs}ms loss={workload.LossPercent}%");
@@ -678,8 +678,7 @@ internal static class RampOrchestrator
             LoadResult? peak = null;
             var lastGoodConcurrency = 0;
 
-            var useQuic = string.Equals(stack.LoadGenerator, "quic-http3", StringComparison.OrdinalIgnoreCase)
-                          && quicPort is > 0;
+            var useQuic = (stackUsesQuicGenerator || forceLossyQuicGenerator) && quicPort is > 0;
             var loadOptions = new LoadRequestOptions
             {
                 Target = targetUri,

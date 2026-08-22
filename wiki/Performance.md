@@ -283,7 +283,7 @@ Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `629fb878`. Source:
 | Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | 🟢 **40** | **602** | *Not possible* | *Not possible* | **24** | **1,745** |
 | Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | **28,700** | **28,700** | 🟢 **32,650** | **32,650** | **27,717** | **27,717** |
 
-Slow consumer is sleep-bound; H1/H2 sit in the same band. TWP H3 slow-consumer sustain **0** (HttpClient sees `Content-Length` but no body bytes). Early-response H1/H2: TWP 🟢 on both OS. Duplex H2: TWP holds a higher sustain than YARP on this pass (YARP peaks higher). WebSocket: TWP 🟢 on Windows; Linux nginx 🟢. nginx HTTP/2 origin is *Not possible* on the duplex H2↔H2 row.
+Slow consumer is sleep-bound; H1/H2 sit in the same band. TWP H3 slow-consumer sustain **0** (HttpClient sees `Content-Length` but no body bytes). Early-response H1/H2: TWP leads on both OS. Duplex H2: TWP holds a higher sustain than YARP on this pass (YARP peaks higher). WebSocket: TWP leads on Windows; Linux nginx leads. nginx HTTP/2 origin is *Not possible* on the duplex H2↔H2 row.
 
 ### TLS termination cost (H1 TLS → cleartext origin)
 

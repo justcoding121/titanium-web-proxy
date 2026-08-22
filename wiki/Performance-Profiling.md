@@ -111,7 +111,7 @@ Windows reverse tiny-GET: base matrix **2026-08-20** High-perf, Linux-matched ha
 
 **Load generators:** Reverse inbound H3 arms use `**dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) after dual-listen reverse H3. MITM H3→H2 / H3→H3 reuse dual-listen transparent reverse (`reverse-http3-to-http2`, `reverse-http3`). Older UDP-only `quic-http3` MITM H3→H1 numbers are **not** comparable to HttpClient reverse twins.
 
-**Matched HttpClient TWP÷YARP — table cells are cool absolutes where cited (🟢 matches the numbers):** **parity audit** `win-parity-audit-20260822-004214/` (both orders @ c=32): H1 plain **41,390 / 38,772** ≈ **1.07×**; H1 TLS **35,205 / 29,750** ≈ **1.18×**; H1→H3 **21,819 / 20,712** ≈ **1.05×**; H3→H3 **26,299 / 14,942** ≈ **1.76×** (YARP soft — treat absolute cautiously). **2026-08-22 cool paste** `win-cool-paste-20260822-063226/` (both orders @ c=32): H1→H2 **25,540 / 24,920** ≈ **1.02×**; H1 plain→HTTPS **30,844 / 30,621** ≈ **1.01×**; h2c→H3 **27,493 / 24,535** ≈ **1.12×**; H2 TLS→H3 **30,813 / 24,039** ≈ **1.28×**; h2c→H1 **46,517 / 42,994** ≈ **1.08×**; H3→H1 **22,325 / 23,773** ≈ **0.94×**; H3→H2 **22,297 / 21,914** ≈ **1.02×**. TWP-led H2 same-protocol rows unchanged (h2c↔h2c ≈ **1.17×**, etc.). Remaining local gaps vs YARP are **H3→H1** (~0.94×) plus **heavier reverse bodies / POST**.
+**Matched HttpClient TWP÷YARP — table cells are cool absolutes where cited:** **parity audit** `win-parity-audit-20260822-004214/` (both orders @ c=32): H1 plain **41,390 / 38,772** ≈ **1.07×**; H1 TLS **35,205 / 29,750** ≈ **1.18×**; H1→H3 **21,819 / 20,712** ≈ **1.05×**; H3→H3 **26,299 / 14,942** ≈ **1.76×** (YARP soft — treat absolute cautiously). **2026-08-22 cool paste** `win-cool-paste-20260822-063226/` (both orders @ c=32): H1→H2 **25,540 / 24,920** ≈ **1.02×**; H1 plain→HTTPS **30,844 / 30,621** ≈ **1.01×**; h2c→H3 **27,493 / 24,535** ≈ **1.12×**; H2 TLS→H3 **30,813 / 24,039** ≈ **1.28×**; h2c→H1 **46,517 / 42,994** ≈ **1.08×**; H3→H1 **22,325 / 23,773** ≈ **0.94×**; H3→H2 **22,297 / 21,914** ≈ **1.02×**. TWP-led H2 same-protocol rows unchanged (h2c↔h2c ≈ **1.17×**, etc.). Remaining local gaps vs YARP are **H3→H1** (~0.94×) plus **heavier reverse bodies / POST**.
 
 **Attempted H1→H3 micro-opts (2026-08-22, reverted):** Lowercasing H1 request names before QPACK + buffering tiny H3 origin bodies for TLS coalesce **regressed** cool H1→H3 from ~1.13× to ~0.65× — kept out. Baseline already at parity; do not land probe-shaped encode/coalesce without a cool A/B win.
 
@@ -142,7 +142,7 @@ nginx/Windows is a limited port — use it for **same-OS** comparison only, not 
 
 nginx/Windows collapses on large reverse bodies in this harness; treat as same-OS only.
 
-**2026-08-22 cool remasure (bodies) — H2→H1 cells are cool means** (`win-bodies-coalesce288-20260822/`, both orders @ c=32): 64 KiB **7,744 / 6,844** ≈ **1.13×** → TWP 🟢; 256 KiB **1,935 / 2,179** ≈ **0.89×** → YARP 🟢. H1 TLS→H1 64 KiB still heated (🟢 follows heated). H3→H1 64 KiB cool ≈ **0.96×** → YARP 🟢. 256 KiB H1/H3: heated → YARP 🟢.
+**2026-08-22 cool remasure (bodies) — H2→H1 cells are cool means** (`win-bodies-coalesce288-20260822/`, both orders @ c=32): 64 KiB **7,744 / 6,844** ≈ **1.13×** → TWP leads; 256 KiB **1,935 / 2,179** ≈ **0.89×** → YARP leads. H1 TLS→H1 64 KiB still heated (marker follows heated). H3→H1 64 KiB cool ≈ **0.96×** → YARP leads. 256 KiB H1/H3: heated → YARP leads.
 
 ### POST 64 KiB request + 64 KiB response
 
@@ -156,7 +156,7 @@ nginx/Windows collapses on large reverse bodies in this harness; treat as same-O
 | HTTP/3 · QUIC | HTTP/1 · plain | **0**        | **185**   | *Not possible* | *Not possible* | 🟢 **1,890** | **1,890** |
 
 
-H1 POST: TWP 🟢 (heated and cool). H2 POST: YARP 🟢 — heated ≈ **0.74×**, cool ≈ **~0.88–0.95×** with c=1 TWP ahead (~**1.2×**); residual is multiplex scaling, not single-stream cost. H3 POST: YARP 🟢 (TWP sustain **0**).
+H1 POST: TWP leads (heated and cool). H2 POST: YARP leads — heated ≈ **0.74×**, cool ≈ **~0.88–0.95×** with c=1 TWP ahead (~**1.2×**); residual is multiplex scaling, not single-stream cost. H3 POST: YARP leads (TWP sustain **0**).
 
 ### Lossy / high-RTT (H2 HOL / H3 packet loss)
 
@@ -187,7 +187,7 @@ H1 stays usable; H2 collapses under connection stalls (HOL). **H3 is the protoco
 | Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | **9** | **590** | *Not possible* | *Not possible* | 🟢 **2,455** | **2,455** |
 | Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **38,235** | **38,823** | **18,251** | **19,054** | **37,803** | **38,454** |
 
-Slow consumer is sleep-bound (~16 × 8 ms per 256 KiB); H1/H2 sit in the same band. TWP H3 slow-consumer sustain **0**: HttpClient sees `Content-Length: 262144` but `CopyToAsync` writes 0 bytes (YARP H3 delivers the body). Early-response H1: TWP 🟢 (~1.25× YARP) — sequential H1 still finishes the exchange quickly when the origin answers after 8 KiB. Early-response H2/H3 and duplex H2: YARP 🟢; TWP H2↔H2 duplex sustain **9** vs peak **590** (errors at higher concurrency) vs YARP **2,455**. WebSocket echo: TWP 🟢 (~1.01× YARP); nginx/Windows same-OS only.
+Slow consumer is sleep-bound (~16 × 8 ms per 256 KiB); H1/H2 sit in the same band. TWP H3 slow-consumer sustain **0**: HttpClient sees `Content-Length: 262144` but `CopyToAsync` writes 0 bytes (YARP H3 delivers the body). Early-response H1: TWP leads (~1.25× YARP) — sequential H1 still finishes the exchange quickly when the origin answers after 8 KiB. Early-response H2/H3 and duplex H2: YARP leads; TWP H2↔H2 duplex sustain **9** vs peak **590** (errors at higher concurrency) vs YARP **2,455**. WebSocket echo: TWP leads (~1.01× YARP); nginx/Windows same-OS only.
 
 ### TLS termination cost (H1 TLS → cleartext origin)
 
