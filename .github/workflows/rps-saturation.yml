@@ -1,11 +1,14 @@
-# Manual saturation RPS lab on a GitHub-hosted Ubuntu VM (not a job container).
+# Manual saturation RPS lab on GitHub-hosted VMs (not a job container).
 # Maintainers run this, then paste median numbers into wiki/Performance.md.
 # Not a per-PR gate; not comparable to dedicated-server blog posts.
 #
-# Prefer --repeats >= 3 for publishable Linux numbers (runner noise). Linux nginx
+# Prefer --repeats >= 3 for publishable numbers (runner noise). Linux nginx
 # is the authoritative nginx baseline; nginx/Windows is same-OS only.
+#
+# Both matrix legs use the standard public-repo runner class (4 vCPU / 16 GiB).
+# Do not mix larger or slim runners unless both OS get the same size.
 
-name: RPS saturation (Linux)
+name: RPS saturation
 
 on:
   workflow_dispatch:
@@ -83,7 +86,11 @@ on:
 
 jobs:
   rps:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
     timeout-minutes: 90
     steps:
@@ -95,9 +102,31 @@ jobs:
           dotnet-version: |
             10.0.x
 
+      - name: Log runner shape (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          echo "os=$(uname -s) $(uname -r)"
+          echo "nproc=$(nproc)"
+          free -h
+          lscpu | sed -n '1,20p'
+
+      - name: Log runner shape (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $os = Get-CimInstance Win32_OperatingSystem
+          $cs = Get-CimInstance Win32_ComputerSystem
+          $cpu = Get-CimInstance Win32_Processor
+          Write-Host "OS=$($os.Caption) $($os.Version)"
+          Write-Host "LogicalProcessors=$($cs.NumberOfLogicalProcessors)"
+          Write-Host "RAM_GiB=$([math]::Round($cs.TotalPhysicalMemory / 1GB, 1))"
+          Write-Host "CPU=$($cpu.Name)"
+
       # Ubuntu 24.04 distro nginx is 1.24 without HTTP/3. Official nginx.org mainline
       # packages are built with --with-http_v3_module so the H3 terminate arm can run.
       - name: Install nginx (HTTP/3-capable)
+        if: runner.os == 'Linux'
         run: |
           set -euo pipefail
           . /etc/os-release
@@ -121,8 +150,30 @@ jobs:
             nginx -V
           fi
 
-      # .NET System.Net.Quic on Linux requires native libmsquic (shipped in-box on Windows only).
+      # nginx/Windows is same-OS only (no QUIC / http_v3). Pin the zip used by the laptop lab.
+      - name: Install nginx (Windows zip)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          NGINX_WIN_VERSION: '1.31.3'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ver = $env:NGINX_WIN_VERSION
+          $zip = Join-Path $env:RUNNER_TEMP "nginx-$ver.zip"
+          $dest = Join-Path $env:RUNNER_TEMP 'nginx'
+          curl.exe --fail --silent --show-error --location --proto '=https' --tlsv1.2 `
+            "https://nginx.org/download/nginx-$ver.zip" -o $zip
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+          $nginxDir = Join-Path $dest "nginx-$ver"
+          if (-not (Test-Path (Join-Path $nginxDir 'nginx.exe'))) {
+            throw "nginx.exe not found under $nginxDir"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $nginxDir
+          & (Join-Path $nginxDir 'nginx.exe') -v
+
+      # .NET System.Net.Quic on Linux requires native libmsquic (shipped in-box on Windows).
       - name: Install libmsquic (HTTP/3)
+        if: runner.os == 'Linux'
         run: |
           set -euo pipefail
           . /etc/os-release
@@ -135,7 +186,17 @@ jobs:
           sudo apt-get install -y libmsquic
           pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { throw "QuicListener.IsSupported is false after libmsquic install" }; Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"'
 
+      - name: Assert in-box MsQuic (HTTP/3)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not [System.Net.Quic.QuicListener]::IsSupported) {
+            throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
+          }
+          Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"
+
       - name: Install bombardier (optional external generator)
+        if: runner.os == 'Linux'
         run: |
           set -euo pipefail
           # Force HTTPS-only (including redirects) for Sonar githubactions:S6506.
@@ -145,7 +206,22 @@ jobs:
           chmod +x /usr/local/bin/bombardier
           bombardier --version || true
 
+      - name: Install bombardier (optional external generator)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'bombardier'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          $exe = Join-Path $dir 'bombardier.exe'
+          curl.exe --fail --silent --show-error --location --proto '=https' --tlsv1.2 `
+            'https://github.com/codesenberg/bombardier/releases/download/v1.2.6/bombardier-windows-amd64.exe' `
+            -o $exe
+          Add-Content -Path $env:GITHUB_PATH -Value $dir
+          & $exe --version
+
       - name: Raise open-file limit
+        if: runner.os == 'Linux'
         run: |
           ulimit -n 65535 || true
           ulimit -n
@@ -173,6 +249,6 @@ jobs:
       - name: Upload CSV artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rps-csv
+          name: rps-csv-${{ matrix.os }}
           path: tools/RpsLoadProbe/results/rps-ramp-*.csv
           if-no-files-found: error

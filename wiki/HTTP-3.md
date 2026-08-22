@@ -32,7 +32,7 @@ sudo apt-get update && sudo apt-get install -y libmsquic
 - An inbound HTTP/3 endpoint: either `TransparentQuicProxyEndPoint` (UDP-only transparent/NAT) or
   `TransparentProxyEndPoint` with `EnableHttp3 = true` (reference .NET server stack-style TCP+UDP reverse listen).
 
-The Linux [RPS saturation](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/rps-saturation.yml) workflow installs `libmsquic` so HTTP/3 probe arms run on `ubuntu-latest`.
+The [RPS saturation](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/rps-saturation.yml) workflow installs `libmsquic` on `ubuntu-latest` and asserts in-box MsQuic on `windows-latest` so HTTP/3 probe arms run on both OS.
 
 ## Quick start — reverse dual-listen (HttpClient / browsers)
 
