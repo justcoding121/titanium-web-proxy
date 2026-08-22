@@ -67,7 +67,7 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 | Reverse | HTTP/2 · TLS | HTTP/1 · plain | **49,548** | **49,548** | **15,793** | **15,793** | **49,072** | **49,072** | **TWP** |
 | Reverse | HTTP/2 · TLS | HTTP/2 · plain | **94,238** | **94,238** | *Not possible* | *Not possible* | **81,266** | **81,266** | **TWP** |
 | Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | **34,506** | **34,506** | *Not possible* (no QUIC) | *Not possible* | **35,388** | **35,388** | **YARP** |
-| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **23,771** | **23,771** | *Not possible* (no QUIC) | *Not possible* | **31,300** | **31,300** | **YARP** |
+| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **24,312** | **24,312** | *Not possible* (no QUIC) | *Not possible* | **30,834** | **30,834** | **YARP** |
 | Reverse | HTTP/3 · QUIC | HTTP/2 · TLS | **30,460** | **30,460** | *Not possible* (no QUIC) | *Not possible* | **36,698** | **36,698** | **YARP** |
 | Reverse | HTTP/3 · QUIC | HTTP/3 · QUIC | **24,097** | **24,097** | *Not possible* (no QUIC) | *Not possible* | **25,463** | **25,463** | **YARP** |
 | MITM | HTTP/1 · TLS | HTTP/1 · TLS | **33,691** | **33,691** | *Not possible* (no MITM) | *Not possible* | *Not possible* (no MITM) | *Not possible* | |
@@ -83,7 +83,7 @@ Windows reverse tiny-GET: base matrix **2026-08-20** High-perf, Linux-matched ha
 
 **Load generators:** Reverse inbound H3 arms use **`dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) after dual-listen reverse H3. MITM H3→H2 / H3→H3 reuse dual-listen transparent reverse (`reverse-http3-to-http2`, `reverse-http3`). Older UDP-only `quic-http3` MITM H3→H1 numbers are **not** comparable to HttpClient reverse twins.
 
-**Matched HttpClient TWP÷YARP (this pass):** H1 plain ≈ **0.95** (41,942 / 44,229). H1 TLS terminate ≈ **0.95** (36,069 / 37,852). H1→H2 ≈ **0.96** (40,355 / 42,122; was 0.70 on 2026-08-20). H1→H3 ≈ **0.91** (25,125 / 27,596). h2c→h2c ≈ **1.17×** (100,568 / 86,021; TWP leads). h2c→H2 TLS ≈ **1.04×** (88,006 / 84,634; TWP leads). H2 TLS→h2c ≈ **1.16×** (94,238 / 81,266; TWP leads). H2 TLS→H1 ≈ **1.01×** (49,548 / 49,072; TWP leads). h2c→H1 ≈ **0.99**. h2c→H3 ≈ **0.95**. H2 TLS→H3 ≈ **0.98**. H3→H3 ≈ **0.95** (24,097 / 25,463). H3→H2 ≈ **0.83** (30,460 / 36,698). H3→H1 ≈ **0.76** (23,771 / 31,300).
+**Matched HttpClient TWP÷YARP (this pass):** H1 plain ≈ **0.95** (41,942 / 44,229). H1 TLS terminate ≈ **0.95** (36,069 / 37,852). H1→H2 ≈ **0.96** (40,355 / 42,122; was 0.70 on 2026-08-20). H1→H3 ≈ **0.91** (25,125 / 27,596). h2c→h2c ≈ **1.17×** (100,568 / 86,021; TWP leads). h2c→H2 TLS ≈ **1.04×** (88,006 / 84,634; TWP leads). H2 TLS→h2c ≈ **1.16×** (94,238 / 81,266; TWP leads). H2 TLS→H1 ≈ **1.01×** (49,548 / 49,072; TWP leads). h2c→H1 ≈ **0.99**. h2c→H3 ≈ **0.95**. H2 TLS→H3 ≈ **0.98**. H3→H3 ≈ **0.95** (24,097 / 25,463). H3→H2 ≈ **0.83** (30,460 / 36,698). H3→H1 ≈ **0.79** (24,312 / 30,834).
 
 **MITM÷TWP reverse pass-through twin (1-rep quick):** Transparent H1 dual-TLS (`reverse-http1-mitm`) ÷ H1 TLS terminate ≈ **1.21** (33,691 / 27,762). H2→H1 MITM ÷ H2→H1 cleartext ≈ **0.99** (48,925 / 49,548). H3→H1 MITM ÷ H3→H1 cleartext ≈ **1.12** (21,811 / 19,517). Explicit CONNECT `https-mitm` ≈ **31,294** sustain / **35,794** peak (CONNECT tax; not the fair twin).
 
