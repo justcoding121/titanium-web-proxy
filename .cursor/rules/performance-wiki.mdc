@@ -1,0 +1,28 @@
+---
+description: Performance wiki — 🟢 marker only in table cells
+globs: wiki/Performance*.md
+alwaysApply: false
+---
+
+# Performance wiki markers
+
+In `wiki/Performance.md` and `wiki/Performance-Profiling.md`:
+
+- **🟢** marks the highest **sustainable** RPS among comparable products on that row.
+- Put **🟢 only inside markdown table cells** (sustain columns).
+- Do **not** use 🟢 in prose, notes, captions, or bullet lists (except the short legend that defines the marker).
+- In narrative, say “leads” / “TWP leads” / “YARP leads” instead of “TWP 🟢”.
+
+```markdown
+<!-- ❌ BAD — prose -->
+Early-response H1: TWP 🟢 (~1.25× YARP).
+
+<!-- ✅ GOOD — prose -->
+Early-response H1: TWP leads (~1.25× YARP).
+
+<!-- ✅ GOOD — table cell -->
+| … | 🟢 **7,099** | **7,531** | … |
+
+<!-- ✅ GOOD — legend only -->
+- 🟢 = highest sustainable RPS among products with a number on that row.
+```
