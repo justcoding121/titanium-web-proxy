@@ -464,7 +464,7 @@ public partial class ProxyServer
                     response.Headers.RemoveHeader(KnownHeaders.Upgrade);
                 }
 
-                if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
+                if (!sessionArgs.IsFastPath && !sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
                     !string.IsNullOrEmpty(ViaHeaderPseudonym))
                 {
                     AddViaHeader(response.Headers, response.HttpVersion, ViaHeaderPseudonym);
@@ -542,12 +542,31 @@ public partial class ProxyServer
 
                     response.StreamBodyWriter = async (clientBodyStream, ct) =>
                     {
+                        // Known-CL non-chunked: read origin HttpStream directly into pre-framed DATA
+                        // buffers (skip LimitedStream + QueueDataFrame payload memcpy). Chunked /
+                        // close-delimited still need LimitedStream for framing + trailers.
+                        if (!originIsChunked && originContentLength >= 0
+                            && clientBodyStream is Http2Helper.Http2BodyStreamWriter framed)
+                        {
+                            var remaining = originContentLength;
+                            var originStream = originConnection.Stream;
+                            await framed.CopyFromAsync(async (dest, token) =>
+                            {
+                                if (remaining <= 0)
+                                    return 0;
+                                var toRead = (int)Math.Min(dest.Length, remaining);
+                                var n = await originStream.ReadAsync(dest.Slice(0, toRead), token)
+                                    .ConfigureAwait(false);
+                                if (n > 0)
+                                    remaining -= n;
+                                return n;
+                            }, ct).ConfigureAwait(false);
+                            return;
+                        }
+
                         IHttpStreamReader reader = originConnection.Stream;
                         using var limited = new LimitedStream(reader, BufferPool, originIsChunked,
                             originContentLength, response.TrailingHeaders);
-                        // Coalesce origin reads into full HTTP/2 DATA frames (default max 16 KiB).
-                        // Cleartext HttpStream often returns 8 KiB fills; writing those through
-                        // immediately doubles frame/ReserveAsync/queue traffic vs one 16 KiB DATA.
                         const int frameBytes = 16 * 1024;
                         var buffer = BufferPool.GetBuffer(frameBytes);
                         try

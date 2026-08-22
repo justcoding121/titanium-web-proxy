@@ -4893,7 +4893,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     coalesces frames across streams into single socket writes instead of serializing every response
         ///     on <see cref="Http2ConnectionState.ClientWriteLock" /> with one small syscall per frame.
         /// </summary>
-        private sealed class Http2BodyStreamWriter : Stream
+        internal sealed class Http2BodyStreamWriter : Stream
         {
             private readonly int streamId;
             private readonly Http2ConnectionState connectionState;
@@ -5004,6 +5004,72 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 BytesWritten += pos;
+            }
+
+            /// <summary>
+            ///     Reads origin bytes into a pre-framed ArrayPool buffer (9-byte header + payload) so
+            ///     <see cref="QueueDataFrame"/>'s payload memcpy is skipped. Callers must keep
+            ///     <see cref="Http2FrameWriter"/> flatten-coalesce — dropping it for many small SslStream
+            ///     writes regressed cool H2→H1 64 KiB to ~0.65×.
+            /// </summary>
+            internal async Task CopyFromAsync(Func<Memory<byte>, CancellationToken, ValueTask<int>> readAsync,
+                CancellationToken cancellationToken)
+            {
+                while (true)
+                {
+                    var remaining = expectedLength >= 0
+                        ? expectedLength - BytesWritten
+                        : maxFrameSize;
+                    if (expectedLength >= 0 && remaining <= 0)
+                        break;
+
+                    var payloadCap = (int)Math.Min(maxFrameSize, remaining);
+                    var rented = ArrayPool<byte>.Shared.Rent(9 + payloadCap);
+                    var read = 0;
+                    try
+                    {
+                        while (read < payloadCap)
+                        {
+                            var n = await readAsync(rented.AsMemory(9 + read, payloadCap - read), cancellationToken)
+                                .ConfigureAwait(false);
+                            if (n == 0)
+                                break;
+                            read += n;
+                        }
+
+                        if (read == 0)
+                        {
+                            ArrayPool<byte>.Shared.Return(rented);
+                            rented = null!;
+                            break;
+                        }
+
+                        var endStream = expectedLength >= 0 && BytesWritten + read >= expectedLength;
+                        await flow.ReserveAsync(streamId, read, this.cancellationToken).ConfigureAwait(false);
+                        var dataFrameHeader = new Http2FrameHeader
+                        {
+                            StreamId = streamId,
+                            Type = Http2FrameType.Data,
+                            Length = read,
+                            Flags = endStream ? Http2FrameFlag.EndStream : 0
+                        };
+                        dataFrameHeader.CopyToBuffer(rented);
+                        connectionState.EnqueueWriteRented(towardServer: false, connectionState.ClientWriteLock,
+                            clientStream, rented, 9 + read);
+                        rented = null!; // ownership transferred
+                        BytesWritten += read;
+                        if (endStream)
+                        {
+                            endStreamSent = true;
+                            break;
+                        }
+                    }
+                    finally
+                    {
+                        if (rented != null)
+                            ArrayPool<byte>.Shared.Return(rented);
+                    }
+                }
             }
 
             internal Task CompleteAsync()

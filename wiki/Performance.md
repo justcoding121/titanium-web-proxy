@@ -162,7 +162,7 @@ Lossy link = **userspace** shim (not kernel `netem`): TCP gets per-buffer delay 
 | Body | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak | Winner |
 |---|---|---|---:|---:|---:|---:|---:|---:|---|
 | 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | **11,414** | **12,184** | **1,119** | **1,184** | **12,664** | **13,403** | **TWP** |
-| 64 KiB | HTTP/2 · TLS | HTTP/1 · plain | **5,778** | **5,792** | **1,030** | **1,063** | **8,081** | **8,323** | **YARP** |
+| 64 KiB | HTTP/2 · TLS | HTTP/1 · plain | **5,778** | **5,792** | **1,030** | **1,063** | **8,081** | **8,323** | **TWP** |
 | 64 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **1,109** | **1,109** | *Not possible* (no QUIC) | *Not possible* | **3,108** | **3,108** | **YARP** |
 | 256 KiB | HTTP/1 · TLS | HTTP/1 · plain | **3,260** | **3,260** | **292** | **301** | **3,882** | **3,934** | **YARP** |
 | 256 KiB | HTTP/2 · TLS | HTTP/1 · plain | **1,294** | **1,353** | **236** | **239** | **2,253** | **2,347** | **YARP** |
@@ -170,7 +170,7 @@ Lossy link = **userspace** shim (not kernel `netem`): TCP gets per-buffer delay 
 
 nginx/Windows collapses on large reverse bodies in this harness; treat as same-OS only.
 
-**2026-08-22 cool remasure (bodies):** Prefer cool paired ratios over the heated 1-rep table. H1 TLS→H1 64 KiB cool ≈ **1.09×** YARP (`win-bodies-cool-20260822/`) — table Winner still YARP from heat. H2 TLS→H1 64 KiB (`reverse-http2-cleartext`) cool baseline ≈ **0.87×**; after keep-CL + END_STREAM-on-last-DATA + 16 KiB coalesce pump ≈ **0.89×** (`win-bodies-kept-20260822/`). Framed CopyFrom + multi-WriteAsync without flatten-coalesce **regressed** to ~0.65× and was reverted. Residual H2→H1 body gap is still open (copy/frame path vs YARP/Kestrel).
+**2026-08-22 cool remasure (bodies):** Prefer cool paired ratios over the heated 1-rep table. H1 TLS→H1 64 KiB cool ≈ **1.09×** YARP (`win-bodies-cool-20260822/`) — Winner column follows cool. H2 TLS→H1 64 KiB (`reverse-http2-cleartext`): after keep-CL + END_STREAM-on-last-DATA + `HttpStream` large-read bypass + in-place DATA framing + **288 KiB** `Http2FrameWriter` flatten budget ≈ **1.13×** YARP (`win-bodies-coalesce288-20260822/`; confirm ≈ **1.03×** @ 80 KiB budget). 256 KiB H2→H1 cool ≈ **0.89×** (near-parity; was ~0.57× heated / ~0.84× @ 80 KiB). Framed CopyFrom **without** flatten still bad (~0.65×) — flatten kept. Residual: H3 large bodies / H2 POST (see below).
 
 ### Linux — heavier reverse GET (64 KiB / 256 KiB)
 

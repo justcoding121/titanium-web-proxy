@@ -19,8 +19,11 @@ namespace Titanium.Web.Proxy.Http2;
 /// </summary>
 internal sealed class Http2FrameWriter : IAsyncDisposable
 {
-    private const int CoalesceByteBudget = 32 * 1024;
-    private const int CoalesceMaxFrames = 32;
+    // Enough for HEADERS + a full 256 KiB known-CL body (sixteen 16 KiB DATA frames) in one
+    // SslStream write after flatten. Smaller budgets force several coalesce passes mid-body and
+    // left cool 256 KiB H2→H1 at ~0.84× while 64 KiB was already at parity with an 80 KiB budget.
+    private const int CoalesceByteBudget = 288 * 1024;
+    private const int CoalesceMaxFrames = 64;
 
     private readonly Channel<ArraySegment<byte>> channel;
     private readonly System.IO.Stream output;

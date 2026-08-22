@@ -339,6 +339,40 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     private async Task<int> ReadAsyncSlow(byte[] buffer, int offset, int count,
         CancellationToken cancellationToken)
     {
+        // Large destination + empty parser window: read the transport directly (classic
+        // BufferedStream rule). Body pumps that pass ≥ streamBuffer.Length avoid the
+        // socket→streamBuffer→dest double-copy that dominated H2→H1 large reverse RPS.
+        if (count >= streamBuffer.Length && streamBuffer.Length > 0 && !IsClosed)
+        {
+            try
+            {
+                var readBytes = await BaseStream.ReadAsync(buffer.AsMemory(offset, count), cancellationToken);
+                if (readBytes > 0)
+                    OnDataRead(buffer, offset, readBytes);
+                else
+                {
+                    IsClosed = true;
+                    closedWrite = true;
+                }
+
+                return readBytes;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                if (!IsNetworkStream)
+                    throw ReportRethrownFailure(ex);
+
+                ReportSuppressedFailure(ex);
+                IsClosed = true;
+                closedWrite = true;
+                return 0;
+            }
+        }
+
         await FillBufferAsync(cancellationToken);
         return ReadFromBuffer(buffer.AsSpan(offset, count));
     }
@@ -373,6 +407,42 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
     private async ValueTask<int> ReadAsyncSlow(Memory<byte> buffer, CancellationToken cancellationToken)
     {
+        // See byte[] ReadAsyncSlow: large dest + empty window → direct BaseStream read.
+        if (buffer.Length >= streamBuffer.Length && streamBuffer.Length > 0 && !IsClosed)
+        {
+            try
+            {
+                var readBytes = await BaseStream.ReadAsync(buffer, cancellationToken);
+                if (readBytes > 0)
+                {
+                    if (System.Runtime.InteropServices.MemoryMarshal.TryGetArray(
+                            (ReadOnlyMemory<byte>)buffer.Slice(0, readBytes), out var segment))
+                        OnDataRead(segment.Array!, segment.Offset, segment.Count);
+                }
+                else
+                {
+                    IsClosed = true;
+                    closedWrite = true;
+                }
+
+                return readBytes;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                if (!IsNetworkStream)
+                    throw ReportRethrownFailure(ex);
+
+                ReportSuppressedFailure(ex);
+                IsClosed = true;
+                closedWrite = true;
+                return 0;
+            }
+        }
+
         await FillBufferAsync(cancellationToken);
         return ReadFromBuffer(buffer.Span);
     }
