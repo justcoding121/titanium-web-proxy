@@ -165,10 +165,10 @@ nginx/Windows collapses on large reverse bodies in this harness; treat as same-O
 | ------------- | -------------- | ------------ | --------- | -------------- | -------------- | ------------ | --------- |
 | HTTP/1 · TLS  | HTTP/1 · plain | 🟢 **6,003** | **6,160** | **383**        | **413**        | **5,264**    | **5,420** |
 | HTTP/2 · TLS  | HTTP/1 · plain | **3,519**    | **3,519** | **357**        | **389**        | 🟢 **4,741** | **4,871** |
-| HTTP/3 · QUIC | HTTP/1 · plain | **0**        | **185**   | *Not possible* | *Not possible* | 🟢 **1,890** | **1,890** |
+| HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **1,973** | **2,001** | *Not possible* | *Not possible* | **1,802**    | **1,893** |
 
 
-H1 POST: TWP leads (heated and cool). H2 POST: YARP leads — heated ≈ **0.74×**, cool ≈ **~0.88–0.95×** with c=1 TWP ahead (~**1.2×**); residual is multiplex scaling, not single-stream cost. H3 POST: YARP leads (TWP sustain **0**).
+H1 POST: TWP leads (heated and cool). H2 POST: YARP leads — heated ≈ **0.74×**, cool ≈ **~0.88–0.95×** with c=1 TWP ahead (~**1.2×**); residual is multiplex scaling, not single-stream cost. **H3 POST (2026-08-22):** `UpdateContentLength` on streamed uploads stamped CL=0 (`ab16a871`). Heated remasure `sustain0-verify/h3-post/` (c=8–64): TWP sustain **1,973** / YARP **1,802** ≈ **1.09×**.
 
 ### Lossy / high-RTT (H2 HOL / H3 packet loss)
 
@@ -192,14 +192,14 @@ H1 stays usable; H2 collapses under connection stalls (HOL). **H3 is the protoco
 |---|---|---|---:|---:|---:|---:|---:|---:|
 | Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | **175** | **175** | 🟢 **203** | **203** | **196** | **196** |
 | Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **248** | **248** | **213** | **213** | 🟢 **248** | **248** |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | **0** | **0** | *Not possible* (no QUIC) | *Not possible* | 🟢 **177** | **177** |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **248** | **248** | *Not possible* (no QUIC) | *Not possible* | 🟢 **248** | **248** |
 | Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **6,402** | **6,606** | **270** | **270** | **5,135** | **5,135** |
 | Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | **2,938** | **3,330** | **117** | **141** | 🟢 **4,056** | **4,056** |
 | Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | **1,066** | **1,066** | *Not possible* (no QUIC) | *Not possible* | 🟢 **1,382** | **1,382** |
 | Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | **9** | **590** | *Not possible* | *Not possible* | 🟢 **2,455** | **2,455** |
 | Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **38,235** | **38,823** | **18,251** | **19,054** | **37,803** | **38,454** |
 
-Slow consumer is sleep-bound (~16 × 8 ms per 256 KiB); H1/H2 sit in the same band. TWP H3 slow-consumer sustain **0**: HttpClient sees `Content-Length: 262144` but `CopyToAsync` writes 0 bytes (YARP H3 delivers the body). Early-response H1: TWP leads (~1.25× YARP) — sequential H1 still finishes the exchange quickly when the origin answers after 8 KiB. Early-response H2/H3 and duplex H2: YARP leads; TWP H2↔H2 duplex sustain **9** vs peak **590** (errors at higher concurrency) vs YARP **2,455**. WebSocket echo: TWP leads (~1.01× YARP); nginx/Windows same-OS only.
+Slow consumer is sleep-bound (~16 × 8 ms per 256 KiB); H1/H2 sit in the same band. **H3 slow-consumer (2026-08-22):** fast path closed the origin socket for CL>16 KiB without `StreamBodyWriter` (`36d21f67`); remasure `sustain0-verify/h3-slow/` matches YARP at **248** sustain. Early-response H1: TWP leads (~1.25× YARP) — sequential H1 still finishes the exchange quickly when the origin answers after 8 KiB. Early-response H2/H3 and duplex H2: YARP leads; TWP H2↔H2 duplex sustain **9** vs peak **590** (errors at higher concurrency) vs YARP **2,455**. WebSocket echo: TWP leads (~1.01× YARP); nginx/Windows same-OS only.
 
 ### TLS termination cost (H1 TLS → cleartext origin)
 

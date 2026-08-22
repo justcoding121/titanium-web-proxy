@@ -231,7 +231,7 @@ Median of **3** repeats on `windows-latest`. Source: Actions [32570360081](https
 | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **4,037** | **4,037** | **310** | **343** | **3,493** | **3,507** |
 | HTTP/3 · QUIC | HTTP/1 · plain | **0** | **972** | *Not possible* | *Not possible* | 🟢 **2,020** | **2,020** |
 
-TWP wins H1 POST (~**1.27×** YARP) and H2 POST (~**1.16×** YARP). H3 POST did not hold the SLO (sustain **0**).
+TWP wins H1 POST (~**1.27×** YARP) and H2 POST (~**1.16×** YARP). H3 POST sustain **0** on this older GHA pass (`UpdateContentLength` stamped streamed CL to 0 — fixed in `ab16a871`). Laptop remasure after the fix: TWP sustain **1,973** vs YARP **1,802** (~**1.09×**); CI remasure pending.
 
 ### Linux — POST 64 KiB request + 64 KiB response
 
@@ -243,7 +243,7 @@ Median of **3** repeats. Source: Actions [32570360081](https://github.com/justco
 | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **3,255** | **3,255** | **1,952** | **2,000** | **2,531** | **2,541** |
 | HTTP/3 · QUIC | HTTP/1 · plain | **0** | **1,989** | **764** | **765** | 🟢 **2,650** | **2,650** |
 
-Linux nginx H1/H2/H3 POST completed this pass (nginx.org mainline). TWP H3 POST peaked at **1,989** but did not hold the error/latency SLO (sustain **0**).
+Linux nginx H1/H2/H3 POST completed this pass (nginx.org mainline). TWP H3 POST peaked at **1,989** but did not hold the error/latency SLO (sustain **0**) — same streamed-CL bug as Windows; fixed in `ab16a871`; CI remasure pending.
 
 ### Windows — lossy / high-RTT (H2 HOL / H3 loss)
 
@@ -303,7 +303,7 @@ Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `629fb878`. Source:
 | Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | 🟢 **40** | **602** | *Not possible* | *Not possible* | **24** | **1,745** |
 | Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | **28,700** | **28,700** | 🟢 **32,650** | **32,650** | **27,717** | **27,717** |
 
-Slow consumer is sleep-bound; H1/H2 sit in the same band. TWP H3 slow-consumer sustain **0** (HttpClient sees `Content-Length` but no body bytes). Early-response H1/H2: TWP leads on both OS. Duplex H2: TWP holds a higher sustain than YARP on this pass (YARP peaks higher). WebSocket: TWP leads on Windows; Linux nginx leads. nginx HTTP/2 origin is *Not possible* on the duplex H2↔H2 row.
+Slow consumer is sleep-bound; H1/H2 sit in the same band. TWP H3 slow-consumer sustain **0** on this older GHA pass (fast path dropped CL>16 KiB bodies — fixed in `36d21f67` / `cffd9f09`). Laptop remasure after the fix: TWP **248** ≈ YARP **248**; CI remasure pending. Early-response H1/H2: TWP leads on both OS. Duplex H2: TWP holds a higher sustain than YARP on this pass (YARP peaks higher). WebSocket: TWP leads on Windows; Linux nginx leads. nginx HTTP/2 origin is *Not possible* on the duplex H2↔H2 row.
 
 ### TLS termination cost (H1 TLS → cleartext origin)
 
