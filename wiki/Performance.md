@@ -227,27 +227,27 @@ Linux nginx H1/H2/H3 POST completed this pass (nginx.org mainline). TWP H3 POST 
 
 ### Windows — lossy / high-RTT (H2 HOL / H3 loss)
 
-Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest`. Source: Actions pending (`compare-lossy` remasure with H3).
+Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest`. Source: [32583471337](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32583471337) (`compare-lossy`). H3 on GHA Windows collapses through the userspace UDP shim (sustain ≈ **1** / **0**); use the [laptop lab](Performance-Profiling#lossy--high-rtt-h2-hol--h3-packet-loss) for the Windows H3 signal.
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
-| HTTP/1 · TLS | HTTP/1 · plain | **567** | **567** | **638** | **638** | 🟢 **663** | **663** |
+| HTTP/1 · TLS | HTTP/1 · plain | **567** | **567** | **643** | **643** | 🟢 **662** | **662** |
 | HTTP/2 · TLS | HTTP/1 · plain | **16** | **18** | **16** | **18** | 🟢 **18** | **18** |
-| HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | *Not measured* | *Not measured* |
+| HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* (GHA UDP-shim) | *Not measured* | *Not possible* (no QUIC) | *Not possible* | *Not measured* (GHA UDP-shim) | *Not measured* |
 
-H1 stays usable; H2 collapses under connection stalls (HOL). H3 cells await the remasure that routes HttpClient through the UDP shim. Laptop preview: TWP H3 ≈ **1,308** sustain vs H2 ≈ **15** (`windows-20260822-lossy-h3/`). Absolute RPS is low because the shim delays every buffer/datagram — the point is the **protocol shape**.
+H1 stays usable; H2 collapses under connection stalls (HOL). Laptop Windows (same shim, `quic-http3`): TWP H3 ≈ **1,572** sustain vs H2 ≈ **14** (~**112×**). Absolute RPS is low because the shim delays every buffer/datagram — the point is the **protocol shape**.
 
 ### Linux — lossy / high-RTT (H2 HOL / H3 loss)
 
-Median of **3** repeats. Source: Actions pending (`compare-lossy` remasure with H3).
+Median of **3** repeats. Source: [32585017609](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32585017609) (`compare-lossy`; lossy H3 uses `quic-http3`).
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
-| HTTP/1 · TLS | HTTP/1 · plain | **1,105** | **1,105** | 🟢 **1,207** | **1,207** | **1,192** | **1,192** |
-| HTTP/2 · TLS | HTTP/1 · plain | 🟢 **40** | **45** | 🟢 **40** | **44** | 🟢 **40** | **44** |
-| HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
+| HTTP/1 · TLS | HTTP/1 · plain | **1,107** | **1,107** | 🟢 **1,205** | **1,205** | **1,196** | **1,196** |
+| HTTP/2 · TLS | HTTP/1 · plain | 🟢 **40** | **44** | 🟢 **40** | **40** | 🟢 **40** | **44** |
+| HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **3,501** | **3,501** | **87** | **87** | **334** | **334** |
 
-Same H1/H2 story as Windows. H3 (and Linux nginx H3 terminate under loss) filled after CI.
+Same H1/H2 story as Windows. **H3 is where the protocol design shows**: TWP H3 sustain ≈ **88×** H2 on this runner; nginx H3 terminate and YARP stay far below under the same UDP loss.
 
 ### Architecture-sensitive
 

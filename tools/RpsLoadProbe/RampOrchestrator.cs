@@ -705,32 +705,52 @@ internal static class RampOrchestrator
             foreach (var concurrency in options.ConcurrencySteps)
             {
                 ProbeLog.Info($"  warmup c={concurrency} for {options.Warmup.TotalSeconds:F0}s...");
-                if (useQuic)
-                {
-                    var ep = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, quicPort!.Value);
-                    // TWP TransparentQuic uses :authority as the upstream target. Managed reverse uses the listen host.
-                    var authority = ResolveQuicAuthority(arm.Mode, stack);
-                    await QuicHttp3LoadGenerator.WarmupAsync(ep, "localhost", authority,
-                        concurrency, options.Warmup, cancellationToken, workload);
-                }
-                else
-                {
-                    await EmbeddedLoadGenerator.WarmupAsync(loadOptions, concurrency, options.Warmup, cancellationToken);
-                }
-
-                ProbeLog.Info($"  measure c={concurrency} for {options.StepDuration.TotalSeconds:F0}s...");
                 LoadResult result;
-                if (useQuic)
+                try
                 {
-                    var ep = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, quicPort!.Value);
-                    var authority = ResolveQuicAuthority(arm.Mode, stack);
-                    result = await QuicHttp3LoadGenerator.RunAsync(ep, "localhost", authority,
-                        concurrency, options.StepDuration, cancellationToken, workload);
+                    if (useQuic)
+                    {
+                        var ep = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, quicPort!.Value);
+                        // TWP TransparentQuic uses :authority as the upstream target. Managed reverse uses the listen host.
+                        var authority = ResolveQuicAuthority(arm.Mode, stack);
+                        await QuicHttp3LoadGenerator.WarmupAsync(ep, "localhost", authority,
+                            concurrency, options.Warmup, cancellationToken, workload);
+                    }
+                    else
+                    {
+                        await EmbeddedLoadGenerator.WarmupAsync(loadOptions, concurrency, options.Warmup, cancellationToken);
+                    }
+
+                    ProbeLog.Info($"  measure c={concurrency} for {options.StepDuration.TotalSeconds:F0}s...");
+                    if (useQuic)
+                    {
+                        var ep = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, quicPort!.Value);
+                        var authority = ResolveQuicAuthority(arm.Mode, stack);
+                        result = await QuicHttp3LoadGenerator.RunAsync(ep, "localhost", authority,
+                            concurrency, options.StepDuration, cancellationToken, workload);
+                    }
+                    else
+                    {
+                        result = await EmbeddedLoadGenerator.RunAsync(loadOptions, concurrency, options.StepDuration,
+                            cancellationToken);
+                    }
                 }
-                else
+                catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {
-                    result = await EmbeddedLoadGenerator.RunAsync(loadOptions, concurrency, options.StepDuration,
-                        cancellationToken);
+                    // Lossy H3 / MsQuic can abort a step; record a hard fail and continue the ramp.
+                    ProbeLog.Error($"  step c={concurrency} aborted: {ex.GetType().Name}: {ex.Message}");
+                    result = new LoadResult(
+                        Generator: useQuic ? "quic-http3" : "dotnet-httpclient",
+                        Concurrency: concurrency,
+                        DurationSeconds: options.StepDuration.TotalSeconds,
+                        Ok: 0,
+                        Errors: 1,
+                        Rps: 0,
+                        ErrorRatePercent: 100,
+                        P50Ms: 0,
+                        P99Ms: 0,
+                        MaxMs: 0,
+                        NegotiatedVersionHint: stack.RequestHttpVersion.ToString());
                 }
 
                 var meetsSlo = result.ErrorRatePercent < options.MaxErrorRatePercent && result.P99Ms <= p99Slo;

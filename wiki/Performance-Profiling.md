@@ -160,17 +160,17 @@ H1 POST: TWP leads (heated and cool). H2 POST: YARP leads — heated ≈ **0.74�
 
 ### Lossy / high-RTT (H2 HOL / H3 packet loss)
 
-Userspace **5 ms** one-way delay + **1%** stall (TCP) or datagram drop (UDP/QUIC); **64 KiB** GET. 1-repeat; warmup 2s / measure 8s; c=8–64. Source: `windows-20260822-lossy-h3/`.
+Userspace **5 ms** one-way delay + **1%** stall (TCP) or datagram drop (UDP/QUIC); **64 KiB** GET. 1-repeat; warmup 2s / measure 8s; c=8–64. Source: `windows-20260822-lossy-h3-quic/` (lossy H3 forced to `quic-http3`).
 
 
 | Client        | Origin         | TWP sustain   | TWP peak   | nginx sustain | nginx peak | YARP sustain | YARP peak |
 | ------------- | -------------- | ------------- | ---------- | ------------- | ---------- | ------------ | --------- |
-| HTTP/1 · TLS  | HTTP/1 · plain | **584**       | **584**    | **648**       | **648**    | 🟢 **680**   | **680**   |
-| HTTP/2 · TLS  | HTTP/1 · plain | 🟢 **15**     | **16**     | **14**        | **14**     | 🟢 **15**    | **15**    |
-| HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **1,308**  | **1,308**  | *Not possible* (no QUIC) | *Not possible* | **8** | **9** |
+| HTTP/1 · TLS  | HTTP/1 · plain | **578**       | **578**    | **500**       | **500**    | 🟢 **656**   | **656**   |
+| HTTP/2 · TLS  | HTTP/1 · plain | **14**        | **15**     | **14**        | **14**     | 🟢 **15**    | **15**    |
+| HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **1,572**  | **1,572**  | *Not possible* (no QUIC) | *Not possible* | **0** | **50** |
 
 
-H1 stays usable; H2 collapses under connection stalls (HOL). **H3 is the protocol-shape win**: TWP H3 sustain ≈ **87×** H2 on the same lossy session (datagram drop, not HOL). YARP H3 stayed soft under this userspace UDP shim (sustain **8**) — treat as same-session measurement, not a capability claim. Absolute RPS is low because the shim delays every buffer/datagram.
+H1 stays usable; H2 collapses under connection stalls (HOL). **H3 is the protocol-shape win**: TWP H3 sustain ≈ **112×** H2 on the same lossy session (datagram drop, not HOL). YARP H3 did not hold the p99 SLO under this userspace UDP shim (peak **50**) — treat as same-session measurement, not a capability claim. Absolute RPS is low because the shim delays every buffer/datagram.
 
 ### Architecture-sensitive
 

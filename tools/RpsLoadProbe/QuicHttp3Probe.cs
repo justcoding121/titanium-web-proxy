@@ -209,9 +209,23 @@ internal static class QuicHttp3LoadGenerator
             {
                 for (var c = 0; c < connectionCount; c++)
                 {
-                    connections[c] = await ConnectAsync(proxyEndPoint, sniHost, cts.Token);
-                    await OpenControlAsync(connections[c]!, retainedUnidirectional, cts.Token);
-                    DrainInbound(connections[c]!, cts.Token);
+                    try
+                    {
+                        connections[c] = await ConnectAsync(proxyEndPoint, sniHost, cts.Token);
+                        await OpenControlAsync(connections[c]!, retainedUnidirectional, cts.Token);
+                        DrainInbound(connections[c]!, cts.Token);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+                    {
+                        // Lossy UDP / MsQuic can fail the first connect; workers reconnect or count errors.
+                        if (firstError == null)
+                        {
+                            firstError = ex.GetType().Name + ": " + ex.Message;
+                            ProbeLog.Error($"  [quic-h3] keep-alive connect: {firstError}");
+                        }
+
+                        connections[c] = null;
+                    }
                 }
             }
 
