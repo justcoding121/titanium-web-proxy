@@ -370,6 +370,13 @@ internal static class Http3RequestStream
                 stream.Abort(QuicAbortDirection.Read, (long)ex.ErrorCode);
             }
             catch (OperationCanceledException) { /* shutdown */ }
+            catch (Exception ex) when (ex is QuicException || ex.GetBaseException() is QuicException)
+            {
+                // Peer already reset/cancelled the stream (load-gen concurrency steps, client timeout).
+                // Re-aborting as H3_INTERNAL_ERROR made slow-consumer fail the 0.1% error SLO.
+                if (logger.IsEnabled(LogLevel.Debug))
+                    logger.LogDebug(ex, "HTTP/3 stream {StreamId} ended with QuicException", stream.Id);
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Unhandled error on HTTP/3 stream {StreamId}", stream.Id);
@@ -383,7 +390,14 @@ internal static class Http3RequestStream
                 {
                     // diagnostics only
                 }
-                stream.Abort(QuicAbortDirection.Write, (long)Http3ErrorCode.InternalError);
+                try
+                {
+                    stream.Abort(QuicAbortDirection.Write, (long)Http3ErrorCode.InternalError);
+                }
+                catch (Exception)
+                {
+                    // already aborted / disposed
+                }
             }
             finally
             {
@@ -526,11 +540,20 @@ internal static class Http3RequestStream
 
             var response = fwd.Response
                            ?? new Response { StatusCode = 502, StatusDescription = "Bad Gateway", HttpVersion = HttpHeader.Version30 };
-            await SendResponseAsync(stream, response, qpackContext, streamToken);
+            try
+            {
+                await SendResponseAsync(stream, response, qpackContext, streamToken);
 
-            qpackContext?.InFlightMinAbsoluteIndex.TryRemove(stream.Id, out _);
-            streamState.ResponseClosed = true;
-            stream.CompleteWrites();
+                qpackContext?.InFlightMinAbsoluteIndex.TryRemove(stream.Id, out _);
+                streamState.ResponseClosed = true;
+                stream.CompleteWrites();
+            }
+            catch (Exception ex) when (ex is QuicException || ex.GetBaseException() is QuicException)
+            {
+                // Client cancelled mid-body (concurrency step / throttle). Do not escalate.
+                if (logger.IsEnabled(LogLevel.Debug))
+                    logger.LogDebug(ex, "HTTP/3 fast-path stream {StreamId} write aborted by peer", stream.Id);
+            }
         }
         finally
         {

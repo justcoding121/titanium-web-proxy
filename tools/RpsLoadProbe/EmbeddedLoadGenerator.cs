@@ -124,10 +124,10 @@ internal static class EmbeddedLoadGenerator
                                 : new ByteArrayContent(requestBody);
                         }
 
-                        // HTTP/3 + TWP reverse: ResponseHeadersRead can surface Content-Length
-                        // with an empty stream. Buffer first, then throttle the local read.
-                        var completion = workload.IsEarlyResponse
-                                         || (workload.IsSlowConsumer && options.HttpVersion.Major < 3)
+                        // Prefer headers-first so slow-consumer sleep applies true backpressure.
+                        // (H3 previously needed ContentRead because the reverse fast path dropped
+                        // large bodies — that is fixed via StreamBodyWriter on ForwardOverTcpFastAsync.)
+                        var completion = workload.IsEarlyResponse || workload.IsSlowConsumer
                             ? HttpCompletionOption.ResponseHeadersRead
                             : HttpCompletionOption.ResponseContentRead;
                         using var response = await client.SendAsync(request, completion, cts.Token);
