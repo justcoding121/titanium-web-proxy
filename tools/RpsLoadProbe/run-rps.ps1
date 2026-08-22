@@ -10,7 +10,7 @@
 param(
     [ValidateSet(
         'compare', 'compare-http2', 'compare-tls', 'compare-terminate', 'compare-same', 'compare-bridges', 'compare-mitm', 'compare-ceiling',
-        'compare-bodies', 'compare-post', 'compare-lossy', 'compare-tls-cost', 'explicit-pool-sweep',
+        'compare-bodies', 'compare-post', 'compare-lossy', 'compare-tls-cost', 'compare-arch', 'explicit-pool-sweep',
         'reverse-http1', 'bare-reverse-http1', 'nginx-reverse-http1', 'yarp-reverse-http1',
         'reverse-http1-tls', 'bare-reverse-http1-tls', 'nginx-reverse-http1-tls', 'yarp-reverse-http1-tls',
         'reverse-http1-to-https', 'yarp-reverse-http1-to-https',
@@ -18,7 +18,7 @@ param(
         'reverse-http2', 'reverse-http2-cleartext', 'reverse-http2-to-h2c', 'yarp-reverse-http2-to-h2c',
         'reverse-h2c', 'yarp-reverse-h2c', 'reverse-h2c-to-h2c', 'yarp-reverse-h2c-to-h2c',
         'reverse-h2c-to-h1', 'yarp-reverse-h2c-to-h1', 'reverse-h2c-to-h3', 'yarp-reverse-h2c-to-h3',
-        'nginx-reverse-http2', 'nginx-reverse-http3-cleartext', 'yarp-reverse-http2',
+        'nginx-reverse-http2', 'nginx-reverse-http3-cleartext', 'yarp-reverse-http2', 'yarp-reverse-http2-to-https',
         'reverse-http3', 'reverse-http3-cleartext', 'yarp-reverse-http3-cleartext',
         'reverse-http11-to-http2', 'yarp-reverse-http11-to-http2',
         'reverse-http1-to-http3', 'yarp-reverse-http1-to-http3',

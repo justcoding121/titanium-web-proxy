@@ -28,6 +28,7 @@ on:
           - compare-post
           - compare-lossy
           - compare-tls-cost
+          - compare-arch
           - compare
           - compare-tls
           - reverse-http1
@@ -67,6 +68,7 @@ on:
           - nginx-reverse-http2
           - nginx-reverse-http3-cleartext
           - yarp-reverse-http2
+          - yarp-reverse-http2-to-https
       concurrency:
         description: 'Comma-separated concurrency steps'
         required: true

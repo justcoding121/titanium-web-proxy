@@ -81,8 +81,8 @@ internal sealed class ChildProcessStack : IAsyncDisposable
 
         var originArgs = mode is ProbeMode.ReverseHttp2ToH2c or ProbeMode.ReverseH2cToH2c
             or ProbeMode.YarpReverseHttp2ToH2c or ProbeMode.YarpReverseH2cToH2c
-            ? $"--serve-origin --h2c --response-bytes {workload.ResponseBytes}"
-            : $"--serve-origin --response-bytes {workload.ResponseBytes}";
+            ? $"--serve-origin --h2c{FormatOriginWorkloadArgs(workload)}"
+            : $"--serve-origin{FormatOriginWorkloadArgs(workload)}";
         var origin = StartChild(exe, originArgs);
         var originLines = await ReadUntilReadyAsync(origin, cancellationToken);
         var originHttp = Require(originLines, "origin_http");
@@ -144,6 +144,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         or ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1
         or ProbeMode.HttpsMitm or ProbeMode.ReverseHttp1Mitm
         or ProbeMode.ReverseHttp1ToHttps or ProbeMode.YarpReverseHttp1ToHttps
+        or ProbeMode.YarpReverseHttp2ToHttps
         or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi;
 
     private static async Task<ChildProcessStack> StartCombinedServeAsync(string exe, ProbeMode mode,
@@ -151,7 +152,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     {
         var modeName = ServeProxyHost.ModeName(mode);
         var args = new StringBuilder().Append(CultureInfo.InvariantCulture,
-            $"--serve --mode {modeName} --response-bytes {workload.ResponseBytes}");
+            $"--serve --mode {modeName}{FormatOriginWorkloadArgs(workload)}");
         if (!string.IsNullOrWhiteSpace(nginxPath))
             args.Append(CultureInfo.InvariantCulture, $" --nginx-path \"{nginxPath}\"");
         if (maxCachedConnections is { } m)
@@ -198,6 +199,17 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             new Uri(target), targets,
             string.IsNullOrWhiteSpace(explicitProxy) ? null : explicitProxy, nginxVersion,
             httpVersion, policy, loadGenerator, quicPort, originQuicPort, yarpVersion);
+    }
+
+    private static string FormatOriginWorkloadArgs(WorkloadOptions workload)
+    {
+        var sb = new StringBuilder().Append(CultureInfo.InvariantCulture,
+            $" --response-bytes {workload.ResponseBytes}");
+        if (workload.EarlyResponseAfterBytes > 0)
+            sb.Append(CultureInfo.InvariantCulture, $" --early-response-after {workload.EarlyResponseAfterBytes}");
+        if (workload.IsWebSocket)
+            sb.Append(" --websocket");
+        return sb.ToString();
     }
 
     private static (Version Version, HttpVersionPolicy Policy) ParseHttpVersion(string? text) => text switch

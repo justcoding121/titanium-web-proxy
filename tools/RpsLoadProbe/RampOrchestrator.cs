@@ -92,6 +92,10 @@ internal enum ProbeMode
     CompareLossy,
     /// <summary>H1 TLS terminate cost: keep-alive tiny, new-connection tiny, keep-alive 256 KiB.</summary>
     CompareTlsCost,
+    /// <summary>Architecture-sensitive reverse: slow consumer, early response, H2 duplex, WebSocket echo.</summary>
+    CompareArch,
+    /// <summary>Managed reverse peer H2 TLS → HTTPS HTTP/2 origin.</summary>
+    YarpReverseHttp2ToHttps,
     ExplicitPoolSweep
 }
 
@@ -169,7 +173,7 @@ internal static class RampOrchestrator
                 or ProbeMode.Compare or ProbeMode.CompareHttp2
                 or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame
                 or ProbeMode.CompareBodies or ProbeMode.ComparePost or ProbeMode.CompareLossy
-                or ProbeMode.CompareTlsCost)
+                or ProbeMode.CompareTlsCost or ProbeMode.CompareArch)
             && nginxExe == null)
         {
             ProbeLog.Info(NginxHost.NginxMissingMessage());
@@ -492,6 +496,12 @@ internal static class RampOrchestrator
                 new("yarp-reverse-http2-to-http3", ProbeMode.YarpReverseHttp2ToHttp3, null),
                 new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
                 new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null),
+                ..(nginxHttp3Available
+                    ? new ArmSpec[]
+                    {
+                        new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null)
+                    }
+                    : []),
                 new("twp-reverse-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null),
                 new("yarp-reverse-http3-to-http2", ProbeMode.YarpReverseHttp3ToHttp2, null),
                 new("yarp-reverse-http3-to-http3", ProbeMode.YarpReverseHttp3ToHttp3, null)
@@ -559,6 +569,9 @@ internal static class RampOrchestrator
                     WorkloadOptions.ForLossy(64 * 1024, 5, 1.0), "lossy",
                     includeHttp3: false),
             ProbeMode.CompareTlsCost => BuildTlsCostArms(nginxAvailable),
+            ProbeMode.CompareArch => BuildArchArms(nginxAvailable, nginxHttp3Available),
+            ProbeMode.YarpReverseHttp2ToHttps =>
+                [new("yarp-reverse-http2-to-https", ProbeMode.YarpReverseHttp2ToHttps, null)],
             ProbeMode.ExplicitPoolSweep =>
             [
                 new("twp-explicit-http1-multi-c4", ProbeMode.ExplicitHttp1Multi, 4),
@@ -590,6 +603,24 @@ internal static class RampOrchestrator
             arms.Insert(7, new("nginx-reverse-http1-tls-ka-256k", ProbeMode.NginxReverseHttp1Tls, null, largeKa));
         }
 
+        return arms;
+    }
+
+    private static IReadOnlyList<ArmSpec> BuildArchArms(bool nginxAvailable, bool nginxHttp3Available)
+    {
+        var slow = WorkloadOptions.ForSlowConsumer();
+        var early = WorkloadOptions.ForEarlyResponse();
+        var duplex = WorkloadOptions.ForDuplexH2();
+        var ws = WorkloadOptions.ForWebSocket();
+        var arms = new List<ArmSpec>();
+        arms.AddRange(HeavierReverseArms(nginxAvailable, nginxHttp3Available, slow, "slow256k"));
+        arms.AddRange(HeavierReverseArms(nginxAvailable, nginxHttp3Available, early, "early64k"));
+        arms.Add(new("twp-reverse-http2-duplex-h2", ProbeMode.ReverseHttp2, null, duplex));
+        arms.Add(new("yarp-reverse-http2-to-https-duplex-h2", ProbeMode.YarpReverseHttp2ToHttps, null, duplex));
+        arms.Add(new("twp-reverse-http1-tls-duplex-ws", ProbeMode.ReverseHttp1Tls, null, ws));
+        if (nginxAvailable)
+            arms.Add(new("nginx-reverse-http1-tls-duplex-ws", ProbeMode.NginxReverseHttp1Tls, null, ws));
+        arms.Add(new("yarp-reverse-http1-tls-duplex-ws", ProbeMode.YarpReverseHttp1Tls, null, ws));
         return arms;
     }
 

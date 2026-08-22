@@ -7,7 +7,7 @@ How the throughput hotspots behind the numbers on the [Performance](Performance)
 - [The measurement harness](#the-measurement-harness)
 - [Controlling measurement noise](#controlling-measurement-noise)
 - [Local Windows lab (developer laptop)](#local-windows-lab-developer-laptop)
-- [Architecture-sensitive (not measured)](#architecture-sensitive-not-measured)
+- [Architecture-sensitive](#architecture-sensitive)
 - [Technique 1: concurrency sweep as a shape test](#technique-1-concurrency-sweep-as-a-shape-test)
 - [Technique 2: async dumps — find where requests wait](#technique-2-async-dumps--find-where-requests-wait)
 - [Technique 3: per-stage latency decomposition](#technique-3-per-stage-latency-decomposition)
@@ -171,26 +171,22 @@ Userspace **5 ms** one-way delay + **1%** connection stall; **64 KiB** GET. 1-re
 
 H1 stays usable; H2 collapses under connection stalls (HOL). Absolute RPS is low because the shim delays every buffer — the point is the **protocol shape**, not competing with the tiny-GET table.
 
-### Architecture-sensitive (not measured)
+### Architecture-sensitive
 
-`compare-bodies` / `compare-post` / `compare-lossy` stay **half-duplex**: the origin drains the request, then writes a fixed `Content-Length` body; the client uses `ByteArrayContent` + `ResponseContentRead` and copies to `Stream.Null` as fast as it can. That measures copy/syscall/multiplex cost. It does **not** isolate YARP's Kestrel-pipe + concurrent-copier stack. Add a YARP twin when each arm exists; do not treat a 256 KiB or H2 POST cell as proof of that architecture. See [TWP vs YARP IO model](#twp-vs-yarp-io-model).
+`compare-arch` (1-repeat; warmup 2s / measure 8s; c=8,16,32,64). Source: `windows-20260822-arch/`. Slow consumer = 256 KiB GET, client reads 16 KiB then sleeps 8 ms. Early response = 64 KiB POST, origin writes after the first 8 KiB. Duplex H2 = overlapping 64 KiB POST on H2 TLS↔H2 TLS. WebSocket = echo round-trips/sec on H1 TLS→H1 plain `/ws`. See [TWP vs YARP IO model](#twp-vs-yarp-io-model).
 
 | Scenario | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---|---:|---:|---:|---:|---:|---:|
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | *Not measured* | *Not measured* |
-| Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
-| Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* | *Not measured* | *Not possible* (no QUIC) | *Not possible* | *Not measured* | *Not measured* |
-| Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | *Not measured* | *Not measured* | *Not possible* | *Not possible* | *Not measured* | *Not measured* |
-| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* | *Not measured* |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | **175** | **175** | 🟢 **203** | **203** | **196** | **196** |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **248** | **248** | **213** | **213** | 🟢 **248** | **248** |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | **0** | **0** | *Not possible* (no QUIC) | *Not possible* | 🟢 **177** | **177** |
+| Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **6,402** | **6,606** | **270** | **270** | **5,135** | **5,135** |
+| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | **2,938** | **3,330** | **117** | **141** | 🟢 **4,056** | **4,056** |
+| Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | **1,066** | **1,066** | *Not possible* (no QUIC) | *Not possible* | 🟢 **1,382** | **1,382** |
+| Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | **9** | **590** | *Not possible* | *Not possible* | 🟢 **2,455** | **2,455** |
+| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **38,235** | **38,823** | **18,251** | **19,054** | **37,803** | **38,454** |
 
-What each row must do once the arm exists:
-
-1. **Slow consumer** — 256 KiB GET; client reads ~8–16 KiB then sleeps. Watch RPS, proxy RSS, and whether the origin/client stall. `compare-lossy` is slow **network**, not this.
-2. **Early response** — origin starts the response after the first request chunk (do not drain-then-write). If TWP waits for `CopyRequestBodyAsync` to finish, YARP can pull ahead.
-3. **Duplex** — H2 (or WebSocket) both directions live. The only case that requires two pumps.
+Slow consumer is sleep-bound (~16 × 8 ms per 256 KiB); H1/H2 sit in the same band. TWP H3 slow-consumer sustain **0**: HttpClient sees `Content-Length: 262144` but `CopyToAsync` writes 0 bytes (YARP H3 delivers the body). Early-response H1: TWP 🟢 (~1.25× YARP) — sequential H1 still finishes the exchange quickly when the origin answers after 8 KiB. Early-response H2/H3 and duplex H2: YARP 🟢; TWP H2↔H2 duplex sustain **9** vs peak **590** (errors at higher concurrency) vs YARP **2,455**. WebSocket echo: TWP 🟢 (~1.01× YARP); nginx/Windows same-OS only.
 
 ### TLS termination cost (H1 TLS → cleartext origin)
 
@@ -291,7 +287,7 @@ YARP inherits better *insurance* for slow consumers, protocol-edge bridging, and
 
 Remaining YARP-led cells in this pass (H2 POST at c=32, some 256 KiB bodies, lossy H1) were named as multiplex/shared-writer, copy/syscall/coalesce, or buffer-vs-delay — not "we lack pipelines." nginx still leads both on Linux H1; if there is a hard ceiling it is managed C# vs native, not TWP vs pipes.
 
-The [architecture-sensitive](#architecture-sensitive-not-measured) table (and the same rows on [Performance](Performance#architecture-sensitive-no-probe-arm-yet)) stays *Not measured* until those arms exist. A YARP win on 256 KiB or H2 POST is still copy/multiplex, not proof of pipes. A TWP win on tiny-GET says nothing about duplex.
+The [architecture-sensitive](#architecture-sensitive) table (and the CI medians on [Performance](Performance#architecture-sensitive)) is `compare-arch`. A YARP win on duplex H2 is the concurrent-copier case; a TWP win on tiny-GET or WebSocket echo is not proof the sequential H1 session covers overlap.
 
 ## Case studies: symptom → tool → root cause → fix
 

@@ -235,11 +235,22 @@ internal sealed class NginxHost : IDisposable
                         server 127.0.0.1:{{originHttpPort}};
                         keepalive 32;
                     }
+                    map $http_upgrade $connection_upgrade {
+                        default upgrade;
+                        '' close;
+                    }
                     server {
                         listen 127.0.0.1:{{port}} ssl;
                         ssl_certificate {{certDest}};
                         ssl_certificate_key {{keyDest}};
                         ssl_protocols TLSv1.2 TLSv1.3;
+                        location /ws {
+                            proxy_http_version 1.1;
+                            proxy_set_header Upgrade $http_upgrade;
+                            proxy_set_header Connection $connection_upgrade;
+                            proxy_set_header Host $host;
+                            proxy_pass http://origin;
+                        }
                         location / {
                             proxy_http_version 1.1;
                             proxy_set_header Connection "";

@@ -42,6 +42,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-bodies
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-post
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-lossy
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-tls-cost
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-arch
 ```
 
 | Mode | Workload |
@@ -50,6 +51,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-tls-cost
 | `compare-post` | POST **64 KiB** request + **64 KiB** response |
 | `compare-lossy` | GET **64 KiB**, userspace **5 ms** delay + **1%** stall (H1/H2; H3 not published yet) |
 | `compare-tls-cost` | H1 TLS only: keep-alive tiny, **new-connection** tiny, keep-alive **256 KiB** |
+| `compare-arch` | Slow consumer (256 KiB GET, throttled read), early response (POST overlap), H2 TLS↔H2 TLS duplex, WebSocket echo |
 
 Lossy link is a userspace shim (not kernel netem): TCP gets per-buffer delay + occasional whole-connection stalls (HOL for multiplexed H2); UDP gets delay + datagram drops (QUIC). PUT with the same body is the same proxy work as POST; DELETE with no body matches GET.
 

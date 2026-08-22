@@ -18,10 +18,19 @@ internal sealed class WorkloadOptions
     public int DelayMs { get; init; }
     public double LossPercent { get; init; }
     public bool CaptureTlsTiming { get; init; }
+    public int ClientReadChunkBytes { get; init; }
+    public int ClientReadSleepMs { get; init; }
+    public int EarlyResponseAfterBytes { get; init; }
+    public bool IsDuplexHttp { get; init; }
+    public bool IsWebSocket { get; init; }
 
     public bool IsLossy => DelayMs > 0 || LossPercent > 0;
     public bool IsHeavyBody => ResponseBytes > TinyJsonBytes || RequestBytes > 0;
     public bool IsHandshake => !KeepAlive;
+    public bool IsSlowConsumer => ClientReadChunkBytes > 0 && ClientReadSleepMs > 0;
+    public bool IsEarlyResponse => EarlyResponseAfterBytes > 0;
+    public bool IsArchitectureSensitive =>
+        IsSlowConsumer || IsEarlyResponse || IsDuplexHttp || IsWebSocket;
 
     public HttpMethod HttpMethod =>
         string.Equals(Method, "POST", StringComparison.OrdinalIgnoreCase)
@@ -70,20 +79,76 @@ internal sealed class WorkloadOptions
         CaptureTlsTiming = true
     };
 
-    public WorkloadOptions WithCaptureTlsTiming(bool capture) => new()
+    public static WorkloadOptions ForSlowConsumer() => new()
     {
-        Method = Method,
-        ResponseBytes = ResponseBytes,
-        RequestBytes = RequestBytes,
-        KeepAlive = KeepAlive,
-        DelayMs = DelayMs,
-        LossPercent = LossPercent,
-        CaptureTlsTiming = capture
+        Method = "GET",
+        ResponseBytes = 256 * 1024,
+        KeepAlive = true,
+        ClientReadChunkBytes = 16 * 1024,
+        ClientReadSleepMs = 8
+    };
+
+    public static WorkloadOptions ForEarlyResponse() => new()
+    {
+        Method = "POST",
+        RequestBytes = 64 * 1024,
+        ResponseBytes = 64 * 1024,
+        KeepAlive = true,
+        EarlyResponseAfterBytes = 8 * 1024
+    };
+
+    public static WorkloadOptions ForDuplexH2() => new()
+    {
+        Method = "POST",
+        RequestBytes = 64 * 1024,
+        ResponseBytes = 64 * 1024,
+        KeepAlive = true,
+        EarlyResponseAfterBytes = 8 * 1024,
+        IsDuplexHttp = true
+    };
+
+    public static WorkloadOptions ForWebSocket() => new()
+    {
+        Method = "GET",
+        KeepAlive = true,
+        IsWebSocket = true
+    };
+
+    public WorkloadOptions WithCaptureTlsTiming(bool capture) => Copy(captureTlsTiming: capture);
+
+    public WorkloadOptions Copy(
+        string? method = null,
+        int? responseBytes = null,
+        int? requestBytes = null,
+        bool? keepAlive = null,
+        int? delayMs = null,
+        double? lossPercent = null,
+        bool? captureTlsTiming = null,
+        int? clientReadChunkBytes = null,
+        int? clientReadSleepMs = null,
+        int? earlyResponseAfterBytes = null,
+        bool? isDuplexHttp = null,
+        bool? isWebSocket = null) => new()
+    {
+        Method = method ?? Method,
+        ResponseBytes = responseBytes ?? ResponseBytes,
+        RequestBytes = requestBytes ?? RequestBytes,
+        KeepAlive = keepAlive ?? KeepAlive,
+        DelayMs = delayMs ?? DelayMs,
+        LossPercent = lossPercent ?? LossPercent,
+        CaptureTlsTiming = captureTlsTiming ?? CaptureTlsTiming,
+        ClientReadChunkBytes = clientReadChunkBytes ?? ClientReadChunkBytes,
+        ClientReadSleepMs = clientReadSleepMs ?? ClientReadSleepMs,
+        EarlyResponseAfterBytes = earlyResponseAfterBytes ?? EarlyResponseAfterBytes,
+        IsDuplexHttp = isDuplexHttp ?? IsDuplexHttp,
+        IsWebSocket = isWebSocket ?? IsWebSocket
     };
 
     public double ResolveP99SloMs(double http1, double http2, double http3, double httpsMitm,
         ProbeMode mode)
     {
+        if (IsArchitectureSensitive)
+            return 5000;
         if (IsLossy)
             return 2000;
         if (IsHandshake)
@@ -98,6 +163,7 @@ internal sealed class WorkloadOptions
                 httpsMitm,
             ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c
                 or ProbeMode.YarpReverseHttp2 or ProbeMode.YarpReverseHttp2ToH2c
+                or ProbeMode.YarpReverseHttp2ToHttps
                 or ProbeMode.ReverseH2c or ProbeMode.ReverseH2cToH2c or ProbeMode.ReverseH2cToH1
                 or ProbeMode.YarpReverseH2c or ProbeMode.YarpReverseH2cToH2c or ProbeMode.YarpReverseH2cToH1
                 or ProbeMode.NginxReverseHttp2 or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
@@ -114,7 +180,23 @@ internal sealed class WorkloadOptions
         };
     }
 
-    public string Suffix =>
-        $"{Method.ToLowerInvariant()}-r{ResponseBytes}-q{RequestBytes}-{(KeepAlive ? "ka" : "nc")}" +
-        (IsLossy ? $"-d{DelayMs}-l{LossPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}" : "");
+    public string Suffix
+    {
+        get
+        {
+            var suffix =
+                $"{Method.ToLowerInvariant()}-r{ResponseBytes}-q{RequestBytes}-{(KeepAlive ? "ka" : "nc")}";
+            if (IsLossy)
+                suffix += $"-d{DelayMs}-l{LossPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}";
+            if (IsSlowConsumer)
+                suffix += $"-slow{ClientReadChunkBytes}-{ClientReadSleepMs}";
+            if (IsEarlyResponse)
+                suffix += $"-early{EarlyResponseAfterBytes}";
+            if (IsDuplexHttp)
+                suffix += "-duplex";
+            if (IsWebSocket)
+                suffix += "-ws";
+            return suffix;
+        }
+    }
 }

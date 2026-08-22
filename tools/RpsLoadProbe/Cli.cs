@@ -31,6 +31,10 @@ internal static class Cli
         var keepAlive = true;
         var delayMs = 0;
         var lossPercent = 0.0;
+        var earlyResponseAfter = 0;
+        var enableWebSocket = false;
+        var clientReadChunkBytes = 0;
+        var clientReadSleepMs = 0;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -115,6 +119,21 @@ internal static class Cli
                     lossPercent = double.Parse(RequireValue(args, ref i, "--loss-percent"),
                         CultureInfo.InvariantCulture);
                     break;
+                case "--early-response-after":
+                    earlyResponseAfter = int.Parse(RequireValue(args, ref i, "--early-response-after"),
+                        CultureInfo.InvariantCulture);
+                    break;
+                case "--websocket":
+                    enableWebSocket = true;
+                    break;
+                case "--client-read-chunk":
+                    clientReadChunkBytes = int.Parse(RequireValue(args, ref i, "--client-read-chunk"),
+                        CultureInfo.InvariantCulture);
+                    break;
+                case "--client-read-sleep-ms":
+                    clientReadSleepMs = int.Parse(RequireValue(args, ref i, "--client-read-sleep-ms"),
+                        CultureInfo.InvariantCulture);
+                    break;
                 default:
                     ProbeLog.Error($"Unknown argument: {args[i]}");
                     PrintHelp();
@@ -129,7 +148,11 @@ internal static class Cli
             RequestBytes = Math.Max(0, requestBytes),
             KeepAlive = keepAlive,
             DelayMs = Math.Max(0, delayMs),
-            LossPercent = Math.Clamp(lossPercent, 0, 100)
+            LossPercent = Math.Clamp(lossPercent, 0, 100),
+            EarlyResponseAfterBytes = Math.Max(0, earlyResponseAfter),
+            IsWebSocket = enableWebSocket,
+            ClientReadChunkBytes = Math.Max(0, clientReadChunkBytes),
+            ClientReadSleepMs = Math.Max(0, clientReadSleepMs)
         };
 
         using var cts = new CancellationTokenSource();
@@ -143,7 +166,7 @@ internal static class Cli
         {
             return command switch
             {
-                "serve-origin" => ServeOriginHost.RunAsync(enableHttps, enableH2c, cts.Token, workload.ResponseBytes)
+                "serve-origin" => ServeOriginHost.RunAsync(enableHttps, enableH2c, cts.Token, workload)
                     .GetAwaiter().GetResult(),
                 "serve-proxy" => RunServeProxy(modeText, originHttpPort, originHttpsPort, nginxPath,
                     maxCachedConnections, cts.Token),
@@ -186,7 +209,8 @@ internal static class Cli
     private static bool IsMultiArmMode(ProbeMode mode) => mode is ProbeMode.Compare or ProbeMode.CompareHttp2
         or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
         or ProbeMode.CompareMitm or ProbeMode.CompareCeiling or ProbeMode.CompareBodies or ProbeMode.ComparePost
-        or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost or ProbeMode.ExplicitPoolSweep;
+        or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost or ProbeMode.CompareArch
+        or ProbeMode.ExplicitPoolSweep;
 
     private static int RunRamp(string? modeText, string? nginxPath, string? resultsDir, List<int> concurrency,
         int warmupSec, int durationSec, int? maxCachedConnections, int repeats, WorkloadOptions workload,
@@ -392,6 +416,12 @@ internal static class Cli
             case "compare-tls-cost":
                 mode = ProbeMode.CompareTlsCost;
                 return true;
+            case "compare-arch":
+                mode = ProbeMode.CompareArch;
+                return true;
+            case "yarp-reverse-http2-to-https":
+                mode = ProbeMode.YarpReverseHttp2ToHttps;
+                return true;
             case "mitm-http2-to-http1":
                 mode = ProbeMode.MitmHttp2ToHttp1;
                 return true;
@@ -477,6 +507,8 @@ internal static class Cli
               compare-post            POST 64 KiB request+response reverse vs control arms
               compare-lossy           64 KiB GET under userspace delay/loss vs control arms
               compare-tls-cost        H1 TLS terminate: keep-alive tiny / new-conn tiny / keep-alive 256 KiB
+              compare-arch            Slow consumer, early response, H2 duplex, WebSocket echo vs control arms
+              yarp-reverse-http2-to-https Control arm: TLS+h2 -> HTTPS/h2
               explicit-pool-sweep     Fan-out with MaxCachedConnections 4 / 32 / 128
 
             Options:
@@ -493,6 +525,8 @@ internal static class Cli
               --no-keepalive          New TCP/TLS connection per request (handshake cost)
               --delay-ms N            Userspace one-way delay via lossy shim (0 = off)
               --loss-percent P        TCP connection stall % or UDP datagram drop % (0 = off)
+              --early-response-after N  Origin starts response after N request bytes (0 = drain-then-write)
+              --websocket             Origin /ws echo; client uses ClientWebSocket
             """);
     }
 }

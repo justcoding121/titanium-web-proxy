@@ -22,7 +22,7 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
     - [Linux — POST 64 KiB request + 64 KiB response](#linux--post-64-kib-request--64-kib-response)
     - [Windows — lossy / high-RTT (H2 HOL)](#windows--lossy--high-rtt-h2-hol)
     - [Linux — lossy / high-RTT (H2 HOL)](#linux--lossy--high-rtt-h2-hol)
-    - [Architecture-sensitive (no probe arm yet)](#architecture-sensitive-no-probe-arm-yet)
+    - [Architecture-sensitive](#architecture-sensitive)
     - [TLS termination cost (H1 TLS → cleartext origin)](#tls-termination-cost-h1-tls--cleartext-origin)
 - [Other measurements](#other-measurements)
 - [Raising limits on large hosts](#raising-limits-on-large-hosts)
@@ -73,6 +73,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-bodies
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-post
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-lossy
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-tls-cost
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-arch
 ```
 
 ## Windows — Titanium vs nginx vs YARP
@@ -166,7 +167,7 @@ For **tiny JSON responses** (~64 B) on loopback, that ordering is **not** expect
 
 ## Heavier reverse workloads
 
-Separate from the tiny-GET matrix. Same measurement environments. Modes: `compare-bodies`, `compare-post`, `compare-lossy`, `compare-tls-cost` in [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe). **PUT with the same body is the same proxy work as POST; DELETE with no body matches GET** — only POST is published. Those modes are still **half-duplex** (origin drains the request, then writes a fixed `Content-Length` body; the client reads as fast as it can). The [architecture-sensitive](#architecture-sensitive-no-probe-arm-yet) rows below have **no probe arm yet** — cells stay *Not measured* until one exists and a CI median is pasted.
+Separate from the tiny-GET matrix. Same measurement environments. Modes: `compare-bodies`, `compare-post`, `compare-lossy`, `compare-tls-cost`, `compare-arch` in [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe). **PUT with the same body is the same proxy work as POST; DELETE with no body matches GET** — only POST is published. Bodies/POST/lossy stay **half-duplex**. `compare-arch` is the slow-consumer / early-response / duplex set. Laptop numbers are on [Performance-Profiling](Performance-Profiling#architecture-sensitive); CI medians go in the tables below.
 
 Lossy link = **userspace** shim (not kernel `netem`): TCP gets per-buffer delay + occasional whole-connection stalls (honest HOL for multiplexed H2); UDP datagram drop exists in the harness but **H3 lossy is not published** — rechecked at concurrency 8 after H2/H3 streaming work (`rps-ramp-20260817-212421`): TWP H3 through the UDP shim stayed at **0** sustain (multi-second p99); YARP H3 via the TCP shim also failed to establish. Treat as a **measurement limitation** (MsQuic + lossy shim), not a capability claim.
 
@@ -246,11 +247,11 @@ Median of **3** repeats. Source: Actions [32570361456](https://github.com/justco
 
 Same story as Windows: H1 stays usable; H2 falls to tens of RPS for all three products. Tiny-GET H1 leadership does not carry over.
 
-### Architecture-sensitive (no probe arm yet)
+### Architecture-sensitive
 
-`compare-bodies` / `compare-post` / `compare-lossy` do **not** isolate YARP's Kestrel-pipe + concurrent-copier stack. These rows are the catch-up set: add a YARP twin when the arm exists. See [TWP vs YARP IO model](Performance-Profiling#twp-vs-yarp-io-model).
+`compare-arch` isolates slow app readers, origin-early response, H2 duplex, and WebSocket echo. See [TWP vs YARP IO model](Performance-Profiling#twp-vs-yarp-io-model). Laptop 1-rep numbers are on [Performance-Profiling](Performance-Profiling#architecture-sensitive). Windows/Linux cells stay *Not measured* until a GHA median is pasted.
 
-*Not measured* here means **no harness**, not “CI pending.” `compare-lossy` (slow **network**) is already published above; it is not a slow **app** reader.
+`compare-lossy` (slow **network**) is already published above; it is not a slow **app** reader.
 
 #### Windows
 

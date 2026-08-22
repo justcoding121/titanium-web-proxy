@@ -271,7 +271,7 @@ internal static class QuicHttp3LoadGenerator
                         try
                         {
                             var status = await SendRequestAsync(connection, authority, "/", method, requestBody,
-                                cts.Token);
+                                workload, cts.Token);
                             if (status is >= 200 and < 300)
                                 Interlocked.Increment(ref ok);
                             else
@@ -474,7 +474,7 @@ internal static class QuicHttp3LoadGenerator
     }
 
     private static async Task<int> SendRequestAsync(QuicConnection connection, string authority, string path,
-        string method, byte[]? requestBody, CancellationToken cancellationToken)
+        string method, byte[]? requestBody, WorkloadOptions workload, CancellationToken cancellationToken)
     {
         await using var stream = await connection.OpenOutboundStreamAsync(
             QuicStreamType.Bidirectional, cancellationToken);
@@ -507,6 +507,7 @@ internal static class QuicHttp3LoadGenerator
                 status = code;
         }
 
+        var sleep = workload.IsSlowConsumer ? Math.Max(0, workload.ClientReadSleepMs) : 0;
         while (true)
         {
             // Drain DATA (large bodies) — 1 MiB cap per frame is enough for our probe sizes.
@@ -514,6 +515,8 @@ internal static class QuicHttp3LoadGenerator
             if (frame is null) break;
             if (frame.Type == Http3FrameType.Headers)
                 break;
+            if (sleep > 0 && frame.Type == Http3FrameType.Data && frame.Payload.Length > 0)
+                await Task.Delay(sleep, cancellationToken);
         }
 
         return status;
