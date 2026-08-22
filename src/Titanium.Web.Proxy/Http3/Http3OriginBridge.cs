@@ -922,8 +922,6 @@ internal static class Http3OriginBridge
             request.Host = request.Authority.GetString();
 
         var isHttps = request.IsHttps;
-        string host;
-        int port;
         string? connectHost = null;
         int? connectPort = null;
         if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint ep)
@@ -935,16 +933,6 @@ internal static class Http3OriginBridge
                 connectHost = ep.ForwardHost;
                 connectPort = ep.ForwardPort;
             }
-        }
-
-        if (connectHost != null && connectPort is { } fwdPort)
-        {
-            host = connectHost;
-            port = fwdPort;
-        }
-        else
-        {
-            (host, port) = request.GetOriginHostPort(isHttps ? 443 : 80);
         }
 
         string? poolKey = null;
@@ -964,6 +952,19 @@ internal static class Http3OriginBridge
 
             if (connection == null)
             {
+                // Resolve host/port only on pool miss — warm keep-alive hits skip GetOriginHostPort.
+                string host;
+                int port;
+                if (connectHost != null && connectPort is { } fwdPort)
+                {
+                    host = connectHost;
+                    port = fwdPort;
+                }
+                else
+                {
+                    (host, port) = request.GetOriginHostPort(isHttps ? 443 : 80);
+                }
+
                 openSession = coldOpenSessionFactory();
                 connection = await server.TcpConnectionFactory.GetServerConnection(
                     server, host, port, HttpHeader.Version11, isHttps,
@@ -991,42 +992,90 @@ internal static class Http3OriginBridge
             await http.ReceiveResponse(cancellationToken);
 
             var response = http.Response;
-            if (response.HasBody && !response.IsBodyRead
-                && !response.IsChunked
-                && response.ContentLength >= 0
-                && response.ContentLength <= 16 * 1024)
+            // Eager-buffer tiny origin bodies before Release. Kestrel often uses chunked for
+            // WriteAsync without Content-Length — skipping those left H3 clients with empty DATA.
+            if (response.HasBody && !response.IsBodyRead)
             {
-                if (response.ContentLength == 0)
+                if (!response.IsChunked
+                    && response.ContentLength >= 0
+                    && response.ContentLength <= 16 * 1024)
                 {
-                    response.Body = [];
+                    if (response.ContentLength == 0)
+                    {
+                        response.Body = [];
+                    }
+                    else
+                    {
+                        var bodyBytes = new byte[response.ContentLength];
+                        var offset = 0;
+                        while (offset < bodyBytes.Length)
+                        {
+                            var read = await connection.Stream.ReadAsync(bodyBytes.AsMemory(offset),
+                                cancellationToken);
+                            if (read == 0)
+                                break;
+                            offset += read;
+                        }
+
+                        if (offset != bodyBytes.Length)
+                        {
+                            closeConnection = true;
+                            Array.Resize(ref bodyBytes, offset);
+                        }
+
+                        response.Body = bodyBytes;
+                    }
+
+                    response.IsBodyRead = true;
+                    response.ContentLength = response.Body.Length;
+                    response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+                }
+                else if (response.IsChunked
+                         || response.ContentLength < 0
+                         || response.ContentLength <= 16 * 1024)
+                {
+                    // Chunked / connection-close / mid-size CL: drain via LimitedStream into a
+                    // MemoryStream (fast path releases the socket before SendResponseAsync).
+                    using var ms = new MemoryStream();
+                    using var limited = new LimitedStream(connection.Stream, server.BufferPool,
+                        response.IsChunked, response.ContentLength, response.TrailingHeaders);
+                    var buffer = server.BufferPool.GetBuffer();
+                    try
+                    {
+                        int read;
+                        while ((read = await limited.ReadAsync(buffer.AsMemory(), cancellationToken)) > 0)
+                        {
+                            if (ms.Length + read > 16 * 1024)
+                            {
+                                closeConnection = true;
+                                throw new InvalidOperationException(
+                                    "H3→H1 fast path does not buffer origin bodies larger than 16 KiB.");
+                            }
+
+                            ms.Write(buffer, 0, read);
+                        }
+
+                        await limited.Finish();
+                    }
+                    finally
+                    {
+                        server.BufferPool.ReturnBuffer(buffer);
+                    }
+
+                    response.Body = ms.ToArray();
+                    response.IsBodyRead = true;
+                    response.ContentLength = response.Body.Length;
+                    response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
                 }
                 else
                 {
-                    var bodyBytes = new byte[response.ContentLength];
-                    var offset = 0;
-                    while (offset < bodyBytes.Length)
-                    {
-                        var read = await connection.Stream.ReadAsync(bodyBytes.AsMemory(offset),
-                            cancellationToken);
-                        if (read == 0)
-                            break;
-                        offset += read;
-                    }
-
-                    if (offset != bodyBytes.Length)
-                    {
-                        closeConnection = true;
-                        Array.Resize(ref bodyBytes, offset);
-                    }
-
-                    response.Body = bodyBytes;
+                    // Large known-length body: do not keep unread bytes on a pooled socket.
+                    closeConnection = true;
                 }
-
-                response.IsBodyRead = true;
-                response.ContentLength = response.Body.Length;
-                response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
             }
-
+            // H1 Title-Case → lowercase once so EncodeResponse skips ToLowerInvariant (same as H3→H2).
+            response.Headers.NormalizeNamesToLowercaseAscii();
+            response.HeaderNamesAreHttp2Normalized = true;
             response.HttpVersion = HttpHeader.Version30;
             fwd.Response = response;
         }

@@ -1305,11 +1305,13 @@ internal sealed class Http2OriginConnection : IDisposable
 
     private void ProcessHeaderBlock(int streamId, ReadOnlySpan<byte> compressed, bool endStream) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
-        var collected = new HeaderCollection();
+        // Decode into the Response's own HeaderCollection (or a temporary for 1xx) so we do not
+        // allocate a second HeaderCollection and copy every field — H3→H2 tiny-GET pays this
+        // once per request on the origin ReadLoop.
         ByteString status = default;
+        Response? buildingResponse = null;
+        HeaderCollection? interimHeaders = null;
 
-        // Avoid GetString() on every field name — ReadLoop must get back to Fill quickly so sibling
-        // multiplexed streams' HeadersReceived can fire (c=32 dump: 8 ReadLoops, 32 waiters).
         var listener = new HeaderCollectorListener((name, value) =>
         {
             if (name.Length > 0 && name.Span[0] == (byte)':')
@@ -1318,7 +1320,41 @@ internal sealed class Http2OriginConnection : IDisposable
                 return;
             }
 
-            collected.AddHeader(new HttpHeader(name, value));
+            // Regular fields: after :status in response HEADERS, or with no :status in a trailer block.
+            if (status.Length == 0)
+            {
+                // Trailer HEADERS (RFC 9113 §8.1) — no :status. Park in interimHeaders as a trailer bag.
+                interimHeaders ??= new HeaderCollection();
+                interimHeaders.AddHeader(new HttpHeader(name, value));
+                return;
+            }
+
+            if (interimHeaders != null)
+            {
+                interimHeaders.AddHeader(new HttpHeader(name, value));
+                return;
+            }
+
+            if (buildingResponse == null)
+            {
+                var statusCodeEarly = TryParseAsciiStatusCode(status.Span, out var early) ? early : 0;
+                if (statusCodeEarly is >= 100 and <= 199)
+                {
+                    interimHeaders = new HeaderCollection();
+                    interimHeaders.AddHeader(new HttpHeader(name, value));
+                    return;
+                }
+
+                buildingResponse = new Response
+                {
+                    StatusCode = statusCodeEarly != 0 ? statusCodeEarly : 502,
+                    StatusDescription = string.Empty,
+                    HttpVersion = HttpHeader.Version11,
+                    HeaderNamesAreHttp2Normalized = true
+                };
+            }
+
+            buildingResponse.Headers.AddHeader(new HttpHeader(name, value));
         });
 
         try
@@ -1343,13 +1379,13 @@ internal sealed class Http2OriginConnection : IDisposable
             {
                 // Queue this interim response for relay when a caller registered on1xx (InterimChannel
                 // present). Passthrough lite drops 1xx — probe/no-intercept paths do not forward them.
-                pending.InterimChannel?.Writer.TryWrite((statusCode, collected));
+                pending.InterimChannel?.Writer.TryWrite((statusCode, interimHeaders ?? new HeaderCollection()));
                 return;
             }
 
             if (pending.Response == null)
             {
-                var response = new Response
+                var response = buildingResponse ?? new Response
                 {
                     StatusCode = statusCode,
                     StatusDescription = string.Empty,
@@ -1357,7 +1393,7 @@ internal sealed class Http2OriginConnection : IDisposable
                     // HPACK field names are lowercase (RFC 9113); QPACK EncodeResponse can skip ToLower.
                     HeaderNamesAreHttp2Normalized = true
                 };
-                foreach (var header in collected) response.Headers.AddHeader(header);
+                response.StatusCode = statusCode;
                 pending.Response = response;
                 // Signal that no more interim responses will arrive; unblocks SendAsync's interim drain loop.
                 pending.InterimChannel?.Writer.TryComplete();
@@ -1378,8 +1414,12 @@ internal sealed class Http2OriginConnection : IDisposable
             }
             else
             {
-                pending.TrailingHeaders ??= new HeaderCollection();
-                foreach (var header in collected) pending.TrailingHeaders.AddHeader(header);
+                pending.TrailingHeaders ??= interimHeaders ?? new HeaderCollection();
+                if (interimHeaders != null && !ReferenceEquals(pending.TrailingHeaders, interimHeaders))
+                {
+                    foreach (var header in interimHeaders)
+                        pending.TrailingHeaders.AddHeader(header);
+                }
             }
         }
 

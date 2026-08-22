@@ -408,6 +408,65 @@ public class HeaderCollection : IEnumerable<HttpHeader>
         nonUniqueHeadersReadOnly.Clear();
     }
 
+    /// <summary>
+    ///     Rewrites Title-Case HTTP/1.1 field names to lowercase ASCII in place (RFC 9113 / 9114).
+    ///     Used before HPACK/QPACK encode so the hot path can skip per-field <c>ToLowerInvariant</c>.
+    ///     No-op when names are already lowercase (common for HTTP/2 origins and some H1 stacks).
+    /// </summary>
+    internal void NormalizeNamesToLowercaseAscii()
+    {
+        var needsRename = false;
+        foreach (var header in this)
+        {
+            if (HeaderNameDataHasUpperCaseAscii(header.NameData))
+            {
+                needsRename = true;
+                break;
+            }
+        }
+
+        if (!needsRename)
+            return;
+
+        var renamed = new List<HttpHeader>(headers.Count + nonUniqueHeaders.Count);
+        foreach (var header in this)
+        {
+            var nameData = header.NameData;
+            if (HeaderNameDataHasUpperCaseAscii(nameData))
+                nameData = AsciiToLowerByteString(nameData);
+            renamed.Add(new HttpHeader(nameData, header.ValueData));
+        }
+
+        Clear();
+        foreach (var header in renamed)
+            AddHeader(header);
+    }
+
+    private static bool HeaderNameDataHasUpperCaseAscii(ByteString name)
+    {
+        var span = name.Span;
+        for (var i = 0; i < span.Length; i++)
+        {
+            if (span[i] is >= (byte)'A' and <= (byte)'Z')
+                return true;
+        }
+
+        return false;
+    }
+
+    private static ByteString AsciiToLowerByteString(ByteString name)
+    {
+        var span = name.Span;
+        var buf = new byte[span.Length];
+        for (var i = 0; i < span.Length; i++)
+        {
+            var c = span[i];
+            buf[i] = c is >= (byte)'A' and <= (byte)'Z' ? (byte)(c + 32) : c;
+        }
+
+        return new ByteString(buf);
+    }
+
     internal string? GetHeaderValueOrNull(KnownHeader headerName)
     {
         if (headers.TryGetValue(headerName.String, out var header)) return header.Value;
