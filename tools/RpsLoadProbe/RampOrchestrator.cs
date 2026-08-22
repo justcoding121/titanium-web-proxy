@@ -79,7 +79,8 @@ internal enum ProbeMode
     /// <summary>All implemented cross-version bridges under load (no native reverse peer).</summary>
     CompareBridges,
     /// <summary>
-    /// MITM-only matrix: explicit H1 MITM, transparent H2/H3 MITM, and dual-crypto bridges (no native reverse peer).
+    /// MITM matrix: same 15 Client×Origin pairs as Reverse (inspectable/decrypt) plus dual-crypto extras.
+    /// nginx/YARP cannot MITM — TWP-only.
     /// </summary>
     CompareMitm,
     /// <summary>TWP vs bare C# reverse vs native reverse peer on the three Linux native-winning reverse rows.</summary>
@@ -508,20 +509,28 @@ internal static class RampOrchestrator
             ],
             ProbeMode.CompareMitm =>
             [
-                new("twp-http-mitm", ProbeMode.HttpMitm, null),
-                new("twp-https-mitm", ProbeMode.HttpsMitm, null),
-                new("twp-reverse-http1-mitm", ProbeMode.ReverseHttp1Mitm, null),
-                // Plain-client H2: transparent reverse is already fully inspectable (no client TLS to forge).
-                new("twp-reverse-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null),
-                new("twp-reverse-h2c", ProbeMode.ReverseH2c, null),
-                new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
-                new("twp-mitm-http2-to-http1", ProbeMode.MitmHttp2ToHttp1, null),
-                new("twp-reverse-http3", ProbeMode.ReverseHttp3, null),
-                new("twp-mitm-http3-to-http1", ProbeMode.MitmHttp3ToHttp1, null),
-                new("twp-reverse-http11-to-http2", ProbeMode.ReverseHttp11ToHttp2, null),
-                new("twp-reverse-http1-to-http3", ProbeMode.ReverseHttp1ToHttp3, null),
-                new("twp-reverse-http2-to-http3", ProbeMode.ReverseHttp2ToHttp3, null),
-                new("twp-reverse-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null)
+                // Same 15 Client×Origin pairs as Reverse (inspectable / decrypt path). nginx/YARP N/A.
+                new("twp-http-mitm", ProbeMode.HttpMitm, null), // H1 plain→H1 plain (explicit)
+                new("twp-reverse-http1-to-https", ProbeMode.ReverseHttp1ToHttps, null), // H1 plain→H1 TLS
+                new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null), // H1 TLS→H1 plain
+                new("twp-reverse-http11-to-http2", ProbeMode.ReverseHttp11ToHttp2, null), // H1 TLS→H2 TLS
+                new("twp-reverse-http1-to-http3", ProbeMode.ReverseHttp1ToHttp3, null), // H1 TLS→H3
+                new("twp-reverse-h2c-to-h1", ProbeMode.ReverseH2cToH1, null), // H2 plain→H1 plain
+                new("twp-reverse-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null), // H2 plain→H2 plain
+                new("twp-reverse-h2c", ProbeMode.ReverseH2c, null), // H2 plain→H2 TLS
+                new("twp-reverse-h2c-to-h3", ProbeMode.ReverseH2cToH3, null), // H2 plain→H3
+                new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null), // H2 TLS→H1 plain
+                new("twp-reverse-http2-to-h2c", ProbeMode.ReverseHttp2ToH2c, null), // H2 TLS→H2 plain
+                new("twp-reverse-http2-to-http3", ProbeMode.ReverseHttp2ToHttp3, null), // H2 TLS→H3
+                new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null), // H3→H1 plain
+                new("twp-reverse-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null), // H3→H2 TLS
+                new("twp-reverse-http3", ProbeMode.ReverseHttp3, null), // H3→H3
+                // Dual-crypto extras (not in the Reverse grid — both legs encrypted).
+                new("twp-https-mitm", ProbeMode.HttpsMitm, null), // explicit CONNECT → H1 TLS
+                new("twp-reverse-http1-mitm", ProbeMode.ReverseHttp1Mitm, null), // H1 TLS→H1 TLS
+                new("twp-reverse-http2", ProbeMode.ReverseHttp2, null), // H2 TLS→H2 TLS
+                new("twp-mitm-http2-to-http1", ProbeMode.MitmHttp2ToHttp1, null), // H2 TLS→H1 TLS
+                new("twp-mitm-http3-to-http1", ProbeMode.MitmHttp3ToHttp1, null) // H3→H1 TLS
             ],
             ProbeMode.MitmHttp2ToHttp1 =>
                 [new("twp-mitm-http2-to-http1", ProbeMode.MitmHttp2ToHttp1, null)],
