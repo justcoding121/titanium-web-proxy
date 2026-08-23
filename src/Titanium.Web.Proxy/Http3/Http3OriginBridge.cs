@@ -1160,9 +1160,15 @@ internal static class Http3OriginBridge
                     };
                 }
             }
-            // H1 Title-Case → lowercase once so EncodeResponse skips ToLowerInvariant (same as H3→H2).
-            response.Headers.NormalizeNamesToLowercaseAscii();
-            response.HeaderNamesAreHttp2Normalized = true;
+            // Tiny H1 responses have few Title-Case fields — let EncodeResponse ToLowerInvariant
+            // per field instead of NormalizeNamesToLowercaseAscii (Clear + new HttpHeader per field).
+            // Medium/large already-buffered bodies still normalize once (lossy / bodies path).
+            if (response.IsBodyRead && response.Body is { Length: >= 16 * 1024 })
+            {
+                response.Headers.NormalizeNamesToLowercaseAscii();
+                response.HeaderNamesAreHttp2Normalized = true;
+            }
+
             response.HttpVersion = HttpHeader.Version30;
             fwd.Response = response;
         }
