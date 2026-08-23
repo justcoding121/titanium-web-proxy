@@ -66,8 +66,11 @@ internal static class BombardierLoadGenerator
         psi.ArgumentList.Add($"{durationSec}s");
         if (collectLatency)
             psi.ArgumentList.Add("-l");
+        // result-only + full "json" (not "j") — otherwise stdout starts with "Bombarding..." and JSON parse fails.
+        psi.ArgumentList.Add("--print");
+        psi.ArgumentList.Add("result");
         psi.ArgumentList.Add("-o");
-        psi.ArgumentList.Add("j");
+        psi.ArgumentList.Add("json");
         psi.ArgumentList.Add("--http1");
         psi.ArgumentList.Add(target.AbsoluteUri);
 
@@ -86,7 +89,18 @@ internal static class BombardierLoadGenerator
                 $"bombardier exited {process.ExitCode}. stderr: {stderr}");
         }
 
-        return ParseJsonResult(stdout, concurrency, duration.TotalSeconds);
+        return ParseJsonResult(ExtractJsonObject(stdout), concurrency, duration.TotalSeconds);
+    }
+
+    /// <summary>Pull the first top-level JSON object if progress/intro leaked onto stdout.</summary>
+    internal static string ExtractJsonObject(string stdout)
+    {
+        var start = stdout.IndexOf('{');
+        var end = stdout.LastIndexOf('}');
+        if (start < 0 || end <= start)
+            throw new InvalidOperationException(
+                $"bombardier stdout was not JSON. First 120 chars: {(stdout.Length > 120 ? stdout[..120] : stdout)}");
+        return stdout[start..(end + 1)];
     }
 
     internal static LoadResult ParseJsonResult(string json, int concurrency, double durationSeconds)
