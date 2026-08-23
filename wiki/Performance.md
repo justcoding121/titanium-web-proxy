@@ -1,4 +1,4 @@
-﻿# Performance
+# Performance
 
 Titanium targets **low-overhead MITM proxying**: connection pooling, HTTP/2 multiplexing, and buffer reuse. Numbers below are **Release** measurements with [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe) (and BenchmarkDotNet / Basic example where noted). Publishable tables cite **GitHub Actions** medians on matched **4 vCPU / 16 GiB** runners. Absolute RPS still varies by OS kernel, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
 
@@ -60,7 +60,7 @@ Laptop High-perf / cool-paired Windows numbers live on [Performance Profiling �
 
 ### Saturation control
 
-Calibration for the shared 4 vCPU loopback shape: how close client + origin are to saturated before ranking reverse peers. Tiny keep-alive GET. Median of **3** repeats @ `71ecb747` — [32671198572](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32671198572). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Block A **% of origin-HttpClient** uses median **peak** RPS. Blocks B/C use peer÷YARP / ÷nginx on median peak (not % of H1 origin). Memory (RSS) / CPU sample the **proxy child** plus its **full descendant tree** (serve-proxy → nginx master → workers); origin-direct samples the **origin** child. Product matrices below use matched `dotnet-httpclient` only (not bombardier).
+Calibration for the shared 4 vCPU loopback shape: how close client + origin are to saturated before ranking reverse peers. Tiny keep-alive GET. Median of **3** repeats @ `a3b9af1e` — [32672941240](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32672941240). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Block A **% of origin-HttpClient** uses median **peak** RPS. Blocks B/C use peer÷YARP / ÷nginx on median peak (not % of H1 origin). **Memory (RSS)** / CPU sample the **proxy child** plus its **full descendant tree** (serve-proxy → nginx master → workers); origin-direct samples the **origin** child. Product matrices below use matched `dotnet-httpclient` only (not bombardier).
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
@@ -79,45 +79,45 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 
 | Arm | Generator | Sustain | Peak | % of origin-HttpClient | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|
-| origin-direct | dotnet-httpclient | **52,598** | **52,598** | **100%** | **53 MiB** | **42.5** |
-| origin-direct-bombardier | bombardier | **37,091** | **39,245** | **74.6%** | **54 MiB** | **25.0** |
-| bare-reverse-http1 | dotnet-httpclient | **26,243** | **26,243** | **49.9%** | **53 MiB** | **46.6** |
-| nginx-reverse-http1 | dotnet-httpclient | **13,787** | **13,787** | **26.2%** | **44 MiB** | **0.0** |
-| yarp-reverse-http1 | dotnet-httpclient | **21,846** | **21,846** | **41.5%** | **85 MiB** | **51.7** |
-| twp-reverse-http1 | dotnet-httpclient | 🥇 **25,543** | **25,543** | **48.6%** | **75 MiB** | **49.6** |
+| origin-direct | dotnet-httpclient | **127,144** | **128,202** | **100%** | **53 MiB** | **47.6** |
+| origin-direct-bombardier | bombardier | **94,587** | **95,521** | **74.5%** | **53 MiB** | **27.0** |
+| bare-reverse-http1 | dotnet-httpclient | **61,356** | **61,356** | **47.9%** | **51 MiB** | **47.1** |
+| nginx-reverse-http1 | dotnet-httpclient | **35,389** | **36,369** | **28.4%** | **120 MiB** | **24.3** |
+| yarp-reverse-http1 | dotnet-httpclient | **57,823** | **57,823** | **45.1%** | **84 MiB** | **49.6** |
+| twp-reverse-http1 | dotnet-httpclient | 🥇 **60,077** | **60,077** | **46.9%** | **66 MiB** | **48.9** |
 
 **Linux** (`ubuntu-latest`)
 
 | Arm | Generator | Sustain | Peak | % of origin-HttpClient | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|
-| origin-direct | dotnet-httpclient | **101,711** | **101,711** | **100%** | **79 MiB** | **44.6** |
-| origin-direct-bombardier | bombardier | **61,736** | **61,736** | **60.7%** | **79 MiB** | **37.4** |
-| bare-reverse-http1 | dotnet-httpclient | **46,188** | **46,188** | **45.4%** | **65 MiB** | **45.3** |
-| nginx-reverse-http1 | dotnet-httpclient | 🥇 **56,648** | **56,648** | **55.7%** | **51 MiB** | **0.0** |
-| yarp-reverse-http1 | dotnet-httpclient | **41,350** | **41,350** | **40.7%** | **113 MiB** | **49.0** |
-| twp-reverse-http1 | dotnet-httpclient | **47,920** | **47,920** | **47.1%** | **81 MiB** | **50.1** |
+| origin-direct | dotnet-httpclient | **105,791** | **105,791** | **100%** | **78 MiB** | **42.1** |
+| origin-direct-bombardier | bombardier | **57,999** | **57,999** | **54.8%** | **78 MiB** | **31.2** |
+| bare-reverse-http1 | dotnet-httpclient | **47,955** | **47,955** | **45.3%** | **66 MiB** | **43.5** |
+| nginx-reverse-http1 | dotnet-httpclient | 🥇 **60,266** | **60,266** | **57.0%** | **72 MiB** | **39.4** |
+| yarp-reverse-http1 | dotnet-httpclient | **41,795** | **41,795** | **39.5%** | **114 MiB** | **49.4** |
+| twp-reverse-http1 | dotnet-httpclient | **47,148** | **47,148** | **44.6%** | **87 MiB** | **49.1** |
 
-Reverse peers are about **26–56%** of the origin-direct HttpClient peak on this runner class. Prefer the **%** column over absolute RPS across runs. 🥇 marks the highest **sustainable** RPS among **TWP / nginx / YARP** only (bare and origin-direct are controls).
+Reverse peers are about **28–57%** of the origin-direct HttpClient peak on this runner class. Prefer the **%** column over absolute RPS across runs. 🥇 marks the highest **sustainable** RPS among **TWP / nginx / YARP** only (bare and origin-direct are controls).
 
 #### Block B — H2 TLS→H1
 
-Peer ratios (÷YARP / ÷nginx) on median peak + RSS/CPU. 🥇 among TWP / nginx / YARP by sustainable RPS.
+Peer ratios (÷YARP / ÷nginx) on median peak + Memory (RSS) / CPU. 🥇 among TWP / nginx / YARP by sustainable RPS.
 
 **Windows** (`windows-latest`)
 
 | Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|---:|
-| nginx-reverse-http2 | dotnet-httpclient | **11,403** | **11,403** | **0.39×** | **1.00×** | **52 MiB** | **0.0** |
-| yarp-reverse-http2 | dotnet-httpclient | **29,617** | **29,617** | **1.00×** | **2.60×** | **91 MiB** | **54.0** |
-| twp-reverse-http2-cleartext | dotnet-httpclient | 🥇 **35,550** | **35,550** | **1.20×** | **3.12×** | **465 MiB** | **54.3** |
+| nginx-reverse-http2 | dotnet-httpclient | **28,507** | **28,507** | **0.38×** | **1.00×** | **137 MiB** | **23.1** |
+| yarp-reverse-http2 | dotnet-httpclient | **74,813** | **74,813** | **1.00×** | **2.62×** | **95 MiB** | **48.3** |
+| twp-reverse-http2-cleartext | dotnet-httpclient | 🥇 **76,697** | **76,697** | **1.03×** | **2.69×** | **848 MiB** | **47.1** |
 
 **Linux** (`ubuntu-latest`)
 
 | Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|---:|
-| nginx-reverse-http2 | dotnet-httpclient | **21,480** | **29,931** | **0.67×** | **1.00×** | **63 MiB** | **0.0** |
-| yarp-reverse-http2 | dotnet-httpclient | **44,490** | **44,490** | **1.00×** | **1.49×** | **122 MiB** | **48.5** |
-| twp-reverse-http2-cleartext | dotnet-httpclient | 🥇 **50,155** | **50,155** | **1.13×** | **1.68×** | **659 MiB** | **52.6** |
+| nginx-reverse-http2 | dotnet-httpclient | **23,281** | **30,402** | **0.78×** | **1.00×** | **96 MiB** | **21.6** |
+| yarp-reverse-http2 | dotnet-httpclient | **39,023** | **39,023** | **1.00×** | **1.28×** | **121 MiB** | **47.8** |
+| twp-reverse-http2-cleartext | dotnet-httpclient | 🥇 **43,916** | **43,916** | **1.13×** | **1.44×** | **626 MiB** | **49.9** |
 
 #### Block C — H3→H1
 
@@ -128,16 +128,16 @@ Same layout as Block B. Requires QuicListener; nginx only with `http_v3_module` 
 | Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|---:|
 | nginx-reverse-http3-cleartext | dotnet-httpclient | *Not possible* (no QUIC) | *Not possible* | — | — | — | — |
-| yarp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **16,252** | **16,252** | **1.00×** | — | **158 MiB** | **49.7** |
-| twp-reverse-http3-cleartext | dotnet-httpclient | **14,935** | **14,935** | **0.92×** | — | **178 MiB** | **46.8** |
+| yarp-reverse-http3-cleartext | dotnet-httpclient | **44,105** | **44,105** | **1.00×** | — | **155 MiB** | **50.3** |
+| twp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **44,716** | **44,716** | **1.01×** | — | **271 MiB** | **46.4** |
 
 **Linux** (`ubuntu-latest`)
 
 | Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|---:|
-| nginx-reverse-http3-cleartext | dotnet-httpclient | **0** | **24,954** | **0.90×** | **1.00×** | **62 MiB** | **0.0** |
-| yarp-reverse-http3-cleartext | dotnet-httpclient | **27,833** | **27,833** | **1.00×** | **1.12×** | **191 MiB** | **49.3** |
-| twp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **30,076** | **30,076** | **1.08×** | **1.21×** | **279 MiB** | **52.6** |
+| nginx-reverse-http3-cleartext | dotnet-httpclient | **0** | **27,519** | **1.19×** | **1.00×** | **106 MiB** | **20.3** |
+| yarp-reverse-http3-cleartext | dotnet-httpclient | **23,196** | **23,196** | **1.00×** | **0.84×** | **184 MiB** | **48.8** |
+| twp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **24,580** | **24,580** | **1.06×** | **0.89×** | **241 MiB** | **47.5** |
 
 **How to read the tables**
 
