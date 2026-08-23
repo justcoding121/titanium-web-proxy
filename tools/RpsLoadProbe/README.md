@@ -35,19 +35,23 @@ Every `--ramp` arm is **three OS processes**: parent load generator, `--serve-or
 
 ## Saturation control (origin ceiling)
 
-Calibration only — not a product ranking matrix. Shows how close the client/origin are to saturated before ranking reverse peers on the same tiny keep-alive H1 plain GET.
+Calibration only — not a product ranking matrix. Tiny keep-alive GET; three blocks:
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 ```
 
-| Arm | Meaning |
+| Block | Arms |
 |---|---|
-| `origin-direct` | HttpClient → origin child (no proxy) |
-| `origin-direct-bombardier` | bombardier → origin (skipped if not on PATH; CI installs it) |
-| `bare-reverse-http1` / `nginx-reverse-http1` / `yarp-reverse-http1` / `twp-reverse-http1` | Same-session H1 plain reverse peers |
+| **A — H1 plain** | `origin-direct`, `origin-direct-bombardier` (if PATH), `bare-reverse-http1`, `nginx-reverse-http1`, `yarp-reverse-http1`, `twp-reverse-http1` |
+| **B — H2 TLS→H1** | `nginx-reverse-http2` (if nginx), `yarp-reverse-http2`, `twp-reverse-http2-cleartext` |
+| **C — H3→H1** | `nginx-reverse-http3-cleartext` (if nginx + `http_v3_module`), `yarp-reverse-http3-cleartext`, `twp-reverse-http3-cleartext` (skipped when `QuicListener` unsupported) |
 
-Summary prints each peak as **% of origin-direct HttpClient** (and vs bombardier when present). Paste CI medians into the wiki [Performance — Saturation control](../../wiki/Performance.md#saturation-control) section. Do not mix bombardier into the publishable TWP÷YARP÷nginx matrices.
+**CSV resource columns** (every measure step): `proxy_rss_peak_bytes`, `proxy_cpu_avg_pct`. Names stay `proxy_*` even on origin-direct arms (those sample the **origin** child PID). Otherwise sample the **proxy** child PID plus **direct children** (so nginx worker RSS/CPU is included under the master). Empty when the PID cannot be sampled. Poll ~200ms during the measure window; peak Working Set / VmRSS sum and average CPU% (of all logical processors). nginx/Windows may still under-report CPU (thread model); treat Linux nginx resource columns as authoritative.
+
+**Summary:** Block A prints median peak RPS as **% of origin-direct** (and bombardier when present) plus median RSS/CPU at the peak-RPS step. Blocks B/C print peer÷YARP and peer÷nginx (when present) plus RSS/CPU — not % of H1 origin-direct.
+
+Paste CI medians into the wiki [Performance — Saturation control](../../wiki/Performance.md#saturation-control) section. Do not mix bombardier into the publishable TWP÷YARP÷nginx matrices.
 
 ## Heavier reverse workloads (bodies / POST / lossy / TLS cost)
 

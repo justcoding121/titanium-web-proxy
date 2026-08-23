@@ -198,6 +198,8 @@ internal static class RampOrchestrator
         }
 
         var peakByArm = new Dictionary<string, List<double>>(StringComparer.Ordinal);
+        var rssByArm = new Dictionary<string, List<long>>(StringComparer.Ordinal);
+        var cpuByArm = new Dictionary<string, List<double>>(StringComparer.Ordinal);
         var repeats = Math.Max(1, options.Repeats);
         for (var rep = 1; rep <= repeats; rep++)
         {
@@ -214,13 +216,35 @@ internal static class RampOrchestrator
                     peakByArm[arm.Name] = list;
                 }
 
-                list.Add(peak);
+                list.Add(peak.PeakRps);
+                if (peak.RssPeakBytes is { } rss)
+                {
+                    if (!rssByArm.TryGetValue(arm.Name, out var rssList))
+                    {
+                        rssList = [];
+                        rssByArm[arm.Name] = rssList;
+                    }
+
+                    rssList.Add(rss);
+                }
+
+                if (peak.CpuAvgPct is { } cpu)
+                {
+                    if (!cpuByArm.TryGetValue(arm.Name, out var cpuList))
+                    {
+                        cpuList = [];
+                        cpuByArm[arm.Name] = cpuList;
+                    }
+
+                    cpuList.Add(cpu);
+                }
+
                 ProbeLog.Info(string.Empty);
             }
         }
 
         if (options.Mode is ProbeMode.CompareSaturation)
-            WriteSaturationSummary(peakByArm);
+            WriteSaturationSummary(peakByArm, rssByArm, cpuByArm);
         else if (repeats > 1)
             WriteMedianSummary(peakByArm);
 
@@ -258,23 +282,54 @@ internal static class RampOrchestrator
         }
     }
 
-    private static void WriteSaturationSummary(Dictionary<string, List<double>> peakByArm)
+    private static readonly HashSet<string> SaturationBlockA = new(StringComparer.Ordinal)
+    {
+        "origin-direct", "origin-direct-bombardier", "bare-reverse-http1", "nginx-reverse-http1",
+        "yarp-reverse-http1", "twp-reverse-http1"
+    };
+
+    private static readonly HashSet<string> SaturationBlockB = new(StringComparer.Ordinal)
+    {
+        "nginx-reverse-http2", "yarp-reverse-http2", "twp-reverse-http2-cleartext"
+    };
+
+    private static readonly HashSet<string> SaturationBlockC = new(StringComparer.Ordinal)
+    {
+        "nginx-reverse-http3-cleartext", "yarp-reverse-http3-cleartext", "twp-reverse-http3-cleartext"
+    };
+
+    private static void WriteSaturationSummary(Dictionary<string, List<double>> peakByArm,
+        Dictionary<string, List<long>> rssByArm, Dictionary<string, List<double>> cpuByArm)
     {
         ProbeLog.Info("=== saturation control (median peaks) ===");
+
+        WriteSaturationBlockA(peakByArm, rssByArm, cpuByArm);
+        WriteSaturationPeerBlock("Block B -- H2 TLS->H1", SaturationBlockB, "yarp-reverse-http2",
+            "nginx-reverse-http2", peakByArm, rssByArm, cpuByArm);
+        WriteSaturationPeerBlock("Block C -- H3->H1", SaturationBlockC, "yarp-reverse-http3-cleartext",
+            "nginx-reverse-http3-cleartext", peakByArm, rssByArm, cpuByArm);
+    }
+
+    private static void WriteSaturationBlockA(Dictionary<string, List<double>> peakByArm,
+        Dictionary<string, List<long>> rssByArm, Dictionary<string, List<double>> cpuByArm)
+    {
+        ProbeLog.Info("  --- Block A -- H1 plain ---");
         double? originDirect = null, originBombardier = null;
-        var medians = new List<(string Name, double Median, int N)>();
-        foreach (var (name, peaks) in peakByArm.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        var medians = new List<(string Name, double Median)>();
+        foreach (var name in SaturationBlockA.OrderBy(n => n, StringComparer.Ordinal))
         {
+            if (!peakByArm.TryGetValue(name, out var peaks) || peaks.Count == 0)
+                continue;
             var median = Median(peaks);
-            medians.Add((name, median, peaks.Count));
-            ProbeLog.Info($"  {name}: median_peak_rps={median:F1} (n={peaks.Count})");
+            medians.Add((name, median));
+            ProbeLog.Info(FormatSaturationArmLine(name, median, peaks.Count, rssByArm, cpuByArm));
             if (name.Equals("origin-direct", StringComparison.Ordinal))
                 originDirect = median;
             if (name.Equals("origin-direct-bombardier", StringComparison.Ordinal))
                 originBombardier = median;
         }
 
-        foreach (var (name, median, _) in medians)
+        foreach (var (name, median) in medians)
         {
             if (name.Equals("origin-direct", StringComparison.Ordinal) ||
                 name.Equals("origin-direct-bombardier", StringComparison.Ordinal))
@@ -296,12 +351,85 @@ internal static class RampOrchestrator
         }
     }
 
+    private static void WriteSaturationPeerBlock(string title, HashSet<string> blockArms, string yarpArm,
+        string nginxArm, Dictionary<string, List<double>> peakByArm, Dictionary<string, List<long>> rssByArm,
+        Dictionary<string, List<double>> cpuByArm)
+    {
+        var present = blockArms
+            .Where(n => peakByArm.TryGetValue(n, out var peaks) && peaks.Count > 0)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+        if (present.Count == 0)
+            return;
+
+        ProbeLog.Info($"  --- {title} ---");
+        double? yarpPeak = null, nginxPeak = null;
+        var medians = new List<(string Name, double Median)>();
+        foreach (var name in present)
+        {
+            var peaks = peakByArm[name];
+            var median = Median(peaks);
+            medians.Add((name, median));
+            ProbeLog.Info(FormatSaturationArmLine(name, median, peaks.Count, rssByArm, cpuByArm));
+            if (name.Equals(yarpArm, StringComparison.Ordinal))
+                yarpPeak = median;
+            if (name.Equals(nginxArm, StringComparison.Ordinal))
+                nginxPeak = median;
+        }
+
+        foreach (var (name, median) in medians)
+        {
+            if (yarpPeak is > 0 && !name.Equals(yarpArm, StringComparison.Ordinal))
+            {
+                var ratio = median / yarpPeak.Value;
+                ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
+                    $"  {name}: {ratio:F3}× YARP"));
+            }
+
+            if (nginxPeak is > 0 && !name.Equals(nginxArm, StringComparison.Ordinal))
+            {
+                var ratio = median / nginxPeak.Value;
+                ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
+                    $"  {name}: {ratio:F3}× nginx"));
+            }
+        }
+    }
+
+    private static string FormatSaturationArmLine(string name, double medianPeak, int n,
+        Dictionary<string, List<long>> rssByArm, Dictionary<string, List<double>> cpuByArm)
+    {
+        var line = string.Create(CultureInfo.InvariantCulture,
+            $"  {name}: median_peak_rps={medianPeak:F1} (n={n})");
+        if (rssByArm.TryGetValue(name, out var rssList) && rssList.Count > 0)
+        {
+            var medianRss = MedianLong(rssList);
+            line += string.Create(CultureInfo.InvariantCulture, $" median_rss_peak_bytes={medianRss}");
+        }
+
+        if (cpuByArm.TryGetValue(name, out var cpuList) && cpuList.Count > 0)
+        {
+            var medianCpu = Median(cpuList);
+            line += string.Create(CultureInfo.InvariantCulture, $" median_cpu_avg_pct={medianCpu:F1}");
+        }
+
+        return line;
+    }
+
     private static double Median(List<double> values)
     {
         var sorted = values.OrderBy(x => x).ToList();
         var mid = sorted.Count / 2;
         return sorted.Count % 2 == 0
             ? (sorted[mid - 1] + sorted[mid]) / 2.0
+            : sorted[mid];
+    }
+
+    private static long MedianLong(List<long> values)
+    {
+        var sorted = values.OrderBy(x => x).ToList();
+        var mid = sorted.Count / 2;
+        return sorted.Count % 2 == 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2
             : sorted[mid];
     }
 
@@ -344,7 +472,7 @@ internal static class RampOrchestrator
         return mode switch
         {
             ProbeMode.OriginDirect => [new("origin-direct", ProbeMode.OriginDirect, null)],
-            ProbeMode.CompareSaturation => BuildSaturationArms(nginxAvailable, bombardierAvailable),
+            ProbeMode.CompareSaturation => BuildSaturationArms(nginxAvailable, bombardierAvailable, nginxHttp3Available),
             ProbeMode.ReverseHttp1 => [new("twp-reverse-http1", ProbeMode.ReverseHttp1, null)],
             ProbeMode.BareReverseHttp1 => [new("bare-reverse-http1", ProbeMode.BareReverseHttp1, null)],
             ProbeMode.NginxReverseHttp1 => nginxAvailable
@@ -648,8 +776,10 @@ internal static class RampOrchestrator
         };
     }
 
-    private static IReadOnlyList<ArmSpec> BuildSaturationArms(bool nginxAvailable, bool bombardierAvailable)
+    private static IReadOnlyList<ArmSpec> BuildSaturationArms(bool nginxAvailable, bool bombardierAvailable,
+        bool nginxHttp3Available)
     {
+        // Block A — H1 plain
         var arms = new List<ArmSpec>
         {
             new("origin-direct", ProbeMode.OriginDirect, null)
@@ -665,6 +795,19 @@ internal static class RampOrchestrator
             arms.Add(new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null));
         arms.Add(new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null));
         arms.Add(new("twp-reverse-http1", ProbeMode.ReverseHttp1, null));
+
+        // Block B — H2 TLS → H1 cleartext (peer ratios, not % of H1 origin-direct)
+        if (nginxAvailable)
+            arms.Add(new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null));
+        arms.Add(new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null));
+        arms.Add(new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null));
+
+        // Block C — H3 → H1 cleartext (QuicListener skip happens in RunAsync RemoveAll)
+        if (nginxHttp3Available)
+            arms.Add(new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null));
+        arms.Add(new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null));
+        arms.Add(new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null));
+
         return arms;
     }
 
@@ -710,7 +853,9 @@ internal static class RampOrchestrator
         return arms;
     }
 
-    private static async Task<double> RunArmAsync(ArmSpec arm, RampOptions options, StreamWriter csv,
+    private sealed record ArmPeakResult(double PeakRps, long? RssPeakBytes, double? CpuAvgPct);
+
+    private static async Task<ArmPeakResult> RunArmAsync(ArmSpec arm, RampOptions options, StreamWriter csv,
         string? nginxVersionHint, CancellationToken cancellationToken)
     {
         var workload = arm.Workload ?? options.Workload;
@@ -763,6 +908,7 @@ internal static class RampOrchestrator
 
             LoadResult? lastGood = null;
             LoadResult? peak = null;
+            ProcessResourceSample? peakResources = null;
             var lastGoodConcurrency = 0;
 
             var useQuic = (stackUsesQuicGenerator || forceLossyQuicGenerator) && quicPort is > 0;
@@ -782,6 +928,9 @@ internal static class RampOrchestrator
                 VersionPolicy = stack.VersionPolicy,
                 Workload = workload
             };
+
+            // Column names stay proxy_*; origin-direct samples the origin child PID.
+            var samplePid = stack.IsOriginDirect ? stack.OriginProcessId : stack.ProxyProcessId;
 
             ProbeLog.Info(
                 $"  target={targetUri} workload={workload.Suffix} proxy={(stack.ExplicitProxyUrl ?? "(direct-to-listen)")} http={stack.RequestHttpVersion} generator={generatorLabel} maxCached={(maxCached?.ToString() ?? "default")}");
@@ -804,6 +953,7 @@ internal static class RampOrchestrator
             {
                 ProbeLog.Info($"  warmup c={concurrency} for {options.Warmup.TotalSeconds:F0}s...");
                 LoadResult result;
+                ProcessResourceSample? resources = null;
                 try
                 {
                     if (useQuic)
@@ -825,23 +975,32 @@ internal static class RampOrchestrator
                     }
 
                     ProbeLog.Info($"  measure c={concurrency} for {options.StepDuration.TotalSeconds:F0}s...");
+                    Task<LoadResult> measureTask;
                     if (useQuic)
                     {
                         var ep = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, quicPort!.Value);
                         var authority = ResolveQuicAuthority(arm.Mode, stack);
-                        result = await QuicHttp3LoadGenerator.RunAsync(ep, "localhost", authority,
+                        measureTask = QuicHttp3LoadGenerator.RunAsync(ep, "localhost", authority,
                             concurrency, options.StepDuration, cancellationToken, workload);
                     }
                     else if (useBombardier)
                     {
-                        result = await BombardierLoadGenerator.RunAsync(targetUri, concurrency, options.StepDuration,
+                        measureTask = BombardierLoadGenerator.RunAsync(targetUri, concurrency, options.StepDuration,
                             workload, cancellationToken);
                     }
                     else
                     {
-                        result = await EmbeddedLoadGenerator.RunAsync(loadOptions, concurrency, options.StepDuration,
+                        measureTask = EmbeddedLoadGenerator.RunAsync(loadOptions, concurrency, options.StepDuration,
                             cancellationToken);
                     }
+
+                    Task<ProcessResourceSample?>? sampleTask = samplePid is int pid
+                        ? ProcessResourceSampler.SampleDuringAsync(pid, options.StepDuration, cancellationToken)
+                        : null;
+
+                    result = await measureTask;
+                    if (sampleTask != null)
+                        resources = await sampleTask;
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {
@@ -863,14 +1022,21 @@ internal static class RampOrchestrator
 
                 var meetsSlo = result.ErrorRatePercent < options.MaxErrorRatePercent && result.P99Ms <= p99Slo;
                 await CsvWriter.WriteRowAsync(csv, arm.Name, result, meetsSlo, nginxVersion, maxCached, workload,
-                    stack.YarpVersion);
+                    stack.YarpVersion, resources);
                 await csv.FlushAsync(cancellationToken);
 
+                var resourceHint = resources is { } r
+                    ? string.Create(CultureInfo.InvariantCulture,
+                        $" rss_peak={r.PeakRssBytes} cpu_avg={r.AvgCpuPercent:F1}%")
+                    : "";
                 ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
-                    $"    rps={result.Rps:F0} err%={result.ErrorRatePercent:F3} p50={result.P50Ms:F1}ms p99={result.P99Ms:F1}ms max={result.MaxMs:F1}ms ver={result.NegotiatedVersionHint} slo={(meetsSlo ? "PASS" : "FAIL")}"));
+                    $"    rps={result.Rps:F0} err%={result.ErrorRatePercent:F3} p50={result.P50Ms:F1}ms p99={result.P99Ms:F1}ms max={result.MaxMs:F1}ms ver={result.NegotiatedVersionHint} slo={(meetsSlo ? "PASS" : "FAIL")}{resourceHint}"));
 
                 if (peak == null || result.Rps > peak.Rps)
+                {
                     peak = result;
+                    peakResources = resources;
+                }
 
                 if (meetsSlo)
                 {
@@ -886,7 +1052,7 @@ internal static class RampOrchestrator
             ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
                 $"  summary arm={arm.Name} sustainable_rps={(lastGood?.Rps ?? 0):F0} @ c={lastGoodConcurrency} peak_rps={(peak?.Rps ?? 0):F0} @ c={peak?.Concurrency ?? 0} p99_slo_ms={p99Slo:F0}"));
 
-            return peak?.Rps ?? 0;
+            return new ArmPeakResult(peak?.Rps ?? 0, peakResources?.PeakRssBytes, peakResources?.AvgCpuPercent);
         }
         finally
         {

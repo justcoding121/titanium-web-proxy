@@ -4,7 +4,7 @@ Titanium targets **low-overhead MITM proxying**: connection pooling, HTTP/2 mult
 
 Control arms: **nginx** (native C reverse-proxy ceiling; Linux is authoritative) and **YARP** (`Yarp.ReverseProxy`, managed .NET reverse proxy). Neither can MITM (no CONNECT / forged certs). FiddlerCore is not compared (commercial debugger license; not a throughput peer).
 
-For pooling knobs and certificate first-visit tuning, see [Performance and pooling](Home#performance-and-pooling). For the local cool A/B lab, laptop tables, and the techniques used to find each hotspot, see [Performance Profiling](Performance-Profiling).
+For pooling knobs and certificate first-visit tuning, see [Performance and pooling](Home#performance-and-pooling). For the local cool A/B lab, laptop tables, and profiling notes, see [Performance Profiling](Performance-Profiling).
 
 ## Contents
 
@@ -60,41 +60,85 @@ Laptop High-perf / cool-paired Windows numbers live on [Performance Profiling �
 
 ### Saturation control
 
-Calibration for the shared 4 vCPU loopback shape: how close client + origin are to saturated before ranking reverse peers. Tiny keep-alive H1 plain GET only. Median of **3** repeats @ `0f4db45e` — [32667553188](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32667553188). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **% of origin-HttpClient** uses median **peak** RPS. **Do not** mix bombardier into the product matrices below — those stay matched `dotnet-httpclient`.
+Calibration for the shared 4 vCPU loopback shape: how close client + origin are to saturated before ranking reverse peers. Tiny keep-alive GET. Median of **3** repeats @ `0f4db45e` — [32667553188](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32667553188) (Block A RPS). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Block A **% of origin-HttpClient** uses median peak RPS. RSS/CPU sample the **proxy child** (+ children for nginx workers); origin-direct samples the **origin** child. RSS/CPU and Blocks B/C are *Not measured*. Product matrices below use matched `dotnet-httpclient` only (not bombardier).
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 ```
 
+#### Block A — H1 plain
+
 | Arm | Generator | Notes |
 |---|---|---|
 | `origin-direct` | `dotnet-httpclient` | No proxy — origin ceiling under the same client used for publishable ratios |
 | `origin-direct-bombardier` | `bombardier` | External client check (CI installs bombardier) |
-| `bare-reverse-http1` / `nginx-reverse-http1` / `yarp-reverse-http1` / `twp-reverse-http1` | `dotnet-httpclient` | Same-session H1 plain reverse peers |
+| `bare-reverse-http1` | `dotnet-httpclient` | Thin C# H1 reverse (`BareHttp1ReverseProxy`) — .NET runtime / loopback ceiling for a three-process reverse hop; **not** a product peer |
+| `nginx-reverse-http1` / `yarp-reverse-http1` / `twp-reverse-http1` | `dotnet-httpclient` | Product peers (🥇 among these three by sustainable RPS) |
 
 **Windows** (`windows-latest`)
 
-| Arm | Generator | Sustain | Peak | % of origin-HttpClient |
-|---|---|---:|---:|---:|
-| origin-direct | dotnet-httpclient | **90,380** | **90,380** | **100%** |
-| origin-direct-bombardier | bombardier | **65,696** | **66,244** | **73.3%** |
-| bare-reverse-http1 | dotnet-httpclient | **45,173** | **45,173** | **50.0%** |
-| nginx-reverse-http1 | dotnet-httpclient | **25,660** | **27,096** | **30.0%** |
-| yarp-reverse-http1 | dotnet-httpclient | **38,885** | **38,885** | **43.0%** |
-| twp-reverse-http1 | dotnet-httpclient | **39,584** | **39,584** | **43.8%** |
+| Arm | Generator | Sustain | Peak | % of origin-HttpClient | RSS peak | CPU avg % |
+|---|---|---:|---:|---:|---:|---:|
+| origin-direct | dotnet-httpclient | **90,380** | **90,380** | **100%** | — | — |
+| origin-direct-bombardier | bombardier | **65,696** | **66,244** | **73.3%** | — | — |
+| bare-reverse-http1 | dotnet-httpclient | **45,173** | **45,173** | **50.0%** | — | — |
+| nginx-reverse-http1 | dotnet-httpclient | **25,660** | **27,096** | **30.0%** | — | — |
+| yarp-reverse-http1 | dotnet-httpclient | **38,885** | **38,885** | **43.0%** | — | — |
+| twp-reverse-http1 | dotnet-httpclient | 🥇 **39,584** | **39,584** | **43.8%** | — | — |
 
 **Linux** (`ubuntu-latest`)
 
-| Arm | Generator | Sustain | Peak | % of origin-HttpClient |
-|---|---|---:|---:|---:|
-| origin-direct | dotnet-httpclient | **72,194** | **72,194** | **100%** |
-| origin-direct-bombardier | bombardier | **42,636** | **42,636** | **59.1%** |
-| bare-reverse-http1 | dotnet-httpclient | **33,160** | **33,160** | **45.9%** |
-| nginx-reverse-http1 | dotnet-httpclient | **39,221** | **39,221** | **54.3%** |
-| yarp-reverse-http1 | dotnet-httpclient | **28,034** | **28,034** | **38.8%** |
-| twp-reverse-http1 | dotnet-httpclient | **32,516** | **32,516** | **45.0%** |
+| Arm | Generator | Sustain | Peak | % of origin-HttpClient | RSS peak | CPU avg % |
+|---|---|---:|---:|---:|---:|---:|
+| origin-direct | dotnet-httpclient | **72,194** | **72,194** | **100%** | — | — |
+| origin-direct-bombardier | bombardier | **42,636** | **42,636** | **59.1%** | — | — |
+| bare-reverse-http1 | dotnet-httpclient | **33,160** | **33,160** | **45.9%** | — | — |
+| nginx-reverse-http1 | dotnet-httpclient | 🥇 **39,221** | **39,221** | **54.3%** | — | — |
+| yarp-reverse-http1 | dotnet-httpclient | **28,034** | **28,034** | **38.8%** | — | — |
+| twp-reverse-http1 | dotnet-httpclient | **32,516** | **32,516** | **45.0%** | — | — |
 
-On this shared-VM shape, reverse peers sit at roughly **30–55%** of the origin-direct HttpClient peak (Linux nginx leads reverse; Windows TWP/YARP lead nginx/Windows). Absolute RPS still swing by runner — use the **%** column.
+Reverse peers are about **30–55%** of the origin-direct HttpClient peak on this runner class. Prefer the **%** column over absolute RPS across runs. 🥇 marks the highest **sustainable** RPS among **TWP / nginx / YARP** only (bare and origin-direct are controls).
+
+#### Block B — H2 TLS→H1
+
+Peer ratios (÷YARP / ÷nginx) and RSS/CPU. *Not measured.* 🥇 among TWP / nginx / YARP by sustainable RPS once numbers are pasted.
+
+**Windows** (`windows-latest`)
+
+| Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | RSS peak | CPU avg % |
+|---|---|---:|---:|---:|---:|---:|---:|
+| nginx-reverse-http2 | dotnet-httpclient | — | — | — | — | — | — |
+| yarp-reverse-http2 | dotnet-httpclient | — | — | — | — | — | — |
+| twp-reverse-http2-cleartext | dotnet-httpclient | — | — | — | — | — | — |
+
+**Linux** (`ubuntu-latest`)
+
+| Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | RSS peak | CPU avg % |
+|---|---|---:|---:|---:|---:|---:|---:|
+| nginx-reverse-http2 | dotnet-httpclient | — | — | — | — | — | — |
+| yarp-reverse-http2 | dotnet-httpclient | — | — | — | — | — | — |
+| twp-reverse-http2-cleartext | dotnet-httpclient | — | — | — | — | — | — |
+
+#### Block C — H3→H1
+
+Same layout as Block B. Requires QuicListener; nginx only with `http_v3_module`. *Not measured.* 🥇 among TWP / nginx / YARP by sustainable RPS once numbers are pasted.
+
+
+**Windows** (`windows-latest`)
+
+| Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | RSS peak | CPU avg % |
+|---|---|---:|---:|---:|---:|---:|---:|
+| nginx-reverse-http3-cleartext | dotnet-httpclient | — | — | — | — | — | — |
+| yarp-reverse-http3-cleartext | dotnet-httpclient | — | — | — | — | — | — |
+| twp-reverse-http3-cleartext | dotnet-httpclient | — | — | — | — | — | — |
+
+**Linux** (`ubuntu-latest`)
+
+| Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | RSS peak | CPU avg % |
+|---|---|---:|---:|---:|---:|---:|---:|
+| nginx-reverse-http3-cleartext | dotnet-httpclient | — | — | — | — | — | — |
+| yarp-reverse-http3-cleartext | dotnet-httpclient | — | — | — | — | — | — |
+| twp-reverse-http3-cleartext | dotnet-httpclient | — | — | — | — | — | — |
 
 **How to read the tables**
 
@@ -120,9 +164,9 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 
 Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS` = encrypted, `QUIC` = HTTP/3).
 
-Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB) @ `bf01825b` (every `--ramp` arm is three OS processes: load gen + origin child + proxy child; parent-seeded loopback CA). Same [32659721937](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32659721937); bridges [32659723583](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32659723583); MITM [32659725022](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32659725022). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Absolute RPS from older **combined** `--serve` TLS/QUIC-origin cells is not comparable — prefer TWP÷peer ratios. Laptop High-perf / cool-paired numbers stay on the [local lab](Performance-Profiling#local-windows-lab-developer-laptop).
+Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB) @ `bf01825b` (every `--ramp` arm is three OS processes: load gen + origin child + proxy child; parent-seeded loopback CA). Same [32659721937](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32659721937); bridges [32659723583](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32659723583); MITM [32659725022](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32659725022). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP÷peer ratios over absolute RPS. Laptop High-perf / cool-paired numbers stay on the [local lab](Performance-Profiling#local-windows-lab-developer-laptop).
 
-**Load generators:** Reverse inbound H3 arms use **`dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) after dual-listen reverse H3. nginx/Windows is same-OS only (no QUIC).
+**Load generators:** Reverse inbound H3 arms use **`dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`). nginx/Windows is same-OS only (no QUIC).
 
 | Mode | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---|---:|---:|---:|---:|---:|---:|
@@ -162,13 +206,13 @@ Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB) @ `bf01825b` (ever
 | MITM | HTTP/2 · TLS | HTTP/1 · TLS | **27,020** | **27,020** | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) |
 | MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **11,684** | **11,684** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | *Not possible* (no MITM) | *Not possible* (no MITM) |
 
-TWP÷YARP H1 plain ≈ **1.03×** (22,723 / 21,958); H1 TLS terminate ≈ **1.07×** (20,009 / 18,702). Three-process remasure @ `bf01825b`: H1→H3 ≈ **1.02×**, H2 TLS→H1 ≈ **1.03×**, h2c→H3 ≈ **1.06×**, H2 TLS→H3 ≈ **1.11×**, H3→H3 ≈ **1.31×**. Open Win gaps vs YARP (gate **>1.00×**): h2c→H1 ≈ **0.95×**, H3→H1 ≈ **0.90×**, H3→H2 ≈ **0.94×**. Prefer ratios over absolute RPS on GHA VMs. MITM publishes the same **15** Client×Origin pairs as Reverse (inspectable/decrypt), then dual-crypto extras (CONNECT, TLS↔TLS). nginx/YARP cannot MITM.
+TWP÷YARP H1 plain ≈ **1.03×** (22,723 / 21,958); H1 TLS terminate ≈ **1.07×** (20,009 / 18,702). Bridges @ `bf01825b`: H1→H3 ≈ **1.02×**, H2 TLS→H1 ≈ **1.03×**, h2c→H3 ≈ **1.06×**, H2 TLS→H3 ≈ **1.11×**, H3→H3 ≈ **1.31×**; h2c→H1 ≈ **0.95×**, H3→H1 ≈ **0.90×**, H3→H2 ≈ **0.94×**. Prefer ratios over absolute RPS on GHA VMs. MITM publishes the same **15** Client×Origin pairs as Reverse (inspectable/decrypt), then dual-crypto extras (CONNECT, TLS↔TLS). nginx/YARP cannot MITM.
 
 ## Linux — Titanium vs nginx vs YARP
 
-Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB) @ `bf01825b` (three-process harness; same [32659721937](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32659721937); bridges [32659723583](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32659723583); MITM [32659725022](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32659725022)). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** The RPS workflow installs nginx.org mainline (`http_v3_module`) and `libmsquic` (`QuicListener.IsSupported=true` on `ubuntu-latest`). Combined `--serve` TLS/QUIC-origin history is not comparable for absolute RPS.
+Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB) @ `bf01825b` (three-process harness; same [32659721937](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32659721937); bridges [32659723583](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32659723583); MITM [32659725022](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32659725022)). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** The RPS workflow installs nginx.org mainline (`http_v3_module`) and `libmsquic` (`QuicListener.IsSupported=true` on `ubuntu-latest`). Prefer ratios over absolute RPS.
 
-TWP÷nginx H1 plain reverse ≈ **0.85** (31,835 / 37,241); TWP÷YARP H1 plain ≈ **1.12×** (31,835 / 28,397). Prefer ratios over absolute RPS on GHA VMs (this Linux host sat well below the prior same-suite absolutes; ratios held).
+TWP÷nginx H1 plain reverse ≈ **0.85** (31,835 / 37,241); TWP÷YARP H1 plain ≈ **1.12×** (31,835 / 28,397).
 
 | Mode | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---|---:|---:|---:|---:|---:|---:|
@@ -214,7 +258,7 @@ On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.85** (31,835 / 37,241)
 
 **YARP HTTP/3 (this matrix):** TWP leads H3→H1 ≈ **1.06×** (19,915 / 18,747), H3→H2 ≈ **1.12×** (23,904 / 21,254), H3→H3 ≈ **1.22×** (19,361 / 15,825). H1→H2 ≈ **1.07×** (23,584 / 22,079). H1→H3 ≈ **1.06×** (17,563 / 16,643). h2c→H3 ≈ **1.05×**.
 
-**Windows vs Linux:** both CI envs are **4 vCPU / 16 GiB**, but do **not** compare absolute RPS across OS. Linux nginx still leads H1 plain/TLS terminate (TWP second, ahead of YARP). Windows reverse tiny-GET still has open TWP÷YARP cells on bridges @ `bf01825b` (h2c→H1 / H3→H1 / H3→H2). Cool laptop notes remain on [Performance Profiling](Performance-Profiling#local-windows-lab-developer-laptop).
+**Windows vs Linux:** both CI envs are **4 vCPU / 16 GiB**, but do **not** compare absolute RPS across OS. Linux nginx leads H1 plain/TLS terminate (TWP second, ahead of YARP). On Windows bridges @ `bf01825b`, TWP÷YARP is below 1.0× on h2c→H1 / H3→H1 / H3→H2. Cool laptop notes remain on [Performance Profiling](Performance-Profiling#local-windows-lab-developer-laptop).
 
 
 ### Tiny JSON reverse is nginx’s best case on Linux
@@ -244,7 +288,7 @@ Median of **3** repeats on `windows-latest` @ `8ac422ee`. Source: Actions [32631
 | 256 KiB | HTTP/2 · TLS | HTTP/1 · plain | 🥇 **2,414** | **2,438** | **222** | **222** | **2,302** | **2,642** |
 | 256 KiB | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **1,495** | **1,569** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **1,371** | **1,410** |
 
-nginx/Windows collapses on large reverse bodies in this harness; treat as same-OS only. H1 TLS **64 KiB** ≈ **1.10×** YARP; **256 KiB** ≈ **1.48×**. H2→H1 64 KiB ≈ **1.17×**. H3→H1 64 KiB ≈ **1.09×** (closed **>1.00×** gate); 256 KiB ≈ **1.09×**.
+nginx/Windows collapses on large reverse bodies in this harness; treat as same-OS only. H1 TLS **64 KiB** ≈ **1.10×** YARP; **256 KiB** ≈ **1.48×**. H2→H1 64 KiB ≈ **1.17×**. H3→H1 64 KiB ≈ **1.09×**; 256 KiB ≈ **1.09×**.
 
 ### Linux — heavier reverse GET (64 KiB / 256 KiB)
 
@@ -271,7 +315,7 @@ Median of **3** repeats on `windows-latest` @ `21396a4d`. Source: Actions [32608
 | HTTP/2 · TLS | HTTP/1 · plain | 🥇 **6,006** | **6,006** | **423** | **444** | **4,880** | **4,880** |
 | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **2,772** | **2,816** | *Not possible* | *Not possible* | **2,769** | **2,861** |
 
-TWP leads H1 POST (~**1.28×** YARP), H2 POST (~**1.23×** YARP), and H3 POST (~**1.00×** YARP) after the streamed-CL fix (`ab16a871`) and CI dual-listen / origin-release hardening (`21396a4d`).
+TWP leads H1 POST (~**1.28×** YARP), H2 POST (~**1.23×** YARP), and H3 POST (~**1.00×** YARP).
 
 ### Linux — POST 64 KiB request + 64 KiB response
 
@@ -343,7 +387,7 @@ Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `21396a4d`. Source:
 | Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **16** | **210** | *Not possible* | *Not possible* | **13** | **1,884** |
 | Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | **35,119** | **35,119** | 🥇 **39,090** | **39,090** | **32,230** | **32,230** |
 
-Slow consumer is sleep-bound; H1/H2/H3 sit in the same band once bodies stream. H3 slow-consumer sustain **0** on older GHA (fast path dropped CL>16 KiB — fixed in `36d21f67` / `cffd9f09`; incomplete-copy pool poison fixed in `21396a4d`). Early-response H3: TWP leads on both OS after duplex upload/`ReceiveResponse` overlap. Duplex H2: TWP holds a higher sustain than YARP on this pass (YARP peaks higher). WebSocket: YARP leads on Windows; Linux nginx leads.
+Slow consumer is sleep-bound; H1/H2/H3 sit in the same band once bodies stream. Early-response H3: TWP leads on both OS. Duplex H2: TWP holds a higher sustain than YARP on this pass (YARP peaks higher). WebSocket: YARP leads on Windows; Linux nginx leads.
 
 ### TLS termination cost (H1 TLS → cleartext origin)
 
@@ -351,7 +395,7 @@ Isolates keep-alive tiny GET vs **new connection per request** (handshake-domina
 
 #### Windows
 
-Median of **3** repeats on `windows-latest` @ `13059143` (origin Connection strip on H1 terminate lite). Source: Actions [32625349927](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32625349927) (`compare-tls-cost`). Absolute RPS on GHA swings hard; prefer **TWP÷YARP**. Gate: **>1.00×** YARP (second when nginx leads).
+Median of **3** repeats on `windows-latest` @ `13059143`. Source: Actions [32625349927](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32625349927) (`compare-tls-cost`). Absolute RPS on GHA swings hard; prefer **TWP÷YARP**.
 
 | Workload | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---:|---:|---:|---:|---:|---:|
@@ -369,7 +413,7 @@ Median of **3** repeats @ `13059143`. Source: Actions [32625349927](https://gith
 | New-connection · tiny GET | **999** | **999** | 🥇 **1,023** | **1,024** | **986** | **986** |
 | Keep-alive · 256 KiB GET | 🥇 **2,776** | **2,776** | **2,685** | **2,685** | **2,194** | **2,194** |
 
-**Verdict:** All three workloads **>1.00×** YARP on both OS. nginx still leads Linux keep-alive tiny and Linux NC — TWP **second**, YARP third. Root cause for the old NC gap: lite path forwarded client `Connection: close` to the origin (pool miss every request).
+All three workloads are **>1.00×** YARP on both OS. nginx leads Linux keep-alive tiny and Linux new-connection; TWP is second, YARP third.
 
 ## Other measurements
 
