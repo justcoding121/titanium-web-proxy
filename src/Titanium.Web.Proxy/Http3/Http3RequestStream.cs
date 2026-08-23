@@ -474,7 +474,9 @@ internal static class Http3RequestStream
 
         try
         {
-            await DrainClientFinOnlyAsync(stream, streamToken);
+            // Bodiless GET/HEAD usually FIN on HEADERS; skip the extra ReadAsync when already closed.
+            if (!stream.ReadsClosed.IsCompleted)
+                await DrainClientFinOnlyAsync(stream, streamToken);
             streamState.RequestClosed = true;
 
             var originAuthorityHost = authority;
@@ -542,7 +544,8 @@ internal static class Http3RequestStream
                            ?? new Response { StatusCode = 502, StatusDescription = "Bad Gateway", HttpVersion = HttpHeader.Version30 };
             try
             {
-                await SendResponseAsync(stream, response, qpackContext, streamToken);
+                // CompleteWrites follows — skip Flush (same as H3→origin fast path).
+                await SendResponseAsync(stream, response, qpackContext, streamToken, flush: false);
 
                 qpackContext?.InFlightMinAbsoluteIndex.TryRemove(stream.Id, out _);
                 streamState.ResponseClosed = true;
@@ -800,7 +803,12 @@ internal static class Http3RequestStream
     /// <summary>
     ///     Sends the HTTP/3 response (HEADERS frame + optional DATA frames) to the client stream.
     /// </summary>
-    private static async Task SendResponseAsync(QuicStream stream, Response response, QpackContext? qpackContext, CancellationToken ct)
+    /// <param name="flush">
+    ///     When false, skip <see cref="QuicStream.FlushAsync"/> — caller will
+    ///     <see cref="QuicStream.CompleteWrites"/> (origin fast-path; Flush costs RPS).
+    /// </param>
+    private static async Task SendResponseAsync(QuicStream stream, Response response, QpackContext? qpackContext,
+        CancellationToken ct, bool flush = true)
     {
         // EncodeResponse already omits transfer-encoding; avoid a RemoveHeader scan on the hot path
         // when HPACK already produced lowercase names (H3→H2).
@@ -808,26 +816,30 @@ internal static class Http3RequestStream
             response.Headers.RemoveHeader("transfer-encoding");
 
         var qpackHeaders = QpackEncoder.EncodeResponse(response, qpackContext);
-        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
 
         if (response.StreamBodyWriter != null && !response.IsBodySent)
         {
-            // Http3OriginBridge streams the origin body; drain it as DATA frames (same contract as
-            // H1 BodyStreamWriter / H2 EmitSyntheticResponseAsync).
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
             var bodyWriter = new Http3DataBodyWriter(stream);
             await response.StreamBodyWriter(bodyWriter, ct);
             response.IsBodySent = true;
         }
         else
         {
-            // Send body if present. Ok()/Respond assign Body without setting IsBodyRead (H1 uses
-            // BodyAvailable); requiring IsBodyRead alone dropped every synthetic H3 response body.
             var body = response.BodyAvailable || response.IsBodyRead ? response.Body : null;
             if (body is { Length: > 0 })
-                await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct);
+            {
+                // Tiny/medium buffered body: one QuicStream write for HEADERS+DATA.
+                await Http3Frame.WriteHeadersAndDataAsync(stream, qpackHeaders, body, ct);
+            }
+            else
+            {
+                await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
+            }
         }
 
-        await stream.FlushAsync(ct);
+        if (flush)
+            await stream.FlushAsync(ct);
     }
 
     private static string StatusCodeString(int statusCode) => statusCode switch

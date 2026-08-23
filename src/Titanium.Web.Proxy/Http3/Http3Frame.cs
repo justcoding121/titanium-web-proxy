@@ -132,6 +132,55 @@ internal sealed class Http3Frame
     }
 
     /// <summary>
+    ///     Writes HEADERS and DATA as a single <see cref="Stream.WriteAsync"/> when both payloads are
+    ///     small (tiny-GET fast path). Avoids an extra QuicStream write syscall between frames.
+    /// </summary>
+    public static async ValueTask WriteHeadersAndDataAsync(
+        Stream stream,
+        ReadOnlyMemory<byte> headersPayload,
+        ReadOnlyMemory<byte> dataPayload,
+        CancellationToken cancellationToken)
+    {
+        const int headerCap = 16;
+        var total = headerCap + headersPayload.Length + headerCap + dataPayload.Length;
+        // Cap coalesce copy size; larger bodies keep separate writes (no huge copy).
+        if (total > 8 * 1024)
+        {
+            await WriteAsync(stream, Http3FrameType.Headers, headersPayload, cancellationToken);
+            if (!dataPayload.IsEmpty)
+                await WriteAsync(stream, Http3FrameType.Data, dataPayload, cancellationToken);
+            return;
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(total);
+        try
+        {
+            var o = 0;
+            o += Http3VarInt.Write(rented.AsSpan(o), Http3FrameType.Headers);
+            o += Http3VarInt.Write(rented.AsSpan(o), (ulong)headersPayload.Length);
+            if (!headersPayload.IsEmpty)
+            {
+                headersPayload.Span.CopyTo(rented.AsSpan(o));
+                o += headersPayload.Length;
+            }
+
+            o += Http3VarInt.Write(rented.AsSpan(o), Http3FrameType.Data);
+            o += Http3VarInt.Write(rented.AsSpan(o), (ulong)dataPayload.Length);
+            if (!dataPayload.IsEmpty)
+            {
+                dataPayload.Span.CopyTo(rented.AsSpan(o));
+                o += dataPayload.Length;
+            }
+
+            await stream.WriteAsync(rented.AsMemory(0, o), cancellationToken);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    /// <summary>
     ///     Writes a zero-payload frame (used for GOAWAY and some SETTINGS without parameters).
     /// </summary>
     public static async ValueTask WriteAsync(
