@@ -2182,12 +2182,10 @@ public partial class ProxyServer : IDisposable
     /// <returns>The task.</returns>
     private async Task HandleClient(Socket tcpClientSocket, ProxyEndPoint endPoint)
     {
-        // Match Kestrel SocketConnectionListener: only NoDelay is set on accept (already applied
-        // in AcceptLoopAsync). Socket.ReceiveTimeout/SendTimeout do not bound our async reads
-        // (see ClientHeaderTimeoutSeconds). SO_LINGER(abortive) was previously always setsockopt'd
-        // even when TcpTimeWaitSeconds==0 — skip the default-0 case to avoid per-NC syscall noise.
-        if (TcpTimeWaitSeconds != 0)
-            tcpClientSocket.LingerState = new LingerOption(true, TcpTimeWaitSeconds);
+        // Match Kestrel on ReceiveTimeout/SendTimeout (async reads ignore them). Keep SO_LINGER:
+        // TcpTimeWaitSeconds==0 → LingerOption(true, 0) is abortive RST (avoids TIME_WAIT on NC);
+        // omitting setsockopt falls back to graceful FIN and accumulates TIME_WAIT under churn.
+        tcpClientSocket.LingerState = new LingerOption(true, TcpTimeWaitSeconds);
 
         if (EnableTcpKeepAlive)
             tcpClientSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
