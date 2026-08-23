@@ -23,7 +23,8 @@ How the throughput hotspots behind the numbers on the [Performance](Performance)
 All throughput work starts from [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe):
 
 - Each **arm** is one topology: client protocol × origin protocol × TLS/cleartext × reverse/MITM (e.g. `twp-reverse-http2-cleartext` = H2 TLS client → H2→H1 bridge → cleartext H1 origin).
-- Every TWP arm has a **control arm** — the managed reverse peer (and the native reverse peer where it can run the path) hosting the *identical* workload in the same process and session, so both sides see the same machine state.
+- Every TWP arm has a **control arm** — the managed reverse peer (and the native reverse peer where it can run the path) hosting the *identical* workload in the same session, so both sides see the same machine state.
+- Every `--ramp` arm is **three OS processes** (parent load generator + origin child + proxy child) with a parent-seeded loopback CA (`TWP_RPS_CERT_DIR`). Combined `--serve` is debug-only. Absolute RPS from older combined TLS/QUIC-origin cells is not comparable to split runs — prefer TWP÷peer ratios.
 - The probe **ramps concurrency** (typically c=8→64) and reports **sustainable RPS**: the last concurrency step that still met the error-rate and p99-latency SLO. A ramp that grows RPS but blows p99 is a queue, not throughput.
 - Results land in timestamped CSVs under `tools/RpsLoadProbe/results/`. Publishable [Performance](Performance) tables cite **GitHub Actions** run IDs (median of 3 on matched 4 vCPU / 16 GiB runners). This page keeps the **local Windows lab** so a cool paired win can be proven before spending a CI remasure.
 
@@ -262,7 +263,7 @@ For arms where the sweep says "per-request cost" or "saturation," attach the sam
 ```powershell
 tools/RpsLoadProbe/bin/Release/net10.0/RpsLoadProbe.exe --ramp --mode <arm> --concurrency 64 `
   --warmup-sec 2 --duration-sec 150 --results-dir tools/RpsLoadProbe/results/profiling
-# ramp logs print: attach: combined --serve pid=N  (or split origin/proxy pids)
+# ramp logs print: attach: split origin pid=… proxy pid=…
 # in a second shell:
 dotnet-dump collect -p <proxy PID> --type Full
 dotnet-trace collect -p <proxy PID> --profile dotnet-sampled-thread-time --duration 00:00:25

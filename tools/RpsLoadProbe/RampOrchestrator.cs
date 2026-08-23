@@ -135,7 +135,7 @@ internal static class RampOrchestrator
 
         ProbeLog.Info(MachineInfo.FormatReport(nginxVersion));
         ProbeLog.Info("Close browsers and other heavy apps before a publishable run.");
-        ProbeLog.Info("Process split: origin/proxy as children when possible; TLS arms use combined --serve.");
+        ProbeLog.Info("Process split: every arm is three OS processes (load generator + origin child + proxy child).");
         if (options.Repeats > 1)
             ProbeLog.Info($"Repeats={options.Repeats} (median peak RPS per arm — dampens GHA runner noise).");
         ProbeLog.Info(string.Empty);

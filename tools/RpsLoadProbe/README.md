@@ -31,7 +31,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-terminate
 
 Client TLS → cleartext origin across H1 TLS terminate, H2→H1, h2c→H1, and H3→H1 arms.
 
-Cleartext-origin terminate arms run **origin and proxy in separate processes** so the proxy under test does not share a ThreadPool/GC with the managed origin server.
+Every `--ramp` arm is **three OS processes**: parent load generator, `--serve-origin` child, `--serve-proxy` child. The parent seeds a temp test CA (`TWP_RPS_CERT_DIR`) so HTTPS/QUIC origin and proxy share the same root. Combined `--serve` remains for local debugging only; it is not on the ramp path. Absolute RPS from older combined TLS/QUIC-origin cells is not comparable to split runs — prefer TWP÷peer ratios.
 
 ## Heavier reverse workloads (bodies / POST / lossy / TLS cost)
 

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using Titanium.Web.Proxy.RpsLoadProbe.Support;
 
 namespace Titanium.Web.Proxy.RpsLoadProbe;
 
@@ -28,16 +29,14 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     public int? OriginQuicPort { get; }
 
     /// <summary>
-    ///     PID of the proxy (or combined --serve) child. Use for <c>dotnet-dump</c> / <c>dotnet-trace</c>.
+    ///     PID of the proxy child. Use for <c>dotnet-dump</c> / <c>dotnet-trace</c>.
     /// </summary>
     public int ProxyProcessId { get; }
 
-    /// <summary>
-    ///     PID of the origin child when process-split; null when origin+proxy share one combined --serve process.
-    /// </summary>
+    /// <summary>PID of the origin child. Ramp always process-splits; never null after <see cref="StartAsync"/>.</summary>
     public int? OriginProcessId { get; }
 
-    /// <summary>True when origin and proxy share one OS process (TLS/QUIC CA must be shared).</summary>
+    /// <summary>True when origin and proxy share one OS process (leftover combined <c>--serve</c> only).</summary>
     public bool IsCombinedServe { get; }
 
     private ChildProcessStack(Process? originProcess, StreamReader originStdout, Process proxyProcess,
@@ -71,34 +70,47 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         workload ??= WorkloadOptions.TinyGet;
         var exe = Environment.ProcessPath
                   ?? throw new InvalidOperationException("Cannot locate current process path for child spawn.");
+        var certDir = LoopbackCertificateAuthority.SeedDirectory();
+        var childEnv = BuildChildEnv(workload, certDir);
 
-        // Combined --serve only when origin and proxy must share the in-process test CA
-        // (HTTPS / QUIC origin). Cleartext-origin terminate arms run split so TWP is not
-        // contending with the origin server for CPU/GC the way a separate native reverse peer process does not.
-        if (RequiresCombinedServe(mode))
-            return await StartCombinedServeAsync(exe, mode, nginxPath, maxCachedConnections, workload,
-                cancellationToken);
+        var origin = StartChild(exe, FormatOriginSpawnArgs(mode, workload), childEnv);
+        Dictionary<string, string> originLines;
+        try
+        {
+            originLines = await ReadUntilReadyAsync(origin, cancellationToken);
+        }
+        catch
+        {
+            TryKill(origin);
+            throw;
+        }
 
-        var originArgs = mode is ProbeMode.ReverseHttp2ToH2c or ProbeMode.ReverseH2cToH2c
-            or ProbeMode.YarpReverseHttp2ToH2c or ProbeMode.YarpReverseH2cToH2c
-            ? $"--serve-origin --h2c{FormatOriginWorkloadArgs(workload)}"
-            : $"--serve-origin{FormatOriginWorkloadArgs(workload)}";
-        var origin = StartChild(exe, originArgs);
-        var originLines = await ReadUntilReadyAsync(origin, cancellationToken);
-        var originHttp = Require(originLines, "origin_http");
-        var originHttpPort = new Uri(originHttp).Port;
+        var originHttpPort = TryParseUrlPort(originLines, "origin_http");
+        var originHttpsPort = TryParseUrlPort(originLines, "origin_https");
+        var originQuicPort = TryParseInt(originLines, "origin_quic_port");
+        var extraHttpsPorts = originLines
+            .Where(kv => kv.Key.StartsWith("origin_https_extra", StringComparison.OrdinalIgnoreCase))
+            .Select(kv => new Uri(kv.Value).Port)
+            .Where(p => p > 0)
+            .ToList();
 
         var modeName = ServeProxyHost.ModeName(mode);
-        var proxyArgs = new StringBuilder()
-            .Append(CultureInfo.InvariantCulture, $"--serve-proxy --mode {modeName} --origin-http-port {originHttpPort}");
+        var proxyArgs = new StringBuilder().Append(CultureInfo.InvariantCulture, $"--serve-proxy --mode {modeName}");
+        if (originHttpPort is > 0)
+            proxyArgs.Append(CultureInfo.InvariantCulture, $" --origin-http-port {originHttpPort}");
+        if (originHttpsPort is > 0)
+            proxyArgs.Append(CultureInfo.InvariantCulture, $" --origin-https-port {originHttpsPort}");
+        if (originQuicPort is > 0)
+            proxyArgs.Append(CultureInfo.InvariantCulture, $" --origin-quic-port {originQuicPort}");
+        foreach (var extraPort in extraHttpsPorts)
+            proxyArgs.Append(CultureInfo.InvariantCulture, $" --origin-https-extra-port {extraPort}");
         if (!string.IsNullOrWhiteSpace(nginxPath))
             proxyArgs.Append(CultureInfo.InvariantCulture, $" --nginx-path \"{nginxPath}\"");
         if (maxCachedConnections is { } m)
             proxyArgs.Append(CultureInfo.InvariantCulture, $" --max-cached-connections {m}");
         proxyArgs.Append(FormatOriginWorkloadArgs(workload));
 
-        var proxy = StartChild(exe, proxyArgs.ToString(),
-            workload.CaptureTlsTiming ? new Dictionary<string, string> { ["TWP_RPS_CAPTURE_TLS"] = "1" } : null);
+        var proxy = StartChild(exe, proxyArgs.ToString(), childEnv);
         Dictionary<string, string> proxyLines;
         try
         {
@@ -118,88 +130,95 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         proxyLines.TryGetValue("http_version", out var httpVersionText);
         proxyLines.TryGetValue("load_generator", out var loadGenerator);
         var (httpVersion, policy) = ParseHttpVersion(httpVersionText);
-        int? quicPort = null;
-        if (proxyLines.TryGetValue("quic_port", out var quicPortText) &&
-            int.TryParse(quicPortText, out var qp))
-            quicPort = qp;
-
-        return new ChildProcessStack(origin, origin.StandardOutput, proxy, proxy.StandardOutput,
-            new Uri(target), [new Uri(target)],
-            string.IsNullOrWhiteSpace(explicitProxy) ? null : explicitProxy, nginxVersion,
-            httpVersion, policy, loadGenerator, quicPort, yarpVersion: yarpVersion);
-    }
-
-    /// <summary>
-    /// True when the origin speaks TLS/QUIC and must share the probe's in-process test CA with the proxy.
-    /// Cleartext-origin terminate arms (H1 TLS / H2→H1 / H2→h2c / native reverse H2 / H3→H1) stay process-split.
-    /// </summary>
-    private static bool RequiresCombinedServe(ProbeMode mode) => mode is
-        ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp3
-        or ProbeMode.ReverseHttp11ToHttp2 or ProbeMode.YarpReverseHttp11ToHttp2
-        or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3
-        or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
-        or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
-        or ProbeMode.YarpReverseHttp3ToHttp3
-        or ProbeMode.ReverseH2c or ProbeMode.YarpReverseH2c
-        or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
-        or ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1
-        or ProbeMode.HttpsMitm or ProbeMode.ReverseHttp1Mitm
-        or ProbeMode.ReverseHttp1ToHttps or ProbeMode.YarpReverseHttp1ToHttps
-        or ProbeMode.YarpReverseHttp2ToHttps
-        or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi;
-
-    private static async Task<ChildProcessStack> StartCombinedServeAsync(string exe, ProbeMode mode,
-        string? nginxPath, int? maxCachedConnections, WorkloadOptions workload, CancellationToken cancellationToken)
-    {
-        var modeName = ServeProxyHost.ModeName(mode);
-        var args = new StringBuilder().Append(CultureInfo.InvariantCulture,
-            $"--serve --mode {modeName}{FormatOriginWorkloadArgs(workload)}");
-        if (!string.IsNullOrWhiteSpace(nginxPath))
-            args.Append(CultureInfo.InvariantCulture, $" --nginx-path \"{nginxPath}\"");
-        if (maxCachedConnections is { } m)
-            args.Append(CultureInfo.InvariantCulture, $" --max-cached-connections {m}");
-
-        var serve = StartChild(exe, args.ToString(),
-            workload.CaptureTlsTiming ? new Dictionary<string, string> { ["TWP_RPS_CAPTURE_TLS"] = "1" } : null);
-        Dictionary<string, string> lines;
-        try
-        {
-            lines = await ReadUntilReadyAsync(serve, cancellationToken);
-        }
-        catch
-        {
-            TryKill(serve);
-            throw;
-        }
-
-        var target = Require(lines, "target_for_client");
-        lines.TryGetValue("explicit_proxy", out var explicitProxy);
-        lines.TryGetValue("nginx", out var nginxVersion);
-        lines.TryGetValue("yarp", out var yarpVersion);
-        lines.TryGetValue("http_version", out var httpVersionText);
+        int? quicPort = TryParseInt(proxyLines, "quic_port");
+        originQuicPort ??= TryParseInt(proxyLines, "origin_quic_port");
 
         var targets = new List<Uri> { new(target) };
-        foreach (var kv in lines)
+        foreach (var kv in proxyLines)
         {
             if (kv.Key.StartsWith("target_for_client_extra", StringComparison.OrdinalIgnoreCase))
                 targets.Add(new Uri(kv.Value));
         }
 
-        var (httpVersion, policy) = ParseHttpVersion(httpVersionText);
-        lines.TryGetValue("load_generator", out var loadGenerator);
-        int? quicPort = null;
-        if (lines.TryGetValue("quic_port", out var quicPortText) &&
-            int.TryParse(quicPortText, out var qp))
-            quicPort = qp;
-        int? originQuicPort = null;
-        if (lines.TryGetValue("origin_quic_port", out var originQuicText) &&
-            int.TryParse(originQuicText, out var oqp))
-            originQuicPort = oqp;
-
-        return new ChildProcessStack(null, serve.StandardOutput, serve, serve.StandardOutput,
+        var stack = new ChildProcessStack(origin, origin.StandardOutput, proxy, proxy.StandardOutput,
             new Uri(target), targets,
             string.IsNullOrWhiteSpace(explicitProxy) ? null : explicitProxy, nginxVersion,
             httpVersion, policy, loadGenerator, quicPort, originQuicPort, yarpVersion);
+        if (stack.OriginProcessId is null)
+            throw new InvalidOperationException("Ramp requires a split origin child; combined --serve is not used.");
+        return stack;
+    }
+
+    private static string FormatOriginSpawnArgs(ProbeMode mode, WorkloadOptions workload)
+    {
+        var extra = FormatOriginWorkloadArgs(workload);
+        return OriginRecipeFor(mode) switch
+        {
+            OriginRecipe.H2c => $"--serve-origin --h2c{extra}",
+            OriginRecipe.Https => $"--serve-origin --https{extra}",
+            OriginRecipe.HttpsOnly => $"--serve-origin --https --https-only{extra}",
+            OriginRecipe.HttpsHttp1Only => $"--serve-origin --https --https-only --https-protocols http1{extra}",
+            OriginRecipe.HttpsMulti => $"--serve-origin --https --https-only --extra-https-origins 15{extra}",
+            OriginRecipe.Quic => $"--serve-origin --quic{extra}",
+            _ => $"--serve-origin{extra}"
+        };
+    }
+
+    private static OriginRecipe OriginRecipeFor(ProbeMode mode) => mode switch
+    {
+        ProbeMode.ReverseHttp2ToH2c or ProbeMode.ReverseH2cToH2c
+            or ProbeMode.YarpReverseHttp2ToH2c or ProbeMode.YarpReverseH2cToH2c => OriginRecipe.H2c,
+        ProbeMode.HttpsMitm or ProbeMode.ReverseHttp1Mitm
+            or ProbeMode.ReverseHttp1ToHttps or ProbeMode.YarpReverseHttp1ToHttps => OriginRecipe.Https,
+        ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1 => OriginRecipe.HttpsHttp1Only,
+        ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi => OriginRecipe.HttpsMulti,
+        ProbeMode.ReverseHttp2 or ProbeMode.ReverseH2c or ProbeMode.YarpReverseH2c
+            or ProbeMode.ReverseHttp11ToHttp2 or ProbeMode.YarpReverseHttp11ToHttp2
+            or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
+            or ProbeMode.YarpReverseHttp2ToHttps => OriginRecipe.HttpsOnly,
+        ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3
+            or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
+            or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
+            or ProbeMode.YarpReverseHttp3ToHttp3 => OriginRecipe.Quic,
+        _ => OriginRecipe.CleartextH1
+    };
+
+    private enum OriginRecipe
+    {
+        CleartextH1,
+        H2c,
+        Https,
+        HttpsOnly,
+        HttpsHttp1Only,
+        HttpsMulti,
+        Quic
+    }
+
+    private static Dictionary<string, string> BuildChildEnv(WorkloadOptions workload, string certDir)
+    {
+        var env = new Dictionary<string, string>
+        {
+            [LoopbackCertificateAuthority.CertDirEnvironmentVariable] = certDir
+        };
+        if (workload.CaptureTlsTiming)
+            env["TWP_RPS_CAPTURE_TLS"] = "1";
+        return env;
+    }
+
+    private static int? TryParseUrlPort(Dictionary<string, string> map, string key)
+    {
+        if (!map.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
+            return null;
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Port > 0 ? uri.Port : null;
+    }
+
+    private static int? TryParseInt(Dictionary<string, string> map, string key)
+    {
+        if (!map.TryGetValue(key, out var text) ||
+            !int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ||
+            value <= 0)
+            return null;
+        return value;
     }
 
     private static string FormatOriginWorkloadArgs(WorkloadOptions workload)

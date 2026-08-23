@@ -21,8 +21,14 @@ internal static class Cli
         var durationSec = 20;
         var enableHttps = false;
         var enableH2c = false;
+        var enableQuic = false;
+        var httpsOnly = false;
+        var httpsProtocols = "http1and2";
+        var extraHttpsOrigins = 0;
         var originHttpPort = 0;
         var originHttpsPort = 0;
+        var originQuicPort = 0;
+        var originHttpsExtraPorts = new List<int>();
         int? maxCachedConnections = null;
         var repeats = 1;
         var method = "GET";
@@ -58,8 +64,21 @@ internal static class Cli
                 case "--https":
                     enableHttps = true;
                     break;
+                case "--https-only":
+                    httpsOnly = true;
+                    break;
+                case "--https-protocols":
+                    httpsProtocols = RequireValue(args, ref i, "--https-protocols");
+                    break;
                 case "--h2c":
                     enableH2c = true;
+                    break;
+                case "--quic":
+                    enableQuic = true;
+                    break;
+                case "--extra-https-origins":
+                    extraHttpsOrigins = int.Parse(RequireValue(args, ref i, "--extra-https-origins"),
+                        CultureInfo.InvariantCulture);
                     break;
                 case "--origin-http-port":
                     originHttpPort = int.Parse(RequireValue(args, ref i, "--origin-http-port"),
@@ -68,6 +87,14 @@ internal static class Cli
                 case "--origin-https-port":
                     originHttpsPort = int.Parse(RequireValue(args, ref i, "--origin-https-port"),
                         CultureInfo.InvariantCulture);
+                    break;
+                case "--origin-quic-port":
+                    originQuicPort = int.Parse(RequireValue(args, ref i, "--origin-quic-port"),
+                        CultureInfo.InvariantCulture);
+                    break;
+                case "--origin-https-extra-port":
+                    originHttpsExtraPorts.Add(int.Parse(RequireValue(args, ref i, "--origin-https-extra-port"),
+                        CultureInfo.InvariantCulture));
                     break;
                 case "--nginx-path":
                     nginxPath = RequireValue(args, ref i, "--nginx-path");
@@ -166,10 +193,17 @@ internal static class Cli
         {
             return command switch
             {
-                "serve-origin" => ServeOriginHost.RunAsync(enableHttps, enableH2c, cts.Token, workload)
-                    .GetAwaiter().GetResult(),
-                "serve-proxy" => RunServeProxy(modeText, originHttpPort, originHttpsPort, nginxPath,
-                    maxCachedConnections, cts.Token, workload),
+                "serve-origin" => ServeOriginHost.RunAsync(new ServeOriginFlags
+                    {
+                        EnableHttps = enableHttps,
+                        EnableH2c = enableH2c,
+                        EnableQuic = enableQuic,
+                        HttpsOnly = httpsOnly,
+                        HttpsProtocols = httpsProtocols,
+                        ExtraHttpsOrigins = extraHttpsOrigins
+                    }, cts.Token, workload).GetAwaiter().GetResult(),
+                "serve-proxy" => RunServeProxy(modeText, originHttpPort, originHttpsPort, originQuicPort,
+                    originHttpsExtraPorts, nginxPath, maxCachedConnections, cts.Token, workload),
                 "serve" => RunServe(modeText, nginxPath, maxCachedConnections, cts.Token, workload),
                 "ramp" => RunRamp(modeText, nginxPath, resultsDir, concurrency, warmupSec, durationSec,
                     maxCachedConnections, repeats, workload, cts.Token),
@@ -197,13 +231,14 @@ internal static class Cli
         return ServeHost.RunAsync(mode, nginxPath, maxCachedConnections, ct, workload).GetAwaiter().GetResult();
     }
 
-    private static int RunServeProxy(string? modeText, int originHttpPort, int originHttpsPort, string? nginxPath,
-        int? maxCachedConnections, CancellationToken ct, WorkloadOptions workload)
+    private static int RunServeProxy(string? modeText, int originHttpPort, int originHttpsPort, int originQuicPort,
+        IReadOnlyList<int> extraHttpsPorts, string? nginxPath, int? maxCachedConnections, CancellationToken ct,
+        WorkloadOptions workload)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode) || IsMultiArmMode(mode))
             return Fail("Required: --serve-proxy --mode <single arm>");
-        return ServeProxyHost.RunAsync(mode, originHttpPort, originHttpsPort, nginxPath, maxCachedConnections, ct,
-                workload)
+        return ServeProxyHost.RunAsync(mode, originHttpPort, originHttpsPort, originQuicPort, extraHttpsPorts,
+                nginxPath, maxCachedConnections, ct, workload)
             .GetAwaiter().GetResult();
     }
 
@@ -447,9 +482,10 @@ internal static class Cli
 
             Usage:
               RpsLoadProbe --serve --mode <mode> [--nginx-path PATH] [--max-cached-connections N] [--response-bytes N]
-              RpsLoadProbe --serve-origin [--https | --h2c] [--response-bytes N]
-              RpsLoadProbe --serve-proxy --mode <http1 mode> --origin-http-port N
+              RpsLoadProbe --serve-origin [--https [--https-only] [--https-protocols http1|http1and2] [--extra-https-origins N] | --h2c | --quic]
+              RpsLoadProbe --serve-proxy --mode <arm> [--origin-http-port N] [--origin-https-port N] [--origin-quic-port N]
               RpsLoadProbe --ramp  --mode <mode> [options]
+              --ramp always uses three processes (load gen + origin child + proxy child). --serve is debug-only.
 
             Modes:
               reverse-http1           TWP TransparentProxyEndPoint -> Kestrel HTTP/1
@@ -515,6 +551,10 @@ internal static class Cli
             Options:
               --nginx-path PATH
               --results-dir DIR
+              --https / --https-only / --https-protocols http1|http1and2 / --extra-https-origins N
+              --h2c / --quic         Origin listen shape for --serve-origin
+              --origin-http-port N / --origin-https-port N / --origin-quic-port N
+              --origin-https-extra-port N   Repeatable; explicit-multi extras
               --concurrency LIST      Default: 8,16,24,32,48,64,128,256,512
               --warmup-sec N
               --duration-sec N

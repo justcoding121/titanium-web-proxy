@@ -3,32 +3,74 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 
 namespace Titanium.Web.Proxy.RpsLoadProbe;
 
+internal sealed class ServeOriginFlags
+{
+    public bool EnableHttps { get; init; }
+    public bool EnableH2c { get; init; }
+    public bool EnableQuic { get; init; }
+    public bool HttpsOnly { get; init; }
+    public string HttpsProtocols { get; init; } = "http1and2";
+    public int ExtraHttpsOrigins { get; init; }
+}
+
 internal static class ServeOriginHost
 {
-    public static async Task<int> RunAsync(bool enableHttps, bool enableH2c, CancellationToken cancellationToken,
+    public static async Task<int> RunAsync(ServeOriginFlags flags, CancellationToken cancellationToken,
         WorkloadOptions? workload = null)
     {
-        if (enableHttps && enableH2c)
-            throw new ArgumentException("--https and --h2c are mutually exclusive.");
+        var exclusive = (flags.EnableHttps ? 1 : 0) + (flags.EnableH2c ? 1 : 0) + (flags.EnableQuic ? 1 : 0);
+        if (exclusive > 1)
+            throw new ArgumentException("--https, --h2c, and --quic are mutually exclusive.");
+        if (flags.HttpsOnly && !flags.EnableHttps)
+            throw new ArgumentException("--https-only requires --https.");
+        if (flags.ExtraHttpsOrigins > 0 && !flags.EnableHttps)
+            throw new ArgumentException("--extra-https-origins requires --https.");
 
         workload ??= WorkloadOptions.TinyGet;
         var responseBytes = workload.ResponseBytes > 0 ? workload.ResponseBytes : WorkloadOptions.TinyJsonBytes;
 
-        await using var origin = enableH2c
-            ? await OriginServer.StartAsync(new OriginListenOptions
-            {
-                EnableHttp = true,
-                EnableHttps = false,
-                HttpProtocols = HttpProtocols.Http2,
-                ResponseBytes = responseBytes
-            }, cancellationToken, workload)
-            : await OriginServer.StartAsync(enableHttps, responseBytes, cancellationToken, workload);
-        await ProbeLog.WriteProtocolLineAsync($"origin_http={origin.HttpUrl}", cancellationToken);
-        if (enableHttps)
+        if (flags.EnableQuic)
+        {
+            if (!System.Net.Quic.QuicListener.IsSupported)
+                throw new PlatformNotSupportedException("QuicListener is not supported on this platform.");
+
+            await using var quic = new QuicHttp3OriginHost(responseBytes);
+            await ProbeLog.WriteProtocolLineAsync($"origin_quic_port={quic.Port}", cancellationToken);
+            await ProbeLog.WriteProtocolLineAsync($"response_bytes={responseBytes}", cancellationToken);
+            await ProbeLog.WriteProtocolLineAsync("READY", cancellationToken);
+            return await WaitUntilCanceledAsync(cancellationToken);
+        }
+
+        var httpsProtocols = flags.HttpsProtocols.Trim().ToLowerInvariant() switch
+        {
+            "http1" => HttpProtocols.Http1,
+            "http1and2" or "" => HttpProtocols.Http1AndHttp2,
+            _ => throw new ArgumentException("--https-protocols must be http1 or http1and2.")
+        };
+
+        await using var origin = await OriginServer.StartAsync(new OriginListenOptions
+        {
+            EnableHttp = flags.EnableH2c || !flags.EnableHttps || !flags.HttpsOnly,
+            EnableHttps = flags.EnableHttps,
+            HttpProtocols = flags.EnableH2c ? HttpProtocols.Http2 : HttpProtocols.Http1,
+            HttpsProtocols = httpsProtocols,
+            ExtraHttpsOriginCount = Math.Max(0, flags.ExtraHttpsOrigins),
+            ResponseBytes = responseBytes
+        }, cancellationToken, workload);
+
+        if (origin.HttpPort > 0)
+            await ProbeLog.WriteProtocolLineAsync($"origin_http={origin.HttpUrl}", cancellationToken);
+        if (origin.HttpsPort > 0)
             await ProbeLog.WriteProtocolLineAsync($"origin_https={origin.HttpsUrl}", cancellationToken);
+        foreach (var port in origin.ExtraHttpsPorts)
+            await ProbeLog.WriteProtocolLineAsync($"origin_https_extra=https://127.0.0.1:{port}/", cancellationToken);
         await ProbeLog.WriteProtocolLineAsync($"response_bytes={responseBytes}", cancellationToken);
         await ProbeLog.WriteProtocolLineAsync("READY", cancellationToken);
+        return await WaitUntilCanceledAsync(cancellationToken);
+    }
 
+    private static async Task<int> WaitUntilCanceledAsync(CancellationToken cancellationToken)
+    {
         try
         {
             await Task.Delay(Timeout.Infinite, cancellationToken);
@@ -44,8 +86,8 @@ internal static class ServeOriginHost
 internal static class ServeProxyHost
 {
     public static async Task<int> RunAsync(ProbeMode mode, int originHttpPort, int originHttpsPort,
-        string? nginxPath, int? maxCachedConnections, CancellationToken cancellationToken,
-        WorkloadOptions? workload = null)
+        int originQuicPort, IReadOnlyList<int> extraHttpsPorts, string? nginxPath, int? maxCachedConnections,
+        CancellationToken cancellationToken, WorkloadOptions? workload = null)
     {
         workload ??= WorkloadOptions.TinyGet;
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
@@ -58,29 +100,11 @@ internal static class ServeProxyHost
             return 2;
         }
 
-        // Cleartext-origin terminate arms may use --serve-proxy (split). HTTPS/QUIC origin arms need --serve.
-        if (mode is ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp3
-            or ProbeMode.ReverseHttp11ToHttp2 or ProbeMode.YarpReverseHttp11ToHttp2
-            or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3
-            or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
-            or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
-            or ProbeMode.YarpReverseHttp3ToHttp3
-            or ProbeMode.ReverseH2c or ProbeMode.YarpReverseH2c
-            or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
-            or ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1
-            or ProbeMode.HttpsMitm or ProbeMode.ReverseHttp1Mitm
-            or ProbeMode.ReverseHttp1ToHttps or ProbeMode.YarpReverseHttp1ToHttps
-            or ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi)
-        {
-            ProbeLog.Error(
-                $"Mode {mode} requires --serve (combined origin+proxy) so the test CA is shared.");
-            return 2;
-        }
-
         IDisposable proxy;
         string listenUrl;
         string? explicitProxy = null;
         string targetForClient;
+        var extraClientTargets = new List<string>();
         string? nginxVersion = null;
         string? yarpVersion = null;
 
@@ -128,7 +152,7 @@ internal static class ServeProxyHost
             case ProbeMode.HttpMitm:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
-                var twp = TwpProxyHost.StartHttpMitm();
+                var twp = TwpProxyHost.StartHttpMitm(maxCachedConnections);
                 proxy = twp;
                 listenUrl = twp.ListenUrl;
                 explicitProxy = twp.ListenUrl;
@@ -295,23 +319,246 @@ internal static class ServeProxyHost
                 yarpVersion = yarp.Version;
                 break;
             }
+            case ProbeMode.HttpsMitm:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var twp = TwpProxyHost.StartHttpsMitm(maxCachedConnections);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                explicitProxy = twp.ListenUrl;
+                targetForClient = $"https://127.0.0.1:{originHttpsPort}/";
+                break;
+            }
+            case ProbeMode.ReverseHttp1Mitm:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var twp = TwpProxyHost.StartReverseHttp1Mitm(originHttpsPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.ReverseHttp1ToHttps:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var twp = TwpProxyHost.StartReverseHttp1ToHttps(originHttpsPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.YarpReverseHttp1ToHttps:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var yarp = await YarpProxyHost.StartHttp1ToHttpsAsync(originHttpsPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
+                break;
+            }
+            case ProbeMode.ReverseHttp2:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var twp = TwpProxyHost.StartReverseHttp2(originHttpsPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.ReverseH2c:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var twp = TwpProxyHost.StartReverseH2c(originHttpsPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.YarpReverseH2c:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var yarp = await YarpProxyHost.StartH2cToHttpsAsync(originHttpsPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
+                break;
+            }
+            case ProbeMode.YarpReverseHttp2ToHttps:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var yarp = await YarpProxyHost.StartHttp2ToHttpsAsync(originHttpsPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
+                break;
+            }
+            case ProbeMode.ReverseHttp11ToHttp2:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var twp = TwpProxyHost.StartReverseHttp11ToHttp2(originHttpsPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.YarpReverseHttp11ToHttp2:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var yarp = await YarpProxyHost.StartHttp1ToHttp2Async(originHttpsPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
+                break;
+            }
+            case ProbeMode.ReverseHttp3ToHttp2:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var twp = TwpProxyHost.StartReverseHttp3ToHttp2(originHttpsPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.YarpReverseHttp3ToHttp2:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var yarp = await YarpProxyHost.StartHttp3ToHttp2Async(originHttpsPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
+                break;
+            }
+            case ProbeMode.MitmHttp2ToHttp1:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var twp = TwpProxyHost.StartMitmHttp2ToHttp1(originHttpsPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.MitmHttp3ToHttp1:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var twp = TwpProxyHost.StartMitmHttp3ToHttp1(originHttpsPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.ReverseHttp3:
+            {
+                if (originQuicPort <= 0) throw new ArgumentException("origin-quic-port required");
+                var twp = TwpProxyHost.StartReverseHttp3(originQuicPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.ReverseHttp1ToHttp3:
+            {
+                if (originQuicPort <= 0) throw new ArgumentException("origin-quic-port required");
+                var twp = TwpProxyHost.StartReverseHttp1ToHttp3(originQuicPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.YarpReverseHttp1ToHttp3:
+            {
+                if (originQuicPort <= 0) throw new ArgumentException("origin-quic-port required");
+                var yarp = await YarpProxyHost.StartHttp1ToHttp3Async(originQuicPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
+                break;
+            }
+            case ProbeMode.ReverseHttp2ToHttp3:
+            {
+                if (originQuicPort <= 0) throw new ArgumentException("origin-quic-port required");
+                var twp = TwpProxyHost.StartReverseHttp2ToHttp3(originQuicPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.YarpReverseHttp2ToHttp3:
+            {
+                if (originQuicPort <= 0) throw new ArgumentException("origin-quic-port required");
+                var yarp = await YarpProxyHost.StartHttp2ToHttp3Async(originQuicPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
+                break;
+            }
+            case ProbeMode.ReverseH2cToH3:
+            {
+                if (originQuicPort <= 0) throw new ArgumentException("origin-quic-port required");
+                var twp = TwpProxyHost.StartReverseH2cToH3(originQuicPort);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.YarpReverseH2cToH3:
+            {
+                if (originQuicPort <= 0) throw new ArgumentException("origin-quic-port required");
+                var yarp = await YarpProxyHost.StartH2cToHttp3Async(originQuicPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
+                break;
+            }
+            case ProbeMode.YarpReverseHttp3ToHttp3:
+            {
+                if (originQuicPort <= 0) throw new ArgumentException("origin-quic-port required");
+                var yarp = await YarpProxyHost.StartHttp3ToHttp3Async(originQuicPort);
+                proxy = yarp;
+                listenUrl = yarp.ListenUrl;
+                targetForClient = yarp.ListenUrl;
+                yarpVersion = yarp.Version;
+                break;
+            }
+            case ProbeMode.ExplicitHttp1Multi:
+            case ProbeMode.ExplicitHttp2Multi:
+            {
+                if (originHttpsPort <= 0) throw new ArgumentException("origin-https-port required");
+                var twp = TwpProxyHost.StartHttpsMitm(maxCachedConnections);
+                proxy = twp;
+                listenUrl = twp.ListenUrl;
+                explicitProxy = twp.ListenUrl;
+                targetForClient = $"https://127.0.0.1:{originHttpsPort}/";
+                extraClientTargets.AddRange(extraHttpsPorts.Select(p => $"https://127.0.0.1:{p}/"));
+                break;
+            }
             default:
                 throw new ArgumentOutOfRangeException(nameof(mode));
         }
 
         var httpVersion = mode switch
         {
-            ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c or ProbeMode.NginxReverseHttp2
+            ProbeMode.ReverseHttp2 or ProbeMode.ReverseHttp2Cleartext or ProbeMode.ReverseHttp2ToH2c
+                or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.NginxReverseHttp2
                 or ProbeMode.YarpReverseHttp2 or ProbeMode.YarpReverseHttp2ToH2c
+                or ProbeMode.YarpReverseHttp2ToHttps or ProbeMode.YarpReverseHttp2ToHttp3
                 or ProbeMode.ReverseH2c or ProbeMode.ReverseH2cToH2c or ProbeMode.ReverseH2cToH1
                 or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2c or ProbeMode.YarpReverseH2cToH2c
-                or ProbeMode.YarpReverseH2cToH1 or ProbeMode.YarpReverseH2cToH3 => "2.0",
-            ProbeMode.ReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3Cleartext
-                or ProbeMode.NginxReverseHttp3Cleartext => "3.0",
+                or ProbeMode.YarpReverseH2cToH1 or ProbeMode.YarpReverseH2cToH3
+                or ProbeMode.MitmHttp2ToHttp1 or ProbeMode.ExplicitHttp2Multi => "2.0",
+            ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp3Cleartext or ProbeMode.ReverseHttp3ToHttp2
+                or ProbeMode.YarpReverseHttp3Cleartext or ProbeMode.YarpReverseHttp3ToHttp2
+                or ProbeMode.YarpReverseHttp3ToHttp3 or ProbeMode.NginxReverseHttp3Cleartext
+                or ProbeMode.MitmHttp3ToHttp1 => "3.0",
             _ => "1.1"
         };
-        // Dual-listen reverse H3 (TWP TransparentProxyEndPoint.EnableHttp3 and reference .NET server stack) use HttpClient.
-        // UDP-only TransparentQuic arms still advertise quic-http3 via combined ServeStack.
         string? loadGenerator = null;
 
         using (proxy)
@@ -321,9 +568,13 @@ internal static class ServeProxyHost
             if (explicitProxy != null)
                 await ProbeLog.WriteProtocolLineAsync($"explicit_proxy={explicitProxy}", cancellationToken);
             await ProbeLog.WriteProtocolLineAsync($"target_for_client={targetForClient}", cancellationToken);
+            foreach (var extra in extraClientTargets)
+                await ProbeLog.WriteProtocolLineAsync($"target_for_client_extra={extra}", cancellationToken);
             await ProbeLog.WriteProtocolLineAsync($"http_version={httpVersion}", cancellationToken);
             if (loadGenerator != null)
                 await ProbeLog.WriteProtocolLineAsync($"load_generator={loadGenerator}", cancellationToken);
+            if (originQuicPort > 0)
+                await ProbeLog.WriteProtocolLineAsync($"origin_quic_port={originQuicPort}", cancellationToken);
             if (nginxVersion != null)
                 await ProbeLog.WriteProtocolLineAsync($"nginx={nginxVersion}", cancellationToken);
             if (yarpVersion != null)
