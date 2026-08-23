@@ -36,8 +36,19 @@ public class SessionEventArgs : SessionEventArgsBase
     /// <summary>
     /// Constructor to initialize the proxy
     /// </summary>
-    internal SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint, HttpClientStream clientStream, ConnectRequest? connectRequest, CancellationTokenSource cancellationTokenSource)
+    internal SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint, HttpClientStream clientStream,
+        ConnectRequest? connectRequest, CancellationTokenSource cancellationTokenSource)
         : base(server, endPoint, clientStream, connectRequest, new Request(), cancellationTokenSource)
+    {
+    }
+
+    /// <summary>
+    ///     Session with a request that already has the request-line and headers populated
+    ///     (H1 terminate lite fall-through when the gate fails after header read).
+    /// </summary>
+    internal SessionEventArgs(ProxyServer server, ProxyEndPoint endPoint, HttpClientStream clientStream,
+        ConnectRequest? connectRequest, CancellationTokenSource cancellationTokenSource, Request request)
+        : base(server, endPoint, clientStream, connectRequest, request, cancellationTokenSource)
     {
     }
 

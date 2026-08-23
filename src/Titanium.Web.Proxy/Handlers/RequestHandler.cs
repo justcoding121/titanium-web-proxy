@@ -56,6 +56,8 @@ public partial class ProxyServer
             // One registry for every keep-alive request on this client socket. Reset() clears a
             // prior firing so we do not allocate a new registry per GET.
             var headerDeadlineRegistry = new DeadlineRegistry();
+            // Reused across KA on the H1 terminate lite path (ResetForKeepAlive); NC exits after one GET.
+            Request? liteRequest = null;
 
             // Loop through each subsequent request on this particular client connection
             // (assuming HTTP connection is kept alive by client)
@@ -71,6 +73,7 @@ public partial class ProxyServer
                 // connection" case below, which must stay silent and args-free exactly as before.
                 RequestStatusInfo requestLine;
                 SessionEventArgs? args = null;
+                var headersAlreadyRead = false;
                 headerDeadlineRegistry.Reset();
                 using (var headerDeadline = headerDeadlineRegistry.Start(cancellationToken,
                            ResolveClientHeaderTimeout(), ProxyTimeoutKind.ClientHeader))
@@ -89,12 +92,98 @@ public partial class ProxyServer
                         requestLine = requestLineRead.Status;
                         if (requestLine.IsEmpty()) return;
 
+                        // Transparent reverse + no interception: try session-lite before SessionEventArgs
+                        // (new-connection TLS terminate: c=1 already leads YARP; c=32 paid full session GC).
+                        var tryH1TerminateLite = connectRequest == null
+                                                 && endPoint is TransparentBaseProxyEndPoint
+                                                 {
+                                                     ForwardHost.Length: > 0
+                                                 }
+                                                 && !NeedsHttpInterception(endPoint)
+                                                 && !Enable100ContinueBehaviour
+                                                 && !EnableWinAuth
+                                                 && GetCustomUpStreamProxyFunc == null;
+
+                        Request? preparedRequest = null;
+                        if (tryH1TerminateLite)
+                        {
+                            if (liteRequest == null)
+                                liteRequest = new Request();
+                            else
+                                liteRequest.ResetForKeepAlive();
+
+                            preparedRequest = liteRequest;
+                            preparedRequest.Method = requestLine.Method;
+                            preparedRequest.RequestUriString8 = requestLine.RequestUri;
+                            preparedRequest.HttpVersion = requestLine.Version;
+                            if (isHttps)
+                                preparedRequest.IsHttps = true;
+
+                            if (!await HeaderParser.TryReadHeadersAsync(clientStream, preparedRequest.Headers,
+                                    headerDeadline.Token))
+                            {
+                                ThrowIfHeaderDeadlineTimedOut(headerDeadline);
+                                return;
+                            }
+
+                            headersAlreadyRead = true;
+
+                            if (CanUseH1TerminateLite(endPoint, preparedRequest, Enable100ContinueBehaviour,
+                                    EnableWinAuth, hasCustomUpstreamProxyFunc: false))
+                            {
+                                try
+                                {
+                                    Http1FramingValidator.Validate(preparedRequest,
+                                        FramingSource.Http1WireTransparent,
+                                        PolicyModes.AllowAmbiguousFraming);
+                                }
+                                catch (Http1FramingException framingEx)
+                                {
+                                    ProxyMetrics.ParserError("framing");
+                                    ProxyDiagnostics.ReportCaught(logger,
+                                        "Request framing rejected; returning client error response", framingEx);
+                                    var err = new GenericResponse(framingEx.StatusCode)
+                                    {
+                                        HttpVersion = preparedRequest.HttpVersion
+                                    };
+                                    err.Headers.AddHeader(KnownHeaders.Connection,
+                                        KnownHeaders.ConnectionClose);
+                                    await clientStream.WriteResponseAsync(err, cancellationToken);
+                                    return;
+                                }
+
+                                preparedRequest.SetOriginalHeaders();
+                                var keepClient = await ForwardH1TerminateLiteAsync(
+                                    (TransparentBaseProxyEndPoint)endPoint, clientStream, preparedRequest,
+                                    cancellationToken);
+                                if (!keepClient)
+                                    return;
+                                continue;
+                            }
+
+                            // Gate failed after headers (e.g. body) — fall through with prepared request.
+                        }
+
                         if (reusable != null)
                         {
                             args = reusable;
                             reusable = null;
                             args.ResetForKeepAlive(connectArgs,
                                 upstreamHttpProtocol ?? connectArgs?.UpstreamHttpProtocol);
+                            preparedRequest = null;
+                            headersAlreadyRead = false;
+                        }
+                        else if (preparedRequest != null)
+                        {
+                            args = new SessionEventArgs(this, endPoint, clientStream, connectRequest,
+                                cancellationTokenSource, preparedRequest)
+                            {
+                                UserData = connectArgs?.UserData,
+                                UpstreamHttpProtocol = upstreamHttpProtocol ?? connectArgs?.UpstreamHttpProtocol
+                            };
+                            // Ownership transferred into session; do not ResetForKeepAlive this instance
+                            // on the next lite attempt — allocate a fresh liteRequest.
+                            liteRequest = null;
                         }
                         else
                         {
@@ -108,7 +197,9 @@ public partial class ProxyServer
                         }
 
                         // Read the request headers in to unique and non-unique header collections
-                        if (!await HeaderParser.TryReadHeadersAsync(clientStream, args.HttpClient.Request.Headers,
+                        // (skipped when preparedRequest already filled them above).
+                        if (!headersAlreadyRead
+                            && !await HeaderParser.TryReadHeadersAsync(clientStream, args.HttpClient.Request.Headers,
                                 headerDeadline.Token))
                         {
                             args.Dispose();

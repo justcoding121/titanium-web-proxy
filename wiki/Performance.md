@@ -311,25 +311,25 @@ Isolates keep-alive tiny GET vs **new connection per request** (handshake-domina
 
 #### Windows
 
-Median of **3** repeats on `windows-latest` @ `b8e7afce` (abortive `SO_LINGER(0)` restored). Source: Actions [32620298807](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32620298807) (`compare-tls-cost`). Absolute RPS on GHA swings hard; prefer **TWP÷YARP**.
+Median of **3** repeats on `windows-latest` @ `2147fbad` (CTS pool). Source: Actions [32621292515](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32621292515) (`compare-tls-cost`). Absolute RPS on GHA swings hard; prefer **TWP÷YARP**. Gate: **>1.00×** YARP (second when nginx leads).
 
 | Workload | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---:|---:|---:|---:|---:|---:|
-| Keep-alive · tiny GET | **17,009** | **19,201** | **8,870** | **8,982** | 🟢 **18,667** | **18,667** |
-| New-connection · tiny GET | **647** | **660** | **254** | **257** | 🟢 **732** | **738** |
-| Keep-alive · 256 KiB GET | 🟢 **2,913** | **3,091** | **236** | **260** | **2,690** | **2,789** |
+| Keep-alive · tiny GET | 🟢 **20,426** | **20,426** | **8,413** | **8,692** | **17,553** | **17,553** |
+| New-connection · tiny GET | **618** | **625** | **245** | **248** | 🟢 **682** | **688** |
+| Keep-alive · 256 KiB GET | 🟢 **2,758** | **2,885** | **235** | **253** | **2,587** | **2,636** |
 
 #### Linux
 
-Median of **3** repeats @ `b8e7afce`. Source: Actions [32620298807](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32620298807) (`compare-tls-cost`).
+Median of **3** repeats @ `2147fbad`. Source: Actions [32621292515](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32621292515) (`compare-tls-cost`).
 
 | Workload | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---:|---:|---:|---:|---:|---:|
-| Keep-alive · tiny GET | **20,544** | **20,544** | 🟢 **28,790** | **28,790** | **20,754** | **20,754** |
-| New-connection · tiny GET | **926** | **926** | 🟢 **1,024** | **1,024** | **974** | **974** |
-| Keep-alive · 256 KiB GET | 🟢 **2,759** | **2,759** | **2,715** | **2,715** | **2,196** | **2,196** |
+| Keep-alive · tiny GET | **48,087** | **48,087** | 🟢 **60,359** | **60,359** | **40,902** | **40,902** |
+| New-connection · tiny GET | **1,454** | **1,454** | 🟢 **1,586** | **1,586** | **1,509** | **1,509** |
+| Keep-alive · 256 KiB GET | 🟢 **5,185** | **5,185** | **5,034** | **5,034** | **3,806** | **3,806** |
 
-**Verdict:** Keep-alive 256 KiB: TWP leads YARP on both OS. Keep-alive tiny: Linux ≈ **0.99×** YARP (nginx still leads); Win GHA noisy this pass (~0.91×). New-connection: Linux ≈ **0.95×** YARP (gate); Win ≈ **0.88×** — cool laptop still shows **c=1 TWP leads**, **c=32 ~0.89×** (parallel handshake/session tax; CTS pool landed, SessionEventArgs-lite next).
+**Verdict:** Keep-alive tiny/256 KiB: TWP **>1.00×** YARP on both OS (nginx still leads Linux keep-alive tiny — TWP second). New-connection: Win ≈ **0.91×**, Linux ≈ **0.96×** YARP — cool laptop still ~**0.89×** at c=32 after session-lite; residual is parallel Schannel (H1 terminate lite + CTS pool landed; remasure pending).
 
 ## Other measurements
 
