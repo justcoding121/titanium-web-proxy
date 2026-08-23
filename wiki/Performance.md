@@ -1,4 +1,4 @@
-# Performance
+﻿# Performance
 
 Titanium targets **low-overhead MITM proxying**: connection pooling, HTTP/2 multiplexing, and buffer reuse. Numbers below are **Release** measurements with [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe) (and BenchmarkDotNet / Basic example where noted). Publishable tables cite **GitHub Actions** medians on matched **4 vCPU / 16 GiB** runners. Absolute RPS still varies by OS kernel, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
 
@@ -138,6 +138,7 @@ Same layout as Block B. Requires QuicListener; nginx only with `http_v3_module` 
 | nginx-reverse-http3-cleartext | dotnet-httpclient | **0** | **24,954** | **0.90×** | **1.00×** | **62 MiB** | **0.0** |
 | yarp-reverse-http3-cleartext | dotnet-httpclient | **27,833** | **27,833** | **1.00×** | **1.12×** | **191 MiB** | **49.3** |
 | twp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **30,076** | **30,076** | **1.08×** | **1.21×** | **279 MiB** | **52.6** |
+
 **How to read the tables**
 
 - **Mode**: **Reverse** = transparent fixed-forward (may TLS-terminate to a cleartext origin, or re-encrypt to a configured HTTPS/QUIC origin). **MITM** = both legs are visible in the clear inside TWP — either by decrypting client TLS/QUIC (forged cert / CONNECT) **or** by accepting an already-cleartext client (explicit HTTP proxy / inspectable transparent reverse) while still speaking plain or TLS to the origin. nginx and YARP cannot do MITM. **HTTP/3 has no cleartext client** (QUIC always encrypted).
