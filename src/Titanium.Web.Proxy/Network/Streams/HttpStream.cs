@@ -1945,36 +1945,79 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     {
         var remainingBytes = count;
         var httpWriter = writer as HttpStream;
+        // YARP StreamCopier uses 64 KiB; H2→H1 large-read bypass never ran on this FillBuffer loop.
+        // Empty parser window + remaining ≥ streamBuffer → rent a large window and ReadAsync so
+        // BaseStream fills directly (classic BufferedStream rule). Cuts origin read / SslStream
+        // WriteAsync count on known-CL reverse bodies (e.g. 256 KiB: ~32×8 KiB → ~4×64 KiB).
+        const int largeCopyGrain = 64 * 1024;
+        byte[]? largeBuf = null;
 
-        while (remainingBytes > 0)
+        try
         {
-            if (Available == 0)
+            while (remainingBytes > 0)
             {
-                var fill = await FillBufferWithResultAsync(cancellationToken);
-                if (fill == BufferFillResult.Cancelled)
-                    cancellationToken.ThrowIfCancellationRequested();
-                if (fill != BufferFillResult.GotData)
-                    break;
+                if (Available == 0 && remainingBytes >= streamBuffer.Length && streamBuffer.Length > 0)
+                {
+                    var grain = (int)Math.Min(remainingBytes, largeCopyGrain);
+                    if (largeBuf == null || largeBuf.Length < grain)
+                    {
+                        if (largeBuf != null)
+                            bufferPool.ReturnBuffer(largeBuf);
+
+                        largeBuf = bufferPool.GetBuffer(grain);
+                    }
+
+                    var read = await ReadAsync(largeBuf.AsMemory(0, grain), cancellationToken);
+                    if (read == 0)
+                        break;
+
+                    if (httpWriter != null)
+                        await httpWriter.WriteAsync(largeBuf.AsMemory(0, read), cancellationToken);
+                    else
+                        await writer.WriteAsync(largeBuf, 0, read, cancellationToken);
+
+                    if (isRequest)
+                        args.OnDataSent(largeBuf, 0, read);
+                    else
+                        args.OnDataReceived(largeBuf, 0, read);
+
+                    remainingBytes -= read;
+                    continue;
+                }
+
+                if (Available == 0)
+                {
+                    var fill = await FillBufferWithResultAsync(cancellationToken);
+                    if (fill == BufferFillResult.Cancelled)
+                        cancellationToken.ThrowIfCancellationRequested();
+                    if (fill != BufferFillResult.GotData)
+                        break;
+                }
+
+                var n = (int)Math.Min(Available, remainingBytes);
+                var offset = bufferPos;
+
+                // Write the unread window in place — no second pooled rent/copy. Await before the next
+                // fill: FillBuffer compact-moves streamBuffer and would invalidate this window.
+                if (httpWriter != null)
+                    await httpWriter.WriteAsync(streamBuffer.AsMemory(offset, n), cancellationToken);
+                else
+                    await writer.WriteAsync(streamBuffer, offset, n, cancellationToken);
+
+                if (isRequest)
+                    args.OnDataSent(streamBuffer, offset, n);
+                else
+                    args.OnDataReceived(streamBuffer, offset, n);
+
+                bufferPos += n;
+                Available -= n;
+                remainingBytes -= n;
             }
-
-            var n = (int)Math.Min(Available, remainingBytes);
-            var offset = bufferPos;
-
-            // Write the unread window in place — no second pooled rent/copy. Await before the next
-            // fill: FillBuffer compact-moves streamBuffer and would invalidate this window.
-            if (httpWriter != null)
-                await httpWriter.WriteAsync(streamBuffer.AsMemory(offset, n), cancellationToken);
-            else
-                await writer.WriteAsync(streamBuffer, offset, n, cancellationToken);
-
-            if (isRequest)
-                args.OnDataSent(streamBuffer, offset, n);
-            else
-                args.OnDataReceived(streamBuffer, offset, n);
-
-            bufferPos += n;
-            Available -= n;
-            remainingBytes -= n;
+        }
+        finally
+        {
+            if (largeBuf != null)
+                bufferPool.ReturnBuffer(largeBuf);
         }
     }
 
