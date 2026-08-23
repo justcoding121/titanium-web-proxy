@@ -336,11 +336,10 @@ internal static class Http3OriginBridge
 
             var maxPayload = sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes;
 
-            // Stream the body to the client as DATA frames arrive. Buffering the entire origin body
-            // before EmitSyntheticResponseAsync / WriteResponseAsync delayed TTFB to roughly the full
-            // download time (measured ~500ms+ on cloudflare.com HTML vs ~40ms over H2 streaming).
-            // Pass wire bytes through with Content-Encoding intact; StreamBodyWriter paths do not
-            // re-compress via CompressBodyAndUpdateContentLength.
+            // Stream large / unknown-length bodies as DATA arrives (TTFB on big HTML). Tiny known-CL
+            // must materialize first: H1 WriteResponseAsync + StreamBodyWriter emits a header-only
+            // TLS record then body (lossy H1 dig / compare-bridges H1→H3). Same ≤64 KiB budget as
+            // H1 terminate coalesce and H3→H1 ForwardOverTcpFastAsync.
             if (!response.HasBody)
             {
                 response.IsBodyRead = true;
@@ -356,6 +355,62 @@ internal static class Http3OriginBridge
 
             if (originStream is null || quicConn is null)
                 throw new InvalidOperationException("HTTP/3 origin stream or connection missing after response headers.");
+
+            const int eagerBodyThreshold = 64 * 1024;
+            if (!response.IsChunked
+                && response.ContentLength >= 0
+                && response.ContentLength <= eagerBodyThreshold
+                && !server.HasOnResponseBodyWriteSubscribers)
+            {
+                var bodyBytes = response.ContentLength == 0
+                    ? Array.Empty<byte>()
+                    : new byte[response.ContentLength];
+                var offset = 0;
+                while (offset < bodyBytes.Length)
+                {
+                    var frame = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload,
+                        cancellationToken);
+                    if (frame == null)
+                        break;
+                    try
+                    {
+                        if (frame.Type == Http3FrameType.Headers)
+                            break; // trailers
+                        if (frame.Type != Http3FrameType.Data || frame.Payload.Length == 0)
+                            continue;
+                        var toCopy = Math.Min(frame.Payload.Length, bodyBytes.Length - offset);
+                        frame.Payload.Span[..toCopy].CopyTo(bodyBytes.AsSpan(offset));
+                        offset += toCopy;
+                    }
+                    finally
+                    {
+                        frame.ReturnPayload();
+                    }
+                }
+
+                // Drain to FIN so Dispose does not RST a live H3 request stream (pool poison →
+                // handshake-per-request under load; cool H1→H3 fell ~1.16× → ~0.7×).
+                while (true)
+                {
+                    var frame = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload,
+                        cancellationToken);
+                    if (frame == null)
+                        break;
+                    frame.ReturnPayload();
+                }
+
+                if (offset != bodyBytes.Length)
+                    Array.Resize(ref bodyBytes, offset);
+
+                response.Body = bodyBytes;
+                response.IsBodyRead = true;
+                response.ContentLength = bodyBytes.Length;
+                response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+                sessionArgs.HttpClient.Response = response;
+                await originStream.DisposeAsync();
+                originStream = null;
+                break;
+            }
 
             QuicStream streamToClient = originStream;
             QuicServerConnection connToRelease = quicConn;
