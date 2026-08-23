@@ -550,7 +550,9 @@ internal sealed class TwpProxyHost : IDisposable
         if (!QuicListener.IsSupported)
             throw new PlatformNotSupportedException("QuicListener is not supported on this platform.");
 
-        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: true);
+        // Clients are H1 TLS; keep EnableHttp2=false so WarmTls fixed-cert terminate engages
+        // (fixed path never routes negotiated h2 into H2 bridges).
+        var proxy = CreateBaseProxy(enableHttp2: false, enableHttp3: true);
         ConfigureSharedTestCa(proxy);
 
         var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
@@ -567,7 +569,7 @@ internal sealed class TwpProxyHost : IDisposable
             return Task.CompletedTask;
         };
         proxy.AddEndPoint(endPoint);
-        // Warm before Start so the fixed-cert H1 path sees CachedServerAuthOptions on first accept.
+        // Warm before Start so fixed-cert H1 path sees CachedServerAuthOptions on first accept.
         WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
         proxy.Start();
         return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);

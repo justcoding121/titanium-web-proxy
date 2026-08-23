@@ -464,7 +464,7 @@ public class SonarNewCodeCoverageTests
     [TestMethod]
     public void Http2ToHttp11Helpers_ParseStatusLowercaseAndThreshold()
     {
-        Assert.AreEqual(16 * 1024, (int)ProxyMethod("EagerBufferBodyThreshold").Invoke(null, [int.MaxValue])!);
+        Assert.AreEqual(64 * 1024, (int)ProxyMethod("EagerBufferBodyThreshold").Invoke(null, [int.MaxValue])!);
         Assert.AreEqual(0, (int)ProxyMethod("EagerBufferBodyThreshold").Invoke(null, [-5])!);
         Assert.AreEqual(128, (int)ProxyMethod("EagerBufferBodyThreshold").Invoke(null, [128])!);
 

@@ -486,8 +486,9 @@ public partial class ProxyServer
                 var originIsChunked = sessionArgs.IsFastPath ? response.IsChunked : response.OriginalIsChunked;
                 var originContentLength = sessionArgs.IsFastPath ? response.ContentLength : response.OriginalContentLength;
 
-                // Eager-buffer known-CL bodies up to min(16 KiB, MaxBufferedBodyBytes); larger bodies
-                // stream via LimitedStream. No assumption about typical response size.
+                // Eager-buffer known-CL bodies up to min(64 KiB, MaxBufferedBodyBytes); larger bodies
+                // stream via LimitedStream. 64 KiB matches the lossy compare-bodies GET size so
+                // EmitSyntheticResponseAsync can flatten HEADERS+DATA (userspace delay shim).
                 var eagerBodyThreshold = EagerBufferBodyThreshold(
                     sessionArgs.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes);
                 if (originHasBody && !response.IsBodyRead
@@ -1086,11 +1087,13 @@ public partial class ProxyServer
     private static readonly char[] separator = new[] { ' ' };
 
     /// <summary>
-    ///     Eager-buffer known-CL bodies up to min(16 KiB, <paramref name="maxBufferedBodyBytes" />).
-    ///     Above that threshold, stream via <see cref="LimitedStream" />.
+    ///     Eager-buffer known-CL bodies up to min(64 KiB, <paramref name="maxBufferedBodyBytes" />).
+    ///     Matches H1 terminate coalesce budget so lossy 64 KiB GETs materialize once and
+    ///     <see cref="Http2Helper.EmitSyntheticResponseAsync"/> can flatten HEADERS+DATA (shim pays
+    ///     delayMs per read — streaming 16 KiB fills tax ~4 extra trips vs one buffered response).
     /// </summary>
     private static int EagerBufferBodyThreshold(int maxBufferedBodyBytes) =>
-        Math.Min(16 * 1024, Math.Max(0, maxBufferedBodyBytes));
+        Math.Min(64 * 1024, Math.Max(0, maxBufferedBodyBytes));
 
     private static bool TryParseHttp11StatusLine(string? line, out int statusCode)
     {

@@ -53,12 +53,13 @@ public partial class ProxyServer
             // NetworkStream (same unwrap as origin HTTPS). Nesting HttpClientStream under SslStream
             // forced an extra buffered layer on every new-connection handshake — Windows Schannel
             // paid that more than Linux (compare-tls-cost NC tiny ~0.84× YARP).
-            // Also when CachedServerAuthOptions is pre-warmed to http/1.1 only (H1→H3 / H1→H2
-            // bridges): peek is unnecessary — ALPN is pinned and BeforeSslAuthenticate still runs.
+            // Require !EnableHttp2: fixed path always offers http/1.1-only ALPN and never routes
+            // negotiated "h2" into H2 bridges. WarmTls that pins http/1.1 under EnableHttp2=true
+            // must not take this path (H2 reverse ALPN fail). EnableHttp3 is OK — H3 clients arrive
+            // on QuicListener, not this TCP TLS terminate (H1→H3 reverse uses this path).
             var fixedCertHttp11Only = endPoint.DecryptSsl
                                       && endPoint.GenericCertificate != null
-                                      && (endPoint.CachedServerAuthOptions != null
-                                          || (!EnableHttp2 && !EnableHttp3));
+                                      && !EnableHttp2;
 
             if (fixedCertHttp11Only)
             {

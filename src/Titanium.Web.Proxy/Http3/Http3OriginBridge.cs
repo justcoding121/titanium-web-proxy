@@ -992,13 +992,14 @@ internal static class Http3OriginBridge
             await http.ReceiveResponse(cancellationToken);
 
             var response = http.Response;
-            // Eager-buffer tiny origin bodies before Release. Kestrel often uses chunked for
+            // Eager-buffer tiny/medium origin bodies before Release. Kestrel often uses chunked for
             // WriteAsync without Content-Length — skipping those left H3 clients with empty DATA.
+            // 64 KiB matches compare-bodies / lossy GET size so HEADERS+DATA can coalesce on write.
             if (response.HasBody && !response.IsBodyRead)
             {
                 if (!response.IsChunked
                     && response.ContentLength >= 0
-                    && response.ContentLength <= 16 * 1024)
+                    && response.ContentLength <= 64 * 1024)
                 {
                     if (response.ContentLength == 0)
                     {
@@ -1669,8 +1670,9 @@ internal static class Http3OriginBridge
             var response = sessionArgs.HttpClient.Response;
             // Stream the response unless a handler already buffered it. H3 client emit path
             // (SendResponseAsync) honours StreamBodyWriter the same way H2 EmitSynthetic does.
-            // Eager-buffer known-CL bodies up to min(16 KiB, MaxBufferedBodyBytes); larger stream.
-            var eagerBodyThreshold = Math.Min(16 * 1024,
+            // Eager-buffer known-CL bodies up to min(64 KiB, MaxBufferedBodyBytes); larger stream
+            // (matches H2→H1 / ForwardOverTcpFastAsync and compare-bodies GET size).
+            var eagerBodyThreshold = Math.Min(64 * 1024,
                 Math.Max(0, sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes));
             if (response.HasBody && !response.IsBodyRead
                 && !response.IsChunked
