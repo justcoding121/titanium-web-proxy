@@ -229,8 +229,10 @@ internal static class EmbeddedLoadGenerator
             // Multiplex across HTTP/2 connections under load. A single client H2 connection serializes
             // all DATA writes on ClientWriteLock and fans every stream onto the H2→H1 bridge at once;
             // multiple connections match browser-style fan-out and keep error rates down.
-            EnableMultipleHttp2Connections = true,
-            EnableMultipleHttp3Connections = httpVersion.Major >= 3,
+            // Set TWP_RPS_SINGLE_HTTP2_CONNECTION=1 to force one client H2 connection (Memory/RSS A/B).
+            EnableMultipleHttp2Connections = !IsTruthyEnv("TWP_RPS_SINGLE_HTTP2_CONNECTION"),
+            EnableMultipleHttp3Connections = httpVersion.Major >= 3 &&
+                                             !IsTruthyEnv("TWP_RPS_SINGLE_HTTP3_CONNECTION"),
             SslOptions = new SslClientAuthenticationOptions
             {
                 RemoteCertificateValidationCallback = static (_, _, _, _) => true
@@ -248,6 +250,14 @@ internal static class EmbeddedLoadGenerator
         }
 
         return handler;
+    }
+
+    private static bool IsTruthyEnv(string name)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase);
     }
 
     internal static double Percentile(double[] sorted, double p)
