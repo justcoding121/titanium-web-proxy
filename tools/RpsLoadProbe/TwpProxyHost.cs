@@ -472,6 +472,7 @@ internal sealed class TwpProxyHost : IDisposable
             return Task.CompletedTask;
         };
         proxy.AddEndPoint(endPoint);
+        WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
         proxy.Start();
         return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
