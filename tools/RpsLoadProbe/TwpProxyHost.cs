@@ -599,6 +599,8 @@ internal sealed class TwpProxyHost : IDisposable
         // New-connection TLS arms pay setsockopt keepalive on every accept; Kestrel does not.
         // Keep-alive reverse RPS is unaffected (connections already long-lived).
         proxy.EnableTcpKeepAlive = false;
+        // New-connection TLS: skip ConcurrentDictionary session-CTS tracking (Stop still disposes).
+        proxy.TrackSessionCancellations = false;
 
         return proxy;
     }
@@ -633,7 +635,9 @@ internal sealed class TwpProxyHost : IDisposable
             ClientCertificateRequired = false,
             EnabledSslProtocols = proxy.SupportedSslProtocols,
             CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
-            ApplicationProtocols = [System.Net.Security.SslApplicationProtocol.Http11]
+            ApplicationProtocols = [System.Net.Security.SslApplicationProtocol.Http11],
+            // Match Kestrel HttpsConnectionMiddleware.ConfigureAlpn (H2 always; harmless for H1).
+            AllowRenegotiation = false
         };
         _ = certName;
     }

@@ -1875,13 +1875,26 @@ public partial class ProxyServer : IDisposable
         systemProxyResolver = null;
     }
 
+    /// <summary>
+    ///     When false, session <see cref="CancellationTokenSource"/> instances are not tracked for
+    ///     <see cref="Stop"/> cancellation. Saturation probes set this false to avoid per-NC
+    ///     <see cref="ConcurrentDictionary{TKey,TValue}"/> churn under parallel handshakes.
+    /// </summary>
+    internal bool TrackSessionCancellations { get; set; } = true;
+
     internal void RegisterSessionCancellation(CancellationTokenSource cancellationTokenSource)
     {
+        if (!TrackSessionCancellations)
+            return;
+
         activeSessionCancellations.TryAdd(cancellationTokenSource, 0);
     }
 
     internal void UnregisterSessionCancellation(CancellationTokenSource cancellationTokenSource)
     {
+        if (!TrackSessionCancellations)
+            return;
+
         activeSessionCancellations.TryRemove(cancellationTokenSource, out _);
     }
 

@@ -108,7 +108,8 @@ public partial class ProxyServer
                                 ClientCertificateRequired = false,
                                 EnabledSslProtocols = SupportedSslProtocols,
                                 CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
-                                ApplicationProtocols = SslExtensions.Http11ProtocolAsList
+                                ApplicationProtocols = SslExtensions.Http11ProtocolAsList,
+                                AllowRenegotiation = false
                             };
                             endPoint.CachedServerAuthOptions = options;
                         }

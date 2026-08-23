@@ -789,6 +789,58 @@ public partial class ProxyServer
                 fastResponse.ContentLength = fastResponse.Body.Length;
             }
 
+            // Known-CL bodies up to one large-copy grain: materialize then one client write
+            // (headers+body). Streaming WriteResponse + CopyBody emits a tiny header-only TLS
+            // record first — under userspace delay that costs an extra shim RTT vs YARP, which
+            // typically forwards a larger first write (lossy H1 cool ~0.86× → target ≥0.95×).
+            const int coalesceBodyLimit = 64 * 1024;
+            if (fastResponse.HasBody
+                && !fastResponse.IsChunked
+                && !fastResponse.HasTrailingHeaders
+                && fastResponse.ContentLength is > 0 and <= coalesceBodyLimit)
+            {
+                var serverStream = args.HttpClient.Connection.Stream;
+                var length = (int)fastResponse.ContentLength;
+                var coalescedBody = new byte[length];
+                try
+                {
+                    using var idleDeadline = args.Deadlines.Start(cancellationToken,
+                        ResolveIdleReadTimeout(args), ProxyTimeoutKind.IdleRead);
+                    try
+                    {
+                        var read = 0;
+                        while (read < length)
+                        {
+                            var n = await serverStream.ReadAsync(coalescedBody.AsMemory(read, length - read),
+                                idleDeadline.Token);
+                            if (n == 0)
+                                break;
+                            read += n;
+                        }
+
+                        if (read != length)
+                            Array.Resize(ref coalescedBody, read);
+
+                        fastResponse.Body = coalescedBody;
+                        fastResponse.IsBodyReceived = true;
+                        fastResponse.IsBodyRead = true;
+                    }
+                    catch (OperationCanceledException ex)
+                    {
+                        idleDeadline.ThrowIfTimedOut(ex);
+                    }
+                }
+                catch (ProxyTimeoutException ex)
+                {
+                    await HandleProxyTimeoutAsync(args, ex, cancellationToken);
+                    return;
+                }
+
+                await args.ClientStream.WriteResponseAsync(fastResponse, cancellationToken);
+                args.IsClientResponseCommitted = true;
+                return;
+            }
+
             await args.ClientStream.WriteResponseAsync(fastResponse, cancellationToken);
             args.IsClientResponseCommitted = true;
 
