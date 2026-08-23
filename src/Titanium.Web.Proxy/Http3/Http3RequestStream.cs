@@ -808,24 +808,35 @@ internal static class Http3RequestStream
             response.Headers.RemoveHeader("transfer-encoding");
 
         var qpackHeaders = QpackEncoder.EncodeResponse(response, qpackContext);
-        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
 
         if (response.StreamBodyWriter != null && !response.IsBodySent)
         {
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
             // Http3OriginBridge streams the origin body; drain it as DATA frames (same contract as
             // H1 BodyStreamWriter / H2 EmitSyntheticResponseAsync).
             var bodyWriter = new Http3DataBodyWriter(stream);
             await response.StreamBodyWriter(bodyWriter, ct);
             response.IsBodySent = true;
+            await stream.FlushAsync(ct);
+            return;
         }
-        else
+
+        // Send body if present. Ok()/Respond assign Body without setting IsBodyRead (H1 uses
+        // BodyAvailable); requiring IsBodyRead alone dropped every synthetic H3 response body.
+        var body = response.BodyAvailable || response.IsBodyRead ? response.Body : null;
+        // Size-gated HEADERS+DATA coalesce for already-buffered medium/large bodies only
+        // (lossy / compare-bodies ≥ 16 KiB). Tiny GET keeps separate writes — full coalesce
+        // there raised cool absolutes and missed Windows CI (latency bundle revert).
+        if (body is { Length: >= 16 * 1024 })
         {
-            // Send body if present. Ok()/Respond assign Body without setting IsBodyRead (H1 uses
-            // BodyAvailable); requiring IsBodyRead alone dropped every synthetic H3 response body.
-            var body = response.BodyAvailable || response.IsBodyRead ? response.Body : null;
-            if (body is { Length: > 0 })
-                await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct);
+            await Http3Frame.WriteHeadersAndDataAsync(stream, qpackHeaders, body, ct);
+            await stream.FlushAsync(ct);
+            return;
         }
+
+        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
+        if (body is { Length: > 0 })
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct);
 
         await stream.FlushAsync(ct);
     }

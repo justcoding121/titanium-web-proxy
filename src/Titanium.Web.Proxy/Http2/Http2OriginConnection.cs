@@ -124,12 +124,13 @@ internal sealed class Http2OriginConnection : IDisposable
     ///     Profiled at c=16 with threshold 16: dumpasync showed a single
     ///     <c>ReadLoopAsync</c> and hundreds of <c>SemaphoreSlim</c> waiters — grow earlier so
     ///     low concurrency is not pinned to one origin TLS+H2 session.
-    ///     Soft=1 (was 2←4): open another origin session as soon as any member is busy — maximizes
-    ///     parallel writeLocks for HPACK encode under multiplex (YARP EnableMultipleHttp2Connections
-    ///     fan-out mechanism, without changing TWP architecture). Cap remains
-    ///     <see cref="ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority"/>.
+    ///     Soft=4 (was 1←2←4): grow once a member has 4 in-flight streams. Soft=1 opened a new
+    ///     TLS+H2 session on the first concurrent stream and fanned out to MaxOrigin (=8) on CI
+    ///     4 vCPU — cool hid the cost; Windows H3→H2 CI sat ~0.94× YARP. Soft=4 still spreads
+    ///     writeLocks before SETTINGS_MAX_CONCURRENT_STREAMS while keeping fewer ReadLoops.
+    ///     Cap remains <see cref="ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority"/>.
     /// </summary>
-    internal const int PoolGrowActiveStreamThreshold = 1;
+    internal const int PoolGrowActiveStreamThreshold = 4;
 
     /// <summary>
     ///     Soft multiplex capacity used by <see cref="Http2OriginConnectionPool" /> to decide when to

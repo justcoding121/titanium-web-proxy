@@ -132,6 +132,48 @@ internal sealed class Http3Frame
     }
 
     /// <summary>
+    ///     Writes HEADERS then DATA as a single stream write when the combined frames fit a modest
+    ///     buffer. Used for already-buffered medium/large bodies (lossy / bodies ≥ 16 KiB) so the
+    ///     UDP path does not emit a header-only datagram before the body. Tiny GET stays on the
+    ///     separate-write path (HEADERS+DATA coalesce there hurt CI).
+    /// </summary>
+    public static async ValueTask WriteHeadersAndDataAsync(
+        Stream stream,
+        ReadOnlyMemory<byte> headersPayload,
+        ReadOnlyMemory<byte> dataPayload,
+        CancellationToken cancellationToken)
+    {
+        const int headerCap = 16;
+        var total = headerCap + headersPayload.Length + headerCap + dataPayload.Length;
+        var rented = ArrayPool<byte>.Shared.Rent(total);
+        try
+        {
+            var o = 0;
+            o += Http3VarInt.Write(rented.AsSpan(o), Http3FrameType.Headers);
+            o += Http3VarInt.Write(rented.AsSpan(o), (ulong)headersPayload.Length);
+            if (!headersPayload.IsEmpty)
+            {
+                headersPayload.Span.CopyTo(rented.AsSpan(o));
+                o += headersPayload.Length;
+            }
+
+            o += Http3VarInt.Write(rented.AsSpan(o), Http3FrameType.Data);
+            o += Http3VarInt.Write(rented.AsSpan(o), (ulong)dataPayload.Length);
+            if (!dataPayload.IsEmpty)
+            {
+                dataPayload.Span.CopyTo(rented.AsSpan(o));
+                o += dataPayload.Length;
+            }
+
+            await stream.WriteAsync(rented.AsMemory(0, o), cancellationToken);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    /// <summary>
     ///     Writes a zero-payload frame (used for GOAWAY and some SETTINGS without parameters).
     /// </summary>
     public static async ValueTask WriteAsync(

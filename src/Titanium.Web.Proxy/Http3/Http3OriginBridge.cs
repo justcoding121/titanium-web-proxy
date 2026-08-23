@@ -957,11 +957,10 @@ internal static class Http3OriginBridge
 
     /// <summary>
     ///     Session-lite H3→H1 forward: Request bag + stub <see cref="SessionEventArgs"/> for
-    ///     <see cref="TcpConnectionFactory"/> / <see cref="HttpWebClient"/> only (no inbound H3
-    ///     pumps, BeforeRequest, or Via). Warm keep-alive still pools origin sockets.
+    ///     <see cref="TcpConnectionFactory"/> only (no inbound H3 pumps, BeforeRequest, or Via).
+    ///     Warm keep-alive still pools origin sockets. Does not allocate <see cref="HttpWebClient"/> —
+    ///     the socket is already leased; only a <see cref="Response"/> is needed for QPACK.
     /// </summary>
-    private static readonly Lazy<int> TcpFastProcessId = new(() => 0);
-
     internal static async Task ForwardOverTcpFastAsync(
         H3H2FastForward fwd,
         ProxyServer server,
@@ -1040,13 +1039,39 @@ internal static class Http3OriginBridge
                 }
             }
 
-            var http = new HttpWebClient(null, request, TcpFastProcessId);
-            http.SetConnection(connection);
-            await http.SendRequest(false, isTransparent: true, server.OriginHttpVersionPolicy,
-                cancellationToken);
-            await http.ReceiveResponse(cancellationToken);
+            // Inline H1 exchange — skip HttpWebClient + InternalDataStore on the warm path.
+            request.Headers.RemoveHeader(KnownHeaders.Connection);
+            var headerBuilder = HeaderBuilder.Rent();
+            try
+            {
+                headerBuilder.WriteRequestLine(request.Method, request.RequestUriString8,
+                    HttpHeader.Version11);
+                headerBuilder.WriteHeaders(request.Headers, sendProxyAuthorization: false);
+                await connection.Stream.WriteHeadersAsync(headerBuilder, cancellationToken);
+            }
+            finally
+            {
+                HeaderBuilder.Return(headerBuilder);
+            }
 
-            var response = http.Response;
+            var httpStatus = await connection.Stream.ReadResponseStatus(cancellationToken);
+            if (httpStatus == null)
+            {
+                // Stale pooled keep-alive: no request body on this fast path → retryable.
+                throw new RetryableServerConnectionException(
+                    "Server connection was closed before any response was received.");
+            }
+
+            var response = new Response
+            {
+                RequestMethod = request.Method,
+                HttpVersion = httpStatus.Value.Version,
+                StatusCode = httpStatus.Value.StatusCode,
+                StatusDescription = httpStatus.Value.Description
+            };
+            if (!await HeaderParser.TryReadHeadersAsync(connection.Stream, response.Headers,
+                    cancellationToken))
+                throw new OperationCanceledException(cancellationToken);
             // Eager-buffer tiny/medium origin bodies before Release. Kestrel often uses chunked for
             // WriteAsync without Content-Length — skipping those left H3 clients with empty DATA.
             // 64 KiB matches compare-bodies / lossy GET size so HEADERS+DATA can coalesce on write.
