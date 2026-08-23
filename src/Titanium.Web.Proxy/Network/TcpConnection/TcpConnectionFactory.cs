@@ -536,13 +536,19 @@ internal class TcpConnectionFactory : IDisposable
         // Release trimming and produced noisy MITM dips (cool 3-rep median fell to ~0.85).
         lock (existingConnections)
         {
-            var cutOff = DateTime.UtcNow.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
+            var now = DateTime.UtcNow;
+            var cutOff = now.AddSeconds(-proxyServer.ConnectionTimeOutSeconds + 3);
+            // Hot reverse keep-alive: sockets returned within the last 2s almost never die
+            // between Release and the next rent. Skip the non-blocking Send(0) poll — a
+            // per-request syscall on every H3→H1 / h2c→H1 pool hit at CI c=32/64.
+            var skipPollAfter = now.AddSeconds(-2);
             while (!existingConnections.IsEmpty)
             {
                 if (existingConnections.TryDequeue(out var recentConnection))
                 {
+                    var recentlyUsed = recentConnection.LastAccess > skipPollAfter;
                     if (recentConnection.LastAccess > cutOff
-                        && recentConnection.TcpSocket.IsGoodConnection()
+                        && (recentlyUsed || recentConnection.TcpSocket.IsGoodConnection())
                         && IsNegotiatedProtocolCompatible(recentConnection, applicationProtocols))
                     {
                         if (!recentConnection.TryEnterLease())
