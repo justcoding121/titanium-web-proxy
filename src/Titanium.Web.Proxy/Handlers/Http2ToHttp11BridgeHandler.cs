@@ -637,6 +637,18 @@ public partial class ProxyServer
                 }
             }
 
+            // Eager-buffered responses no longer need the origin socket — release before H2 emit so
+            // the next multiplexed stream can ReceiveResponse sooner (Win CI h2c→H1 ~0.96×).
+            if (connection != null
+                && sessionArgs.HttpClient.Response.IsBodyRead
+                && sessionArgs.HttpClient.Response.StreamBodyWriter == null)
+            {
+                if (connection.Stream is Helpers.HttpStream residual && residual.DataAvailable)
+                    closeConnection = true;
+                await TcpConnectionFactory.Release(connection, closeConnection);
+                connection = null;
+            }
+
             await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState, clientStream,
                 cancellationToken);
 
