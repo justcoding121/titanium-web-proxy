@@ -33,7 +33,7 @@ public partial class ProxyServer
     /// <returns>The task.</returns>
     private async Task HandleClient(ExplicitProxyEndPoint endPoint, TcpClientConnection clientConnection) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
-        var cancellationTokenSource = new CancellationTokenSource();
+        var cancellationTokenSource = RentSessionCancellation();
         RegisterSessionCancellation(cancellationTokenSource);
         var cancellationToken = cancellationTokenSource.Token;
 
@@ -639,8 +639,7 @@ public partial class ProxyServer
         finally
         {
             if (!cancellationTokenSource.IsCancellationRequested) await cancellationTokenSource.CancelAsync();
-            UnregisterSessionCancellation(cancellationTokenSource);
-            cancellationTokenSource.Dispose();
+            ReturnSessionCancellation(cancellationTokenSource);
 
             await TcpConnectionFactory.Release(prefetchConnectionTask, closeServerConnection);
 

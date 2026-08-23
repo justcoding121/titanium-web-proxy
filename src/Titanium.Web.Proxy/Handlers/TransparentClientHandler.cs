@@ -30,7 +30,7 @@ public partial class ProxyServer
     /// <returns></returns>
     private Task HandleClient(TransparentProxyEndPoint endPoint, TcpClientConnection clientConnection)
     {
-        var cancellationTokenSource = new CancellationTokenSource();
+        var cancellationTokenSource = RentSessionCancellation();
         var cancellationToken = cancellationTokenSource.Token;
         return HandleClient(endPoint, clientConnection, endPoint.Port, cancellationTokenSource, cancellationToken);
     }
@@ -606,8 +606,7 @@ public partial class ProxyServer
         finally
         {
             if (!cancellationTokenSource.IsCancellationRequested) await cancellationTokenSource.CancelAsync();
-            UnregisterSessionCancellation(cancellationTokenSource);
-            cancellationTokenSource.Dispose();
+            ReturnSessionCancellation(cancellationTokenSource);
             await TcpConnectionFactory.Release(prefetchConnectionTask, true);
             if (clientStream != null)
                 await clientStream.DisposeAsync();

@@ -88,6 +88,8 @@ public partial class ProxyServer : IDisposable
     ///     so active relays do not outlive the listener (issues #919 / #799 / #809).
     /// </summary>
     private readonly ConcurrentDictionary<CancellationTokenSource, byte> activeSessionCancellations = new();
+    private readonly ConcurrentBag<CancellationTokenSource> sessionCtsPool = new();
+    private const int SessionCtsPoolCap = 256;
 
     /// <summary>
     ///     Backing field for exposed public property.
@@ -1881,6 +1883,41 @@ public partial class ProxyServer : IDisposable
     ///     <see cref="ConcurrentDictionary{TKey,TValue}"/> churn under parallel handshakes.
     /// </summary>
     internal bool TrackSessionCancellations { get; set; } = true;
+
+    /// <summary>
+    ///     Rent a session CTS (Kestrel <c>CancellationTokenSourcePool</c> analogue). New-connection
+    ///     TLS terminate allocates one CTS per accept; pooling cuts GC under parallel handshakes.
+    /// </summary>
+    internal CancellationTokenSource RentSessionCancellation()
+    {
+        while (sessionCtsPool.TryTake(out var cts))
+        {
+            if (cts.TryReset())
+                return cts;
+            cts.Dispose();
+        }
+
+        return new CancellationTokenSource();
+    }
+
+    /// <summary>
+    ///     Return a session CTS after Cancel. Prefer <see cref="CancellationTokenSource.TryReset"/> over dispose.
+    /// </summary>
+    internal void ReturnSessionCancellation(CancellationTokenSource cancellationTokenSource)
+    {
+        UnregisterSessionCancellation(cancellationTokenSource);
+
+        if (!cancellationTokenSource.TryReset())
+        {
+            cancellationTokenSource.Dispose();
+            return;
+        }
+
+        if (sessionCtsPool.Count < SessionCtsPoolCap)
+            sessionCtsPool.Add(cancellationTokenSource);
+        else
+            cancellationTokenSource.Dispose();
+    }
 
     internal void RegisterSessionCancellation(CancellationTokenSource cancellationTokenSource)
     {
