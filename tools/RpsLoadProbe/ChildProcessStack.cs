@@ -95,6 +95,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             proxyArgs.Append(CultureInfo.InvariantCulture, $" --nginx-path \"{nginxPath}\"");
         if (maxCachedConnections is { } m)
             proxyArgs.Append(CultureInfo.InvariantCulture, $" --max-cached-connections {m}");
+        proxyArgs.Append(FormatOriginWorkloadArgs(workload));
 
         var proxy = StartChild(exe, proxyArgs.ToString(),
             workload.CaptureTlsTiming ? new Dictionary<string, string> { ["TWP_RPS_CAPTURE_TLS"] = "1" } : null);
@@ -209,6 +210,12 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             sb.Append(CultureInfo.InvariantCulture, $" --early-response-after {workload.EarlyResponseAfterBytes}");
         if (workload.IsWebSocket)
             sb.Append(" --websocket");
+        // Lossy serve children need IsLossy so H2→H1 hosts can set MaxConcurrentStreams=8.
+        if (workload.DelayMs > 0)
+            sb.Append(CultureInfo.InvariantCulture, $" --delay-ms {workload.DelayMs}");
+        if (workload.LossPercent > 0)
+            sb.Append(CultureInfo.InvariantCulture,
+                $" --loss-percent {workload.LossPercent.ToString("0.##", CultureInfo.InvariantCulture)}");
         return sb.ToString();
     }
 

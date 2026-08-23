@@ -44,8 +44,10 @@ internal static class ServeOriginHost
 internal static class ServeProxyHost
 {
     public static async Task<int> RunAsync(ProbeMode mode, int originHttpPort, int originHttpsPort,
-        string? nginxPath, int? maxCachedConnections, CancellationToken cancellationToken)
+        string? nginxPath, int? maxCachedConnections, CancellationToken cancellationToken,
+        WorkloadOptions? workload = null)
     {
+        workload ??= WorkloadOptions.TinyGet;
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
             or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
             or ProbeMode.CompareMitm or ProbeMode.CompareCeiling or ProbeMode.CompareBodies
@@ -175,7 +177,8 @@ internal static class ServeProxyHost
             case ProbeMode.ReverseHttp2Cleartext:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
-                var twp = TwpProxyHost.StartReverseHttp2Cleartext(originHttpPort);
+                var twp = TwpProxyHost.StartReverseHttp2Cleartext(originHttpPort,
+                    TwpProxyHost.LossyH2MaxConcurrentStreams(workload));
                 proxy = twp;
                 listenUrl = twp.ListenUrl;
                 targetForClient = twp.ListenUrl;
@@ -232,7 +235,8 @@ internal static class ServeProxyHost
             case ProbeMode.ReverseH2cToH1:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
-                var twp = TwpProxyHost.StartReverseH2cToH1(originHttpPort);
+                var twp = TwpProxyHost.StartReverseH2cToH1(originHttpPort,
+                    TwpProxyHost.LossyH2MaxConcurrentStreams(workload));
                 proxy = twp;
                 listenUrl = twp.ListenUrl;
                 targetForClient = twp.ListenUrl;
@@ -651,7 +655,8 @@ internal static class ServeHost
                 {
                     // Native reverse peer parity: client TLS+h2 → terminate → cleartext HTTP/1 origin via H2→H1 bridge.
                     var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken, workload);
-                    var twp = TwpProxyHost.StartReverseHttp2Cleartext(origin.HttpPort);
+                    var twp = TwpProxyHost.StartReverseHttp2Cleartext(origin.HttpPort,
+                        TwpProxyHost.LossyH2MaxConcurrentStreams(workload));
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
                         twp.ListenUrl, [twp.ListenUrl], null, "2.0");
                 }
@@ -685,7 +690,8 @@ internal static class ServeHost
                 case ProbeMode.ReverseH2cToH1:
                 {
                     var origin = await OriginServer.StartAsync(false, responseBytes, cancellationToken, workload);
-                    var twp = TwpProxyHost.StartReverseH2cToH1(origin.HttpPort);
+                    var twp = TwpProxyHost.StartReverseH2cToH1(origin.HttpPort,
+                        TwpProxyHost.LossyH2MaxConcurrentStreams(workload));
                     return new ServeStack(origin, twp, twp, origin.HttpUrl, null, [], twp.ListenUrl, null,
                         twp.ListenUrl, [twp.ListenUrl], null, "2.0");
                 }

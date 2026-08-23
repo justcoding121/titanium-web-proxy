@@ -169,7 +169,7 @@ internal static class Cli
                 "serve-origin" => ServeOriginHost.RunAsync(enableHttps, enableH2c, cts.Token, workload)
                     .GetAwaiter().GetResult(),
                 "serve-proxy" => RunServeProxy(modeText, originHttpPort, originHttpsPort, nginxPath,
-                    maxCachedConnections, cts.Token),
+                    maxCachedConnections, cts.Token, workload),
                 "serve" => RunServe(modeText, nginxPath, maxCachedConnections, cts.Token, workload),
                 "ramp" => RunRamp(modeText, nginxPath, resultsDir, concurrency, warmupSec, durationSec,
                     maxCachedConnections, repeats, workload, cts.Token),
@@ -198,11 +198,12 @@ internal static class Cli
     }
 
     private static int RunServeProxy(string? modeText, int originHttpPort, int originHttpsPort, string? nginxPath,
-        int? maxCachedConnections, CancellationToken ct)
+        int? maxCachedConnections, CancellationToken ct, WorkloadOptions workload)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode) || IsMultiArmMode(mode))
             return Fail("Required: --serve-proxy --mode <single arm>");
-        return ServeProxyHost.RunAsync(mode, originHttpPort, originHttpsPort, nginxPath, maxCachedConnections, ct)
+        return ServeProxyHost.RunAsync(mode, originHttpPort, originHttpsPort, nginxPath, maxCachedConnections, ct,
+                workload)
             .GetAwaiter().GetResult();
     }
 

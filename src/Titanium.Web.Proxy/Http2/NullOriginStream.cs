@@ -14,16 +14,15 @@ namespace Titanium.Web.Proxy.Http2;
 ///     generic relay loop that nothing on the client=>server leg ever appears to fail or hang unexpectedly:
 ///     <list type="bullet">
 ///         <item>
-///             Exactly one connection SETTINGS frame is produced on the first read (ENABLE_PUSH=0,
-///             INITIAL_WINDOW_SIZE = 768 KiB, and MAX_CONCURRENT_STREAMS = 8), because the
-///             client=>server relay direction requires one before it will emit any client-facing HEADERS
-///             (see <see cref="Http2ConnectionState.ServerSettingsRelayed" />) - including the bridge's
-///             own synthetic responses, which reuse that exact signal. The large INITIAL_WINDOW_SIZE is
-///             relayed so concurrent 64 KiB uploads are not capped at the RFC default 65535. The stream
-///             cap is intentionally tight: each h2 stream already owns its own HTTP/1.1 origin TCP
-///             connection, so packing many streams on one client TCP connection only adds HOL risk under
-///             loss (HttpClient's EnableMultipleHttp2Connections spreads once this limit is hit).
-///             Http2Helper still clamps to <see cref="Options.ProxyResourceLimits.MaxConcurrentStreamsPerConnection" />.
+///             Exactly one connection SETTINGS frame is produced on the first read (ENABLE_PUSH=0 and
+///             INITIAL_WINDOW_SIZE = 768 KiB), because the client=>server relay direction
+///             requires one before it will emit any client-facing HEADERS (see
+///             <see cref="Http2ConnectionState.ServerSettingsRelayed" />) - including the bridge's own synthetic
+///             responses, which reuse that exact signal. The large INITIAL_WINDOW_SIZE is relayed to the
+///             client so concurrent 64 KiB uploads are not capped at the RFC default 65535.
+///             <see cref="Http2Helper" /> appends <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> from
+///             <see cref="Options.ProxyResourceLimits.MaxConcurrentStreamsPerConnection" /> when omitted —
+///             set that limit to 8 under lossy/HOL workloads so clients spread across TCP connections.
 ///         </item>
 ///         <item>
 ///             Every write (the client's re-encoded HEADERS/DATA that <see cref="Http2Helper" /> forwards toward
@@ -43,14 +42,8 @@ namespace Titanium.Web.Proxy.Http2;
 internal sealed class NullOriginStream : Stream
 {
     /// <summary>
-    ///     Client-facing stream admission for H2→H1 / H2→H3 bridges. Kept low so lossy/HOL clients
-    ///     open additional TCP connections instead of parking all streams behind one stalled peer.
-    /// </summary>
-    internal const int BridgeClientMaxConcurrentStreams = 8;
-
-    /// <summary>
-    ///     SETTINGS frame: ENABLE_PUSH=0 + INITIAL_WINDOW_SIZE=768 KiB + MAX_CONCURRENT_STREAMS=8.
-    ///     Length = 18, type = SETTINGS, flags = 0, stream id = 0.
+    ///     SETTINGS frame: ENABLE_PUSH=0 (6 bytes) + INITIAL_WINDOW_SIZE=768 KiB (6 bytes).
+    ///     Length = 12, type = SETTINGS, flags = 0, stream id = 0.
     /// </summary>
     private static readonly byte[] ClientFacingSettingsFrame = BuildClientFacingSettingsFrame();
 
@@ -59,12 +52,12 @@ internal sealed class NullOriginStream : Stream
 
     private static byte[] BuildClientFacingSettingsFrame()
     {
-        // 9-byte header + 18-byte payload (three SETTINGS entries).
-        var frame = new byte[9 + 18];
-        // Length = 18
+        // 9-byte header + 12-byte payload (two SETTINGS entries).
+        var frame = new byte[9 + 12];
+        // Length = 12
         frame[0] = 0;
         frame[1] = 0;
-        frame[2] = 18;
+        frame[2] = 12;
         frame[3] = (byte)Http2FrameType.Settings;
         frame[4] = 0; // flags
         // stream id = 0 (bytes 5-8 already zero)
@@ -76,9 +69,6 @@ internal sealed class NullOriginStream : Stream
         // SETTINGS_INITIAL_WINDOW_SIZE = 768 KiB
         BinaryPrimitives.WriteUInt16BigEndian(payload.Slice(6), (ushort)Http2SettingsId.InitialWindowSize);
         BinaryPrimitives.WriteUInt32BigEndian(payload.Slice(8), (uint)Http2Helper.ClientInitialStreamWindowSize);
-        // SETTINGS_MAX_CONCURRENT_STREAMS = BridgeClientMaxConcurrentStreams
-        BinaryPrimitives.WriteUInt16BigEndian(payload.Slice(12), (ushort)Http2SettingsId.MaxConcurrentStreams);
-        BinaryPrimitives.WriteUInt32BigEndian(payload.Slice(14), (uint)BridgeClientMaxConcurrentStreams);
         return frame;
     }
 

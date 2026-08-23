@@ -93,9 +93,17 @@ internal sealed class TwpProxyHost : IDisposable
     /// <summary>
     /// TLS-terminating reverse HTTP/2 matching native reverse peer: client h2 TLS → H2→H1 bridge → cleartext HTTP/1 origin.
     /// </summary>
-    public static TwpProxyHost StartReverseHttp2Cleartext(int originHttpPort)
+    /// <summary>
+    /// TLS-terminating reverse HTTP/2 → H2→H1 bridge → cleartext HTTP/1 origin.
+    /// </summary>
+    /// <param name="maxConcurrentStreamsPerConnection">
+    /// When set (lossy HOL uses 8), advertised via ResourceLimits so HttpClient spreads connections.
+    /// </param>
+    public static TwpProxyHost StartReverseHttp2Cleartext(int originHttpPort,
+        int? maxConcurrentStreamsPerConnection = null)
     {
-        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false,
+            maxConcurrentStreamsPerConnection: maxConcurrentStreamsPerConnection);
         ConfigureSharedTestCa(proxy);
 
         var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
@@ -169,9 +177,11 @@ internal sealed class TwpProxyHost : IDisposable
     }
 
     /// <summary>Cleartext reverse: client prior-knowledge h2c → H2→H1 bridge → cleartext HTTP/1 origin.</summary>
-    public static TwpProxyHost StartReverseH2cToH1(int originHttpPort)
+    public static TwpProxyHost StartReverseH2cToH1(int originHttpPort,
+        int? maxConcurrentStreamsPerConnection = null)
     {
-        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false,
+            maxConcurrentStreamsPerConnection: maxConcurrentStreamsPerConnection);
         ConfigureSharedTestCa(proxy);
 
         var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false)
@@ -575,7 +585,15 @@ internal sealed class TwpProxyHost : IDisposable
         return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
 
-    private static ProxyServer CreateBaseProxy(bool enableHttp2, bool enableHttp3, int? maxCachedConnections = null)
+    /// <summary>
+    /// Lossy H2 HOL: advertise MaxConcurrentStreams=8 so HttpClient opens multiple TCP connections.
+    /// Tiny-GET keeps the default (256) — hardcoding 8 on NullOriginStream taxed Win tiny-GET bridges.
+    /// </summary>
+    internal static int? LossyH2MaxConcurrentStreams(WorkloadOptions? workload) =>
+        workload is { IsLossy: true } ? 8 : null;
+
+    private static ProxyServer CreateBaseProxy(bool enableHttp2, bool enableHttp3,
+        int? maxCachedConnections = null, int? maxConcurrentStreamsPerConnection = null)
     {
         var proxy = new ProxyServer(false, false, false);
         // Saturation runs must not format or enqueue diagnostics on session threads.
@@ -601,6 +619,10 @@ internal sealed class TwpProxyHost : IDisposable
         // Saturation probe: raise floor so 4-vCPU Linux hosts are not stuck at OS defaults.
         proxy.ThreadPoolWorkerThread = Math.Max(Environment.ProcessorCount * 8, 64);
         proxy.MaxCachedConnections = maxCachedConnections ?? 256;
+        // Lossy H2 HOL: cap client streams so EnableMultipleHttp2Connections spreads across TCP
+        // connections (NullOriginStream omits SETTINGS_MAX_CONCURRENT_STREAMS; Http2Helper appends this).
+        if (maxConcurrentStreamsPerConnection is { } maxStreams)
+            proxy.ResourceLimits = proxy.ResourceLimits.WithMaxConcurrentStreamsPerConnection(maxStreams);
         // New-connection TLS arms pay setsockopt keepalive on every accept; Kestrel does not.
         // Keep-alive reverse RPS is unaffected (connections already long-lived).
         proxy.EnableTcpKeepAlive = false;

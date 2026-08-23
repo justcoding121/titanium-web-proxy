@@ -232,6 +232,33 @@ public sealed class ProxyResourceLimits
     }
 
     /// <summary>
+    ///     Returns a copy with <see cref="MaxConcurrentStreamsPerConnection" /> replaced.
+    /// </summary>
+    public ProxyResourceLimits WithMaxConcurrentStreamsPerConnection(int maxConcurrentStreamsPerConnection)
+    {
+        RequirePositive(maxConcurrentStreamsPerConnection, nameof(maxConcurrentStreamsPerConnection));
+        return new ProxyResourceLimits
+        {
+            MaxHeaderLineBytes = MaxHeaderLineBytes,
+            MaxHeaderCount = MaxHeaderCount,
+            MaxHeaderAggregateBytes = MaxHeaderAggregateBytes,
+            MaxEncodedBodyBytes = MaxEncodedBodyBytes,
+            MaxDecodedBodyBytes = MaxDecodedBodyBytes,
+            MaxDecompressionRatio = MaxDecompressionRatio,
+            MaxConcurrentClients = MaxConcurrentClients,
+            MaxConcurrentStreamsPerConnection = maxConcurrentStreamsPerConnection,
+            MaxPeerInitiatedIncompleteStreamResets = MaxPeerInitiatedIncompleteStreamResets,
+            MaxOpenHeaderBlockFrames = MaxOpenHeaderBlockFrames,
+            MaxOpenHeaderBlockDuration = MaxOpenHeaderBlockDuration,
+            ConnectionPoolingEnabled = ConnectionPoolingEnabled,
+            MaxCachedConnectionsPerHost = MaxCachedConnectionsPerHost,
+            MaxOriginHttp2ConnectionsPerAuthority = MaxOriginHttp2ConnectionsPerAuthority,
+            MaxCertificateCacheEntries = MaxCertificateCacheEntries,
+            MaxCertificateDiskCacheEntries = MaxCertificateDiskCacheEntries
+        };
+    }
+
+    /// <summary>
     ///     Returns a copy with <see cref="MaxOriginHttp2ConnectionsPerAuthority" /> replaced.
     /// </summary>
     public ProxyResourceLimits WithMaxOriginHttp2ConnectionsPerAuthority(int maxOriginHttp2ConnectionsPerAuthority)

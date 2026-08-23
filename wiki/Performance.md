@@ -80,7 +80,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-arch
 
 Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS` = encrypted, `QUIC` = HTTP/3).
 
-Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB). Same @ `62e5efcd` ([32627482477](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32627482477)); bridges @ `8789d6de` ([32636039240](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32636039240)); MITM @ `1b5ca9f9` ([32588707712](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32588707712)). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Laptop High-perf / cool-paired numbers stay on the [local lab](Performance-Profiling#local-windows-lab-developer-laptop).
+Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB). Same @ `62e5efcd` ([32627482477](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32627482477)); bridges @ `8e5c181b` ([32643127999](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32643127999)); MITM @ `1b5ca9f9` ([32588707712](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32588707712)). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Laptop High-perf / cool-paired numbers stay on the [local lab](Performance-Profiling#local-windows-lab-developer-laptop).
 
 **Load generators:** Reverse inbound H3 arms use **`dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) after dual-listen reverse H3. nginx/Windows is same-OS only (no QUIC).
 
@@ -89,17 +89,17 @@ Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB). Same @ `62e5efcd`
 | Reverse | HTTP/1 · plain | HTTP/1 · plain | 🟢 **22,974** | **22,974** | **13,916** | **13,916** | **22,066** | **22,066** |
 | Reverse | HTTP/1 · plain | HTTP/1 · TLS | 🟢 **20,282** | **20,282** | *Not possible* | *Not possible* | **19,046** | **19,046** |
 | Reverse | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **19,831** | **19,831** | **8,785** | **8,968** | **18,646** | **18,646** |
-| Reverse | HTTP/1 · TLS | HTTP/2 · TLS | 🟢 **23,662** | **23,662** | *Not possible* | *Not possible* | **22,878** | **22,878** |
-| Reverse | HTTP/1 · TLS | HTTP/3 · QUIC | 🟢 **14,389** | **14,389** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **13,806** | **13,806** |
-| Reverse | HTTP/2 · plain | HTTP/1 · plain | **31,031** | **31,031** | *Not possible* | *Not possible* | 🟢 **32,282** | **32,282** |
-| Reverse | HTTP/2 · plain | HTTP/2 · plain | 🟢 **89,143** | **89,143** | *Not possible* | *Not possible* | **65,827** | **65,827** |
+| Reverse | HTTP/1 · TLS | HTTP/2 · TLS | 🟢 **23,935** | **23,935** | *Not possible* | *Not possible* | **23,058** | **23,058** |
+| Reverse | HTTP/1 · TLS | HTTP/3 · QUIC | 🟢 **14,742** | **14,742** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **14,223** | **14,223** |
+| Reverse | HTTP/2 · plain | HTTP/1 · plain | **29,669** | **29,669** | *Not possible* | *Not possible* | 🟢 **32,847** | **32,847** |
+| Reverse | HTTP/2 · plain | HTTP/2 · plain | 🟢 **89,351** | **89,351** | *Not possible* | *Not possible* | **66,312** | **66,312** |
 | Reverse | HTTP/2 · plain | HTTP/2 · TLS | 🟢 **76,008** | **76,008** | *Not possible* | *Not possible* | **57,302** | **57,302** |
-| Reverse | HTTP/2 · plain | HTTP/3 · QUIC | 🟢 **31,394** | **31,394** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **30,002** | **30,002** |
-| Reverse | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **30,418** | **30,418** | **11,172** | **11,172** | **29,457** | **29,457** |
-| Reverse | HTTP/2 · TLS | HTTP/2 · plain | 🟢 **84,001** | **84,001** | *Not possible* | *Not possible* | **55,908** | **55,908** |
-| Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | 🟢 **31,105** | **31,105** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **27,323** | **27,323** |
-| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **13,040** | **13,040** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | 🟢 **14,691** | **14,691** |
-| Reverse | HTTP/3 · QUIC | HTTP/2 · TLS | 🟢 **24,027** | **24,027** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **22,852** | **22,852** |
+| Reverse | HTTP/2 · plain | HTTP/3 · QUIC | **29,779** | **29,779** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | 🟢 **30,518** | **30,518** |
+| Reverse | HTTP/2 · TLS | HTTP/1 · plain | **28,167** | **28,167** | **11,172** | **11,172** | 🟢 **29,976** | **29,976** |
+| Reverse | HTTP/2 · TLS | HTTP/2 · plain | 🟢 **84,456** | **84,456** | *Not possible* | *Not possible* | **55,927** | **55,927** |
+| Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | **25,916** | **25,916** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | 🟢 **27,929** | **27,929** |
+| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | **13,185** | **13,185** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | 🟢 **14,814** | **15,286** |
+| Reverse | HTTP/3 · QUIC | HTTP/2 · TLS | 🟢 **24,414** | **24,414** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **20,959** | **20,959** |
 | Reverse | HTTP/3 · QUIC | HTTP/3 · QUIC | 🟢 **20,726** | **20,726** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **13,715** | **13,715** |
 | MITM | HTTP/1 · plain | HTTP/1 · plain | **24,782** | **24,782** | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) |
 | MITM | HTTP/1 · plain | HTTP/1 · TLS | **25,503** | **25,503** | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) |
@@ -122,11 +122,11 @@ Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB). Same @ `62e5efcd`
 | MITM | HTTP/2 · TLS | HTTP/1 · TLS | **28,034** | **28,034** | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) |
 | MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **15,082** | **15,082** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | *Not possible* (no MITM) | *Not possible* (no MITM) |
 
-TWP÷YARP H1 plain ≈ **1.04×** (22,974 / 22,066); H1 TLS terminate ≈ **1.06×** (19,831 / 18,646). Open Win gaps vs YARP (gate **>1.00×**): h2c→H1 ≈ **0.96×**, H3→H1 ≈ **0.89×**. Closed this tip: H1→H3 ≈ **1.04×**, h2c→H3 ≈ **1.05×**. Cool laptop pairs still lead the open arms; dig continues. H3→H3 ≈ **1.67×**. Prefer ratios over absolute RPS on GHA VMs. MITM publishes the same **15** Client×Origin pairs as Reverse (inspectable/decrypt), then dual-crypto extras (CONNECT, TLS↔TLS). nginx/YARP cannot MITM.
+TWP÷YARP H1 plain ≈ **1.04×** (22,974 / 22,066); H1 TLS terminate ≈ **1.06×** (19,831 / 18,646). Bridges remasure @ `8e5c181b` ([32643127999](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32643127999)): H1→H3 ≈ **1.04×**, H1→H2 ≈ **1.04×**. Open Win gaps vs YARP (gate **>1.00×**): h2c→H1 ≈ **0.90×**, H3→H1 ≈ **0.89×**, H2 TLS→H1 ≈ **0.94×**, h2c→H3 ≈ **0.98×** (bridges @ MaxStreams=8 hardcode — remasuring after lossy-only ResourceLimits). Lossy H2 closed ≈ **3.47×**. Prefer ratios over absolute RPS on GHA VMs. MITM publishes the same **15** Client×Origin pairs as Reverse (inspectable/decrypt), then dual-crypto extras (CONNECT, TLS↔TLS). nginx/YARP cannot MITM.
 
 ## Linux — Titanium vs nginx vs YARP
 
-Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB). Same @ `62e5efcd` ([32627482477](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32627482477)); bridges @ `8789d6de` ([32636039240](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32636039240)); MITM @ `1b5ca9f9` ([32588707712](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32588707712)). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** The RPS workflow installs nginx.org mainline (`http_v3_module`) and `libmsquic` (`QuicListener.IsSupported=true` on `ubuntu-latest`).
+Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB). Same @ `62e5efcd` ([32627482477](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32627482477)); bridges @ `8e5c181b` ([32643127999](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32643127999)); MITM @ `1b5ca9f9` ([32588707712](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32588707712)). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** The RPS workflow installs nginx.org mainline (`http_v3_module`) and `libmsquic` (`QuicListener.IsSupported=true` on `ubuntu-latest`).
 
 TWP÷nginx H1 plain reverse ≈ **0.76** (65,887 / 87,232); TWP÷YARP H1 plain ≈ **1.12×** (65,887 / 58,658). Prefer ratios over absolute RPS on GHA VMs.
 
@@ -135,17 +135,17 @@ TWP÷nginx H1 plain reverse ≈ **0.76** (65,887 / 87,232); TWP÷YARP H1 plain �
 | Reverse | HTTP/1 · plain | HTTP/1 · plain | **65,887** | **65,926** | 🟢 **87,232** | **87,232** | **58,658** | **58,734** |
 | Reverse | HTTP/1 · plain | HTTP/1 · TLS | 🟢 **55,156** | **55,156** | *Not possible* | *Not possible* | **50,228** | **50,228** |
 | Reverse | HTTP/1 · TLS | HTTP/1 · plain | **52,041** | **52,275** | 🟢 **65,621** | **65,621** | **45,466** | **45,466** |
-| Reverse | HTTP/1 · TLS | HTTP/2 · TLS | 🟢 **29,775** | **29,775** | *Not possible* | *Not possible* | **28,677** | **28,677** |
-| Reverse | HTTP/1 · TLS | HTTP/3 · QUIC | 🟢 **23,062** | **23,062** | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **21,278** | **21,278** |
-| Reverse | HTTP/2 · plain | HTTP/1 · plain | 🟢 **41,028** | **41,028** | *Not possible* | *Not possible* | **39,759** | **39,759** |
-| Reverse | HTTP/2 · plain | HTTP/2 · plain | 🟢 **73,464** | **73,464** | *Not possible* | *Not possible* | **55,555** | **55,555** |
+| Reverse | HTTP/1 · TLS | HTTP/2 · TLS | 🟢 **29,273** | **29,273** | *Not possible* | *Not possible* | **28,433** | **28,433** |
+| Reverse | HTTP/1 · TLS | HTTP/3 · QUIC | 🟢 **22,822** | **22,822** | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **20,930** | **20,930** |
+| Reverse | HTTP/2 · plain | HTTP/1 · plain | **39,656** | **39,656** | *Not possible* | *Not possible* | 🟢 **39,865** | **39,865** |
+| Reverse | HTTP/2 · plain | HTTP/2 · plain | 🟢 **74,398** | **74,398** | *Not possible* | *Not possible* | **55,113** | **55,113** |
 | Reverse | HTTP/2 · plain | HTTP/2 · TLS | 🟢 **96,393** | **96,393** | *Not possible* | *Not possible* | **72,066** | **72,066** |
-| Reverse | HTTP/2 · plain | HTTP/3 · QUIC | 🟢 **31,206** | **31,206** | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **30,640** | **30,640** |
-| Reverse | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **38,024** | **38,024** | **32,404** | **46,118** | **34,503** | **34,503** |
-| Reverse | HTTP/2 · TLS | HTTP/2 · plain | 🟢 **68,702** | **68,702** | *Not possible* | *Not possible* | **45,383** | **45,383** |
-| Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | 🟢 **30,303** | **30,303** | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **26,549** | **26,549** |
-| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **23,373** | **23,373** | **15,563** | **18,987** | **22,070** | **22,070** |
-| Reverse | HTTP/3 · QUIC | HTTP/2 · TLS | 🟢 **28,967** | **28,967** | *Not possible* (no H3→H2) | *Not possible* (no H3→H2) | **25,162** | **25,162** |
+| Reverse | HTTP/2 · plain | HTTP/3 · QUIC | 🟢 **31,597** | **31,597** | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **30,120** | **30,120** |
+| Reverse | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **36,109** | **36,109** | **32,404** | **46,118** | **34,459** | **34,459** |
+| Reverse | HTTP/2 · TLS | HTTP/2 · plain | 🟢 **66,244** | **66,244** | *Not possible* | *Not possible* | **44,924** | **44,924** |
+| Reverse | HTTP/2 · TLS | HTTP/3 · QUIC | 🟢 **30,456** | **30,456** | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **26,435** | **26,435** |
+| Reverse | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **22,970** | **22,970** | **15,563** | **18,987** | **21,696** | **21,696** |
+| Reverse | HTTP/3 · QUIC | HTTP/2 · TLS | 🟢 **28,428** | **28,428** | *Not possible* (no H3→H2) | *Not possible* (no H3→H2) | **24,483** | **24,483** |
 | Reverse | HTTP/3 · QUIC | HTTP/3 · QUIC | 🟢 **28,104** | **28,104** | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **23,708** | **23,708** |
 | MITM | HTTP/1 · plain | HTTP/1 · plain | **29,982** | **29,982** | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) |
 | MITM | HTTP/1 · plain | HTTP/1 · TLS | **27,856** | **27,856** | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) |
@@ -168,7 +168,7 @@ TWP÷nginx H1 plain reverse ≈ **0.76** (65,887 / 87,232); TWP÷YARP H1 plain �
 | MITM | HTTP/2 · TLS | HTTP/1 · TLS | **31,697** | **31,697** | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) |
 | MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **21,573** | **21,573** | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) |
 
-On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.76** (65,887 / 87,232). H1 TLS terminate ≈ **0.79** (52,041 / 65,621). TWP÷YARP H1 plain ≈ **1.12×**; H1 TLS terminate ≈ **1.14×**. Open vs YARP: none on bridges @ `8789d6de` (all published TWP÷YARP **>1.00×**). Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**. MITM publishes the same **15** Client×Origin pairs as Reverse (inspectable/decrypt), then dual-crypto extras (CONNECT, TLS↔TLS). nginx/YARP cannot MITM.
+On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.76** (65,887 / 87,232). H1 TLS terminate ≈ **0.79** (52,041 / 65,621). TWP÷YARP H1 plain ≈ **1.12×**; H1 TLS terminate ≈ **1.14×**. Bridges @ `8e5c181b`: most TWP÷YARP **>1.00×**; h2c→H1 ≈ **0.995×** (noise). Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**. MITM publishes the same **15** Client×Origin pairs as Reverse (inspectable/decrypt), then dual-crypto extras (CONNECT, TLS↔TLS). nginx/YARP cannot MITM.
 
 **nginx HTTP/3:** inbound QUIC terminate → cleartext H1 (`nginx-reverse-http3-cleartext`) @ `8789d6de` bridges: sustain **15,563** / peak **18,987**. TWP/YARP H3→H1 on this row are from the same bridges pass. nginx still cannot speak HTTP/3 to an origin (no H3 upstream in this conf).
 
@@ -255,7 +255,7 @@ Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP da
 | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **59** | **87** | **16** | **17** | **17** | **17** |
 | HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* (GHA UDP-shim) | *Not measured* | *Not possible* (no QUIC) | *Not possible* | *Not measured* (GHA UDP-shim) | *Not measured* |
 
-H1: TWP÷YARP ≈ **1.00×** (663 / 661) — TWP 1st. H2: TWP÷YARP ≈ **3.47×** (59 / 17) after NullOriginStream **MAX_CONCURRENT_STREAMS=8** (`8e5c181b`) — HOL closed vs prior 16 vs 17. Laptop Windows (same shim, `quic-http3`): TWP H3 ≈ **1,572** sustain vs H2 ≈ **14** (~**112×**). Absolute RPS is low because the shim delays every buffer/datagram — the point is the **protocol shape**.
+H1: TWP÷YARP ≈ **1.00×** (663 / 661) — TWP 1st. H2: TWP÷YARP ≈ **3.47×** (59 / 17) after lossy arm sets **MaxConcurrentStreamsPerConnection=8** (`8e5c181b` / follow-up ResourceLimits wiring) — HOL closed vs prior 16 vs 17. Laptop Windows (same shim, `quic-http3`): TWP H3 ≈ **1,572** sustain vs H2 ≈ **14** (~**112×**). Absolute RPS is low because the shim delays every buffer/datagram — the point is the **protocol shape**.
 
 ### Linux — lossy / high-RTT (H2 HOL / H3 loss)
 
