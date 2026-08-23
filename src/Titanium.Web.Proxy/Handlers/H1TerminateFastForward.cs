@@ -27,6 +27,8 @@ public partial class ProxyServer
     ///     bodiless GET/HEAD without allocating <see cref="SessionEventArgs" /> (H3→H1 session-lite analogue).
     ///     New-connection TLS terminate pays Schannel per accept; skipping the session graph cuts parallel
     ///     GC under c=32 (cool: c=1 already leads YARP, c=32 was ~0.88–0.90×).
+    ///     Callers must also refuse <see cref="UpstreamHttpProtocol.Http2"/> / <see cref="UpstreamHttpProtocol.Http3"/>
+    ///     at the connection level — this path only speaks HTTP/1.1 TCP to the origin.
     /// </summary>
     private static bool CanUseH1TerminateLite(ProxyEndPoint endPoint, Request request, bool enable100Continue,
         bool enableWinAuth, bool hasCustomUpstreamProxyFunc)

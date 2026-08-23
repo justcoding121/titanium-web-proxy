@@ -94,11 +94,16 @@ public partial class ProxyServer
 
                         // Transparent reverse + no interception: try session-lite before SessionEventArgs
                         // (new-connection TLS terminate: c=1 already leads YARP; c=32 paid full session GC).
+                        // Never lite when the connection-level upstream is H2/H3 — ForwardH1TerminateLite
+                        // always opens HTTP/1.1 TCP (H1→H3/H2 bridges were 100% err after session-lite).
+                        var connectionUpstream = upstreamHttpProtocol ?? connectArgs?.UpstreamHttpProtocol;
                         var tryH1TerminateLite = connectRequest == null
                                                  && endPoint is TransparentBaseProxyEndPoint
                                                  {
                                                      ForwardHost.Length: > 0
                                                  }
+                                                 && connectionUpstream is not UpstreamHttpProtocol.Http2
+                                                 && connectionUpstream is not UpstreamHttpProtocol.Http3
                                                  && !NeedsHttpInterception(endPoint)
                                                  && !Enable100ContinueBehaviour
                                                  && !EnableWinAuth
