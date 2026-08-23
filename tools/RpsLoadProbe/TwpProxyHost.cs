@@ -566,6 +566,8 @@ internal sealed class TwpProxyHost : IDisposable
             return Task.CompletedTask;
         };
         proxy.AddEndPoint(endPoint);
+        // Warm before Start so the fixed-cert H1 path sees CachedServerAuthOptions on first accept.
+        WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
         proxy.Start();
         return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
     }
