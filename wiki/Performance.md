@@ -60,7 +60,7 @@ Laptop High-perf / cool-paired Windows numbers live on [Performance Profiling �
 
 ### Saturation control
 
-Calibration for the shared 4 vCPU loopback shape: how close client + origin are to saturated before ranking reverse peers. Tiny keep-alive GET. Median of **3** repeats @ `71ecb747` — [32671198572](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32671198572). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Block A **% of origin-HttpClient** uses median **peak** RPS. Blocks B/C use peer÷YARP / ÷nginx on median peak (not % of H1 origin). RSS/CPU sample the **proxy child** (+ children for nginx workers); origin-direct samples the **origin** child. nginx CPU often reads **0%** in this harness (master/worker accounting) — treat Linux nginx RSS as the useful nginx resource signal. Product matrices below use matched `dotnet-httpclient` only (not bombardier).
+Calibration for the shared 4 vCPU loopback shape: how close client + origin are to saturated before ranking reverse peers. Tiny keep-alive GET. Median of **3** repeats @ `71ecb747` — [32671198572](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32671198572). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Block A **% of origin-HttpClient** uses median **peak** RPS. Blocks B/C use peer÷YARP / ÷nginx on median peak (not % of H1 origin). Memory (RSS) / CPU sample the **proxy child** plus its **full descendant tree** (serve-proxy → nginx master → workers); origin-direct samples the **origin** child. Product matrices below use matched `dotnet-httpclient` only (not bombardier).
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
@@ -77,7 +77,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 
 **Windows** (`windows-latest`)
 
-| Arm | Generator | Sustain | Peak | % of origin-HttpClient | RSS peak | CPU avg % |
+| Arm | Generator | Sustain | Peak | % of origin-HttpClient | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|
 | origin-direct | dotnet-httpclient | **52,598** | **52,598** | **100%** | **53 MiB** | **42.5** |
 | origin-direct-bombardier | bombardier | **37,091** | **39,245** | **74.6%** | **54 MiB** | **25.0** |
@@ -88,7 +88,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 
 **Linux** (`ubuntu-latest`)
 
-| Arm | Generator | Sustain | Peak | % of origin-HttpClient | RSS peak | CPU avg % |
+| Arm | Generator | Sustain | Peak | % of origin-HttpClient | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|
 | origin-direct | dotnet-httpclient | **101,711** | **101,711** | **100%** | **79 MiB** | **44.6** |
 | origin-direct-bombardier | bombardier | **61,736** | **61,736** | **60.7%** | **79 MiB** | **37.4** |
@@ -105,7 +105,7 @@ Peer ratios (÷YARP / ÷nginx) on median peak + RSS/CPU. 🥇 among TWP / nginx 
 
 **Windows** (`windows-latest`)
 
-| Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | RSS peak | CPU avg % |
+| Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|---:|
 | nginx-reverse-http2 | dotnet-httpclient | **11,403** | **11,403** | **0.39×** | **1.00×** | **52 MiB** | **0.0** |
 | yarp-reverse-http2 | dotnet-httpclient | **29,617** | **29,617** | **1.00×** | **2.60×** | **91 MiB** | **54.0** |
@@ -113,7 +113,7 @@ Peer ratios (÷YARP / ÷nginx) on median peak + RSS/CPU. 🥇 among TWP / nginx 
 
 **Linux** (`ubuntu-latest`)
 
-| Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | RSS peak | CPU avg % |
+| Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|---:|
 | nginx-reverse-http2 | dotnet-httpclient | **21,480** | **29,931** | **0.67×** | **1.00×** | **63 MiB** | **0.0** |
 | yarp-reverse-http2 | dotnet-httpclient | **44,490** | **44,490** | **1.00×** | **1.49×** | **122 MiB** | **48.5** |
@@ -125,7 +125,7 @@ Same layout as Block B. Requires QuicListener; nginx only with `http_v3_module` 
 
 **Windows** (`windows-latest`)
 
-| Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | RSS peak | CPU avg % |
+| Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|---:|
 | nginx-reverse-http3-cleartext | dotnet-httpclient | *Not possible* (no QUIC) | *Not possible* | — | — | — | — |
 | yarp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **16,252** | **16,252** | **1.00×** | — | **158 MiB** | **49.7** |
@@ -133,7 +133,7 @@ Same layout as Block B. Requires QuicListener; nginx only with `http_v3_module` 
 
 **Linux** (`ubuntu-latest`)
 
-| Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | RSS peak | CPU avg % |
+| Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|---:|
 | nginx-reverse-http3-cleartext | dotnet-httpclient | **0** | **24,954** | **0.90×** | **1.00×** | **62 MiB** | **0.0** |
 | yarp-reverse-http3-cleartext | dotnet-httpclient | **27,833** | **27,833** | **1.00×** | **1.12×** | **191 MiB** | **49.3** |

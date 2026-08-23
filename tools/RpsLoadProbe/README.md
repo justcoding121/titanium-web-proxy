@@ -47,7 +47,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 | **B — H2 TLS→H1** | `nginx-reverse-http2` (if nginx), `yarp-reverse-http2`, `twp-reverse-http2-cleartext` |
 | **C — H3→H1** | `nginx-reverse-http3-cleartext` (if nginx + `http_v3_module`), `yarp-reverse-http3-cleartext`, `twp-reverse-http3-cleartext` (skipped when `QuicListener` unsupported) |
 
-**CSV resource columns** (every measure step): `proxy_rss_peak_bytes`, `proxy_cpu_avg_pct`. Names stay `proxy_*` even on origin-direct arms (those sample the **origin** child PID). Otherwise sample the **proxy** child PID plus **direct children** (so nginx worker RSS/CPU is included under the master). Empty when the PID cannot be sampled. Poll ~200ms during the measure window; peak Working Set / VmRSS sum and average CPU% (of all logical processors). nginx/Windows may still under-report CPU (thread model); treat Linux nginx resource columns as authoritative.
+**CSV resource columns** (every measure step): `proxy_rss_peak_bytes`, `proxy_cpu_avg_pct` (wiki label: **Memory (RSS)**). Names stay `proxy_*` even on origin-direct arms (those sample the **origin** child PID). Otherwise sample the **proxy** child PID plus its **full descendant tree** (so nginx workers under the serve-proxy → master chain are included). Empty when the PID cannot be sampled. Poll ~200ms during the measure window; peak Working Set / VmRSS sum and average CPU% (of all logical processors).
 
 **Summary:** Block A prints median peak RPS as **% of origin-direct** (and bombardier when present) plus median RSS/CPU at the peak-RPS step. Blocks B/C print peer÷YARP and peer÷nginx (when present) plus RSS/CPU — not % of H1 origin-direct.
 

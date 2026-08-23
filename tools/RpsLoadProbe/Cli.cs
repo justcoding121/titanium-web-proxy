@@ -554,7 +554,7 @@ internal static class Cli
               compare-arch            Slow consumer, early response, H2 duplex, WebSocket echo vs control arms
               compare-saturation      Calibration: origin-direct (+ bombardier) + H1 plain peers;
                                       then H2 TLS→H1 and H3→H1 peers; CSV proxy_rss/cpu columns
-                                      (proxy child + children; origin PID on origin-direct)
+                                      (proxy child + descendants; origin PID on origin-direct)
               origin-direct           Load generator → origin child only (no proxy)
               yarp-reverse-http2-to-https Control arm: TLS+h2 -> HTTPS/h2
               explicit-pool-sweep     Fan-out with MaxCachedConnections 4 / 32 / 128

@@ -403,7 +403,7 @@ internal static class RampOrchestrator
         if (rssByArm.TryGetValue(name, out var rssList) && rssList.Count > 0)
         {
             var medianRss = MedianLong(rssList);
-            line += string.Create(CultureInfo.InvariantCulture, $" median_rss_peak_bytes={medianRss}");
+            line += string.Create(CultureInfo.InvariantCulture, $" median_memory_rss_bytes={medianRss}");
         }
 
         if (cpuByArm.TryGetValue(name, out var cpuList) && cpuList.Count > 0)
@@ -1027,7 +1027,7 @@ internal static class RampOrchestrator
 
                 var resourceHint = resources is { } r
                     ? string.Create(CultureInfo.InvariantCulture,
-                        $" rss_peak={r.PeakRssBytes} cpu_avg={r.AvgCpuPercent:F1}%")
+                        $" memory_rss={r.PeakRssBytes} cpu_avg={r.AvgCpuPercent:F1}%")
                     : "";
                 ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
                     $"    rps={result.Rps:F0} err%={result.ErrorRatePercent:F3} p50={result.P50Ms:F1}ms p99={result.P99Ms:F1}ms max={result.MaxMs:F1}ms ver={result.NegotiatedVersionHint} slo={(meetsSlo ? "PASS" : "FAIL")}{resourceHint}"));

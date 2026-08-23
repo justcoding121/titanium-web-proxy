@@ -7,7 +7,7 @@ namespace Titanium.Web.Proxy.RpsLoadProbe;
 /// <summary>
 /// Polls RSS and CPU% for a child PID during a measure window.
 /// Columns stay named <c>proxy_*</c> even when the sampled PID is the origin (origin-direct arms).
-/// Includes direct children (e.g. nginx workers under the master PID we spawn).
+/// Includes the full descendant process tree (serve-proxy → nginx master → workers).
 /// </summary>
 internal sealed record ProcessResourceSample(long PeakRssBytes, double AvgCpuPercent);
 
@@ -249,27 +249,56 @@ internal static class ProcessResourceSampler
         return new ProcessResourceSample(peakRss, avgCpu);
     }
 
-    /// <summary>Root PID plus direct children (nginx workers under master).</summary>
+    /// <summary>
+    /// Root PID plus all descendants (serve-proxy → nginx master → workers).
+    /// Direct-children-only misses nginx workers under the .NET proxy child.
+    /// </summary>
     private static List<int> GetWindowsTreePids(int rootPid)
     {
-        var result = new List<int> { rootPid };
+        var result = new List<int>();
         try
         {
             var snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
             if (snapshot == INVALID_HANDLE_VALUE)
-                return result;
+                return [rootPid];
 
             try
             {
+                var childrenByParent = new Dictionary<int, List<int>>();
                 var entry = new PROCESSENTRY32 { dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32>() };
                 if (!Process32First(snapshot, ref entry))
-                    return result;
+                    return [rootPid];
 
                 do
                 {
-                    if ((int)entry.th32ParentProcessID == rootPid && (int)entry.th32ProcessID != rootPid)
-                        result.Add((int)entry.th32ProcessID);
+                    var pid = (int)entry.th32ProcessID;
+                    var ppid = (int)entry.th32ParentProcessID;
+                    if (pid <= 0 || pid == ppid)
+                        continue;
+                    if (!childrenByParent.TryGetValue(ppid, out var list))
+                    {
+                        list = [];
+                        childrenByParent[ppid] = list;
+                    }
+
+                    list.Add(pid);
                 } while (Process32Next(snapshot, ref entry));
+
+                var queue = new Queue<int>();
+                var seen = new HashSet<int> { rootPid };
+                queue.Enqueue(rootPid);
+                while (queue.Count > 0)
+                {
+                    var current = queue.Dequeue();
+                    result.Add(current);
+                    if (!childrenByParent.TryGetValue(current, out var kids))
+                        continue;
+                    foreach (var kid in kids)
+                    {
+                        if (seen.Add(kid))
+                            queue.Enqueue(kid);
+                    }
+                }
             }
             finally
             {
@@ -278,57 +307,59 @@ internal static class ProcessResourceSampler
         }
         catch
         {
-            // fall back to root only
+            return [rootPid];
         }
 
-        return result;
+        return result.Count > 0 ? result : [rootPid];
     }
 
     private static List<int> GetLinuxTreePids(int rootPid)
     {
-        var result = new List<int> { rootPid };
+        var result = new List<int>();
+        var seen = new HashSet<int> { rootPid };
+        var queue = new Queue<int>();
+        queue.Enqueue(rootPid);
+
         try
         {
-            // Prefer /proc/<pid>/task/<tid>/children (kernel 3.5+)
-            var taskDir = $"/proc/{rootPid}/task";
-            if (Directory.Exists(taskDir))
-            {
-                foreach (var tidDir in Directory.EnumerateDirectories(taskDir))
-                {
-                    var childrenPath = Path.Combine(tidDir, "children");
-                    if (!File.Exists(childrenPath))
-                        continue;
-                    var text = File.ReadAllText(childrenPath);
-                    foreach (var part in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-                    {
-                        if (int.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out var child) &&
-                            child > 0 && child != rootPid)
-                            result.Add(child);
-                    }
-                }
-
-                if (result.Count > 1)
-                    return result.Distinct().ToList();
-            }
-
-            // Fallback: scan /proc for ppid == root
+            // Build ppid → children once when walking deep trees (nginx workers are grandchildren).
+            var childrenByParent = new Dictionary<int, List<int>>();
             foreach (var dir in Directory.EnumerateDirectories("/proc"))
             {
                 var name = Path.GetFileName(dir);
-                if (!int.TryParse(name, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pid) ||
-                    pid == rootPid)
+                if (!int.TryParse(name, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pid))
                     continue;
                 var ppid = TryReadLinuxPpid($"/proc/{pid}/stat");
-                if (ppid == rootPid)
-                    result.Add(pid);
+                if (ppid is null or <= 0 || ppid == pid)
+                    continue;
+                if (!childrenByParent.TryGetValue(ppid.Value, out var list))
+                {
+                    list = [];
+                    childrenByParent[ppid.Value] = list;
+                }
+
+                list.Add(pid);
+            }
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                result.Add(current);
+                if (!childrenByParent.TryGetValue(current, out var kids))
+                    continue;
+                foreach (var kid in kids)
+                {
+                    if (seen.Add(kid))
+                        queue.Enqueue(kid);
+                }
             }
         }
         catch
         {
-            // fall back to root only
+            return [rootPid];
         }
 
-        return result.Distinct().ToList();
+        return result.Count > 0 ? result : [rootPid];
     }
 
     private static int? TryReadLinuxPpid(string statPath)
