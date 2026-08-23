@@ -58,7 +58,7 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     Global admission counter for the admission gate, incremented/decremented synchronously at
-    ///     <see cref="HandleClient(Socket,ProxyEndPoint)" /> entry/exit. Deliberately independent of
+    ///     <see cref="HandleClient(Socket,ProxyEndPoint,Task{int})" /> entry/exit. Deliberately independent of
     ///     <see cref="clientConnectionCount" />: that counter is decremented from a fire-and-forget task
     ///     behind a hardcoded one-second TIME_WAIT delay in <see cref="TcpClientConnection.Dispose" />,
     ///     so gating admission on it would reject healthy traffic for a full second after every closed
@@ -2083,8 +2083,32 @@ public partial class ProxyServer : IDisposable
                 OnException(null, ex);
             }
 
+            // Kestrel SocketConnection.Start(): arm a zero-byte WaitForData on the accept thread
+            // before the ThreadPool hop so ClientHello can arrive during queue/setup. Await it
+            // before new SslStream (overlapping receives on the same socket are unsafe).
+            Task<int> clientHelloWait;
+            try
+            {
+                clientHelloWait = tcpClient.ReceiveAsync(Memory<byte>.Empty, SocketFlags.None).AsTask();
+            }
+            catch (Exception ex)
+            {
+                OnException(null, ex);
+                try
+                {
+                    tcpClient.Dispose();
+                }
+                catch
+                {
+                    // Already disposed / reset.
+                }
+
+                ReleaseClientConnection(endPoint);
+                continue;
+            }
+
             ThreadPool.UnsafeQueueUserWorkItem(
-                new AcceptedClientWorkItem(this, tcpClient, endPoint), preferLocal: false);
+                new AcceptedClientWorkItem(this, tcpClient, endPoint, clientHelloWait), preferLocal: false);
         }
     }
 
@@ -2096,25 +2120,29 @@ public partial class ProxyServer : IDisposable
         private readonly ProxyServer server;
         private readonly Socket socket;
         private readonly ProxyEndPoint endPoint;
+        private readonly Task<int> clientHelloWait;
 
-        public AcceptedClientWorkItem(ProxyServer server, Socket socket, ProxyEndPoint endPoint)
+        public AcceptedClientWorkItem(ProxyServer server, Socket socket, ProxyEndPoint endPoint,
+            Task<int> clientHelloWait)
         {
             this.server = server;
             this.socket = socket;
             this.endPoint = endPoint;
+            this.clientHelloWait = clientHelloWait;
         }
 
         public void Execute()
         {
-            _ = server.HandleAcceptedClientAsync(socket, endPoint);
+            _ = server.HandleAcceptedClientAsync(socket, endPoint, clientHelloWait);
         }
     }
 
-    private async Task HandleAcceptedClientAsync(Socket acceptedClient, ProxyEndPoint endPoint)
+    private async Task HandleAcceptedClientAsync(Socket acceptedClient, ProxyEndPoint endPoint,
+        Task<int> clientHelloWait)
     {
         try
         {
-            await HandleClient(acceptedClient, endPoint);
+            await HandleClient(acceptedClient, endPoint, clientHelloWait);
         }
         catch (Exception ex)
         {
@@ -2229,27 +2257,46 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     /// <param name="tcpClientSocket">The client socket.</param>
     /// <param name="endPoint">The proxy endpoint.</param>
+    /// <param name="clientHelloWait">
+    ///     Zero-byte <see cref="Socket.ReceiveAsync(Memory{byte}, SocketFlags)" /> armed on the accept
+    ///     thread; completes when the first ClientHello (or FIN) is readable without consuming it.
+    /// </param>
     /// <returns>The task.</returns>
-    private async Task HandleClient(Socket tcpClientSocket, ProxyEndPoint endPoint)
+    private async Task HandleClient(Socket tcpClientSocket, ProxyEndPoint endPoint, Task<int> clientHelloWait)
     {
-        // Match Kestrel on ReceiveTimeout/SendTimeout (async reads ignore them). Keep SO_LINGER:
-        // TcpTimeWaitSeconds==0 → LingerOption(true, 0) is abortive RST (avoids TIME_WAIT on NC);
-        // omitting setsockopt falls back to graceful FIN and accumulates TIME_WAIT under churn.
-        tcpClientSocket.LingerState = new LingerOption(true, TcpTimeWaitSeconds);
+        // SO_LINGER abortive RST is applied on close (TcpClientConnection.Dispose), not here —
+        // keeps setsockopt off the handshake critical path (Kestrel never sets linger on accept).
 
         if (EnableTcpKeepAlive)
             tcpClientSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 
-        await InvokeClientConnectionCreateEvent(tcpClientSocket);
+        if (OnClientConnectionCreate != null)
+            await InvokeClientConnectionCreateEvent(tcpClientSocket);
 
         using (var clientConnection = new TcpClientConnection(this, tcpClientSocket))
         {
+            // Defer WaitForData await until just before the first socket read so TcpClientConnection /
+            // NetworkStream / SslStream construction can overlap ClientHello arrival (Kestrel shape).
+            clientConnection.PendingClientHelloWait = clientHelloWait;
+
             if (endPoint is ExplicitProxyEndPoint eep)
                 await HandleClient(eep, clientConnection);
             else if (endPoint is TransparentProxyEndPoint tep)
                 await HandleClient(tep, clientConnection);
             else if (endPoint is SocksProxyEndPoint sep) await HandleClient(sep, clientConnection);
         }
+    }
+
+    /// <summary>
+    ///     Completes the accept-thread zero-byte WaitForData. Safe to call more than once.
+    /// </summary>
+    private static async ValueTask AwaitPendingClientHelloAsync(TcpClientConnection clientConnection)
+    {
+        var wait = clientConnection.PendingClientHelloWait;
+        if (wait == null) return;
+
+        clientConnection.PendingClientHelloWait = null;
+        await wait.ConfigureAwait(false);
     }
 
     /// <summary>

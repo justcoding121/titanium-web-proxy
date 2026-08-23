@@ -69,6 +69,13 @@ internal class TcpClientConnection : IDisposable
 
     public long Id { get; } = ConnectionId.Next();
 
+    /// <summary>
+    ///     Accept-thread zero-byte <see cref="Socket.ReceiveAsync(System.Memory{byte}, SocketFlags)" /> —
+    ///     must complete before any socket read (<see cref="SslStream.AuthenticateAsServerAsync" /> /
+    ///     ClientHello peek). Cleared after await.
+    /// </summary>
+    internal Task<int>? PendingClientHelloWait { get; set; }
+
     public EndPoint LocalEndPoint => LocalEndPointOverride
                                      ?? tcpClientSocket?.LocalEndPoint
                                      ?? throw new InvalidOperationException("Client connection has no local endpoint.");
@@ -110,6 +117,9 @@ internal class TcpClientConnection : IDisposable
                 {
                     try
                     {
+                        // Abortive RST (Linger true,0) — applied at close so accept→TLS does not
+                        // pay setsockopt; omitting linger falls back to graceful FIN / TIME_WAIT.
+                        tcpClientSocket.LingerState = new LingerOption(true, 0);
                         tcpClientSocket.Close();
                     }
                     catch (Exception ex)
@@ -130,6 +140,8 @@ internal class TcpClientConnection : IDisposable
                     if (tcpClientSocket == null) return;
                     try
                     {
+                        tcpClientSocket.LingerState =
+                            new LingerOption(true, ProxyServer.TcpTimeWaitSeconds);
                         tcpClientSocket.Close();
                     }
                     catch (Exception ex)

@@ -18,6 +18,7 @@ internal sealed class BareHttp1ReverseProxy : IDisposable
     private readonly Socket listener;
     private readonly IPEndPoint originEndPoint;
     private readonly X509Certificate2? serverCertificate;
+    private readonly SslStreamCertificateContext? serverCertificateContext;
     private readonly CancellationTokenSource cts = new();
     private readonly List<Task> clients = [];
     private readonly object clientsGate = new();
@@ -30,6 +31,9 @@ internal sealed class BareHttp1ReverseProxy : IDisposable
         this.listener = listener;
         this.originEndPoint = originEndPoint;
         this.serverCertificate = serverCertificate;
+        serverCertificateContext = serverCertificate == null
+            ? null
+            : SslStreamCertificateContext.Create(serverCertificate, null);
         Port = ((IPEndPoint)listener.LocalEndPoint!).Port;
         ListenUrl = serverCertificate == null
             ? $"http://127.0.0.1:{Port}/"
@@ -99,14 +103,15 @@ internal sealed class BareHttp1ReverseProxy : IDisposable
         try
         {
             clientStream = new NetworkStream(client, ownsSocket: true);
-            if (serverCertificate != null)
+            if (serverCertificateContext != null)
             {
                 var ssl = new SslStream(clientStream, leaveInnerStreamOpen: false);
                 await ssl.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
                 {
-                    ServerCertificate = serverCertificate,
+                    ServerCertificateContext = serverCertificateContext,
                     EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-                    CertificateRevocationCheckMode = X509RevocationMode.NoCheck
+                    CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                    AllowRenegotiation = false
                 }, cts.Token);
                 clientStream = ssl;
             }
@@ -189,7 +194,10 @@ internal sealed class BareHttp1ReverseProxy : IDisposable
             return false;
         }
 
-        if (connectionClose)
+        // Connection: close on the request means "close after this exchange" — still read the
+        // response. Only stop the loop after the response message when the response (or prior
+        // request) asked to close.
+        if (connectionClose && !isRequest)
             return false;
 
         return true;
@@ -336,8 +344,8 @@ internal sealed class BareHttp1ReverseProxy : IDisposable
 
             var line = remaining[..eol];
             remaining = remaining[(eol + 2)..];
-            if (line.Length >= nameColon.Length &&
-                line[..nameColon.Length].SequenceEqual(nameColon) ||
+            if ((line.Length >= nameColon.Length &&
+                 line[..nameColon.Length].SequenceEqual(nameColon)) ||
                 StartsWithIgnoreCase(line, nameColon))
             {
                 return line[nameColon.Length..];

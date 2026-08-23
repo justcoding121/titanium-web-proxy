@@ -59,6 +59,12 @@ public partial class ProxyServer
         request.Locked = true;
         request.IsBodyReceived = true;
 
+        // Remember before stripping hop-by-hop Connection for the origin write — NC clients send
+        // Connection: close; forwarding it forces the origin to close and defeats pooling (Bare still
+        // ConnectAsyncs every time and was beating TWP at c=32).
+        var clientRequestedClose = H1TerminateClientRequestedClose(request);
+        request.Headers.RemoveHeader(KnownHeaders.Connection);
+
         var isHttps = !endPoint.ForwardCleartext && request.IsHttps;
         // Terminate with ForwardCleartext: origin is cleartext regardless of client TLS.
         if (endPoint.ForwardCleartext)
@@ -204,8 +210,8 @@ public partial class ProxyServer
                 || (connection.Stream is HttpStream residual && residual.DataAvailable))
                 closeConnection = true;
 
-            // Client Connection: close (NC) → stop accept-loop KA.
-            return response.KeepAlive && !H1TerminateClientRequestedClose(request);
+            // Client Connection: close (NC) → stop accept-loop KA (origin may stay pooled).
+            return response.KeepAlive && !clientRequestedClose;
         }
         catch (RetryableServerConnectionException)
         {

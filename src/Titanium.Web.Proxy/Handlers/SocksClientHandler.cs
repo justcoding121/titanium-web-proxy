@@ -30,6 +30,7 @@ public partial class ProxyServer
         string? targetHost = null;
         try
         {
+            await AwaitPendingClientHelloAsync(clientConnection);
             if (!await TryReadExactAsync(stream, buffer, 0, 1, cancellationToken)) return;
 
             if (buffer[0] == 4)

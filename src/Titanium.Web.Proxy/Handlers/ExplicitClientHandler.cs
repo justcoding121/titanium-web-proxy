@@ -37,6 +37,7 @@ public partial class ProxyServer
         RegisterSessionCancellation(cancellationTokenSource);
         var cancellationToken = cancellationTokenSource.Token;
 
+        await AwaitPendingClientHelloAsync(clientConnection);
         var clientStream = new HttpClientStream(this, clientConnection, clientConnection.GetStream(), BufferPool,
             cancellationToken);
 

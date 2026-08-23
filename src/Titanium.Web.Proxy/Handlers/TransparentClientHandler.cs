@@ -88,6 +88,7 @@ public partial class ProxyServer
                 if (!decryptSsl)
                 {
                     // Caller asked to tunnel without decrypt — fall back to the peek path below.
+                    await AwaitPendingClientHelloAsync(clientConnection);
                     clientStream = new HttpClientStream(this, clientConnection, networkStream, BufferPool,
                         cancellationToken);
                 }
@@ -97,6 +98,8 @@ public partial class ProxyServer
                     X509Certificate2? certificate = endPoint.GenericCertificate;
                     try
                     {
+                        // Construct SslStream before WaitForData completes so construction overlaps
+                        // ClientHello arrival (Kestrel: Start WaitForData, then middleware builds SslStream).
                         sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false);
                         var options = endPoint.CachedServerAuthOptions;
                         if (options == null)
@@ -114,6 +117,7 @@ public partial class ProxyServer
                             endPoint.CachedServerAuthOptions = options;
                         }
 
+                        await AwaitPendingClientHelloAsync(clientConnection);
                         await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
                         clientConnection.NegotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
                         clientConnection.SslProtocol = SupportedSslProtocols;
@@ -138,6 +142,7 @@ public partial class ProxyServer
 
             if (clientStream == null)
             {
+            await AwaitPendingClientHelloAsync(clientConnection);
             clientStream = new HttpClientStream(this, clientConnection, networkStream, BufferPool,
                 cancellationToken);
 
