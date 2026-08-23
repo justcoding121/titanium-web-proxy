@@ -193,33 +193,33 @@ Lossy link = **userspace** shim (not kernel `netem`): TCP gets per-buffer delay 
 
 ### Windows — heavier reverse GET (64 KiB / 256 KiB)
 
-Median of **3** repeats on `windows-latest`. Source: Actions [32570358864](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32570358864) (`compare-bodies`). Warmup 2s / measure 8s.
+Median of **3** repeats on `windows-latest` @ `cd276c83`. Source: Actions [32611185635](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32611185635) (`compare-bodies`). Warmup 2s / measure 8s.
 
 | Body | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---|---:|---:|---:|---:|---:|---:|
-| 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **8,835** | **9,089** | **867** | **917** | **8,452** | **8,900** |
-| 64 KiB | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **8,921** | **8,921** | **754** | **784** | **6,977** | **6,977** |
-| 64 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **2,232** | **2,291** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | 🟢 **3,974** | **3,974** |
-| 256 KiB | HTTP/1 · TLS | HTTP/1 · plain | **2,457** | **2,489** | **224** | **239** | 🟢 **2,710** | **2,829** |
-| 256 KiB | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **2,699** | **2,717** | **175** | **176** | **1,934** | **2,031** |
-| 256 KiB | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **2,147** | **2,273** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **1,104** | **1,141** |
+| 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **7,804** | **7,921** | **879** | **943** | **6,175** | **7,827** |
+| 64 KiB | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **7,699** | **7,732** | **746** | **793** | **5,913** | **6,019** |
+| 64 KiB | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **3,752** | **3,861** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **3,269** | **3,269** |
+| 256 KiB | HTTP/1 · TLS | HTTP/1 · plain | **2,197** | **2,296** | **232** | **248** | 🟢 **2,571** | **2,590** |
+| 256 KiB | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **2,440** | **2,440** | **173** | **175** | **1,609** | **1,851** |
+| 256 KiB | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **1,149** | **1,174** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **1,077** | **1,077** |
 
-nginx/Windows collapses on large reverse bodies in this harness; treat as same-OS only.
+nginx/Windows collapses on large reverse bodies in this harness; treat as same-OS only. H3→H1 64 KiB remasure after `StreamBodyWriter` / dual-listen hardening: TWP÷YARP ≈ **1.15×** (stale cell was ~0.56×). Remaining Windows body gap vs YARP: H1 TLS **256 KiB** ≈ **0.85×**.
 
 ### Linux — heavier reverse GET (64 KiB / 256 KiB)
 
-Median of **3** repeats. Source: Actions [32570358864](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32570358864) (`compare-bodies` on `02dcbdbf`). Warmup 2s / measure 8s.
+Median of **3** repeats @ `cd276c83`. Source: Actions [32611185635](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32611185635) (`compare-bodies`). Warmup 2s / measure 8s.
 
 | Body | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---|---:|---:|---:|---:|---:|---:|
-| 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | **11,710** | **11,710** | 🟢 **13,536** | **14,727** | **10,893** | **10,893** |
-| 64 KiB | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **10,027** | **10,027** | **7,519** | **7,582** | **7,892** | **7,892** |
-| 64 KiB | HTTP/3 · QUIC | HTTP/1 · plain | **4,583** | **5,654** | **2,415** | **2,670** | 🟢 **5,588** | **5,588** |
-| 256 KiB | HTTP/1 · TLS | HTTP/1 · plain | **3,655** | **3,655** | 🟢 **4,311** | **4,311** | **3,315** | **3,315** |
-| 256 KiB | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **2,424** | **2,424** | **1,942** | **1,942** | **2,110** | **2,115** |
-| 256 KiB | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **4,483** | **4,857** | **614** | **723** | **1,670** | **1,680** |
+| 64 KiB | HTTP/1 · TLS | HTTP/1 · plain | **6,606** | **6,623** | 🟢 **7,853** | **7,936** | **6,596** | **6,596** |
+| 64 KiB | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **5,933** | **5,933** | **3,424** | **3,523** | **4,866** | **4,866** |
+| 64 KiB | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **5,295** | **5,295** | **1,620** | **1,652** | **4,247** | **4,247** |
+| 256 KiB | HTTP/1 · TLS | HTTP/1 · plain | **2,157** | **2,157** | 🟢 **2,682** | **2,682** | **2,153** | **2,153** |
+| 256 KiB | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **1,600** | **1,600** | **913** | **938** | **1,381** | **1,381** |
+| 256 KiB | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **1,460** | **1,460** | **423** | **423** | **1,281** | **1,281** |
 
-On this GHA pass TWP÷YARP H1 TLS ≈ **1.07×** (64 KiB) / **1.10×** (256 KiB); H2→H1 ≈ **1.27×** / **1.15×**; H3→H1 ≈ **0.82×** / **2.68×** (YARP soft on 256 KiB H3 — treat absolute cautiously). TWP÷nginx H1 TLS ≈ **0.87** / **0.85**. Absolute RPS swings by VM; prefer ratios.
+On this GHA pass TWP÷YARP H1 TLS ≈ **1.00×** (64 KiB) / **1.00×** (256 KiB); H2→H1 ≈ **1.22×** / **1.16×**; H3→H1 ≈ **1.25×** / **1.14×**. TWP÷nginx H1 TLS ≈ **0.84** / **0.80**. Absolute RPS swings by VM; prefer ratios.
 
 ### Windows — POST 64 KiB request + 64 KiB response
 
