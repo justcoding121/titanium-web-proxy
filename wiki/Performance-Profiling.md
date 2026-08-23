@@ -228,6 +228,25 @@ Cheapest tool with the highest information density. Run the arm at c=1 and at c=
 
 The h2c→H1 bridge showed the second shape: TWP *beat* the managed reverse peer at c=1 (6,425 vs 5,449 RPS) but flatlined at ~22k while the managed reverse peer scaled to 46k. That single observation eliminated allocation work, `System.IO.Pipelines`, and syscall efficiency as hypotheses and said "find the serial section."
 
+## Memory (RSS) — H2→H1 vs H1 / H3
+
+Published [Saturation control](Performance#saturation-control) Memory (RSS) @ `a3b9af1e` / remasure: TWP H1 ≈ YARP or lower; TWP H2→H1 is **~5–9×** YARP; TWP H3→H1 is only **~1.1–1.7×**. Laptop cool-ish A/B (2026-08-23, c=64, 8 s):
+
+| Arm | Memory (RSS) | RPS |
+|---|---:|---:|
+| TWP H2→H1 (`EnableMultipleHttp2Connections=true`, default) | **425 MiB** | 41k |
+| TWP H2→H1 (`TWP_RPS_SINGLE_HTTP2_CONNECTION=1`) | **367 MiB** | 32k |
+| YARP H2→H1 (multi) | **104 MiB** | 41k |
+
+Single-connection mode cuts ~14% RSS and ~23% RPS — fan-out is a **multiplier**, not the bulk. Remaining ~3.5× vs YARP is per-stream H2→H1 cost:
+
+1. **New `SessionEventArgs` per stream** (H1 keep-alive uses `ResetForKeepAlive` on one session).
+2. **`PendingSynthetics` / `PendingFinalizations`** (`ConcurrentBag<Task>`) retain completed Tasks for the life of each client H2 connection (awaited only on relay teardown).
+3. Custom H2 stack per client connection (`Http2FrameWriter` unbounded channel, 64 KiB intakes) vs Kestrel pooled streams.
+4. **Not** the 768 KiB / ~15 MiB flow-control windows — those are advertised credit, not preallocated receive buffers on tiny-GET.
+
+Next product steps (do not shrink windows just to game RSS): SessionEventArgs-lite / pool on H2→H1 (lite exists for H3→H2 only); trim or bound pending-task bags after completion; then remeasure Memory (RSS).
+
 ## Technique 2: async dumps — find where requests wait
 
 CPU profilers show where cycles burn; under async I/O the bottleneck is usually where requests **park**. Capture the async state machine population under load:
