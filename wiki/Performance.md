@@ -170,7 +170,7 @@ TWPÃ·nginx H1 plain reverse â‰ˆ **0.76** (65,887 / 87,232); TWPÃ·YARP H1
 
 On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.76** (65,887 / 87,232). H1 TLS terminate ≈ **0.79** (52,041 / 65,621). TWP÷YARP H1 plain ≈ **1.12×**; H1 TLS terminate ≈ **1.14×**. Open vs YARP: none on bridges @ `8789d6de` (all published TWP÷YARP **>1.00×**). Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**. MITM publishes the same **15** Client×Origin pairs as Reverse (inspectable/decrypt), then dual-crypto extras (CONNECT, TLS↔TLS). nginx/YARP cannot MITM.
 
-**nginx HTTP/3:** inbound QUIC terminate â†’ cleartext H1 (`nginx-reverse-http3-cleartext`) @ `11e32f1c` bridges: sustain **12,727** / peak **15,409**. TWP/YARP H3â†’H1 on this row are from the same bridges pass. nginx still cannot speak HTTP/3 to an origin (no H3 upstream in this conf).
+**nginx HTTP/3:** inbound QUIC terminate → cleartext H1 (`nginx-reverse-http3-cleartext`) @ `8789d6de` bridges: sustain **15,563** / peak **18,987**. TWP/YARP H3→H1 on this row are from the same bridges pass. nginx still cannot speak HTTP/3 to an origin (no H3 upstream in this conf).
 
 **YARP HTTP/3 (this matrix):** TWP leads H3→H1 ≈ **1.06×** (23,373 / 22,070), H3→H2 ≈ **1.15×** (28,967 / 25,162). H1→H2 ≈ **1.04×** (29,775 / 28,677). H1→H3 ≈ **1.08×** (23,062 / 21,278). h2c→H3 ≈ **1.02×**.
 
