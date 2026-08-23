@@ -39,6 +39,11 @@ public abstract class ProxyEndPoint
     internal TcpListener? Listener { get; set; }
 
     /// <summary>
+    ///     Cancels the Kestrel-style <c>AcceptAsync</c> loop started for <see cref="Listener" />.
+    /// </summary>
+    internal CancellationTokenSource? AcceptLoopCts { get; set; }
+
+    /// <summary>
     ///     Ip Address we are listening.
     /// </summary>
     public IPAddress IpAddress { get; }

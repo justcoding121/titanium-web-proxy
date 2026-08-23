@@ -1915,8 +1915,12 @@ public partial class ProxyServer : IDisposable
 
             endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
 
-            // accept clients asynchronously
-            endPoint.Listener.BeginAcceptSocket(OnAcceptConnection, endPoint);
+            // Kestrel-style AcceptAsync loop (not TcpListener.BeginAcceptSocket / TaskToAsyncResult).
+            // BeginAccept is a Task wrapper around AcceptAsync on modern .NET — an extra hop before
+            // every new-connection TLS handshake on Windows.
+            endPoint.AcceptLoopCts?.Dispose();
+            endPoint.AcceptLoopCts = new CancellationTokenSource();
+            _ = AcceptLoopAsync(endPoint, endPoint.AcceptLoopCts.Token);
         }
         catch (SocketException ex)
         {
@@ -1957,68 +1961,80 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
-    ///     Act when a connection is received from client.
+    ///     Accept loop mirroring Kestrel <c>SocketConnectionListener</c>: await
+    ///     <see cref="Socket.AcceptAsync(CancellationToken)" />, then
+    ///     <see cref="ThreadPool.UnsafeQueueUserWorkItem(IThreadPoolWorkItem, bool)" />.
     /// </summary>
-    private void OnAcceptConnection(IAsyncResult asyn) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    private async Task AcceptLoopAsync(ProxyEndPoint endPoint, CancellationToken cancellationToken)
     {
-        var endPoint = (ProxyEndPoint)asyn.AsyncState!;
-        var listener = endPoint.Listener!;
+        var listener = endPoint.Listener;
+        if (listener == null) return;
 
-        Socket? tcpClient = null;
-        var listenerDisposed = false;
+        var listenSocket = listener.Server;
 
-        try
+        while (!cancellationToken.IsCancellationRequested && ProxyRunning)
         {
-            tcpClient = listener.EndAcceptSocket(asyn);
-        }
-        catch (ObjectDisposedException)
-        {
-            // The listener was Stop()'d, disposing the underlying socket and
-            // triggering the completion of the callback. We're already exiting.
-            listenerDisposed = true;
-        }
-        catch (Exception ex)
-        {
-            // Errors here (e.g. transient socket errors under heavy load) are
-            // reported but must not prevent re-arming the accept loop below.
-            OnException(null, ex);
-        }
-
-        // Re-arm the accept loop as early as possible (before dispatching the
-        // just-accepted client) so bursts of near-simultaneous connections are
-        // drained from the backlog without delay.
-        if (!listenerDisposed) BeginAcceptConnection(endPoint, listener);
-
-        if (tcpClient != null)
-        {
-            if (ProxyRunning)
+            Socket tcpClient;
+            try
             {
-                // Gate before spending anything on this socket beyond the accept itself: a rejected
-                // connection is disposed immediately, without a handler task ever being scheduled.
-                if (!TryAdmitClientConnection(endPoint))
-                {
-                    tcpClient.Dispose();
-                }
-                else
-                {
-                    try
-                    {
-                        tcpClient.NoDelay = NoDelay;
-                    }
-                    catch (Exception ex)
-                    {
-                        OnException(null, ex);
-                    }
-
-                    var acceptedClient = tcpClient;
-                    // Match Kestrel ConnectionDispatcher: queue as IThreadPoolWorkItem (no Task.Run /
-                    // ExecutionContext capture) before the TLS handshake starts.
-                    ThreadPool.UnsafeQueueUserWorkItem(
-                        new AcceptedClientWorkItem(this, acceptedClient, endPoint), preferLocal: false);
-                }
+                tcpClient = await listenSocket.AcceptAsync(cancellationToken).ConfigureAwait(false);
             }
-            else
+            catch (ObjectDisposedException)
+            {
+                break;
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (SocketException ex) when (ex.SocketErrorCode is SocketError.OperationAborted
+                                                 or SocketError.Interrupted)
+            {
+                break;
+            }
+            catch (SocketException)
+            {
+                // Connection reset while in the backlog — retry like Kestrel.
+                continue;
+            }
+            catch (Exception ex)
+            {
+                OnException(null, ex);
+                try
+                {
+                    await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            if (!ProxyRunning)
+            {
                 tcpClient.Dispose();
+                break;
+            }
+
+            if (!TryAdmitClientConnection(endPoint))
+            {
+                tcpClient.Dispose();
+                continue;
+            }
+
+            try
+            {
+                tcpClient.NoDelay = NoDelay;
+            }
+            catch (Exception ex)
+            {
+                OnException(null, ex);
+            }
+
+            ThreadPool.UnsafeQueueUserWorkItem(
+                new AcceptedClientWorkItem(this, tcpClient, endPoint), preferLocal: false);
         }
     }
 
@@ -2140,41 +2156,6 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
-    ///     (Re)arms the accept loop for the given end point.
-    ///     Any exception thrown by <see cref="TcpListener.BeginAcceptSocket" /> (e.g. transient
-    ///     resource exhaustion under heavy connection load) is caught and retried instead of being
-    ///     allowed to escape the async I/O completion callback, which would otherwise crash the
-    ///     process or silently stop the proxy from accepting any further connections.
-    /// </summary>
-    private void BeginAcceptConnection(ProxyEndPoint endPoint, TcpListener listener)
-    {
-        if (!ProxyRunning) return;
-
-        try
-        {
-            listener.BeginAcceptSocket(OnAcceptConnection, endPoint);
-        }
-        catch (Exception ex) when (ex is ObjectDisposedException || ex is InvalidOperationException)
-        {
-            // The listener was Stop()'d, disposing the underlying socket and
-            // triggering the completion of the callback. We're already exiting,
-            // so just return.
-        }
-        catch (Exception ex)
-        {
-            OnException(null, ex);
-
-            // Retry shortly instead of permanently abandoning the accept loop.
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(100, CancellationToken.None).ConfigureAwait(false);
-                BeginAcceptConnection(endPoint, listener);
-            }, CancellationToken.None);
-        }
-    }
-
-
-    /// <summary>
     ///     Change the ThreadPool.WorkerThread minThread
     /// </summary>
     /// <param name="workerThreads">minimum Threads allocated in the ThreadPool</param>
@@ -2202,7 +2183,7 @@ public partial class ProxyServer : IDisposable
     private async Task HandleClient(Socket tcpClientSocket, ProxyEndPoint endPoint)
     {
         // Match Kestrel SocketConnectionListener: only NoDelay is set on accept (already applied
-        // in OnAcceptConnection). Socket.ReceiveTimeout/SendTimeout do not bound our async reads
+        // in AcceptLoopAsync). Socket.ReceiveTimeout/SendTimeout do not bound our async reads
         // (see ClientHeaderTimeoutSeconds). SO_LINGER(abortive) was previously always setsockopt'd
         // even when TcpTimeWaitSeconds==0 — skip the default-0 case to avoid per-NC syscall noise.
         if (TcpTimeWaitSeconds != 0)
@@ -2239,11 +2220,29 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     private static void QuitListen(ProxyEndPoint endPoint)
     {
+        try
+        {
+            endPoint.AcceptLoopCts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already disposed during a prior stop.
+        }
+
         var listener = endPoint.Listener;
-        if (listener == null) return;
+        if (listener == null)
+        {
+            endPoint.AcceptLoopCts?.Dispose();
+            endPoint.AcceptLoopCts = null;
+            return;
+        }
 
         listener.Stop();
         listener.Server.Dispose();
+        endPoint.Listener = null;
+
+        endPoint.AcceptLoopCts?.Dispose();
+        endPoint.AcceptLoopCts = null;
     }
 
     /// <summary>
