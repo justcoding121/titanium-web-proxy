@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
@@ -17,7 +18,7 @@ internal class TcpClientConnection : IDisposable
 {
     private readonly Socket? tcpClientSocket;
 
-    private bool disposed;
+    private int disposed; // 0 = live, 1 = disposed (Interlocked)
 
     private int? processId;
 
@@ -101,7 +102,7 @@ internal class TcpClientConnection : IDisposable
 
     protected virtual void Dispose(bool disposing)
     {
-        if (disposed) return;
+        if (Interlocked.Exchange(ref disposed, 1) != 0) return;
 
         if (disposing)
         {
@@ -113,47 +114,47 @@ internal class TcpClientConnection : IDisposable
                 if (trackClientConnectionCount)
                     ProxyServer.UpdateClientConnectionCount(false);
 
-                if (tcpClientSocket != null)
-                {
-                    try
-                    {
-                        // Abortive RST (Linger true,0) — applied at close so accept→TLS does not
-                        // pay setsockopt; omitting linger falls back to graceful FIN / TIME_WAIT.
-                        tcpClientSocket.LingerState = new LingerOption(true, 0);
-                        tcpClientSocket.Close();
-                    }
-                    catch (Exception ex)
-                    {
-                        Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
-                            "Failed to close a client socket during disposal.", ex);
-                    }
-                }
+                CloseClientSocket(lingerSeconds: 0);
             }
             else
             {
+                var lingerSeconds = ProxyServer.TcpTimeWaitSeconds;
                 Task.Run(async () =>
                 {
                     await Task.Delay(1000);
                     if (trackClientConnectionCount)
                         ProxyServer.UpdateClientConnectionCount(false);
 
-                    if (tcpClientSocket == null) return;
-                    try
-                    {
-                        tcpClientSocket.LingerState =
-                            new LingerOption(true, ProxyServer.TcpTimeWaitSeconds);
-                        tcpClientSocket.Close();
-                    }
-                    catch (Exception ex)
-                    {
-                        Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
-                            "Failed to close a client socket during disposal.", ex);
-                    }
+                    CloseClientSocket(lingerSeconds);
                 });
             }
         }
+    }
 
-        disposed = true;
+    private void CloseClientSocket(int lingerSeconds)
+    {
+        if (tcpClientSocket == null) return;
+        try
+        {
+            // Abortive RST when lingerSeconds==0 — applied at close so accept→TLS does not
+            // pay setsockopt; omitting linger falls back to graceful FIN / TIME_WAIT.
+            tcpClientSocket.LingerState = new LingerOption(true, lingerSeconds);
+            tcpClientSocket.Close();
+        }
+        catch (ObjectDisposedException)
+        {
+            // GetStream() historically used ownsSocket:true; the NetworkStream may already
+            // have closed the handle before this Dispose runs. Expected under concurrent teardown.
+        }
+        catch (SocketException)
+        {
+            // Socket already half-closed / reset by the peer or by the owning NetworkStream.
+        }
+        catch (Exception ex)
+        {
+            Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
+                "Failed to close a client socket during disposal.", ex);
+        }
     }
 
     public Stream GetStream()
@@ -161,7 +162,9 @@ internal class TcpClientConnection : IDisposable
         if (tcpClientSocket == null)
             throw new InvalidOperationException(
                 "GetStream() is not supported on non-TCP connections. Use the QUIC stream API directly.");
-        return new NetworkStream(tcpClientSocket, true);
+        // ownsSocket:true — HttpClientStream dispose closes the handle. Connection.Dispose then
+        // may race; CloseClientSocket treats ObjectDisposedException as expected (no ReportBenign).
+        return new NetworkStream(tcpClientSocket, ownsSocket: true);
     }
 
     public int GetProcessId(ProxyEndPoint endPoint)

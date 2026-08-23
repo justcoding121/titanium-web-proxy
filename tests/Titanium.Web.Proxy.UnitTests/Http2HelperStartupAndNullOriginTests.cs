@@ -49,9 +49,14 @@ public class Http2HelperStartupAndNullOriginTests
 
         var buf = new byte[32];
         var n1 = await stream.ReadAsync(buf);
-        Assert.AreEqual(21, n1); // 9-byte header + 12-byte SETTINGS payload
+        Assert.AreEqual(27, n1); // 9-byte header + 18-byte SETTINGS payload
         Assert.AreEqual((byte)Http2FrameType.Settings, buf[3]);
-        Assert.AreEqual(12, (buf[0] << 16) | (buf[1] << 8) | buf[2]);
+        Assert.AreEqual(18, (buf[0] << 16) | (buf[1] << 8) | buf[2]);
+
+        var maxStreamsId = (buf[21] << 8) | buf[22];
+        Assert.AreEqual((int)Http2SettingsId.MaxConcurrentStreams, maxStreamsId);
+        Assert.AreEqual(NullOriginStream.BridgeClientMaxConcurrentStreams,
+            (buf[23] << 24) | (buf[24] << 16) | (buf[25] << 8) | buf[26]);
 
         // Writes are discarded
         await stream.WriteAsync(new byte[] { 1, 2, 3 }, CancellationToken.None);
