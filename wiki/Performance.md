@@ -223,27 +223,27 @@ On this GHA pass TWP÷YARP H1 TLS ≈ **1.07×** (64 KiB) / **1.10×** (256 KiB)
 
 ### Windows — POST 64 KiB request + 64 KiB response
 
-Median of **3** repeats on `windows-latest`. Source: Actions [32570360081](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32570360081) (`compare-post`).
+Median of **3** repeats on `windows-latest` @ `21396a4d`. Source: Actions [32608567396](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32608567396) (`compare-post`).
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
-| HTTP/1 · TLS | HTTP/1 · plain | 🟢 **5,268** | **5,286** | **334** | **369** | **4,151** | **4,337** |
-| HTTP/2 · TLS | HTTP/1 · plain | 🟢 **4,037** | **4,037** | **310** | **343** | **3,493** | **3,507** |
-| HTTP/3 · QUIC | HTTP/1 · plain | *Fixed — remasure pending* | *Fixed — remasure pending* | *Not possible* | *Not possible* | 🟢 **2,020** | **2,020** |
+| HTTP/1 · TLS | HTTP/1 · plain | 🟢 **7,594** | **7,819** | **425** | **433** | **5,921** | **5,927** |
+| HTTP/2 · TLS | HTTP/1 · plain | 🟢 **6,006** | **6,006** | **423** | **444** | **4,880** | **4,880** |
+| HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **2,772** | **2,816** | *Not possible* | *Not possible* | **2,769** | **2,861** |
 
-TWP wins H1 POST (~**1.27×** YARP) and H2 POST (~**1.16×** YARP). H3 POST showed sustain **0** on the older GHA pass above (`UpdateContentLength` stamped streamed CL to 0 — fixed in `ab16a871`). Laptop remasure after the fix: TWP sustain **1,973** vs YARP **1,802** (~**1.09×**). Cell left unfilled until a successful CI `compare-post` median lands (prior remasure [32602145518](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32602145518) failed on Windows QUIC bind).
+TWP leads H1 POST (~**1.28×** YARP), H2 POST (~**1.23×** YARP), and H3 POST (~**1.00×** YARP) after the streamed-CL fix (`ab16a871`) and CI dual-listen / origin-release hardening (`21396a4d`).
 
 ### Linux — POST 64 KiB request + 64 KiB response
 
-Median of **3** repeats. Source: Actions [32570360081](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32570360081) (`compare-post`).
+Median of **3** repeats @ `21396a4d`. Source: Actions [32608567396](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32608567396) (`compare-post`).
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
-| HTTP/1 · TLS | HTTP/1 · plain | 🟢 **4,161** | **4,161** | **4,082** | **4,082** | **3,218** | **3,218** |
-| HTTP/2 · TLS | HTTP/1 · plain | 🟢 **3,255** | **3,255** | **1,952** | **2,000** | **2,531** | **2,541** |
-| HTTP/3 · QUIC | HTTP/1 · plain | *Fixed — remasure pending* | *Fixed — remasure pending* | **764** | **765** | 🟢 **2,650** | **2,650** |
+| HTTP/1 · TLS | HTTP/1 · plain | 🟢 **4,415** | **4,415** | **4,277** | **4,292** | **3,406** | **3,406** |
+| HTTP/2 · TLS | HTTP/1 · plain | 🟢 **3,350** | **3,350** | **2,071** | **2,147** | **2,776** | **2,776** |
+| HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **2,919** | **2,919** | **799** | **802** | **2,771** | **2,771** |
 
-Linux nginx H1/H2/H3 POST completed this pass (nginx.org mainline). TWP H3 POST peaked at **1,989** on the older GHA pass but did not hold the error/latency SLO (sustain **0**) — same streamed-CL bug as Windows; fixed in `ab16a871`. Cell left unfilled until CI `compare-post` succeeds.
+Linux nginx H1/H2/H3 POST completed (nginx.org mainline). TWP÷YARP H3 POST ≈ **1.05×**; TWP÷nginx H3 ≈ **3.65×**.
 
 ### Windows — lossy / high-RTT (H2 HOL / H3 loss)
 
@@ -273,7 +273,7 @@ Same H1/H2 story as Windows. **H3 is where the protocol design shows**: TWP H3 s
 
 `compare-arch` isolates slow app readers, origin-early response, H2 duplex, and WebSocket echo. See [TWP vs YARP IO model](Performance-Profiling#twp-vs-yarp-io-model). Laptop 1-rep numbers are on [Performance-Profiling](Performance-Profiling#architecture-sensitive).
 
-Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `629fb878`. Source: [32577472805](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32577472805) (`compare-arch`). Slow consumer = 256 KiB GET, 16 KiB read + 8 ms sleep. Early response = 64 KiB POST, origin writes after 8 KiB. Duplex H2 = overlapping 64 KiB POST on H2 TLS↔H2 TLS. WebSocket = echo round-trips/sec.
+Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `21396a4d`. Source: [32608568872](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32608568872) (`compare-arch`). Slow consumer = 256 KiB GET, 16 KiB read + 8 ms sleep. Early response = 64 KiB POST, origin writes after 8 KiB. Duplex H2 = overlapping 64 KiB POST on H2 TLS↔H2 TLS. WebSocket = echo round-trips/sec.
 
 `compare-lossy` (slow **network**) is already published above; it is not a slow **app** reader.
 
@@ -281,29 +281,29 @@ Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `629fb878`. Source:
 
 | Scenario | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---|---:|---:|---:|---:|---:|---:|
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **248** | **248** | **230** | **230** | 🟢 **248** | **248** |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | **249** | **249** | **213** | **213** | 🟢 **256** | **256** |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | *Fixed — remasure pending* | *Fixed — remasure pending* | *Not possible* (no QUIC) | *Not possible* | 🟢 **236** | **236** |
-| Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **7,099** | **7,531** | **374** | **443** | **5,222** | **5,812** |
-| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **6,501** | **6,501** | **0** | **427** | **3,775** | **4,463** |
-| Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | **1,372** | **1,372** | *Not possible* (no QUIC) | *Not possible* | 🟢 **1,808** | **1,808** |
-| Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | 🟢 **1,299** | **1,299** | *Not possible* | *Not possible* | **28** | **3,069** |
-| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **41,615** | **41,615** | **24,184** | **25,549** | **40,191** | **40,191** |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **256** | **256** | **243** | **243** | 🟢 **256** | **256** |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **256** | **256** | **248** | **248** | 🟢 **256** | **256** |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **272** | **272** | *Not possible* (no QUIC) | *Not possible* | 🟢 **272** | **272** |
+| Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **11,243** | **12,400** | **584** | **637** | **6,868** | **9,421** |
+| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **8,770** | **9,163** | **0** | **622** | **6,867** | **6,867** |
+| Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **4,041** | **4,256** | *Not possible* (no QUIC) | *Not possible* | **3,656** | **3,955** |
+| Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | 🟢 **35** | **1,102** | *Not possible* | *Not possible* | **0** | **2,235** |
+| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | **65,885** | **65,885** | **38,329** | **38,329** | 🟢 **66,934** | **66,934** |
 
 #### Linux
 
 | Scenario | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---|---:|---:|---:|---:|---:|---:|
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | **453** | **453** | 🟢 **472** | **472** | **407** | **407** |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **477** | **477** | **476** | **476** | **474** | **474** |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | *Fixed — remasure pending* | *Fixed — remasure pending* | **286** | **286** | 🟢 **432** | **432** |
-| Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **4,089** | **4,089** | **3,942** | **4,039** | **3,145** | **3,145** |
-| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **3,215** | **3,215** | **0** | **1,996** | **2,231** | **2,338** |
-| Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **2,157** | **2,157** | **0** | **728** | **2,116** | **2,116** |
-| Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | 🟢 **40** | **602** | *Not possible* | *Not possible* | **24** | **1,745** |
-| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | **28,700** | **28,700** | 🟢 **32,650** | **32,650** | **27,717** | **27,717** |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | **447** | **447** | 🟢 **472** | **472** | **419** | **419** |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | **472** | **472** | 🟢 **479** | **479** | **472** | **472** |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **473** | **473** | **120** | **427** | **472** | **472** |
+| Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **4,334** | **4,334** | **4,305** | **4,305** | **3,336** | **3,336** |
+| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **3,695** | **3,695** | **0** | **2,128** | **2,402** | **2,555** |
+| Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **2,861** | **2,861** | **0** | **784** | **2,227** | **2,227** |
+| Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | 🟢 **16** | **210** | *Not possible* | *Not possible* | **13** | **1,884** |
+| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | **35,119** | **35,119** | 🟢 **39,090** | **39,090** | **32,230** | **32,230** |
 
-Slow consumer is sleep-bound; H1/H2 sit in the same band. TWP H3 slow-consumer showed sustain **0** on the older GHA pass above (fast path dropped CL>16 KiB bodies — fixed in `36d21f67` / `cffd9f09`). Laptop remasure after the fix: TWP **248** ≈ YARP **248**. Cells left unfilled until a successful CI `compare-arch` median lands (prior remasure [32602146550](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32602146550) failed on Windows H3 error SLO). Early-response H1/H2: TWP leads on both OS. Duplex H2: TWP holds a higher sustain than YARP on this pass (YARP peaks higher). WebSocket: TWP leads on Windows; Linux nginx leads. nginx HTTP/2 origin is *Not possible* on the duplex H2↔H2 row.
+Slow consumer is sleep-bound; H1/H2/H3 sit in the same band once bodies stream. H3 slow-consumer sustain **0** on older GHA (fast path dropped CL>16 KiB — fixed in `36d21f67` / `cffd9f09`; incomplete-copy pool poison fixed in `21396a4d`). Early-response H3: TWP leads on both OS after duplex upload/`ReceiveResponse` overlap. Duplex H2: TWP holds a higher sustain than YARP on this pass (YARP peaks higher). WebSocket: YARP leads on Windows; Linux nginx leads.
 
 ### TLS termination cost (H1 TLS → cleartext origin)
 
