@@ -204,7 +204,7 @@ Median of **3** repeats on `windows-latest` @ `106e73b9`. Source: Actions [32614
 | 256 KiB | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **2,497** | **2,559** | **174** | **175** | **1,738** | **1,827** |
 | 256 KiB | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **1,084** | **1,163** | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **1,073** | **1,078** |
 
-nginx/Windows collapses on large reverse bodies in this harness; treat as same-OS only. H1 TLS **256 KiB** after 64 KiB `CopyBytesToStream` grain (`106e73b9`): TWP÷YARP ≈ **1.12×** (was ~0.85×). H3→H1 64 KiB ≈ **0.97×** (within ≥0.95× gate).
+nginx/Windows collapses on large reverse bodies in this harness; treat as same-OS only. H1 TLS **256 KiB** after 64 KiB `CopyBytesToStream` grain (`106e73b9`): TWP÷YARP ≈ **1.12×** (was ~0.85×). H3→H1 64 KiB ≈ **0.97×** (under **>1.00×** gate — cool laptop historically ~1.13×; `compare-bodies` remasure on tip in flight).
 
 ### Linux — heavier reverse GET (64 KiB / 256 KiB)
 
