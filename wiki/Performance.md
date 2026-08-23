@@ -247,27 +247,27 @@ Linux nginx H1/H2/H3 POST completed (nginx.org mainline). TWP÷YARP H3 POST ≈ 
 
 ### Windows — lossy / high-RTT (H2 HOL / H3 loss)
 
-Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest` @ `8e5c181b`. Source: [32643126466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32643126466) (`compare-lossy`). H3 on GHA Windows collapses through the userspace UDP shim (sustain ≈ **0**); use the [laptop lab](Performance-Profiling#lossy--high-rtt-h2-hol--h3-packet-loss) for the Windows H3 signal.
+Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest` @ `f35e2335`. Source: [32647944069](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32647944069) (`compare-lossy`). H3 on GHA Windows collapses through the userspace UDP shim (sustain ≈ **0**); use the [laptop lab](Performance-Profiling#lossy--high-rtt-h2-hol--h3-packet-loss) for the Windows H3 signal.
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
-| HTTP/1 · TLS | HTTP/1 · plain | 🟢 **663** | **663** | **636** | **636** | **661** | **661** |
-| HTTP/2 · TLS | HTTP/1 · plain | 🟢 **59** | **87** | **16** | **17** | **17** | **17** |
+| HTTP/1 · TLS | HTTP/1 · plain | 🟢 **662** | **662** | **640** | **640** | 🟢 **662** | **662** |
+| HTTP/2 · TLS | HTTP/1 · plain | 🟢 **58** | **86** | **16** | **16** | **18** | **18** |
 | HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* (GHA UDP-shim) | *Not measured* | *Not possible* (no QUIC) | *Not possible* | *Not measured* (GHA UDP-shim) | *Not measured* |
 
-H1: TWP÷YARP ≈ **1.00×** (663 / 661) — TWP 1st. H2: TWP÷YARP ≈ **3.47×** (59 / 17) after lossy arm sets **MaxConcurrentStreamsPerConnection=8** (`8e5c181b` / follow-up ResourceLimits wiring) — HOL closed vs prior 16 vs 17. Laptop Windows (same shim, `quic-http3`): TWP H3 ≈ **1,572** sustain vs H2 ≈ **14** (~**112×**). Absolute RPS is low because the shim delays every buffer/datagram — the point is the **protocol shape**.
+H1: TWP÷YARP ≈ **1.00×** (662 / 662). H2: TWP÷YARP ≈ **3.22×** (58 / 18) with lossy-only **MaxConcurrentStreamsPerConnection=8** (`f35e2335`). Laptop Windows (same shim, `quic-http3`): TWP H3 ≈ **1,572** sustain vs H2 ≈ **14** (~**112×**). Absolute RPS is low because the shim delays every buffer/datagram — the point is the **protocol shape**.
 
 ### Linux — lossy / high-RTT (H2 HOL / H3 loss)
 
-Median of **3** repeats @ `8e5c181b`. Source: [32643126466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32643126466) (`compare-lossy`; lossy H3 uses `quic-http3`).
+Median of **3** repeats @ `f35e2335`. Source: [32647944069](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32647944069) (`compare-lossy`; lossy H3 uses `quic-http3`).
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
-| HTTP/1 · TLS | HTTP/1 · plain | **1,202** | **1,202** | 🟢 **1,208** | **1,208** | **1,196** | **1,196** |
-| HTTP/2 · TLS | HTTP/1 · plain | 🟢 **319** | **319** | **40** | **44** | **40** | **40** |
-| HTTP/3 · QUIC | HTTP/1 · plain | **247** | **247** | **87** | **87** | 🟢 **325** | **325** |
+| HTTP/1 · TLS | HTTP/1 · plain | **1,199** | **1,199** | 🟢 **1,205** | **1,205** | **1,192** | **1,192** |
+| HTTP/2 · TLS | HTTP/1 · plain | 🟢 **318** | **318** | **40** | **42** | **40** | **44** |
+| HTTP/3 · QUIC | HTTP/1 · plain | **264** | **264** | **90** | **90** | 🟢 **346** | **346** |
 
-Same H1 story (nginx 1st **1,208**, TWP 2nd ahead of YARP ≈ **1.01×**). **H2:** TWP leads ≈ **8.0×** YARP (319 / 40) with MaxStreams=8. **H3:** YARP still edges this pass (325 vs 247 ≈ **0.76×**); nginx H3 terminate stays far below under the same UDP loss — TWP 2nd.
+Same H1 story (nginx 1st **1,205**, TWP 2nd ahead of YARP ≈ **1.01×**). **H2:** TWP leads ≈ **8.0×** YARP (318 / 40). **H3:** YARP still edges this pass (346 vs 264 ≈ **0.76×**); nginx H3 terminate stays far below — TWP 2nd.
 
 ### Architecture-sensitive
 
