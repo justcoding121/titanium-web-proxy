@@ -251,11 +251,11 @@ Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP da
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
-| HTTP/1 · TLS | HTTP/1 · plain | **663** | **663** | **640** | **640** | 🟢 **670** | **670** |
+| HTTP/1 · TLS | HTTP/1 · plain | 🟢 **662** | **662** | **634** | **634** | **662** | **662** |
 | HTTP/2 · TLS | HTTP/1 · plain | **16** | **18** | **16** | **18** | 🟢 **17** | **17** |
 | HTTP/3 Â· QUIC | HTTP/1 Â· plain | *Not measured* (GHA UDP-shim) | *Not measured* | *Not possible* (no QUIC) | *Not possible* | *Not measured* (GHA UDP-shim) | *Not measured* |
 
-H1: TWP÷YARP ≈ **0.99×** (663 / 670). H2 collapses under connection stalls (HOL) — YARP still edges the median (16 vs 17); open under **>1.00×**. Laptop Windows (same shim, \quic-http3\): TWP H3 ≈ **1,572** sustain vs H2 ≈ **14** (~**112×**). Absolute RPS is low because the shim delays every buffer/datagram — the point is the **protocol shape**.
+H1: TWP÷YARP ≈ **1.00×** (662 / 662); nginx 1st (634) — TWP 2nd. H2 collapses under connection stalls (HOL) — YARP still edges the median (16 vs 17); open under **>1.00×**. Laptop Windows (same shim, \quic-http3\): TWP H3 ≈ **1,572** sustain vs H2 ≈ **14** (~**112×**). Absolute RPS is low because the shim delays every buffer/datagram — the point is the **protocol shape**.
 
 ### Linux â€” lossy / high-RTT (H2 HOL / H3 loss)
 
@@ -263,11 +263,11 @@ Median of **3** repeats @ `8789d6de`. Source: [32636044385](https://github.com/j
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
-| HTTP/1 · TLS | HTTP/1 · plain | **1,215** | **1,215** | 🟢 **1,219** | **1,219** | **1,212** | **1,212** |
-| HTTP/2 · TLS | HTTP/1 · plain | 🟢 **40** | **46** | **40** | **44** | **40** | **44** |
-| HTTP/3 · QUIC | HTTP/1 · plain | **258** | **258** | **94** | **94** | 🟢 **351** | **351** |
+| HTTP/1 · TLS | HTTP/1 · plain | **1,200** | **1,200** | 🟢 **1,207** | **1,207** | **1,191** | **1,191** |
+| HTTP/2 · TLS | HTTP/1 · plain | 🟢 **44** | **45** | **40** | **40** | **40** | **40** |
+| HTTP/3 · QUIC | HTTP/1 · plain | **270** | **270** | **86** | **86** | 🟢 **330** | **330** |
 
-Same H1 story (nginx 1st, TWP 2nd ahead of YARP ≈ **1.00×**). **H2:** TWP ties YARP median sustain (40). **H3:** YARP edges this pass (351 vs 258); nginx H3 terminate stays far below under the same UDP loss.
+Same H1 story (nginx 1st, TWP 2nd ahead of YARP ≈ **1.01×**). **H2:** TWP leads ≈ **1.10×** YARP. **H3:** YARP edges this pass (330 vs 270); nginx H3 terminate stays far below under the same UDP loss.
 
 ### Architecture-sensitive
 
