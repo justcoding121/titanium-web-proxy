@@ -596,6 +596,9 @@ internal sealed class TwpProxyHost : IDisposable
         // Saturation probe: raise floor so 4-vCPU Linux hosts are not stuck at OS defaults.
         proxy.ThreadPoolWorkerThread = Math.Max(Environment.ProcessorCount * 8, 64);
         proxy.MaxCachedConnections = maxCachedConnections ?? 256;
+        // New-connection TLS arms pay setsockopt keepalive on every accept; Kestrel does not.
+        // Keep-alive reverse RPS is unaffected (connections already long-lived).
+        proxy.EnableTcpKeepAlive = false;
 
         return proxy;
     }
@@ -615,15 +618,16 @@ internal sealed class TwpProxyHost : IDisposable
     /// <summary>
     /// Pin a leaf + warm <see cref="System.Net.Security.SslStreamCertificateContext"/> so the first
     /// handshake does not pay cert creation / chain build on the critical path.
+    /// Prefer the shared loopback RSA leaf (same material YARP/Kestrel UseHttps uses) so
+    /// compare-tls-cost new-connection is not an ECDSA-vs-RSA Schannel bake-off.
     /// </summary>
     private static void WarmTlsTerminateCertificate(ProxyServer proxy, TransparentProxyEndPoint endPoint,
         string certName)
     {
-        var leaf = proxy.CertificateManager.CreateServerCertificate(certName).GetAwaiter().GetResult();
-        if (leaf == null)
-            return;
+        var leaf = LoopbackCertificateAuthority.ServerCertificate;
         endPoint.GenericCertificate = leaf;
         _ = proxy.CertificateManager.CreateSslCertificateContext(leaf);
+        _ = certName;
     }
 
     public void Dispose()

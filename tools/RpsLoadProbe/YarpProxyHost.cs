@@ -246,7 +246,7 @@ internal sealed class YarpProxyHost : IDisposable
 
     private static async Task<YarpProxyHost> StartAsync(YarpListenOptions options)
     {
-        var port = GetFreeTcpPort();
+        var port = GetFreeDualStackPort();
         X509Certificate2? cert = null;
         if (options.UseTls)
             cert = LoopbackCertificateAuthority.ServerCertificate;
@@ -359,5 +359,43 @@ internal sealed class YarpProxyHost : IDisposable
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
         return port;
+    }
+
+    /// <summary>
+    ///     Pick a port free for both TCP and UDP. Kestrel H3 binds MsQuic on the same port; Windows
+    ///     TCP/UDP namespaces are independent so a TCP-only pick can fail QUIC with WSAEADDRINUSE.
+    /// </summary>
+    private static int GetFreeDualStackPort()
+    {
+        for (var i = 0; i < 20; i++)
+        {
+            var port = GetFreeTcpPort();
+            if (IsUdpPortFree(port))
+                return port;
+        }
+
+        return GetFreeTcpPort();
+    }
+
+    private static bool IsUdpPortFree(int port)
+    {
+        try
+        {
+            // MsQuic dual-listen uses IPv6Any for loopback endpoints — probe the same scope.
+            using var udp = new System.Net.Sockets.UdpClient(new IPEndPoint(IPAddress.IPv6Any, port));
+            return true;
+        }
+        catch
+        {
+            try
+            {
+                using var udp = new System.Net.Sockets.UdpClient(new IPEndPoint(IPAddress.Any, port));
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
     }
 }

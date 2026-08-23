@@ -1293,14 +1293,36 @@ public partial class ProxyServer : IDisposable
         }
         else if (ProxyRunning)
         {
-            Listen(endPoint);
-            if (EnableHttp3 && endPoint is TransparentProxyEndPoint { EnableHttp3: true } dualListen)
+            var wantDualQuic = EnableHttp3 && endPoint is TransparentProxyEndPoint { EnableHttp3: true };
+            var ephemeralDual = wantDualQuic && endPoint.Port == 0;
+            const int maxDualListenAttempts = 20;
+            var dualAttempts = 0;
+            while (true)
             {
+                dualAttempts++;
+                Listen(endPoint);
+
+                if (!wantDualQuic)
+                    break;
+
+                var dualListen = (TransparentProxyEndPoint)endPoint;
                 if (!dualListen.DecryptSsl)
                     throw new InvalidOperationException(
                         "TransparentProxyEndPoint.EnableHttp3 requires DecryptSsl = true.");
-                quicListenerCts ??= new CancellationTokenSource();
-                ListenQuic(dualListen);
+
+                try
+                {
+                    quicListenerCts ??= new CancellationTokenSource();
+                    ListenQuic(dualListen);
+                    break;
+                }
+                catch (Exception ex) when (ephemeralDual && dualAttempts < maxDualListenAttempts
+                                           && IsAddressAlreadyInUse(ex))
+                {
+                    QuitListenQuic(dualListen);
+                    QuitListen(endPoint);
+                    endPoint.Port = 0;
+                }
             }
         }
     }
@@ -1640,30 +1662,55 @@ public partial class ProxyServer : IDisposable
 
             // TCP endpoints. Dual-listen reverse H3: bind TCP first (assign ephemeral port), then UDP
             // on the same IP:port so HttpClient can discover H3 via Alt-Svc or RequestVersionExact.
+            // Windows TCP and UDP port spaces are independent — ephemeral TCP can land on a UDP port
+            // that is already taken / excluded (WSAEADDRINUSE). Retry ephemeral dual-listen binds.
             foreach (var endPoint in ProxyEndPoints)
             {
                 if (endPoint is TransparentQuicProxyEndPoint)
                     continue;
 
-                if (endPoint is TransparentProxyEndPoint { EnableHttp3: true } dualListen)
+                if (endPoint is TransparentProxyEndPoint { EnableHttp3: true } dualListenGate)
                 {
                     if (!EnableHttp3)
                         throw new InvalidOperationException(
                             "TransparentProxyEndPoint.EnableHttp3 requires ProxyServer.EnableHttp3 = true.");
-                    if (!dualListen.DecryptSsl)
+                    if (!dualListenGate.DecryptSsl)
                         throw new InvalidOperationException(
                             "TransparentProxyEndPoint.EnableHttp3 requires DecryptSsl = true.");
                 }
 
-                Listen(endPoint);
-                startedTcpEndPoints.Add(endPoint);
-
-                if (EnableHttp3 && endPoint is TransparentProxyEndPoint { EnableHttp3: true } dual)
+                var wantDualQuic = EnableHttp3 && endPoint is TransparentProxyEndPoint { EnableHttp3: true };
+                var ephemeralDual = wantDualQuic && endPoint.Port == 0;
+                const int maxDualListenAttempts = 20;
+                var dualAttempts = 0;
+                while (true)
                 {
-                    createdQuicListenerCts = true;
-                    quicListenerCts ??= new CancellationTokenSource();
-                    ListenQuic(dual);
-                    startedQuicEndPoints.Add(dual);
+                    dualAttempts++;
+                    Listen(endPoint);
+
+                    if (!wantDualQuic)
+                    {
+                        startedTcpEndPoints.Add(endPoint);
+                        break;
+                    }
+
+                    var dual = (TransparentProxyEndPoint)endPoint;
+                    try
+                    {
+                        createdQuicListenerCts = true;
+                        quicListenerCts ??= new CancellationTokenSource();
+                        ListenQuic(dual);
+                        startedTcpEndPoints.Add(endPoint);
+                        startedQuicEndPoints.Add(dual);
+                        break;
+                    }
+                    catch (Exception ex) when (ephemeralDual && dualAttempts < maxDualListenAttempts
+                                               && IsAddressAlreadyInUse(ex))
+                    {
+                        SafeRollback(() => QuitListenQuic(dual));
+                        SafeRollback(() => QuitListen(endPoint));
+                        endPoint.Port = 0;
+                    }
                 }
             }
         }
@@ -2167,6 +2214,23 @@ public partial class ProxyServer : IDisposable
 
         listener.Stop();
         listener.Server.Dispose();
+    }
+
+    /// <summary>
+    ///     True when <paramref name="ex"/> (or an inner exception) is WSAEADDRINUSE / EADDRINUSE.
+    ///     Used to retry ephemeral TCP+QUIC dual-listen when Windows assigns a TCP port whose UDP twin is busy.
+    /// </summary>
+    private static bool IsAddressAlreadyInUse(Exception ex)
+    {
+        for (Exception? cur = ex; cur != null; cur = cur.InnerException)
+        {
+            if (cur is SocketException se &&
+                (se.SocketErrorCode == SocketError.AddressAlreadyInUse
+                 || se.NativeErrorCode is 10048 or 98))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

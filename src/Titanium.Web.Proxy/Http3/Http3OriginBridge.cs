@@ -1102,13 +1102,20 @@ internal static class Http3OriginBridge
                     var inner = fwd.Response.StreamBodyWriter;
                     fwd.Response.StreamBodyWriter = async (dest, ct) =>
                     {
+                        var copyCompleted = false;
                         try
                         {
                             await inner!(dest, ct);
+                            copyCompleted = true;
                         }
                         finally
                         {
-                            if (owned.Stream is Helpers.HttpStream residual && residual.DataAvailable)
+                            // Incomplete copy may leave unread CL bytes on the socket while
+                            // HttpStream.Available is 0 (bytes already in the pump buffer). Pooling
+                            // that connection poisons the next H3→H1 request into H3_INTERNAL_ERROR
+                            // (GHA compare-arch slow-consumer after warmup cancel).
+                            if (!copyCompleted
+                                || (owned.Stream is Helpers.HttpStream residual && residual.DataAvailable))
                                 shouldClose = true;
                             await server.TcpConnectionFactory.Release(owned, shouldClose);
                         }
@@ -1577,35 +1584,56 @@ internal static class Http3OriginBridge
                 server.Enable100ContinueBehaviour, sessionArgs.IsTransparent,
                 sessionArgs.OriginHttpVersionPolicy ?? server.OriginHttpVersionPolicy, cancellationToken);
 
+            // Streamed uploads: start the origin body write in parallel with ReceiveResponse so an
+            // early-responding origin (compare-arch) can push response headers/body while the
+            // remaining request bytes are still in flight — same duplex shape as YARP StreamCopier.
+            // Buffered bodies stay half-duplex (write then read).
+            Task? uploadTask = null;
             if (needsHttp11Wire && request.HasBody && !request.ExpectationFailed)
             {
                 if (streamRequestBody)
                 {
                     var bodyWriter = new Helpers.BodyStreamWriter(connection.Stream, request.IsChunked);
-                    if (earlyBodyChannel != null)
+                    var earlyChannel = earlyBodyChannel;
+                    var earlyPump = earlyBodyPump;
+                    var bodyPump = sessionArgs.Http3RequestBodyPump;
+                    var trailing = request.HasTrailingHeaders ? request.TrailingHeaders : null;
+                    uploadTask = PumpUploadAsync();
+
+                    async Task PumpUploadAsync()
                     {
-                        await foreach (var chunk in earlyBodyChannel.Reader.ReadAllAsync(cancellationToken))
+                        try
                         {
-                            if (!chunk.IsEmpty)
-                                await bodyWriter.WriteAsync(chunk, cancellationToken);
-                        }
-
-                        if (earlyBodyPump != null)
-                            await earlyBodyPump;
-                    }
-                    else if (sessionArgs.Http3RequestBodyPump != null)
-                    {
-                        await sessionArgs.Http3RequestBodyPump(
-                            async (data, ct) =>
+                            if (earlyChannel != null)
                             {
-                                if (!data.IsEmpty)
-                                    await bodyWriter.WriteAsync(data, ct);
-                            },
-                            cancellationToken);
-                    }
+                                await foreach (var chunk in earlyChannel.Reader.ReadAllAsync(cancellationToken))
+                                {
+                                    if (!chunk.IsEmpty)
+                                        await bodyWriter.WriteAsync(chunk, cancellationToken);
+                                }
 
-                    await bodyWriter.CompleteAsync(
-                        request.HasTrailingHeaders ? request.TrailingHeaders : null, cancellationToken);
+                                if (earlyPump != null)
+                                    await earlyPump;
+                            }
+                            else if (bodyPump != null)
+                            {
+                                await bodyPump(
+                                    async (data, ct) =>
+                                    {
+                                        if (!data.IsEmpty)
+                                            await bodyWriter.WriteAsync(data, ct);
+                                    },
+                                    cancellationToken);
+                            }
+
+                            await bodyWriter.CompleteAsync(trailing, cancellationToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            earlyChannel?.Writer.TryComplete(ex);
+                            throw;
+                        }
+                    }
                 }
                 else
                 {
@@ -1614,15 +1642,28 @@ internal static class Http3OriginBridge
                 }
             }
 
-            await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
-
-            while (sessionArgs.HttpClient.Response.StatusCode is >= 100 and < 200)
+            try
             {
-                if (onInterimResponse != null)
-                    await onInterimResponse(sessionArgs.HttpClient.Response, cancellationToken);
-
-                await sessionArgs.ClearResponse(cancellationToken);
                 await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
+
+                while (sessionArgs.HttpClient.Response.StatusCode is >= 100 and < 200)
+                {
+                    if (onInterimResponse != null)
+                        await onInterimResponse(sessionArgs.HttpClient.Response, cancellationToken);
+
+                    await sessionArgs.ClearResponse(cancellationToken);
+                    await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
+                }
+            }
+            catch
+            {
+                if (uploadTask != null)
+                {
+                    try { await uploadTask; }
+                    catch { /* surface ReceiveResponse failure */ }
+                }
+
+                throw;
             }
 
             var response = sessionArgs.HttpClient.Response;
@@ -1636,6 +1677,10 @@ internal static class Http3OriginBridge
                 && response.ContentLength >= 0
                 && response.ContentLength <= eagerBodyThreshold)
             {
+                // Finish upload before draining a buffered response body (same socket).
+                if (uploadTask != null)
+                    await uploadTask;
+
                 byte[] bodyBytes;
                 if (response.ContentLength == 0)
                 {
@@ -1673,27 +1718,43 @@ internal static class Http3OriginBridge
                 var originConnection = connection;
                 var originIsChunked = response.IsChunked;
                 var originContentLength = response.ContentLength;
+                var pendingUpload = uploadTask;
+                uploadTask = null; // ownership moved into StreamBodyWriter
                 if (response.ContentLength < 0 && !response.IsChunked)
                     response.Headers.AddHeader(KnownHeaders.TransferEncoding, "chunked");
 
                 response.StreamBodyWriter = async (clientBodyStream, ct) =>
                 {
-                    IHttpStreamReader reader = originConnection!.Stream;
-                    using var limited = new LimitedStream(reader, server.BufferPool, originIsChunked,
-                        originContentLength, response.TrailingHeaders);
-                    var buffer = server.BufferPool.GetBuffer();
-                    try
+                    async Task CopyResponseAsync()
                     {
-                        int read;
-                        while ((read = await limited.ReadAsync(buffer.AsMemory(), ct)) > 0)
-                            await clientBodyStream.WriteAsync(buffer.AsMemory(0, read), ct);
-                        await limited.Finish();
+                        IHttpStreamReader reader = originConnection!.Stream;
+                        using var limited = new LimitedStream(reader, server.BufferPool, originIsChunked,
+                            originContentLength, response.TrailingHeaders);
+                        var buffer = server.BufferPool.GetBuffer();
+                        try
+                        {
+                            int read;
+                            while ((read = await limited.ReadAsync(buffer.AsMemory(), ct)) > 0)
+                                await clientBodyStream.WriteAsync(buffer.AsMemory(0, read), ct);
+                            await limited.Finish();
+                        }
+                        finally
+                        {
+                            server.BufferPool.ReturnBuffer(buffer);
+                        }
                     }
-                    finally
-                    {
-                        server.BufferPool.ReturnBuffer(buffer);
-                    }
+
+                    // Keep request upload live while copying the response (true duplex).
+                    var copyTask = CopyResponseAsync();
+                    if (pendingUpload != null)
+                        await Task.WhenAll(pendingUpload, copyTask);
+                    else
+                        await copyTask;
                 };
+            }
+            else if (uploadTask != null)
+            {
+                await uploadTask;
             }
 
             closeConnection = !response.KeepAlive;
@@ -1725,14 +1786,18 @@ internal static class Http3OriginBridge
                     var inner = sessionArgs.HttpClient.Response.StreamBodyWriter;
                     sessionArgs.HttpClient.Response.StreamBodyWriter = async (dest, ct) =>
                     {
+                        var copyCompleted = false;
                         try
                         {
                             await inner!(dest, ct);
+                            copyCompleted = true;
                         }
                         finally
                         {
-                            // Residual framing after a full body drain — do not pool.
-                            if (owned.Stream is Helpers.HttpStream residual && residual.DataAvailable)
+                            // Incomplete copy may leave unread CL bytes on the socket while
+                            // HttpStream.Available is 0 (bytes already in the pump buffer). Never pool.
+                            if (!copyCompleted
+                                || (owned.Stream is Helpers.HttpStream residual && residual.DataAvailable))
                                 shouldClose = true;
                             await server.TcpConnectionFactory.Release(owned, shouldClose);
                         }

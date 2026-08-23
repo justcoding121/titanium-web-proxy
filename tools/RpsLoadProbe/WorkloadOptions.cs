@@ -76,7 +76,9 @@ internal sealed class WorkloadOptions
         Method = "GET",
         ResponseBytes = TinyJsonBytes,
         KeepAlive = false,
-        CaptureTlsTiming = true
+        // RPS fairness: do not enable TWP-only timing capture on the NC arm (YARP has no equivalent).
+        // Set TWP_RPS_CAPTURE_TLS=1 manually when collecting ClientTlsTiming.
+        CaptureTlsTiming = false
     };
 
     public static WorkloadOptions ForSlowConsumer() => new()

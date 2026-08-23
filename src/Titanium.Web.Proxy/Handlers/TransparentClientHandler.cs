@@ -42,18 +42,94 @@ public partial class ProxyServer
         RegisterSessionCancellation(cancellationTokenSource);
         var isHttps = false;
         Task<TcpServerConnection?>? prefetchConnectionTask = null;
-        var clientStream = new HttpClientStream(this, clientConnection, clientConnection.GetStream(), BufferPool,
-            cancellationToken);
+        HttpClientStream? clientStream = null;
+        UpstreamHttpProtocol? transparentUpstreamProtocol = null;
 
         try
         {
+            var networkStream = clientConnection.GetStream();
+
+            // Fixed leaf + HTTP/1-only reverse terminate: skip ClientHello peek and authenticate on
+            // NetworkStream (same unwrap as origin HTTPS). Nesting HttpClientStream under SslStream
+            // forced an extra buffered layer on every new-connection handshake — Windows Schannel
+            // paid that more than Linux (compare-tls-cost NC tiny ~0.84× YARP).
+            var fixedCertHttp11Only = endPoint.DecryptSsl
+                                      && endPoint.GenericCertificate != null
+                                      && !EnableHttp2
+                                      && !EnableHttp3;
+
+            if (fixedCertHttp11Only)
+            {
+                var httpsHostName = endPoint.GenericCertificateName;
+                var args = new BeforeSslAuthenticateEventArgs(this, clientConnection, cancellationTokenSource,
+                    httpsHostName);
+
+                var forwardHost = endPoint.ForwardHost;
+                if (forwardHost != null && forwardHost.Length != 0)
+                    args.ForwardHttpsHostName = forwardHost;
+                if (endPoint.ForwardPort is int forwardPort)
+                    args.ForwardHttpsPort = forwardPort;
+
+                await endPoint.InvokeBeforeSslAuthenticate(this, args, logger);
+                transparentUpstreamProtocol = args.UpstreamHttpProtocol;
+
+                if (cancellationTokenSource.IsCancellationRequested)
+                    return;
+
+                if (!args.DecryptSsl)
+                {
+                    // Caller asked to tunnel without decrypt — fall back to the peek path below.
+                    clientStream = new HttpClientStream(this, clientConnection, networkStream, BufferPool,
+                        cancellationToken);
+                }
+                else
+                {
+                    SslStream? sslStream = null;
+                    X509Certificate2? certificate = endPoint.GenericCertificate;
+                    try
+                    {
+                        sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false);
+                        var options = new SslServerAuthenticationOptions
+                        {
+                            ServerCertificateContext = CertificateManager.CreateSslCertificateContext(certificate!),
+                            ClientCertificateRequired = false,
+                            EnabledSslProtocols = SupportedSslProtocols,
+                            CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                            ApplicationProtocols = SslExtensions.Http11ProtocolAsList
+                        };
+
+                        await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
+                        clientConnection.NegotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
+                        clientConnection.SslProtocol = SupportedSslProtocols;
+
+                        clientStream = new HttpClientStream(this, clientConnection, sslStream, BufferPool,
+                            cancellationToken);
+                        sslStream = null;
+                        isHttps = !endPoint.ForwardCleartext;
+                    }
+                    catch (Exception e)
+                    {
+                        if (sslStream != null) await sslStream.DisposeAsync();
+                        clientStream ??= new HttpClientStream(this, clientConnection, networkStream, BufferPool,
+                            cancellationToken);
+                        var certName = certificate?.GetNameInfo(X509NameType.SimpleName, false);
+                        var session = new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
+                        throw new ProxyConnectException(
+                            $"Couldn't authenticate host '{httpsHostName}' with certificate '{certName}'.", e, session);
+                    }
+                }
+            }
+
+            if (clientStream == null)
+            {
+            clientStream = new HttpClientStream(this, clientConnection, networkStream, BufferPool,
+                cancellationToken);
+
             // HTTP reverse-proxy (ForwardHost set, DecryptSsl off): skip TLS ClientHello detection.
             // Peeking every connection was pure overhead for plain HTTP and still paid an await.
             ClientHelloInfo? clientHelloInfo = null;
             if (endPoint.DecryptSsl || string.IsNullOrEmpty(endPoint.ForwardHost))
                 clientHelloInfo = await SslTools.PeekClientHello(clientStream, BufferPool, cancellationToken);
-
-            UpstreamHttpProtocol? transparentUpstreamProtocol = null;
 
             if (clientHelloInfo != null)
             {
@@ -426,6 +502,7 @@ public partial class ProxyServer
                     return;
                 }
             }
+            } // end peek/legacy TLS path (clientStream was null)
 
             // HTTPS server created - we can now decrypt the client's traffic
             // Now create the request
@@ -516,7 +593,8 @@ public partial class ProxyServer
             UnregisterSessionCancellation(cancellationTokenSource);
             cancellationTokenSource.Dispose();
             await TcpConnectionFactory.Release(prefetchConnectionTask, true);
-            await clientStream.DisposeAsync();
+            if (clientStream != null)
+                await clientStream.DisposeAsync();
         }
     }
 

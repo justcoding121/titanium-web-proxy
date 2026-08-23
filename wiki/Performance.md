@@ -229,9 +229,9 @@ Median of **3** repeats on `windows-latest`. Source: Actions [32570360081](https
 |---|---|---:|---:|---:|---:|---:|---:|
 | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **5,268** | **5,286** | **334** | **369** | **4,151** | **4,337** |
 | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **4,037** | **4,037** | **310** | **343** | **3,493** | **3,507** |
-| HTTP/3 · QUIC | HTTP/1 · plain | **0** | **972** | *Not possible* | *Not possible* | 🟢 **2,020** | **2,020** |
+| HTTP/3 · QUIC | HTTP/1 · plain | *Fixed — remasure pending* | *Fixed — remasure pending* | *Not possible* | *Not possible* | 🟢 **2,020** | **2,020** |
 
-TWP wins H1 POST (~**1.27×** YARP) and H2 POST (~**1.16×** YARP). H3 POST sustain **0** on this older GHA pass (`UpdateContentLength` stamped streamed CL to 0 — fixed in `ab16a871`). Laptop remasure after the fix: TWP sustain **1,973** vs YARP **1,802** (~**1.09×**); CI remasure pending.
+TWP wins H1 POST (~**1.27×** YARP) and H2 POST (~**1.16×** YARP). H3 POST showed sustain **0** on the older GHA pass above (`UpdateContentLength` stamped streamed CL to 0 — fixed in `ab16a871`). Laptop remasure after the fix: TWP sustain **1,973** vs YARP **1,802** (~**1.09×**). Cell left unfilled until a successful CI `compare-post` median lands (prior remasure [32602145518](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32602145518) failed on Windows QUIC bind).
 
 ### Linux — POST 64 KiB request + 64 KiB response
 
@@ -241,9 +241,9 @@ Median of **3** repeats. Source: Actions [32570360081](https://github.com/justco
 |---|---|---:|---:|---:|---:|---:|---:|
 | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **4,161** | **4,161** | **4,082** | **4,082** | **3,218** | **3,218** |
 | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **3,255** | **3,255** | **1,952** | **2,000** | **2,531** | **2,541** |
-| HTTP/3 · QUIC | HTTP/1 · plain | **0** | **1,989** | **764** | **765** | 🟢 **2,650** | **2,650** |
+| HTTP/3 · QUIC | HTTP/1 · plain | *Fixed — remasure pending* | *Fixed — remasure pending* | **764** | **765** | 🟢 **2,650** | **2,650** |
 
-Linux nginx H1/H2/H3 POST completed this pass (nginx.org mainline). TWP H3 POST peaked at **1,989** but did not hold the error/latency SLO (sustain **0**) — same streamed-CL bug as Windows; fixed in `ab16a871`; CI remasure pending.
+Linux nginx H1/H2/H3 POST completed this pass (nginx.org mainline). TWP H3 POST peaked at **1,989** on the older GHA pass but did not hold the error/latency SLO (sustain **0**) — same streamed-CL bug as Windows; fixed in `ab16a871`. Cell left unfilled until CI `compare-post` succeeds.
 
 ### Windows — lossy / high-RTT (H2 HOL / H3 loss)
 
@@ -283,7 +283,7 @@ Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `629fb878`. Source:
 |---|---|---|---:|---:|---:|---:|---:|---:|
 | Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **248** | **248** | **230** | **230** | 🟢 **248** | **248** |
 | Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | **249** | **249** | **213** | **213** | 🟢 **256** | **256** |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | **0** | **0** | *Not possible* (no QUIC) | *Not possible* | 🟢 **236** | **236** |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | *Fixed — remasure pending* | *Fixed — remasure pending* | *Not possible* (no QUIC) | *Not possible* | 🟢 **236** | **236** |
 | Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **7,099** | **7,531** | **374** | **443** | **5,222** | **5,812** |
 | Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **6,501** | **6,501** | **0** | **427** | **3,775** | **4,463** |
 | Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | **1,372** | **1,372** | *Not possible* (no QUIC) | *Not possible* | 🟢 **1,808** | **1,808** |
@@ -296,14 +296,14 @@ Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `629fb878`. Source:
 |---|---|---|---:|---:|---:|---:|---:|---:|
 | Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | **453** | **453** | 🟢 **472** | **472** | **407** | **407** |
 | Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **477** | **477** | **476** | **476** | **474** | **474** |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | **0** | **0** | **286** | **286** | 🟢 **432** | **432** |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | *Fixed — remasure pending* | *Fixed — remasure pending* | **286** | **286** | 🟢 **432** | **432** |
 | Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | 🟢 **4,089** | **4,089** | **3,942** | **4,039** | **3,145** | **3,145** |
 | Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | 🟢 **3,215** | **3,215** | **0** | **1,996** | **2,231** | **2,338** |
 | Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | 🟢 **2,157** | **2,157** | **0** | **728** | **2,116** | **2,116** |
 | Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | 🟢 **40** | **602** | *Not possible* | *Not possible* | **24** | **1,745** |
 | Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | **28,700** | **28,700** | 🟢 **32,650** | **32,650** | **27,717** | **27,717** |
 
-Slow consumer is sleep-bound; H1/H2 sit in the same band. TWP H3 slow-consumer sustain **0** on this older GHA pass (fast path dropped CL>16 KiB bodies — fixed in `36d21f67` / `cffd9f09`). Laptop remasure after the fix: TWP **248** ≈ YARP **248**; CI remasure pending. Early-response H1/H2: TWP leads on both OS. Duplex H2: TWP holds a higher sustain than YARP on this pass (YARP peaks higher). WebSocket: TWP leads on Windows; Linux nginx leads. nginx HTTP/2 origin is *Not possible* on the duplex H2↔H2 row.
+Slow consumer is sleep-bound; H1/H2 sit in the same band. TWP H3 slow-consumer showed sustain **0** on the older GHA pass above (fast path dropped CL>16 KiB bodies — fixed in `36d21f67` / `cffd9f09`). Laptop remasure after the fix: TWP **248** ≈ YARP **248**. Cells left unfilled until a successful CI `compare-arch` median lands (prior remasure [32602146550](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32602146550) failed on Windows H3 error SLO). Early-response H1/H2: TWP leads on both OS. Duplex H2: TWP holds a higher sustain than YARP on this pass (YARP peaks higher). WebSocket: TWP leads on Windows; Linux nginx leads. nginx HTTP/2 origin is *Not possible* on the duplex H2↔H2 row.
 
 ### TLS termination cost (H1 TLS → cleartext origin)
 
