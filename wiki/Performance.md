@@ -1,4 +1,4 @@
-# Performance
+﻿# Performance
 
 Titanium targets **low-overhead MITM proxying**: connection pooling, HTTP/2 multiplexing, and buffer reuse. Numbers below are **Release** measurements with [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe) (and BenchmarkDotNet / Basic example where noted). Publishable tables cite **GitHub Actions** medians on matched **4 vCPU / 16 GiB** runners. Absolute RPS still varies by OS kernel, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
 
@@ -218,8 +218,8 @@ TWP÷nginx H1 plain reverse ≈ **0.85** (31,835 / 37,241); TWP÷YARP H1 plain �
 | Reverse | HTTP/1 · plain | HTTP/1 · plain | **31,835** | **31,835** | 🥇 **37,241** | **37,241** | **28,397** | **28,397** |
 | Reverse | HTTP/1 · plain | HTTP/1 · TLS | 🥇 **23,709** | **23,709** | *Not possible* | *Not possible* | **22,090** | **22,090** |
 | Reverse | HTTP/1 · TLS | HTTP/1 · plain | **23,478** | **23,478** | 🥇 **28,181** | **28,181** | **20,392** | **20,392** |
-| Reverse | HTTP/1 · TLS | HTTP/2 · TLS | 🥇 **23,584** | **23,584** | *Not possible* | *Not possible* | **22,079** | **22,079** |
-| Reverse | HTTP/1 · TLS | HTTP/3 · QUIC | 🥇 **17,563** | **17,563** | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **16,643** | **16,643** |
+| Reverse | HTTP/1 · TLS | HTTP/2 · TLS | 🥇 **22,588** | **22,588** | *Not possible* | *Not possible* | **22,317** | **22,317** |
+| Reverse | HTTP/1 · TLS | HTTP/3 · QUIC | 🥇 **17,605** | **17,605** | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **16,765** | **16,765** |
 | Reverse | HTTP/2 · plain | HTTP/1 · plain | 🥇 **36,497** | **36,497** | *Not possible* | *Not possible* | **34,072** | **34,072** |
 | Reverse | HTTP/2 · plain | HTTP/2 · plain | 🥇 **67,622** | **67,622** | *Not possible* | *Not possible* | **48,832** | **48,832** |
 | Reverse | HTTP/2 · plain | HTTP/2 · TLS | 🥇 **51,321** | **51,321** | *Not possible* | *Not possible* | **39,522** | **39,522** |
@@ -251,13 +251,13 @@ TWP÷nginx H1 plain reverse ≈ **0.85** (31,835 / 37,241); TWP÷YARP H1 plain �
 | MITM | HTTP/2 · TLS | HTTP/1 · TLS | **27,168** | **27,168** | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) |
 | MITM | HTTP/3 · QUIC | HTTP/1 · TLS | **15,903** | **15,903** | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) |
 
-On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.85** (31,835 / 37,241). H1 TLS terminate ≈ **0.83** (23,478 / 28,181). TWP÷YARP H1 plain ≈ **1.12×**; H1 TLS terminate ≈ **1.15×**. Bridges @ `bf01825b`: all published TWP÷YARP **>1.00×** (h2c→H1 ≈ **1.07×**, H3→H1 ≈ **1.06×**). Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**. MITM publishes the same **15** Client×Origin pairs as Reverse (inspectable/decrypt), then dual-crypto extras (CONNECT, TLS↔TLS). nginx/YARP cannot MITM.
+On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.85** (31,835 / 37,241). H1 TLS terminate ≈ **0.83** (23,478 / 28,181). TWP÷YARP H1 plain ≈ **1.12×**; H1 TLS terminate ≈ **1.15×**. Bridges @ `97559056`: all published TWP÷YARP **≥1.00×** (h2c→H1 ≈ **1.10×**, H3→H1 ≈ **1.12×**, H3→H2 ≈ **1.11×**). Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**. MITM publishes the same **15** Client×Origin pairs as Reverse (inspectable/decrypt), then dual-crypto extras (CONNECT, TLS↔TLS). nginx/YARP cannot MITM.
 
-**nginx HTTP/3:** inbound QUIC terminate → cleartext H1 (`nginx-reverse-http3-cleartext`) @ `bf01825b` bridges: sustain **0** (p99/error SLO miss on all three repeats) / peak **14,707**. TWP/YARP H3→H1 on this row are from the same bridges pass. nginx still cannot speak HTTP/3 to an origin (no H3 upstream in this conf).
+**nginx HTTP/3:** inbound QUIC terminate → cleartext H1 (`nginx-reverse-http3-cleartext`) @ `97559056` bridges: sustain **0** (p99/error SLO miss) / peak **14,867**. TWP/YARP H3→H1 on this row are from the same bridges pass. nginx still cannot speak HTTP/3 to an origin (no H3 upstream in this conf).
 
-**YARP HTTP/3 (this matrix):** TWP leads H3→H1 ≈ **1.06×** (19,915 / 18,747), H3→H2 ≈ **1.12×** (23,904 / 21,254), H3→H3 ≈ **1.22×** (19,361 / 15,825). H1→H2 ≈ **1.07×** (23,584 / 22,079). H1→H3 ≈ **1.06×** (17,563 / 16,643). h2c→H3 ≈ **1.05×**.
+**YARP HTTP/3 (this matrix):** TWP leads H3→H1 ≈ **1.12×** (21,226 / 18,908), H3→H2 ≈ **1.11×** (24,004 / 21,658). H1→H2 ≈ **1.01×** (22,588 / 22,317). H1→H3 ≈ **1.05×** (17,605 / 16,765). h2c→H3 ≈ **1.03×**.
 
-**Windows vs Linux:** both CI envs are **4 vCPU / 16 GiB**, but do **not** compare absolute RPS across OS. Linux nginx leads H1 plain/TLS terminate (TWP second, ahead of YARP). On Windows bridges @ `bf01825b`, TWP÷YARP is below 1.0× on h2c→H1 / H3→H1 / H3→H2. Cool laptop notes remain on [Performance Profiling](Performance-Profiling#local-windows-lab-developer-laptop).
+**Windows vs Linux:** both CI envs are **4 vCPU / 16 GiB**, but do **not** compare absolute RPS across OS. Linux nginx leads H1 plain/TLS terminate (TWP second, ahead of YARP). Windows bridges @ `97559056` closed h2c→H1 / H3→H2; **H3→H1 remains the open Win YARP-led cell** (≈ **0.95×**). Cool laptop notes remain on [Performance Profiling](Performance-Profiling#local-windows-lab-developer-laptop).
 
 
 ### Tiny JSON reverse is nginx’s best case on Linux
@@ -330,33 +330,33 @@ Linux nginx H1/H2/H3 POST completed (nginx.org mainline). TWP÷YARP H3 POST ≈ 
 
 ### Windows — lossy / high-RTT (H2 HOL / H3 loss)
 
-Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest` @ `f35e2335`. Source: [32647944069](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32647944069) (`compare-lossy`). H3 on GHA Windows collapses through the userspace UDP shim (sustain ≈ **0**); use the [laptop lab](Performance-Profiling#lossy--high-rtt-h2-hol--h3-packet-loss) for the Windows H3 signal.
+Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2) or UDP datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest` @ `ab9c0631`. Source: [32666017510](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32666017510) (`compare-lossy`). H3 on GHA Windows collapses through the userspace UDP shim (sustain ≈ **0**); use the [laptop lab](Performance-Profiling#lossy--high-rtt-h2-hol--h3-packet-loss) for the Windows H3 signal.
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
-| HTTP/1 · TLS | HTTP/1 · plain | 🥇 **662** | **662** | **640** | **640** | 🥇 **662** | **662** |
-| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **58** | **86** | **16** | **16** | **18** | **18** |
+| HTTP/1 · TLS | HTTP/1 · plain | 🥇 **662** | **662** | **635** | **635** | 🥇 **662** | **662** |
+| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **60** | **87** | **18** | **18** | **17** | **17** |
 | HTTP/3 · QUIC | HTTP/1 · plain | *Not measured* (GHA UDP-shim) | *Not measured* | *Not possible* (no QUIC) | *Not possible* | *Not measured* (GHA UDP-shim) | *Not measured* |
 
-H1: TWP÷YARP ≈ **1.00×** (662 / 662). H2: TWP÷YARP ≈ **3.22×** (58 / 18) with lossy-only **MaxConcurrentStreamsPerConnection=8** (`f35e2335`). Laptop Windows (same shim, `quic-http3`): TWP H3 ≈ **1,572** sustain vs H2 ≈ **14** (~**112×**). Absolute RPS is low because the shim delays every buffer/datagram — the point is the **protocol shape**.
+H1: TWP÷YARP ≈ **1.00×** (662 / 662). H2: TWP÷YARP ≈ **3.53×** (60 / 17) with lossy-only **MaxConcurrentStreamsPerConnection=8**. Laptop Windows (same shim, `quic-http3`): TWP H3 ≈ **1,572** sustain vs H2 ≈ **14** (~**112×**). Absolute RPS is low because the shim delays every buffer/datagram — the point is the **protocol shape**.
 
 ### Linux — lossy / high-RTT (H2 HOL / H3 loss)
 
-Median of **3** repeats @ `f35e2335`. Source: [32647944069](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32647944069) (`compare-lossy`; lossy H3 uses `quic-http3`).
+Median of **3** repeats @ `ab9c0631`. Source: [32666017510](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32666017510) (`compare-lossy`; lossy H3 uses `quic-http3`).
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
-| HTTP/1 · TLS | HTTP/1 · plain | **1,199** | **1,199** | 🥇 **1,205** | **1,205** | **1,192** | **1,192** |
-| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **318** | **318** | **40** | **42** | **40** | **44** |
-| HTTP/3 · QUIC | HTTP/1 · plain | **264** | **264** | **90** | **90** | 🥇 **346** | **346** |
+| HTTP/1 · TLS | HTTP/1 · plain | **1,195** | **1,195** | 🥇 **1,207** | **1,207** | **1,192** | **1,192** |
+| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **319** | **319** | **40** | **40** | **44** | **44** |
+| HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **321** | **321** | **90** | **90** | **316** | **316** |
 
-Same H1 story (nginx 1st **1,205**, TWP 2nd ahead of YARP ≈ **1.01×**). **H2:** TWP leads ≈ **8.0×** YARP (318 / 40). **H3:** YARP still edges this pass (346 vs 264 ≈ **0.76×**); nginx H3 terminate stays far below — TWP 2nd.
+Same H1 story (nginx 1st **1,207**, TWP 2nd ahead of YARP ≈ **1.00×**). **H2:** TWP leads ≈ **7.3×** YARP (319 / 44). **H3:** TWP leads ≈ **1.02×** YARP (321 / 316) after size-gated HEADERS+DATA coalesce for bodies ≥16 KiB (`ab9c0631`); nginx H3 terminate stays far below — TWP 1st among peers that complete.
 
 ### Architecture-sensitive
 
 `compare-arch` isolates slow app readers, origin-early response, H2 duplex, and WebSocket echo. See [TWP vs YARP IO model](Performance-Profiling#twp-vs-yarp-io-model). Laptop 1-rep numbers are on [Performance-Profiling](Performance-Profiling#architecture-sensitive).
 
-Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `21396a4d`. Source: [32608568872](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32608568872) (`compare-arch`). Slow consumer = 256 KiB GET, 16 KiB read + 8 ms sleep. Early response = 64 KiB POST, origin writes after 8 KiB. Duplex H2 = overlapping 64 KiB POST on H2 TLS↔H2 TLS. WebSocket = echo round-trips/sec.
+Median of **3** repeats on matched 4 vCPU / 16 GiB runners. Slow/early/duplex rows @ `21396a4d` ([32608568872](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32608568872)); WebSocket remasure @ `ab9c0631` ([32666019333](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32666019333)) (`compare-arch`). Slow consumer = 256 KiB GET, 16 KiB read + 8 ms sleep. Early response = 64 KiB POST, origin writes after 8 KiB. Duplex H2 = overlapping 64 KiB POST on H2 TLS↔H2 TLS. WebSocket = echo round-trips/sec.
 
 `compare-lossy` (slow **network**) is already published above; it is not a slow **app** reader.
 
@@ -371,7 +371,7 @@ Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `21396a4d`. Source:
 | Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | 🥇 **8,770** | **9,163** | **0** | **622** | **6,867** | **6,867** |
 | Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **4,041** | **4,256** | *Not possible* (no QUIC) | *Not possible* | **3,656** | **3,955** |
 | Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **35** | **1,102** | *Not possible* | *Not possible* | **0** | **2,235** |
-| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | **65,885** | **65,885** | **38,329** | **38,329** | 🥇 **66,934** | **66,934** |
+| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | 🥇 **23,951** | **23,951** | **13,082** | **13,082** | **21,032** | **21,032** |
 
 #### Linux
 
@@ -384,9 +384,9 @@ Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `21396a4d`. Source:
 | Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | 🥇 **3,695** | **3,695** | **0** | **2,128** | **2,402** | **2,555** |
 | Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **2,861** | **2,861** | **0** | **784** | **2,227** | **2,227** |
 | Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **16** | **210** | *Not possible* | *Not possible* | **13** | **1,884** |
-| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | **35,119** | **35,119** | 🥇 **39,090** | **39,090** | **32,230** | **32,230** |
+| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | **32,850** | **32,850** | 🥇 **34,594** | **34,594** | **28,450** | **28,450** |
 
-Slow consumer is sleep-bound; H1/H2/H3 sit in the same band once bodies stream. Early-response H3: TWP leads on both OS. Duplex H2: TWP holds a higher sustain than YARP on this pass (YARP peaks higher). WebSocket: YARP leads on Windows; Linux nginx leads.
+Slow consumer is sleep-bound; H1/H2/H3 sit in the same band once bodies stream. Early-response H3: TWP leads on both OS. Duplex H2: TWP holds a higher sustain than YARP on this pass (YARP peaks higher). WebSocket @ `ab9c0631` arch: TWP leads on Windows ≈ **1.14×** YARP (23,951 / 21,032); Linux nginx leads.
 
 ### TLS termination cost (H1 TLS → cleartext origin)
 
