@@ -60,7 +60,7 @@ Laptop High-perf / cool-paired Windows numbers live on [Performance Profiling �
 
 ### Saturation control
 
-Calibration table for the shared 4 vCPU loopback shape: how close client + origin are to saturated before ranking reverse peers. Tiny keep-alive H1 plain GET only. Run `workflow_dispatch` with `mode=compare-saturation`, then paste medians here. **Do not** add bombardier columns to the product matrices below — those stay matched `dotnet-httpclient`.
+Calibration for the shared 4 vCPU loopback shape: how close client + origin are to saturated before ranking reverse peers. Tiny keep-alive H1 plain GET only. Median of **3** repeats @ `0f4db45e` — [32667553188](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32667553188). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **% of origin-HttpClient** uses median **peak** RPS. **Do not** mix bombardier into the product matrices below — those stay matched `dotnet-httpclient`.
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
@@ -69,30 +69,32 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 | Arm | Generator | Notes |
 |---|---|---|
 | `origin-direct` | `dotnet-httpclient` | No proxy — origin ceiling under the same client used for publishable ratios |
-| `origin-direct-bombardier` | `bombardier` | Stronger client check (CI installs bombardier) |
+| `origin-direct-bombardier` | `bombardier` | External client check (CI installs bombardier) |
 | `bare-reverse-http1` / `nginx-reverse-http1` / `yarp-reverse-http1` / `twp-reverse-http1` | `dotnet-httpclient` | Same-session H1 plain reverse peers |
 
-**Windows** — *Not measured* (run `compare-saturation` on `windows-latest` and paste).
+**Windows** (`windows-latest`)
 
 | Arm | Generator | Sustain | Peak | % of origin-HttpClient |
 |---|---|---:|---:|---:|
-| origin-direct | dotnet-httpclient | — | — | 100% |
-| origin-direct-bombardier | bombardier | — | — | — |
-| bare-reverse-http1 | dotnet-httpclient | — | — | — |
-| nginx-reverse-http1 | dotnet-httpclient | — | — | — |
-| yarp-reverse-http1 | dotnet-httpclient | — | — | — |
-| twp-reverse-http1 | dotnet-httpclient | — | — | — |
+| origin-direct | dotnet-httpclient | **90,380** | **90,380** | **100%** |
+| origin-direct-bombardier | bombardier | **65,696** | **66,244** | **73.3%** |
+| bare-reverse-http1 | dotnet-httpclient | **45,173** | **45,173** | **50.0%** |
+| nginx-reverse-http1 | dotnet-httpclient | **25,660** | **27,096** | **30.0%** |
+| yarp-reverse-http1 | dotnet-httpclient | **38,885** | **38,885** | **43.0%** |
+| twp-reverse-http1 | dotnet-httpclient | **39,584** | **39,584** | **43.8%** |
 
-**Linux** — *Not measured* (run `compare-saturation` on `ubuntu-latest` and paste).
+**Linux** (`ubuntu-latest`)
 
 | Arm | Generator | Sustain | Peak | % of origin-HttpClient |
 |---|---|---:|---:|---:|
-| origin-direct | dotnet-httpclient | — | — | 100% |
-| origin-direct-bombardier | bombardier | — | — | — |
-| bare-reverse-http1 | dotnet-httpclient | — | — | — |
-| nginx-reverse-http1 | dotnet-httpclient | — | — | — |
-| yarp-reverse-http1 | dotnet-httpclient | — | — | — |
-| twp-reverse-http1 | dotnet-httpclient | — | — | — |
+| origin-direct | dotnet-httpclient | **72,194** | **72,194** | **100%** |
+| origin-direct-bombardier | bombardier | **42,636** | **42,636** | **59.1%** |
+| bare-reverse-http1 | dotnet-httpclient | **33,160** | **33,160** | **45.9%** |
+| nginx-reverse-http1 | dotnet-httpclient | **39,221** | **39,221** | **54.3%** |
+| yarp-reverse-http1 | dotnet-httpclient | **28,034** | **28,034** | **38.8%** |
+| twp-reverse-http1 | dotnet-httpclient | **32,516** | **32,516** | **45.0%** |
+
+On this shared-VM shape, reverse peers sit at roughly **30–55%** of the origin-direct HttpClient peak (Linux nginx leads reverse; Windows TWP/YARP lead nginx/Windows). Absolute RPS still swing by runner — use the **%** column.
 
 **How to read the tables**
 
