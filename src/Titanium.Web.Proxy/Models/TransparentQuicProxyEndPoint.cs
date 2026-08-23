@@ -180,6 +180,8 @@ public class TransparentQuicProxyEndPoint : TransparentBaseProxyEndPoint, IQuicI
     ///     satisfy the <see cref="TransparentBaseProxyEndPoint" /> contract. Use
     ///     <see cref="BeforeQuicAuthenticate" /> instead.
     /// </summary>
+    internal override bool HasBeforeSslAuthenticateHandlers => false;
+
     internal override Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
         BeforeSslAuthenticateEventArgs connectArgs, ILogger logger) => Task.CompletedTask;
 

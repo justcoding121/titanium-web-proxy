@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using System.Net.Security;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
@@ -61,6 +62,14 @@ public abstract class TransparentBaseProxyEndPoint : ProxyEndPoint
     /// </summary>
     internal string? CachedHttp11PoolKey;
     internal bool CachedHttp11PoolIsHttps;
+
+    /// <summary>
+    ///     Prebuilt server TLS options for fixed <see cref="ProxyEndPoint.GenericCertificate" /> reverse
+    ///     terminate (compare-tls-cost / sticky leaf). Avoids allocating options per new connection.
+    /// </summary>
+    internal SslServerAuthenticationOptions? CachedServerAuthOptions;
+
+    internal abstract bool HasBeforeSslAuthenticateHandlers { get; }
 
     internal abstract Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
         BeforeSslAuthenticateEventArgs connectArgs, ILogger logger);

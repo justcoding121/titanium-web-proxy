@@ -626,7 +626,15 @@ internal sealed class TwpProxyHost : IDisposable
     {
         var leaf = LoopbackCertificateAuthority.ServerCertificate;
         endPoint.GenericCertificate = leaf;
-        _ = proxy.CertificateManager.CreateSslCertificateContext(leaf);
+        var context = proxy.CertificateManager.CreateSslCertificateContext(leaf);
+        endPoint.CachedServerAuthOptions = new System.Net.Security.SslServerAuthenticationOptions
+        {
+            ServerCertificateContext = context,
+            ClientCertificateRequired = false,
+            EnabledSslProtocols = proxy.SupportedSslProtocols,
+            CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
+            ApplicationProtocols = [System.Net.Security.SslApplicationProtocol.Http11]
+        };
         _ = certName;
     }
 

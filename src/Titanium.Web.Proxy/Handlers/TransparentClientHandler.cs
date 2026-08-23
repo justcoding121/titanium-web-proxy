@@ -61,22 +61,31 @@ public partial class ProxyServer
             if (fixedCertHttp11Only)
             {
                 var httpsHostName = endPoint.GenericCertificateName;
-                var args = new BeforeSslAuthenticateEventArgs(this, clientConnection, cancellationTokenSource,
-                    httpsHostName);
+                UpstreamHttpProtocol? hookUpstreamProtocol = null;
+                var decryptSsl = true;
 
-                var forwardHost = endPoint.ForwardHost;
-                if (forwardHost != null && forwardHost.Length != 0)
-                    args.ForwardHttpsHostName = forwardHost;
-                if (endPoint.ForwardPort is int forwardPort)
-                    args.ForwardHttpsPort = forwardPort;
+                if (endPoint.HasBeforeSslAuthenticateHandlers)
+                {
+                    var args = new BeforeSslAuthenticateEventArgs(this, clientConnection, cancellationTokenSource,
+                        httpsHostName);
 
-                await endPoint.InvokeBeforeSslAuthenticate(this, args, logger);
-                transparentUpstreamProtocol = args.UpstreamHttpProtocol;
+                    var forwardHost = endPoint.ForwardHost;
+                    if (forwardHost != null && forwardHost.Length != 0)
+                        args.ForwardHttpsHostName = forwardHost;
+                    if (endPoint.ForwardPort is int forwardPort)
+                        args.ForwardHttpsPort = forwardPort;
+
+                    await endPoint.InvokeBeforeSslAuthenticate(this, args, logger);
+                    hookUpstreamProtocol = args.UpstreamHttpProtocol;
+                    decryptSsl = args.DecryptSsl;
+                }
+
+                transparentUpstreamProtocol = hookUpstreamProtocol;
 
                 if (cancellationTokenSource.IsCancellationRequested)
                     return;
 
-                if (!args.DecryptSsl)
+                if (!decryptSsl)
                 {
                     // Caller asked to tunnel without decrypt — fall back to the peek path below.
                     clientStream = new HttpClientStream(this, clientConnection, networkStream, BufferPool,
@@ -89,14 +98,20 @@ public partial class ProxyServer
                     try
                     {
                         sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false);
-                        var options = new SslServerAuthenticationOptions
+                        var options = endPoint.CachedServerAuthOptions;
+                        if (options == null)
                         {
-                            ServerCertificateContext = CertificateManager.CreateSslCertificateContext(certificate!),
-                            ClientCertificateRequired = false,
-                            EnabledSslProtocols = SupportedSslProtocols,
-                            CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
-                            ApplicationProtocols = SslExtensions.Http11ProtocolAsList
-                        };
+                            options = new SslServerAuthenticationOptions
+                            {
+                                ServerCertificateContext =
+                                    CertificateManager.CreateSslCertificateContext(certificate!),
+                                ClientCertificateRequired = false,
+                                EnabledSslProtocols = SupportedSslProtocols,
+                                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                                ApplicationProtocols = SslExtensions.Http11ProtocolAsList
+                            };
+                            endPoint.CachedServerAuthOptions = options;
+                        }
 
                         await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
                         clientConnection.NegotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;

@@ -664,22 +664,32 @@ public partial class ProxyServer
 
         args.HttpClient.Request.Locked = true;
 
-        // Sticky keep-alive (already leased): skip RetryPolicy + two closures per GET.
-        // On a typed stale-socket failure, drop the connection and fall through to retry.
-        if (serverConnection != null && !args.HttpClient.Request.UpgradeToWebSocket)
+        // Sticky keep-alive (already leased) or reverse fast-path tiny GET: skip RetryPolicy +
+        // two closures per request. New-connection TLS terminate hits the null-serverConnection
+        // branch every time — Schannel is the dominant cost; do not wrap it in ExecuteAsync.
+        if (!args.HttpClient.Request.UpgradeToWebSocket
+            && (serverConnection != null
+                || (args.IsFastPath
+                    && !args.HttpClient.Request.HasBody
+                    && !Enable100ContinueBehaviour
+                    && !args.EnableWinAuth)))
         {
-            args.HttpClient.SetConnection(serverConnection);
-            if (args.Timing != null)
-                args.Timing.MarkConnectionReady(serverConnection.Id, !serverConnection.ClaimFirstUse());
-
+            TcpServerConnection? connection = serverConnection;
             try
             {
+                connection ??= await TcpConnectionFactory.GetServerConnection(this, args, false,
+                    sslApplicationProtocol, noCache, cancellationToken);
+                args.HttpClient.SetConnection(connection);
+                if (args.Timing != null)
+                    args.Timing.MarkConnectionReady(connection.Id, !connection.ClaimFirstUse());
+
                 await HandleHttpSessionRequest(args);
-                return new RetryResult(serverConnection, null, true);
+                return new RetryResult(connection, null, true);
             }
             catch (RetryableServerConnectionException)
             {
-                await TcpConnectionFactory.Release(serverConnection, true);
+                if (connection != null)
+                    await TcpConnectionFactory.Release(connection, true);
                 serverConnection = null;
             }
         }

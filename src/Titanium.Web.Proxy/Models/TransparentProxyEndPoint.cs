@@ -139,6 +139,8 @@ public class TransparentProxyEndPoint : TransparentBaseProxyEndPoint, IQuicInbou
         BeforeQuicAuthenticateEventArgs args, ILogger logger) =>
         InvokeBeforeQuicAuthenticate(proxyServer, args, logger);
 
+    internal override bool HasBeforeSslAuthenticateHandlers => BeforeSslAuthenticate != null;
+
     internal override Task InvokeBeforeSslAuthenticate(ProxyServer proxyServer,
         BeforeSslAuthenticateEventArgs connectArgs, ILogger logger)
     {

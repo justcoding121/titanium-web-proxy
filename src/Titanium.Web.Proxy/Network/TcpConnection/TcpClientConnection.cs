@@ -98,28 +98,47 @@ internal class TcpClientConnection : IDisposable
 
         if (disposing)
         {
-            // No finalizer: sockets already have safe-handle finalization, and scheduling
-            // Task.Run / logging from a finalizer thread is unsafe.
-            Task.Run(async () =>
+            // Prefer peer-first close (push TIME_WAIT to the client) only when explicitly requested.
+            // Default TcpTimeWaitSeconds==0: close immediately — matches Kestrel SocketConnection
+            // and avoids scheduling ~1 Task.Delay per new-connection handshake onto the worker pool.
+            if (ProxyServer.TcpTimeWaitSeconds == 0)
             {
-                // delay calling tcp connection close()
-                // so that client have enough time to call close first.
-                // This way we can push tcp Time_Wait to client side when possible.
-                await Task.Delay(1000);
                 if (trackClientConnectionCount)
                     ProxyServer.UpdateClientConnectionCount(false);
 
-                if (tcpClientSocket == null) return;
-                try
+                if (tcpClientSocket != null)
                 {
-                    tcpClientSocket.Close();
+                    try
+                    {
+                        tcpClientSocket.Close();
+                    }
+                    catch (Exception ex)
+                    {
+                        Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
+                            "Failed to close a client socket during disposal.", ex);
+                    }
                 }
-                catch (Exception ex)
+            }
+            else
+            {
+                Task.Run(async () =>
                 {
-                    Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
-                        "Failed to close a client socket during disposal.", ex);
-                }
-            });
+                    await Task.Delay(1000);
+                    if (trackClientConnectionCount)
+                        ProxyServer.UpdateClientConnectionCount(false);
+
+                    if (tcpClientSocket == null) return;
+                    try
+                    {
+                        tcpClientSocket.Close();
+                    }
+                    catch (Exception ex)
+                    {
+                        Logging.ProxyDiagnostics.ReportBenign(ProxyServer.Logger,
+                            "Failed to close a client socket during disposal.", ex);
+                    }
+                });
+            }
         }
 
         disposed = true;

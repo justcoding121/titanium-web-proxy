@@ -2011,32 +2011,56 @@ public partial class ProxyServer : IDisposable
                     }
 
                     var acceptedClient = tcpClient;
-                    // Session lifetime is tracked separately; opt out of a process-wide token here.
-                    Task.Run(async () =>
-                    {
-                        // HandleClient runs detached (fire-and-forget); an unobserved exception here would
-                        // otherwise never surface anywhere and, depending on the .NET unobserved-task-
-                        // exception policy, could tear down the process. Always report it instead.
-                        try
-                        {
-                            await HandleClient(acceptedClient, endPoint);
-                        }
-                        catch (Exception ex)
-                        {
-                            ProxyDiagnostics.ReportException(logger, "Unhandled exception while handling a client connection", ex);
-                        }
-                        finally
-                        {
-                            // Synchronous, unconditional release: never tied to the TIME_WAIT-delayed
-                            // decrement in TcpClientConnection.Dispose, so a burst of short-lived
-                            // connections cannot starve admission for a following burst.
-                            ReleaseClientConnection(endPoint);
-                        }
-                    }, CancellationToken.None);
+                    // Match Kestrel ConnectionDispatcher: queue as IThreadPoolWorkItem (no Task.Run /
+                    // ExecutionContext capture) before the TLS handshake starts.
+                    ThreadPool.UnsafeQueueUserWorkItem(
+                        new AcceptedClientWorkItem(this, acceptedClient, endPoint), preferLocal: false);
                 }
             }
             else
                 tcpClient.Dispose();
+        }
+    }
+
+    /// <summary>
+    ///     Accept-path dispatch work item — mirrors Kestrel's <c>KestrelConnection</c> queuing.
+    /// </summary>
+    private sealed class AcceptedClientWorkItem : IThreadPoolWorkItem
+    {
+        private readonly ProxyServer server;
+        private readonly Socket socket;
+        private readonly ProxyEndPoint endPoint;
+
+        public AcceptedClientWorkItem(ProxyServer server, Socket socket, ProxyEndPoint endPoint)
+        {
+            this.server = server;
+            this.socket = socket;
+            this.endPoint = endPoint;
+        }
+
+        public void Execute()
+        {
+            _ = server.HandleAcceptedClientAsync(socket, endPoint);
+        }
+    }
+
+    private async Task HandleAcceptedClientAsync(Socket acceptedClient, ProxyEndPoint endPoint)
+    {
+        try
+        {
+            await HandleClient(acceptedClient, endPoint);
+        }
+        catch (Exception ex)
+        {
+            ProxyDiagnostics.ReportException(logger,
+                "Unhandled exception while handling a client connection", ex);
+        }
+        finally
+        {
+            // Synchronous, unconditional release: never tied to the TIME_WAIT-delayed
+            // decrement in TcpClientConnection.Dispose, so a burst of short-lived
+            // connections cannot starve admission for a following burst.
+            ReleaseClientConnection(endPoint);
         }
     }
 
@@ -2048,7 +2072,11 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     private bool TryAdmitClientConnection(ProxyEndPoint endPoint)
     {
-        var mode = policyModes[PolicyFamily.AdmissionControl];
+        // Kestrel only installs ConnectionLimitMiddleware when a limit is configured. Skip the
+        // PolicyModes dictionary lookup when both caps are unlimited (probe / typical reverse).
+        var mode = MaxConcurrentClientConnections is null && endPoint.MaxConcurrentClients is null
+            ? PolicyMode.Disabled
+            : policyModes[PolicyFamily.AdmissionControl];
 
         if (!TryAdmitGlobal(mode))
         {
@@ -2173,10 +2201,12 @@ public partial class ProxyServer : IDisposable
     /// <returns>The task.</returns>
     private async Task HandleClient(Socket tcpClientSocket, ProxyEndPoint endPoint)
     {
-        tcpClientSocket.ReceiveTimeout = ConnectionTimeOutSeconds * 1000;
-        tcpClientSocket.SendTimeout = ConnectionTimeOutSeconds * 1000;
-
-        tcpClientSocket.LingerState = new LingerOption(true, TcpTimeWaitSeconds);
+        // Match Kestrel SocketConnectionListener: only NoDelay is set on accept (already applied
+        // in OnAcceptConnection). Socket.ReceiveTimeout/SendTimeout do not bound our async reads
+        // (see ClientHeaderTimeoutSeconds). SO_LINGER(abortive) was previously always setsockopt'd
+        // even when TcpTimeWaitSeconds==0 — skip the default-0 case to avoid per-NC syscall noise.
+        if (TcpTimeWaitSeconds != 0)
+            tcpClientSocket.LingerState = new LingerOption(true, TcpTimeWaitSeconds);
 
         if (EnableTcpKeepAlive)
             tcpClientSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);

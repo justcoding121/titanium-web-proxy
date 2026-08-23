@@ -297,7 +297,13 @@ internal class TcpConnectionFactory : IDisposable
     {
         List<SslApplicationProtocol>? applicationProtocols = null;
         if (applicationProtocol != default)
-            applicationProtocols = new List<SslApplicationProtocol> { applicationProtocol };
+        {
+            applicationProtocols = applicationProtocol == SslApplicationProtocol.Http11
+                ? SslExtensions.Http11ProtocolAsList
+                : applicationProtocol == SslApplicationProtocol.Http2
+                    ? SslExtensions.Http2ProtocolAsList
+                    : new List<SslApplicationProtocol> { applicationProtocol };
+        }
 
         var customUpStreamProxy = session.CustomUpStreamProxy;
 
@@ -356,7 +362,15 @@ internal class TcpConnectionFactory : IDisposable
     {
         List<SslApplicationProtocol>? applicationProtocols = null;
         if (applicationProtocol != default)
-            applicationProtocols = new List<SslApplicationProtocol> { applicationProtocol };
+        {
+            // Reuse static singleton lists for the common ALPN values — avoids a List<> alloc on
+            // every new-connection TLS terminate (and every pooled origin get).
+            applicationProtocols = applicationProtocol == SslApplicationProtocol.Http11
+                ? SslExtensions.Http11ProtocolAsList
+                : applicationProtocol == SslApplicationProtocol.Http2
+                    ? SslExtensions.Http2ProtocolAsList
+                    : new List<SslApplicationProtocol> { applicationProtocol };
+        }
 
         return GetServerConnection(proxyServer, session, isConnect, applicationProtocols, noCache, false,
             cancellationToken)!;
