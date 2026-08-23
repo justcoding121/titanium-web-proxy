@@ -311,25 +311,25 @@ Isolates keep-alive tiny GET vs **new connection per request** (handshake-domina
 
 #### Windows
 
-Median of **3** repeats on `windows-latest` @ `03159694` (H1 terminate session-lite). Source: Actions [32622605159](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32622605159) (`compare-tls-cost`). Absolute RPS on GHA swings hard; prefer **TWP÷YARP**. Gate: **>1.00×** YARP (second when nginx leads).
+Median of **3** repeats on `windows-latest` @ `13059143` (origin Connection strip on H1 terminate lite). Source: Actions [32625349927](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32625349927) (`compare-tls-cost`). Absolute RPS on GHA swings hard; prefer **TWP÷YARP**. Gate: **>1.00×** YARP (second when nginx leads).
 
 | Workload | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---:|---:|---:|---:|---:|---:|
-| Keep-alive · tiny GET | 🟢 **19,363** | **19,363** | **8,494** | **8,840** | **18,300** | **18,300** |
-| New-connection · tiny GET | **621** | **621** | **242** | **247** | 🟢 **697** | **697** |
-| Keep-alive · 256 KiB GET | 🟢 **2,773** | **2,889** | **231** | **253** | **2,588** | **2,686** |
+| Keep-alive · tiny GET | 🟢 **23,320** | **23,320** | **11,801** | **12,719** | **21,827** | **21,827** |
+| New-connection · tiny GET | 🟢 **708** | **708** | **235** | **238** | **701** | **701** |
+| Keep-alive · 256 KiB GET | 🟢 **2,840** | **2,891** | **220** | **236** | **2,582** | **2,594** |
 
 #### Linux
 
-Median of **3** repeats @ `03159694`. Source: Actions [32622605159](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32622605159) (`compare-tls-cost`).
+Median of **3** repeats @ `13059143`. Source: Actions [32625349927](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32625349927) (`compare-tls-cost`).
 
 | Workload | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---:|---:|---:|---:|---:|---:|
-| Keep-alive · tiny GET | **37,593** | **37,593** | 🟢 **44,164** | **44,164** | **32,328** | **32,328** |
-| New-connection · tiny GET | **1,414** | **1,425** | 🟢 **1,589** | **1,589** | **1,504** | **1,504** |
-| Keep-alive · 256 KiB GET | 🟢 **3,821** | **3,821** | **3,722** | **3,722** | **2,957** | **2,957** |
+| Keep-alive · tiny GET | **24,241** | **24,241** | 🟢 **29,229** | **29,229** | **21,058** | **21,058** |
+| New-connection · tiny GET | **999** | **999** | 🟢 **1,023** | **1,024** | **986** | **986** |
+| Keep-alive · 256 KiB GET | 🟢 **2,776** | **2,776** | **2,685** | **2,685** | **2,194** | **2,194** |
 
-**Verdict:** Keep-alive tiny/256 KiB: TWP **>1.00×** YARP on both OS (nginx leads Linux keep-alive tiny — TWP second). New-connection CI @ `03159694` still Win ≈ **0.89×** / Linux ≈ **0.94×**. Cool root cause: lite path forwarded client `Connection: close` to the origin, defeating keep-alive pooling (Bare Connect-every-time still beat TWP). After strip-on-origin-write: cool c=32 mean ≈ **1.06×** YARP (1035/939 & 1002/990). CI remasure pending.
+**Verdict:** All three workloads **>1.00×** YARP on both OS. nginx still leads Linux keep-alive tiny and Linux NC — TWP **second**, YARP third. Root cause for the old NC gap: lite path forwarded client `Connection: close` to the origin (pool miss every request).
 
 ## Other measurements
 
