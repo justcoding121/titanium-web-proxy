@@ -31,7 +31,23 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-terminate
 
 Client TLS → cleartext origin across H1 TLS terminate, H2→H1, h2c→H1, and H3→H1 arms.
 
-Every `--ramp` arm is **three OS processes**: parent load generator, `--serve-origin` child, `--serve-proxy` child. The parent seeds a temp test CA (`TWP_RPS_CERT_DIR`) so HTTPS/QUIC origin and proxy share the same root. Combined `--serve` remains for local debugging only; it is not on the ramp path. Absolute RPS from older combined TLS/QUIC-origin cells is not comparable to split runs — prefer TWP÷peer ratios.
+Every `--ramp` arm is **three OS processes**: parent load generator, `--serve-origin` child, `--serve-proxy` child (except **origin-direct** arms, which omit the proxy child). The parent seeds a temp test CA (`TWP_RPS_CERT_DIR`) so HTTPS/QUIC origin and proxy share the same root. Combined `--serve` remains for local debugging only; it is not on the ramp path. Absolute RPS from older combined TLS/QUIC-origin cells is not comparable to split runs — prefer TWP÷peer ratios.
+
+## Saturation control (origin ceiling)
+
+Calibration only — not a product ranking matrix. Shows how close the client/origin are to saturated before ranking reverse peers on the same tiny keep-alive H1 plain GET.
+
+```powershell
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
+```
+
+| Arm | Meaning |
+|---|---|
+| `origin-direct` | HttpClient → origin child (no proxy) |
+| `origin-direct-bombardier` | bombardier → origin (skipped if not on PATH; CI installs it) |
+| `bare-reverse-http1` / `nginx-reverse-http1` / `yarp-reverse-http1` / `twp-reverse-http1` | Same-session H1 plain reverse peers |
+
+Summary prints each peak as **% of origin-direct HttpClient** (and vs bombardier when present). Paste CI medians into the wiki [Performance — Saturation control](../../wiki/Performance.md#saturation-control) section. Do not mix bombardier into the publishable TWP÷YARP÷nginx matrices.
 
 ## Heavier reverse workloads (bodies / POST / lossy / TLS cost)
 

@@ -11,6 +11,7 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 - [Measurement environment](#measurement-environment)
     - [Windows (GitHub-hosted `windows-latest`)](#windows-github-hosted-windows-latest)
     - [Linux (GitHub-hosted `ubuntu-latest`)](#linux-github-hosted-ubuntu-latest)
+    - [Saturation control](#saturation-control)
 - [Windows — Titanium vs nginx vs YARP](#windows--titanium-vs-nginx-vs-yarp)
 - [Linux — Titanium vs nginx vs YARP](#linux--titanium-vs-nginx-vs-yarp)
     - [Tiny JSON reverse is nginx’s best case on Linux](#tiny-json-reverse-is-nginxs-best-case-on-linux)
@@ -29,7 +30,7 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 
 ## Measurement environment
 
-Both OS use the standard public-repo GitHub-hosted runner class (**4 vCPU / 16 GiB / 14 GB SSD**). Same harness knobs (`workflow_dispatch` [RPS saturation](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/rps-saturation.yml): warmup 2s / measure 8s; concurrency 8, 16, 32, 64; median of 3 repeats). Every `--ramp` arm is **three OS processes** (parent load generator + origin child + proxy child). Prefer **TWP÷YARP** / **TWP÷nginx** ratios over absolute RPS.
+Both OS use the standard public-repo GitHub-hosted runner class (**4 vCPU / 16 GiB / 14 GB SSD**). Same harness knobs (`workflow_dispatch` [RPS saturation](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/rps-saturation.yml): warmup 2s / measure 8s; concurrency 8, 16, 32, 64; median of 3 repeats). Every `--ramp` arm is **three OS processes** (parent load generator + origin child + proxy child), except **origin-direct** arms (load gen + origin only). Prefer **TWP÷YARP** / **TWP÷nginx** ratios over absolute RPS.
 
 Laptop High-perf / cool-paired Windows numbers live on [Performance Profiling — Local Windows lab](Performance-Profiling#local-windows-lab-developer-laptop). Do not mix those absolutes into the tables below.
 
@@ -57,6 +58,42 @@ Laptop High-perf / cool-paired Windows numbers live on [Performance Profiling �
 | YARP | Yarp.ReverseProxy **2.3.0** |
 | Harness | RpsLoadProbe Release; median of 3 repeats where noted |
 
+### Saturation control
+
+Calibration table for the shared 4 vCPU loopback shape: how close client + origin are to saturated before ranking reverse peers. Tiny keep-alive H1 plain GET only. Run `workflow_dispatch` with `mode=compare-saturation`, then paste medians here. **Do not** add bombardier columns to the product matrices below — those stay matched `dotnet-httpclient`.
+
+```powershell
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
+```
+
+| Arm | Generator | Notes |
+|---|---|---|
+| `origin-direct` | `dotnet-httpclient` | No proxy — origin ceiling under the same client used for publishable ratios |
+| `origin-direct-bombardier` | `bombardier` | Stronger client check (CI installs bombardier) |
+| `bare-reverse-http1` / `nginx-reverse-http1` / `yarp-reverse-http1` / `twp-reverse-http1` | `dotnet-httpclient` | Same-session H1 plain reverse peers |
+
+**Windows** — *Not measured* (run `compare-saturation` on `windows-latest` and paste).
+
+| Arm | Generator | Sustain | Peak | % of origin-HttpClient |
+|---|---|---:|---:|---:|
+| origin-direct | dotnet-httpclient | — | — | 100% |
+| origin-direct-bombardier | bombardier | — | — | — |
+| bare-reverse-http1 | dotnet-httpclient | — | — | — |
+| nginx-reverse-http1 | dotnet-httpclient | — | — | — |
+| yarp-reverse-http1 | dotnet-httpclient | — | — | — |
+| twp-reverse-http1 | dotnet-httpclient | — | — | — |
+
+**Linux** — *Not measured* (run `compare-saturation` on `ubuntu-latest` and paste).
+
+| Arm | Generator | Sustain | Peak | % of origin-HttpClient |
+|---|---|---:|---:|---:|
+| origin-direct | dotnet-httpclient | — | — | 100% |
+| origin-direct-bombardier | bombardier | — | — | — |
+| bare-reverse-http1 | dotnet-httpclient | — | — | — |
+| nginx-reverse-http1 | dotnet-httpclient | — | — | — |
+| yarp-reverse-http1 | dotnet-httpclient | — | — | — |
+| twp-reverse-http1 | dotnet-httpclient | — | — | — |
+
 **How to read the tables**
 
 - **Mode**: **Reverse** = transparent fixed-forward (may TLS-terminate to a cleartext origin, or re-encrypt to a configured HTTPS/QUIC origin). **MITM** = both legs are visible in the clear inside TWP — either by decrypting client TLS/QUIC (forged cert / CONNECT) **or** by accepting an already-cleartext client (explicit HTTP proxy / inspectable transparent reverse) while still speaking plain or TLS to the origin. nginx and YARP cannot do MITM. **HTTP/3 has no cleartext client** (QUIC always encrypted).
@@ -74,6 +111,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-post
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-lossy
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-tls-cost
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-arch
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 ```
 
 ## Windows — Titanium vs nginx vs YARP

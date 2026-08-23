@@ -29,6 +29,8 @@ on:
           - compare-lossy
           - compare-tls-cost
           - compare-arch
+          - compare-saturation
+          - origin-direct
           - compare
           - compare-tls
           - reverse-http1

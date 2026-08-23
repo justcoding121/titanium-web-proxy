@@ -12,9 +12,9 @@ namespace Titanium.Web.Proxy.RpsLoadProbe;
 internal sealed class ChildProcessStack : IAsyncDisposable
 {
     private readonly Process? originProcess;
-    private readonly Process proxyProcess;
+    private readonly Process? proxyProcess;
     private readonly StreamReader originStdout;
-    private readonly StreamReader proxyStdout;
+    private readonly StreamReader? proxyStdout;
 
     public Uri TargetUri { get; }
     public string TargetUrl => TargetUri.ToString();
@@ -29,9 +29,9 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     public int? OriginQuicPort { get; }
 
     /// <summary>
-    ///     PID of the proxy child. Use for <c>dotnet-dump</c> / <c>dotnet-trace</c>.
+    ///     PID of the proxy child. Null for origin-direct arms. Use for <c>dotnet-dump</c> / <c>dotnet-trace</c>.
     /// </summary>
-    public int ProxyProcessId { get; }
+    public int? ProxyProcessId { get; }
 
     /// <summary>PID of the origin child. Ramp always process-splits; never null after <see cref="StartAsync"/>.</summary>
     public int? OriginProcessId { get; }
@@ -39,8 +39,11 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     /// <summary>True when origin and proxy share one OS process (leftover combined <c>--serve</c> only).</summary>
     public bool IsCombinedServe { get; }
 
-    private ChildProcessStack(Process? originProcess, StreamReader originStdout, Process proxyProcess,
-        StreamReader proxyStdout, Uri targetUri, IReadOnlyList<Uri> targetUris, string? explicitProxyUrl,
+    /// <summary>True when the arm hits the origin child with no proxy process.</summary>
+    public bool IsOriginDirect => proxyProcess is null && originProcess is not null;
+
+    private ChildProcessStack(Process? originProcess, StreamReader originStdout, Process? proxyProcess,
+        StreamReader? proxyStdout, Uri targetUri, IReadOnlyList<Uri> targetUris, string? explicitProxyUrl,
         string? nginxVersion, Version requestHttpVersion, HttpVersionPolicy versionPolicy,
         string? loadGenerator = null, int? quicPort = null, int? originQuicPort = null,
         string? yarpVersion = null)
@@ -59,9 +62,10 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         LoadGenerator = loadGenerator;
         QuicPort = quicPort;
         OriginQuicPort = originQuicPort;
-        ProxyProcessId = proxyProcess.Id;
-        IsCombinedServe = originProcess == null || ReferenceEquals(originProcess, proxyProcess);
-        OriginProcessId = IsCombinedServe ? null : originProcess!.Id;
+        ProxyProcessId = proxyProcess?.Id;
+        IsCombinedServe = originProcess == null ||
+                          (proxyProcess != null && ReferenceEquals(originProcess, proxyProcess));
+        OriginProcessId = IsCombinedServe ? null : originProcess?.Id;
     }
 
     public static async Task<ChildProcessStack> StartAsync(ProbeMode mode, string? nginxPath,
@@ -83,6 +87,19 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         {
             TryKill(origin);
             throw;
+        }
+
+        if (mode == ProbeMode.OriginDirect)
+        {
+            var originHttp = Require(originLines, "origin_http");
+            var originOnlyTarget = new Uri(originHttp);
+            var originOnly = new ChildProcessStack(origin, origin.StandardOutput, proxyProcess: null,
+                proxyStdout: null, originOnlyTarget, [originOnlyTarget], explicitProxyUrl: null,
+                nginxVersion: null, System.Net.HttpVersion.Version11, HttpVersionPolicy.RequestVersionOrLower,
+                originQuicPort: TryParseInt(originLines, "origin_quic_port"));
+            if (originOnly.OriginProcessId is null)
+                throw new InvalidOperationException("Origin-direct requires an origin child.");
+            return originOnly;
         }
 
         var originHttpPort = TryParseUrlPort(originLines, "origin_http");
@@ -248,13 +265,13 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         TryKill(proxyProcess);
-        if (!ReferenceEquals(originProcess, proxyProcess))
+        if (originProcess != null && !ReferenceEquals(originProcess, proxyProcess))
             TryKill(originProcess);
         await Task.CompletedTask;
-        if (!ReferenceEquals(originStdout, proxyStdout))
+        if (proxyStdout == null || !ReferenceEquals(originStdout, proxyStdout))
             originStdout.Dispose();
-        proxyStdout.Dispose();
-        proxyProcess.Dispose();
+        proxyStdout?.Dispose();
+        proxyProcess?.Dispose();
         if (originProcess != null && !ReferenceEquals(originProcess, proxyProcess))
             originProcess.Dispose();
     }

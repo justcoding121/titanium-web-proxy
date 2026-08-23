@@ -95,6 +95,12 @@ internal enum ProbeMode
     CompareTlsCost,
     /// <summary>Architecture-sensitive reverse: slow consumer, early response, H2 duplex, WebSocket echo.</summary>
     CompareArch,
+    /// <summary>
+    /// Saturation control: origin-direct (+ optional bombardier) and H1 plain reverse peers in one session.
+    /// </summary>
+    CompareSaturation,
+    /// <summary>Load generator → origin child only (no proxy); calibration ceiling for reverse peers.</summary>
+    OriginDirect,
     /// <summary>Managed reverse peer H2 TLS → HTTPS HTTP/2 origin.</summary>
     YarpReverseHttp2ToHttps,
     ExplicitPoolSweep
@@ -135,7 +141,16 @@ internal static class RampOrchestrator
 
         ProbeLog.Info(MachineInfo.FormatReport(nginxVersion));
         ProbeLog.Info("Close browsers and other heavy apps before a publishable run.");
-        ProbeLog.Info("Process split: every arm is three OS processes (load generator + origin child + proxy child).");
+        if (options.Mode is ProbeMode.CompareSaturation or ProbeMode.OriginDirect)
+        {
+            ProbeLog.Info(
+                "Process split: origin-direct arms are two OS processes (load generator + origin child); proxy arms remain three.");
+        }
+        else
+        {
+            ProbeLog.Info("Process split: every arm is three OS processes (load generator + origin child + proxy child).");
+        }
+
         if (options.Repeats > 1)
             ProbeLog.Info($"Repeats={options.Repeats} (median peak RPS per arm — dampens GHA runner noise).");
         ProbeLog.Info(string.Empty);
@@ -147,7 +162,8 @@ internal static class RampOrchestrator
         if (nginxExe != null && !nginxHttp3)
             ProbeLog.Info("nginx has no http_v3_module — skipping HTTP/3 native reverse arms (install nginx.org mainline on Linux).");
 
-        var arms = ResolveArms(options.Mode, nginxExe != null, nginxHttp3).ToList();
+        var bombardierAvailable = BombardierLoadGenerator.IsAvailable();
+        var arms = ResolveArms(options.Mode, nginxExe != null, nginxHttp3, bombardierAvailable).ToList();
         if (!System.Net.Quic.QuicListener.IsSupported)
         {
             var removed = arms.RemoveAll(a =>
@@ -174,7 +190,7 @@ internal static class RampOrchestrator
                 or ProbeMode.Compare or ProbeMode.CompareHttp2
                 or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame
                 or ProbeMode.CompareBodies or ProbeMode.ComparePost or ProbeMode.CompareLossy
-                or ProbeMode.CompareTlsCost or ProbeMode.CompareArch)
+                or ProbeMode.CompareTlsCost or ProbeMode.CompareArch or ProbeMode.CompareSaturation)
             && nginxExe == null)
         {
             ProbeLog.Info(NginxHost.NginxMissingMessage());
@@ -203,7 +219,9 @@ internal static class RampOrchestrator
             }
         }
 
-        if (repeats > 1)
+        if (options.Mode is ProbeMode.CompareSaturation)
+            WriteSaturationSummary(peakByArm);
+        else if (repeats > 1)
             WriteMedianSummary(peakByArm);
 
         await csv.FlushAsync(cancellationToken);
@@ -240,6 +258,44 @@ internal static class RampOrchestrator
         }
     }
 
+    private static void WriteSaturationSummary(Dictionary<string, List<double>> peakByArm)
+    {
+        ProbeLog.Info("=== saturation control (median peaks) ===");
+        double? originDirect = null, originBombardier = null;
+        var medians = new List<(string Name, double Median, int N)>();
+        foreach (var (name, peaks) in peakByArm.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        {
+            var median = Median(peaks);
+            medians.Add((name, median, peaks.Count));
+            ProbeLog.Info($"  {name}: median_peak_rps={median:F1} (n={peaks.Count})");
+            if (name.Equals("origin-direct", StringComparison.Ordinal))
+                originDirect = median;
+            if (name.Equals("origin-direct-bombardier", StringComparison.Ordinal))
+                originBombardier = median;
+        }
+
+        foreach (var (name, median, _) in medians)
+        {
+            if (name.Equals("origin-direct", StringComparison.Ordinal) ||
+                name.Equals("origin-direct-bombardier", StringComparison.Ordinal))
+                continue;
+
+            if (originDirect is > 0)
+            {
+                var pct = median * 100.0 / originDirect.Value;
+                ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
+                    $"  {name}: {pct:F1}% of origin-direct"));
+            }
+
+            if (originBombardier is > 0)
+            {
+                var pct = median * 100.0 / originBombardier.Value;
+                ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
+                    $"  {name}: {pct:F1}% of origin-direct-bombardier"));
+            }
+        }
+    }
+
     private static double Median(List<double> values)
     {
         var sorted = values.OrderBy(x => x).ToList();
@@ -250,7 +306,7 @@ internal static class RampOrchestrator
     }
 
     private sealed record ArmSpec(string Name, ProbeMode Mode, int? MaxCachedConnections,
-        WorkloadOptions? Workload = null);
+        WorkloadOptions? Workload = null, string? PreferredGenerator = null);
 
     private static IReadOnlyList<ArmSpec> HeavierReverseArms(bool nginxAvailable, bool nginxHttp3Available,
         WorkloadOptions workload, string nameSuffix, bool includeHttp3 = true)
@@ -283,10 +339,12 @@ internal static class RampOrchestrator
     }
 
     private static IReadOnlyList<ArmSpec> ResolveArms(ProbeMode mode, bool nginxAvailable,
-        bool nginxHttp3Available = false)
+        bool nginxHttp3Available = false, bool bombardierAvailable = false)
     {
         return mode switch
         {
+            ProbeMode.OriginDirect => [new("origin-direct", ProbeMode.OriginDirect, null)],
+            ProbeMode.CompareSaturation => BuildSaturationArms(nginxAvailable, bombardierAvailable),
             ProbeMode.ReverseHttp1 => [new("twp-reverse-http1", ProbeMode.ReverseHttp1, null)],
             ProbeMode.BareReverseHttp1 => [new("bare-reverse-http1", ProbeMode.BareReverseHttp1, null)],
             ProbeMode.NginxReverseHttp1 => nginxAvailable
@@ -590,6 +648,26 @@ internal static class RampOrchestrator
         };
     }
 
+    private static IReadOnlyList<ArmSpec> BuildSaturationArms(bool nginxAvailable, bool bombardierAvailable)
+    {
+        var arms = new List<ArmSpec>
+        {
+            new("origin-direct", ProbeMode.OriginDirect, null)
+        };
+        if (bombardierAvailable)
+        {
+            arms.Add(new("origin-direct-bombardier", ProbeMode.OriginDirect, null,
+                PreferredGenerator: BombardierLoadGenerator.GeneratorName));
+        }
+
+        arms.Add(new("bare-reverse-http1", ProbeMode.BareReverseHttp1, null));
+        if (nginxAvailable)
+            arms.Add(new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null));
+        arms.Add(new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null));
+        arms.Add(new("twp-reverse-http1", ProbeMode.ReverseHttp1, null));
+        return arms;
+    }
+
     private static IReadOnlyList<ArmSpec> BuildTlsCostArms(bool nginxAvailable)
     {
         var tinyKa = WorkloadOptions.ForTlsKeepAlive(WorkloadOptions.TinyJsonBytes);
@@ -688,6 +766,13 @@ internal static class RampOrchestrator
             var lastGoodConcurrency = 0;
 
             var useQuic = (stackUsesQuicGenerator || forceLossyQuicGenerator) && quicPort is > 0;
+            var useBombardier = string.Equals(arm.PreferredGenerator, BombardierLoadGenerator.GeneratorName,
+                StringComparison.OrdinalIgnoreCase);
+            var generatorLabel = useQuic
+                ? "quic-http3"
+                : useBombardier
+                    ? BombardierLoadGenerator.GeneratorName
+                    : "dotnet-httpclient";
             var loadOptions = new LoadRequestOptions
             {
                 Target = targetUri,
@@ -699,8 +784,12 @@ internal static class RampOrchestrator
             };
 
             ProbeLog.Info(
-                $"  target={targetUri} workload={workload.Suffix} proxy={(stack.ExplicitProxyUrl ?? "(direct-to-listen)")} http={stack.RequestHttpVersion} generator={(useQuic ? "quic-http3" : "dotnet-httpclient")} maxCached={(maxCached?.ToString() ?? "default")}");
-            if (stack.IsCombinedServe)
+                $"  target={targetUri} workload={workload.Suffix} proxy={(stack.ExplicitProxyUrl ?? "(direct-to-listen)")} http={stack.RequestHttpVersion} generator={generatorLabel} maxCached={(maxCached?.ToString() ?? "default")}");
+            if (stack.IsOriginDirect)
+            {
+                ProbeLog.Info($"  attach: origin-only pid={stack.OriginProcessId}");
+            }
+            else if (stack.IsCombinedServe)
             {
                 ProbeLog.Info(
                     $"  attach: combined --serve pid={stack.ProxyProcessId} (origin+proxy same process; traces mix Kestrel origin with TWP)");
@@ -725,6 +814,11 @@ internal static class RampOrchestrator
                         await QuicHttp3LoadGenerator.WarmupAsync(ep, "localhost", authority,
                             concurrency, options.Warmup, cancellationToken, workload);
                     }
+                    else if (useBombardier)
+                    {
+                        await BombardierLoadGenerator.WarmupAsync(targetUri, concurrency, options.Warmup, workload,
+                            cancellationToken);
+                    }
                     else
                     {
                         await EmbeddedLoadGenerator.WarmupAsync(loadOptions, concurrency, options.Warmup, cancellationToken);
@@ -738,6 +832,11 @@ internal static class RampOrchestrator
                         result = await QuicHttp3LoadGenerator.RunAsync(ep, "localhost", authority,
                             concurrency, options.StepDuration, cancellationToken, workload);
                     }
+                    else if (useBombardier)
+                    {
+                        result = await BombardierLoadGenerator.RunAsync(targetUri, concurrency, options.StepDuration,
+                            workload, cancellationToken);
+                    }
                     else
                     {
                         result = await EmbeddedLoadGenerator.RunAsync(loadOptions, concurrency, options.StepDuration,
@@ -749,7 +848,7 @@ internal static class RampOrchestrator
                     // Lossy H3 / MsQuic can abort a step; record a hard fail and continue the ramp.
                     ProbeLog.Error($"  step c={concurrency} aborted: {ex.GetType().Name}: {ex.Message}");
                     result = new LoadResult(
-                        Generator: useQuic ? "quic-http3" : "dotnet-httpclient",
+                        Generator: generatorLabel,
                         Concurrency: concurrency,
                         DurationSeconds: options.StepDuration.TotalSeconds,
                         Ok: 0,

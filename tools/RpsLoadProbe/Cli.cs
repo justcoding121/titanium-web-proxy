@@ -246,6 +246,7 @@ internal static class Cli
         or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
         or ProbeMode.CompareMitm or ProbeMode.CompareCeiling or ProbeMode.CompareBodies or ProbeMode.ComparePost
         or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost or ProbeMode.CompareArch
+        or ProbeMode.CompareSaturation
         or ProbeMode.ExplicitPoolSweep;
 
     private static int RunRamp(string? modeText, string? nginxPath, string? resultsDir, List<int> concurrency,
@@ -455,6 +456,12 @@ internal static class Cli
             case "compare-arch":
                 mode = ProbeMode.CompareArch;
                 return true;
+            case "compare-saturation":
+                mode = ProbeMode.CompareSaturation;
+                return true;
+            case "origin-direct":
+                mode = ProbeMode.OriginDirect;
+                return true;
             case "yarp-reverse-http2-to-https":
                 mode = ProbeMode.YarpReverseHttp2ToHttps;
                 return true;
@@ -545,6 +552,8 @@ internal static class Cli
               compare-lossy           64 KiB GET under userspace delay/loss vs control arms
               compare-tls-cost        H1 TLS terminate: keep-alive tiny / new-conn tiny / keep-alive 256 KiB
               compare-arch            Slow consumer, early response, H2 duplex, WebSocket echo vs control arms
+              compare-saturation      Origin-direct (+ bombardier if on PATH) + H1 plain reverse peers (calibration)
+              origin-direct           Load generator → origin child only (no proxy)
               yarp-reverse-http2-to-https Control arm: TLS+h2 -> HTTPS/h2
               explicit-pool-sweep     Fan-out with MaxCachedConnections 4 / 32 / 128
 

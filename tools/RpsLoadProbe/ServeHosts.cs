@@ -90,11 +90,17 @@ internal static class ServeProxyHost
         CancellationToken cancellationToken, WorkloadOptions? workload = null)
     {
         workload ??= WorkloadOptions.TinyGet;
+        if (mode is ProbeMode.OriginDirect)
+        {
+            ProbeLog.Error("--serve-proxy does not support origin-direct (no proxy child)");
+            return 2;
+        }
+
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
             or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
             or ProbeMode.CompareMitm or ProbeMode.CompareCeiling or ProbeMode.CompareBodies
             or ProbeMode.ComparePost or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost
-            or ProbeMode.CompareArch or ProbeMode.ExplicitPoolSweep)
+            or ProbeMode.CompareArch or ProbeMode.CompareSaturation or ProbeMode.ExplicitPoolSweep)
         {
             ProbeLog.Error("--serve-proxy requires a single arm mode");
             return 2;
@@ -655,6 +661,8 @@ internal static class ServeProxyHost
         ProbeMode.CompareLossy => "compare-lossy",
         ProbeMode.CompareTlsCost => "compare-tls-cost",
         ProbeMode.CompareArch => "compare-arch",
+        ProbeMode.CompareSaturation => "compare-saturation",
+        ProbeMode.OriginDirect => "origin-direct",
         ProbeMode.ExplicitPoolSweep => "explicit-pool-sweep",
         _ => mode.ToString()
     };
@@ -666,11 +674,17 @@ internal static class ServeHost
         CancellationToken cancellationToken, WorkloadOptions? workload = null)
     {
         workload ??= WorkloadOptions.TinyGet;
+        if (mode is ProbeMode.OriginDirect)
+        {
+            ProbeLog.Error("--serve does not support origin-direct; use --serve-origin or --ramp --mode origin-direct");
+            return 2;
+        }
+
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
             or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
             or ProbeMode.CompareMitm or ProbeMode.CompareCeiling or ProbeMode.CompareBodies
             or ProbeMode.ComparePost or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost
-            or ProbeMode.CompareArch or ProbeMode.ExplicitPoolSweep)
+            or ProbeMode.CompareArch or ProbeMode.CompareSaturation or ProbeMode.ExplicitPoolSweep)
         {
             ProbeLog.Error("--serve requires a single mode");
             return 2;
