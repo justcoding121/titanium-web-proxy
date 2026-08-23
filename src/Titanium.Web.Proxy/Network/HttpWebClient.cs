@@ -280,6 +280,11 @@ public class HttpWebClient
                 headerBuilder.WriteRequestLine(Request.Method, url, originHttpVersion);
             else
                 headerBuilder.WriteRequestLine(Request.Method, Request.RequestUriString8, originHttpVersion);
+            // Transparent reverse: strip hop-by-hop Connection so NC clients (Connection: close)
+            // do not force the origin to close — keeps the upstream pool warm (H1 terminate lite
+            // already strips; keep the full session path consistent).
+            if (isTransparent)
+                Request.Headers.RemoveHeader(KnownHeaders.Connection);
             headerBuilder.WriteHeaders(Request.Headers, !isTransparent, upstreamProxyUserName, upstreamProxyPassword);
 
             // write request headers
