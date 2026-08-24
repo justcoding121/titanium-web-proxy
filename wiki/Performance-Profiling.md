@@ -91,16 +91,16 @@ dotnet-gcdump collect -p <proxy PID>
 
 **Keep / revert for new lites:** cool-measure Memory + ÷YARP RPS; revert the lite if Memory is no better (within noise) **or** RPS regresses. Bag tracker is RPS-neutral retention — keep regardless.
 
-**Residual after bag + lite** (confirmed from `.tmp/ci-rps/peer-footprints.tsv` `compare-saturation` medians; same numbers already in-cell on [Saturation control](Performance#saturation-control) Blocks B/C — leave those cells as-is until next GHA paste):
+**Residual after bag + lite + `ClientSyntheticStreams`** (GHA `compare-saturation` @ `571b6fba` — [32724323848](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32724323848); same numbers in [Saturation control](Performance#saturation-control) Blocks B/C):
 
 | Arm | OS | TWP RSS | YARP RSS | ÷YARP |
 |---|---|---:|---:|---:|
-| H2→H1 (`twp-reverse-http2-cleartext`) | Windows | **149** MiB | **94** MiB | **~1.6×** |
-| H2→H1 | Linux | **227** MiB | **122** MiB | **~1.9×** |
-| H3→H1 (`twp-reverse-http3-cleartext`) | Windows | **233** MiB | **164** MiB | **~1.4×** |
-| H3→H1 | Linux | **304** MiB | **193** MiB | **~1.6×** |
+| H2→H1 (`twp-reverse-http2-cleartext`) | Windows | **95** MiB | **92** MiB | **~1.04×** |
+| H2→H1 | Linux | **119** MiB | **120** MiB | **~0.99×** |
+| H3→H1 (`twp-reverse-http3-cleartext`) | Windows | **169** MiB | **156** MiB | **~1.08×** |
+| H3→H1 | Linux | **269** MiB | **182** MiB | **~1.48×** |
 
-Pre-fix saturation was ~5–9× YARP on H2→H1 (~848 / ~626 MiB). RPS still leads YARP on both arms.
+Pre-PendingWork saturation was ~5–9× YARP on H2→H1 (~848 / ~626 MiB). Pre-syntheticStreams Block B was ~1.6× / ~1.9×. RPS still leads YARP on both arms.
 
 **Decode-time `SessionEventArgs` skip (tried → reverted):** H3-class defer of `sessionFactory()` until after HPACK on NullOrigin bridges (lite GET/HEAD/DELETE/OPTIONS + END_STREAM → Request bag + Response-only emit). Cool paired A/B after dispatch-order fix: ÷YARP RPS ~**1.05×** (no regression) but Memory **flat** vs prior lite-wire residual (~211 MiB TWP vs ~127 MiB YARP on laptop ≈ **1.65×**, same band as CI **~1.6×** / local lab ~199 MiB). First dispatch shape that awaited prior stream before starting the lite task capped multiplex (~0.5× YARP) — fixed before the keep decision. **Reverted** per keep/revert (Memory not past noise).
 
@@ -119,10 +119,14 @@ Systematic Windows reverse inventory (published TWP RSS > YARP) ranked H2→H1 a
 |---|---:|---:|---:|---:|
 | H2 TLS→H1 | **132** MiB | **114** MiB | **~1.16×** | **~1.20×** (41.3k / 34.5k) |
 | h2c→H1 | **105** MiB | **93** MiB | **~1.13×** | **~1.07×** (47.6k / 44.6k) |
+| H2 TLS→H3 | **139** MiB | **124** MiB | **~1.12×** | **~1.26×** (20.3k / 16.1k) |
+| h2c→H3 | **113** MiB | **119** MiB | **~0.95×** | **~1.10×** (21.1k / 19.1k) |
 
-GC heap post-fix ~5.4 MiB; `VolatileNode<int,byte>[]` collapsed to one table (~0.6 MiB) with no Node storm. Residual RSS is largely native / structural (custom H2 + origin fan-out); remasure GHA before rewriting publish cells.
+GC heap post-fix ~5.4 MiB; `VolatileNode<int,byte>[]` collapsed to one table (~0.6 MiB) with no Node storm. **GHA paste @ `571b6fba`:** Win H2→H1 Memory ÷YARP ~**1.04×** (95 / 92 MiB); Linux ~**0.99×**. H2→H3 / h2c→H3 cool remasure ≤~1.2× Memory ÷YARP — **no further dig** on those arms (same keep).
 
 Harness: `tools/RpsLoadProbe/profile-memory-arm.ps1` (mid-measure gcdump + Heap dump).
+
+**H3→H1 cool remasure (same session, `mem-audit-h3h1-post-synth`):** TWP **183** MiB / YARP **169** MiB ≈ **1.08×** Memory ÷YARP (RPS ~10.2k / ~6.4k — YARP soft on this box). GC heaps ~10 / ~9 MiB; no unbounded dict Node storm. Published CI was ~**1.57×** — laptop gap is already under the **≥1.3×** dig gate; residual treated as MsQuic / structural. **No H3 Memory code change** this pass; confirm with GHA Block C paste.
 
 ## nginx portable takeaways
 
