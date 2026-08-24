@@ -1,4 +1,4 @@
-# Performance
+﻿# Performance
 
 Titanium targets **low-overhead MITM proxying**: connection pooling, HTTP/2 multiplexing, and buffer reuse. Numbers below are **Release** measurements with [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe) (and BenchmarkDotNet / Basic example where noted). Publishable tables cite **GitHub Actions** medians on matched **4 vCPU / 16 GiB** runners. Absolute RPS still varies by OS kernel, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
 
@@ -73,7 +73,7 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 | `origin-direct` | `dotnet-httpclient` | No proxy — origin ceiling under the same client used for publishable ratios |
 | `origin-direct-bombardier` | `bombardier` | External client check (CI installs bombardier) |
 | `bare-reverse-http1` | `dotnet-httpclient` | Thin C# H1 reverse (`BareHttp1ReverseProxy`) — .NET runtime / loopback ceiling for a three-process reverse hop; **not** a product peer |
-| `nginx-reverse-http1` / `yarp-reverse-http1` / `twp-reverse-http1` | `dotnet-httpclient` | Product peers (🥇 among these three by sustainable RPS) |
+| `nginx-reverse-http1` / `yarp-reverse-http1` / `twp-reverse-http1` | `dotnet-httpclient` | Product peers (medals among these three only) |
 
 **Windows** (`windows-latest`)
 
@@ -82,9 +82,9 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 | origin-direct | dotnet-httpclient | **127,144** | **128,202** | **100%** | **53 MiB** | **47.6** |
 | origin-direct-bombardier | bombardier | **94,587** | **95,521** | **74.5%** | **53 MiB** | **27.0** |
 | bare-reverse-http1 | dotnet-httpclient | **61,356** | **61,356** | **47.9%** | **51 MiB** | **47.1** |
-| nginx-reverse-http1 | dotnet-httpclient | **35,389** | **36,369** | **28.4%** | **120 MiB** | **24.3** |
+| nginx-reverse-http1 | dotnet-httpclient | **35,389** | **36,369** | **28.4%** | **120 MiB** | 🥇 **24.3** |
 | yarp-reverse-http1 | dotnet-httpclient | **57,823** | **57,823** | **45.1%** | **84 MiB** | **49.6** |
-| twp-reverse-http1 | dotnet-httpclient | 🥇 **60,077** | **60,077** | **46.9%** | **66 MiB** | **48.9** |
+| twp-reverse-http1 | dotnet-httpclient | 🥇 **60,077** | **60,077** | **46.9%** | 🥇 **66 MiB** | **48.9** |
 
 **Linux** (`ubuntu-latest`)
 
@@ -93,29 +93,29 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 | origin-direct | dotnet-httpclient | **105,791** | **105,791** | **100%** | **78 MiB** | **42.1** |
 | origin-direct-bombardier | bombardier | **57,999** | **57,999** | **54.8%** | **78 MiB** | **31.2** |
 | bare-reverse-http1 | dotnet-httpclient | **47,955** | **47,955** | **45.3%** | **66 MiB** | **43.5** |
-| nginx-reverse-http1 | dotnet-httpclient | 🥇 **60,266** | **60,266** | **57.0%** | **72 MiB** | **39.4** |
+| nginx-reverse-http1 | dotnet-httpclient | 🥇 **60,266** | **60,266** | **57.0%** | 🥇 **72 MiB** | 🥇 **39.4** |
 | yarp-reverse-http1 | dotnet-httpclient | **41,795** | **41,795** | **39.5%** | **114 MiB** | **49.4** |
 | twp-reverse-http1 | dotnet-httpclient | **47,148** | **47,148** | **44.6%** | **87 MiB** | **49.1** |
 
-Reverse peers are about **28–57%** of the origin-direct HttpClient peak on this runner class. Prefer the **%** column over absolute RPS across runs. 🥇 marks the highest **sustainable** RPS among **TWP / nginx / YARP** only (bare and origin-direct are controls).
+Reverse peers are about **28–57%** of the origin-direct HttpClient peak on this runner class. Prefer the **%** column over absolute RPS across runs. Bare and origin-direct are controls (not medal peers).
 
 #### Block B — H2 TLS→H1
 
-Peer ratios (÷YARP / ÷nginx) on median peak + Memory (RSS) / CPU. 🥇 among TWP / nginx / YARP by sustainable RPS.
+Peer ratios (÷YARP / ÷nginx) on median peak + Memory (RSS) / CPU among TWP / nginx / YARP.
 
 **Windows** (`windows-latest`)
 
 | Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|---:|
-| nginx-reverse-http2 | dotnet-httpclient | **28,507** | **28,507** | **0.38×** | **1.00×** | **137 MiB** | **23.1** |
-| yarp-reverse-http2 | dotnet-httpclient | **74,813** | **74,813** | **1.00×** | **2.62×** | **95 MiB** | **48.3** |
+| nginx-reverse-http2 | dotnet-httpclient | **28,507** | **28,507** | **0.38×** | **1.00×** | **137 MiB** | 🥇 **23.1** |
+| yarp-reverse-http2 | dotnet-httpclient | **74,813** | **74,813** | **1.00×** | **2.62×** | 🥇 **95 MiB** | **48.3** |
 | twp-reverse-http2-cleartext | dotnet-httpclient | 🥇 **76,697** | **76,697** | **1.03×** | **2.69×** | **848 MiB** | **47.1** |
 
 **Linux** (`ubuntu-latest`)
 
 | Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|---:|
-| nginx-reverse-http2 | dotnet-httpclient | **23,281** | **30,402** | **0.78×** | **1.00×** | **96 MiB** | **21.6** |
+| nginx-reverse-http2 | dotnet-httpclient | **23,281** | **30,402** | **0.78×** | **1.00×** | 🥇 **96 MiB** | 🥇 **21.6** |
 | yarp-reverse-http2 | dotnet-httpclient | **39,023** | **39,023** | **1.00×** | **1.28×** | **121 MiB** | **47.8** |
 | twp-reverse-http2-cleartext | dotnet-httpclient | 🥇 **43,916** | **43,916** | **1.13×** | **1.44×** | **626 MiB** | **49.9** |
 
@@ -128,22 +128,22 @@ Same layout as Block B. Requires QuicListener; nginx only with `http_v3_module` 
 | Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|---:|
 | nginx-reverse-http3-cleartext | dotnet-httpclient | *Not possible* (no QUIC) | *Not possible* | — | — | — | — |
-| yarp-reverse-http3-cleartext | dotnet-httpclient | **44,105** | **44,105** | **1.00×** | — | **155 MiB** | **50.3** |
-| twp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **44,716** | **44,716** | **1.01×** | — | **271 MiB** | **46.4** |
+| yarp-reverse-http3-cleartext | dotnet-httpclient | **44,105** | **44,105** | **1.00×** | — | 🥇 **155 MiB** | **50.3** |
+| twp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **44,716** | **44,716** | **1.01×** | — | **271 MiB** | 🥇 **46.4** |
 
 **Linux** (`ubuntu-latest`)
 
 | Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|---:|
 | nginx-reverse-http3-cleartext | dotnet-httpclient | **0** | **27,519** | **1.19×** | **1.00×** | **106 MiB** | **20.3** |
-| yarp-reverse-http3-cleartext | dotnet-httpclient | **23,196** | **23,196** | **1.00×** | **0.84×** | **184 MiB** | **48.8** |
-| twp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **24,580** | **24,580** | **1.06×** | **0.89×** | **241 MiB** | **47.5** |
+| yarp-reverse-http3-cleartext | dotnet-httpclient | **23,196** | **23,196** | **1.00×** | **0.84×** | 🥇 **184 MiB** | **48.8** |
+| twp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **24,580** | **24,580** | **1.06×** | **0.89×** | **241 MiB** | 🥇 **47.5** |
 
 **How to read the tables**
 
 - **Mode**: **Reverse** = transparent fixed-forward (may TLS-terminate to a cleartext origin, or re-encrypt to a configured HTTPS/QUIC origin). **MITM** = both legs are visible in the clear inside TWP — either by decrypting client TLS/QUIC (forged cert / CONNECT) **or** by accepting an already-cleartext client (explicit HTTP proxy / inspectable transparent reverse) while still speaking plain or TLS to the origin. nginx and YARP cannot do MITM. **HTTP/3 has no cleartext client** (QUIC always encrypted).
 - **Sustainable** = last concurrency that still met error/latency SLOs. **Peak** = highest RPS in that ramp.
-- 🥇 = highest **sustainable** RPS among products that have a number on that row. Omitted when only TWP can run the path (no fair multi-product comparison).
+- 🥇 = best among **TWP / nginx / YARP** only on that row or saturation block (never vs bare / origin-direct / bombardier). Product matrices and saturation **Sustain**: highest sustainable RPS. Saturation **Memory (RSS)** / **CPU avg %**: lowest value among those three that have **sustain > 0** (sustain **0** / *Not possible* peers are excluded). Omitted when only TWP can run the path (no fair multi-product comparison).
 - *Not possible* = product cannot do that path. *Not measured* = path exists but no published number yet for that OS.
 
 ```powershell
