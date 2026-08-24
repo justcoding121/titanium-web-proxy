@@ -84,14 +84,14 @@ dotnet-gcdump collect -p <proxy PID>
 **Root causes (H2→H1 ≫ YARP Memory while RPS ≈ parity):**
 
 1. **`PendingSynthetics` / `PendingFinalizations`** retained completed `Task`s for the life of each client H2 connection (`ConcurrentBag` never removed). Fixed with **`Http2PendingWork`** (remove-on-complete tracker) — connection-scoped retention, not a process-immortal leak.
-2. **Per-stream `SessionEventArgs`** on H2→H1 / H2→H3 even when `IsFastPath` (H1 keep-alive uses `ResetForKeepAlive`; H3 inbound already had `H3H2FastForward`). Mitigated with **warm `TryRentPooled` + `HeaderBuilder` wire** on interception-off bodiless H2→H1 (H3→H1 analogue) and IsFastPath skips on H2→H3; full decode-time session skip still requires deeper `Http2Helper` work (HEADERS still call `sessionFactory()` before bridge round-trip).
+2. **Per-stream `SessionEventArgs`** on H2→H1 / H2→H3 even when `IsFastPath` (H1 keep-alive uses `ResetForKeepAlive`; H3 inbound already had `H3H2FastForward`). Mitigated with **warm `TryRentPooled` + `HeaderBuilder` wire** on interception-off bodiless H2→H1 (H3→H1 analogue) and IsFastPath skips on H2→H3.
 3. Custom H2 stack per client connection vs Kestrel pooled streams (residual).
 4. H3→H1 residual also includes **MsQuic / QUIC connection pool** cost vs YARP’s Kestrel QUIC stack — not a tiny session-lite leftover.
 5. **Not** the 768 KiB flow-control windows — advertised credit, not tiny-GET buffers. **Do not** force single H2 connection (or other single-connection env knobs) to game RSS (laptop A/B: −14% RSS / −23% RPS).
 
 **Keep / revert for new lites:** cool-measure Memory + ÷YARP RPS; revert the lite if Memory is no better (within noise) **or** RPS regresses. Bag tracker is RPS-neutral retention — keep regardless.
 
-**Residual after bag + lite** (confirmed from `.tmp/ci-rps/peer-footprints.tsv` `compare-saturation` medians; same numbers already in-cell on [Saturation control](Performance#saturation-control) Blocks B/C — leave those cells as-is):
+**Residual after bag + lite** (confirmed from `.tmp/ci-rps/peer-footprints.tsv` `compare-saturation` medians; same numbers already in-cell on [Saturation control](Performance#saturation-control) Blocks B/C — leave those cells as-is until next GHA paste):
 
 | Arm | OS | TWP RSS | YARP RSS | ÷YARP |
 |---|---|---:|---:|---:|
@@ -100,7 +100,29 @@ dotnet-gcdump collect -p <proxy PID>
 | H3→H1 (`twp-reverse-http3-cleartext`) | Windows | **233** MiB | **164** MiB | **~1.4×** |
 | H3→H1 | Linux | **304** MiB | **193** MiB | **~1.6×** |
 
-Pre-fix saturation was ~5–9× YARP on H2→H1 (~848 / ~626 MiB). RPS still leads YARP on both arms. **No further keep/revert-gated product cut now:** remaining H2→H1 `SessionEventArgs` on `IsFastPath` is decode-time in `Http2Helper` (H3-class `H3H2FastForward` analogue), not a small bridge-handler trim. Next Memory dig is structural (custom H2 stack / MsQuic pool), not another lite wire.
+Pre-fix saturation was ~5–9× YARP on H2→H1 (~848 / ~626 MiB). RPS still leads YARP on both arms.
+
+**Decode-time `SessionEventArgs` skip (tried → reverted):** H3-class defer of `sessionFactory()` until after HPACK on NullOrigin bridges (lite GET/HEAD/DELETE/OPTIONS + END_STREAM → Request bag + Response-only emit). Cool paired A/B after dispatch-order fix: ÷YARP RPS ~**1.05×** (no regression) but Memory **flat** vs prior lite-wire residual (~211 MiB TWP vs ~127 MiB YARP on laptop ≈ **1.65×**, same band as CI **~1.6×** / local lab ~199 MiB). First dispatch shape that awaited prior stream before starting the lite task capped multiplex (~0.5× YARP) — fixed before the keep decision. **Reverted** per keep/revert (Memory not past noise).
+
+### Windows Memory audit (2026-08-24) — synthetic-stream registry leak
+
+Systematic Windows reverse inventory (published TWP RSS > YARP) ranked H2→H1 arms worst (~2.1–2.2×). Cool `dotnet-gcdump` / `dumpheap` on `reverse-http2-cleartext` @ c=64 showed:
+
+- RSS gap mostly **outside** managed GC heap (~244 MiB RSS vs ~17 MiB GC for TWP; YARP ~125 / ~5 MiB).
+- Actionable managed leak: `ConcurrentDictionary<int, byte>+Node` **~225k** entries / ~14 MiB — `syntheticStreams` in `Http2Helper.CopyHttp2FrameAsync` `TryAdd` on every NullOrigin / synthetic stream and **never removed** on keep-alive multiplex (stream ids grow forever).
+
+**Fix (kept):** wire `Http2ConnectionState.ClientSyntheticStreams` and clear via `TryTakeStream` / `RemoveStream` on all stream-exit paths (H2 helper, H2→H1 / H2→H3 bridges).
+
+**Cool laptop A/B after fix** (`mem-audit-post-synth-fix`, c=64):
+
+| Arm | TWP RSS | YARP RSS | ÷YARP Mem | ÷YARP RPS |
+|---|---:|---:|---:|---:|
+| H2 TLS→H1 | **132** MiB | **114** MiB | **~1.16×** | **~1.20×** (41.3k / 34.5k) |
+| h2c→H1 | **105** MiB | **93** MiB | **~1.13×** | **~1.07×** (47.6k / 44.6k) |
+
+GC heap post-fix ~5.4 MiB; `VolatileNode<int,byte>[]` collapsed to one table (~0.6 MiB) with no Node storm. Residual RSS is largely native / structural (custom H2 + origin fan-out); remasure GHA before rewriting publish cells.
+
+Harness: `tools/RpsLoadProbe/profile-memory-arm.ps1` (mid-measure gcdump + Heap dump).
 
 ## nginx portable takeaways
 
@@ -113,7 +135,7 @@ Dig through nginx `src/http` (proxy + upstream keepalive), `src/event`, and `src
 | Write coalesce + `sendfile` / `writev` chain | `ngx_output_chain.c`, `ngx_writev_chain.c` (“coalesce the neighbouring bufs”) | `Http2FrameWriter` coalesce budget (already have); H1 is already buffered `HttpStream` writes | **Done** for H2; H1 not a syscall-storm residual |
 | `worker_processes` + `accept_mutex` | `nginx.c` / `ngx_event_accept.c` | N/A — native multi-process fan-out; TWP is one managed process + thread pool | **N/A** — do not fake workers for RSS/RPS games |
 
-**Concrete managed cut worth trying now:** **N/A**. Portable lessons are already landed or process-model only. A decode-time H2 session skip would be a TWP-internal H3-fast-forward port, not an nginx technique.
+**Concrete managed cut worth trying now:** **N/A** for new session-lites. Portable lessons are already landed or process-model only. Decode-time H2 session skip was **reverted**; the Windows Memory audit then found and **kept** the `syntheticStreams` registry leak fix (see [Memory (RSS)](#memory-rss--h2h1-vs-h1--h3)). Next dig is residual native RSS / MsQuic after GHA remasure.
 
 ## Technique 2: async dumps — find where requests wait
 

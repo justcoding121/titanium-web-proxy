@@ -608,7 +608,12 @@ namespace Titanium.Web.Proxy.Http2
 
             // stream ids that were answered with a synthetic (proxy-generated) response and therefore must not
             // be forwarded to the server. Only relevant on the client=>server relay.
+            // Must be cleared when streams leave the registry — otherwise keep-alive H2→H1 multiplex
+            // retains one entry per historical stream id for the connection lifetime (saturation dump:
+            // ~225k ConcurrentDictionary nodes / ~14 MiB managed on a single client connection).
             var syntheticStreams = new ConcurrentDictionary<int, byte>();
+            if (isClient)
+                connectionState.ClientSyntheticStreams = syntheticStreams;
 
             // Synthetic responses (Ok/Respond/RespondStreaming during BeforeRequest) are no longer awaited
             // inline in the frame loop below (see the HEADERS dispatch) so that a slow synthetic body does
@@ -767,9 +772,8 @@ namespace Titanium.Web.Proxy.Http2
 
                 connectionState.OriginRelayPool?.ReleaseStream(removeStreamId);
 
-                if (connectionState.Streams.TryRemove(removeStreamId, out var removedState))
+                if (connectionState.TryTakeStream(removeStreamId, out var removedState))
                 {
-                    connectionState.MultipartObservers.TryRemove(removeStreamId, out _);
                     removedState.InboundTunnelChannel?.Writer.TryComplete(
                         new IOException("HTTP/2 stream removed due to protocol error."));
                     removedState.Cancellation.Cancel();
@@ -3111,7 +3115,7 @@ namespace Titanium.Web.Proxy.Http2
                     if (isClient)
                         connectionState.MultipartObservers.TryRemove(streamId, out _);
                     connectionState.OriginRelayPool?.ReleaseStream(streamId);
-                    if (connectionState.Streams.TryRemove(streamId, out var resetStream))
+                    if (connectionState.TryTakeStream(streamId, out var resetStream))
                     {
                         // RFC 8441: if the reset stream is an extended CONNECT tunnel, unblock the relay
                         // that is reading from the inbound channel so it can shut down promptly.

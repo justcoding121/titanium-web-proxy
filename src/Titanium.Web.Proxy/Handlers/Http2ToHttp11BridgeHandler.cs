@@ -758,7 +758,7 @@ public partial class ProxyServer
             // once the whole (potentially long-lived, multiplexed) h2 connection itself ends.
             // Http2StreamState.FinalizedFlag (checked inside FinalizeStreamAsync) makes this race-safe
             // against RST_STREAM/GOAWAY teardown finalizing the very same stream first.
-            if (connectionState.Streams.TryRemove(streamId, out var finalStreamState))
+            if (connectionState.TryTakeStream(streamId, out var finalStreamState))
             {
                 connectionState.ClientSendFlow.RemoveStream(streamId);
                 connectionState.ServerSendFlow.RemoveStream(streamId);
@@ -1026,7 +1026,7 @@ public partial class ProxyServer
 
             // Finalize this stream immediately (same as RunHttp2ToHttp11BridgeRoundTripAsync) because
             // the bridged response never flows through CopyHttp2FrameAsync's isClient=false direction.
-            if (ctx.ConnectionState.Streams.TryRemove(ctx.StreamId, out var finalStreamState))
+            if (ctx.ConnectionState.TryTakeStream(ctx.StreamId, out var finalStreamState))
             {
                 ctx.ConnectionState.ClientSendFlow.RemoveStream(ctx.StreamId);
                 ctx.ConnectionState.ServerSendFlow.RemoveStream(ctx.StreamId);

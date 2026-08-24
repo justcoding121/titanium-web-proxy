@@ -399,7 +399,7 @@ public partial class ProxyServer
             // CopyHttp2FrameAsync's isClient=false direction, so the normal "both directions closed"
             // bookkeeping never observes it.  FinalizedFlag makes this race-safe against any
             // concurrent RST_STREAM / GOAWAY finalization.
-            if (connectionState.Streams.TryRemove(streamId, out var finalStreamState))
+            if (connectionState.TryTakeStream(streamId, out var finalStreamState))
             {
                 connectionState.ClientSendFlow.RemoveStream(streamId);
                 connectionState.ServerSendFlow.RemoveStream(streamId);

@@ -327,11 +327,30 @@ internal sealed class Http2ConnectionState
         return state;
     }
 
+    /// <summary>
+    ///     Client→origin relay: stream ids answered synthetically / by an external bridge.
+    ///     Cleared when the stream leaves <see cref="Streams" /> so keep-alive multiplex cannot grow
+    ///     this unboundedly (saturation dump: ~225k nodes / ~14 MiB on one H2→H1 connection).
+    /// </summary>
+    internal ConcurrentDictionary<int, byte>? ClientSyntheticStreams { get; set; }
+
+    /// <summary>
+    ///     Removes stream registry entries (Streams, MultipartObservers, ClientSyntheticStreams).
+    ///     Callers that also own flow-control windows should follow with
+    ///     <see cref="Http2SendFlowController.RemoveStream" /> on both directions, or use
+    ///     <see cref="RemoveStream" />.
+    /// </summary>
+    public bool TryTakeStream(int streamId, out Http2StreamState state)
+    {
+        ClientSyntheticStreams?.TryRemove(streamId, out _);
+        MultipartObservers.TryRemove(streamId, out _);
+        return Streams.TryRemove(streamId, out state!);
+    }
+
     /// <summary>Removes a stream from the registry and both flow-control send windows once fully closed/reset.</summary>
     public void RemoveStream(int streamId)
     {
-        Streams.TryRemove(streamId, out _);
-        MultipartObservers.TryRemove(streamId, out _);
+        TryTakeStream(streamId, out _);
         ClientSendFlow.RemoveStream(streamId);
         ServerSendFlow.RemoveStream(streamId);
     }
