@@ -20,6 +20,23 @@ public class ChannelLoggerProviderBaseTests
 {
     [TestMethod]
     [Timeout(30 * 1000)]
+    public void Enqueue_PriorityChannelSaturation_DropsAndCountsPriorityOverflow()
+    {
+        using var sink = new RecordingSink(queueCapacity: 1);
+        sink.BlockWriter();
+
+        var logger = sink.CreateLogger("test");
+        logger.LogInformation("filler");
+        // Priority channel capacity is 64; fill it then force priority drops.
+        for (var i = 0; i < 80; i++)
+            logger.LogError("priority overflow {Index}", i);
+
+        Assert.AreEqual(0, sink.WritesObservedOnCallingThread);
+        sink.ReleaseWriter();
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
     public void Enqueue_NeverWritesOnCallingThread_EvenWhenMainChannelIsSaturatedWithErrors()
     {
         // A capacity-1 channel plus a writer gate that never opens guarantees every subsequent

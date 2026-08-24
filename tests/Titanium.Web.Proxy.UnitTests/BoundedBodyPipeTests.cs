@@ -21,6 +21,41 @@ public class BoundedBodyPipeTests
     }
 
     [TestMethod]
+    public async Task WriteAsync_WhenPipeBackpressures_UsesSlowPath()
+    {
+        using var pipe = new BoundedBodyPipe(maxBytes: 0);
+        var chunk = new byte[32 * 1024];
+
+        var producer = Task.Run(async () =>
+        {
+            for (var i = 0; i < 64; i++)
+                await pipe.WriteAsync(chunk);
+            pipe.CompleteWriter();
+        });
+
+        // Give the producer time to fill the pipe past the pause threshold so later writes await.
+        await Task.Delay(50);
+
+        var total = 0L;
+        while (true)
+        {
+            var result = await pipe.Reader.ReadAsync();
+            if (result.Buffer.Length > 0)
+            {
+                total += result.Buffer.Length;
+                pipe.Reader.AdvanceTo(result.Buffer.End);
+            }
+
+            if (result.IsCompleted)
+                break;
+        }
+
+        await producer;
+        Assert.IsTrue(total >= chunk.Length);
+        Assert.IsTrue(pipe.TotalWritten >= chunk.Length);
+    }
+
+    [TestMethod]
     public async Task WriteAsync_Unlimited_SucceedsAndTracksTotal()
     {
         using var pipe = new BoundedBodyPipe(maxBytes: 0);

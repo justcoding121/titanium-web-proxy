@@ -995,6 +995,13 @@ public class SonarNewCodeCoverageTests
         Assert.IsTrue(mgr.CreateRootCertificate(false));
         Assert.IsNotNull(mgr.RootCertificate);
 
+        mgr.RootCertificateIssuerName = "Unit Test CA";
+        Assert.AreEqual("Unit Test CA", mgr.RootCertificateIssuerName);
+        mgr.LeafCertificateKeyAlgorithm = CertificateKeyAlgorithm.EcdsaP256;
+        Assert.AreEqual(CertificateKeyAlgorithm.EcdsaP256, mgr.LeafCertificateKeyAlgorithm);
+        mgr.LeafCertificateKeyAlgorithm = CertificateKeyAlgorithm.EcdsaP256; // same-value early return
+        mgr.LeafCertificateKeyAlgorithm = CertificateKeyAlgorithm.Rsa2048;
+
         // Touch Windows engine setter path on Windows only (throws elsewhere).
         if (RunTime.IsWindows)
         {
@@ -1026,6 +1033,58 @@ public class SonarNewCodeCoverageTests
 
         await writer.DisposeAsync();
         Assert.IsTrue(failing.WriteAttempts >= 1);
+    }
+
+    [TestMethod]
+    public void Http2OriginPool_DiagPickStats_WhenEnabled_EmitsCounters()
+    {
+        var diag = typeof(Http2OriginConnectionPool).GetNestedType("DiagPickStats", BindingFlags.NonPublic)!;
+        var enabled = diag.GetField("Enabled", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var loggerStarted = diag.GetField("loggerStarted", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var previous = (bool)enabled.GetValue(null)!;
+        var previousLogger = (int)loggerStarted.GetValue(null)!;
+        try
+        {
+            enabled.SetValue(null, true);
+            loggerStarted.SetValue(null, 0);
+
+            var outPath = Path.Combine(Path.GetTempPath(), $"twp-pool-diag-{Guid.NewGuid():N}.log");
+            Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT", outPath);
+            try
+            {
+                Http2OriginConnectionPool.DiagPickStats.OnRent();
+                Http2OriginConnectionPool.DiagPickStats.OnTryPick(2, 10, 3, hit: true);
+                Http2OriginConnectionPool.DiagPickStats.OnTryPick(1, 5, 0, hit: false);
+                Http2OriginConnectionPool.DiagPickStats.OnCreationGate();
+                Http2OriginConnectionPool.DiagPickStats.OnTryPickAny();
+                Http2OriginConnectionPool.DiagPickStats.OnOpen();
+
+                var emit = diag.GetMethod("Emit", BindingFlags.NonPublic | BindingFlags.Static)!;
+                emit.Invoke(null, ["unit"]);
+
+                Assert.IsTrue(Http2OriginConnectionPool.DiagPickStats.IsEnabled);
+                Assert.IsFalse(string.IsNullOrEmpty(Http2OriginConnectionPool.DiagPickStats.FormatSummary()));
+                Assert.IsTrue(File.Exists(outPath));
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT", null);
+                try
+                {
+                    if (File.Exists(outPath))
+                        File.Delete(outPath);
+                }
+                catch
+                {
+                    // best-effort
+                }
+            }
+        }
+        finally
+        {
+            enabled.SetValue(null, previous);
+            loggerStarted.SetValue(null, previousLogger);
+        }
     }
 
     private sealed class FailingWriteStream : Stream
