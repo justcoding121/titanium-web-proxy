@@ -318,14 +318,27 @@ internal sealed class QuicHttp3Client : IAsyncDisposable
             var chunkSize = frameSize > 0 && frameSize < body.Length
                 ? frameSize
                 : body.Length;
-            for (var offset = 0; offset < body.Length; offset += chunkSize)
+            try
             {
-                var len = Math.Min(chunkSize, body.Length - offset);
-                await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body.AsMemory(offset, len),
-                    cancellationToken);
+                for (var offset = 0; offset < body.Length; offset += chunkSize)
+                {
+                    var len = Math.Min(chunkSize, body.Length - offset);
+                    await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body.AsMemory(offset, len),
+                        cancellationToken);
+                }
+
+                stream.CompleteWrites();
+            }
+            catch (QuicException)
+            {
+                // Proxy may abort an unread request body after a synthetic BeforeRequest response
+                // (H3_REQUEST_CANCELLED). The response may already be readable on this stream.
             }
         }
-        stream.CompleteWrites();
+        else
+        {
+            stream.CompleteWrites();
+        }
 
         var headersFrame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 64 * 1024, cancellationToken);
         if (headersFrame is null || headersFrame.Type != Http3FrameType.Headers)
