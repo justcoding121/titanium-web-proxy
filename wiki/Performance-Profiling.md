@@ -158,7 +158,19 @@ docker run --rm --entrypoint /bin/bash --cap-add=SYS_PTRACE --security-opt secco
   twp-mem-linux -c "sed -i 's/\r$//' /src/tools/RpsLoadProbe/profile-memory-arm.sh && bash /src/tools/RpsLoadProbe/profile-memory-arm.sh reverse-http3-cleartext"
 ```
 
-**KEEP — inbound H3 `ConcurrentBag<Task>` → `Http2PendingWork`:** same defect class as the H2 bag. Mid-measure Win H3→H1 GC ~13 MiB with large `Task[]` segments → post-fix ~3.4 MiB / peak RSS **~108** MiB vs YARP **~162** (~**0.67×** Memory ÷YARP; RPS soft vs YARP on that cool pair). Linux Docker (diagnosis only): TWP **~142** / YARP **~209** MiB. Control-stream `ReturnPayload` also landed. Cool secondary after keep: H3→H2 Mem ÷YARP **~0.72×**; H1→H2 Mem **~1.09×** but RPS **~1.51×** → skip dig. **GHA paste** confirms publishable medians.
+**KEEP — inbound H3 `ConcurrentBag<Task>` → `Http2PendingWork`:** same defect class as the H2 bag. Mid-measure Win H3→H1 GC ~13 MiB with large `Task[]` segments → post-fix ~3.4 MiB / peak RSS **~108** MiB vs YARP **~162** (~**0.67×** Memory ÷YARP; RPS soft vs YARP on that cool pair). Linux Docker (diagnosis only): TWP **~142** / YARP **~209** MiB. Control-stream `ReturnPayload` also landed. Cool secondary after keep: H3→H2 Mem ÷YARP **~0.72×**; H1→H2 Mem **~1.09×** but RPS **~1.51×** → skip dig. **GHA @ `f9769503`:** sat Block C Win **0.79×** Mem / **1.12×** RPS; Linux **0.77×** / **1.07×** — KEEP. Bridges H3→H1 Win **0.69×** Mem / **1.02×** RPS.
+
+**Remaining (Mem÷YARP > 1.05 and Mem > RPS) after that KEEP:**
+
+| Pri | OS | Arm | Mem÷YARP | RPS÷YARP | Notes |
+|---|---|---|---:|---:|---|
+| P1 | Win | H1→H2 | **1.12×** | **1.02×** | Extra origin TLS+H2 sessions vs YARP’s one; **Offer-only-when-empty reverted** (cool RPS 0.74× YARP) — next: skip live seed when pool already has capacity, not discard all seeds |
+| P1 | Lin | H1→H2 | **1.08×** | **1.03×** | Same shape |
+| P2 | Win | h2c→H1 | **1.10×** | **1.07×** | Soft; re-check after H1→H2 |
+| P2 | Win | h2c→H3 | **1.09×** | **1.04×** | Soft |
+| P2 | Win | H2→H1 | **1.10×** | **1.05–1.14×** | Sat Mem>RPS; bridges Mem≤RPS — watch |
+
+RPS not beating YARP: Win H1→H3 ~**1.00×** (Memory already **0.89×**). H3→H3 TWP not in `compare-bridges` (YARP control only) — prior paste.
 
 ## nginx portable takeaways
 
