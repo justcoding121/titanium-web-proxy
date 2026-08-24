@@ -4006,7 +4006,7 @@ namespace Titanium.Web.Proxy.Http2
             HeaderCollection headers, ByteString scheme)
         {
             // Same serialization contract as QueueSendHeader: encoder + scratch are direction-scoped.
-            lock (settings)
+            lock (settings.Sync)
             {
                 var encoder = settings.Encoder;
                 if (encoder == null)
@@ -4056,7 +4056,7 @@ namespace Titanium.Web.Proxy.Http2
         {
             // Same HPACK lock as QueueSendHeader: Encoder + encode scratch are connection-direction scoped.
             ReadOnlyMemory<byte> block;
-            lock (settings)
+            lock (settings.Sync)
                 block = EncodeHeaderBlock(settings, rr).ToArray();
             await WriteHeaderBlockAsync(frameHeader, frameHeaderBuffer, frameHeader.StreamId,
                 pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers, endStream,
@@ -4075,7 +4075,7 @@ namespace Titanium.Web.Proxy.Http2
         {
             // BeforeRequest dispatches may finish on different thread-pool threads. Keep HPACK encoding and
             // write-chain admission atomic per direction so the connection-scoped dynamic table remains ordered.
-            lock (settings)
+            lock (settings.Sync)
             {
                 var block = EncodeHeaderBlock(settings, rr);
                 var framed = RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, frameHeader.StreamId,
@@ -4148,7 +4148,7 @@ namespace Titanium.Web.Proxy.Http2
             byte[] frameHeaderBuffer, int streamId, HeaderCollection trailingHeaders, bool endStream, Stream output)
         {
             ReadOnlyMemory<byte> block;
-            lock (settings)
+            lock (settings.Sync)
             {
                 var encoder = settings.Encoder;
                 if (encoder == null)
@@ -4458,14 +4458,14 @@ namespace Titanium.Web.Proxy.Http2
 
         /// <summary>
         ///     HPACK-encodes <paramref name="rr"/> into a rented framed HEADERS/CONTINUATION block.
-        ///     Takes <c>lock(settings)</c> around encode (same as <see cref="SendHeader"/> /
+        ///     Takes <c>lock(settings.Sync)</c> around encode (same as <see cref="SendHeader"/> /
         ///     <see cref="QueueSendHeader"/>) so the connection Encoder and encode scratch stay
         ///     consistent even if a caller only holds the origin socket write lock.
         /// </summary>
         internal static ArraySegment<byte> RentFramedHeaders(Http2Settings settings, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, bool pushPromise = false)
         {
-            lock (settings)
+            lock (settings.Sync)
             {
                 var block = EncodeHeaderBlock(settings, rr);
                 return RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, frameHeader.StreamId,
@@ -4488,13 +4488,13 @@ namespace Titanium.Web.Proxy.Http2
 
         /// <summary>
         ///     HPACK-encodes trailing headers into a rented framed HEADERS block.
-        ///     Takes <c>lock(settings)</c> for the same Encoder/scratch contract as
+        ///     Takes <c>lock(settings.Sync)</c> for the same Encoder/scratch contract as
         ///     <see cref="RentFramedHeaders"/>.
         /// </summary>
         internal static ArraySegment<byte> RentFramedTrailers(Http2Settings settings, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, int streamId, HeaderCollection trailingHeaders, bool endStream)
         {
-            lock (settings)
+            lock (settings.Sync)
             {
                 var encoder = settings.Encoder;
                 if (encoder == null)

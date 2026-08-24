@@ -132,6 +132,15 @@ internal sealed class Http3Frame
     }
 
     /// <summary>
+    ///     Writes a zero-payload frame (used for GOAWAY and some SETTINGS without parameters).
+    /// </summary>
+    public static async ValueTask WriteAsync(
+        Stream stream,
+        ulong frameType,
+        CancellationToken cancellationToken)
+        => await WriteAsync(stream, frameType, ReadOnlyMemory<byte>.Empty, cancellationToken);
+
+    /// <summary>
     ///     Writes HEADERS then DATA as a single stream write when the combined frames fit a modest
     ///     buffer. Used for already-buffered medium/large bodies (lossy / bodies ≥ 16 KiB) so the
     ///     UDP path does not emit a header-only datagram before the body. Tiny GET stays on the
@@ -172,13 +181,4 @@ internal sealed class Http3Frame
             ArrayPool<byte>.Shared.Return(rented);
         }
     }
-
-    /// <summary>
-    ///     Writes a zero-payload frame (used for GOAWAY and some SETTINGS without parameters).
-    /// </summary>
-    public static async ValueTask WriteAsync(
-        Stream stream,
-        ulong frameType,
-        CancellationToken cancellationToken)
-        => await WriteAsync(stream, frameType, ReadOnlyMemory<byte>.Empty, cancellationToken);
 }

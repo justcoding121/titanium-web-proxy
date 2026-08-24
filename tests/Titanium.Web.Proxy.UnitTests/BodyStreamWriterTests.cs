@@ -44,6 +44,10 @@ public class BodyStreamWriterTests
 
         stream.Flush();
         await stream.FlushAsync(CancellationToken.None);
+
+        Assert.AreEqual(0, fake.Lines.Count);
+        Assert.AreEqual(0, fake.ByteWrites.Count);
+        Assert.IsTrue(stream.CanWrite);
     }
 
     [TestMethod]
@@ -108,7 +112,7 @@ public class BodyStreamWriterTests
         using var stream = new BodyStreamWriter(fake, isChunked: false);
         var payload = new byte[] { 7, 8, 9 };
 
-        await stream.WriteAsync(payload, 0, payload.Length, CancellationToken.None);
+        await stream.WriteAsync(payload.AsMemory(0, payload.Length), CancellationToken.None);
 
         CollectionAssert.AreEqual(payload, fake.ByteWrites[0]);
     }

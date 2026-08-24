@@ -147,7 +147,7 @@ internal static class QpackEncoder
         [ThreadStatic]
         private static ResponseBlockBuilder? cached;
 
-        private MemoryStream body = new(128);
+        private readonly MemoryStream body = new(128);
         private QpackDynamicTable? outboundTable;
         private QpackContext? context;
         private ulong maxRequiredInsertCount;
@@ -194,8 +194,7 @@ internal static class QpackEncoder
 
         internal byte[] Finish()
         {
-            if (returned)
-                throw new ObjectDisposedException(nameof(ResponseBlockBuilder));
+            ObjectDisposedException.ThrowIf(returned, nameof(ResponseBlockBuilder));
             return FinishBlock(body, maxRequiredInsertCount, outboundTable, context);
         }
 

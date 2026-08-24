@@ -2089,7 +2089,7 @@ public partial class ProxyServer : IDisposable
             Task<int> clientHelloWait;
             try
             {
-                clientHelloWait = tcpClient.ReceiveAsync(Memory<byte>.Empty, SocketFlags.None).AsTask();
+                clientHelloWait = tcpClient.ReceiveAsync(Memory<byte>.Empty, SocketFlags.None, cancellationToken).AsTask();
             }
             catch (Exception ex)
             {

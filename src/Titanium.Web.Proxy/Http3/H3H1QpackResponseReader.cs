@@ -16,6 +16,11 @@ namespace Titanium.Web.Proxy.Http3;
 /// </summary>
 internal static class H3H1QpackResponseReader
 {
+    private const string ConnectionHeaderName = "connection";
+    private const string KeepAliveHeaderName = "keep-alive";
+    private const string ProxyConnectionHeaderName = "proxy-connection";
+    private const string UpgradeHeaderName = "upgrade";
+
     internal readonly struct Result
     {
         public required byte[] QpackHeaders { get; init; }
@@ -89,9 +94,9 @@ internal static class H3H1QpackResponseReader
         var valueSpan = TrimAscii(tmpLine.Slice(colonIndex + 1));
         var lowerName = LowerAsciiName(nameSpan);
 
-        if (lowerName is "connection" or "keep-alive" or "proxy-connection" or "upgrade")
+        if (lowerName is ConnectionHeaderName or KeepAliveHeaderName or ProxyConnectionHeaderName or UpgradeHeaderName)
         {
-            if (lowerName == "connection" && AsciiEqualsIgnoreCase(valueSpan, "close"))
+            if (lowerName == ConnectionHeaderName && AsciiEqualsIgnoreCase(valueSpan, "close"))
                 connectionClose = true;
             return;
         }
@@ -125,9 +130,9 @@ internal static class H3H1QpackResponseReader
         var valueSpan = tmpLine.AsSpan(colonIndex + 1).Trim();
         var lowerName = LowerAsciiName(nameSpan);
 
-        if (lowerName is "connection" or "keep-alive" or "proxy-connection" or "upgrade")
+        if (lowerName is ConnectionHeaderName or KeepAliveHeaderName or ProxyConnectionHeaderName or UpgradeHeaderName)
         {
-            if (lowerName == "connection"
+            if (lowerName == ConnectionHeaderName
                 && valueSpan.Equals("close", StringComparison.OrdinalIgnoreCase))
                 connectionClose = true;
             return;
@@ -189,7 +194,7 @@ internal static class H3H1QpackResponseReader
         if (ReferenceEquals(known, KnownHeaders.Server))
             return "server";
         if (ReferenceEquals(known, KnownHeaders.Connection))
-            return "connection";
+            return ConnectionHeaderName;
         if (ReferenceEquals(known, KnownHeaders.TransferEncoding))
             return "transfer-encoding";
         if (ReferenceEquals(known, KnownHeaders.Host))

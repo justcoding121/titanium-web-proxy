@@ -11,6 +11,15 @@ namespace Titanium.Web.Proxy.Http2;
 internal class Http2Settings
 {
     /// <summary>
+    ///     Lock shared with <c>Http2Helper</c> encode/send paths (<c>lock (settings.Sync)</c>) so
+    ///     SETTINGS_HEADER_TABLE_SIZE applies cannot race EncodeHeaderBlock's dual-DTSU read.
+    /// </summary>
+    private readonly object sync = new();
+
+    /// <summary>Exposes <see cref="sync"/> for <c>Http2Helper</c> encode/send critical sections.</summary>
+    internal object Sync => sync;
+
+    /// <summary>
     ///     Current HPACK dynamic table size ceiling advertised by the peer (RFC 7541 §6.3).
     ///     Defaults to the RFC-mandated 4096-byte initial value.
     ///     Use <see cref="UpdateHeaderTableSize"/> to change this so the minimum-tracking invariant is maintained.
@@ -30,9 +39,7 @@ internal class Http2Settings
     /// <summary>Updates the header-table size ceiling, keeping the minimum-since-last-encode in sync.</summary>
     public void UpdateHeaderTableSize(int value)
     {
-        // Same lock object as Http2Helper.SendHeader/QueueSendHeader/RentFramedHeaders so a
-        // SETTINGS_HEADER_TABLE_SIZE apply cannot race EncodeHeaderBlock's dual-DTSU read.
-        lock (this)
+        lock (sync)
         {
             HeaderTableSize = value;
             if (value < MinHeaderTableSizeSinceLastEncode)
@@ -47,7 +54,7 @@ internal class Http2Settings
     /// </summary>
     public void NotifyHeaderBlockEncoded()
     {
-        lock (this)
+        lock (sync)
             MinHeaderTableSizeSinceLastEncode = HeaderTableSize;
     }
 

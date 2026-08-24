@@ -286,7 +286,7 @@ public abstract class RequestResponseBase
         }
     }
 
-    internal byte[]? CompressBodyAndUpdateContentLength()
+    internal byte[]? CompressBodyAndUpdateContentLength() // NOSONAR S3776 -- Body compress/framing path shares mutable header state; splitting adds regression risk.
     {
         if (!IsBodyRead && BodyInternal == null) return null;
 

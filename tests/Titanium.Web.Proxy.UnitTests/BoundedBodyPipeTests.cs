@@ -96,6 +96,7 @@ public class BoundedBodyPipeTests
         // Completing the reader first should not throw on the write itself for an unlimited pipe;
         // the flush may report completed. Just ensure the call returns.
         await pipe.WriteAsync(new byte[] { 1 });
+        Assert.AreEqual(1, pipe.TotalWritten);
         pipe.CompleteWriter();
     }
 
@@ -178,10 +179,13 @@ public class BoundedBodyPipeTests
     }
 
     [TestMethod]
-    public void Dispose_Twice_IsIdempotent()
+    public async Task Dispose_Twice_IsIdempotent()
     {
         var pipe = new BoundedBodyPipe(maxBytes: 0);
         pipe.Dispose();
         pipe.Dispose();
+
+        await Assert.ThrowsExactlyAsync<ObjectDisposedException>(
+            async () => await pipe.WriteAsync(new byte[] { 1 }));
     }
 }

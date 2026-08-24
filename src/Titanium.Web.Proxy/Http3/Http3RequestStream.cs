@@ -384,7 +384,7 @@ internal static class Http3RequestStream
                 {
                     var path = Environment.GetEnvironmentVariable("TWP_H3_ERROR_LOG");
                     if (!string.IsNullOrEmpty(path))
-                        await System.IO.File.AppendAllTextAsync(path, ex.ToString() + Environment.NewLine + "---" + Environment.NewLine);
+                        await System.IO.File.AppendAllTextAsync(path, ex.ToString() + Environment.NewLine + "---" + Environment.NewLine, CancellationToken.None);
                 }
                 catch
                 {
