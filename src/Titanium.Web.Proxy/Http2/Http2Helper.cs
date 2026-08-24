@@ -4054,7 +4054,10 @@ namespace Titanium.Web.Proxy.Http2
 
         internal static async Task SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         {
-            var block = EncodeHeaderBlock(settings, rr);
+            // Same HPACK lock as QueueSendHeader: Encoder + encode scratch are connection-direction scoped.
+            ReadOnlyMemory<byte> block;
+            lock (settings)
+                block = EncodeHeaderBlock(settings, rr).ToArray();
             await WriteHeaderBlockAsync(frameHeader, frameHeaderBuffer, frameHeader.StreamId,
                 pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers, endStream,
                 rr.Priority.HasValue, block, settings.MaxFrameSize, output);
@@ -4144,38 +4147,44 @@ namespace Titanium.Web.Proxy.Http2
         internal static async Task SendTrailer(Http2Settings settings, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, int streamId, HeaderCollection trailingHeaders, bool endStream, Stream output)
         {
-            var encoder = settings.Encoder;
-            if (encoder == null)
+            ReadOnlyMemory<byte> block;
+            lock (settings)
             {
-                encoder = new Encoder(RfcDefaultHeaderTableSize);
-                settings.Encoder = encoder;
+                var encoder = settings.Encoder;
+                if (encoder == null)
+                {
+                    encoder = new Encoder(RfcDefaultHeaderTableSize);
+                    settings.Encoder = encoder;
+                }
+
+                var ms = settings.GetEncodeStream();
+                var writer = settings.GetEncodeWriter();
+
+                // Same RFC 7541 §6.3 dual-DTSU logic as SendHeader (see the detailed comment there).
+                var minSizeT = settings.MinHeaderTableSizeSinceLastEncode;
+                var curSizeT = settings.HeaderTableSize;
+                if (encoder.MaxHeaderTableSize != minSizeT)
+                    encoder.SetMaxHeaderTableSize(writer, minSizeT);
+                if (encoder.MaxHeaderTableSize != curSizeT)
+                    encoder.SetMaxHeaderTableSize(writer, curSizeT);
+                settings.NotifyHeaderBlockEncoded();
+
+                foreach (var header in trailingHeaders)
+                {
+                    // See the matching comment in SendHeader: field names must be lowercase on the wire.
+                    var nameData = header.NameData;
+                    if (HasUpperCaseAscii(nameData))
+                        nameData = AsciiToLowerByteString(nameData);
+                    encoder.EncodeHeader(writer, nameData, header.ValueData);
+                }
+
+                writer.Flush();
+                // Encode scratch is reused; copy before releasing the HPACK lock.
+                block = GetMemoryStreamMemory(ms).ToArray();
             }
-
-            var ms = settings.GetEncodeStream();
-            var writer = settings.GetEncodeWriter();
-
-            // Same RFC 7541 §6.3 dual-DTSU logic as SendHeader (see the detailed comment there).
-            var minSizeT = settings.MinHeaderTableSizeSinceLastEncode;
-            var curSizeT = settings.HeaderTableSize;
-            if (encoder.MaxHeaderTableSize != minSizeT)
-                encoder.SetMaxHeaderTableSize(writer, minSizeT);
-            if (encoder.MaxHeaderTableSize != curSizeT)
-                encoder.SetMaxHeaderTableSize(writer, curSizeT);
-            settings.NotifyHeaderBlockEncoded();
-
-            foreach (var header in trailingHeaders)
-            {
-                // See the matching comment in SendHeader: field names must be lowercase on the wire.
-                var nameData = header.NameData;
-                if (HasUpperCaseAscii(nameData))
-                    nameData = AsciiToLowerByteString(nameData);
-                encoder.EncodeHeader(writer, nameData, header.ValueData);
-            }
-
-            writer.Flush();
 
             await WriteHeaderBlockAsync(frameHeader, frameHeaderBuffer, streamId, Http2FrameType.Headers,
-                endStream, false, GetMemoryStreamMemory(ms), settings.MaxFrameSize, output);
+                endStream, false, block, settings.MaxFrameSize, output);
         }
 
         private static ReadOnlyMemory<byte> GetMemoryStreamMemory(MemoryStream ms)
@@ -4449,22 +4458,25 @@ namespace Titanium.Web.Proxy.Http2
 
         /// <summary>
         ///     HPACK-encodes <paramref name="rr"/> into a rented framed HEADERS/CONTINUATION block.
-        ///     Caller must hold the origin write lock across encode (dynamic table + RFC 7540 §5.1.1
-        ///     stream-id order). Enqueue may happen after the lock is released so the exclusive drain
-        ///     can write TLS without pinning HPACK.
+        ///     Takes <c>lock(settings)</c> around encode (same as <see cref="SendHeader"/> /
+        ///     <see cref="QueueSendHeader"/>) so the connection Encoder and encode scratch stay
+        ///     consistent even if a caller only holds the origin socket write lock.
         /// </summary>
         internal static ArraySegment<byte> RentFramedHeaders(Http2Settings settings, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, bool pushPromise = false)
         {
-            var block = EncodeHeaderBlock(settings, rr);
-            return RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, frameHeader.StreamId,
-                pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers, endStream,
-                rr.Priority.HasValue, block, settings.MaxFrameSize);
+            lock (settings)
+            {
+                var block = EncodeHeaderBlock(settings, rr);
+                return RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, frameHeader.StreamId,
+                    pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers, endStream,
+                    rr.Priority.HasValue, block, settings.MaxFrameSize);
+            }
         }
 
         /// <summary>
         ///     HPACK-encodes <paramref name="rr"/> and enqueues the framed HEADERS/CONTINUATION bytes.
-        ///     Caller must hold the origin write lock across encode; enqueue may be after unlock.
+        ///     Encode is synchronized on <paramref name="settings"/>; enqueue may run after that lock.
         /// </summary>
         internal static void EnqueueHeader(Http2Settings settings, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Http2FrameWriter writer,
@@ -4475,42 +4487,46 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         /// <summary>
-        ///     HPACK-encodes trailing headers and enqueues the framed HEADERS block. Same lock contract
-        ///     as <see cref="EnqueueHeader"/>.
+        ///     HPACK-encodes trailing headers into a rented framed HEADERS block.
+        ///     Takes <c>lock(settings)</c> for the same Encoder/scratch contract as
+        ///     <see cref="RentFramedHeaders"/>.
         /// </summary>
         internal static ArraySegment<byte> RentFramedTrailers(Http2Settings settings, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, int streamId, HeaderCollection trailingHeaders, bool endStream)
         {
-            var encoder = settings.Encoder;
-            if (encoder == null)
+            lock (settings)
             {
-                encoder = new Encoder(RfcDefaultHeaderTableSize);
-                settings.Encoder = encoder;
+                var encoder = settings.Encoder;
+                if (encoder == null)
+                {
+                    encoder = new Encoder(RfcDefaultHeaderTableSize);
+                    settings.Encoder = encoder;
+                }
+
+                var ms = settings.GetEncodeStream();
+                var writerBuf = settings.GetEncodeWriter();
+
+                var minSizeT = settings.MinHeaderTableSizeSinceLastEncode;
+                var curSizeT = settings.HeaderTableSize;
+                if (encoder.MaxHeaderTableSize != minSizeT)
+                    encoder.SetMaxHeaderTableSize(writerBuf, minSizeT);
+                if (encoder.MaxHeaderTableSize != curSizeT)
+                    encoder.SetMaxHeaderTableSize(writerBuf, curSizeT);
+                settings.NotifyHeaderBlockEncoded();
+
+                foreach (var header in trailingHeaders)
+                {
+                    var nameData = header.NameData;
+                    if (HasUpperCaseAscii(nameData))
+                        nameData = AsciiToLowerByteString(nameData);
+                    encoder.EncodeHeader(writerBuf, nameData, header.ValueData);
+                }
+
+                writerBuf.Flush();
+
+                return RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, streamId,
+                    Http2FrameType.Headers, endStream, false, GetMemoryStreamMemory(ms), settings.MaxFrameSize);
             }
-
-            var ms = settings.GetEncodeStream();
-            var writerBuf = settings.GetEncodeWriter();
-
-            var minSizeT = settings.MinHeaderTableSizeSinceLastEncode;
-            var curSizeT = settings.HeaderTableSize;
-            if (encoder.MaxHeaderTableSize != minSizeT)
-                encoder.SetMaxHeaderTableSize(writerBuf, minSizeT);
-            if (encoder.MaxHeaderTableSize != curSizeT)
-                encoder.SetMaxHeaderTableSize(writerBuf, curSizeT);
-            settings.NotifyHeaderBlockEncoded();
-
-            foreach (var header in trailingHeaders)
-            {
-                var nameData = header.NameData;
-                if (HasUpperCaseAscii(nameData))
-                    nameData = AsciiToLowerByteString(nameData);
-                encoder.EncodeHeader(writerBuf, nameData, header.ValueData);
-            }
-
-            writerBuf.Flush();
-
-            return RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, streamId,
-                Http2FrameType.Headers, endStream, false, GetMemoryStreamMemory(ms), settings.MaxFrameSize);
         }
 
         internal static void EnqueueTrailer(Http2Settings settings, Http2FrameHeader frameHeader,
@@ -4644,19 +4660,23 @@ namespace Titanium.Web.Proxy.Http2
 
             var frameHeader = new Http2FrameHeader { StreamId = streamId };
             var frameHeaderBuffer = new byte[9];
-            var clientWriteLock = connectionState.ClientWriteLock;
 
-            await clientWriteLock.WaitAsync(cancellationToken);
+            // QueueSendHeader locks ClientSettings for HPACK and admits onto the client frame FIFO —
+            // same ordering as final responses. SendHeader under ClientWriteLock alone raced concurrent
+            // QueueSendHeader encodes on the shared dynamic table.
+            QueueSendHeader(connectionState, towardServer: false, connectionState.ClientWriteLock,
+                connectionState.ClientSettings, frameHeader, frameHeaderBuffer, interim,
+                endStream: false, clientStream, pushPromise: false);
+
+            // Flush so Navigation Timing responseStart can move before the final response arrives.
+            await connectionState.ClientWriteLock.WaitAsync(cancellationToken);
             try
             {
-                // SendHeader lowercases field names for the HPACK encoder path as needed.
-                await SendHeader(connectionState.ClientSettings, frameHeader, frameHeaderBuffer, interim,
-                    endStream: false, clientStream, pushPromise: false);
                 await clientStream.FlushAsync(cancellationToken);
             }
             finally
             {
-                clientWriteLock.Release();
+                connectionState.ClientWriteLock.Release();
             }
         }
 

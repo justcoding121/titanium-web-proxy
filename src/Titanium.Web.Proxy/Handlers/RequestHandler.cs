@@ -1062,9 +1062,18 @@ public partial class ProxyServer
                 var token = (comma < 0 ? remaining : remaining.Slice(0, comma)).Trim();
                 if (token.Length > 0)
                 {
-                    var s = token.ToString();
-                    if (ProxyConstants.ProxySupportedCompressions.Contains(s))
-                        supportedAcceptEncoding.Add(s);
+                    // Chrome often sends "gzip;q=1.0" — match the coding token only, not the full
+                    // parameter list, so we do not collapse Accept-Encoding to identity.
+                    var coding = token;
+                    var semicolon = coding.IndexOf(';');
+                    if (semicolon >= 0)
+                        coding = coding.Slice(0, semicolon).Trim();
+                    if (coding.Length > 0)
+                    {
+                        var s = coding.ToString();
+                        if (ProxyConstants.ProxySupportedCompressions.Contains(s))
+                            supportedAcceptEncoding.Add(s);
+                    }
                 }
 
                 if (comma < 0) break;

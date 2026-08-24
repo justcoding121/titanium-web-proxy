@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -470,5 +471,41 @@ public class Http2HelperFrameWriterTests
         Assert.IsTrue(wire.Length > 9);
         Assert.AreEqual((byte)Http2FrameType.Headers, wire[3]);
         Assert.AreEqual((byte)(Http2FrameFlag.EndHeaders | Http2FrameFlag.EndStream), wire[4]);
+    }
+
+    [TestMethod]
+    public async Task SendHeader_ConcurrentCallsOnSharedSettings_DoNotCorruptHpackTable()
+    {
+        // EmitInterimResponseAsync / SendBody used to call EncodeHeaderBlock without lock(settings)
+        // while QueueSendHeader held the lock — concurrent encodes on one connection Encoder desync
+        // the dynamic table (lost content-encoding → garbage YouTube player JSON).
+        var settings = new Http2Settings { MaxFrameSize = 16384 };
+        settings.UpdateHeaderTableSize(4096);
+
+        var tasks = Enumerable.Range(0, 32).Select(async i =>
+        {
+            using var ms = new MemoryStream();
+            var (header, buf) = NewFrameScratch(i * 2 + 1);
+            var response = new Response
+            {
+                HttpVersion = HttpHeader.Version20,
+                StatusCode = 200,
+                StatusDescription = "OK"
+            };
+            // Repeated content-encoding + a unique header so the shared dynamic table grows.
+            response.Headers.AddHeader("content-encoding", "gzip");
+            response.Headers.AddHeader("content-type", "application/json");
+            response.Headers.AddHeader("x-stream-id", i.ToString());
+
+            await Http2Helper.SendHeader(settings, header, buf, response, endStream: true, ms,
+                pushPromise: false);
+
+            var wire = ms.ToArray();
+            Assert.IsTrue(wire.Length > 9, "stream " + i);
+            Assert.AreEqual((byte)Http2FrameType.Headers, wire[3], "stream " + i);
+        });
+
+        await Task.WhenAll(tasks);
+        Assert.IsNotNull(settings.Encoder);
     }
 }

@@ -51,6 +51,28 @@ public class RequestHandlerAndBridgeHelperTests
     }
 
     [TestMethod]
+    public void PrepareRequestHeaders_StripsQualityValues_KeepsSupportedCodings()
+    {
+        // Chrome often sends "gzip;q=1.0, deflate;q=0.9, br;q=0.8". Matching the full token
+        // (including ;q=) against ProxySupportedCompressions used to drop every coding and leave
+        // only identity — origins then omit Content-Encoding or change payload shape.
+        var headers = new HeaderCollection();
+        headers.AddHeader(KnownHeaders.AcceptEncoding, "gzip;q=1.0, deflate;q=0.9, br;q=0.8, zstd;q=0.7");
+
+        typeof(ProxyServer).GetMethod("PrepareRequestHeaders", PrivateStatic)!
+            .Invoke(null, [headers]);
+
+        var accept = headers.GetHeaderValueOrNull(KnownHeaders.AcceptEncoding);
+        Assert.IsNotNull(accept);
+        StringAssert.Contains(accept, "gzip");
+        StringAssert.Contains(accept, "deflate");
+        StringAssert.Contains(accept, "br");
+        StringAssert.Contains(accept, "identity");
+        Assert.IsFalse(accept.Contains("zstd", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(accept.Contains(";q=", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
     public void PrepareRequestHeaders_MissingAcceptEncoding_StillFixesProxyHeaders()
     {
         var headers = new HeaderCollection();

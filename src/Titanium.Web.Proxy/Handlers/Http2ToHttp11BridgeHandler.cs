@@ -661,8 +661,12 @@ public partial class ProxyServer
                     // lowercase "content-length" name (avoids undoing LowercaseHeaderNames + SendHeader
                     // ToLowerInvariant). Restore HTTP/1.1 afterward so AfterResponse / traffic tape still
                     // report the origin protocol (H2↔H1.1), not H2↔H2.
+                    // Preserve BodyIsWireEncoded across Body reassignment (setter clears the flag).
+                    var wasWireEncoded = response.BodyIsWireEncoded;
                     response.HttpVersion = clientHttpVersion;
                     response.Body = bodyBytes;
+                    if (wasWireEncoded)
+                        response.BodyIsWireEncoded = true;
                     response.IsBodyRead = true;
                     response.ContentLength = bodyBytes.Length;
                     response.HttpVersion = HttpHeader.Version11;

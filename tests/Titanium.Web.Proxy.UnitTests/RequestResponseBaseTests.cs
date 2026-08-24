@@ -122,6 +122,40 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         [TestMethod]
+        public void BodyReassignment_MustRestoreBodyIsWireEncoded_ToAvoidDoubleCompress()
+        {
+            // H2→H1 / synthetic emit paths often do: Body = bytes; BodyIsWireEncoded = true.
+            // The Body setter always clears the flag — callers that forget to restore it double-gzip
+            // and browsers then parse compressed player JSON as text (garbage videoplayback URLs).
+            var plain = Encoding.ASCII.GetBytes(
+                "the quick brown fox jumps over the lazy dog. the quick brown fox jumps over the lazy dog.");
+            byte[] gzipped;
+            using (var ms = new MemoryStream())
+            {
+                using (var gzip = new GZipStream(ms, CompressionLevel.SmallestSize, leaveOpen: true))
+                    gzip.Write(plain);
+                gzipped = ms.ToArray();
+            }
+
+            var response = new Response(gzipped);
+            response.Headers.AddHeader(KnownHeaders.ContentEncoding, "gzip");
+            response.IsBodyRead = true;
+            response.BodyIsWireEncoded = true;
+
+            // Simulate a bridge that reassigns the same wire bytes without restoring the flag.
+            var wasWire = response.BodyIsWireEncoded;
+            response.Body = response.Body;
+            Assert.IsFalse(response.BodyIsWireEncoded, "Body setter must clear the flag.");
+            if (wasWire)
+                response.BodyIsWireEncoded = true;
+
+            var onWire = response.CompressBodyAndUpdateContentLength();
+            Assert.IsNotNull(onWire);
+            CollectionAssert.AreEqual(gzipped, onWire,
+                "After restoring BodyIsWireEncoded, CompressBody must not gzip again.");
+        }
+
+        [TestMethod]
         public void CompressBodyAndUpdateContentLength_WireEncodedGzip_DoesNotDoubleCompress()
         {
             var plain = Encoding.ASCII.GetBytes(
@@ -145,6 +179,32 @@ namespace Titanium.Web.Proxy.UnitTests
             CollectionAssert.AreEqual(gzipped, onWire, "Wire-encoded body must not be gzipped again.");
             Assert.AreEqual(gzipped.Length, response.ContentLength);
 
+            using (var compressedStream = new MemoryStream(onWire))
+            using (var gzip = new GZipStream(compressedStream, CompressionMode.Decompress))
+            using (var decompressed = new MemoryStream())
+            {
+                gzip.CopyTo(decompressed);
+                CollectionAssert.AreEqual(plain, decompressed.ToArray());
+            }
+        }
+
+        [TestMethod]
+        public void CompressBodyAndUpdateContentLength_AfterEnsurePlainBody_RecompressesGzip()
+        {
+            // Mirrors GetRequestBody → EnsurePlainBodyAsync: BodyIsWireEncoded cleared, Body is plain,
+            // Content-Encoding still set. Origin forward must CompressBody (not send plain with CE).
+            var plain = Encoding.ASCII.GetBytes(
+                "the quick brown fox jumps over the lazy dog. the quick brown fox jumps over the lazy dog.");
+            var request = new Request { Method = "POST" };
+            request.Body = plain;
+            request.Headers.AddHeader(KnownHeaders.ContentEncoding, "gzip");
+            request.IsBodyRead = true;
+            request.BodyIsWireEncoded = false;
+
+            var onWire = request.CompressBodyAndUpdateContentLength();
+
+            Assert.IsNotNull(onWire);
+            Assert.AreNotEqual(plain.Length, onWire.Length);
             using (var compressedStream = new MemoryStream(onWire))
             using (var gzip = new GZipStream(compressedStream, CompressionMode.Decompress))
             using (var decompressed = new MemoryStream())

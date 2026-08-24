@@ -30,9 +30,14 @@ internal class Http2Settings
     /// <summary>Updates the header-table size ceiling, keeping the minimum-since-last-encode in sync.</summary>
     public void UpdateHeaderTableSize(int value)
     {
-        HeaderTableSize = value;
-        if (value < MinHeaderTableSizeSinceLastEncode)
-            MinHeaderTableSizeSinceLastEncode = value;
+        // Same lock object as Http2Helper.SendHeader/QueueSendHeader/RentFramedHeaders so a
+        // SETTINGS_HEADER_TABLE_SIZE apply cannot race EncodeHeaderBlock's dual-DTSU read.
+        lock (this)
+        {
+            HeaderTableSize = value;
+            if (value < MinHeaderTableSizeSinceLastEncode)
+                MinHeaderTableSizeSinceLastEncode = value;
+        }
     }
 
     /// <summary>
@@ -40,7 +45,11 @@ internal class Http2Settings
     ///     been emitted. Resets the minimum tracker so that only updates arriving <em>after</em> the last
     ///     encode are rolled up into the next header block.
     /// </summary>
-    public void NotifyHeaderBlockEncoded() => MinHeaderTableSizeSinceLastEncode = HeaderTableSize;
+    public void NotifyHeaderBlockEncoded()
+    {
+        lock (this)
+            MinHeaderTableSizeSinceLastEncode = HeaderTableSize;
+    }
 
     public int MaxFrameSize { get; set; } = 16384;
 

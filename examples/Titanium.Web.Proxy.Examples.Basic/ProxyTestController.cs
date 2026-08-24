@@ -75,7 +75,8 @@ namespace Titanium.Web.Proxy.Examples.Basic
             //
             // Env overrides: TWP_ENABLE_CONNECTION_POOL, TWP_FORWARD_UPSTREAM, TWP_PREFETCH,
             // TWP_ENABLE_HTTP2, TWP_SAVE_FAKE_CERTS, TWP_LEAF_KEY (ec|rsa), TWP_CAPTURE_TIMING,
-            // TWP_SET_SYSTEM_PROXY, TWP_ENABLE_HTTP3, TWP_ENABLE_SVCB_DNS (last two in StartProxy).
+            // TWP_SET_SYSTEM_PROXY, TWP_ENABLE_HTTP3, TWP_ENABLE_SVCB_DNS, TWP_SESSION_HOOKS
+            // (last three in StartProxy; TWP_SESSION_HOOKS=0 skips traffic-tape interception).
             proxyServer.Profile = ProxyProfile.Balanced;
             proxyServer.EnableConnectionPool = ReadEnvBool("TWP_ENABLE_CONNECTION_POOL", defaultValue: true);
             // Per-request timing marks are measurement scaffolding; opt in for latency runs.
@@ -108,9 +109,20 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public void StartProxy()
         {
-            proxyServer.BeforeRequest += OnRequest;
-            proxyServer.BeforeResponse += OnResponse;
-            proxyServer.AfterResponse += OnAfterResponse;
+            // Session hooks force full H2 header decode/re-encode (disables compressed HEADERS relay).
+            // Set TWP_SESSION_HOOKS=0 to A/B YouTube/media without traffic-tape interception.
+            var sessionHooks = ReadEnvBool("TWP_SESSION_HOOKS", defaultValue: true);
+            if (sessionHooks)
+            {
+                proxyServer.BeforeRequest += OnRequest;
+                proxyServer.BeforeResponse += OnResponse;
+                proxyServer.AfterResponse += OnAfterResponse;
+            }
+            else
+            {
+                Logger.LogWarning(
+                    "TWP_SESSION_HOOKS=0: BeforeRequest/BeforeResponse/AfterResponse not subscribed (H2 compressed relay on)");
+            }
 
             // Inspect/modify the response body chunk-by-chunk as it streams, without buffering it in memory.
             // Do not combine with SessionEventArgs.GetResponseBody (which buffers the whole body).

@@ -226,18 +226,10 @@ internal static class Http3OriginBridge
             {
                 pendingCopy = copyRequestBody;
             }
-            else if (request.HttpVersion.Major >= 3)
-            {
-                // Native HTTP/3 GetRequestBody() stores wire bytes matching Content-Encoding.
-                // CompressBodyAndUpdateContentLength assumes decompressed bytes and would
-                // double-compress — same rule as ForwardOverTcpAsync.
-                body = request.BodyAvailable ? request.Body : null;
-                if (body != null && !request.IsChunked && request.ContentLength < 0)
-                    request.UpdateContentLength();
-            }
             else
             {
-                // H1→H3 / H2→H3: GetRequestBody() decompressed; re-apply Content-Encoding for the wire.
+                // GetRequestBody() leaves plain bytes (EnsurePlainBodyAsync); CompressBody respects
+                // BodyIsWireEncoded so eager wire buffers are not double-compressed.
                 body = request.HasBody || request.BodyAvailable
                     ? request.CompressBodyAndUpdateContentLength()
                     : null;
@@ -1612,10 +1604,11 @@ internal static class Http3OriginBridge
 
             if (!streamRequestBody)
             {
-                // Native HTTP/3 GetRequestBody() stores DATA-frame payloads verbatim:
-                // Body already IS the wire-compressed representation matching Content-Encoding.
-                body = request.BodyAvailable ? request.Body : null;
-                request.UpdateContentLength();
+                // GetRequestBody() leaves plain bytes; CompressBody respects BodyIsWireEncoded so
+                // any remaining wire buffer is not double-compressed onto the H1 origin.
+                body = request.BodyAvailable || request.HasBody
+                    ? request.CompressBodyAndUpdateContentLength()
+                    : null;
             }
             else if (request.ContentLength < 0 && !request.IsChunked)
             {
