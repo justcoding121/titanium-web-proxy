@@ -266,28 +266,34 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 
 #### Block A — H1 plain
 
+1-rep cool-ish laptop @ `0ff3673c` (`laptop-sat-memory-fix/`, 2026-08-24). Absolutes are local-only; prefer ratios.
+
 | Arm | Generator | Sustain | Peak | % of origin-HttpClient | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|
-| origin-direct | dotnet-httpclient | *fill* | *fill* | 100% | *fill* | *fill* |
-| bare-reverse-http1 | dotnet-httpclient | *fill* | *fill* | *fill* | *fill* | *fill* |
-| nginx-reverse-http1 | dotnet-httpclient | *fill* | *fill* | *fill* | *fill* | *fill* |
-| yarp-reverse-http1 | dotnet-httpclient | *fill* | *fill* | *fill* | *fill* | *fill* |
-| twp-reverse-http1 | dotnet-httpclient | *fill* | *fill* | *fill* | *fill* | *fill* |
+| origin-direct | dotnet-httpclient | **47,946** | **62,661** | **100%** | **58 MiB** | **32.2** |
+| bare-reverse-http1 | dotnet-httpclient | **36,177** | **36,177** | **57.7%** | **57 MiB** | **35.4** |
+| nginx-reverse-http1 | dotnet-httpclient | **18,208** | **19,436** | **31.0%** | **217 MiB** | 🥇 **12.1** |
+| yarp-reverse-http1 | dotnet-httpclient | **29,592** | **34,703** | **55.4%** | **85 MiB** | **41.3** |
+| twp-reverse-http1 | dotnet-httpclient | **34,061** | **34,061** | **54.4%** | 🥇 **81 MiB** | **39.4** |
 
 #### Block B — H2 TLS→H1
 
+Same run. **TWP Memory ~199 MiB** vs prior laptop multi-conn **~425 MiB** / CI **~848 MiB** — bag drain + H2→H1 lite wire; RPS still **1.04×** YARP.
+
 | Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|---:|
-| nginx-reverse-http2 | dotnet-httpclient | *fill* | *fill* | *fill* | 1.00× | *fill* | *fill* |
-| yarp-reverse-http2 | dotnet-httpclient | *fill* | *fill* | 1.00× | *fill* | *fill* | *fill* |
-| twp-reverse-http2-cleartext | dotnet-httpclient | *fill* | *fill* | *fill* | *fill* | *fill* | *fill* |
+| nginx-reverse-http2 | dotnet-httpclient | **3,186** | **11,389** | **0.25×** | **1.00×** | **243 MiB** | 🥇 **11.4** |
+| yarp-reverse-http2 | dotnet-httpclient | **45,269** | **45,269** | **1.00×** | **3.98×** | 🥇 **105 MiB** | **48.3** |
+| twp-reverse-http2-cleartext | dotnet-httpclient | 🥇 **46,987** | **46,987** | **1.04×** | **4.13×** | **199 MiB** | **47.3** |
 
 #### Block C — H3→H1
 
+Same sequential run (thermal; treat ÷YARP cautiously vs cool pair).
+
 | Arm | Generator | Sustain | Peak | ÷YARP | Memory (RSS) | CPU avg % |
 |---|---|---:|---:|---:|---:|---:|
-| yarp-reverse-http3-cleartext | dotnet-httpclient | *fill* | *fill* | 1.00× | *fill* | *fill* |
-| twp-reverse-http3-cleartext | dotnet-httpclient | *fill* | *fill* | *fill* | *fill* | *fill* |
+| yarp-reverse-http3-cleartext | dotnet-httpclient | 🥇 **28,101** | **28,101** | **1.00×** | 🥇 **172 MiB** | **45.4** |
+| twp-reverse-http3-cleartext | dotnet-httpclient | **22,910** | **23,628** | **0.84×** | **198 MiB** | 🥇 **40.7** |
 
 Laptop cool-ish A/B before bag/lite fix (2026-08-23, c=64, 8 s) — superseded by Block B once filled:
 
