@@ -124,9 +124,41 @@ Systematic Windows reverse inventory (published TWP RSS > YARP) ranked H2→H1 a
 
 GC heap post-fix ~5.4 MiB; `VolatileNode<int,byte>[]` collapsed to one table (~0.6 MiB) with no Node storm. **GHA paste @ `571b6fba`:** Win H2→H1 Memory ÷YARP ~**1.04×** (95 / 92 MiB); Linux ~**0.99×**. H2→H3 / h2c→H3 cool remasure ≤~1.2× Memory ÷YARP — **no further dig** on those arms (same keep).
 
-Harness: `tools/RpsLoadProbe/profile-memory-arm.ps1` (mid-measure gcdump + Heap dump).
+Harness: `tools/RpsLoadProbe/profile-memory-arm.ps1` (mid-measure gcdump + Heap dump). Linux: `Dockerfile.mem-profile` + `profile-memory-arm.sh` in Docker with `libmsquic` (diagnosis only — publishable numbers stay GHA).
 
 **H3→H1 cool remasure (same session, `mem-audit-h3h1-post-synth`):** TWP **183** MiB / YARP **169** MiB ≈ **1.08×** Memory ÷YARP (RPS ~10.2k / ~6.4k — YARP soft on this box). GC heaps ~10 / ~9 MiB; no unbounded dict Node storm. Published CI was ~**1.57×** — laptop gap is already under the **≥1.3×** dig gate; residual treated as MsQuic / structural. **No H3 Memory code change** this pass; confirm with GHA Block C paste.
+
+### Unjustified Memory dig gate (post-syntheticStreams)
+
+Skip treating Memory alone. From published reverse matrices, **dig** only when:
+
+- Memory÷YARP > **1.05**, **and**
+- Memory÷YARP > RPS÷YARP (RSS tax without matching throughput lead, or RPS behind).
+
+Otherwise Memory is at parity or justified by higher RPS. Do not close gaps as “YARP/Kestrel is leaner” — both are managed C#; attribute TWP-owned retention / pool / buffer causes.
+
+| Pri | OS | Arm | Mem÷YARP | RPS÷YARP | Dig? |
+|---|---|---|---:|---:|---|
+| P0 | Linux | H3→H1 | **1.49×** | **1.15×** | Yes — largest excess |
+| P0 | Windows | H3→H1 | **1.09×** | **0.95×** | Yes — more RSS and slower |
+| P1 | Linux | H3→H2 | **1.28×** | **1.14×** | Yes |
+| P1 | Windows | H1→H2 | **1.17×** | **1.03×** | Yes |
+| P2 | Windows | H3→H2 | **1.20×** | **1.14×** | Marginal; after P0/P1 |
+
+Out of scope when Mem ≤1.05 or Mem ≤ RPS: H2→H1, h2c→H1, H2→H3, h2c→H3, H3→H3, same-protocol H2↔H2.
+
+```powershell
+# Windows mid-measure dump
+pwsh tools/RpsLoadProbe/profile-memory-arm.ps1 -Mode reverse-http3-cleartext -Concurrency 64 -SkipBuild
+
+# Linux (Docker + libmsquic) — build once, then:
+docker build -f tools/RpsLoadProbe/Dockerfile.mem-profile -t twp-mem-linux tools/RpsLoadProbe
+docker run --rm --entrypoint /bin/bash --cap-add=SYS_PTRACE --security-opt seccomp=unconfined `
+  -v ${PWD}:/src -w /src -v ${PWD}/tools/RpsLoadProbe/results:/out `
+  twp-mem-linux -c "sed -i 's/\r$//' /src/tools/RpsLoadProbe/profile-memory-arm.sh && bash /src/tools/RpsLoadProbe/profile-memory-arm.sh reverse-http3-cleartext"
+```
+
+**KEEP — inbound H3 `ConcurrentBag<Task>` → `Http2PendingWork`:** same defect class as the H2 bag. Mid-measure Win H3→H1 GC ~13 MiB with large `Task[]` segments → post-fix ~3.4 MiB / peak RSS **~108** MiB vs YARP **~162** (~**0.67×** Memory ÷YARP; RPS soft vs YARP on that cool pair). Linux Docker (diagnosis only): TWP **~142** / YARP **~209** MiB. Control-stream `ReturnPayload` also landed. Cool secondary after keep: H3→H2 Mem ÷YARP **~0.72×**; H1→H2 Mem **~1.09×** but RPS **~1.51×** → skip dig. **GHA paste** confirms publishable medians.
 
 ## nginx portable takeaways
 

@@ -1,10 +1,10 @@
 #pragma warning disable CA1416
 using System;
-using System.Collections.Concurrent;
 using System.Net.Quic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Titanium.Web.Proxy.Http2;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -19,7 +19,7 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
     private readonly QuicConnection _connection;
     private readonly ProxyServer _proxyServer;
     private readonly CancellationTokenSource _cts = new();
-    private readonly ConcurrentBag<Task> _backgroundTasks = [];
+    private readonly Http2PendingWork _backgroundTasks = new();
     private Task? _acceptLoop;
     private QuicStream? _controlStream;
     private Http3Settings? _peerSettings;
@@ -70,7 +70,7 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
             }
 
             // Track drain tasks (do not discard) so DisposeAsync can join them.
-            _backgroundTasks.Add(DrainInboundUnidirectionalStreamAsync(stream, ct));
+            _backgroundTasks.Track(DrainInboundUnidirectionalStreamAsync(stream, ct));
         }
     }
 
@@ -155,18 +155,25 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
             var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 16 * 1024, ct);
             if (frame is null) return settings;
 
-            if (!receivedSettings)
+            try
             {
-                if (frame.Type != Http3FrameType.Settings)
-                    return settings; // peer violation; leave connection for request paths to fail/retry
-                settings = Http3Settings.Parse(frame.Payload.Span);
-                receivedSettings = true;
-                continue;
-            }
+                if (!receivedSettings)
+                {
+                    if (frame.Type != Http3FrameType.Settings)
+                        return settings; // peer violation; leave connection for request paths to fail/retry
+                    settings = Http3Settings.Parse(frame.Payload.Span);
+                    receivedSettings = true;
+                    continue;
+                }
 
-            // Drain remaining control frames (GOAWAY, etc.).
-            if (frame.Type == Http3FrameType.GoAway)
-                return settings;
+                // Drain remaining control frames (GOAWAY, etc.).
+                if (frame.Type == Http3FrameType.GoAway)
+                    return settings;
+            }
+            finally
+            {
+                frame.ReturnPayload();
+            }
         }
 
         return settings;
@@ -217,7 +224,7 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
 
         try
         {
-            await Task.WhenAll(_backgroundTasks).WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None);
+            await _backgroundTasks.WhenAllAsync().WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None);
         }
         catch (Exception ex)
         {

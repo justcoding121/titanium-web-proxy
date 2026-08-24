@@ -287,6 +287,17 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             CreateNoWindow = true,
             WorkingDirectory = AppContext.BaseDirectory
         };
+
+        // When the parent is launched as `dotnet RpsLoadProbe.dll`, ProcessPath is the host
+        // (`dotnet`) and children need the same DLL path prepended or they fail with
+        // "specified command or file was not found" (Linux Docker mem-profile path).
+        if (NeedsDotnetEntryAssemblyPrefix(exe))
+        {
+            var entry = System.Reflection.Assembly.GetEntryAssembly()?.Location
+                        ?? Path.Combine(AppContext.BaseDirectory, "RpsLoadProbe.dll");
+            psi.ArgumentList.Add(entry);
+        }
+
         foreach (var part in SplitArgs(args))
             psi.ArgumentList.Add(part);
         psi.Environment["DOTNET_ENVIRONMENT"] = "Production";
@@ -299,6 +310,13 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         var process = Process.Start(psi)
                       ?? throw new InvalidOperationException($"Failed to start child: {exe} {args}");
         return process;
+    }
+
+    private static bool NeedsDotnetEntryAssemblyPrefix(string exe)
+    {
+        var name = Path.GetFileNameWithoutExtension(exe);
+        return name.Equals("dotnet", StringComparison.OrdinalIgnoreCase)
+               || name.Equals("dotnet.exe", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IEnumerable<string> SplitArgs(string args)

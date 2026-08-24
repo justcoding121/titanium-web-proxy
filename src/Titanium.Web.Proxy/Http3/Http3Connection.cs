@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
@@ -52,13 +53,13 @@ internal sealed class Http3Connection
     private readonly CancellationTokenSource _connectionCts;
 
     /// <summary>
-    ///     Every background task spawned for this connection (per-request-stream handlers,
-    ///     unidirectional-stream handlers, the QPACK decoder-stream ack writer), so
-    ///     <see cref="JoinBackgroundTasksAsync" /> can wait for all of them to actually finish - not
-    ///     just observe that their owning token was cancelled - before shared per-connection state is
-    ///     torn down.
+    ///     Every in-flight background task for this connection (per-request-stream handlers,
+    ///     unidirectional-stream handlers, the QPACK decoder-stream ack writer). Uses
+    ///     <see cref="Http2PendingWork" /> so completed tasks unroot immediately — a
+    ///     <see cref="ConcurrentBag{T}"/> retained every completed stream Task (and its
+    ///     async state machine / QuicStream locals) for the connection lifetime under multiplex.
     /// </summary>
-    private readonly ConcurrentBag<Task> _backgroundTasks = new();
+    private readonly Http2PendingWork _backgroundTasks = new();
 
     /// <summary>
     ///     Active request streams keyed by QUIC stream ID (long). Values are the per-stream state objects
@@ -172,7 +173,7 @@ internal sealed class Http3Connection
                 await qpackDecoderStream.WriteAsync(new byte[] { (byte)Http3StreamType.QpackDecoder }, _connectionCts.Token);
 
                 // Start the ack writer background loop, tracked so it is joined before teardown.
-                _backgroundTasks.Add(QpackDecoderStreamWriter.RunAsync(qpackDecoderStream, _qpackContext, _connectionCts.Token));
+                _backgroundTasks.Track(QpackDecoderStreamWriter.RunAsync(qpackDecoderStream, _qpackContext, _connectionCts.Token));
             }
 
             // Run request-accept loop concurrently with unidirectional stream setup.
@@ -259,7 +260,7 @@ internal sealed class Http3Connection
         if (_backgroundTasks.IsEmpty) return;
         try
         {
-            var allDone = Task.WhenAll(_backgroundTasks);
+            var allDone = _backgroundTasks.WhenAllAsync();
             // Drain timeout must not share the connection CTS (already cancelled at this point).
             var completed = await Task.WhenAny(allDone,
                 Task.Delay(BackgroundTaskDrainTimeout, CancellationToken.None));
@@ -326,11 +327,11 @@ internal sealed class Http3Connection
             // connection's shared state (QpackContext, session state) is torn down.
             if (stream.Type == QuicStreamType.Bidirectional)
             {
-                _backgroundTasks.Add(HandleRequestStreamAsync(stream, ct));
+                _backgroundTasks.Track(HandleRequestStreamAsync(stream, ct));
             }
             else
             {
-                _backgroundTasks.Add(HandleUnidirectionalStreamAsync(stream, ct));
+                _backgroundTasks.Track(HandleUnidirectionalStreamAsync(stream, ct));
             }
         }
     }
@@ -400,46 +401,53 @@ internal sealed class Http3Connection
                 throw new Http3ConnectionException(Http3ErrorCode.ClosedCriticalStream,
                     "The client's control stream was closed.");
 
-            if (isFirstFrame)
+            try
             {
-                isFirstFrame = false;
-                // RFC 9114 §6.2.1: "the first frame on the control stream MUST be a SETTINGS
-                // frame". Accepting MAX_PUSH_ID/CANCEL_PUSH (or anything else) before SETTINGS
-                // would let a peer configure connection-wide behavior we have not yet negotiated.
-                if (frame.Type != Http3FrameType.Settings)
-                    throw new Http3ConnectionException(Http3ErrorCode.MissingSettings,
-                        $"The first frame on the client's control stream must be SETTINGS; got type 0x{frame.Type:X}.");
-            }
+                if (isFirstFrame)
+                {
+                    isFirstFrame = false;
+                    // RFC 9114 §6.2.1: "the first frame on the control stream MUST be a SETTINGS
+                    // frame". Accepting MAX_PUSH_ID/CANCEL_PUSH (or anything else) before SETTINGS
+                    // would let a peer configure connection-wide behavior we have not yet negotiated.
+                    if (frame.Type != Http3FrameType.Settings)
+                        throw new Http3ConnectionException(Http3ErrorCode.MissingSettings,
+                            $"The first frame on the client's control stream must be SETTINGS; got type 0x{frame.Type:X}.");
+                }
 
-            switch (frame.Type)
+                switch (frame.Type)
+                {
+                    case Http3FrameType.Settings:
+                        if (receivedSettings)
+                            throw new Http3ConnectionException(Http3ErrorCode.FrameUnexpected,
+                                "Received duplicate SETTINGS on control stream.");
+                        _clientSettings = Http3Settings.Parse(frame.Payload.Span);
+                        receivedSettings = true;
+                        // If the client sets QPACK_MAX_TABLE_CAPACITY = 0, disable outbound dynamic table
+                        // encoding so we never reference entries the peer will not maintain.
+                        if (_qpackContext != null && _clientSettings.QpackMaxTableCapacity == 0)
+                            _qpackContext.DisableOutboundTable();
+                        else if (_qpackContext != null && _clientSettings.QpackMaxTableCapacity > 0)
+                            _qpackContext.MaxTableCapacityFromPeer = _clientSettings.QpackMaxTableCapacity;
+                        break;
+                    case Http3FrameType.GoAway:
+                        // Client is initiating graceful shutdown — stop processing new requests.
+                        return;
+                    case Http3FrameType.CancelPush:
+                    case Http3FrameType.MaxPushId:
+                        // Accepted but we don't implement push — ignore.
+                        break;
+                    default:
+                        // DATA, HEADERS etc. are not allowed on the control stream (RFC 9114 §7.2.1).
+                        if (frame.Type == Http3FrameType.Data || frame.Type == Http3FrameType.Headers)
+                            throw new Http3ConnectionException(Http3ErrorCode.FrameUnexpected,
+                                $"Frame type 0x{frame.Type:X} not permitted on control stream.");
+                        // Unknown frame types MUST be ignored (RFC 9114 §9).
+                        break;
+                }
+            }
+            finally
             {
-                case Http3FrameType.Settings:
-                    if (receivedSettings)
-                        throw new Http3ConnectionException(Http3ErrorCode.FrameUnexpected,
-                            "Received duplicate SETTINGS on control stream.");
-                    _clientSettings = Http3Settings.Parse(frame.Payload.Span);
-                    receivedSettings = true;
-                    // If the client sets QPACK_MAX_TABLE_CAPACITY = 0, disable outbound dynamic table
-                    // encoding so we never reference entries the peer will not maintain.
-                    if (_qpackContext != null && _clientSettings.QpackMaxTableCapacity == 0)
-                        _qpackContext.DisableOutboundTable();
-                    else if (_qpackContext != null && _clientSettings.QpackMaxTableCapacity > 0)
-                        _qpackContext.MaxTableCapacityFromPeer = _clientSettings.QpackMaxTableCapacity;
-                    break;
-                case Http3FrameType.GoAway:
-                    // Client is initiating graceful shutdown — stop processing new requests.
-                    return;
-                case Http3FrameType.CancelPush:
-                case Http3FrameType.MaxPushId:
-                    // Accepted but we don't implement push — ignore.
-                    break;
-                default:
-                    // DATA, HEADERS etc. are not allowed on the control stream (RFC 9114 §7.2.1).
-                    if (frame.Type == Http3FrameType.Data || frame.Type == Http3FrameType.Headers)
-                        throw new Http3ConnectionException(Http3ErrorCode.FrameUnexpected,
-                            $"Frame type 0x{frame.Type:X} not permitted on control stream.");
-                    // Unknown frame types MUST be ignored (RFC 9114 §9).
-                    break;
+                frame.ReturnPayload();
             }
         }
     }
