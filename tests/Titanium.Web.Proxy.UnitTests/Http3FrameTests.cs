@@ -109,5 +109,49 @@ public class Http3FrameTests
         Assert.IsNotNull(frame);
         Assert.AreEqual(Http3FrameType.Headers, frame!.Type);
         CollectionAssert.AreEqual(qpack, frame.Payload.ToArray());
+        frame.ReturnPayload();
+        frame.ReturnPayload(); // idempotent
+    }
+
+    [TestMethod]
+    public async Task WriteAsync_LargePayload_UsesHeaderThenBodyWrites()
+    {
+        await using var ms = new MemoryStream();
+        var payload = new byte[512];
+        payload.AsSpan().Fill(0xAB);
+
+        await Http3Frame.WriteAsync(ms, Http3FrameType.Data, payload, CancellationToken.None);
+        ms.Position = 0;
+
+        var frame = await Http3Frame.ReadAsync(ms, maxPayloadBytes: 1024, CancellationToken.None);
+
+        Assert.IsNotNull(frame);
+        Assert.AreEqual(Http3FrameType.Data, frame!.Type);
+        Assert.AreEqual(512, frame.Payload.Length);
+        Assert.AreEqual(0xAB, frame.Payload.Span[0]);
+        frame.ReturnPayload();
+    }
+
+    [TestMethod]
+    public async Task WriteHeadersAndDataAsync_CoalescesIntoReadableFrames()
+    {
+        await using var ms = new MemoryStream();
+        var headers = new byte[] { 0x00, 0x00, 0xD1 };
+        var data = new byte[] { 1, 2, 3, 4, 5 };
+
+        await Http3Frame.WriteHeadersAndDataAsync(ms, headers, data, CancellationToken.None);
+        ms.Position = 0;
+
+        var headersFrame = await Http3Frame.ReadAsync(ms, maxPayloadBytes: 4096, CancellationToken.None);
+        var dataFrame = await Http3Frame.ReadAsync(ms, maxPayloadBytes: 4096, CancellationToken.None);
+
+        Assert.IsNotNull(headersFrame);
+        Assert.AreEqual(Http3FrameType.Headers, headersFrame!.Type);
+        CollectionAssert.AreEqual(headers, headersFrame.Payload.ToArray());
+        Assert.IsNotNull(dataFrame);
+        Assert.AreEqual(Http3FrameType.Data, dataFrame!.Type);
+        CollectionAssert.AreEqual(data, dataFrame.Payload.ToArray());
+        headersFrame.ReturnPayload();
+        dataFrame.ReturnPayload();
     }
 }

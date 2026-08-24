@@ -5,6 +5,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -788,5 +789,166 @@ public class SonarNewCodeCoverageTests
         CollectionAssert.AreEqual(new byte[] { 9 }, mem.ToArray());
         mem = (ReadOnlyMemory<byte>)stripMem.Invoke(null, [Array.Empty<byte>(), 0, Http2FrameFlag.Padded])!;
         Assert.AreEqual(0, mem.Length);
+    }
+
+    [TestMethod]
+    public void ResponseMayHaveBody_And_ForbiddenStreamTypes_CoverBranches()
+    {
+        var mayHave = BridgeMethod("ResponseMayHaveBody");
+        Assert.IsFalse((bool)mayHave.Invoke(null, [100, "GET", -1L, false, false])!);
+        Assert.IsFalse((bool)mayHave.Invoke(null, [204, "GET", 10L, false, false])!);
+        Assert.IsFalse((bool)mayHave.Invoke(null, [304, "GET", 10L, false, false])!);
+        Assert.IsFalse((bool)mayHave.Invoke(null, [200, "HEAD", 10L, false, false])!);
+        Assert.IsFalse((bool)mayHave.Invoke(null, [200, "GET", 0L, false, false])!);
+        Assert.IsTrue((bool)mayHave.Invoke(null, [200, "GET", 5L, false, false])!);
+        Assert.IsTrue((bool)mayHave.Invoke(null, [200, "GET", -1L, true, false])!);
+        Assert.IsTrue((bool)mayHave.Invoke(null, [200, "GET", -1L, false, true])!);
+        Assert.IsFalse((bool)mayHave.Invoke(null, [200, "GET", -1L, false, false])!);
+
+        var forbidden = BridgeMethod("IsForbiddenOnRequestStream");
+        Assert.IsTrue((bool)forbidden.Invoke(null, [Http3FrameType.Settings])!);
+        Assert.IsTrue((bool)forbidden.Invoke(null, [Http3FrameType.GoAway])!);
+        Assert.IsFalse((bool)forbidden.Invoke(null, [Http3FrameType.Headers])!);
+        Assert.IsFalse((bool)forbidden.Invoke(null, [Http3FrameType.Data])!);
+    }
+
+    [TestMethod]
+    public void HeaderBuilder_CoversVersionEmptyUrlAndProxyAuthBranches()
+    {
+        var builder = HeaderBuilder.Rent();
+        try
+        {
+            builder.WriteRequestLine("GET", "", HttpHeader.Version10);
+            builder.WriteRequestLine("OPTIONS", (ByteString)"", new Version(1, 2));
+            builder.WriteResponseLine(HttpHeader.Version11, 200, "OK");
+
+            var headers = new HeaderCollection();
+            headers.AddHeader("Proxy-Authorization", "secret");
+            headers.AddHeader("X-Keep", "1");
+            builder.WriteHeaders(headers, sendProxyAuthorization: false);
+            builder.WriteHeaders(headers, sendProxyAuthorization: true);
+            builder.WriteHeaders(headers, sendProxyAuthorization: true, "user", "pass");
+            builder.WriteLine();
+            builder.WriteRaw("raw"u8);
+            builder.Write(string.Empty);
+            builder.Write(new string('x', 300)); // ArrayPool encode path
+
+            var buf = builder.GetBuffer();
+            Assert.IsTrue(buf.Count > 20);
+            Assert.IsFalse(string.IsNullOrEmpty(builder.GetString(Encoding.ASCII)));
+        }
+        finally
+        {
+            HeaderBuilder.Return(builder);
+            HeaderBuilder.Return(HeaderBuilder.Rent()); // cache hit path
+        }
+    }
+
+    [TestMethod]
+    public async Task Http2FrameWriter_CoalescePath_FlushesMultipleFrames()
+    {
+        using var output = new MemoryStream();
+        await using var writer = new Http2FrameWriter(output);
+
+        for (var i = 0; i < 8; i++)
+        {
+            var rented = ArrayPool<byte>.Shared.Rent(32);
+            rented.AsSpan(0, 32).Fill((byte)i);
+            writer.EnqueueRented(rented, 32);
+        }
+
+        await writer.DisposeAsync();
+        Assert.IsTrue(output.Length >= 256);
+    }
+
+    [TestMethod]
+    public async Task Http2ToHttp11_ReadLineAndLiteHelpers()
+    {
+        var readLine = ProxyMethod("ReadLineAsync");
+        await using (var ms = new MemoryStream(Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\n")))
+        {
+            var line = await (Task<string?>)readLine.Invoke(null, [ms, CancellationToken.None])!;
+            Assert.AreEqual("HTTP/1.1 200 OK", line);
+        }
+
+        await using (var empty = new MemoryStream())
+        {
+            Assert.IsNull(await (Task<string?>)readLine.Invoke(null, [empty, CancellationToken.None])!);
+        }
+
+        await using (var partial = new MemoryStream(Encoding.ASCII.GetBytes("no-nl")))
+        {
+            Assert.AreEqual("no-nl", await (Task<string?>)readLine.Invoke(null, [partial, CancellationToken.None])!);
+        }
+
+        var lite = ProxyMethod("IsH2BridgeLiteMethod");
+        Assert.IsTrue((bool)lite.Invoke(null, ["GET"])!);
+        Assert.IsTrue((bool)lite.Invoke(null, ["head"])!);
+        Assert.IsTrue((bool)lite.Invoke(null, ["DELETE"])!);
+        Assert.IsTrue((bool)lite.Invoke(null, ["OPTIONS"])!);
+        Assert.IsFalse((bool)lite.Invoke(null, ["POST"])!);
+        Assert.IsFalse((bool)lite.Invoke(null, [null])!);
+
+        var hasUpper = ProxyMethod("HeaderNameDataHasUpperCaseAscii");
+        Assert.IsTrue((bool)hasUpper.Invoke(null, ["Content-Type".GetByteString()])!);
+        Assert.IsFalse((bool)hasUpper.Invoke(null, ["content-type".GetByteString()])!);
+
+        var lower = ProxyMethod("AsciiToLowerByteString");
+        var lowered = (ByteString)lower.Invoke(null, ["X-Mixed".GetByteString()])!;
+        Assert.AreEqual("x-mixed", lowered.GetString());
+    }
+
+    [TestMethod]
+    public void Http11ToHttp2_PrepareOriginAndWsHelpers()
+    {
+        var prepare = ProxyMethod("PrepareRequestForOrigin");
+        var request = new Request
+        {
+            Method = "GET",
+            HttpVersion = HttpHeader.Version11,
+            Host = "Example.COM",
+            RequestUriString8 = "/path".GetByteString()
+        };
+        request.Headers.AddHeader("X-Mixed", "1");
+        prepare.Invoke(null, [request]);
+        Assert.IsTrue(request.HeaderNamesAreHttp2Normalized);
+        Assert.IsTrue(request.Authority.Length > 0);
+        Assert.IsNull(request.Headers.GetHeaderValueOrNull(KnownHeaders.Host));
+
+        var close = ProxyMethod("ClientRequestedConnectionClose");
+        var closeReq = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
+        closeReq.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionClose.String);
+        Assert.IsTrue((bool)close.Invoke(null, [closeReq])!);
+        Assert.IsFalse((bool)close.Invoke(null, [new Request { Method = "GET", HttpVersion = HttpHeader.Version11 }])!);
+
+        var http10 = new Request { Method = "GET", HttpVersion = HttpHeader.Version10 };
+        Assert.IsTrue((bool)close.Invoke(null, [http10])!);
+        http10.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionKeepAlive.String);
+        Assert.IsFalse((bool)close.Invoke(null, [http10])!);
+
+        var wsPrep = ProxyMethod("PrepareWebSocketUpgradeForHttp2Origin");
+        var ws = new Request
+        {
+            Method = "GET",
+            Host = "ws.example",
+            RequestUriString8 = "/chat".GetByteString()
+        };
+        ws.Headers.AddHeader(KnownHeaders.Upgrade, KnownHeaders.UpgradeWebsocket);
+        ws.Headers.AddHeader(KnownHeaders.Connection, "Upgrade");
+        ws.Headers.AddHeader("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==");
+        ws.Headers.AddHeader("Sec-WebSocket-Version", "13");
+        wsPrep.Invoke(null, [ws]);
+        Assert.AreEqual("CONNECT", ws.Method);
+        Assert.AreEqual("websocket", ws.ExtendedConnectProtocol);
+        Assert.IsTrue(ws.Authority.Length > 0);
+
+        var build101 = ProxyMethod("BuildSwitchingProtocolsResponse");
+        var origin = new Response { StatusCode = 101 };
+        origin.Headers.AddHeader("sec-websocket-protocol", "chat");
+        origin.Headers.AddHeader("sec-websocket-extensions", "permessage-deflate");
+        var response101 = (Response)build101.Invoke(null, ["dGhlIHNhbXBsZSBub25jZQ==", origin])!;
+        Assert.AreEqual(101, response101.StatusCode);
+        Assert.IsNotNull(response101.Headers.GetHeaderValueOrNull("Sec-WebSocket-Accept"));
+        Assert.AreEqual("chat", response101.Headers.GetHeaderValueOrNull("sec-websocket-protocol"));
     }
 }
