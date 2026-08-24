@@ -49,7 +49,9 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
 
 **CSV resource columns** (every measure step): `proxy_rss_peak_bytes`, `proxy_cpu_avg_pct` (wiki label: **Memory (RSS)**). Names stay `proxy_*` even on origin-direct arms (those sample the **origin** child PID). Otherwise sample the **proxy** child PID plus its **full descendant tree** (so nginx workers under the serve-proxy → master chain are included). Empty when the PID cannot be sampled. Poll ~200ms during the measure window; peak Working Set / VmRSS sum and average CPU% (of all logical processors).
 
-**Summary:** Block A prints median peak RPS as **% of origin-direct** (and bombardier when present) plus median Memory (RSS) / CPU at the peak-RPS step. Blocks B/C print peer÷YARP and peer÷nginx (when present) plus Memory (RSS) / CPU — not % of H1 origin-direct.
+**Summary:**
+- **compare-saturation:** Block A prints median peak RPS as **% of origin-direct** (and bombardier when present) plus median Memory (RSS) / CPU at the peak-RPS step. Blocks B/C print peer÷YARP and peer÷nginx (when present) plus Memory (RSS) / CPU — not % of H1 origin-direct.
+- **Other compare-* matrix modes:** median peak RPS for all arms; **TWP-only** median Memory (RSS) / CPU (`median_memory_rss_bytes` / `median_cpu_avg_pct`). nginx/YARP Memory/CPU remain saturation-only for peer comparison.
 
 Memory A/B knobs (load generator): `TWP_RPS_SINGLE_HTTP2_CONNECTION=1` / `TWP_RPS_SINGLE_HTTP3_CONNECTION=1` force a single multiplexed client connection (`EnableMultipleHttp2Connections` / `EnableMultipleHttp3Connections` off). See [Performance Profiling — Memory (RSS)](../../wiki/Performance-Profiling.md#memory-rss--h2h1-vs-h1--h3).
 

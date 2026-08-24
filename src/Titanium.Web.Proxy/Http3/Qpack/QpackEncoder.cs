@@ -135,46 +135,84 @@ internal static class QpackEncoder
 
     /// <summary>
     ///     Incremental QPACK response builder for the H3→H1 one-pass header parse.
-    ///     Holds a dedicated <see cref="MemoryStream"/> (safe across awaits; not ThreadStatic).
+    ///     Thread-local rent (like <c>HeaderBuilder</c>): TLS slot is empty while rented, so awaits
+    ///     on the same thread allocate a fresh builder rather than sharing the active one.
     /// </summary>
     internal sealed class ResponseBlockBuilder : IDisposable
     {
-        private MemoryStream? body;
-        private readonly QpackDynamicTable? outboundTable;
-        private readonly QpackContext? context;
-        private ulong maxRequiredInsertCount;
+        [ThreadStatic]
+        private static ResponseBlockBuilder? cached;
 
-        internal ResponseBlockBuilder(int statusCode, QpackContext? context)
+        private MemoryStream body = new(128);
+        private QpackDynamicTable? outboundTable;
+        private QpackContext? context;
+        private ulong maxRequiredInsertCount;
+        private bool returned;
+
+        private ResponseBlockBuilder()
         {
-            this.context = context;
-            outboundTable = context != null && !context.OutboundTableDisabled && context.MaxTableCapacityFromPeer > 0
-                ? context.OutboundEncoderTable
+        }
+
+        internal static ResponseBlockBuilder Rent(int statusCode, QpackContext? context)
+        {
+            var builder = cached;
+            if (builder != null)
+            {
+                cached = null;
+                builder.Reset(statusCode, context);
+                return builder;
+            }
+
+            builder = new ResponseBlockBuilder();
+            builder.Reset(statusCode, context);
+            return builder;
+        }
+
+        private void Reset(int statusCode, QpackContext? ctx)
+        {
+            returned = false;
+            context = ctx;
+            outboundTable = ctx != null && !ctx.OutboundTableDisabled && ctx.MaxTableCapacityFromPeer > 0
+                ? ctx.OutboundEncoderTable
                 : null;
-            body = new MemoryStream(128);
+            maxRequiredInsertCount = 0;
+            body.SetLength(0);
             EncodeOne(body, outboundTable, ref maxRequiredInsertCount, ":status",
                 StatusCodeToString(statusCode));
         }
 
         internal void AddHeader(string lowerName, string value) =>
-            EncodeOne(body!, outboundTable, ref maxRequiredInsertCount, lowerName, value);
+            EncodeOne(body, outboundTable, ref maxRequiredInsertCount, lowerName, value);
+
+        /// <summary>Encode a header value from the H1 window without Latin-1 string round-trip.</summary>
+        internal void AddHeader(string lowerName, ReadOnlySpan<byte> value) =>
+            EncodeOne(body, outboundTable, ref maxRequiredInsertCount, lowerName, value);
 
         internal byte[] Finish()
         {
-            var stream = body ?? throw new ObjectDisposedException(nameof(ResponseBlockBuilder));
-            var result = FinishBlock(stream, maxRequiredInsertCount, outboundTable, context);
-            Dispose();
-            return result;
+            if (returned)
+                throw new ObjectDisposedException(nameof(ResponseBlockBuilder));
+            return FinishBlock(body, maxRequiredInsertCount, outboundTable, context);
         }
 
-        public void Dispose()
+        public void Dispose() => Return(this);
+
+        internal static void Return(ResponseBlockBuilder builder)
         {
-            body?.Dispose();
-            body = null;
+            if (builder.returned)
+                return;
+            builder.returned = true;
+            builder.outboundTable = null;
+            builder.context = null;
+            builder.maxRequiredInsertCount = 0;
+            builder.body.SetLength(0);
+            if (cached == null)
+                cached = builder;
         }
     }
 
     internal static ResponseBlockBuilder RentResponseBlockBuilder(int statusCode, QpackContext? context) =>
-        new(statusCode, context);
+        ResponseBlockBuilder.Rent(statusCode, context);
 
     private static string StatusCodeToString(int statusCode) => statusCode switch
     {
@@ -239,6 +277,25 @@ internal static class QpackEncoder
         WriteLiteralNewName(body, lowerName, value);
     }
 
+    /// <summary>
+    ///     Span value path: name-only static / literal encode (skips FindExact string alloc).
+    ///     Fine for reverse tiny-GET where values are almost never static-exact hits.
+    /// </summary>
+    private static void EncodeOne(MemoryStream body, QpackDynamicTable? outboundTable,
+        ref ulong maxRequiredInsertCount, string lowerName, ReadOnlySpan<byte> value)
+    {
+        _ = outboundTable;
+        _ = maxRequiredInsertCount;
+        var nameOnlyStaticIndex = QpackStaticTable.FindName(lowerName);
+        if (nameOnlyStaticIndex >= 0)
+        {
+            WriteLiteralWithStaticNameRef(body, (ulong)nameOnlyStaticIndex, value);
+            return;
+        }
+
+        WriteLiteralNewName(body, lowerName, value);
+    }
+
     private static byte[] FinishBlock(MemoryStream body, ulong maxRequiredInsertCount,
         QpackDynamicTable? outboundTable, QpackContext? context)
     {
@@ -292,6 +349,12 @@ internal static class QpackEncoder
         WriteStringLiteral(buf, value);
     }
 
+    private static void WriteLiteralWithStaticNameRef(MemoryStream buf, ulong nameIndex, ReadOnlySpan<byte> value)
+    {
+        WritePrefixedInt(buf, 0x50, 4, nameIndex);
+        WriteStringLiteral(buf, value);
+    }
+
     // Literal Header Field With Name Reference (dynamic, post-base): 0 0 0 0 N=0 Index(3) — pattern 0x00
     private static void WriteLiteralWithDynamicNameRef(MemoryStream buf, ulong absoluteIndex, string value)
     {
@@ -306,6 +369,14 @@ internal static class QpackEncoder
     {
         var nameBytes = Encoding.Latin1.GetBytes(name);
         // pattern 0x20 => 001 N=0 H=0, then 3-bit-prefixed name length
+        WritePrefixedInt(buf, 0x20, 3, (ulong)nameBytes.Length);
+        buf.Write(nameBytes, 0, nameBytes.Length);
+        WriteStringLiteral(buf, value);
+    }
+
+    private static void WriteLiteralNewName(MemoryStream buf, string name, ReadOnlySpan<byte> value)
+    {
+        var nameBytes = Encoding.Latin1.GetBytes(name);
         WritePrefixedInt(buf, 0x20, 3, (ulong)nameBytes.Length);
         buf.Write(nameBytes, 0, nameBytes.Length);
         WriteStringLiteral(buf, value);
@@ -340,5 +411,11 @@ internal static class QpackEncoder
         var bytes = Encoding.Latin1.GetBytes(s);
         WritePrefixedInt(buf, 0x00, 7, (ulong)bytes.Length);
         buf.Write(bytes, 0, bytes.Length);
+    }
+
+    private static void WriteStringLiteral(MemoryStream buf, ReadOnlySpan<byte> bytes)
+    {
+        WritePrefixedInt(buf, 0x00, 7, (ulong)bytes.Length);
+        buf.Write(bytes);
     }
 }

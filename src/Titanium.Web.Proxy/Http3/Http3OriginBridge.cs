@@ -1083,13 +1083,44 @@ internal static class Http3OriginBridge
                 if (!isChunked && contentLength >= 0 && contentLength <= 64 * 1024)
                 {
                     byte[] bodyBytes;
+                    var bodyLength = (int)contentLength;
+                    var rented = false;
                     if (contentLength == 0)
                     {
                         bodyBytes = [];
                     }
+                    else if (connection.Stream.Available >= bodyLength)
+                    {
+                        bodyBytes = server.BufferPool.GetBuffer(bodyLength);
+                        if (!connection.Stream.TryCopyAvailableExact(bodyBytes.AsSpan(0, bodyLength)))
+                        {
+                            server.BufferPool.ReturnBuffer(bodyBytes);
+                            bodyBytes = new byte[bodyLength];
+                            var offset = 0;
+                            while (offset < bodyBytes.Length)
+                            {
+                                var read = await connection.Stream.ReadAsync(bodyBytes.AsMemory(offset),
+                                    cancellationToken);
+                                if (read == 0)
+                                    break;
+                                offset += read;
+                            }
+
+                            if (offset != bodyBytes.Length)
+                            {
+                                closeConnection = true;
+                                Array.Resize(ref bodyBytes, offset);
+                                bodyLength = offset;
+                            }
+                        }
+                        else
+                        {
+                            rented = true;
+                        }
+                    }
                     else
                     {
-                        bodyBytes = new byte[contentLength];
+                        bodyBytes = new byte[bodyLength];
                         var offset = 0;
                         while (offset < bodyBytes.Length)
                         {
@@ -1104,11 +1135,14 @@ internal static class Http3OriginBridge
                         {
                             closeConnection = true;
                             Array.Resize(ref bodyBytes, offset);
+                            bodyLength = offset;
                         }
                     }
 
                     fwd.PreencodedQpackHeaders = parsed.Value.QpackHeaders;
                     fwd.PreencodedBody = bodyBytes;
+                    fwd.PreencodedBodyLength = bodyLength;
+                    fwd.PreencodedBodyRented = rented;
                 }
                 else
                 {

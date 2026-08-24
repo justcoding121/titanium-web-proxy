@@ -20,6 +20,7 @@ using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.StreamExtended.Network;
+using SslExtensions = Titanium.Web.Proxy.Extensions.SslExtensions;
 
 namespace Titanium.Web.Proxy;
 
@@ -197,7 +198,7 @@ public partial class ProxyServer
                                 t.Exception.GetBaseException(), sessionArgs));
                 }, TaskScheduler.Default);
             tunnelStreamState.SyntheticTask = tunnelTask;
-            ctx.ConnectionState.PendingSynthetics.Add(tunnelTask);
+            ctx.ConnectionState.PendingSynthetics.Track(tunnelTask);
             return;
         }
 
@@ -255,7 +256,7 @@ public partial class ProxyServer
         }
 
         streamState.SyntheticTask = bridgeTask;
-        ctx.ConnectionState.PendingSynthetics.Add(bridgeTask);
+        ctx.ConnectionState.PendingSynthetics.Track(bridgeTask);
     }
 
     /// <summary>
@@ -342,37 +343,72 @@ public partial class ProxyServer
                 poolKey = poolEp.CachedHttp11PoolKey;
             }
 
-            var newConnection = await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
-                HttpHeader.Version11, upstreamIsHttps, SslExtensions.Http11ProtocolAsList, false, sessionArgs,
-                sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint,
-                customUpStreamProxy ?? (upstreamIsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy), false, false,
-                cancellationToken, connectHost, connectPort,
-                createGate: upstreamIsHttps ? Http2ToHttp11HttpsOriginCreateGate : null,
-                precomputedCacheKey: poolKey)
-                ?? throw new InvalidOperationException($"Failed to establish an HTTP/1.1 origin connection to '{remoteHostName}:{remotePort}'.");
-            connection = newConnection;
-
-            if (poolKey == null
+            // H3→H1 session-lite analogue: warm pool hit without SessionEventArgs factory work.
+            if (poolKey != null
                 && sessionArgs.IsFastPath
-                && sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint storePoolEp
-                && customUpStreamProxy == null
-                && (sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint) == null)
+                && TcpConnectionFactory.TryRentPooled(this, poolKey, SslExtensions.Http11ProtocolAsList,
+                    out var pooled))
             {
-                // Cache key for the common fixed-forward reverse shape (no upstream proxy / bind override).
-                storePoolEp.CachedHttp11PoolKey = newConnection.CacheKey;
-                storePoolEp.CachedHttp11PoolIsHttps = upstreamIsHttps;
+                connection = pooled;
+            }
+            else
+            {
+                var newConnection = await TcpConnectionFactory.GetServerConnection(this, remoteHostName, remotePort,
+                    HttpHeader.Version11, upstreamIsHttps, SslExtensions.Http11ProtocolAsList, false, sessionArgs,
+                    sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint,
+                    customUpStreamProxy ?? (upstreamIsHttps ? UpStreamHttpsProxy : UpStreamHttpProxy), false, false,
+                    cancellationToken, connectHost, connectPort,
+                    createGate: upstreamIsHttps ? Http2ToHttp11HttpsOriginCreateGate : null,
+                    precomputedCacheKey: poolKey)
+                    ?? throw new InvalidOperationException($"Failed to establish an HTTP/1.1 origin connection to '{remoteHostName}:{remotePort}'.");
+                connection = newConnection;
+
+                if (poolKey == null
+                    && sessionArgs.IsFastPath
+                    && sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint storePoolEp
+                    && customUpStreamProxy == null
+                    && (sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint) == null)
+                {
+                    storePoolEp.CachedHttp11PoolKey = newConnection.CacheKey;
+                    storePoolEp.CachedHttp11PoolIsHttps = upstreamIsHttps;
+                }
             }
 
-            sessionArgs.HttpClient.SetConnection(newConnection);
-            var firstUse = newConnection.ClaimFirstUse();
+            sessionArgs.HttpClient.SetConnection(connection!);
+            var firstUse = connection!.ClaimFirstUse();
             if (sessionArgs.Timing != null)
-                sessionArgs.Timing.MarkConnectionReady(newConnection.Id, !firstUse);
+                sessionArgs.Timing.MarkConnectionReady(connection.Id, !firstUse);
 
-            // Matches HandleHttpSessionRequest's HTTP/1.1 send sequence. Stream live when the body
-            // was not buffered by GetRequestBody; otherwise compress + write the in-memory bytes.
+            // Interception-off bodiless: HeaderBuilder write like H3→H1 ForwardOverTcpFastAsync
+            // (skip HttpWebClient.SendRequest request-line rebuild).
+            var useH2H1LiteWire = sessionArgs.IsFastPath
+                && requestBodyChannel == null
+                && !request.HasBody
+                && !request.BodyAvailable
+                && !Enable100ContinueBehaviour
+                && IsH2BridgeLiteMethod(request.Method);
+
             byte[]? body = null;
             var streamRequestBody = requestBodyChannel != null && !request.IsBodyRead;
-            if (!streamRequestBody)
+            if (useH2H1LiteWire)
+            {
+                request.Headers.RemoveHeader(KnownHeaders.Connection);
+                var headerBuilder = HeaderBuilder.Rent();
+                try
+                {
+                    headerBuilder.WriteRequestLine(request.Method, request.RequestUriString8,
+                        HttpHeader.Version11);
+                    headerBuilder.WriteHeaders(request.Headers, sendProxyAuthorization: false);
+                    await connection.Stream.WriteHeadersAsync(headerBuilder, cancellationToken);
+                }
+                finally
+                {
+                    HeaderBuilder.Return(headerBuilder);
+                }
+
+                request.IsBodyReceived = true;
+            }
+            else if (!streamRequestBody)
             {
                 // Bodiless fast-path GET: skip CompressBodyAndUpdateContentLength (no body, no CL stamp).
                 if (sessionArgs.IsFastPath && !request.HasBody && !request.BodyAvailable)
@@ -390,10 +426,14 @@ public partial class ProxyServer
             // BodyInternal?.Length ?? 0, and a live-streamed body has no BodyInternal, so it would
             // rewrite content-length to 0 and make the origin skip the entire request body.
 
-            await sessionArgs.HttpClient.SendRequest(Enable100ContinueBehaviour, true, sessionArgs.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy,
-                cancellationToken);
+            if (!useH2H1LiteWire)
+            {
+                await sessionArgs.HttpClient.SendRequest(Enable100ContinueBehaviour, true,
+                    sessionArgs.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy,
+                    cancellationToken);
+            }
 
-            if (request.HasBody && !request.ExpectationFailed)
+            if (!useH2H1LiteWire && request.HasBody && !request.ExpectationFailed)
             {
                 if (streamRequestBody)
                 {
@@ -1146,6 +1186,13 @@ public partial class ProxyServer
         foreach (var header in renamed)
             headers.AddHeader(header);
     }
+
+    private static bool IsH2BridgeLiteMethod(string? method) =>
+        method is not null
+        && (method.Equals("GET", StringComparison.OrdinalIgnoreCase)
+            || method.Equals("HEAD", StringComparison.OrdinalIgnoreCase)
+            || method.Equals("DELETE", StringComparison.OrdinalIgnoreCase)
+            || method.Equals("OPTIONS", StringComparison.OrdinalIgnoreCase));
 
     private static bool HeaderNameDataHasUpperCaseAscii(ByteString name)
     {

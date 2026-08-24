@@ -87,17 +87,19 @@ internal sealed class Http2ConnectionState
 
     /// <summary>
     ///     Background tasks for synthetic (proxy-generated) responses, tracked so they can be observed for
-    ///     failure and awaited before the owning relay direction completes.
+    ///     failure and awaited before the owning relay direction completes. Completed tasks are unrooted
+    ///     immediately (see <see cref="Http2PendingWork"/>).
     /// </summary>
-    public ConcurrentBag<Task> PendingSynthetics { get; } = new();
+    public Http2PendingWork PendingSynthetics { get; } = new();
 
     /// <summary>
     ///     Background tasks running each stream's <c>AfterResponse</c> + <c>Dispose</c> finalization (see
     ///     <see cref="Http2StreamState.FinalizedFlag" />), tracked so a slow user <c>AfterResponse</c>
     ///     handler for one stream never stalls frame processing for every other multiplexed stream, while
     ///     still being awaited (in <c>Http2Helper.SendHttp2</c>) before the whole relay call returns.
+    ///     Completed tasks are unrooted immediately.
     /// </summary>
-    public ConcurrentBag<Task> PendingFinalizations { get; } = new();
+    public Http2PendingWork PendingFinalizations { get; } = new();
 
     /// <summary>
     ///     The highest client-initiated stream id admitted so far on this connection, used to enforce RFC

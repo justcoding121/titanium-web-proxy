@@ -336,7 +336,7 @@ namespace Titanium.Web.Proxy.Http2
 
             if (!connectionState.PendingFinalizations.IsEmpty)
             {
-                await Task.WhenAll(connectionState.PendingFinalizations.ToArray());
+                await connectionState.PendingFinalizations.WhenAllAsync();
             }
         }
 
@@ -495,7 +495,7 @@ namespace Titanium.Web.Proxy.Http2
                 return;
             }
 
-            connectionState.PendingFinalizations.Add(
+            connectionState.PendingFinalizations.Track(
                 FinalizeStreamAsync(state, onAfterResponse, logger, connectionState));
         }
 
@@ -1353,7 +1353,7 @@ namespace Titanium.Web.Proxy.Http2
                                     }
                                 }, TaskScheduler.Default);
                             if (streamState != null) streamState.SyntheticTask = synthTask;
-                            pendingSynthetics.Add(synthTask);
+                            pendingSynthetics.Track(synthTask);
                         }
                         else
                         {
@@ -1417,7 +1417,7 @@ namespace Titanium.Web.Proxy.Http2
                                                     t.Exception.GetBaseException(), sessionArgs));
                                         }, TaskScheduler.Default);
                                     if (unknProtoState != null) unknProtoState.SyntheticTask = synthTask501;
-                                    pendingSynthetics.Add(synthTask501);
+                                    pendingSynthetics.Track(synthTask501);
                                 }
                                 else if (!connectionState.ServerSettings.EnableConnectProtocol)
                                 {
@@ -1469,7 +1469,7 @@ namespace Titanium.Web.Proxy.Http2
                     }, cancellationToken);
                     requestDispatchChain = dispatchTask;
                     request.Http2BeforeHandlerTask = dispatchTask;
-                    pendingSynthetics.Add(dispatchTask);
+                    pendingSynthetics.Track(dispatchTask);
                     return false;
                 }
                 else
@@ -1582,7 +1582,7 @@ namespace Titanium.Web.Proxy.Http2
                                         }
                                     }, TaskScheduler.Default);
                                 if (streamState != null) streamState.SyntheticTask = synthTask;
-                                pendingSynthetics.Add(synthTask);
+                                pendingSynthetics.Track(synthTask);
 
                                 return false;
                             }
@@ -3496,7 +3496,7 @@ namespace Titanium.Web.Proxy.Http2
 
                 if (!pendingSynthetics.IsEmpty)
                 {
-                    await Task.WhenAll(pendingSynthetics.ToArray());
+                    await pendingSynthetics.WhenAllAsync();
                 }
             }
         }

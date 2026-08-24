@@ -101,7 +101,8 @@ public partial class ProxyServer
         int remotePort,
         bool coldH3Bridge = false)
     {
-        await OnBeforeRequest(sessionArgs);
+        if (!sessionArgs.IsFastPath)
+            await OnBeforeRequest(sessionArgs);
 
         // BeforeRequest already synthesized a response (Ok/GenericResponse/Redirect/etc.); Http2Helper
         // handles this via the CancelRequest path — nothing to bridge.
@@ -163,25 +164,36 @@ public partial class ProxyServer
 
         streamState.InboundRequestBodyChannel = requestBodyChannel;
 
-        var bridgeTask = RunHttp2ToHttp3BridgeRoundTripAsync(
+        // IsFastPath: no ContinueWith fault wrapper (same as H2→H1).
+        Task bridgeTask;
+        if (sessionArgs.IsFastPath)
+        {
+            bridgeTask = RunHttp2ToHttp3BridgeRoundTripAsync(
                 sessionArgs, ctx.StreamId, ctx.ConnectionState, ctx.ClientStream,
-                h3Route, ctx.CancellationToken, streamState.Cancellation.Token, requestBodyChannel)
-            .ContinueWith(t =>
-            {
-                if (t.IsFaulted)
-                    ProxyDiagnostics.ReportException(logger,
-                        $"H2→H3 bridge round trip failed for stream {ctx.StreamId}",
-                        new ProxyHttpException(
+                h3Route, ctx.CancellationToken, streamState.Cancellation.Token, requestBodyChannel);
+        }
+        else
+        {
+            bridgeTask = RunHttp2ToHttp3BridgeRoundTripAsync(
+                    sessionArgs, ctx.StreamId, ctx.ConnectionState, ctx.ClientStream,
+                    h3Route, ctx.CancellationToken, streamState.Cancellation.Token, requestBodyChannel)
+                .ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                        ProxyDiagnostics.ReportException(logger,
                             $"H2→H3 bridge round trip failed for stream {ctx.StreamId}",
-                            t.Exception.GetBaseException(), sessionArgs));
-            }, TaskScheduler.Default);
+                            new ProxyHttpException(
+                                $"H2→H3 bridge round trip failed for stream {ctx.StreamId}",
+                                t.Exception.GetBaseException(), sessionArgs));
+                }, TaskScheduler.Default);
+        }
 
         // Register ownership BEFORE returning from this delegate so Http2Helper sees the state
         // correctly in ProcessCompleteHeaderBlockAsync (for bodiless requests, the handler
         // completes in the Task.WhenAny 'if' branch and the IsExternalBridge check runs there).
         streamState.SyntheticTask = bridgeTask;
         streamState.IsExternalBridge = true;
-        ctx.ConnectionState.PendingSynthetics.Add(bridgeTask);
+        ctx.ConnectionState.PendingSynthetics.Track(bridgeTask);
     }
 
     private static (string Host, int Port) ResolveH3BridgeOriginIdentity(
@@ -295,9 +307,10 @@ public partial class ProxyServer
             // see Http1FramingValidator's remarks. The call is still made (as a documented no-op) so
             // this remains one of the five insertion points the isolation test suite enumerates.
             Http1FramingValidator.Validate(sessionArgs.HttpClient.Response, FramingSource.SynthesizedFromH3);
-            sessionArgs.HttpClient.Response.SetOriginalHeaders();
+            if (!sessionArgs.IsFastPath)
+                sessionArgs.HttpClient.Response.SetOriginalHeaders();
 
-            if (!sessionArgs.HttpClient.Response.Locked)
+            if (!sessionArgs.IsFastPath && !sessionArgs.HttpClient.Response.Locked)
                 await OnBeforeResponse(sessionArgs);
 
             var response = sessionArgs.HttpClient.Response;

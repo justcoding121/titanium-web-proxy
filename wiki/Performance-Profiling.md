@@ -9,6 +9,7 @@ How the throughput hotspots behind the numbers on the [Performance](Performance)
 - [Local Windows lab (developer laptop)](#local-windows-lab-developer-laptop)
 - [Architecture-sensitive](#architecture-sensitive)
 - [Technique 1: concurrency sweep as a shape test](#technique-1-concurrency-sweep-as-a-shape-test)
+- [Memory (RSS) — H2→H1 vs H1 / H3](#memory-rss--h2h1-vs-h1--h3)
 - [Technique 2: async dumps — find where requests wait](#technique-2-async-dumps--find-where-requests-wait)
 - [Technique 3: per-stage latency decomposition](#technique-3-per-stage-latency-decomposition)
 - [Technique 4: CPU sampling](#technique-4-cpu-sampling)
@@ -230,22 +231,71 @@ The h2c→H1 bridge showed the second shape: TWP *beat* the managed reverse peer
 
 ## Memory (RSS) — H2→H1 vs H1 / H3
 
-Published [Saturation control](Performance#saturation-control) Memory (RSS) @ `a3b9af1e` / remasure: TWP H1 ≈ YARP or lower; TWP H2→H1 is **~5–9×** YARP; TWP H3→H1 is only **~1.1–1.7×**. Laptop cool-ish A/B (2026-08-23, c=64, 8 s):
+### Technique: connection-scoped Task retention + H2 bridge lite wire
+
+Tools already on this page (cool A/B, concurrency sweep, `dumpasync`, stage timing) find **where time burns**. Memory gaps need the harness **RSS sampler** plus heap confirmation:
+
+```powershell
+# Saturation / matrix CSV columns (every measure step):
+#   proxy_rss_peak_bytes, proxy_cpu_avg_pct
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
+
+# Optional heap confirm under H2→H1 load (Full dump):
+dotnet-gcdump collect -p <proxy PID>
+# or: dotnet-dump collect -p <proxy PID> --type Full → dumpheap -stat
+```
+
+**Root causes (H2→H1 ≫ YARP Memory while RPS ≈ parity):**
+
+1. **`PendingSynthetics` / `PendingFinalizations`** retained completed `Task`s for the life of each client H2 connection (`ConcurrentBag` never removed). Fixed with **`Http2PendingWork`** (remove-on-complete tracker) — connection-scoped retention, not a process-immortal leak.
+2. **Per-stream `SessionEventArgs`** on H2→H1 / H2→H3 even when `IsFastPath` (H1 keep-alive uses `ResetForKeepAlive`; H3 inbound already had `H3H2FastForward`). Mitigated with **warm `TryRentPooled` + `HeaderBuilder` wire** on interception-off bodiless H2→H1 (H3→H1 analogue) and IsFastPath skips on H2→H3; full decode-time session skip still requires deeper `Http2Helper` work.
+3. Custom H2 stack per client connection vs Kestrel pooled streams (residual).
+4. **Not** the 768 KiB flow-control windows — advertised credit, not tiny-GET buffers. **Do not** force single H2 connection to game RSS (laptop A/B: −14% RSS / −23% RPS).
+
+**Keep / revert for new lites:** cool-measure Memory + ÷YARP RPS; revert the lite if Memory is no better (within noise) **or** RPS regresses. Bag tracker is RPS-neutral retention — keep regardless.
+
+Published [Saturation control](Performance#saturation-control) Memory (RSS) @ `a3b9af1e` / remasure (pre-fix): TWP H1 ≈ YARP or lower; TWP H2→H1 **~5–9×** YARP; TWP H3→H1 **~1.1–1.7×**. Remeasure after bag tracker + H2 lite wire and paste Block A/B/C below (laptop) and on Performance (CI).
+
+### Local saturation control (laptop)
+
+Same shape as [Performance § Saturation control](Performance#saturation-control); one OS = this laptop. Fill after cool `compare-saturation` (median of repeats; Memory/CPU at peak-RPS step).
+
+```powershell
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-saturation
+```
+
+#### Block A — H1 plain
+
+| Arm | Generator | Sustain | Peak | % of origin-HttpClient | Memory (RSS) | CPU avg % |
+|---|---|---:|---:|---:|---:|---:|
+| origin-direct | dotnet-httpclient | *fill* | *fill* | 100% | *fill* | *fill* |
+| bare-reverse-http1 | dotnet-httpclient | *fill* | *fill* | *fill* | *fill* | *fill* |
+| nginx-reverse-http1 | dotnet-httpclient | *fill* | *fill* | *fill* | *fill* | *fill* |
+| yarp-reverse-http1 | dotnet-httpclient | *fill* | *fill* | *fill* | *fill* | *fill* |
+| twp-reverse-http1 | dotnet-httpclient | *fill* | *fill* | *fill* | *fill* | *fill* |
+
+#### Block B — H2 TLS→H1
+
+| Arm | Generator | Sustain | Peak | ÷YARP | ÷nginx | Memory (RSS) | CPU avg % |
+|---|---|---:|---:|---:|---:|---:|---:|
+| nginx-reverse-http2 | dotnet-httpclient | *fill* | *fill* | *fill* | 1.00× | *fill* | *fill* |
+| yarp-reverse-http2 | dotnet-httpclient | *fill* | *fill* | 1.00× | *fill* | *fill* | *fill* |
+| twp-reverse-http2-cleartext | dotnet-httpclient | *fill* | *fill* | *fill* | *fill* | *fill* | *fill* |
+
+#### Block C — H3→H1
+
+| Arm | Generator | Sustain | Peak | ÷YARP | Memory (RSS) | CPU avg % |
+|---|---|---:|---:|---:|---:|---:|
+| yarp-reverse-http3-cleartext | dotnet-httpclient | *fill* | *fill* | 1.00× | *fill* | *fill* |
+| twp-reverse-http3-cleartext | dotnet-httpclient | *fill* | *fill* | *fill* | *fill* | *fill* |
+
+Laptop cool-ish A/B before bag/lite fix (2026-08-23, c=64, 8 s) — superseded by Block B once filled:
 
 | Arm | Memory (RSS) | RPS |
 |---|---:|---:|
 | TWP H2→H1 (`EnableMultipleHttp2Connections=true`, default) | **425 MiB** | 41k |
 | TWP H2→H1 (`TWP_RPS_SINGLE_HTTP2_CONNECTION=1`) | **367 MiB** | 32k |
 | YARP H2→H1 (multi) | **104 MiB** | 41k |
-
-Single-connection mode cuts ~14% RSS and ~23% RPS — fan-out is a **multiplier**, not the bulk. Remaining ~3.5× vs YARP is per-stream H2→H1 cost:
-
-1. **New `SessionEventArgs` per stream** (H1 keep-alive uses `ResetForKeepAlive` on one session).
-2. **`PendingSynthetics` / `PendingFinalizations`** (`ConcurrentBag<Task>`) retain completed Tasks for the life of each client H2 connection (awaited only on relay teardown).
-3. Custom H2 stack per client connection (`Http2FrameWriter` unbounded channel, 64 KiB intakes) vs Kestrel pooled streams.
-4. **Not** the 768 KiB / ~15 MiB flow-control windows — those are advertised credit, not preallocated receive buffers on tiny-GET.
-
-Next product steps (do not shrink windows just to game RSS): SessionEventArgs-lite / pool on H2→H1 (lite exists for H3→H2 only); trim or bound pending-task bags after completion; then remeasure Memory (RSS).
 
 ## Technique 2: async dumps — find where requests wait
 
@@ -387,6 +437,8 @@ The [architecture-sensitive](#architecture-sensitive) table (and the CI medians 
 | Lossy H1 Win cool ~0.86× (p50 +16 ms vs YARP)                                     | Cool A/B + userspace delay shim analysis                                                                      | Fast-path `WriteResponse` then `CopyBody` emitted a **header-only TLS record** before body; shim pays `delayMs` per read → ~3 extra 5 ms trips                                                                                                                                                                                                  | Materialize known-CL ≤64 KiB on fast path + coalesce headers+body (`bc768069`). Cool ≈ **1.00×**; CI [32620889168](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32620889168): Win **663/664**, Linux **1199/1196**.                                                                                                                                                                                                                                                                            |
 | GHA `compare-post`/`compare-arch` failed; laptop H3 POST/slow passed              | Failed run logs ([32602145518](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32602145518), [32602146550](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32602146550)) | (1) Dual-listen: TCP ephemeral then QUIC UDP same port → Windows `WSAEADDRINUSE` when UDP busy/excluded. (2) Incomplete `StreamBodyWriter` + `DataAvailable==0` pooled origin sockets with unread CL → next request `H3_INTERNAL_ERROR` (HeadersRead slow-consumer + warmup cancel amplifies on 4 vCPU) | Retry ephemeral TCP+QUIC bind in `ProxyServer.Start`/`AddEndPoint`; always close origin on incomplete StreamBodyWriter; YARP/nginx dual-stack free-port pick |
 | H3→H1 latency bundle (skip drain / skip Flush / HEADERS+DATA coalesce)            | Cool absolute win (`cool-h3h1-latency-bundle-20260823/`) + CI bridges [32652931261](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32652931261) @ `3f948409` | Cool c=64 TWP ~25k (tip ~20–23k); laptop YARP ~30k → cool TY ~0.85×. Trace @ c=64: p50 gap not exclusive CPU. | **CI miss**: Win H3→H1 **0.92× → ~0.87×** (13,391 / 15,444). Lin H3→H1 still leads (~1.11×). Lossy Lin H3 improved ~0.76×→~**0.89×** (278/314) but still <1.00×. **Reverted** (`2bf18d75`). |
+| H2→H1 Memory ~5–9× YARP at RPS parity                                              | Saturation RSS sampler + bag lifetime analysis                                                                 | `ConcurrentBag<Task>` PendingSynthetics/Finalizations retained completed Tasks (session closures) for client H2 conn life; full SessionEventArgs per stream on IsFastPath                                                                                                  | **`Http2PendingWork`** remove-on-complete; H2→H1 warm `TryRentPooled` + `HeaderBuilder` wire (H3→H1 analogue). Remeasure Block B Memory. Do not shrink windows / single-conn. |
+| H3→H1 Win ~0.993× residual after one-pass QPACK                                   | Cool A/B + gen0 on post-status path                                                                            | Per-response `MemoryStream` QPACK builder + Latin-1 string round-trip + `new byte[]` tiny body                                                                                                                                                                               | ThreadStatic **`ResponseBlockBuilder` rent**; span `AddHeader`; BufferPool body when `Available` covers CL. Gate ≥1.00× on bridges CI. |
 | H3→H1 skip Normalize on tiny (`b54f5708`)                                         | CI bridges remasure                                                                                            | Hypothesis: avoid Clear+new HttpHeader per field; EncodeResponse ToLowerInvariant instead                                                                                                                                                                                  | **CI miss**: Win H3→H1 ~0.95×→~**0.92×**. Reverted on develop (always Normalize again). |
 | H3→H1 sticky ConcurrentBag TCP pool (bypass factory poolLock)                     | Cool tip-vs-sticky both orders @ c=32 (`cool-sticky-vs-tip-20260823/`)                                         | Hypothesis: CI 4 vCPU multiplex tax on poolLock/queue                                                                                                                                                                                                                      | **Cool flat** (~1.07× both). Reverted. |
 | H3→H1 Request/Response ConcurrentBag + QPACK ArrayPool EncodeResponse             | Cool same-thermal tip-vs-pool @ c=32 (`cool-pool-qpack-20260823/`)                                             | Hypothesis: HeaderCollection graph + QPACK `byte[]` gen0 under 32 wakeups                                                                                                                                                                                                  | **Cool flat** (tip ~1.08×, pool ~1.06×). TWP absolute sometimes +high single digits; ratio not ≥+2%. Reverted. |
@@ -408,6 +460,7 @@ The [architecture-sensitive](#architecture-sensitive) table (and the CI medians 
 3. `dumpasync` for where requests *wait*; `dotnet-trace` for where cycles *burn*.
 4. Decompose internal vs client-observed latency (`TWP_RPS_STAGE_TIMING`); a large gap means queueing upstream of the pipeline.
 5. Read the faster system's source to answer named hypotheses; keep TWP's architecture.
-6. Before keeping a change: confirm it is a real proxy improvement (less work / alloc / I/O on a general hot path), not a probe-only tweak to beat YARP.
-7. Run the full test suites and the external repro before publishing; record run IDs in the wiki.
+6. Before keeping a change: confirm it is a real proxy improvement (less work / alloc / I/O on a general hot path), not a probe-only tweak to beat YARP. For Memory lites: keep only if RSS improves (or not worse) **and** RPS ÷YARP does not regress.
+7. For Memory: use harness `proxy_rss_peak_bytes` / descendant-tree sampler; confirm retention with gcdump when bags/sessions look sticky; do not shrink H2 windows or force single-connection to game RSS.
+8. Run the full test suites and the external repro before publishing; record run IDs in the wiki.
 

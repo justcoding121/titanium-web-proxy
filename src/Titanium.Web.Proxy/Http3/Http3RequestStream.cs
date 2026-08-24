@@ -542,8 +542,23 @@ internal static class Http3RequestStream
             {
                 if (fwd.PreencodedQpackHeaders != null)
                 {
-                    await SendPreencodedResponseAsync(stream, fwd.PreencodedQpackHeaders,
-                        fwd.PreencodedBody, fwd.PreencodedStreamBodyWriter, streamToken);
+                    var body = fwd.PreencodedBody;
+                    var bodyLen = fwd.PreencodedBodyLength > 0
+                        ? fwd.PreencodedBodyLength
+                        : body?.Length ?? 0;
+                    ReadOnlyMemory<byte> bodyMem = body is { Length: > 0 }
+                        ? body.AsMemory(0, Math.Min(bodyLen, body.Length))
+                        : ReadOnlyMemory<byte>.Empty;
+                    try
+                    {
+                        await SendPreencodedResponseAsync(stream, fwd.PreencodedQpackHeaders,
+                            bodyMem, fwd.PreencodedStreamBodyWriter, streamToken);
+                    }
+                    finally
+                    {
+                        if (fwd.PreencodedBodyRented && body != null)
+                            server.BufferPool.ReturnBuffer(body);
+                    }
                 }
                 else
                 {
@@ -811,7 +826,7 @@ internal static class Http3RequestStream
     private static async Task SendPreencodedResponseAsync(
         QuicStream stream,
         byte[] qpackHeaders,
-        byte[]? body,
+        ReadOnlyMemory<byte> body,
         Func<Stream, CancellationToken, Task>? streamBodyWriter,
         CancellationToken ct)
     {
@@ -824,7 +839,7 @@ internal static class Http3RequestStream
             return;
         }
 
-        if (body is { Length: >= 16 * 1024 })
+        if (body.Length >= 16 * 1024)
         {
             await Http3Frame.WriteHeadersAndDataAsync(stream, qpackHeaders, body, ct);
             await stream.FlushAsync(ct);
@@ -832,7 +847,7 @@ internal static class Http3RequestStream
         }
 
         await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
-        if (body is { Length: > 0 })
+        if (body.Length > 0)
             await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct);
 
         await stream.FlushAsync(ct);

@@ -245,22 +245,43 @@ internal static class RampOrchestrator
 
         if (options.Mode is ProbeMode.CompareSaturation)
             WriteSaturationSummary(peakByArm, rssByArm, cpuByArm);
-        else if (repeats > 1)
-            WriteMedianSummary(peakByArm);
+        else
+            WriteMedianSummary(peakByArm, rssByArm, cpuByArm);
 
         await csv.FlushAsync(cancellationToken);
         ProbeLog.Info($"CSV: {Path.GetFullPath(csvPath)}");
         return 0;
     }
 
-    private static void WriteMedianSummary(Dictionary<string, List<double>> peakByArm)
+    private static void WriteMedianSummary(Dictionary<string, List<double>> peakByArm,
+        Dictionary<string, List<long>> rssByArm, Dictionary<string, List<double>> cpuByArm)
     {
         ProbeLog.Info("=== median peaks across repeats ===");
         double? twpH1Tls = null, nginxH1Tls = null, yarpH1Tls = null;
         foreach (var (name, peaks) in peakByArm.OrderBy(kv => kv.Key, StringComparer.Ordinal))
         {
             var median = Median(peaks);
-            ProbeLog.Info($"  {name}: median_peak_rps={median:F1} (n={peaks.Count})");
+            var line = string.Create(CultureInfo.InvariantCulture,
+                $"  {name}: median_peak_rps={median:F1} (n={peaks.Count})");
+            // TWP-only Memory/CPU on matrix summaries (peers stay on saturation tables).
+            if (name.StartsWith("twp-", StringComparison.Ordinal))
+            {
+                if (rssByArm.TryGetValue(name, out var rssList) && rssList.Count > 0)
+                {
+                    var medianRss = MedianLong(rssList);
+                    line += string.Create(CultureInfo.InvariantCulture,
+                        $" median_memory_rss_bytes={medianRss}");
+                }
+
+                if (cpuByArm.TryGetValue(name, out var cpuList) && cpuList.Count > 0)
+                {
+                    var medianCpu = Median(cpuList);
+                    line += string.Create(CultureInfo.InvariantCulture,
+                        $" median_cpu_avg_pct={medianCpu:F1}");
+                }
+            }
+
+            ProbeLog.Info(line);
             if (name.Contains("twp-reverse-http1-tls", StringComparison.Ordinal))
                 twpH1Tls = median;
             if (name.Contains("nginx-reverse-http1-tls", StringComparison.Ordinal))

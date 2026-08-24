@@ -30,6 +30,15 @@ internal sealed class H3H2FastForward
     public byte[]? PreencodedBody { get; set; }
 
     /// <summary>
+    ///     When <see cref="PreencodedBody"/> was rented from <c>BufferPool</c>, the valid byte count
+    ///     (buffer may be larger). 0 means use <c>PreencodedBody.Length</c>.
+    /// </summary>
+    public int PreencodedBodyLength { get; set; }
+
+    /// <summary>Return <see cref="PreencodedBody"/> to the buffer pool after the client write.</summary>
+    public bool PreencodedBodyRented { get; set; }
+
+    /// <summary>
     ///     Streamed origin body for large/chunked H3→H1 responses when QPACK was pre-encoded.
     /// </summary>
     public Func<Stream, CancellationToken, Task>? PreencodedStreamBodyWriter { get; set; }

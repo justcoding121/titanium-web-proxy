@@ -107,8 +107,7 @@ internal static class H3H1QpackResponseReader
             && Utf8Parser.TryParse(valueSpan, out long cl, out _) && cl >= 0)
             contentLength = cl;
 
-        var value = GetLatin1String(valueSpan);
-        builder.AddHeader(lowerName, value);
+        builder.AddHeader(lowerName, valueSpan);
     }
 
     private static void ConsumeLine(
@@ -215,17 +214,6 @@ internal static class H3H1QpackResponseReader
                 dest[i] = (char)(b is >= (byte)'A' and <= (byte)'Z' ? b + 32 : b);
             }
         });
-
-    private static string GetLatin1String(ReadOnlySpan<byte> value)
-    {
-        if (value.IsEmpty)
-            return string.Empty;
-        return string.Create(value.Length, value, static (dest, src) =>
-        {
-            for (var i = 0; i < src.Length; i++)
-                dest[i] = (char)src[i];
-        });
-    }
 
     private static ReadOnlySpan<byte> TrimAscii(ReadOnlySpan<byte> value)
     {

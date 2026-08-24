@@ -446,6 +446,20 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     }
 
     /// <summary>
+    ///     Copies exactly <paramref name="destination"/>.Length bytes from the unread window when
+    ///     <see cref="Available"/> is already sufficient; otherwise returns false without consuming.
+    /// </summary>
+    internal bool TryCopyAvailableExact(Span<byte> destination)
+    {
+        if (destination.IsEmpty)
+            return true;
+        if (Available < destination.Length)
+            return false;
+        ReadFromBuffer(destination);
+        return true;
+    }
+
+    /// <summary>
     ///     Copies up to <paramref name="destination" />.Length bytes from the unread window.
     ///     Caller must ensure <see cref="Available" /> is already non-zero, or accept a zero return.
     /// </summary>
