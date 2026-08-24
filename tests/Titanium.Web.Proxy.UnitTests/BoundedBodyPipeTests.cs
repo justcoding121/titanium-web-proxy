@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -18,6 +19,28 @@ public class BoundedBodyPipeTests
         Assert.IsNotNull(pipe.Reader);
         Assert.IsNotNull(pipe.Writer);
         Assert.AreEqual(0, pipe.TotalWritten);
+    }
+
+    [TestMethod]
+    public async Task WriteAsyncSlow_ViaReflection_CoversAwaitAndCanceledFlush()
+    {
+        using var pipe = new BoundedBodyPipe(maxBytes: 0);
+        var slow = typeof(BoundedBodyPipe).GetMethod("WriteAsyncSlow",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        var ok = (ValueTask)slow.Invoke(pipe,
+            [new ValueTask<System.IO.Pipelines.FlushResult>(new System.IO.Pipelines.FlushResult(false, false)), 4,
+                CancellationToken.None])!;
+        await ok;
+        Assert.AreEqual(4, pipe.TotalWritten);
+
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(async () =>
+        {
+            var canceled = (ValueTask)slow.Invoke(pipe,
+                [new ValueTask<System.IO.Pipelines.FlushResult>(new System.IO.Pipelines.FlushResult(true, false)), 2,
+                    CancellationToken.None])!;
+            await canceled;
+        });
     }
 
     [TestMethod]
