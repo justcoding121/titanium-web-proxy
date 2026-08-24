@@ -133,6 +133,49 @@ internal static class QpackEncoder
         return FinishBlock(body, maxRequiredInsertCount, outboundTable, context);
     }
 
+    /// <summary>
+    ///     Incremental QPACK response builder for the H3→H1 one-pass header parse.
+    ///     Holds a dedicated <see cref="MemoryStream"/> (safe across awaits; not ThreadStatic).
+    /// </summary>
+    internal sealed class ResponseBlockBuilder : IDisposable
+    {
+        private MemoryStream? body;
+        private readonly QpackDynamicTable? outboundTable;
+        private readonly QpackContext? context;
+        private ulong maxRequiredInsertCount;
+
+        internal ResponseBlockBuilder(int statusCode, QpackContext? context)
+        {
+            this.context = context;
+            outboundTable = context != null && !context.OutboundTableDisabled && context.MaxTableCapacityFromPeer > 0
+                ? context.OutboundEncoderTable
+                : null;
+            body = new MemoryStream(128);
+            EncodeOne(body, outboundTable, ref maxRequiredInsertCount, ":status",
+                StatusCodeToString(statusCode));
+        }
+
+        internal void AddHeader(string lowerName, string value) =>
+            EncodeOne(body!, outboundTable, ref maxRequiredInsertCount, lowerName, value);
+
+        internal byte[] Finish()
+        {
+            var stream = body ?? throw new ObjectDisposedException(nameof(ResponseBlockBuilder));
+            var result = FinishBlock(stream, maxRequiredInsertCount, outboundTable, context);
+            Dispose();
+            return result;
+        }
+
+        public void Dispose()
+        {
+            body?.Dispose();
+            body = null;
+        }
+    }
+
+    internal static ResponseBlockBuilder RentResponseBlockBuilder(int statusCode, QpackContext? context) =>
+        new(statusCode, context);
+
     private static string StatusCodeToString(int statusCode) => statusCode switch
     {
         200 => "200",

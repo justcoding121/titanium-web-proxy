@@ -966,7 +966,8 @@ internal static class Http3OriginBridge
         ProxyServer server,
         ILogger logger,
         CancellationToken cancellationToken,
-        Func<SessionEventArgs> coldOpenSessionFactory)
+        Func<SessionEventArgs> coldOpenSessionFactory,
+        QpackContext? qpackContext = null)
     {
         var request = fwd.Request;
         request.HttpVersion = HttpHeader.Version11;
@@ -1062,32 +1063,33 @@ internal static class Http3OriginBridge
                     "Server connection was closed before any response was received.");
             }
 
-            var response = new Response
-            {
-                RequestMethod = request.Method,
-                HttpVersion = httpStatus.Value.Version,
-                StatusCode = httpStatus.Value.StatusCode,
-                StatusDescription = httpStatus.Value.Description
-            };
-            if (!await HeaderParser.TryReadHeadersAsync(connection.Stream, response.Headers,
-                    cancellationToken))
+            // One-pass H1 headers → QPACK (no Response/HeaderCollection) for the interception-off
+            // path. Large/chunked still streams via PreencodedStreamBodyWriter.
+            var parsed = await H3H1QpackResponseReader.TryReadAsync(
+                connection.Stream, httpStatus.Value.StatusCode, qpackContext, cancellationToken);
+            if (parsed is null)
                 throw new OperationCanceledException(cancellationToken);
-            // Eager-buffer tiny/medium origin bodies before Release. Kestrel often uses chunked for
-            // WriteAsync without Content-Length — skipping those left H3 clients with empty DATA.
-            // 64 KiB matches compare-bodies / lossy GET size so HEADERS+DATA can coalesce on write.
-            if (response.HasBody && !response.IsBodyRead)
+
+            var statusCode = httpStatus.Value.StatusCode;
+            var method = request.Method;
+            var contentLength = parsed.Value.ContentLength;
+            var isChunked = parsed.Value.IsChunked;
+            var connectionClose = parsed.Value.ConnectionClose;
+            var mayHaveBody = ResponseMayHaveBody(statusCode, method, contentLength, isChunked,
+                connectionClose);
+
+            if (mayHaveBody)
             {
-                if (!response.IsChunked
-                    && response.ContentLength >= 0
-                    && response.ContentLength <= 64 * 1024)
+                if (!isChunked && contentLength >= 0 && contentLength <= 64 * 1024)
                 {
-                    if (response.ContentLength == 0)
+                    byte[] bodyBytes;
+                    if (contentLength == 0)
                     {
-                        response.Body = [];
+                        bodyBytes = [];
                     }
                     else
                     {
-                        var bodyBytes = new byte[response.ContentLength];
+                        bodyBytes = new byte[contentLength];
                         var offset = 0;
                         while (offset < bodyBytes.Length)
                         {
@@ -1103,30 +1105,24 @@ internal static class Http3OriginBridge
                             closeConnection = true;
                             Array.Resize(ref bodyBytes, offset);
                         }
-
-                        response.Body = bodyBytes;
                     }
 
-                    response.IsBodyRead = true;
-                    response.ContentLength = response.Body.Length;
-                    response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
+                    fwd.PreencodedQpackHeaders = parsed.Value.QpackHeaders;
+                    fwd.PreencodedBody = bodyBytes;
                 }
                 else
                 {
-                    // Large / chunked / close-delimited: stream via StreamBodyWriter so
-                    // SendResponseAsync emits DATA. Closing the socket here left Content-Length
-                    // with zero body bytes (H3 slow-consumer sustain 0).
+                    // Large / chunked / close-delimited: stream via PreencodedStreamBodyWriter.
                     var originConnection = connection;
-                    var originIsChunked = response.IsChunked;
-                    var originContentLength = response.ContentLength;
-                    if (response.ContentLength < 0 && !response.IsChunked)
-                        response.Headers.AddHeader(KnownHeaders.TransferEncoding, "chunked");
-
-                    response.StreamBodyWriter = async (clientBodyStream, ct) =>
+                    var originIsChunked = isChunked;
+                    var originContentLength = contentLength;
+                    var trailingHeaders = new HeaderCollection();
+                    fwd.PreencodedQpackHeaders = parsed.Value.QpackHeaders;
+                    fwd.PreencodedStreamBodyWriter = async (clientBodyStream, ct) =>
                     {
                         IHttpStreamReader reader = originConnection!.Stream;
                         using var limited = new LimitedStream(reader, server.BufferPool, originIsChunked,
-                            originContentLength, response.TrailingHeaders);
+                            originContentLength, trailingHeaders);
                         const int frameBytes = 16 * 1024;
                         var buffer = server.BufferPool.GetBuffer(frameBytes);
                         try
@@ -1160,13 +1156,11 @@ internal static class Http3OriginBridge
                     };
                 }
             }
-            // H1 Title-Case → lowercase once so EncodeResponse skips ToLowerInvariant (same as H3→H2).
-            // Skip-norm on tiny-only missed Windows CI (~0.95×→~0.92× @ b54f5708) — keep normalize for all.
-            response.Headers.NormalizeNamesToLowercaseAscii();
-            response.HeaderNamesAreHttp2Normalized = true;
-
-            response.HttpVersion = HttpHeader.Version30;
-            fwd.Response = response;
+            else
+            {
+                fwd.PreencodedQpackHeaders = parsed.Value.QpackHeaders;
+                fwd.PreencodedBody = null;
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -1177,13 +1171,13 @@ internal static class Http3OriginBridge
         {
             if (connection != null)
             {
-                // StreamBodyWriter owns the socket until SendResponseAsync finishes the copy.
-                if (fwd.Response?.StreamBodyWriter != null && !fwd.Response.IsBodyRead)
+                // Stream body writer owns the socket until the client DATA copy finishes.
+                if (fwd.PreencodedStreamBodyWriter != null)
                 {
                     var owned = connection;
                     var shouldClose = closeConnection;
-                    var inner = fwd.Response.StreamBodyWriter;
-                    fwd.Response.StreamBodyWriter = async (dest, ct) =>
+                    var inner = fwd.PreencodedStreamBodyWriter;
+                    fwd.PreencodedStreamBodyWriter = async (dest, ct) =>
                     {
                         var copyCompleted = false;
                         try
@@ -1218,6 +1212,18 @@ internal static class Http3OriginBridge
         }
 
         _ = logger;
+    }
+
+    private static bool ResponseMayHaveBody(
+        int statusCode, string method, long contentLength, bool isChunked, bool connectionClose)
+    {
+        if (statusCode is >= 100 and < 200) return false;
+        if (statusCode is 204 or 304) return false;
+        if (string.Equals(method, "HEAD", StringComparison.OrdinalIgnoreCase)) return false;
+        if (contentLength == 0) return false;
+        if (contentLength > 0) return true;
+        if (isChunked || connectionClose) return true;
+        return false;
     }
 
     private static async Task ForwardOverHttp2Async(

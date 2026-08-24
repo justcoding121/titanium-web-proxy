@@ -531,18 +531,26 @@ internal static class Http3RequestStream
                     break;
                 case UpstreamHttpProtocol.Http11:
                     await Http3OriginBridge.ForwardOverTcpFastAsync(fwd, server, logger, streamToken,
-                        ColdOpenSessionFactory);
+                        ColdOpenSessionFactory, qpackContext);
                     break;
                 default:
                     throw new InvalidOperationException(
                         $"H3 origin fast path does not support {authArgs.UpstreamHttpProtocol}.");
             }
 
-            var response = fwd.Response
-                           ?? new Response { StatusCode = 502, StatusDescription = "Bad Gateway", HttpVersion = HttpHeader.Version30 };
             try
             {
-                await SendResponseAsync(stream, response, qpackContext, streamToken);
+                if (fwd.PreencodedQpackHeaders != null)
+                {
+                    await SendPreencodedResponseAsync(stream, fwd.PreencodedQpackHeaders,
+                        fwd.PreencodedBody, fwd.PreencodedStreamBodyWriter, streamToken);
+                }
+                else
+                {
+                    var response = fwd.Response
+                                   ?? new Response { StatusCode = 502, StatusDescription = "Bad Gateway", HttpVersion = HttpHeader.Version30 };
+                    await SendResponseAsync(stream, response, qpackContext, streamToken);
+                }
 
                 qpackContext?.InFlightMinAbsoluteIndex.TryRemove(stream.Id, out _);
                 streamState.ResponseClosed = true;
@@ -794,6 +802,39 @@ internal static class Http3RequestStream
         }
         var encoded = QpackEncoder.Encode(headers, qpackContext);
         await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, encoded, ct);
+        await stream.FlushAsync(ct);
+    }
+
+    /// <summary>
+    ///     Writes a pre-encoded QPACK HEADERS block (+ optional DATA) from the H3→H1 one-pass path.
+    /// </summary>
+    private static async Task SendPreencodedResponseAsync(
+        QuicStream stream,
+        byte[] qpackHeaders,
+        byte[]? body,
+        Func<Stream, CancellationToken, Task>? streamBodyWriter,
+        CancellationToken ct)
+    {
+        if (streamBodyWriter != null)
+        {
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
+            var bodyWriter = new Http3DataBodyWriter(stream);
+            await streamBodyWriter(bodyWriter, ct);
+            await stream.FlushAsync(ct);
+            return;
+        }
+
+        if (body is { Length: >= 16 * 1024 })
+        {
+            await Http3Frame.WriteHeadersAndDataAsync(stream, qpackHeaders, body, ct);
+            await stream.FlushAsync(ct);
+            return;
+        }
+
+        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackHeaders, ct);
+        if (body is { Length: > 0 })
+            await Http3Frame.WriteAsync(stream, Http3FrameType.Data, body, ct);
+
         await stream.FlushAsync(ct);
     }
 
