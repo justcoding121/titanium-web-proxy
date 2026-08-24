@@ -15,7 +15,7 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
@@ -79,7 +79,7 @@ jobs:
         # occasionally hang or get "connection refused" on shared, resource-constrained CI
         # runners under connection bursts (a pre-existing, environment-dependent flake, not
         # specific to any particular test). Retry a couple of times before failing the build.
-        $maxAttempts = 3
+        $maxAttempts = 2
         for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
           Write-Output "Integration tests attempt $attempt of $maxAttempts"
           dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory!=Slow" --blame-hang --blame-hang-timeout 5m --collect:"Code Coverage" --results-directory "coverage/integration/attempt-$attempt"
