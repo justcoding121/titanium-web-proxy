@@ -78,6 +78,8 @@ internal enum ProbeMode
     CompareSame,
     /// <summary>All implemented cross-version bridges under load (no native reverse peer).</summary>
     CompareBridges,
+    /// <summary>H3→H1 cleartext only: TWP + YARP (+ nginx when http_v3_module).</summary>
+    CompareHttp3Cleartext,
     /// <summary>
     /// MITM matrix: same 15 Client×Origin pairs as Reverse (inspectable/decrypt) plus dual-crypto extras.
     /// nginx/YARP cannot MITM — TWP-only.
@@ -189,6 +191,7 @@ internal static class RampOrchestrator
                 or ProbeMode.NginxReverseHttp2 or ProbeMode.NginxReverseHttp3Cleartext
                 or ProbeMode.Compare or ProbeMode.CompareHttp2
                 or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame
+                or ProbeMode.CompareBridges or ProbeMode.CompareHttp3Cleartext
                 or ProbeMode.CompareBodies or ProbeMode.ComparePost or ProbeMode.CompareLossy
                 or ProbeMode.CompareTlsCost or ProbeMode.CompareArch or ProbeMode.CompareSaturation)
             && nginxExe == null)
@@ -709,6 +712,17 @@ internal static class RampOrchestrator
                 new("twp-reverse-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null),
                 new("yarp-reverse-http3-to-http2", ProbeMode.YarpReverseHttp3ToHttp2, null),
                 new("yarp-reverse-http3-to-http3", ProbeMode.YarpReverseHttp3ToHttp3, null)
+            ],
+            ProbeMode.CompareHttp3Cleartext =>
+            [
+                new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
+                new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null),
+                ..(nginxHttp3Available
+                    ? new ArmSpec[]
+                    {
+                        new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null)
+                    }
+                    : [])
             ],
             ProbeMode.CompareMitm =>
             [

@@ -244,6 +244,7 @@ internal static class Cli
 
     private static bool IsMultiArmMode(ProbeMode mode) => mode is ProbeMode.Compare or ProbeMode.CompareHttp2
         or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
+        or ProbeMode.CompareHttp3Cleartext
         or ProbeMode.CompareMitm or ProbeMode.CompareCeiling or ProbeMode.CompareBodies or ProbeMode.ComparePost
         or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost or ProbeMode.CompareArch
         or ProbeMode.CompareSaturation
@@ -435,6 +436,9 @@ internal static class Cli
             case "compare-bridges":
                 mode = ProbeMode.CompareBridges;
                 return true;
+            case "compare-http3-cleartext":
+                mode = ProbeMode.CompareHttp3Cleartext;
+                return true;
             case "compare-mitm":
                 mode = ProbeMode.CompareMitm;
                 return true;
@@ -545,6 +549,7 @@ internal static class Cli
               compare-terminate       Fair terminate: H1 TLS, H2→H1, H3→H1 (+ control arms)
               compare-same            Same-protocol: H1 cleartext, H1 TLS, H1 MITM, H2 MITM, H3 MITM (+ control arms)
               compare-bridges         Cross-version bridges (H1↔H2↔H3; TWP + control arms)
+              compare-http3-cleartext H3→H1 cleartext only (TWP + YARP + nginx when available)
               compare-mitm            MITM matrix: same 15 Client×Origin pairs as reverse (inspectable/decrypt) + dual-crypto extras (TWP only)
               compare-ceiling         TWP vs bare C# vs control arms on H1 / H1 TLS / H2→H1 reverse
               compare-bodies          Heavier reverse GET (64 KiB + 256 KiB) vs control arms

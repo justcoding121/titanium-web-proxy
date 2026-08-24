@@ -22,6 +22,7 @@ on:
           - compare-terminate
           - compare-same
           - compare-bridges
+          - compare-http3-cleartext
           - compare-mitm
           - compare-ceiling
           - compare-bodies

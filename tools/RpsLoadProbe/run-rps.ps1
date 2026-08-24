@@ -9,7 +9,8 @@
 [CmdletBinding()]
 param(
     [ValidateSet(
-        'compare', 'compare-http2', 'compare-tls', 'compare-terminate', 'compare-same', 'compare-bridges', 'compare-mitm', 'compare-ceiling',
+        'compare', 'compare-http2', 'compare-tls', 'compare-terminate', 'compare-same', 'compare-bridges',
+        'compare-http3-cleartext', 'compare-mitm', 'compare-ceiling',
         'compare-bodies', 'compare-post', 'compare-lossy', 'compare-tls-cost', 'compare-arch', 'compare-saturation',
         'origin-direct', 'explicit-pool-sweep',
         'reverse-http1', 'bare-reverse-http1', 'nginx-reverse-http1', 'yarp-reverse-http1',

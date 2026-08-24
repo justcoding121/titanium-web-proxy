@@ -98,6 +98,7 @@ internal static class ServeProxyHost
 
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
             or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
+            or ProbeMode.CompareHttp3Cleartext
             or ProbeMode.CompareMitm or ProbeMode.CompareCeiling or ProbeMode.CompareBodies
             or ProbeMode.ComparePost or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost
             or ProbeMode.CompareArch or ProbeMode.CompareSaturation or ProbeMode.ExplicitPoolSweep)
@@ -654,6 +655,7 @@ internal static class ServeProxyHost
         ProbeMode.CompareTerminate => "compare-terminate",
         ProbeMode.CompareSame => "compare-same",
         ProbeMode.CompareBridges => "compare-bridges",
+        ProbeMode.CompareHttp3Cleartext => "compare-http3-cleartext",
         ProbeMode.CompareMitm => "compare-mitm",
         ProbeMode.CompareCeiling => "compare-ceiling",
         ProbeMode.CompareBodies => "compare-bodies",
@@ -682,6 +684,7 @@ internal static class ServeHost
 
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
             or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
+            or ProbeMode.CompareHttp3Cleartext
             or ProbeMode.CompareMitm or ProbeMode.CompareCeiling or ProbeMode.CompareBodies
             or ProbeMode.ComparePost or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost
             or ProbeMode.CompareArch or ProbeMode.CompareSaturation or ProbeMode.ExplicitPoolSweep)

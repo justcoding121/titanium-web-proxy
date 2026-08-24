@@ -223,4 +223,5 @@ tools/ChromeLoadProbe/results/
 
 # Local RPS / protocol probe scratch (never commit)
 .tmp-rps/
+tmp/
 
