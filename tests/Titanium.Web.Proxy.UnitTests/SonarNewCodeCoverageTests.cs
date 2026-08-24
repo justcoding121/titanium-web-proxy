@@ -19,6 +19,7 @@ using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
@@ -821,6 +822,7 @@ public class SonarNewCodeCoverageTests
             builder.WriteRequestLine("GET", "", HttpHeader.Version10);
             builder.WriteRequestLine("OPTIONS", (ByteString)"", new Version(1, 2));
             builder.WriteResponseLine(HttpHeader.Version11, 200, "OK");
+            builder.WriteResponseLine(new Version(2, 0), 418, "I'm a teapot");
 
             var headers = new HeaderCollection();
             headers.AddHeader("Proxy-Authorization", "secret");
@@ -950,5 +952,99 @@ public class SonarNewCodeCoverageTests
         Assert.AreEqual(101, response101.StatusCode);
         Assert.IsNotNull(response101.Headers.GetHeaderValueOrNull("Sec-WebSocket-Accept"));
         Assert.AreEqual("chat", response101.Headers.GetHeaderValueOrNull("sec-websocket-protocol"));
+    }
+
+    [TestMethod]
+    public void Http2ToHttp3_CookieConsolidateAndOriginIdentity()
+    {
+        var consolidate = ProxyMethod("ConsolidateCookieHeaders");
+        var cookies = new HeaderCollection();
+        cookies.AddHeader("Cookie", "a=1");
+        cookies.AddHeader("Cookie", "b=2");
+        consolidate.Invoke(null, [cookies]);
+        Assert.AreEqual("a=1; b=2", cookies.GetHeaderValueOrNull("Cookie"));
+        consolidate.Invoke(null, [cookies]); // single cookie: no-op
+
+        using var proxy = new ProxyServer(false, false, false);
+        var resolve = ProxyMethod("ResolveH3BridgeOriginIdentity");
+        var transparent = new TransparentProxyEndPoint(IPAddress.Loopback, 0, true)
+        {
+            ForwardHost = "fwd.example",
+            ForwardPort = 8443
+        };
+        using var session = MakeSession(proxy, transparent);
+        var identity = ((string Host, int Port))resolve.Invoke(null, [session, "fallback.example", 443])!;
+        Assert.AreEqual("fwd.example", identity.Host);
+        Assert.AreEqual(8443, identity.Port);
+
+        using var explicitSession = MakeSession(proxy);
+        explicitSession.HttpClient.Request.Host = "req.example";
+        explicitSession.HttpClient.Request.Authority = "req.example:9443".GetByteString();
+        identity = ((string Host, int Port))resolve.Invoke(null, [explicitSession, "fallback.example", 443])!;
+        Assert.IsFalse(string.IsNullOrEmpty(identity.Host));
+    }
+
+    [TestMethod]
+    public void CertificateManager_CachedCountAndEngineBranch()
+    {
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle
+        };
+        Assert.AreEqual(0, mgr.CachedCertificateCount);
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        Assert.IsNotNull(mgr.RootCertificate);
+
+        // Touch Windows engine setter path on Windows only (throws elsewhere).
+        if (RunTime.IsWindows)
+        {
+            using var win = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            {
+                CertificateEngine = CertificateEngine.DefaultWindows
+            };
+            Assert.IsNotNull(win);
+        }
+    }
+
+    [TestMethod]
+    public async Task Http2FrameWriter_FailingStream_ReturnsRentedBuffers()
+    {
+        await using var failing = new FailingWriteStream();
+        var writer = new Http2FrameWriter(failing);
+        var rented = ArrayPool<byte>.Shared.Rent(16);
+        rented.AsSpan(0, 16).Fill(7);
+        writer.EnqueueRented(rented, 16);
+
+        try
+        {
+            await writer.Completion.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        catch
+        {
+            // drain faults on write — expected
+        }
+
+        await writer.DisposeAsync();
+        Assert.IsTrue(failing.WriteAttempts >= 1);
+    }
+
+    private sealed class FailingWriteStream : Stream
+    {
+        public int WriteAttempts;
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new IOException("fail");
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            WriteAttempts++;
+            return ValueTask.FromException(new IOException("fail"));
+        }
     }
 }

@@ -373,5 +373,40 @@ namespace Titanium.Web.Proxy.UnitTests
 
             Assert.ThrowsExactly<NotSupportedException>(() => enumerator.Reset());
         }
+
+        [TestMethod]
+        public void NormalizeNamesToLowercaseAscii_RewritesMixedCaseAndIsIdempotent()
+        {
+            var headers = new HeaderCollection();
+            headers.AddHeader("Content-Type", "text/plain");
+            headers.AddHeader("X-Custom", "a");
+            headers.AddHeader("X-Custom", "b");
+            headers.AddHeader("already-lower", "ok");
+
+            headers.NormalizeNamesToLowercaseAscii();
+
+            Assert.AreEqual("text/plain", headers.GetHeaderValueOrNull("content-type"));
+            Assert.IsTrue(headers.Headers.ContainsKey("content-type") || headers.NonUniqueHeaders.ContainsKey("content-type")
+                || headers.GetFirstHeader("content-type") != null);
+            Assert.AreEqual("content-type", headers.GetFirstHeader("Content-Type")!.Name);
+            var customs = headers.GetHeaders("x-custom");
+            Assert.IsNotNull(customs);
+            Assert.AreEqual(2, customs!.Count);
+            Assert.AreEqual("x-custom", customs[0].Name);
+            Assert.AreEqual("ok", headers.GetHeaderValueOrNull("already-lower"));
+
+            headers.NormalizeNamesToLowercaseAscii();
+            Assert.AreEqual("text/plain", headers.GetHeaderValueOrNull("content-type"));
+        }
+
+        [TestMethod]
+        public void RemoveHeader_Object_ReturnsFalseWhenUniqueValueDoesNotMatch()
+        {
+            var headers = new HeaderCollection();
+            headers.AddHeader("X-One", "keep");
+            Assert.IsFalse(headers.RemoveHeader(new HttpHeader("X-One", "other")));
+            Assert.AreEqual("keep", headers.GetHeaderValueOrNull("X-One"));
+            Assert.IsFalse(headers.RemoveHeader(new HttpHeader("Missing", "x")));
+        }
     }
 }
