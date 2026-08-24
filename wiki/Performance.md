@@ -1,4 +1,4 @@
-# Performance
+﻿# Performance
 
 Titanium targets **low-overhead MITM proxying**: connection pooling, HTTP/2 multiplexing, and buffer reuse. Numbers below are **Release** measurements with [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe) (and BenchmarkDotNet / Basic example where noted). Publishable tables cite **GitHub Actions** medians on matched **4 vCPU / 16 GiB** runners. Absolute RPS still varies by OS kernel, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
 
@@ -251,7 +251,7 @@ TWP÷nginx H1 plain reverse ≈ **0.83** (46,284 / 55,862); TWP÷YARP H1 plain �
 | MITM | HTTP/2 · TLS | HTTP/1 · TLS | 🥇 **43,868**<br><sub>(220 MiB / 46.8% CPU)</sub> | **43,868**<br><sub>(220 MiB / 46.8% CPU)</sub> | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) |
 | MITM | HTTP/3 · QUIC | HTTP/1 · TLS | 🥇 **26,330**<br><sub>(294 MiB / 45.7% CPU)</sub> | **26,330**<br><sub>(294 MiB / 45.7% CPU)</sub> | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) | *Not possible* (no MITM) |
 
-On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.83** (46,284 / 55,862). H1 TLS terminate ≈ **0.85** (36,518 / 43,011). TWP÷YARP H1 plain ≈ **1.12×** (46,284 / 41,203). Bridges @ `0ff3673c`: H3→H1 ≈ **1.09×** (34,129 / 31,205), H3→H2 ≈ **1.01×**, H2 TLS→H1 ≈ **1.07×**, H1→H3 ≈ **1.05×**; h2c→H1 ≈ **0.985×** (66,809 / 67,822 — within ~1.5% of YARP). Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**. MITM publishes the same **15** Client×Origin pairs as Reverse (inspectable/decrypt), then dual-crypto extras (CONNECT, TLS↔TLS). nginx/YARP cannot MITM.
+On this GHA shape, TWP H1 plain ÷ nginx H1 plain ≈ **0.83** (46,284 / 55,862). H1 TLS terminate ≈ **0.85** (36,518 / 43,011). TWP÷YARP H1 plain ≈ **1.12×** (46,284 / 41,203). Bridges @ `0ff3673c`: H3→H1 ≈ **1.09×** (34,129 / 31,205), H3→H2 ≈ **1.01×**, H2 TLS→H1 ≈ **1.07×**, H1→H3 ≈ **1.05×**; h2c→H1 ≈ **0.985×** (66,809 / 67,822 — within ~1.5% of YARP; cool Win A/B both orders ≈ **1.28×**, so treat the Linux CI cell as runner noise, not a product gap). Absolute RPS swings by VM; prefer the **ratio** and **median across repeats**. MITM publishes the same **15** Client×Origin pairs as Reverse (inspectable/decrypt), then dual-crypto extras (CONNECT, TLS↔TLS). nginx/YARP cannot MITM.
 
 **nginx HTTP/3:** inbound QUIC terminate → cleartext H1 (`nginx-reverse-http3-cleartext`) @ `0ff3673c` bridges: sustain **0** (p99/error SLO miss) / peak **40,727**. TWP/YARP H3→H1 on this row are from the same bridges pass. nginx still cannot speak HTTP/3 to an origin (no H3 upstream in this conf).
 
@@ -306,26 +306,27 @@ On this GHA pass TWP÷YARP H1 TLS ≈ **1.21×** (64 KiB) / **1.33×** (256 KiB)
 
 ### Windows — POST 64 KiB request + 64 KiB response
 
-Median of **3** repeats on `windows-latest` @ `21396a4d`. Source: Actions [32608567396](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32608567396) (`compare-post`). **Tip remasure @ `1f2d0eee` blocked:** three-process harness since `bf01825b` hangs TWP H1 keep-alive POST (RPS ≈ concurrency; YARP/nginx POST OK). H2/H3 POST tip medians were healthy (~3.8k / ~2.3k Win) but H1 POST needs a product fix before republishing.
+Median of **3** repeats on `windows-latest` @ `d3566486`. Source: Actions [32711461804](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32711461804) (`compare-post`). H1 keep-alive POST hang fixed (session-lite + reusable guard).
+
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
-| HTTP/1 · TLS | HTTP/1 · plain | 🥇 **7,594** | **7,819** | **425**<br><sub>(137 MiB / 24.6% CPU)</sub> | **433**<br><sub>(137 MiB / 24.6% CPU)</sub> | **5,921**<br><sub>(118 MiB / 57.2% CPU)</sub> | **5,927**<br><sub>(118 MiB / 57.2% CPU)</sub> |
-| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **6,006**<br><sub>(189 MiB / 49.2% CPU)</sub> | **6,006**<br><sub>(189 MiB / 49.2% CPU)</sub> | **423**<br><sub>(138 MiB / 24.8% CPU)</sub> | **444**<br><sub>(138 MiB / 24.8% CPU)</sub> | **4,880**<br><sub>(119 MiB / 51.1% CPU)</sub> | **4,880**<br><sub>(119 MiB / 51.1% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **2,772**<br><sub>(123 MiB / 41.9% CPU)</sub> | **2,816**<br><sub>(123 MiB / 41.9% CPU)</sub> | *Not possible* | *Not possible* | **2,769**<br><sub>(201 MiB / 50.3% CPU)</sub> | **2,861**<br><sub>(201 MiB / 50.3% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/1 · plain | 🥇 **6,720**<br><sub>(92 MiB / 44% CPU)</sub> | **6,720**<br><sub>(92 MiB / 44% CPU)</sub> | **353**<br><sub>(137 MiB / 24.6% CPU)</sub> | **353**<br><sub>(137 MiB / 24.6% CPU)</sub> | **4,767**<br><sub>(113 MiB / 56.2% CPU)</sub> | **4,767**<br><sub>(113 MiB / 56.2% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **4,576**<br><sub>(183 MiB / 48.3% CPU)</sub> | **4,576**<br><sub>(183 MiB / 48.3% CPU)</sub> | **337**<br><sub>(137 MiB / 24.6% CPU)</sub> | **337**<br><sub>(137 MiB / 24.6% CPU)</sub> | **4,018**<br><sub>(117 MiB / 52.4% CPU)</sub> | **4,018**<br><sub>(117 MiB / 52.4% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **2,346**<br><sub>(158 MiB / 41.3% CPU)</sub> | **2,346**<br><sub>(158 MiB / 41.3% CPU)</sub> | *Not possible* | *Not possible* | **2,133**<br><sub>(156 MiB / 47.4% CPU)</sub> | **2,133**<br><sub>(156 MiB / 47.4% CPU)</sub> |
 
-TWP leads H1 POST (~**1.28×** YARP), H2 POST (~**1.23×** YARP), and H3 POST (~**1.00×** YARP).
+TWP leads H1 POST (~**1.41×** YARP), H2 POST (~**1.14×** YARP), and H3 POST (~**1.10×** YARP).
 
 ### Linux — POST 64 KiB request + 64 KiB response
 
-Median of **3** repeats @ `21396a4d`. Source: Actions [32608567396](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32608567396) (`compare-post`).
+Median of **3** repeats @ `d3566486`. Source: Actions [32711461804](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32711461804) (`compare-post`).
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
-| HTTP/1 · TLS | HTTP/1 · plain | 🥇 **4,415** | **4,415** | **4,277**<br><sub>(96 MiB / 48.7% CPU)</sub> | **4,292**<br><sub>(96 MiB / 48.7% CPU)</sub> | **3,406**<br><sub>(170 MiB / 55.3% CPU)</sub> | **3,406**<br><sub>(170 MiB / 55.3% CPU)</sub> |
-| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **3,350**<br><sub>(212 MiB / 49.6% CPU)</sub> | **3,350**<br><sub>(212 MiB / 49.6% CPU)</sub> | **2,071**<br><sub>(99 MiB / 22.6% CPU)</sub> | **2,147**<br><sub>(99 MiB / 22.6% CPU)</sub> | **2,776**<br><sub>(170 MiB / 48.1% CPU)</sub> | **2,776**<br><sub>(170 MiB / 48.1% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **2,919**<br><sub>(237 MiB / 44.3% CPU)</sub> | **2,919**<br><sub>(237 MiB / 44.3% CPU)</sub> | **799**<br><sub>(108 MiB / 24.7% CPU)</sub> | **802**<br><sub>(108 MiB / 24.7% CPU)</sub> | **2,771**<br><sub>(244 MiB / 50.2% CPU)</sub> | **2,771**<br><sub>(244 MiB / 50.2% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/1 · plain | 🥇 **4,674**<br><sub>(125 MiB / 44.9% CPU)</sub> | **4,674**<br><sub>(125 MiB / 44.9% CPU)</sub> | **4,029**<br><sub>(96 MiB / 48.9% CPU)</sub> | **4,029**<br><sub>(96 MiB / 48.9% CPU)</sub> | **3,104**<br><sub>(178 MiB / 55.2% CPU)</sub> | **3,104**<br><sub>(178 MiB / 55.2% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **3,102**<br><sub>(230 MiB / 49.1% CPU)</sub> | **3,102**<br><sub>(230 MiB / 49.1% CPU)</sub> | **1,963**<br><sub>(99 MiB / 22.3% CPU)</sub> | **1,963**<br><sub>(99 MiB / 22.3% CPU)</sub> | **2,489**<br><sub>(148 MiB / 47.9% CPU)</sub> | **2,489**<br><sub>(148 MiB / 47.9% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **2,903**<br><sub>(227 MiB / 43.5% CPU)</sub> | **2,903**<br><sub>(227 MiB / 43.5% CPU)</sub> | **750**<br><sub>(106 MiB / 24.1% CPU)</sub> | **750**<br><sub>(106 MiB / 24.1% CPU)</sub> | **2,555**<br><sub>(253 MiB / 50% CPU)</sub> | **2,555**<br><sub>(253 MiB / 50% CPU)</sub> |
 
-Linux nginx H1/H2/H3 POST completed (nginx.org mainline). TWP÷YARP H3 POST ≈ **1.05×**; TWP÷nginx H3 ≈ **3.65×**.
+Linux nginx H1/H2/H3 POST completed (nginx.org mainline). TWP÷YARP H1 ≈ **1.51×**; H2 ≈ **1.25×**; H3 ≈ **1.14×**. TWP÷nginx H3 ≈ **3.87×**.
 
 ### Windows — lossy / high-RTT (H2 HOL / H3 loss)
 
@@ -349,13 +350,13 @@ Median of **3** repeats @ `1f2d0eee`. Source: [32688085411](https://github.com/j
 | HTTP/2 · TLS | HTTP/1 · plain | 🥇 **314**<br><sub>(192 MiB / 6.6% CPU)</sub> | **314**<br><sub>(192 MiB / 6.6% CPU)</sub> | **40**<br><sub>(99 MiB / 0.4% CPU)</sub> | **40**<br><sub>(99 MiB / 0.4% CPU)</sub> | **44**<br><sub>(119 MiB / 1.6% CPU)</sub> | **44**<br><sub>(119 MiB / 1.6% CPU)</sub> |
 | HTTP/3 · QUIC | HTTP/1 · plain | **328**<br><sub>(147 MiB / 12.2% CPU)</sub> | **328**<br><sub>(147 MiB / 12.2% CPU)</sub> | **86**<br><sub>(107 MiB / 2.2% CPU)</sub> | **86**<br><sub>(107 MiB / 2.2% CPU)</sub> | 🥇 **332**<br><sub>(185 MiB / 20.7% CPU)</sub> | **332**<br><sub>(185 MiB / 20.7% CPU)</sub> |
 
-TWP H2 HOL ≫ YARP (~**7.1×**). H3 ≈ parity with YARP (~**0.99×**).
+TWP H2 HOL ≫ YARP (~**7.1×**). H3 ≈ parity with YARP (~**0.99×**; cool Win lossy H3 both orders TWP-led ≈ **1.3×** mean — leave published Linux ratio, no product chase).
 
 ### Architecture-sensitive
 
 `compare-arch` isolates slow app readers, origin-early response, H2 duplex, and WebSocket echo. See [TWP vs YARP IO model](Performance-Profiling#twp-vs-yarp-io-model). Laptop 1-rep numbers are on [Performance Local Lab](Performance-Local-Lab#architecture-sensitive).
 
-Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `1f2d0eee` ([32688089789](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32688089789)) (`compare-arch`). Slow consumer = 256 KiB GET, 16 KiB read + 8 ms sleep. Early response = 64 KiB POST, origin writes after 8 KiB. Duplex H2 = overlapping 64 KiB POST on H2 TLS↔H2 TLS. WebSocket = echo round-trips/sec. **H1 early-response tip hang** (RPS≈8) is the same three-process POST body issue as compare-post; H2/H3 early and slow/duplex/WS cells below are tip medians.
+Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `d3566486` ([32711464527](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32711464527)) (`compare-arch`). Slow consumer = 256 KiB GET, 16 KiB read + 8 ms sleep. Early response = 64 KiB POST, origin writes after 8 KiB. Duplex H2 = overlapping 64 KiB POST on H2 TLS↔H2 TLS. WebSocket = echo round-trips/sec. H1 early-response unblocked by session-lite keep-alive POST fix.
 
 `compare-lossy` (slow **network**) is already published above; it is not a slow **app** reader.
 
@@ -363,29 +364,29 @@ Median of **3** repeats on matched 4 vCPU / 16 GiB runners @ `1f2d0eee` ([326880
 
 | Scenario | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---|---:|---:|---:|---:|---:|---:|
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | **248**<br><sub>(98 MiB / 4.1% CPU)</sub> | **248**<br><sub>(98 MiB / 4.1% CPU)</sub> | **218**<br><sub>(240 MiB / 24.4% CPU)</sub> | **218**<br><sub>(240 MiB / 24.4% CPU)</sub> | **241**<br><sub>(110 MiB / 4.9% CPU)</sub> | **241**<br><sub>(110 MiB / 4.9% CPU)</sub> |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | **248**<br><sub>(118 MiB / 5.7% CPU)</sub> | **248**<br><sub>(118 MiB / 5.7% CPU)</sub> | **198**<br><sub>(141 MiB / 24.4% CPU)</sub> | **198**<br><sub>(141 MiB / 24.4% CPU)</sub> | 🥇 **256**<br><sub>(113 MiB / 7.3% CPU)</sub> | **256**<br><sub>(113 MiB / 7.3% CPU)</sub> |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **263**<br><sub>(99 MiB / 18% CPU)</sub> | **263**<br><sub>(99 MiB / 18% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* | **257**<br><sub>(172 MiB / 21.2% CPU)</sub> | **257**<br><sub>(172 MiB / 21.2% CPU)</sub> |
-| Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | *blocked* (POST hang) | *blocked* | **413**<br><sub>(137 MiB / 24.7% CPU)</sub> | **413**<br><sub>(137 MiB / 24.7% CPU)</sub> | 🥇 **5,383**<br><sub>(135 MiB / 55.1% CPU)</sub> | **5,383**<br><sub>(135 MiB / 55.1% CPU)</sub> |
-| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | 🥇 **5,786**<br><sub>(162 MiB / 48% CPU)</sub> | **5,786**<br><sub>(162 MiB / 48% CPU)</sub> | **401**<br><sub>(139 MiB / 24.6% CPU)</sub> | **401**<br><sub>(139 MiB / 24.6% CPU)</sub> | **3,452**<br><sub>(132 MiB / 53.5% CPU)</sub> | **3,452**<br><sub>(132 MiB / 53.5% CPU)</sub> |
-| Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **2,683**<br><sub>(164 MiB / 43.3% CPU)</sub> | **2,683**<br><sub>(164 MiB / 43.3% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* | **2,261**<br><sub>(206 MiB / 52.9% CPU)</sub> | **2,261**<br><sub>(206 MiB / 52.9% CPU)</sub> |
-| Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | **1,670**<br><sub>(132 MiB / 23.3% CPU)</sub> | **1,670**<br><sub>(132 MiB / 23.3% CPU)</sub> | *Not possible* | *Not possible* | 🥇 **2,666**<br><sub>(117 MiB / 41% CPU)</sub> | **2,666**<br><sub>(117 MiB / 41% CPU)</sub> |
-| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | 🥇 **35,743**<br><sub>(96 MiB / 42.6% CPU)</sub> | **35,743**<br><sub>(96 MiB / 42.6% CPU)</sub> | **24,549**<br><sub>(137 MiB / 24.9% CPU)</sub> | **24,549**<br><sub>(137 MiB / 24.9% CPU)</sub> | **33,006**<br><sub>(86 MiB / 44.1% CPU)</sub> | **33,006**<br><sub>(86 MiB / 44.1% CPU)</sub> |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | 🥇 **248**<br><sub>(93 MiB / 4.4% CPU)</sub> | **248**<br><sub>(93 MiB / 4.4% CPU)</sub> | **194**<br><sub>(141 MiB / 24.5% CPU)</sub> | **194**<br><sub>(141 MiB / 24.5% CPU)</sub> | **244**<br><sub>(107 MiB / 5% CPU)</sub> | **244**<br><sub>(107 MiB / 5% CPU)</sub> |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | **248**<br><sub>(118 MiB / 5% CPU)</sub> | **248**<br><sub>(118 MiB / 5% CPU)</sub> | **169**<br><sub>(141 MiB / 24.8% CPU)</sub> | **169**<br><sub>(141 MiB / 24.8% CPU)</sub> | 🥇 **256**<br><sub>(109 MiB / 6.9% CPU)</sub> | **256**<br><sub>(109 MiB / 6.9% CPU)</sub> |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **268**<br><sub>(98 MiB / 19.1% CPU)</sub> | **268**<br><sub>(98 MiB / 19.1% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* | **259**<br><sub>(161 MiB / 22.4% CPU)</sub> | **259**<br><sub>(161 MiB / 22.4% CPU)</sub> |
+| Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | 🥇 **5,034**<br><sub>(85 MiB / 38% CPU)</sub> | **5,034**<br><sub>(85 MiB / 38% CPU)</sub> | **349**<br><sub>(136 MiB / 24.6% CPU)</sub> | **349**<br><sub>(136 MiB / 24.6% CPU)</sub> | **3,441**<br><sub>(114 MiB / 41.6% CPU)</sub> | **3,441**<br><sub>(114 MiB / 41.6% CPU)</sub> |
+| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | 🥇 **4,285**<br><sub>(143 MiB / 43.3% CPU)</sub> | **4,285**<br><sub>(143 MiB / 43.3% CPU)</sub> | **300**<br><sub>(137 MiB / 24.5% CPU)</sub> | **300**<br><sub>(137 MiB / 24.5% CPU)</sub> | **3,016**<br><sub>(109 MiB / 39.9% CPU)</sub> | **3,016**<br><sub>(109 MiB / 39.9% CPU)</sub> |
+| Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **2,263**<br><sub>(136 MiB / 43.5% CPU)</sub> | **2,263**<br><sub>(136 MiB / 43.5% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* | **1,985**<br><sub>(155 MiB / 53.6% CPU)</sub> | **1,985**<br><sub>(155 MiB / 53.6% CPU)</sub> |
+| Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | **885**<br><sub>(113 MiB / 13.1% CPU)</sub> | **885**<br><sub>(113 MiB / 13.1% CPU)</sub> | *Not possible* | *Not possible* | 🥇 **2,293**<br><sub>(119 MiB / 38.5% CPU)</sub> | **2,293**<br><sub>(119 MiB / 38.5% CPU)</sub> |
+| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | 🥇 **31,149**<br><sub>(93 MiB / 44.8% CPU)</sub> | **31,149**<br><sub>(93 MiB / 44.8% CPU)</sub> | **18,388**<br><sub>(137 MiB / 24.7% CPU)</sub> | **18,388**<br><sub>(137 MiB / 24.7% CPU)</sub> | **28,676**<br><sub>(89 MiB / 44.6% CPU)</sub> | **28,676**<br><sub>(89 MiB / 44.6% CPU)</sub> |
 
 #### Linux
 
 | Scenario | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---|---:|---:|---:|---:|---:|---:|
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | **467**<br><sub>(119 MiB / 9.8% CPU)</sub> | **467**<br><sub>(119 MiB / 9.8% CPU)</sub> | 🥇 **472**<br><sub>(99 MiB / 5.7% CPU)</sub> | **472**<br><sub>(99 MiB / 5.7% CPU)</sub> | **420**<br><sub>(144 MiB / 13.9% CPU)</sub> | **420**<br><sub>(144 MiB / 13.9% CPU)</sub> |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | **476**<br><sub>(146 MiB / 19% CPU)</sub> | **476**<br><sub>(146 MiB / 19% CPU)</sub> | 🥇 **478**<br><sub>(109 MiB / 12.4% CPU)</sub> | **478**<br><sub>(109 MiB / 12.4% CPU)</sub> | **470**<br><sub>(152 MiB / 23.8% CPU)</sub> | **470**<br><sub>(152 MiB / 23.8% CPU)</sub> |
-| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **474**<br><sub>(134 MiB / 35.6% CPU)</sub> | **474**<br><sub>(134 MiB / 35.6% CPU)</sub> | **427**<br><sub>(133 MiB / 24.2% CPU)</sub> | **427**<br><sub>(133 MiB / 24.2% CPU)</sub> | **471**<br><sub>(198 MiB / 43.8% CPU)</sub> | **471**<br><sub>(198 MiB / 43.8% CPU)</sub> |
-| Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | *blocked* (POST hang) | *blocked* | 🥇 **4,375**<br><sub>(94 MiB / 48.8% CPU)</sub> | **4,375**<br><sub>(94 MiB / 48.8% CPU)</sub> | **3,413**<br><sub>(177 MiB / 55.4% CPU)</sub> | **3,413**<br><sub>(177 MiB / 55.4% CPU)</sub> |
-| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | 🥇 **3,448**<br><sub>(223 MiB / 48.2% CPU)</sub> | **3,448**<br><sub>(223 MiB / 48.2% CPU)</sub> | **2,147**<br><sub>(98 MiB / 22.4% CPU)</sub> | **2,147**<br><sub>(98 MiB / 22.4% CPU)</sub> | **2,528**<br><sub>(147 MiB / 48.7% CPU)</sub> | **2,528**<br><sub>(147 MiB / 48.7% CPU)</sub> |
-| Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **3,135**<br><sub>(231 MiB / 45.5% CPU)</sub> | **3,135**<br><sub>(231 MiB / 45.5% CPU)</sub> | **789**<br><sub>(105 MiB / 24.1% CPU)</sub> | **789**<br><sub>(105 MiB / 24.1% CPU)</sub> | **2,234**<br><sub>(270 MiB / 47.3% CPU)</sub> | **2,234**<br><sub>(270 MiB / 47.3% CPU)</sub> |
-| Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | **579**<br><sub>(141 MiB / 12.9% CPU)</sub> | **579**<br><sub>(141 MiB / 12.9% CPU)</sub> | *Not possible* | *Not possible* | 🥇 **1,862**<br><sub>(153 MiB / 51.7% CPU)</sub> | **1,862**<br><sub>(153 MiB / 51.7% CPU)</sub> |
-| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | **34,995**<br><sub>(122 MiB / 44.9% CPU)</sub> | **34,995**<br><sub>(122 MiB / 44.9% CPU)</sub> | 🥇 **39,340**<br><sub>(96 MiB / 37.2% CPU)</sub> | **39,340**<br><sub>(96 MiB / 37.2% CPU)</sub> | **31,648**<br><sub>(122 MiB / 45.8% CPU)</sub> | **31,648**<br><sub>(122 MiB / 45.8% CPU)</sub> |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/1 · TLS | HTTP/1 · plain | **464**<br><sub>(116 MiB / 9.7% CPU)</sub> | **464**<br><sub>(116 MiB / 9.7% CPU)</sub> | 🥇 **473**<br><sub>(98 MiB / 6.6% CPU)</sub> | **473**<br><sub>(98 MiB / 6.6% CPU)</sub> | **419**<br><sub>(147 MiB / 15.3% CPU)</sub> | **419**<br><sub>(147 MiB / 15.3% CPU)</sub> |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/2 · TLS | HTTP/1 · plain | **468**<br><sub>(140 MiB / 19.1% CPU)</sub> | **468**<br><sub>(140 MiB / 19.1% CPU)</sub> | 🥇 **477**<br><sub>(108 MiB / 13.7% CPU)</sub> | **477**<br><sub>(108 MiB / 13.7% CPU)</sub> | **472**<br><sub>(144 MiB / 25% CPU)</sub> | **472**<br><sub>(144 MiB / 25% CPU)</sub> |
+| Slow consumer (256 KiB GET, throttled client read) | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **472**<br><sub>(133 MiB / 36.3% CPU)</sub> | **472**<br><sub>(133 MiB / 36.3% CPU)</sub> | **410**<br><sub>(122 MiB / 24.4% CPU)</sub> | **410**<br><sub>(122 MiB / 24.4% CPU)</sub> | **469**<br><sub>(197 MiB / 41% CPU)</sub> | **469**<br><sub>(197 MiB / 41% CPU)</sub> |
+| Early response (origin writes after first request chunk) | HTTP/1 · TLS | HTTP/1 · plain | 🥇 **4,637**<br><sub>(132 MiB / 47.7% CPU)</sub> | **4,637**<br><sub>(132 MiB / 47.7% CPU)</sub> | **3,998**<br><sub>(95 MiB / 50.6% CPU)</sub> | **3,998**<br><sub>(95 MiB / 50.6% CPU)</sub> | **3,088**<br><sub>(173 MiB / 56.8% CPU)</sub> | **3,088**<br><sub>(173 MiB / 56.8% CPU)</sub> |
+| Early response (origin writes after first request chunk) | HTTP/2 · TLS | HTTP/1 · plain | 🥇 **3,132**<br><sub>(230 MiB / 46.4% CPU)</sub> | **3,132**<br><sub>(230 MiB / 46.4% CPU)</sub> | **1,925**<br><sub>(99 MiB / 22.4% CPU)</sub> | **1,925**<br><sub>(99 MiB / 22.4% CPU)</sub> | **2,273**<br><sub>(132 MiB / 48.3% CPU)</sub> | **2,273**<br><sub>(132 MiB / 48.3% CPU)</sub> |
+| Early response (origin writes after first request chunk) | HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **2,875**<br><sub>(220 MiB / 45.9% CPU)</sub> | **2,875**<br><sub>(220 MiB / 45.9% CPU)</sub> | **708**<br><sub>(107 MiB / 24% CPU)</sub> | **708**<br><sub>(107 MiB / 24% CPU)</sub> | **2,042**<br><sub>(248 MiB / 48.7% CPU)</sub> | **2,042**<br><sub>(248 MiB / 48.7% CPU)</sub> |
+| Duplex (both directions live) | HTTP/2 · TLS | HTTP/2 · TLS | **378**<br><sub>(136 MiB / 9.2% CPU)</sub> | **378**<br><sub>(136 MiB / 9.2% CPU)</sub> | *Not possible* | *Not possible* | 🥇 **1,706**<br><sub>(149 MiB / 45.4% CPU)</sub> | **1,706**<br><sub>(149 MiB / 45.4% CPU)</sub> |
+| Duplex (WebSocket / extended CONNECT) | HTTP/1 · TLS | HTTP/1 · plain | **31,574**<br><sub>(122 MiB / 43.7% CPU)</sub> | **31,574**<br><sub>(122 MiB / 43.7% CPU)</sub> | 🥇 **32,771**<br><sub>(96 MiB / 35.6% CPU)</sub> | **32,771**<br><sub>(96 MiB / 35.6% CPU)</sub> | **26,797**<br><sub>(122 MiB / 44.5% CPU)</sub> | **26,797**<br><sub>(122 MiB / 44.5% CPU)</sub> |
 
-Slow consumer is sleep-bound; H1/H2/H3 sit in the same band once bodies stream. Early-response H2/H3: TWP leads. H1 early blocked by keep-alive POST hang under three-process. WebSocket: TWP leads Windows ≈ **1.08×** YARP (35,743 / 33,006); Linux nginx leads.
+Slow consumer is sleep-bound; H1/H2/H3 sit in the same band (Win H2 ÷YARP ≈ **0.97×** is noise — no product chase). Early-response H1/H2/H3: TWP leads (H1 early ≈ **1.46×** / **1.50×** YARP Win/Linux after keep-alive POST fix). **Duplex H2**: YARP leads by design — Win ≈ **0.39×** (885 / 2,293), Linux ≈ **0.22×** (378 / 1,706); irreducible concurrent-copier cell (see [IO model](Performance-Profiling#twp-vs-yarp-io-model)). WebSocket: TWP leads Windows ≈ **1.09×** YARP; Linux nginx leads.
 
 ### TLS termination cost (H1 TLS → cleartext origin)
 
