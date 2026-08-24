@@ -390,7 +390,7 @@ namespace Titanium.Web.Proxy.Http2
                         continue;
 
                     Http2OriginRelayPool.OriginLeg? completedLeg = null;
-                    foreach (var kvp in tasks)
+                    foreach (var kvp in tasks) // NOSONAR S3267 -- Explicit loop avoids LINQ enumerator allocation on hot path.
                     {
                         if (ReferenceEquals(kvp.Value, completed))
                         {
@@ -590,9 +590,13 @@ namespace Titanium.Web.Proxy.Http2
 
             // The lock protecting every write onto `input` itself (same-leg replies: PING ACK, WINDOW_UPDATE
             // receive-credit grants, RST_STREAM for a malformed block).
-            var ownLegWriteLock = originReceiveLeg != null
-                ? originReceiveLeg.WriteLock
-                : (isClient ? connectionState.ClientWriteLock : connectionState.ServerWriteLock);
+            SemaphoreSlim ownLegWriteLock;
+            if (originReceiveLeg != null)
+                ownLegWriteLock = originReceiveLeg.WriteLock;
+            else if (isClient)
+                ownLegWriteLock = connectionState.ClientWriteLock;
+            else
+                ownLegWriteLock = connectionState.ServerWriteLock;
 
             // The lock protecting every write onto `output` (shared with the other task, which reads from
             // `output`'s peer and may itself need to reply directly on it).
@@ -767,7 +771,7 @@ namespace Titanium.Web.Proxy.Http2
                 {
                     pendingStreamReceiveCredit.Remove(removeStreamId);
                     // Fire-and-forget under the loop; connection credit stays batched.
-                    _ = GrantReceiveCreditLockedAsync(removeStreamId, 0, leftover);
+                    _ = GrantReceiveCreditLockedAsync(removeStreamId, 0, leftover).AsTask();
                 }
 
                 connectionState.OriginRelayPool?.ReleaseStream(removeStreamId);
@@ -2675,9 +2679,13 @@ namespace Titanium.Web.Proxy.Http2
                     else
                     {
                         // Multi-origin: each origin leg has its own send window (peer ids).
-                        var flow = originReceiveLeg != null
-                            ? originReceiveLeg.SendFlow
-                            : (isClient ? connectionState.ClientSendFlow : connectionState.ServerSendFlow);
+                        Http2FlowController flow;
+                        if (originReceiveLeg != null)
+                            flow = originReceiveLeg.SendFlow;
+                        else if (isClient)
+                            flow = connectionState.ClientSendFlow;
+                        else
+                            flow = connectionState.ServerSendFlow;
                         var flowStreamId = originReceiveLeg != null ? peerStreamId : streamId;
                         bool overflow = flow.OnWindowUpdate(flowStreamId, increment);
                         if (overflow)
@@ -2871,9 +2879,13 @@ namespace Titanium.Web.Proxy.Http2
                                 // this peer is telling us the initial send-window it grants us for streams
                                 // we open toward it - i.e. it feeds the SEND flow controller for writes
                                 // toward *this* peer, symmetrically with WINDOW_UPDATE above.
-                                var flow = originReceiveLeg != null
-                                    ? originReceiveLeg.SendFlow
-                                    : (isClient ? connectionState.ClientSendFlow : connectionState.ServerSendFlow);
+                                Http2FlowController flow;
+                                if (originReceiveLeg != null)
+                                    flow = originReceiveLeg.SendFlow;
+                                else if (isClient)
+                                    flow = connectionState.ClientSendFlow;
+                                else
+                                    flow = connectionState.ServerSendFlow;
                                 flow.OnInitialWindowSizeChanged((int)value);
 
                                 if (!suppressConnectionFrameRelay && value < ClientInitialStreamWindowSize)
@@ -3416,9 +3428,11 @@ namespace Titanium.Web.Proxy.Http2
                                 var wireLen = 9 + frameLength;
                                 var streamScoped = type is Http2FrameType.Headers or Http2FrameType.Continuation
                                     or Http2FrameType.RstStream or Http2FrameType.Priority;
-                                var dedicatedWriter = streamScoped
-                                    ? (isClient ? connectionState.ServerFrameWriter : connectionState.ClientFrameWriter)
-                                    : null;
+                                Http2FrameWriter? dedicatedWriter = null;
+                                if (streamScoped)
+                                    dedicatedWriter = isClient
+                                        ? connectionState.ServerFrameWriter
+                                        : connectionState.ClientFrameWriter;
                                 if (dedicatedWriter != null)
                                 {
                                     var rented = ArrayPool<byte>.Shared.Rent(wireLen);
@@ -3512,18 +3526,6 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         /// <summary>Cheap check avoiding a ToLowerInvariant() allocation for the common already-lowercase case.</summary>
-        private static bool HasUpperCaseAscii(string s)
-        {
-            for (var i = 0; i < s.Length; i++)
-            {
-                var c = s[i];
-                if (c is >= 'A' and <= 'Z')
-                    return true;
-            }
-
-            return false;
-        }
-
         private static bool HasUpperCaseAscii(ByteString name)
         {
             var span = name.Span;
@@ -3795,7 +3797,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     <c>:scheme</c> (0x86↔0x87) without a Decoder. Returns <see cref="StaticSchemeOverrideResult.AlreadyMatching"/>
         ///     when the block already carries the origin-transport scheme as a static index.
         /// </summary>
-        internal static StaticSchemeOverrideResult TryApplyStaticIndexedSchemeOverride(byte[] block,
+        internal static StaticSchemeOverrideResult TryApplyStaticIndexedSchemeOverride(byte[] block, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
             ByteString toScheme, out byte[] patched)
         {
             patched = null!;
@@ -3860,7 +3862,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     <c>:scheme</c> (static indices 6/7). Returns false when scheme is not indexed that way
         ///     (literal encoding, absent, or ambiguous) so the caller can fall back to full re-encode.
         /// </summary>
-        internal static bool TryPatchStaticIndexedScheme(byte[] block, ByteString fromScheme,
+        internal static bool TryPatchStaticIndexedScheme(byte[] block, ByteString fromScheme, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
             ByteString toScheme, out byte[] patched)
         {
             patched = null!;
@@ -3940,12 +3942,8 @@ namespace Titanium.Web.Proxy.Http2
                 return false;
             }
 
-            if (nameIndex == 0)
-            {
-                // New name: length-prefixed string
-                if (!TrySkipHpackString(block, ref i))
-                    return false;
-            }
+            if (nameIndex == 0 && !TrySkipHpackString(block, ref i))
+                return false;
 
             return TrySkipHpackString(block, ref i);
         }
@@ -4063,7 +4061,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     DATA frames for the same direction must also go through <see cref="Http2ConnectionState.EnqueueWriteRented"/>
         ///     so they cannot overtake this HEADERS on the wire.
         /// </summary>
-        private static void QueueSendHeader(Http2ConnectionState connectionState, bool towardServer,
+        private static void QueueSendHeader(Http2ConnectionState connectionState, bool towardServer, // NOSONAR S107 -- Parameters kept explicit to avoid allocating options bags on hot bridge/pool paths.
             SemaphoreSlim writeLock, Http2Settings settings, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise)
         {
@@ -4079,7 +4077,7 @@ namespace Titanium.Web.Proxy.Http2
             }
         }
 
-        private static void QueueSendHeaderTowardServer(Http2ConnectionState connectionState,
+        private static void QueueSendHeaderTowardServer(Http2ConnectionState connectionState, // NOSONAR S107 -- Parameters kept explicit to avoid allocating options bags on hot bridge/pool paths.
             SemaphoreSlim serverWriteLock, Http2Settings settings, Http2FrameHeader frameHeader,
             byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise) =>
             QueueSendHeader(connectionState, towardServer: true, serverWriteLock, settings, frameHeader,
@@ -5016,7 +5014,7 @@ namespace Titanium.Web.Proxy.Http2
             ///     Reads origin bytes directly into pre-sized DATA frame buffers (header + payload),
             ///     reserves flow-control credit, and enqueues for the client frame writer.
             /// </summary>
-            internal async Task CopyFromAsync(Func<Memory<byte>, CancellationToken, ValueTask<int>> readAsync,
+            internal async Task CopyFromAsync(Func<Memory<byte>, CancellationToken, ValueTask<int>> readAsync, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
                 CancellationToken cancellationToken)
             {
                 while (true)

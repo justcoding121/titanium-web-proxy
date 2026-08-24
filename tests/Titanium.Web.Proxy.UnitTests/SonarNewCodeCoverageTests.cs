@@ -337,6 +337,7 @@ public class SonarNewCodeCoverageTests
 
         var leftover = await CreateShellAsync(proxy);
         pool.Offer("drained", leftover);
+        Assert.IsFalse(leftover.IsUsable);
         leftover.Dispose();
     }
 
@@ -484,10 +485,6 @@ public class SonarNewCodeCoverageTests
         Assert.AreEqual("a", headers.GetHeaderValueOrNull("x-mixed"));
         Assert.AreEqual("b", headers.GetHeaderValueOrNull("already-lower"));
         ProxyMethod("LowercaseHeaderNames").Invoke(null, [headers]);
-
-        var hasUpper = ProxyMethod("HeaderNameHasUpperCaseAscii");
-        Assert.IsTrue((bool)hasUpper.Invoke(null, ["Host"])!);
-        Assert.IsFalse((bool)hasUpper.Invoke(null, ["host"])!);
     }
 
     [TestMethod]

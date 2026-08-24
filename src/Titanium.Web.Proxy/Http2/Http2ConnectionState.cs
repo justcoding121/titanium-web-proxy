@@ -162,7 +162,7 @@ internal sealed class Http2ConnectionState
                     {
                         if (antecedent.IsFaulted)
                             System.Runtime.ExceptionServices.ExceptionDispatchInfo
-                                .Capture(antecedent.Exception!.InnerException ?? antecedent.Exception).Throw();
+                                .Capture(antecedent.Exception.InnerException ?? antecedent.Exception).Throw();
                         if (antecedent.IsCanceled)
                             throw new TaskCanceledException(antecedent);
 

@@ -50,8 +50,7 @@ internal sealed class Http2FrameIntake
     /// </summary>
     public async ValueTask<bool> EnsureAsync(int count, CancellationToken cancellationToken)
     {
-        if (count < 0)
-            throw new ArgumentOutOfRangeException(nameof(count));
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
         if (count == 0)
             return true;
         if (count > buf.Length)

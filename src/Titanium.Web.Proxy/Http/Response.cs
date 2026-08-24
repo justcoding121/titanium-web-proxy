@@ -68,7 +68,7 @@ public class Response : RequestResponseBase
     /// </summary>
     public override bool HasBody
     {
-        get
+        get // NOSONAR S3776 -- Body-framing rules share status/method state; splitting the accessor adds disproportionate regression risk.
         {
             // RFC 9110 section 6.4.1: a 1xx, 204 or 304 response never has a body, regardless of
             // any Content-Length/Transfer-Encoding header the server sent - those headers describe

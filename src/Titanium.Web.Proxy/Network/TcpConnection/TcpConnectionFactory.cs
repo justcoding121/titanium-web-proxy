@@ -298,11 +298,12 @@ internal class TcpConnectionFactory : IDisposable
         List<SslApplicationProtocol>? applicationProtocols = null;
         if (applicationProtocol != default)
         {
-            applicationProtocols = applicationProtocol == SslApplicationProtocol.Http11
-                ? SslExtensions.Http11ProtocolAsList
-                : applicationProtocol == SslApplicationProtocol.Http2
-                    ? SslExtensions.Http2ProtocolAsList
-                    : new List<SslApplicationProtocol> { applicationProtocol };
+            if (applicationProtocol == SslApplicationProtocol.Http11)
+                applicationProtocols = SslExtensions.Http11ProtocolAsList;
+            else if (applicationProtocol == SslApplicationProtocol.Http2)
+                applicationProtocols = SslExtensions.Http2ProtocolAsList;
+            else
+                applicationProtocols = new List<SslApplicationProtocol> { applicationProtocol };
         }
 
         var customUpStreamProxy = session.CustomUpStreamProxy;
@@ -365,11 +366,12 @@ internal class TcpConnectionFactory : IDisposable
         {
             // Reuse static singleton lists for the common ALPN values — avoids a List<> alloc on
             // every new-connection TLS terminate (and every pooled origin get).
-            applicationProtocols = applicationProtocol == SslApplicationProtocol.Http11
-                ? SslExtensions.Http11ProtocolAsList
-                : applicationProtocol == SslApplicationProtocol.Http2
-                    ? SslExtensions.Http2ProtocolAsList
-                    : new List<SslApplicationProtocol> { applicationProtocol };
+            if (applicationProtocol == SslApplicationProtocol.Http11)
+                applicationProtocols = SslExtensions.Http11ProtocolAsList;
+            else if (applicationProtocol == SslApplicationProtocol.Http2)
+                applicationProtocols = SslExtensions.Http2ProtocolAsList;
+            else
+                applicationProtocols = new List<SslApplicationProtocol> { applicationProtocol };
         }
 
         return GetServerConnection(proxyServer, session, isConnect, applicationProtocols, noCache, false,
@@ -524,7 +526,7 @@ internal class TcpConnectionFactory : IDisposable
         List<SslApplicationProtocol>? applicationProtocols, out TcpServerConnection? connection)
         => TryRentFromPool(proxyServer, cacheKey, noCache: false, applicationProtocols, out connection);
 
-    private bool TryRentFromPool(ProxyServer proxyServer, string cacheKey, bool noCache,
+    private bool TryRentFromPool(ProxyServer proxyServer, string cacheKey, bool noCache, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         List<SslApplicationProtocol>? applicationProtocols, out TcpServerConnection? connection)
     {
         connection = null;

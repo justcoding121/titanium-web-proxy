@@ -334,6 +334,34 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
         return ReadAsyncSlow(buffer, offset, count, cancellationToken);
     }
 
+    /// <summary>
+    ///     Asynchronously reads a sequence of bytes from the current stream,
+    ///     advances the position within the stream by the number of bytes read,
+    ///     and monitors cancellation requests.
+    /// </summary>
+    /// <param name="buffer">The buffer to write the data into.</param>
+    /// <param name="cancellationToken">
+    ///     The token to monitor for cancellation requests.
+    ///     The default value is <see cref="P:System.Threading.CancellationToken.None" />.
+    /// </param>
+    /// <returns>
+    ///     A task that represents the asynchronous read operation.
+    ///     The value of the parameter contains the total
+    ///     number of bytes read into the buffer.
+    ///     The result value can be less than the number of bytes
+    ///     requested if the number of bytes currently available is
+    ///     less than the requested number, or it can be 0 (zero)
+    ///     if the end of the stream has been reached.
+    /// </returns>
+    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken =
+ default)
+    {
+        if (Available > 0)
+            return new ValueTask<int>(ReadFromBuffer(buffer.Span));
+
+        return ReadAsyncSlow(buffer, cancellationToken);
+    }
+
     private async Task<int> ReadAsyncSlow(byte[] buffer, int offset, int count,
         CancellationToken cancellationToken)
     {
@@ -373,34 +401,6 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
 
         await FillBufferAsync(cancellationToken);
         return ReadFromBuffer(buffer.AsSpan(offset, count));
-    }
-
-    /// <summary>
-    ///     Asynchronously reads a sequence of bytes from the current stream,
-    ///     advances the position within the stream by the number of bytes read,
-    ///     and monitors cancellation requests.
-    /// </summary>
-    /// <param name="buffer">The buffer to write the data into.</param>
-    /// <param name="cancellationToken">
-    ///     The token to monitor for cancellation requests.
-    ///     The default value is <see cref="P:System.Threading.CancellationToken.None" />.
-    /// </param>
-    /// <returns>
-    ///     A task that represents the asynchronous read operation.
-    ///     The value of the parameter contains the total
-    ///     number of bytes read into the buffer.
-    ///     The result value can be less than the number of bytes
-    ///     requested if the number of bytes currently available is
-    ///     less than the requested number, or it can be 0 (zero)
-    ///     if the end of the stream has been reached.
-    /// </returns>
-    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken =
- default)
-    {
-        if (Available > 0)
-            return new ValueTask<int>(ReadFromBuffer(buffer.Span));
-
-        return ReadAsyncSlow(buffer, cancellationToken);
     }
 
     private async ValueTask<int> ReadAsyncSlow(Memory<byte> buffer, CancellationToken cancellationToken)
@@ -1952,7 +1952,7 @@ internal class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader, IPeekS
     /// <param name="onCopy"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    private async Task CopyBytesToStream(IHttpStreamWriter writer, long count, bool isRequest, SessionEventArgs args,
+    private async Task CopyBytesToStream(IHttpStreamWriter writer, long count, bool isRequest, SessionEventArgs args, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         CancellationToken cancellationToken)
     {
         var remainingBytes = count;

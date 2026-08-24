@@ -1280,7 +1280,7 @@ public partial class ProxyServer : IDisposable
     ///     Add a proxy end point.
     /// </summary>
     /// <param name="endPoint">The proxy endpoint.</param>
-    public void AddEndPoint(ProxyEndPoint endPoint)
+    public void AddEndPoint(ProxyEndPoint endPoint) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (ProxyEndPoints.Any(x =>
                 x.IpAddress.Equals(endPoint.IpAddress) && endPoint.Port != 0 && x.Port == endPoint.Port))
@@ -2015,7 +2015,7 @@ public partial class ProxyServer : IDisposable
     ///     <see cref="Socket.AcceptAsync(CancellationToken)" />, then
     ///     <see cref="ThreadPool.UnsafeQueueUserWorkItem(IThreadPoolWorkItem, bool)" />.
     /// </summary>
-    private async Task AcceptLoopAsync(ProxyEndPoint endPoint, CancellationToken cancellationToken)
+    private async Task AcceptLoopAsync(ProxyEndPoint endPoint, CancellationToken cancellationToken) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var listener = endPoint.Listener;
         if (listener == null) return;

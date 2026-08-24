@@ -116,19 +116,23 @@ internal static class QpackStaticTable
         /* 98 */ ("x-frame-options", "sameorigin"),
     };
 
-    private static readonly Dictionary<(string Name, string Value), int> ExactIndex;
-    private static readonly Dictionary<string, int> NameOnlyIndex;
+    private static readonly Dictionary<(string Name, string Value), int> ExactIndex = BuildExactIndex();
+    private static readonly Dictionary<string, int> NameOnlyIndex = BuildNameOnlyIndex();
 
-    static QpackStaticTable()
+    private static Dictionary<(string, string), int> BuildExactIndex()
     {
-        ExactIndex = new Dictionary<(string, string), int>(Entries.Length);
-        NameOnlyIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+        var exact = new Dictionary<(string, string), int>(Entries.Length);
         for (var i = 0; i < Entries.Length; i++)
-        {
-            var e = Entries[i];
-            ExactIndex[(e.Name, e.Value)] = i;
-            NameOnlyIndex.TryAdd(e.Name, i);
-        }
+            exact[(Entries[i].Name, Entries[i].Value)] = i;
+        return exact;
+    }
+
+    private static Dictionary<string, int> BuildNameOnlyIndex()
+    {
+        var names = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var i = 0; i < Entries.Length; i++)
+            names.TryAdd(Entries[i].Name, i);
+        return names;
     }
 
     /// <summary>Exact static-table index, or -1.</summary>

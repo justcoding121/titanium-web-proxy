@@ -443,7 +443,7 @@ public class Http2BodyWriterAndOriginSettingsTests
     private static ProcessHeaderBlockDelegate GetProcessHeaderBlock(Http2OriginConnection origin)
     {
         var method = typeof(Http2OriginConnection).GetMethod("ProcessHeaderBlock", PrivateInstance)!;
-        return (ProcessHeaderBlockDelegate)method.CreateDelegate(typeof(ProcessHeaderBlockDelegate), origin);
+        return method.CreateDelegate<ProcessHeaderBlockDelegate>(origin);
     }
 
     private sealed class RecordingHeaderListener : IHeaderListener

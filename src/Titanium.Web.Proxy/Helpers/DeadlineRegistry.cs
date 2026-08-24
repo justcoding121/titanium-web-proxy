@@ -60,18 +60,15 @@ internal sealed class DeadlineRegistry
     /// </summary>
     public Deadline Start(CancellationToken parentToken, TimeSpan? timeout, ProxyTimeoutKind kind) // NOSONAR CA1068 -- Parameter order is retained to avoid churn across deadline call sites.
     {
-        if (timeout is not { } d || d <= TimeSpan.Zero)
+        if ((timeout is not { } d || d <= TimeSpan.Zero) && passthroughInUse < 2)
         {
-            if (passthroughInUse < 2)
-            {
-                var index = passthroughInUse++;
-                ref var slot = ref index == 0 ? ref passthrough0 : ref passthrough1;
-                if (slot == null)
-                    slot = new Deadline(this, parentToken, null, kind, cachedPassthrough: true);
-                else
-                    slot.ReusePassthrough(parentToken, kind);
-                return slot;
-            }
+            var index = passthroughInUse++;
+            ref var slot = ref index == 0 ? ref passthrough0 : ref passthrough1;
+            if (slot == null)
+                slot = new Deadline(this, parentToken, null, kind, cachedPassthrough: true);
+            else
+                slot.ReusePassthrough(parentToken, kind);
+            return slot;
         }
 
         return new Deadline(this, parentToken, timeout, kind, cachedPassthrough: false);

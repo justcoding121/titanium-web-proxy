@@ -86,7 +86,7 @@ internal static class Http3RequestStream
 
                 // 2. Decode QPACK headers → extract HTTP/3 pseudo-headers and regular headers.
                 // Decoding is synchronous (SETTINGS_QPACK_BLOCKED_STREAMS = 0; missing inserts are errors).
-                var decodedHeaders = QpackDecoder.Decode(
+                var decodedHeaders = QpackDecoder.Decode( // NOSONAR S6966 -- sync decode by protocol design
                     headersFrame.Payload, qpackContext, cancellationToken);
                 headersFrame.ReturnPayload();
                 qpackContext?.EnqueueSectionAck(stream.Id);
@@ -384,7 +384,7 @@ internal static class Http3RequestStream
                 {
                     var path = Environment.GetEnvironmentVariable("TWP_H3_ERROR_LOG");
                     if (!string.IsNullOrEmpty(path))
-                        System.IO.File.AppendAllText(path, ex.ToString() + Environment.NewLine + "---" + Environment.NewLine);
+                        await System.IO.File.AppendAllTextAsync(path, ex.ToString() + Environment.NewLine + "---" + Environment.NewLine);
                 }
                 catch
                 {
@@ -404,23 +404,21 @@ internal static class Http3RequestStream
                 linkedCts?.Dispose();
                 cts?.Dispose();
                 if (streamState != null &&
-                    Interlocked.CompareExchange(ref streamState.FinalizedFlag, 1, 0) == 0)
+                    Interlocked.CompareExchange(ref streamState.FinalizedFlag, 1, 0) == 0 &&
+                    sessionArgs != null)
                 {
-                    if (sessionArgs != null)
+                    try
                     {
-                        try
-                        {
-                            await onAfterResponse(sessionArgs);
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.LogError(ex, "AfterResponse handler error on HTTP/3 stream {StreamId}", stream.Id);
-                        }
-                        finally
-                        {
-                            sessionArgs.Timing?.MarkComplete();
-                            sessionArgs.Dispose();
-                        }
+                        await onAfterResponse(sessionArgs);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "AfterResponse handler error on HTTP/3 stream {StreamId}", stream.Id);
+                    }
+                    finally
+                    {
+                        sessionArgs.Timing?.MarkComplete();
+                        sessionArgs.Dispose();
                     }
                 }
             }
@@ -432,7 +430,7 @@ internal static class Http3RequestStream
     ///     <see cref="SessionEventArgs" /> graph (matches YARP's lack of a proxy session bag).
     ///     Dispatches to H3→H2 / H3→H3 / H3→H1 session-lite forwards.
     /// </summary>
-    private static async Task HandleH3OriginFastPathAsync(
+    private static async Task HandleH3OriginFastPathAsync( // NOSONAR S107 -- Parameters kept explicit to avoid allocating options bags on hot bridge/pool paths.
         QuicStream stream,
         ProxyEndPoint endPoint,
         BeforeQuicAuthenticateEventArgs authArgs,

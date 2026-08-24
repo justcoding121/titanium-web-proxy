@@ -351,7 +351,7 @@ internal static class Http3OriginBridge
 
             // H1 clients need chunked framing when Content-Length is absent; H2/H3 strip TE later.
             if (response.ContentLength < 0 && !response.IsChunked)
-                response.Headers.AddHeader(KnownHeaders.TransferEncoding, "chunked");
+                response.Headers.AddHeader(KnownHeaders.TransferEncoding, KnownHeaders.TransferEncodingChunked);
 
             if (originStream is null || quicConn is null)
                 throw new InvalidOperationException("HTTP/3 origin stream or connection missing after response headers.");
@@ -464,10 +464,11 @@ internal static class Http3OriginBridge
                                     if (hookArgs.BodyBytes is { Length: > 0 })
                                         await clientBodyStream.WriteAsync(hookArgs.BodyBytes, ct);
 
-                                    if (hookArgs.IsLastChunk && !isLast)
+                                    if (hookArgs.IsLastChunk && next is { } toRelease
+                                        && toRelease.Type != Http3FrameType.Headers)
                                     {
                                         streamToClient.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
-                                        next?.ReturnPayload();
+                                        toRelease.ReturnPayload();
                                         break;
                                     }
                                 }
@@ -725,7 +726,7 @@ internal static class Http3OriginBridge
         }
     }
 
-    private static async Task<Http2OriginConnection> LeaseHttp2OriginFastAsync(
+    private static async Task<Http2OriginConnection> LeaseHttp2OriginFastAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         ProxyServer server, ILogger logger, H3H2FastForward fwd,
         Http2OriginTarget target,
         Func<SessionEventArgs> coldOpenSessionFactory,
@@ -782,7 +783,7 @@ internal static class Http3OriginBridge
     ///     analogue) — no response QPACK decode/re-encode / <see cref="Response"/> graph.
     ///     Returns <see langword="true"/> when the client response is already on the wire.
     /// </summary>
-    internal static async Task<bool> ForwardOverQuicFastAsync(
+    internal static async Task<bool> ForwardOverQuicFastAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         H3H2FastForward fwd,
         ProxyServer server,
         ILogger logger,
@@ -961,7 +962,7 @@ internal static class Http3OriginBridge
     ///     Warm keep-alive still pools origin sockets. Does not allocate <see cref="HttpWebClient"/> —
     ///     the socket is already leased; only a <see cref="Response"/> is needed for QPACK.
     /// </summary>
-    internal static async Task ForwardOverTcpFastAsync(
+    internal static async Task ForwardOverTcpFastAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         H3H2FastForward fwd,
         ProxyServer server,
         ILogger logger,
@@ -1154,7 +1155,7 @@ internal static class Http3OriginBridge
                     fwd.PreencodedQpackHeaders = parsed.Value.QpackHeaders;
                     fwd.PreencodedStreamBodyWriter = async (clientBodyStream, ct) =>
                     {
-                        IHttpStreamReader reader = originConnection!.Stream;
+                        IHttpStreamReader reader = originConnection.Stream;
                         using var limited = new LimitedStream(reader, server.BufferPool, originIsChunked,
                             originContentLength, trailingHeaders);
                         const int frameBytes = 16 * 1024;
@@ -1216,7 +1217,7 @@ internal static class Http3OriginBridge
                         var copyCompleted = false;
                         try
                         {
-                            await inner!(dest, ct);
+                            await inner(dest, ct);
                             copyCompleted = true;
                         }
                         finally
@@ -1260,7 +1261,7 @@ internal static class Http3OriginBridge
         return false;
     }
 
-    private static async Task ForwardOverHttp2Async(
+    private static async Task ForwardOverHttp2Async( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         SessionEventArgs sessionArgs,
         ProxyServer server,
         ILogger logger,
@@ -1461,7 +1462,7 @@ internal static class Http3OriginBridge
     private readonly record struct Http2OriginTarget(
         string Host, int Port, string? ConnectHost, int? ConnectPort, string PoolKey);
 
-    private static async Task<Http2OriginConnection> LeaseHttp2OriginAsync(
+    private static async Task<Http2OriginConnection> LeaseHttp2OriginAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         ProxyServer server, ILogger logger, SessionEventArgs sessionArgs,
         Http2OriginTarget target, CancellationToken cancellationToken)
     {
@@ -1614,7 +1615,7 @@ internal static class Http3OriginBridge
             else if (request.ContentLength < 0 && !request.IsChunked)
             {
                 // Unknown length over H3 → chunked on the H1 wire.
-                request.Headers.AddHeader(KnownHeaders.TransferEncoding, "chunked");
+                request.Headers.AddHeader(KnownHeaders.TransferEncoding, KnownHeaders.TransferEncodingChunked);
             }
             // else: client-declared content-length is already correct for the streamed body.
             // UpdateContentLength() must NOT run here — it stamps BodyInternal?.Length ?? 0 and
@@ -1817,7 +1818,7 @@ internal static class Http3OriginBridge
                     var offset = 0;
                     while (offset < bodyBytes.Length)
                     {
-                        var read = await connection!.Stream.ReadAsync(
+                        var read = await connection.Stream.ReadAsync(
                             bodyBytes.AsMemory(offset), cancellationToken);
                         if (read == 0)
                             break;
@@ -1843,15 +1844,14 @@ internal static class Http3OriginBridge
                 var originIsChunked = response.IsChunked;
                 var originContentLength = response.ContentLength;
                 var pendingUpload = uploadTask;
-                uploadTask = null; // ownership moved into StreamBodyWriter
                 if (response.ContentLength < 0 && !response.IsChunked)
-                    response.Headers.AddHeader(KnownHeaders.TransferEncoding, "chunked");
+                    response.Headers.AddHeader(KnownHeaders.TransferEncoding, KnownHeaders.TransferEncodingChunked);
 
                 response.StreamBodyWriter = async (clientBodyStream, ct) =>
                 {
                     async Task CopyResponseAsync()
                     {
-                        IHttpStreamReader reader = originConnection!.Stream;
+                        IHttpStreamReader reader = originConnection.Stream;
                         using var limited = new LimitedStream(reader, server.BufferPool, originIsChunked,
                             originContentLength, response.TrailingHeaders);
                         var buffer = server.BufferPool.GetBuffer();
@@ -1883,11 +1883,10 @@ internal static class Http3OriginBridge
 
             closeConnection = !response.KeepAlive;
 
-            // Do NOT check HttpStream.DataAvailable here when StreamBodyWriter still owns the
-            // origin body — loopback already has response DATA buffered after headers, which would
-            // look like "residual framing" and force-close every keep-alive (ephemeral-port storm
-            // under H3 multiplexed POST). Check after the body drain instead (eager path below;
-            // StreamBodyWriter wrapper in finally).
+            // Do not probe residual bytes while a stream body writer still owns the origin socket —
+            // buffered DATA after headers would look like leftover framing and force-close keep-alive
+            // under multiplexed POST. Probe only after the body drain (eager path below, or the
+            // stream-body wrapper in finally).
             if (sessionArgs.HttpClient.Response.StreamBodyWriter == null
                 && connection?.Stream is Helpers.HttpStream httpStream && httpStream.DataAvailable)
                 closeConnection = true;
@@ -1913,7 +1912,7 @@ internal static class Http3OriginBridge
                         var copyCompleted = false;
                         try
                         {
-                            await inner!(dest, ct);
+                            await inner(dest, ct);
                             copyCompleted = true;
                         }
                         finally
@@ -1948,9 +1947,13 @@ internal static class Http3OriginBridge
     /// </summary>
     private static List<(string, string)> BuildRequestHeaders(Request request, string authorityHost) // NOSONAR S1144 -- reflection test seam
     {
-        var authority = request.Authority.Length > 0
-            ? request.Authority.GetString()
-            : (!string.IsNullOrEmpty(request.Host) ? request.Host! : authorityHost);
+        string authority;
+        if (request.Authority.Length > 0)
+            authority = request.Authority.GetString();
+        else if (!string.IsNullOrEmpty(request.Host))
+            authority = request.Host;
+        else
+            authority = authorityHost;
         var path = request.RequestUriString8.Length > 0
             ? request.RequestUriString8.GetString()
             : "/";

@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -133,5 +134,73 @@ public class BoundedWriteStreamTests
         bounded.Write(new byte[] { 7, 8, 9 }, 0, 3);
 
         Assert.AreEqual(9, inner.Length);
+    }
+
+    [TestMethod]
+    public void StreamCapabilities_MatchWriteOnlyContract()
+    {
+        using var inner = new MemoryStream();
+        using var bounded = new BoundedWriteStream(inner, maxBytes: 10);
+
+        Assert.IsFalse(bounded.CanRead);
+        Assert.IsFalse(bounded.CanSeek);
+        Assert.IsTrue(bounded.CanWrite);
+    }
+
+    [TestMethod]
+    public void LengthAndPosition_DelegateToInnerStream()
+    {
+        using var inner = new MemoryStream();
+        inner.Write(new byte[] { 1, 2, 3 }, 0, 3);
+        using var bounded = new BoundedWriteStream(inner, maxBytes: 10);
+
+        Assert.AreEqual(3, bounded.Length);
+        Assert.AreEqual(3, bounded.Position);
+    }
+
+    [TestMethod]
+    public void Position_Set_ThrowsNotSupported()
+    {
+        using var inner = new MemoryStream();
+        using var bounded = new BoundedWriteStream(inner, maxBytes: 10);
+
+        Assert.ThrowsExactly<NotSupportedException>(() => bounded.Position = 0);
+    }
+
+    [TestMethod]
+    public async Task Flush_AndFlushAsync_ForwardToInner()
+    {
+        using var inner = new MemoryStream();
+        using var bounded = new BoundedWriteStream(inner, maxBytes: 10);
+
+        bounded.Write(new byte[] { 1 }, 0, 1);
+        bounded.Flush();
+        await bounded.FlushAsync(CancellationToken.None);
+
+        Assert.AreEqual(1, inner.Length);
+    }
+
+    [TestMethod]
+    public void ReadSeekAndSetLength_ThrowNotSupported()
+    {
+        using var inner = new MemoryStream();
+        using var bounded = new BoundedWriteStream(inner, maxBytes: 10);
+        var buffer = new byte[4];
+
+        Assert.ThrowsExactly<NotSupportedException>(() => bounded.Read(buffer, 0, buffer.Length));
+        Assert.ThrowsExactly<NotSupportedException>(() => bounded.Seek(0, SeekOrigin.Begin));
+        Assert.ThrowsExactly<NotSupportedException>(() => bounded.SetLength(0));
+    }
+
+    [TestMethod]
+    public async Task WriteAsync_ReadOnlyMemory_WithinLimit_Succeeds()
+    {
+        using var inner = new MemoryStream();
+        using var bounded = new BoundedWriteStream(inner, maxBytes: 8);
+        var payload = new byte[] { 9, 8, 7, 6 };
+
+        await bounded.WriteAsync((ReadOnlyMemory<byte>)payload, CancellationToken.None);
+
+        CollectionAssert.AreEqual(payload, inner.ToArray());
     }
 }

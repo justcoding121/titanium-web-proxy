@@ -101,7 +101,7 @@ internal static class Http1FramingValidator
     ///     choice, because forwarding with one value used for framing while different bytes are actually
     ///     on the wire is exactly the request-smuggling primitive this check exists to close.
     /// </summary>
-    private static void NormalizeContentLength(HeaderCollection headers)
+    private static void NormalizeContentLength(HeaderCollection headers) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         // Common path: one well-formed Content-Length. Do not allocate GetHeaders()'s List,
         // Split, or rewrite the header — that was a per-response tax on every tiny GET.

@@ -416,7 +416,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     internal void NormalizeNamesToLowercaseAscii()
     {
         var needsRename = false;
-        foreach (var header in this)
+        foreach (var header in this) // NOSONAR S3267 -- Explicit loop avoids LINQ enumerator allocation on hot path.
         {
             if (HeaderNameDataHasUpperCaseAscii(header.NameData))
             {

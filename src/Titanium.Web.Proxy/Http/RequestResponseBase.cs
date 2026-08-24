@@ -123,13 +123,11 @@ public abstract class RequestResponseBase
         {
             // Prefer ValueData parse — GetHeaderValueOrNull → header.Value allocates a string per call,
             // and HasBody/framing hit this multiple times on the transparent keep-alive path.
-            if (Headers.TryGetUniqueHeader(KnownHeaders.ContentLength, out var header)
+            if ((Headers.TryGetUniqueHeader(KnownHeaders.ContentLength, out var header)
                 || Headers.TryGetUniqueHeader(KnownHeaders.ContentLengthHttp2, out header))
-            {
-                if (System.Buffers.Text.Utf8Parser.TryParse(header.ValueData.Span, out long contentLen, out _)
-                    && contentLen >= 0)
-                    return contentLen;
-            }
+                && System.Buffers.Text.Utf8Parser.TryParse(header.ValueData.Span, out long contentLen, out _)
+                && contentLen >= 0)
+                return contentLen;
 
             return -1;
         }

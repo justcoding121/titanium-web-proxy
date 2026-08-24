@@ -299,20 +299,6 @@ public class Request : RequestResponseBase
         }
     }
 
-    private static bool IsHttp10(ReadOnlySpan<byte> httpVersion)
-    {
-        if (httpVersion.Length != 8) return false;
-        ReadOnlySpan<byte> expected = "HTTP/1.0"u8;
-        for (var i = 0; i < 8; i++)
-        {
-            var c = httpVersion[i];
-            if (c is >= (byte)'a' and <= (byte)'z') c = (byte)(c - 32);
-            if (c != expected[i]) return false;
-        }
-
-        return true;
-    }
-
     internal static void ParseRequestLine(ReadOnlySpan<char> httpCmd, out string method, out ByteString requestUri,
         out Version version)
     {
@@ -342,6 +328,20 @@ public class Request : RequestResponseBase
 
             if (httpVersion.EqualsIgnoreCase("HTTP/1.0".AsSpan(0))) version = HttpHeader.Version10;
         }
+    }
+
+    private static bool IsHttp10(ReadOnlySpan<byte> httpVersion)
+    {
+        if (httpVersion.Length != 8) return false;
+        ReadOnlySpan<byte> expected = "HTTP/1.0"u8;
+        for (var i = 0; i < 8; i++)
+        {
+            var c = httpVersion[i];
+            if (c is >= (byte)'a' and <= (byte)'z') c = (byte)(c - 32);
+            if (c != expected[i]) return false;
+        }
+
+        return true;
     }
 
     private static string InternMethod(ReadOnlySpan<byte> method)

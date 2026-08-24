@@ -241,7 +241,7 @@ internal sealed class Http2OriginRelayPool : IAsyncDisposable
         if (Interlocked.Exchange(ref disposed, 1) != 0)
             return;
 
-        try { poolCts.Cancel(); }
+        try { await poolCts.CancelAsync(); }
         catch { /* ignore */ }
 
         OriginLeg[] snapshot;

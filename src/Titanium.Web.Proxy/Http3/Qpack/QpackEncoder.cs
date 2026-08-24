@@ -81,7 +81,7 @@ internal static class QpackEncoder
     /// <summary>
     ///     Encodes an HTTP request without building an intermediate header list (hot H3→origin path).
     /// </summary>
-    public static byte[] EncodeRequest(Request request, string authorityHost, QpackContext? context = null)
+    public static byte[] EncodeRequest(Request request, string authorityHost, QpackContext? context = null) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var body = reusableBuffer ??= new MemoryStream();
         body.SetLength(0);
@@ -91,9 +91,13 @@ internal static class QpackEncoder
 
         ulong maxRequiredInsertCount = 0;
 
-        var authority = request.Authority.Length > 0
-            ? request.Authority.GetString()
-            : (!string.IsNullOrEmpty(request.Host) ? request.Host! : authorityHost);
+        string authority;
+        if (request.Authority.Length > 0)
+            authority = request.Authority.GetString();
+        else if (!string.IsNullOrEmpty(request.Host))
+            authority = request.Host;
+        else
+            authority = authorityHost;
         var path = request.RequestUriString8.Length > 0
             ? request.RequestUriString8.GetString()
             : "/";

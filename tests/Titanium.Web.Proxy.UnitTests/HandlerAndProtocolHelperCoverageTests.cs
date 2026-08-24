@@ -18,6 +18,7 @@ using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Http3.Dns;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Extensions;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
@@ -233,8 +234,9 @@ public class HandlerAndProtocolHelperCoverageTests
     public void HasUpperCaseAscii_DetectsLatinUppercase(string value, bool expected)
     {
         var method = typeof(Http2Helper).GetMethod(
-            "HasUpperCaseAscii", PrivateStatic, binder: null, [typeof(string)], modifiers: null)!;
-        Assert.AreEqual(expected, (bool)method.Invoke(null, [value])!);
+            "HasUpperCaseAscii", PrivateStatic, binder: null, [typeof(ByteString)], modifiers: null)!;
+        ByteString name = value.GetByteString();
+        Assert.AreEqual(expected, (bool)method.Invoke(null, [name])!);
     }
 
     [TestMethod]

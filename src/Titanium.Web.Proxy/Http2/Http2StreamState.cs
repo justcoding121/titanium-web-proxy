@@ -152,14 +152,11 @@ internal sealed class Http2StreamState
 
     private void ResetMutableFields(bool preserveCancellation = false)
     {
-        if (!preserveCancellation)
+        if (!preserveCancellation && !Cancellation.TryReset())
         {
-            if (!Cancellation.TryReset())
-            {
-                try { Cancellation.Dispose(); }
-                catch { /* ignore */ }
-                Cancellation = new CancellationTokenSource();
-            }
+            try { Cancellation.Dispose(); }
+            catch { /* ignore */ }
+            Cancellation = new CancellationTokenSource();
         }
 
         RequestClosed = false;

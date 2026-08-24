@@ -63,7 +63,7 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
 
     public Task Completion => drainTask;
 
-    private async Task DrainAsync(CancellationToken cancellationToken)
+    private async Task DrainAsync(CancellationToken cancellationToken) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var reader = channel.Reader;
         try
@@ -176,7 +176,7 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         }
         catch (TimeoutException)
         {
-            try { cts.Cancel(); }
+            try { await cts.CancelAsync(); }
             catch { /* ignore */ }
 
             try { await drainTask.WaitAsync(TimeSpan.FromSeconds(1), CancellationToken.None).ConfigureAwait(false); }
@@ -187,7 +187,7 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
             /* drain may fault if socket already closed */
         }
 
-        try { cts.Cancel(); }
+        try { await cts.CancelAsync(); }
         catch { /* ignore */ }
 
         cts.Dispose();

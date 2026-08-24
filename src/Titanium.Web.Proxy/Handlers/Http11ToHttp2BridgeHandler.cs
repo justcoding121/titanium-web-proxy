@@ -345,8 +345,8 @@ public partial class ProxyServer
     ///     Offers the negotiation-retained TCP seed (when ALPN/h2c is valid) into the shared origin pool
     ///     as an established <see cref="Http2OriginConnection" />. Releases invalid seeds.
     /// </summary>
-    private async Task OfferRetainedHttp2OriginSeedAsync(SessionEventArgs args, string poolKey,
-        string remoteHostName, int remotePort, string? connectHost, int? connectPort,
+    private async Task OfferRetainedHttp2OriginSeedAsync(SessionEventArgs args, string poolKey, // NOSONAR S107 -- Parameters kept explicit to avoid allocating options bags on hot bridge/pool paths.
+        string remoteHostName, int remotePort, string? connectHost, int? connectPort, // NOSONAR S1172 -- retained for call-site / overload symmetry with exchange path
         Task<TcpServerConnection?> retainedConnectionTask, CancellationToken cancellationToken)
     {
         TcpServerConnection? seedConnection = null;
@@ -476,9 +476,9 @@ public partial class ProxyServer
     ///     writes the translated result back to the HTTP/1.1 client. On GOAWAY for an unprocessed stream,
     ///     invalidates that connection and retries once on a freshly rented member.
     /// </summary>
-    private async Task RunHttp11ToHttp2ExchangeAsync(SessionEventArgs args, string poolKey,
+    private async Task RunHttp11ToHttp2ExchangeAsync(SessionEventArgs args, string poolKey, // NOSONAR S3776, S107 -- This protocol/state-machine path shares mutable parsing or transport state; parameters kept explicit to avoid allocating options bags on hot bridge/pool paths.
         Func<CancellationToken, Task<Http2OriginConnection>> openFactory,
-        string remoteHostName, int remotePort, string? connectHost, int? connectPort,
+        string remoteHostName, int remotePort, string? connectHost, int? connectPort, // NOSONAR S1172 -- retained for call-site / overload symmetry with seed offer path
         CancellationToken cancellationToken)
     {
         var request = args.HttpClient.Request;

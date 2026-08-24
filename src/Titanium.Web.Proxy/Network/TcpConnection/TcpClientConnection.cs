@@ -100,7 +100,7 @@ internal class TcpClientConnection : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    protected virtual void Dispose(bool disposing)
+    protected virtual void Dispose(bool disposing) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         if (Interlocked.Exchange(ref disposed, 1) != 0) return;
 

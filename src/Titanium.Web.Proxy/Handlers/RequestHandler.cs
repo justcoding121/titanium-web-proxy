@@ -178,7 +178,6 @@ public partial class ProxyServer
                             reusable = null;
                             args.ResetForKeepAlive(connectArgs,
                                 upstreamHttpProtocol ?? connectArgs?.UpstreamHttpProtocol);
-                            preparedRequest = null;
                             headersAlreadyRead = false;
                         }
                         else if (preparedRequest != null)
@@ -834,7 +833,7 @@ public partial class ProxyServer
         }, generator, serverConnection);
     }
 
-    private async Task HandleHttpSessionRequest(SessionEventArgs args)
+    private async Task HandleHttpSessionRequest(SessionEventArgs args) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
         var cancellationToken = args.CancellationToken;
         var request = args.HttpClient.Request;

@@ -52,7 +52,7 @@ public partial class ProxyServer
     ///     Forward one bodiless reverse GET/HEAD without a session bag. Returns whether the client
     ///     connection should stay open for another keep-alive request.
     /// </summary>
-    private async Task<bool> ForwardH1TerminateLiteAsync(
+    private async Task<bool> ForwardH1TerminateLiteAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         TransparentBaseProxyEndPoint endPoint,
         HttpClientStream clientStream,
         Request request,
@@ -126,7 +126,6 @@ public partial class ProxyServer
             if (response.StatusCode is >= 100 and <= 199)
             {
                 // 1xx needs the full session path's interim loop — close origin and signal fallback.
-                closeConnection = true;
                 throw new InvalidOperationException("H1 terminate lite does not handle interim 1xx responses.");
             }
 

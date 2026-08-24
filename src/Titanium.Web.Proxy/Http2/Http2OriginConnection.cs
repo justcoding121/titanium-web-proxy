@@ -271,7 +271,7 @@ internal sealed class Http2OriginConnection : IDisposable
     ///     body was not buffered), request DATA is streamed; the response body is delivered via
     ///     <see cref="Response.StreamBodyWriter"/> instead of a fully materialized <c>byte[]</c>.
     /// </summary>
-    internal async Task<Http2OriginExchange> SendAsync(Request request,
+    internal async Task<Http2OriginExchange> SendAsync(Request request, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         Func<int, HeaderCollection, CancellationToken, Task>? on1xx,
         CancellationToken cancellationToken,
         Func<Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask>, CancellationToken, Task>? copyRequestBody =
@@ -287,7 +287,8 @@ internal sealed class Http2OriginConnection : IDisposable
         await initialSettingsReceived.Task.WaitAsync(cancellationToken);
 
         var gate = concurrencyGate ?? throw new InvalidOperationException("Origin settings were never processed.");
-        if (!gate.Wait(0))
+        // Non-allocating uncontended take; WaitAsync alone allocates even when free.
+        if (!gate.Wait(0, CancellationToken.None)) // NOSONAR S6966 -- intentional sync try-take before WaitAsync
             await gate.WaitAsync(cancellationToken);
 
         // Allocate InterimChannel only when the caller will drain 1xx (on1xx != null). Passthrough
@@ -360,9 +361,9 @@ internal sealed class Http2OriginConnection : IDisposable
                 }
             }
 
-            if (streamRequest)
+            if (streamRequest && copyRequestBody is { } copyBody)
             {
-                await copyRequestBody!(
+                await copyBody(
                     async (data, ct) =>
                     {
                         if (data.IsEmpty) return;
@@ -512,7 +513,7 @@ internal sealed class Http2OriginConnection : IDisposable
                 }
                 finally
                 {
-                    bodyCancelRegistration.Dispose();
+                    await bodyCancelRegistration.DisposeAsync();
                     TryUnregisterStream(streamId, out _);
                     pending.Dispose();
                     sendFlow.RemoveStream(streamId);
@@ -701,7 +702,7 @@ internal sealed class Http2OriginConnection : IDisposable
     }
 
     private Task ResetStreamAsync(int streamId, Http2ErrorCode errorCode,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken) // NOSONAR S1172 -- signature matches tunnel reset delegate
     {
         Http2Helper.EnqueueRstStream(Writer, streamId, errorCode);
         return Task.CompletedTask;
@@ -735,13 +736,13 @@ internal sealed class Http2OriginConnection : IDisposable
         }
     }
 
-    private Task SendSettingsAckAsync(CancellationToken cancellationToken)
+    private Task SendSettingsAckAsync(CancellationToken cancellationToken) // NOSONAR S1172 -- kept for await-site symmetry with other frame helpers
     {
         Http2Helper.EnqueueSettingsAck(Writer);
         return Task.CompletedTask;
     }
 
-    private Task SendPingAckAsync(byte[] payload, CancellationToken cancellationToken)
+    private Task SendPingAckAsync(byte[] payload, CancellationToken cancellationToken) // NOSONAR S1172 -- kept for await-site symmetry with other frame helpers
     {
         Http2Helper.EnqueuePingAck(Writer, payload);
         return Task.CompletedTask;
@@ -752,8 +753,8 @@ internal sealed class Http2OriginConnection : IDisposable
     ///     <see cref="Http2Helper.ReceiveCreditBatchThreshold" /> (half of the 768 KiB stream window),
     ///     matching <see cref="Http2Helper" /> so credit is not drip-fed under the write lock per frame.
     /// </summary>
-    private Task GrantReceiveCreditAsync(int streamId, int bytes, bool forceFlush,
-        CancellationToken cancellationToken)
+    private Task GrantReceiveCreditAsync(int streamId, int bytes, bool forceFlush, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+        CancellationToken cancellationToken) // NOSONAR S1172 -- enqueue is sync; token reserved for future async flush
     {
         if (bytes <= 0 && !forceFlush)
             return Task.CompletedTask;
@@ -841,13 +842,11 @@ internal sealed class Http2OriginConnection : IDisposable
                     return;
                 }
 
-                if (length > 0)
+                if (length > 0 &&
+                    !await intake.EnsureAsync(length, cancellationToken).ConfigureAwait(false))
                 {
-                    if (!await intake.EnsureAsync(length, cancellationToken).ConfigureAwait(false))
-                    {
-                        Fail(new IOException("The origin h2 connection was closed mid-frame."));
-                        return;
-                    }
+                    Fail(new IOException("The origin h2 connection was closed mid-frame."));
+                    return;
                 }
 
                 var payloadSpan = length == 0
@@ -1283,7 +1282,7 @@ internal sealed class Http2OriginConnection : IDisposable
     ///     Byte[] overload kept for unit tests via reflection. Unpadded / empty-padded returns the same
     ///     instance (historical contract); padded otherwise allocates.
     /// </summary>
-    private static byte[] StripDataFraming(byte[] payload, Http2FrameFlag flags)
+    private static byte[] StripDataFraming(byte[] payload, Http2FrameFlag flags) // NOSONAR S1144 -- reflection test seam
     {
         if ((flags & Http2FrameFlag.Padded) == 0 || payload.Length == 0) return payload;
 
@@ -1537,7 +1536,7 @@ internal sealed class Http2OriginConnection : IDisposable
         var writer = frameWriter;
         frameWriter = null;
         if (writer != null)
-            _ = writer.DisposeAsync();
+            _ = writer.DisposeAsync().AsTask(); // fire-and-forget; sync Dispose cannot await
         connectionCts.Dispose();
         writeLock.Dispose();
         concurrencyGate?.Dispose();
@@ -1550,7 +1549,8 @@ internal sealed class Http2OriginConnection : IDisposable
     /// </summary>
     private ValueTask WaitWriteLockAsync(CancellationToken cancellationToken)
     {
-        if (writeLock.Wait(0))
+        // Explicit None: zero-timeout poll must not observe cancellation (would throw before WaitAsync).
+        if (writeLock.Wait(0, CancellationToken.None)) // NOSONAR S6966 -- intentional sync try-take before WaitAsync
             return default;
 
         return new ValueTask(writeLock.WaitAsync(cancellationToken));

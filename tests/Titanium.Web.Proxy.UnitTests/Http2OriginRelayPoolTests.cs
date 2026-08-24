@@ -43,7 +43,7 @@ public class Http2OriginRelayPoolTests
             {
                 var clientStreamId = 1 + i * 2;
                 var assignment = await pool.AssignStreamAsync(clientStreamId, CancellationToken.None);
-                Assert.IsTrue(assignment.OriginStreamId % 2 == 1);
+                Assert.AreEqual(1, assignment.OriginStreamId % 2);
                 Assert.IsTrue(pool.TryGetAssignment(clientStreamId, out _));
             }
 

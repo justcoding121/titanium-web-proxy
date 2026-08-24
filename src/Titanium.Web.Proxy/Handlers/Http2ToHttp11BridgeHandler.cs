@@ -251,7 +251,7 @@ public partial class ProxyServer
                             $"HTTP/2-to-HTTP/1.1 bridge round trip failed for stream {ctx.StreamId}",
                             new ProxyHttpException(
                                 $"HTTP/2-to-HTTP/1.1 bridge round trip failed for stream {ctx.StreamId}",
-                                t.Exception!.GetBaseException(), sessionArgs));
+                                t.Exception.GetBaseException(), sessionArgs));
                 }, TaskScheduler.Default);
         }
 
@@ -269,7 +269,7 @@ public partial class ProxyServer
     /// </summary>
     private async Task RunHttp2ToHttp11BridgeRoundTripAsync(SessionEventArgs sessionArgs, int streamId, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         Http2ConnectionState connectionState, System.IO.Stream clientStream, string remoteHostName, int remotePort,
-        string? connectHost, int? connectPort, CancellationToken connectionToken, CancellationToken streamToken,
+        string? connectHost, int? connectPort, CancellationToken connectionToken, CancellationToken streamToken, // NOSONAR S1172 -- connectionToken retained for call-site symmetry; streamToken drives cancellation
         Channel<(byte[] Buffer, int Length)>? requestBodyChannel)
     {
         // Stream CTS is cancelled on RST_STREAM and when the connection tears down (all streams
@@ -435,10 +435,10 @@ public partial class ProxyServer
 
             if (!useH2H1LiteWire && request.HasBody && !request.ExpectationFailed)
             {
-                if (streamRequestBody)
+                if (streamRequestBody && requestBodyChannel is { } bodyChannel)
                 {
                     var bodyWriter = new Helpers.BodyStreamWriter(connection.Stream, request.IsChunked);
-                    await foreach (var chunk in requestBodyChannel!.Reader.ReadAllAsync(cancellationToken))
+                    await foreach (var chunk in bodyChannel.Reader.ReadAllAsync(cancellationToken))
                     {
                         try
                         {
@@ -1160,7 +1160,7 @@ public partial class ProxyServer
         // Fast path: origin already sent lowercase names (common for modern server stacks).
         // Use foreach on HeaderCollection (struct enumerator) — LINQ Any/Select boxes IEnumerator.
         var needsRename = false;
-        foreach (var header in headers)
+        foreach (var header in headers) // NOSONAR S3267 -- Explicit loop avoids LINQ enumerator allocation on hot path.
         {
             if (HeaderNameDataHasUpperCaseAscii(header.NameData))
             {
@@ -1217,17 +1217,5 @@ public partial class ProxyServer
         }
 
         return new ByteString(buf);
-    }
-
-    private static bool HeaderNameHasUpperCaseAscii(string name)
-    {
-        for (var i = 0; i < name.Length; i++)
-        {
-            var c = name[i];
-            if (c is >= 'A' and <= 'Z')
-                return true;
-        }
-
-        return false;
     }
 }

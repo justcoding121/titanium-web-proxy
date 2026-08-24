@@ -248,6 +248,87 @@ public class AltSvcParserTests
         Assert.AreEqual(1, results.Count);
         Assert.AreEqual(0, results[0].MaxAgeSeconds);
     }
+
+    [TestMethod]
+    public void Parse_QuotedCommaInsideAuthority_DoesNotSplitTokens()
+    {
+        // A comma inside quotes must not be treated as a token separator.
+        var results = AltSvcParser.Parse("h3=\":443,extra\"; ma=100, h3=\":8443\"; ma=200");
+
+        // First token has an invalid port (":443,extra"), so only the second h3 token survives.
+        Assert.AreEqual(1, results.Count);
+        Assert.AreEqual(8443, results[0].Port);
+        Assert.AreEqual(200, results[0].MaxAgeSeconds);
+    }
+
+    [TestMethod]
+    public void Parse_BareAuthority_WithoutQuotes_IsAccepted()
+    {
+        var results = AltSvcParser.Parse("h3=:443; ma=120");
+
+        Assert.AreEqual(1, results.Count);
+        Assert.AreEqual(443, results[0].Port);
+        Assert.AreEqual(120, results[0].MaxAgeSeconds);
+    }
+
+    [TestMethod]
+    public void Parse_InvalidToken_MissingEquals_IsIgnored()
+    {
+        var results = AltSvcParser.Parse("h3-without-authority; ma=86400, h3=\":443\"; ma=10");
+
+        Assert.AreEqual(1, results.Count);
+        Assert.AreEqual(443, results[0].Port);
+    }
+
+    [TestMethod]
+    public void Parse_InvalidToken_UnclosedQuote_IsIgnored()
+    {
+        // Unclosed quote keeps the comma "inside" quotes, so the whole value is one invalid token.
+        var results = AltSvcParser.Parse("h3=\":443; ma=10, h3=\":8443\"; ma=20");
+        Assert.AreEqual(0, results.Count);
+
+        // Properly closed invalid authority is skipped; a following valid token is kept.
+        results = AltSvcParser.Parse("h3=\":bad\"; ma=10, h3=\":8443\"; ma=20");
+        Assert.AreEqual(1, results.Count);
+        Assert.AreEqual(8443, results[0].Port);
+    }
+
+    [TestMethod]
+    public void Parse_InvalidPort_OutOfRange_IsIgnored()
+    {
+        Assert.AreEqual(0, AltSvcParser.Parse("h3=\":0\"; ma=10").Count);
+        Assert.AreEqual(0, AltSvcParser.Parse("h3=\":70000\"; ma=10").Count);
+        Assert.AreEqual(0, AltSvcParser.Parse("h3=\":abc\"; ma=10").Count);
+        Assert.AreEqual(0, AltSvcParser.Parse("h3=\"\"; ma=10").Count);
+        Assert.AreEqual(0, AltSvcParser.Parse("h3=; ma=10").Count);
+    }
+
+    [TestMethod]
+    public void Parse_MaParameter_CaseInsensitiveAndSkipsUnknownParams()
+    {
+        var results = AltSvcParser.Parse("h3=\":443\"; persist=1; MA=42; foo=bar");
+
+        Assert.AreEqual(1, results.Count);
+        Assert.AreEqual(42, results[0].MaxAgeSeconds);
+    }
+
+    [TestMethod]
+    public void Parse_MaParameter_NonInteger_KeepsDefault()
+    {
+        var results = AltSvcParser.Parse("h3=\":443\"; ma=not-a-number");
+
+        Assert.AreEqual(1, results.Count);
+        Assert.AreEqual(86400, results[0].MaxAgeSeconds);
+    }
+
+    [TestMethod]
+    public void Parse_ParameterWithoutEquals_IsSkipped()
+    {
+        var results = AltSvcParser.Parse("h3=\":443\"; persist; ma=77");
+
+        Assert.AreEqual(1, results.Count);
+        Assert.AreEqual(77, results[0].MaxAgeSeconds);
+    }
 }
 
 [TestClass]
