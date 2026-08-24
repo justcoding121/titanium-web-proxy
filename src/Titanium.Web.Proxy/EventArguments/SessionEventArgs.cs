@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -304,7 +305,12 @@ public class SessionEventArgs : SessionEventArgsBase
 
         var body = await Http3BufferedBodyReader(cancellationToken);
         Http3BufferedBodyReader = null;
-        if (!request.BodyAvailable) request.Body = body;
+        if (!request.BodyAvailable)
+        {
+            request.Body = body;
+            // Native H3 GetRequestBody stores wire bytes matching Content-Encoding.
+            request.BodyIsWireEncoded = true;
+        }
 
         request.IsBodyRead = true;
         request.IsBodyReceived = true;
@@ -313,7 +319,11 @@ public class SessionEventArgs : SessionEventArgsBase
     private async Task BufferHttp11RequestBodyAsync(Request request, CancellationToken cancellationToken)
     {
         var body = await ReadBodyAsync(true, cancellationToken);
-        if (!request.BodyAvailable) request.Body = body;
+        if (!request.BodyAvailable)
+        {
+            request.Body = body;
+            request.BodyIsWireEncoded = false; // Uncompress transformation
+        }
 
         request.IsBodyRead = true;
         request.IsBodyReceived = true;
@@ -387,7 +397,11 @@ public class SessionEventArgs : SessionEventArgsBase
             else
             {
                 var body = await ReadBodyAsync(false, cancellationToken);
-                if (!response.BodyAvailable) response.Body = body;
+                if (!response.BodyAvailable)
+                {
+                    response.Body = body;
+                    response.BodyIsWireEncoded = false; // Uncompress transformation
+                }
 
                 // Now set the flag to true
                 // So that next time we can deliver body from cache
@@ -551,17 +565,11 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
     /// <returns>The body as bytes.</returns>
-    public Task<byte[]> GetRequestBody(CancellationToken cancellationToken = default)
+    public async Task<byte[]> GetRequestBody(CancellationToken cancellationToken = default)
     {
-        if (HttpClient.Request.IsBodyRead)
-            return Task.FromResult(HttpClient.Request.Body);
-
-        return GetRequestBodyCoreAsync(cancellationToken);
-    }
-
-    private async Task<byte[]> GetRequestBodyCoreAsync(CancellationToken cancellationToken)
-    {
-        await ReadRequestBodyAsync(cancellationToken);
+        if (!HttpClient.Request.IsBodyRead)
+            await ReadRequestBodyAsync(cancellationToken);
+        await EnsurePlainBodyAsync(HttpClient.Request, cancellationToken);
         return HttpClient.Request.Body;
     }
 
@@ -570,17 +578,9 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
     /// <returns>The body as string.</returns>
-    public Task<string> GetRequestBodyAsString(CancellationToken cancellationToken = default)
+    public async Task<string> GetRequestBodyAsString(CancellationToken cancellationToken = default)
     {
-        if (HttpClient.Request.IsBodyRead)
-            return Task.FromResult(HttpClient.Request.BodyString);
-
-        return GetRequestBodyAsStringCoreAsync(cancellationToken);
-    }
-
-    private async Task<string> GetRequestBodyAsStringCoreAsync(CancellationToken cancellationToken)
-    {
-        await ReadRequestBodyAsync(cancellationToken);
+        await GetRequestBody(cancellationToken);
         return HttpClient.Request.BodyString;
     }
 
@@ -613,17 +613,11 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
     /// <returns>The resulting bytes.</returns>
-    public Task<byte[]> GetResponseBody(CancellationToken cancellationToken = default)
+    public async Task<byte[]> GetResponseBody(CancellationToken cancellationToken = default)
     {
-        if (HttpClient.Response.IsBodyRead)
-            return Task.FromResult(HttpClient.Response.Body);
-
-        return GetResponseBodyCoreAsync(cancellationToken);
-    }
-
-    private async Task<byte[]> GetResponseBodyCoreAsync(CancellationToken cancellationToken)
-    {
-        await ReadResponseBodyAsync(cancellationToken);
+        if (!HttpClient.Response.IsBodyRead)
+            await ReadResponseBodyAsync(cancellationToken);
+        await EnsurePlainBodyAsync(HttpClient.Response, cancellationToken);
         return HttpClient.Response.Body;
     }
 
@@ -632,18 +626,37 @@ public class SessionEventArgs : SessionEventArgsBase
     /// </summary>
     /// <param name="cancellationToken">Optional cancellation token for this async task.</param>
     /// <returns>The string body.</returns>
-    public Task<string> GetResponseBodyAsString(CancellationToken cancellationToken = default)
+    public async Task<string> GetResponseBodyAsString(CancellationToken cancellationToken = default)
     {
-        if (HttpClient.Response.IsBodyRead)
-            return Task.FromResult(HttpClient.Response.BodyString);
-
-        return GetResponseBodyAsStringCoreAsync(cancellationToken);
+        await GetResponseBody(cancellationToken);
+        return HttpClient.Response.BodyString;
     }
 
-    private async Task<string> GetResponseBodyAsStringCoreAsync(CancellationToken cancellationToken)
+    /// <summary>
+    ///     When eager-buffer left wire bytes in <see cref="RequestResponseBase.Body"/>, decompress once
+    ///     so handlers see the same plain body as H1/H2 Get*Body (and Set*Body can re-encode safely).
+    /// </summary>
+    private static async Task EnsurePlainBodyAsync(RequestResponseBase rr, CancellationToken cancellationToken)
     {
-        await ReadResponseBodyAsync(cancellationToken);
-        return HttpClient.Response.BodyString;
+        if (!rr.BodyIsWireEncoded || rr.ContentEncoding == null || !rr.BodyAvailable)
+            return;
+
+        var (decompressStream, owned) =
+            CompressionUtil.CreateDecompressionChain(new MemoryStream(rr.Body), rr.ContentEncoding);
+        try
+        {
+            if (owned.Count == 0)
+                return; // unsupported (dcb/dcz/…) — leave wire bytes
+
+            using var ms = new MemoryStream();
+            await decompressStream.CopyToAsync(ms, cancellationToken);
+            rr.Body = ms.ToArray(); // clears BodyIsWireEncoded via setter
+        }
+        finally
+        {
+            for (var i = owned.Count - 1; i >= 0; i--)
+                await owned[i].DisposeAsync();
+        }
     }
 
     /// <summary>

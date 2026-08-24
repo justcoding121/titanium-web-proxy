@@ -651,7 +651,9 @@ public partial class ProxyServer
             {
                 response.ContentLength = fastBody.Length;
                 // So WriteResponseAsync can coalesce headers+body into one TLS write.
+                // exchange.Body is H2 DATA wire bytes (already content-encoded when CE is set).
                 response.Body = fastBody;
+                response.BodyIsWireEncoded = true;
             }
             else if (response.ContentLength < 0 && !response.IsChunked)
             {
@@ -662,6 +664,7 @@ public partial class ProxyServer
                 fastBody = buffered.ToArray();
                 response.ContentLength = fastBody.Length;
                 response.Body = fastBody;
+                response.BodyIsWireEncoded = true;
             }
 
             await clientStream.WriteResponseAsync(response, cancellationToken);

@@ -877,7 +877,20 @@ internal static class Http3RequestStream
 
         // Send body if present. Ok()/Respond assign Body without setting IsBodyRead (H1 uses
         // BodyAvailable); requiring IsBodyRead alone dropped every synthetic H3 response body.
-        var body = response.BodyAvailable || response.IsBodyRead ? response.Body : null;
+        // Match H1 WriteResponseAsync / H2 EmitBuffered: recompress when Body is plain and
+        // Content-Encoding is set (SetResponseBody after GetResponseBody). Wire-eager buffers
+        // set BodyIsWireEncoded and must not be recompressed.
+        byte[]? body;
+        if (response.BodyAvailable || response.IsBodyRead)
+        {
+            body = !response.BodyIsWireEncoded && response.ContentEncoding != null
+                ? response.CompressBodyAndUpdateContentLength()
+                : response.Body;
+        }
+        else
+        {
+            body = null;
+        }
         // Size-gated HEADERS+DATA coalesce for already-buffered medium/large bodies only
         // (lossy / compare-bodies ≥ 16 KiB). Tiny GET keeps separate writes — full coalesce
         // there raised cool absolutes and missed Windows CI (latency bundle revert).

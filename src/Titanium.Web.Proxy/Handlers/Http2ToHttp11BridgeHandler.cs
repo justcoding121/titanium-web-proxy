@@ -564,6 +564,7 @@ public partial class ProxyServer
 
                     response.HttpVersion = clientHttpVersion;
                     response.Body = bodyBytes;
+                    response.BodyIsWireEncoded = true;
                     response.IsBodyRead = true;
                     response.ContentLength = bodyBytes.Length;
                     response.HttpVersion = HttpHeader.Version11;

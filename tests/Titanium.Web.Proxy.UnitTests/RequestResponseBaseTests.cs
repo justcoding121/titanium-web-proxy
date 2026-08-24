@@ -111,6 +111,64 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         [TestMethod]
+        public void BodySetter_ClearsBodyIsWireEncoded()
+        {
+            var response = new Response(Encoding.ASCII.GetBytes("wire"));
+            response.BodyIsWireEncoded = true;
+
+            response.Body = Encoding.ASCII.GetBytes("plain");
+
+            Assert.IsFalse(response.BodyIsWireEncoded);
+        }
+
+        [TestMethod]
+        public void CompressBodyAndUpdateContentLength_WireEncodedGzip_DoesNotDoubleCompress()
+        {
+            var plain = Encoding.ASCII.GetBytes(
+                "the quick brown fox jumps over the lazy dog. the quick brown fox jumps over the lazy dog.");
+            byte[] gzipped;
+            using (var ms = new MemoryStream())
+            {
+                using (var gzip = new GZipStream(ms, CompressionLevel.SmallestSize, leaveOpen: true))
+                    gzip.Write(plain);
+                gzipped = ms.ToArray();
+            }
+
+            var response = new Response(gzipped);
+            response.Headers.AddHeader(KnownHeaders.ContentEncoding, "gzip");
+            response.IsBodyRead = true;
+            response.BodyIsWireEncoded = true;
+
+            var onWire = response.CompressBodyAndUpdateContentLength();
+
+            Assert.IsNotNull(onWire);
+            CollectionAssert.AreEqual(gzipped, onWire, "Wire-encoded body must not be gzipped again.");
+            Assert.AreEqual(gzipped.Length, response.ContentLength);
+
+            using (var compressedStream = new MemoryStream(onWire))
+            using (var gzip = new GZipStream(compressedStream, CompressionMode.Decompress))
+            using (var decompressed = new MemoryStream())
+            {
+                gzip.CopyTo(decompressed);
+                CollectionAssert.AreEqual(plain, decompressed.ToArray());
+            }
+        }
+
+        [TestMethod]
+        public void CompressBodyAndUpdateContentLength_UnsupportedEncoding_PassesWireBytesThrough()
+        {
+            var wire = Encoding.ASCII.GetBytes("not-really-dcb-but-opaque");
+            var response = new Response(wire);
+            response.Headers.AddHeader(KnownHeaders.ContentEncoding, "dcb");
+            response.IsBodyRead = true;
+
+            var onWire = response.CompressBodyAndUpdateContentLength();
+
+            Assert.IsNotNull(onWire);
+            CollectionAssert.AreEqual(wire, onWire);
+        }
+
+        [TestMethod]
         public void TrailingHeaders_DefaultsToEmptyAndHasTrailingHeadersReflectsContent()
         {
             var response = new Response();

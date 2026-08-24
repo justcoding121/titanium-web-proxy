@@ -403,6 +403,7 @@ internal static class Http3OriginBridge
                     Array.Resize(ref bodyBytes, offset);
 
                 response.Body = bodyBytes;
+                response.BodyIsWireEncoded = true;
                 response.IsBodyRead = true;
                 response.ContentLength = bodyBytes.Length;
                 response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
@@ -682,6 +683,8 @@ internal static class Http3OriginBridge
             {
                 response.IsBodyRead = true;
                 response.Body = exchange.Body;
+                // Http2OriginConnection materializes H2 DATA wire bytes.
+                response.BodyIsWireEncoded = true;
             }
 
             if (exchange.TrailingHeaders != null && !response.HasTrailingHeaders)
@@ -1349,6 +1352,8 @@ internal static class Http3OriginBridge
             {
                 response.IsBodyRead = true;
                 response.Body = exchange.Body;
+                // Http2OriginConnection materializes H2 DATA wire bytes.
+                response.BodyIsWireEncoded = true;
             }
 
             if (exchange.TrailingHeaders != null && !response.HasTrailingHeaders)
@@ -1661,8 +1666,13 @@ internal static class Http3OriginBridge
                 earlyBodyPump = pump(
                     async (data, ct) =>
                     {
-                        if (!data.IsEmpty)
-                            await writer.WriteAsync(data, ct);
+                        if (data.IsEmpty)
+                            return;
+                        // Copy before enqueue: StreamRequestBodyToWriteAsync returns the frame's
+                        // ArrayPool buffer after writeData completes — Channel.WriteAsync only
+                        // queues the Memory, so returning early would corrupt the upload.
+                        var owned = data.ToArray();
+                        await writer.WriteAsync(owned, ct);
                     },
                     cancellationToken).ContinueWith(t =>
                 {
@@ -1833,6 +1843,7 @@ internal static class Http3OriginBridge
                 }
 
                 response.Body = bodyBytes;
+                response.BodyIsWireEncoded = true;
                 response.IsBodyRead = true;
                 response.ContentLength = bodyBytes.Length;
                 response.Headers.RemoveHeader(KnownHeaders.TransferEncoding);

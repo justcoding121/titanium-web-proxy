@@ -3252,6 +3252,7 @@ namespace Titanium.Web.Proxy.Http2
                             throw new InvalidOperationException("HTTP/2 body completion was signaled without a buffer.");
 
                         var body = data.ToArray();
+                        var leftAsWireEncoded = false;
 
                         if (rr.ContentEncoding != null)
                         {
@@ -3265,8 +3266,11 @@ namespace Titanium.Web.Proxy.Http2
                                     await decompressStream.CopyToAsync(ms, cancellationToken);
                                     body = ms.ToArray();
                                 }
-                                // else: unsupported/unparseable encoding - leave body as the raw wire
-                                // bytes (matching Http3OriginBridge's equivalent pass-through behavior).
+                                else
+                                {
+                                    // Unsupported encoding (dcb/dcz/zstd…): keep wire bytes.
+                                    leftAsWireEncoded = true;
+                                }
                             }
                             finally
                             {
@@ -3278,6 +3282,7 @@ namespace Titanium.Web.Proxy.Http2
                         if (!rr.BodyAvailable)
                         {
                             rr.Body = body;
+                            rr.BodyIsWireEncoded = leftAsWireEncoded;
                         }
                     }
 
@@ -4767,10 +4772,12 @@ namespace Titanium.Web.Proxy.Http2
             // be present: Response.HasBody treats CL=-1 + chunked as "has body", and stripping TE
             // first made HasBody false so CompressBodyAndUpdateContentLength zeroed Content-Length
             // and dropped the buffered bytes (empty CDN JS/CSS through the H2→H3 bridge).
-            // Fast path: bridge already buffered a fixed-CL body with no content-encoding.
+            // Fast path: bridge already buffered a fixed-CL body that is ready for the wire
+            // (no content-encoding, or BodyIsWireEncoded from eager-buffer — do not re-compress).
             byte[]? body;
-            if (response.IsBodyRead && response.BodyAvailable && response.ContentEncoding == null &&
-                !response.IsChunked && response.ContentLength >= 0)
+            if (response.IsBodyRead && response.BodyAvailable
+                && (response.ContentEncoding == null || response.BodyIsWireEncoded)
+                && !response.IsChunked && response.ContentLength >= 0)
             {
                 body = response.Body;
                 if (body.Length != response.ContentLength)

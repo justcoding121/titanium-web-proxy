@@ -215,6 +215,8 @@ public abstract class RequestResponseBase
         {
             BodyInternal = value;
             bodyString = null;
+            // Assignments are plain unless a wire-materialize site re-sets BodyIsWireEncoded.
+            BodyIsWireEncoded = false;
 
             // If there is a content length header update it
             UpdateContentLength();
@@ -256,6 +258,13 @@ public abstract class RequestResponseBase
 
     internal bool IsBodySent { get; set; }
 
+    /// <summary>
+    ///     True when <see cref="BodyInternal"/> already matches <see cref="ContentEncoding"/> on the wire
+    ///     (eager-buffer / coalesce / H2 origin materialize). <see cref="CompressBodyAndUpdateContentLength"/>
+    ///     must not re-compress — that double-encodes and browsers show garbled HTML after one decompress.
+    /// </summary>
+    internal bool BodyIsWireEncoded { get; set; }
+
     internal abstract void EnsureBodyAvailable(bool throwWhenNotReadYet = true);
 
     /// <summary>
@@ -292,7 +301,15 @@ public abstract class RequestResponseBase
             var body = BodyInternal ?? Body;
             if (contentEncoding != null && body is { Length: > 0 })
             {
-                body = GetCompressedBody(CompressionUtil.CompressionNameToEnum(contentEncoding), body);
+                // Eager-buffer paths store bytes that already match Content-Encoding. Re-applying
+                // gzip/br here double-compresses; Chrome then shows replacement-character garbage.
+                if (!BodyIsWireEncoded)
+                {
+                    var kind = CompressionUtil.CompressionNameToEnum(contentEncoding);
+                    // dcb/dcz/zstd etc.: leave wire bytes alone (cannot re-encode without the dict).
+                    if (kind != HttpCompression.Unsupported)
+                        body = GetCompressedBody(kind, body);
+                }
 
                 if (!isChunked)
                     ContentLength = body.Length;
@@ -366,6 +383,7 @@ public abstract class RequestResponseBase
         IsBodyRead = false;
         IsBodyReceived = false;
         IsBodySent = false;
+        BodyIsWireEncoded = false;
         Locked = false;
         KeepBody = false;
         HeaderNamesAreHttp2Normalized = false;

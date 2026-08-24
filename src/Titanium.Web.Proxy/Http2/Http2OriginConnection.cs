@@ -492,6 +492,8 @@ internal sealed class Http2OriginConnection : IDisposable
 
                 response.IsBodyRead = true;
                 response.Body = body;
+                // H2 DATA payload is already content-encoded when Content-Encoding is present.
+                response.BodyIsWireEncoded = true;
                 if (trailers != null)
                 {
                     foreach (var header in trailers)

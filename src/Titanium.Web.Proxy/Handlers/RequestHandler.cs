@@ -891,8 +891,11 @@ public partial class ProxyServer
             // (headers+body). Streaming WriteResponse + CopyBody emits a tiny header-only TLS
             // record first — under userspace delay that costs an extra shim RTT vs YARP, which
             // typically forwards a larger first write (lossy H1 cool ~0.86× → target ≥0.95×).
+            // Skip when the body is already buffered (e.g. HTTP/1.0 chunked reframe above) —
+            // another ReadAsync would pull the next keep-alive response off the pooled socket.
             const int coalesceBodyLimit = 64 * 1024;
-            if (fastResponse.HasBody
+            if (!fastResponse.IsBodyRead
+                && fastResponse.HasBody
                 && !fastResponse.IsChunked
                 && !fastResponse.HasTrailingHeaders
                 && fastResponse.ContentLength is > 0 and <= coalesceBodyLimit)
@@ -917,9 +920,19 @@ public partial class ProxyServer
                         }
 
                         if (read != length)
+                        {
                             Array.Resize(ref coalescedBody, read);
+                            // Short CL read: do not return this socket to the pool (desync).
+                            args.HttpClient.CloseServerConnection = true;
+                        }
+                        else if (serverStream.DataAvailable)
+                        {
+                            // Extra bytes after a known-CL body — framing is ambiguous.
+                            args.HttpClient.CloseServerConnection = true;
+                        }
 
                         fastResponse.Body = coalescedBody;
+                        fastResponse.BodyIsWireEncoded = true;
                         fastResponse.IsBodyReceived = true;
                         fastResponse.IsBodyRead = true;
                     }

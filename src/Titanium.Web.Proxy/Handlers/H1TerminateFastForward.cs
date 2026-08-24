@@ -177,6 +177,7 @@ public partial class ProxyServer
                 }
 
                 response.Body = body;
+                response.BodyIsWireEncoded = true;
                 response.IsBodyReceived = true;
                 response.IsBodyRead = true;
                 await clientStream.WriteResponseAsync(response, cancellationToken);
