@@ -63,9 +63,10 @@ public partial class ProxyServer
 
         // Remember before stripping hop-by-hop Connection for the origin write — NC clients send
         // Connection: close; forwarding it forces the origin to close and defeats pooling (Bare still
-        // ConnectAsyncs every time and was beating TWP at c=32).
+        // ConnectAsyncs every time and was beating TWP at c=32). HTTP/1.0 keep-alive is preserved
+        // (see Request.StripHopByHopConnectionForTransparentOrigin).
         var clientRequestedClose = H1TerminateClientRequestedClose(request);
-        request.Headers.RemoveHeader(KnownHeaders.Connection);
+        request.StripHopByHopConnectionForTransparentOrigin();
 
         var isHttps = !endPoint.ForwardCleartext && request.IsHttps;
         // Terminate with ForwardCleartext: origin is cleartext regardless of client TLS.

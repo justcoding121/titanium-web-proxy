@@ -261,6 +261,25 @@ public class Request : RequestResponseBase
         ExpectationFailed = false;
     }
 
+    /// <summary>
+    ///     Drop hop-by-hop <c>Connection</c> before a transparent origin write (so
+    ///     <c>Connection: close</c> from NC clients does not force the origin to close and
+    ///     defeat pooling), but keep <c>Connection: keep-alive</c> on HTTP/1.0 — that version
+    ///     is non-persistent by default and the origin must see the explicit opt-in.
+    /// </summary>
+    internal void StripHopByHopConnectionForTransparentOrigin()
+    {
+        var value = Headers.GetHeaderValueOrNull(KnownHeaders.Connection);
+        if (value == null)
+            return;
+
+        if (HttpVersion == HttpHeader.Version10
+            && value.Equals(KnownHeaders.ConnectionKeepAlive.String, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        Headers.RemoveHeader(KnownHeaders.Connection);
+    }
+
     internal static readonly ByteString OriginFormRoot = (ByteString)"/";
     internal static readonly ByteString AsteriskForm = (ByteString)"*";
 
