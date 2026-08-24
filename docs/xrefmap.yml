@@ -6969,6 +6969,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithCertificateCacheBounds
   nameWithType: ProxyResourceLimits.WithCertificateCacheBounds
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxConcurrentStreamsPerConnection(System.Int32)
+  name: WithMaxConcurrentStreamsPerConnection(int)
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithMaxConcurrentStreamsPerConnection_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxConcurrentStreamsPerConnection(System.Int32)
+  name.vb: WithMaxConcurrentStreamsPerConnection(Integer)
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxConcurrentStreamsPerConnection(int)
+  fullName.vb: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxConcurrentStreamsPerConnection(Integer)
+  nameWithType: ProxyResourceLimits.WithMaxConcurrentStreamsPerConnection(int)
+  nameWithType.vb: ProxyResourceLimits.WithMaxConcurrentStreamsPerConnection(Integer)
+- uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxConcurrentStreamsPerConnection*
+  name: WithMaxConcurrentStreamsPerConnection
+  href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithMaxConcurrentStreamsPerConnection_
+  commentId: Overload:Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxConcurrentStreamsPerConnection
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxConcurrentStreamsPerConnection
+  nameWithType: ProxyResourceLimits.WithMaxConcurrentStreamsPerConnection
 - uid: Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxOriginHttp2ConnectionsPerAuthority(System.Int32)
   name: WithMaxOriginHttp2ConnectionsPerAuthority(int)
   href: api/Titanium.Web.Proxy.Options.ProxyResourceLimits.html#Titanium_Web_Proxy_Options_ProxyResourceLimits_WithMaxOriginHttp2ConnectionsPerAuthority_System_Int32_
