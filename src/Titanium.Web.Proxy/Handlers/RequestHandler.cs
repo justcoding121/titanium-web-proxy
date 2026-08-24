@@ -110,7 +110,10 @@ public partial class ProxyServer
                                                  && GetCustomUpStreamProxyFunc == null;
 
                         Request? preparedRequest = null;
-                        if (tryH1TerminateLite)
+                        // Skip lite prefetch when a fast-path session is recycled: lite would consume
+                        // headers into preparedRequest, then the reusable branch discards them and
+                        // re-parses — for POST that reads the body as headers (keep-alive hang).
+                        if (tryH1TerminateLite && reusable == null)
                         {
                             if (liteRequest == null)
                                 liteRequest = new Request();

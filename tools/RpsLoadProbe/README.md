@@ -2,7 +2,7 @@
 
 Saturation RPS harness for Titanium.Web.Proxy. Measures the **breaking point** (last concurrency that still meets error/latency SLOs) and **peak RPS**.
 
-Published numbers and external control-arm comparisons live only on the wiki [Performance](../../wiki/Performance.md) page (GitHub Actions medians on matched 4 vCPU / 16 GiB Linux+Windows runners). Local cool A/B and laptop tables live on [Performance Profiling](../../wiki/Performance-Profiling.md). This README lists how to run the local harness.
+Published numbers and external control-arm comparisons live only on the wiki [Performance](../../wiki/Performance.md) page (GitHub Actions medians on matched 4 vCPU / 16 GiB Linux+Windows runners). Local cool A/B and laptop tables live on [Performance Local Lab](../../wiki/Performance-Local-Lab.md); the playbook is on [Performance Profiling](../../wiki/Performance-Profiling.md). This README lists how to run the local harness.
 
 Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workflow_dispatch`, both `ubuntu-latest` and `windows-latest`).
 

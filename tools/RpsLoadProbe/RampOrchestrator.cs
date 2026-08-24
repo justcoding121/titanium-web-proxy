@@ -263,22 +263,18 @@ internal static class RampOrchestrator
             var median = Median(peaks);
             var line = string.Create(CultureInfo.InvariantCulture,
                 $"  {name}: median_peak_rps={median:F1} (n={peaks.Count})");
-            // TWP-only Memory/CPU on matrix summaries (peers stay on saturation tables).
-            if (name.StartsWith("twp-", StringComparison.Ordinal))
+            if (rssByArm.TryGetValue(name, out var rssList) && rssList.Count > 0)
             {
-                if (rssByArm.TryGetValue(name, out var rssList) && rssList.Count > 0)
-                {
-                    var medianRss = MedianLong(rssList);
-                    line += string.Create(CultureInfo.InvariantCulture,
-                        $" median_memory_rss_bytes={medianRss}");
-                }
+                var medianRss = MedianLong(rssList);
+                line += string.Create(CultureInfo.InvariantCulture,
+                    $" median_memory_rss_bytes={medianRss}");
+            }
 
-                if (cpuByArm.TryGetValue(name, out var cpuList) && cpuList.Count > 0)
-                {
-                    var medianCpu = Median(cpuList);
-                    line += string.Create(CultureInfo.InvariantCulture,
-                        $" median_cpu_avg_pct={medianCpu:F1}");
-                }
+            if (cpuByArm.TryGetValue(name, out var cpuList) && cpuList.Count > 0)
+            {
+                var medianCpu = Median(cpuList);
+                line += string.Create(CultureInfo.InvariantCulture,
+                    $" median_cpu_avg_pct={medianCpu:F1}");
             }
 
             ProbeLog.Info(line);

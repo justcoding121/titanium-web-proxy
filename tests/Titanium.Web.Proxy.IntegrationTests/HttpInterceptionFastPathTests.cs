@@ -263,4 +263,61 @@ public class HttpInterceptionFastPathTests
             proxy.Dispose();
         }
     }
+
+    /// <summary>
+    /// Session-lite must not prefetch headers when a fast-path SessionEventArgs is recycled:
+    /// otherwise the second keep-alive POST body is parsed as headers (RPS ≈ concurrency).
+    /// </summary>
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task H1_Cleartext_Reverse_KeepAlive_Post_Twice_Succeeds()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        var posts = 0;
+        server.HandleRequest(async context =>
+        {
+            Interlocked.Increment(ref posts);
+            using var ms = new System.IO.MemoryStream();
+            await context.Request.Body.CopyToAsync(ms);
+            context.Response.ContentType = "text/plain";
+            await context.Response.WriteAsync($"ok-{ms.Length}");
+        });
+
+        var proxy = new ProxyServer(false, false, false);
+        proxy.AddEndPoint(new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = new Uri(server.ListeningHttpUrl).Port,
+            ForwardCleartext = true
+        });
+        proxy.Start();
+        try
+        {
+            Assert.IsFalse(proxy.NeedsHttpInterception());
+            using var handler = new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false,
+                UseCookies = false,
+                PooledConnectionLifetime = TimeSpan.FromMinutes(1)
+            };
+            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
+            var url = $"http://127.0.0.1:{proxy.ProxyEndPoints[0].Port}/post";
+            for (var i = 0; i < 2; i++)
+            {
+                using var content = new ByteArrayContent(new byte[100]);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+                using var response = await client.PostAsync(url, content);
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+                Assert.AreEqual("ok-100", await response.Content.ReadAsStringAsync());
+            }
+
+            Assert.AreEqual(2, posts);
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
 }

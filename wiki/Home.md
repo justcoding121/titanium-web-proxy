@@ -19,6 +19,7 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET. This wiki documents t
 - [Authentication](#authentication)
 - [Performance](Performance) — measured latency, throughput, saturation RPS, and footprint
 - [Performance profiling](Performance-Profiling) — how throughput hotspots are found (harness, dumps, stage timing)
+- [Performance local lab](Performance-Local-Lab) — laptop cool A/B tables (not publishable)
 - [Performance and pooling](#performance-and-pooling)
 - [Logging and diagnostics](#logging-and-diagnostics)
 - [Request timing](#request-timing)
