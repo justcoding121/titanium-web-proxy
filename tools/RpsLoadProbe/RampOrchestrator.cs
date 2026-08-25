@@ -889,12 +889,9 @@ internal static class RampOrchestrator
 
     private static IReadOnlyList<ArmSpec> BuildFullMatrixArms(bool nginxAvailable, bool nginxHttp3Available)
     {
-        // Full 5×5 Client×Origin reverse cartesian: TWP + YARP for each cell.
-        // nginxAvailable / nginxHttp3Available reserved for optional native peers (not in this matrix).
-        _ = nginxAvailable;
-        _ = nginxHttp3Available;
-        return
-        [
+        // Full 5×5 Client×Origin reverse cartesian: TWP + YARP for each cell; nginx on terminate peers.
+        var arms = new List<ArmSpec>
+        {
             // H1 plain client
             new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
             new("yarp-reverse-http1", ProbeMode.YarpReverseHttp1, null),
@@ -950,7 +947,29 @@ internal static class RampOrchestrator
             new("yarp-reverse-http3-to-http2", ProbeMode.YarpReverseHttp3ToHttp2, null),
             new("twp-reverse-http3", ProbeMode.ReverseHttp3, null),
             new("yarp-reverse-http3-to-http3", ProbeMode.YarpReverseHttp3ToHttp3, null)
-        ];
+        };
+
+        if (nginxAvailable)
+        {
+            var i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp1);
+            if (i >= 0)
+                arms.Insert(i + 1, new("nginx-reverse-http1", ProbeMode.NginxReverseHttp1, null));
+            i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp1Tls);
+            if (i >= 0)
+                arms.Insert(i + 1, new("nginx-reverse-http1-tls", ProbeMode.NginxReverseHttp1Tls, null));
+            i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp2);
+            if (i >= 0)
+                arms.Insert(i + 1, new("nginx-reverse-http2", ProbeMode.NginxReverseHttp2, null));
+        }
+
+        if (nginxHttp3Available)
+        {
+            var i = arms.FindIndex(a => a.Mode == ProbeMode.YarpReverseHttp3Cleartext);
+            if (i >= 0)
+                arms.Insert(i + 1, new("nginx-reverse-http3-cleartext", ProbeMode.NginxReverseHttp3Cleartext, null));
+        }
+
+        return arms;
     }
 
     private static IReadOnlyList<ArmSpec> BuildSaturationArms(bool nginxAvailable, bool bombardierAvailable,

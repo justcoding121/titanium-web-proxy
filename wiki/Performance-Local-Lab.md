@@ -1,6 +1,6 @@
 # Performance Local Lab
 
-Local Windows laptop debugging / cool A/B tables. **Not publishable** � do not compare these absolutes to [Performance](Performance) GHA tables. Use cool paired ratios as a gate, then remasure on matched Windows+Linux GHA and paste CI medians onto Performance.
+Local Windows laptop debugging / cool A/B tables. **Not publishable** � do not compare these absolutes to [Performance](Performance) GHA tables. Use cool paired ratios as a gate, then remasure on matched Windows+Linux GHA and paste CI medians onto Performance.
 
 Playbook (harness, dumps, stage timing, Memory techniques) stays on [Performance Profiling](Performance-Profiling).
 
@@ -35,7 +35,7 @@ This box is **8 logical / ~32 GiB** — not the 4 vCPU / 16 GiB GHA class. Treat
 
 Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS` = encrypted, `QUIC` = HTTP/3).
 
-Reverse TWP/YARP cells for cool-audited arms are **cool paired means** (see notes). nginx cells remain the older heated High-perf baseline (nginx was not in the cool pairs). MITM rows are heated 1-rep full matrix (`windows-20260822-mitm-full/`, probe @ `1b5ca9f9`) — same **15** Client×Origin pairs as Reverse plus dual-crypto extras.
+Reverse TWP/YARP cells for cool-audited arms are **cool paired means** (see notes). nginx cells remain the older heated High-perf baseline (nginx was not in the cool pairs). MITM rows are heated 1-rep full matrix (`windows-20260822-mitm-full/`, probe @ `1b5ca9f9`) — same **25** Client×Origin pairs as Reverse plus dual-crypto extras.
 
 
 | Mode    | Client         | Origin         | TWP sustain    | TWP peak    | TWP Memory | TWP CPU % | nginx sustain            | nginx peak     | YARP sustain             | YARP peak      |
@@ -85,7 +85,7 @@ Windows reverse tiny-GET: base matrix **2026-08-20** High-perf, Linux-matched ha
 
 **2026-08-22 matrix fill (missing plain cells):** Library fix so cleartext-listen reverse (`DecryptSsl=false`) honors `ForwardCleartext=false` as origin HTTPS (H1 plain→HTTPS). New probe arms: `reverse-http1-to-https` / `yarp-reverse-http1-to-https`, `http-mitm` (explicit plain→plain). Full Windows `compare-same` + `compare-bridges` + plain twins under `tools/RpsLoadProbe/results/windows-20260822-matrix/` (1-rep; warmup 2s / measure 8s; c=8,16,32,64).
 
-**2026-08-22 MITM full matrix:** `CompareMitm` matches Reverse’s **15** Client×Origin pairs (inspectable/decrypt) plus CONNECT / TLS↔TLS extras. Laptop 1-rep CSV: `tools/RpsLoadProbe/results/windows-20260822-mitm-full/`. Publishable CI medians (Win+Linux, 3-rep): [32588707712](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32588707712) @ `1b5ca9f9` — see [Performance](Performance#windows--titanium-vs-nginx-vs-yarp).
+**2026-08-22 MITM full matrix:** `CompareMitm` matches Reverse's **25** Client×Origin pairs (inspectable/decrypt) plus CONNECT / TLS↔TLS extras. Laptop 1-rep CSV: `tools/RpsLoadProbe/results/windows-20260822-mitm-full/`. Publishable CI medians (Win+Linux, 3-rep): [32588707712](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32588707712) @ `1b5ca9f9` — see [Performance](Performance#windows--titanium-vs-nginx-vs-yarp).
 
 **Load generators:** Reverse inbound H3 arms use `**dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`) after dual-listen reverse H3. MITM H3→H2 / H3→H3 / H3→H1 plain reuse the same dual-listen transparent reverse path as their reverse twins (`ForwardCleartext` / decrypt knobs). Older UDP-only `quic-http3` MITM H3→H1 TLS numbers are dual-crypto extras (`mitm-http3-to-http1`).
 
