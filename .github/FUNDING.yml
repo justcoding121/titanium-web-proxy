@@ -1,2 +1,4 @@
 # These are supported funding model platforms
-github: [justcoding121]
+
+github: justcoding121
+custom: ["https://github.com/sponsors/justcoding121"]
