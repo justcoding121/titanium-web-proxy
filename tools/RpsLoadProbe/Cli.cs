@@ -245,7 +245,8 @@ internal static class Cli
     private static bool IsMultiArmMode(ProbeMode mode) => mode is ProbeMode.Compare or ProbeMode.CompareHttp2
         or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
         or ProbeMode.CompareHttp3Cleartext
-        or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareCeiling or ProbeMode.CompareBodies
+        or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareProduct
+        or ProbeMode.CompareCeiling or ProbeMode.CompareBodies
         or ProbeMode.ComparePost
         or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost or ProbeMode.CompareArch
         or ProbeMode.CompareSaturation
@@ -491,6 +492,9 @@ internal static class Cli
             case "compare-matrix":
                 mode = ProbeMode.CompareMatrix;
                 return true;
+            case "compare-product":
+                mode = ProbeMode.CompareProduct;
+                return true;
             case "compare-ceiling":
                 mode = ProbeMode.CompareCeiling;
                 return true;
@@ -614,8 +618,9 @@ internal static class Cli
               compare-same            Same-protocol: H1 cleartext, H1 TLS, H1 MITM, H2 MITM, H3 MITM (+ control arms)
               compare-bridges         Cross-version bridges (H1↔H2↔H3; TWP + control arms)
               compare-http3-cleartext H3→H1 cleartext only (TWP + YARP + nginx when available)
-              compare-mitm            Full 5×5 Client×Origin wire pairs (TWP) + https-mitm CONNECT
-              compare-matrix          Full 5×5 reverse matrix: all TWP + YARP Client×Origin pairs
+              compare-mitm            True MITM 5×5 (TWP interception on) + CONNECT
+              compare-matrix          Full 5×5 reverse matrix: all TWP + YARP (+ nginx terminate peers)
+              compare-product         Same-job: compare-matrix reverse peers + compare-mitm TWP
               compare-ceiling         TWP vs bare C# vs control arms on H1 / H1 TLS / H2→H1 reverse
               compare-bodies          Heavier reverse GET (64 KiB + 256 KiB) vs control arms
               compare-post            POST 64 KiB request+response reverse vs control arms

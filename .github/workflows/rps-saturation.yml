@@ -25,6 +25,7 @@ on:
           - compare-http3-cleartext
           - compare-mitm
           - compare-matrix
+          - compare-product
           - compare-ceiling
           - compare-bodies
           - compare-post
@@ -113,7 +114,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
-    timeout-minutes: 120
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v6
 

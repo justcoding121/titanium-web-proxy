@@ -10,7 +10,7 @@
 param(
     [ValidateSet(
         'compare', 'compare-http2', 'compare-tls', 'compare-terminate', 'compare-same', 'compare-bridges',
-        'compare-http3-cleartext', 'compare-mitm', 'compare-matrix', 'compare-ceiling',
+        'compare-http3-cleartext', 'compare-mitm', 'compare-matrix', 'compare-product', 'compare-ceiling',
         'compare-bodies', 'compare-post', 'compare-lossy', 'compare-tls-cost', 'compare-arch', 'compare-saturation',
         'origin-direct', 'explicit-pool-sweep',
         'reverse-http1', 'bare-reverse-http1', 'nginx-reverse-http1', 'yarp-reverse-http1',

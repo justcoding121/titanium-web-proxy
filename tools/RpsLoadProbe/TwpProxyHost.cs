@@ -788,6 +788,16 @@ internal sealed class TwpProxyHost : IDisposable
             proxy.EnableRequestTimingCapture = true;
             StageTimingCollector.Attach(proxy);
         }
+
+        // True-MITM product arms: child sets TWP_RPS_HTTP_INTERCEPTION=1 so session handlers run
+        // (disables session-lite / no-interception fast paths). Bare reverse leaves this unset.
+        if (string.Equals(Environment.GetEnvironmentVariable("TWP_RPS_HTTP_INTERCEPTION"), "1",
+                StringComparison.Ordinal))
+        {
+            EnableNoopInterception(proxy);
+            Console.Error.WriteLine("rps: EnableNoopInterception (TWP_RPS_HTTP_INTERCEPTION=1)");
+        }
+
         proxy.EnableConnectionPool = true;
         proxy.EnableHttp2 = enableHttp2;
         proxy.EnableHttp3 = enableHttp3;
@@ -806,6 +816,23 @@ internal sealed class TwpProxyHost : IDisposable
         proxy.TrackSessionCancellations = false;
 
         return proxy;
+    }
+
+    /// <summary>
+    /// No-op BeforeRequest/BeforeResponse so <see cref="ProxyServer.NeedsHttpInterception"/> is true
+    /// (real MITM session path). Hits are counted for smoke verification.
+    /// </summary>
+    internal static long NoopInterceptionHits;
+
+    internal static void EnableNoopInterception(ProxyServer proxy)
+    {
+        proxy.EnableHttpInterception = true;
+        proxy.BeforeRequest += (_, _) =>
+        {
+            Interlocked.Increment(ref NoopInterceptionHits);
+            return Task.CompletedTask;
+        };
+        proxy.BeforeResponse += (_, _) => Task.CompletedTask;
     }
 
     private static void ConfigureSharedTestCa(ProxyServer proxy)

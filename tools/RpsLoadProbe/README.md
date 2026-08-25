@@ -102,13 +102,17 @@ Lossy link is a userspace shim (not kernel netem): TCP gets per-buffer delay + o
 
 CLI knobs (also usable on single arms): `--method`, `--response-bytes`, `--request-bytes`, `--no-keepalive`, `--delay-ms`, `--loss-percent`.
 
-## MITM / inspectable matrix (5×5 + CONNECT)
+## MITM matrix (true interception, TWP-only)
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-mitm
+# Same-job reverse peers + MITM (for wiki MITM÷Reverse ratios):
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-product
 ```
 
-All 25 Client×Origin wire pairs (TWP reverse / inspectable arms) plus explicit `https-mitm` CONNECT. nginx/YARP cannot MITM.
+All 25 Client×Origin wires with `EnableHttpInterception` + no-op `BeforeRequest`/`BeforeResponse` (session path, not session-lite), plus explicit CONNECT. nginx/YARP cannot MITM — omit peer columns on the MITM wiki table.
+
+**Reverse** (`compare-matrix` / reverse half of `compare-product`) is bare terminate (no handlers). nginx conf matches TWP/YARP streaming: `keepalive 256`, `proxy_buffering off`, `proxy_request_buffering off`.
 
 ## Bridge matrix (cross-version)
 
