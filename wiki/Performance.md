@@ -147,7 +147,7 @@ Same layout as Block B. Requires QuicListener; nginx only with `http_v3_module` 
 - **Sustainable** = last concurrency that still met error/latency SLOs. **Peak** = highest RPS in that ramp.
 - 🥇 = best among **TWP / nginx / YARP** on Reverse rows (or saturation blocks). MITM is TWP-only. **MITM÷Reverse** = TWP MITM sustain ÷ TWP Reverse sustain on the same Client×Origin from the same `compare-product` job (interception tax).
 - *Not possible* = product cannot do that path. *Not measured* = path exists but no published number yet for that OS.
-- Product refresh: `compare-product` @ `9d7c2966` — [32866706475](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32866706475). Heavier/saturation/tls: [32866709227](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32866709227), [32871900682](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32871900682), [32866714851](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32866714851), [32866717729](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32866717729), [32866720742](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32866720742), [32866723562](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32866723562).
+- Product refresh: `compare-product` @ `7cc84089` — [32895736984](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32895736984). Heavier/saturation/tls: [32866709227](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32866709227), [32871900682](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32871900682), [32866714851](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32866714851), [32866717729](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32866717729), [32866720742](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32866720742), [32866723562](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32866723562).
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-product
@@ -165,137 +165,137 @@ Client / origin: HTTP version and whether TLS is used (`plain` = cleartext, `TLS
 
 ### Reverse
 
-Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB). Bare reverse 5×5 @ `9d7c2966` — `compare-product` [32866706475](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32866706475). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP÷peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as `<br><sub>(MiB / CPU%)</sub>`. nginx terminate peers use `keepalive 256` + streaming buffers. Laptop High-perf / cool-paired numbers stay on the [local lab](Performance-Local-Lab).
+Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB). Bare reverse 5×5 @ `7cc84089` — `compare-product` [32895736984](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32895736984). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP÷peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as `<br><sub>(MiB / CPU%)</sub>`. nginx terminate peers use `keepalive 256` + streaming buffers. Laptop High-perf / cool-paired numbers stay on the [local lab](Performance-Local-Lab).
 
 **Load generators:** Reverse inbound H3 arms use **`dotnet-httpclient`** (`http_version=3.0`, `RequestVersionExact`). nginx/Windows is same-OS only (no QUIC).
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
-| HTTP/1 · plain | HTTP/1 · plain | 🥇 **33,241**<br><sub>(66 MiB / 50.0% CPU)</sub> | **33,241**<br><sub>(66 MiB / 50.0% CPU)</sub> | **21,231**<br><sub>(120 MiB / 24.8% CPU)</sub> | **21,231**<br><sub>(120 MiB / 24.8% CPU)</sub> | **29,288**<br><sub>(87 MiB / 49.5% CPU)</sub> | **29,288**<br><sub>(87 MiB / 49.5% CPU)</sub> |
-| HTTP/1 · plain | HTTP/1 · TLS | 🥇 **28,278**<br><sub>(84 MiB / 51.2% CPU)</sub> | **28,278**<br><sub>(84 MiB / 51.2% CPU)</sub> | *Not possible* | *Not possible* | **25,772**<br><sub>(95 MiB / 50.9% CPU)</sub> | **25,772**<br><sub>(95 MiB / 50.9% CPU)</sub> |
-| HTTP/1 · plain | HTTP/2 · plain | 🥇 **44,104**<br><sub>(100 MiB / 49.6% CPU)</sub> | **44,104**<br><sub>(100 MiB / 49.6% CPU)</sub> | *Not possible* | *Not possible* | **42,558**<br><sub>(89 MiB / 50.8% CPU)</sub> | **42,558**<br><sub>(89 MiB / 50.8% CPU)</sub> |
-| HTTP/1 · plain | HTTP/2 · TLS | 🥇 **39,813**<br><sub>(113 MiB / 49.4% CPU)</sub> | **39,813**<br><sub>(113 MiB / 49.4% CPU)</sub> | *Not possible* | *Not possible* | **38,213**<br><sub>(97 MiB / 47.0% CPU)</sub> | **38,213**<br><sub>(97 MiB / 47.0% CPU)</sub> |
-| HTTP/1 · plain | HTTP/3 · QUIC | **22,580**<br><sub>(110 MiB / 51.2% CPU)</sub> | **22,580**<br><sub>(110 MiB / 51.2% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | 🥇 **22,626**<br><sub>(118 MiB / 52.6% CPU)</sub> | **22,626**<br><sub>(118 MiB / 52.6% CPU)</sub> |
-| HTTP/1 · TLS | HTTP/1 · plain | 🥇 **28,254**<br><sub>(94 MiB / 48.4% CPU)</sub> | **28,254**<br><sub>(94 MiB / 48.4% CPU)</sub> | **13,777**<br><sub>(137 MiB / 24.9% CPU)</sub> | **13,858**<br><sub>(137 MiB / 24.9% CPU)</sub> | **24,566**<br><sub>(111 MiB / 51.8% CPU)</sub> | **24,566**<br><sub>(111 MiB / 51.8% CPU)</sub> |
-| HTTP/1 · TLS | HTTP/1 · TLS | 🥇 **25,273**<br><sub>(83 MiB / 45.2% CPU)</sub> | **25,273**<br><sub>(83 MiB / 45.2% CPU)</sub> | *Not possible* | *Not possible* | **22,322**<br><sub>(104 MiB / 48.2% CPU)</sub> | **22,322**<br><sub>(104 MiB / 48.2% CPU)</sub> |
-| HTTP/1 · TLS | HTTP/2 · plain | 🥇 **35,160**<br><sub>(109 MiB / 46.1% CPU)</sub> | **35,160**<br><sub>(109 MiB / 46.1% CPU)</sub> | *Not possible* | *Not possible* | **34,206**<br><sub>(107 MiB / 48.2% CPU)</sub> | **34,206**<br><sub>(107 MiB / 48.2% CPU)</sub> |
-| HTTP/1 · TLS | HTTP/2 · TLS | 🥇 **32,555**<br><sub>(108 MiB / 48.9% CPU)</sub> | **32,555**<br><sub>(108 MiB / 48.9% CPU)</sub> | *Not possible* | *Not possible* | **31,582**<br><sub>(107 MiB / 50.9% CPU)</sub> | **31,582**<br><sub>(107 MiB / 50.9% CPU)</sub> |
-| HTTP/1 · TLS | HTTP/3 · QUIC | 🥇 **19,401**<br><sub>(112 MiB / 48.1% CPU)</sub> | **19,401**<br><sub>(112 MiB / 48.1% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **19,248**<br><sub>(129 MiB / 50.4% CPU)</sub> | **19,248**<br><sub>(129 MiB / 50.4% CPU)</sub> |
-| HTTP/2 · plain | HTTP/1 · plain | 🥇 **43,882**<br><sub>(94 MiB / 52.1% CPU)</sub> | **43,882**<br><sub>(94 MiB / 52.1% CPU)</sub> | *Not possible* | *Not possible* | **41,013**<br><sub>(85 MiB / 49.2% CPU)</sub> | **41,013**<br><sub>(85 MiB / 49.2% CPU)</sub> |
-| HTTP/2 · plain | HTTP/1 · TLS | 🥇 **35,840**<br><sub>(102 MiB / 53.0% CPU)</sub> | **35,840**<br><sub>(102 MiB / 53.0% CPU)</sub> | *Not possible* | *Not possible* | **34,668**<br><sub>(94 MiB / 46.8% CPU)</sub> | **34,668**<br><sub>(94 MiB / 46.8% CPU)</sub> |
-| HTTP/2 · plain | HTTP/2 · plain | 🥇 **94,208**<br><sub>(76 MiB / 33.0% CPU)</sub> | **94,208**<br><sub>(76 MiB / 33.0% CPU)</sub> | *Not possible* | *Not possible* | **68,700**<br><sub>(95 MiB / 52.6% CPU)</sub> | **68,700**<br><sub>(95 MiB / 52.6% CPU)</sub> |
-| HTTP/2 · plain | HTTP/2 · TLS | 🥇 **80,585**<br><sub>(79 MiB / 33.7% CPU)</sub> | **80,585**<br><sub>(79 MiB / 33.7% CPU)</sub> | *Not possible* | *Not possible* | **60,038**<br><sub>(98 MiB / 46.8% CPU)</sub> | **60,038**<br><sub>(98 MiB / 46.8% CPU)</sub> |
-| HTTP/2 · plain | HTTP/3 · QUIC | 🥇 **33,190**<br><sub>(135 MiB / 54.6% CPU)</sub> | **33,190**<br><sub>(135 MiB / 54.6% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **32,100**<br><sub>(121 MiB / 50.7% CPU)</sub> | **32,100**<br><sub>(121 MiB / 50.7% CPU)</sub> |
-| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **42,580**<br><sub>(107 MiB / 50.0% CPU)</sub> | **42,580**<br><sub>(107 MiB / 50.0% CPU)</sub> | **12,344**<br><sub>(137 MiB / 24.0% CPU)</sub> | **12,604**<br><sub>(137 MiB / 24.0% CPU)</sub> | **36,886**<br><sub>(95 MiB / 51.3% CPU)</sub> | **36,886**<br><sub>(95 MiB / 51.3% CPU)</sub> |
-| HTTP/2 · TLS | HTTP/1 · TLS | 🥇 **35,862**<br><sub>(100 MiB / 52.9% CPU)</sub> | **35,862**<br><sub>(100 MiB / 52.9% CPU)</sub> | *Not possible* | *Not possible* | **31,745**<br><sub>(98 MiB / 50.5% CPU)</sub> | **31,745**<br><sub>(98 MiB / 50.5% CPU)</sub> |
-| HTTP/2 · TLS | HTTP/2 · plain | 🥇 **86,952**<br><sub>(91 MiB / 37.5% CPU)</sub> | **86,952**<br><sub>(91 MiB / 37.5% CPU)</sub> | *Not possible* | *Not possible* | **59,551**<br><sub>(107 MiB / 49.4% CPU)</sub> | **59,551**<br><sub>(107 MiB / 49.4% CPU)</sub> |
-| HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **75,920**<br><sub>(97 MiB / 33.4% CPU)</sub> | **75,920**<br><sub>(97 MiB / 33.4% CPU)</sub> | *Not possible* | *Not possible* | **53,472**<br><sub>(100 MiB / 50.3% CPU)</sub> | **53,472**<br><sub>(100 MiB / 50.3% CPU)</sub> |
-| HTTP/2 · TLS | HTTP/3 · QUIC | 🥇 **32,636**<br><sub>(130 MiB / 52.4% CPU)</sub> | **32,636**<br><sub>(130 MiB / 52.4% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **28,798**<br><sub>(126 MiB / 52.6% CPU)</sub> | **28,798**<br><sub>(126 MiB / 52.6% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **20,839**<br><sub>(107 MiB / 41.4% CPU)</sub> | **20,839**<br><sub>(107 MiB / 41.4% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **17,968**<br><sub>(115 MiB / 48.1% CPU)</sub> | **18,860**<br><sub>(115 MiB / 48.1% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/1 · TLS | 🥇 **17,062**<br><sub>(109 MiB / 42.9% CPU)</sub> | **17,062**<br><sub>(109 MiB / 42.9% CPU)</sub> | *Not possible* | *Not possible* | **15,864**<br><sub>(119 MiB / 49.1% CPU)</sub> | **16,555**<br><sub>(119 MiB / 49.1% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/2 · plain | 🥇 **29,891**<br><sub>(119 MiB / 48.9% CPU)</sub> | **29,891**<br><sub>(119 MiB / 48.9% CPU)</sub> | *Not possible* (no H3→H2) | *Not possible* (no H3→H2) | **26,759**<br><sub>(146 MiB / 47.8% CPU)</sub> | **26,759**<br><sub>(146 MiB / 47.8% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/2 · TLS | 🥇 **27,480**<br><sub>(125 MiB / 47.4% CPU)</sub> | **27,480**<br><sub>(125 MiB / 47.4% CPU)</sub> | *Not possible* (no H3→H2) | *Not possible* (no H3→H2) | **23,953**<br><sub>(124 MiB / 46.5% CPU)</sub> | **24,208**<br><sub>(124 MiB / 46.5% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/3 · QUIC | 🥇 **16,303**<br><sub>(120 MiB / 47.6% CPU)</sub> | **16,303**<br><sub>(120 MiB / 47.6% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **14,368**<br><sub>(161 MiB / 51.6% CPU)</sub> | **14,535**<br><sub>(161 MiB / 51.6% CPU)</sub> |
+| HTTP/1 · plain | HTTP/1 · plain | 🥇 **25300**<br><sub>(70 MiB / 50.0% CPU)</sub> | 🥇 **25300**<br><sub>(70 MiB / 50.0% CPU)</sub> | **13555**<br><sub>(120 MiB / 24.9% CPU)</sub> | **13555**<br><sub>(120 MiB / 24.9% CPU)</sub> | **21298**<br><sub>(86 MiB / 50.6% CPU)</sub> | **21298**<br><sub>(86 MiB / 50.6% CPU)</sub> |
+| HTTP/1 · plain | HTTP/1 · TLS | 🥇 **21294**<br><sub>(84 MiB / 50.2% CPU)</sub> | 🥇 **21294**<br><sub>(84 MiB / 50.2% CPU)</sub> | *Not possible* | *Not possible* | **18998**<br><sub>(98 MiB / 48.8% CPU)</sub> | **18998**<br><sub>(98 MiB / 48.8% CPU)</sub> |
+| HTTP/1 · plain | HTTP/2 · plain | 🥇 **34325**<br><sub>(119 MiB / 46.8% CPU)</sub> | 🥇 **34325**<br><sub>(119 MiB / 46.8% CPU)</sub> | *Not possible* | *Not possible* | **32870**<br><sub>(93 MiB / 49.3% CPU)</sub> | **32870**<br><sub>(93 MiB / 49.3% CPU)</sub> |
+| HTTP/1 · plain | HTTP/2 · TLS | 🥇 **30455**<br><sub>(110 MiB / 45.9% CPU)</sub> | 🥇 **30455**<br><sub>(110 MiB / 45.9% CPU)</sub> | *Not possible* | *Not possible* | **29926**<br><sub>(95 MiB / 47.1% CPU)</sub> | **29926**<br><sub>(95 MiB / 47.1% CPU)</sub> |
+| HTTP/1 · plain | HTTP/3 · QUIC | **18204**<br><sub>(106 MiB / 52.4% CPU)</sub> | **18204**<br><sub>(106 MiB / 52.4% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | 🥇 **18359**<br><sub>(113 MiB / 50.2% CPU)</sub> | 🥇 **18359**<br><sub>(113 MiB / 50.2% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/1 · plain | 🥇 **20768**<br><sub>(83 MiB / 49.2% CPU)</sub> | 🥇 **20768**<br><sub>(83 MiB / 49.2% CPU)</sub> | **8735**<br><sub>(137 MiB / 24.7% CPU)</sub> | **8919**<br><sub>(137 MiB / 24.7% CPU)</sub> | **17290**<br><sub>(91 MiB / 48.1% CPU)</sub> | **17674**<br><sub>(91 MiB / 48.1% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/1 · TLS | 🥇 **18612**<br><sub>(82 MiB / 48.9% CPU)</sub> | 🥇 **18612**<br><sub>(82 MiB / 48.9% CPU)</sub> | *Not possible* | *Not possible* | **16877**<br><sub>(102 MiB / 47.3% CPU)</sub> | **16877**<br><sub>(102 MiB / 47.3% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/2 · plain | 🥇 **26506**<br><sub>(123 MiB / 46.0% CPU)</sub> | 🥇 **26506**<br><sub>(123 MiB / 46.0% CPU)</sub> | *Not possible* | *Not possible* | **25477**<br><sub>(108 MiB / 44.9% CPU)</sub> | **25477**<br><sub>(108 MiB / 44.9% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/2 · TLS | **23850**<br><sub>(121 MiB / 45.1% CPU)</sub> | **23850**<br><sub>(121 MiB / 45.1% CPU)</sub> | *Not possible* | *Not possible* | 🥇 **24068**<br><sub>(107 MiB / 47.8% CPU)</sub> | 🥇 **24068**<br><sub>(107 MiB / 47.8% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/3 · QUIC | 🥇 **15394**<br><sub>(105 MiB / 51.1% CPU)</sub> | 🥇 **15394**<br><sub>(105 MiB / 51.1% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **14923**<br><sub>(122 MiB / 50.3% CPU)</sub> | **14923**<br><sub>(122 MiB / 50.3% CPU)</sub> |
+| HTTP/2 · plain | HTTP/1 · plain | 🥇 **35862**<br><sub>(91 MiB / 51.6% CPU)</sub> | 🥇 **35862**<br><sub>(91 MiB / 51.6% CPU)</sub> | *Not possible* | *Not possible* | **31614**<br><sub>(83 MiB / 52.7% CPU)</sub> | **31614**<br><sub>(83 MiB / 52.7% CPU)</sub> |
+| HTTP/2 · plain | HTTP/1 · TLS | 🥇 **30499**<br><sub>(99 MiB / 53.8% CPU)</sub> | 🥇 **30499**<br><sub>(99 MiB / 53.8% CPU)</sub> | *Not possible* | *Not possible* | **26830**<br><sub>(92 MiB / 51.4% CPU)</sub> | **26830**<br><sub>(92 MiB / 51.4% CPU)</sub> |
+| HTTP/2 · plain | HTTP/2 · plain | 🥇 **86005**<br><sub>(73 MiB / 38.0% CPU)</sub> | 🥇 **86005**<br><sub>(73 MiB / 38.0% CPU)</sub> | *Not possible* | *Not possible* | **64185**<br><sub>(94 MiB / 51.9% CPU)</sub> | **64185**<br><sub>(94 MiB / 51.9% CPU)</sub> |
+| HTTP/2 · plain | HTTP/2 · TLS | 🥇 **75577**<br><sub>(79 MiB / 37.7% CPU)</sub> | 🥇 **75577**<br><sub>(79 MiB / 37.7% CPU)</sub> | *Not possible* | *Not possible* | **54814**<br><sub>(102 MiB / 47.9% CPU)</sub> | **54814**<br><sub>(102 MiB / 47.9% CPU)</sub> |
+| HTTP/2 · plain | HTTP/3 · QUIC | 🥇 **30434**<br><sub>(126 MiB / 53.3% CPU)</sub> | 🥇 **30434**<br><sub>(126 MiB / 53.3% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **28454**<br><sub>(120 MiB / 52.5% CPU)</sub> | **28454**<br><sub>(120 MiB / 52.5% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **34653**<br><sub>(97 MiB / 53.8% CPU)</sub> | 🥇 **34653**<br><sub>(97 MiB / 53.8% CPU)</sub> | **8152**<br><sub>(137 MiB / 24.3% CPU)</sub> | **8324**<br><sub>(137 MiB / 24.3% CPU)</sub> | **29075**<br><sub>(93 MiB / 52.0% CPU)</sub> | **29075**<br><sub>(93 MiB / 52.0% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/1 · TLS | 🥇 **29952**<br><sub>(96 MiB / 52.6% CPU)</sub> | 🥇 **29952**<br><sub>(96 MiB / 52.6% CPU)</sub> | *Not possible* | *Not possible* | **25177**<br><sub>(93 MiB / 54.5% CPU)</sub> | **25177**<br><sub>(93 MiB / 54.5% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/2 · plain | 🥇 **80516**<br><sub>(92 MiB / 37.9% CPU)</sub> | 🥇 **80516**<br><sub>(92 MiB / 37.9% CPU)</sub> | *Not possible* | *Not possible* | **54732**<br><sub>(101 MiB / 52.9% CPU)</sub> | **54732**<br><sub>(101 MiB / 52.9% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **70348**<br><sub>(90 MiB / 36.6% CPU)</sub> | 🥇 **70348**<br><sub>(90 MiB / 36.6% CPU)</sub> | *Not possible* | *Not possible* | **48924**<br><sub>(98 MiB / 49.5% CPU)</sub> | **48924**<br><sub>(98 MiB / 49.5% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/3 · QUIC | 🥇 **29464**<br><sub>(126 MiB / 52.9% CPU)</sub> | 🥇 **29464**<br><sub>(126 MiB / 52.9% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **26110**<br><sub>(121 MiB / 52.0% CPU)</sub> | **26110**<br><sub>(121 MiB / 52.0% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **14696**<br><sub>(105 MiB / 46.4% CPU)</sub> | 🥇 **14696**<br><sub>(105 MiB / 46.4% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **14545**<br><sub>(118 MiB / 50.7% CPU)</sub> | **15081**<br><sub>(118 MiB / 50.7% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/1 · TLS | **12900**<br><sub>(106 MiB / 45.2% CPU)</sub> | **12900**<br><sub>(106 MiB / 45.2% CPU)</sub> | *Not possible* | *Not possible* | 🥇 **12979**<br><sub>(118 MiB / 52.2% CPU)</sub> | 🥇 **13356**<br><sub>(118 MiB / 52.2% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/2 · plain | 🥇 **25874**<br><sub>(110 MiB / 47.1% CPU)</sub> | 🥇 **25874**<br><sub>(110 MiB / 47.1% CPU)</sub> | *Not possible* (no H3→H2) | *Not possible* (no H3→H2) | **23088**<br><sub>(171 MiB / 48.1% CPU)</sub> | **23088**<br><sub>(171 MiB / 48.1% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/2 · TLS | 🥇 **23721**<br><sub>(116 MiB / 48.6% CPU)</sub> | 🥇 **23721**<br><sub>(116 MiB / 48.6% CPU)</sub> | *Not possible* (no H3→H2) | *Not possible* (no H3→H2) | **21739**<br><sub>(169 MiB / 47.4% CPU)</sub> | **21739**<br><sub>(169 MiB / 47.4% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/3 · QUIC | **14781**<br><sub>(117 MiB / 41.3% CPU)</sub> | **15946**<br><sub>(117 MiB / 41.3% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | 🥇 **15806**<br><sub>(163 MiB / 49.0% CPU)</sub> | 🥇 **15806**<br><sub>(163 MiB / 49.0% CPU)</sub> |
 
 ### MITM (TWP only)
 
-Same Client×Origin wires with interception on (`compare-product` [32866706475](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32866706475)). nginx/YARP cannot MITM. **MITM÷Reverse** is the interception tax vs bare reverse on the same arm (same job).
+Same Client×Origin wires with interception on (`compare-product` [32895736984](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32895736984)). nginx/YARP cannot MITM. **MITM÷Reverse** is the interception tax vs bare reverse on the same arm (same job).
 
 | Client | Origin | TWP sustain | TWP peak | MITM÷Reverse |
 |---|---|---:|---:|---:|
-| HTTP/1 · plain | HTTP/1 · plain | 🥇 **29,846**<br><sub>(78 MiB / 52.1% CPU)</sub> | **29,846**<br><sub>(78 MiB / 52.1% CPU)</sub> | **0.90×** |
-| HTTP/1 · plain | HTTP/1 · TLS | 🥇 **25,853**<br><sub>(90 MiB / 52.4% CPU)</sub> | **25,853**<br><sub>(90 MiB / 52.4% CPU)</sub> | **0.91×** |
-| HTTP/1 · plain | HTTP/2 · plain | 🥇 **0**<br><sub>(786 MiB / 47.4% CPU)</sub> | **1,143**<br><sub>(786 MiB / 47.4% CPU)</sub> | **0.00×** |
-| HTTP/1 · plain | HTTP/2 · TLS | 🥇 **0**<br><sub>(91 MiB / 7.1% CPU)</sub> | **2**<br><sub>(91 MiB / 7.1% CPU)</sub> | **0.00×** |
-| HTTP/1 · plain | HTTP/3 · QUIC | 🥇 **7,976**<br><sub>(75 MiB / 37.8% CPU)</sub> | **7,976**<br><sub>(75 MiB / 37.8% CPU)</sub> | **0.35×** |
-| HTTP/1 · TLS | HTTP/1 · plain | 🥇 **25,402**<br><sub>(89 MiB / 48.0% CPU)</sub> | **25,402**<br><sub>(89 MiB / 48.0% CPU)</sub> | **0.90×** |
-| HTTP/1 · TLS | HTTP/1 · TLS | 🥇 **22,451**<br><sub>(87 MiB / 52.3% CPU)</sub> | **22,451**<br><sub>(87 MiB / 52.3% CPU)</sub> | **0.89×** |
-| HTTP/1 · TLS | HTTP/2 · plain | 🥇 **0**<br><sub>(237 MiB / 26.5% CPU)</sub> | **478**<br><sub>(237 MiB / 26.5% CPU)</sub> | **0.00×** |
-| HTTP/1 · TLS | HTTP/2 · TLS | 🥇 **0**<br><sub>(78 MiB / 5.8% CPU)</sub> | **2**<br><sub>(78 MiB / 5.8% CPU)</sub> | **0.00×** |
-| HTTP/1 · TLS | HTTP/3 · QUIC | 🥇 **11,523**<br><sub>(86 MiB / 45.5% CPU)</sub> | **12,320**<br><sub>(86 MiB / 45.5% CPU)</sub> | **0.59×** |
-| HTTP/2 · plain | HTTP/1 · plain | 🥇 **42,650**<br><sub>(103 MiB / 53.6% CPU)</sub> | **42,650**<br><sub>(103 MiB / 53.6% CPU)</sub> | **0.97×** |
-| HTTP/2 · plain | HTTP/1 · TLS | 🥇 **36,775**<br><sub>(101 MiB / 52.9% CPU)</sub> | **36,775**<br><sub>(101 MiB / 52.9% CPU)</sub> | **1.03×** |
-| HTTP/2 · plain | HTTP/2 · plain | 🥇 **18,838**<br><sub>(68 MiB / 50.1% CPU)</sub> | **18,892**<br><sub>(68 MiB / 50.1% CPU)</sub> | **0.20×** |
-| HTTP/2 · plain | HTTP/2 · TLS | 🥇 **12,960**<br><sub>(78 MiB / 48.1% CPU)</sub> | **12,960**<br><sub>(78 MiB / 48.1% CPU)</sub> | **0.16×** |
-| HTTP/2 · plain | HTTP/3 · QUIC | 🥇 **33,024**<br><sub>(133 MiB / 53.8% CPU)</sub> | **33,024**<br><sub>(133 MiB / 53.8% CPU)</sub> | **1.00×** |
-| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **40,884**<br><sub>(104 MiB / 53.3% CPU)</sub> | **40,884**<br><sub>(104 MiB / 53.3% CPU)</sub> | **0.96×** |
-| HTTP/2 · TLS | HTTP/1 · TLS | 🥇 **35,929**<br><sub>(100 MiB / 55.2% CPU)</sub> | **35,929**<br><sub>(100 MiB / 55.2% CPU)</sub> | **1.00×** |
-| HTTP/2 · TLS | HTTP/2 · plain | 🥇 **19,784**<br><sub>(85 MiB / 53.0% CPU)</sub> | **19,784**<br><sub>(85 MiB / 53.0% CPU)</sub> | **0.23×** |
-| HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **13,643**<br><sub>(89 MiB / 47.2% CPU)</sub> | **13,643**<br><sub>(89 MiB / 47.2% CPU)</sub> | **0.18×** |
-| HTTP/2 · TLS | HTTP/3 · QUIC | 🥇 **32,279**<br><sub>(135 MiB / 53.6% CPU)</sub> | **32,279**<br><sub>(135 MiB / 53.6% CPU)</sub> | **0.99×** |
-| HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **14,315**<br><sub>(110 MiB / 47.9% CPU)</sub> | **14,315**<br><sub>(110 MiB / 47.9% CPU)</sub> | **0.69×** |
-| HTTP/3 · QUIC | HTTP/1 · TLS | 🥇 **12,286**<br><sub>(127 MiB / 48.3% CPU)</sub> | **12,286**<br><sub>(127 MiB / 48.3% CPU)</sub> | **0.72×** |
-| HTTP/3 · QUIC | HTTP/2 · plain | 🥇 **27,183**<br><sub>(133 MiB / 50.9% CPU)</sub> | **27,183**<br><sub>(133 MiB / 50.9% CPU)</sub> | **0.91×** |
-| HTTP/3 · QUIC | HTTP/2 · TLS | 🥇 **25,248**<br><sub>(133 MiB / 50.9% CPU)</sub> | **25,248**<br><sub>(133 MiB / 50.9% CPU)</sub> | **0.92×** |
-| HTTP/3 · QUIC | HTTP/3 · QUIC | 🥇 **15,350**<br><sub>(103 MiB / 44.8% CPU)</sub> | **16,812**<br><sub>(103 MiB / 44.8% CPU)</sub> | **0.94×** |
-| HTTP/1 · plain (CONNECT) | HTTP/1 · TLS | 🥇 **20,713**<br><sub>(105 MiB / 53.6% CPU)</sub> | **20,713**<br><sub>(105 MiB / 53.6% CPU)</sub> | *n/a* |
+| HTTP/1 · plain | HTTP/1 · plain | 🥇 **21742**<br><sub>(74 MiB / 50.5% CPU)</sub> | **21742**<br><sub>(74 MiB / 50.5% CPU)</sub> | **0.86×** |
+| HTTP/1 · plain | HTTP/1 · TLS | 🥇 **18813**<br><sub>(88 MiB / 54.1% CPU)</sub> | **18813**<br><sub>(88 MiB / 54.1% CPU)</sub> | **0.88×** |
+| HTTP/1 · plain | HTTP/2 · plain | 🥇 **32998**<br><sub>(118 MiB / 50.4% CPU)</sub> | **32998**<br><sub>(118 MiB / 50.4% CPU)</sub> | **0.96×** |
+| HTTP/1 · plain | HTTP/2 · TLS | 🥇 **30498**<br><sub>(114 MiB / 48.1% CPU)</sub> | **30498**<br><sub>(114 MiB / 48.1% CPU)</sub> | **1.00×** |
+| HTTP/1 · plain | HTTP/3 · QUIC | 🥇 **17481**<br><sub>(106 MiB / 50.5% CPU)</sub> | **17481**<br><sub>(106 MiB / 50.5% CPU)</sub> | **0.96×** |
+| HTTP/1 · TLS | HTTP/1 · plain | 🥇 **18280**<br><sub>(88 MiB / 52.3% CPU)</sub> | **18280**<br><sub>(88 MiB / 52.3% CPU)</sub> | **0.88×** |
+| HTTP/1 · TLS | HTTP/1 · TLS | 🥇 **16744**<br><sub>(90 MiB / 53.9% CPU)</sub> | **16744**<br><sub>(90 MiB / 53.9% CPU)</sub> | **0.90×** |
+| HTTP/1 · TLS | HTTP/2 · plain | 🥇 **26257**<br><sub>(121 MiB / 48.1% CPU)</sub> | **26257**<br><sub>(121 MiB / 48.1% CPU)</sub> | **0.99×** |
+| HTTP/1 · TLS | HTTP/2 · TLS | 🥇 **24589**<br><sub>(118 MiB / 46.1% CPU)</sub> | **24589**<br><sub>(118 MiB / 46.1% CPU)</sub> | **1.03×** |
+| HTTP/1 · TLS | HTTP/3 · QUIC | 🥇 **15236**<br><sub>(106 MiB / 50.6% CPU)</sub> | **15236**<br><sub>(106 MiB / 50.6% CPU)</sub> | **0.99×** |
+| HTTP/2 · plain | HTTP/1 · plain | 🥇 **34659**<br><sub>(92 MiB / 57.8% CPU)</sub> | **34659**<br><sub>(92 MiB / 57.8% CPU)</sub> | **0.97×** |
+| HTTP/2 · plain | HTTP/1 · TLS | 🥇 **30034**<br><sub>(93 MiB / 55.0% CPU)</sub> | **30034**<br><sub>(93 MiB / 55.0% CPU)</sub> | **0.98×** |
+| HTTP/2 · plain | HTTP/2 · plain | 🥇 **11577**<br><sub>(70 MiB / 48.7% CPU)</sub> | **11589**<br><sub>(70 MiB / 48.7% CPU)</sub> | **0.13×** |
+| HTTP/2 · plain | HTTP/2 · TLS | 🥇 **7891**<br><sub>(76 MiB / 46.8% CPU)</sub> | **7929**<br><sub>(76 MiB / 46.8% CPU)</sub> | **0.10×** |
+| HTTP/2 · plain | HTTP/3 · QUIC | 🥇 **30279**<br><sub>(119 MiB / 55.3% CPU)</sub> | **30279**<br><sub>(119 MiB / 55.3% CPU)</sub> | **0.99×** |
+| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **34076**<br><sub>(102 MiB / 54.3% CPU)</sub> | **34076**<br><sub>(102 MiB / 54.3% CPU)</sub> | **0.98×** |
+| HTTP/2 · TLS | HTTP/1 · TLS | 🥇 **29246**<br><sub>(103 MiB / 53.6% CPU)</sub> | **29246**<br><sub>(103 MiB / 53.6% CPU)</sub> | **0.98×** |
+| HTTP/2 · TLS | HTTP/2 · plain | 🥇 **12071**<br><sub>(88 MiB / 51.3% CPU)</sub> | **12071**<br><sub>(88 MiB / 51.3% CPU)</sub> | **0.15×** |
+| HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **8214**<br><sub>(83 MiB / 48.0% CPU)</sub> | **8260**<br><sub>(83 MiB / 48.0% CPU)</sub> | **0.12×** |
+| HTTP/2 · TLS | HTTP/3 · QUIC | 🥇 **29588**<br><sub>(133 MiB / 54.6% CPU)</sub> | **29588**<br><sub>(133 MiB / 54.6% CPU)</sub> | **1.00×** |
+| HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **9527**<br><sub>(104 MiB / 48.7% CPU)</sub> | **9527**<br><sub>(104 MiB / 48.7% CPU)</sub> | **0.65×** |
+| HTTP/3 · QUIC | HTTP/1 · TLS | 🥇 **8236**<br><sub>(102 MiB / 50.1% CPU)</sub> | **8236**<br><sub>(102 MiB / 50.1% CPU)</sub> | **0.64×** |
+| HTTP/3 · QUIC | HTTP/2 · plain | 🥇 **23958**<br><sub>(122 MiB / 51.3% CPU)</sub> | **23958**<br><sub>(122 MiB / 51.3% CPU)</sub> | **0.93×** |
+| HTTP/3 · QUIC | HTTP/2 · TLS | 🥇 **22555**<br><sub>(130 MiB / 50.6% CPU)</sub> | **22555**<br><sub>(130 MiB / 50.6% CPU)</sub> | **0.95×** |
+| HTTP/3 · QUIC | HTTP/3 · QUIC | 🥇 **13491**<br><sub>(114 MiB / 46.1% CPU)</sub> | **14298**<br><sub>(114 MiB / 46.1% CPU)</sub> | **0.91×** |
+| HTTP/1 · plain (CONNECT) | HTTP/1 · TLS | 🥇 **15396**<br><sub>(108 MiB / 51.9% CPU)</sub> | **15396**<br><sub>(108 MiB / 51.9% CPU)</sub> | *n/a* |
 
 ## Linux — Titanium vs nginx vs YARP
 
 ### Reverse
 
-Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB). Bare reverse 5×5 @ `9d7c2966` — `compare-product` [32866706475](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32866706475). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** nginx terminate peers use `keepalive 256` + streaming buffers. The RPS workflow installs nginx.org mainline (`http_v3_module`) and `libmsquic`. Prefer ratios over absolute RPS.
+Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB). Bare reverse 5×5 @ `7cc84089` — `compare-product` [32895736984](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32895736984). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** nginx terminate peers use `keepalive 256` + streaming buffers. The RPS workflow installs nginx.org mainline (`http_v3_module`) and `libmsquic`. Prefer ratios over absolute RPS.
 
 | Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
 |---|---|---:|---:|---:|---:|---:|---:|
-| HTTP/1 · plain | HTTP/1 · plain | **36,591**<br><sub>(82 MiB / 50.2% CPU)</sub> | **36,591**<br><sub>(82 MiB / 50.2% CPU)</sub> | 🥇 **44,069**<br><sub>(72 MiB / 40.8% CPU)</sub> | **44,069**<br><sub>(72 MiB / 40.8% CPU)</sub> | **32,009**<br><sub>(123 MiB / 49.5% CPU)</sub> | **32,009**<br><sub>(123 MiB / 49.5% CPU)</sub> |
-| HTTP/1 · plain | HTTP/1 · TLS | 🥇 **28,744**<br><sub>(100 MiB / 49.2% CPU)</sub> | **28,744**<br><sub>(100 MiB / 49.2% CPU)</sub> | *Not possible* | *Not possible* | **25,755**<br><sub>(129 MiB / 49.7% CPU)</sub> | **25,755**<br><sub>(129 MiB / 49.7% CPU)</sub> |
-| HTTP/1 · plain | HTTP/2 · plain | 🥇 **43,034**<br><sub>(121 MiB / 52.0% CPU)</sub> | **43,034**<br><sub>(121 MiB / 52.0% CPU)</sub> | *Not possible* | *Not possible* | **41,209**<br><sub>(121 MiB / 49.0% CPU)</sub> | **41,209**<br><sub>(121 MiB / 49.0% CPU)</sub> |
-| HTTP/1 · plain | HTTP/2 · TLS | 🥇 **35,841**<br><sub>(146 MiB / 50.4% CPU)</sub> | **35,841**<br><sub>(146 MiB / 50.4% CPU)</sub> | *Not possible* | *Not possible* | **34,482**<br><sub>(126 MiB / 48.3% CPU)</sub> | **34,482**<br><sub>(126 MiB / 48.3% CPU)</sub> |
-| HTTP/1 · plain | HTTP/3 · QUIC | 🥇 **25,147**<br><sub>(131 MiB / 53.4% CPU)</sub> | **25,147**<br><sub>(131 MiB / 53.4% CPU)</sub> | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **24,015**<br><sub>(149 MiB / 48.5% CPU)</sub> | **24,015**<br><sub>(149 MiB / 48.5% CPU)</sub> |
-| HTTP/1 · TLS | HTTP/1 · plain | **27,711**<br><sub>(103 MiB / 48.6% CPU)</sub> | **27,711**<br><sub>(103 MiB / 48.6% CPU)</sub> | 🥇 **33,465**<br><sub>(96 MiB / 41.5% CPU)</sub> | **33,465**<br><sub>(96 MiB / 41.5% CPU)</sub> | **24,462**<br><sub>(144 MiB / 50.1% CPU)</sub> | **24,462**<br><sub>(144 MiB / 50.1% CPU)</sub> |
-| HTTP/1 · TLS | HTTP/1 · TLS | 🥇 **23,831**<br><sub>(113 MiB / 48.5% CPU)</sub> | **23,831**<br><sub>(113 MiB / 48.5% CPU)</sub> | *Not possible* | *Not possible* | **20,933**<br><sub>(134 MiB / 49.6% CPU)</sub> | **20,933**<br><sub>(134 MiB / 49.6% CPU)</sub> |
-| HTTP/1 · TLS | HTTP/2 · plain | 🥇 **32,378**<br><sub>(147 MiB / 51.5% CPU)</sub> | **32,378**<br><sub>(147 MiB / 51.5% CPU)</sub> | *Not possible* | *Not possible* | **30,497**<br><sub>(135 MiB / 49.2% CPU)</sub> | **30,497**<br><sub>(135 MiB / 49.2% CPU)</sub> |
-| HTTP/1 · TLS | HTTP/2 · TLS | 🥇 **27,835**<br><sub>(151 MiB / 49.9% CPU)</sub> | **27,835**<br><sub>(151 MiB / 49.9% CPU)</sub> | *Not possible* | *Not possible* | **27,050**<br><sub>(149 MiB / 48.5% CPU)</sub> | **27,050**<br><sub>(149 MiB / 48.5% CPU)</sub> |
-| HTTP/1 · TLS | HTTP/3 · QUIC | 🥇 **20,541**<br><sub>(134 MiB / 52.3% CPU)</sub> | **20,541**<br><sub>(134 MiB / 52.3% CPU)</sub> | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **19,491**<br><sub>(158 MiB / 49.4% CPU)</sub> | **19,491**<br><sub>(158 MiB / 49.4% CPU)</sub> |
-| HTTP/2 · plain | HTTP/1 · plain | 🥇 **39,523**<br><sub>(104 MiB / 52.4% CPU)</sub> | **39,523**<br><sub>(104 MiB / 52.4% CPU)</sub> | *Not possible* | *Not possible* | **39,420**<br><sub>(113 MiB / 48.5% CPU)</sub> | **39,420**<br><sub>(113 MiB / 48.5% CPU)</sub> |
-| HTTP/2 · plain | HTTP/1 · TLS | 🥇 **32,735**<br><sub>(117 MiB / 50.7% CPU)</sub> | **32,735**<br><sub>(117 MiB / 50.7% CPU)</sub> | *Not possible* | *Not possible* | **30,934**<br><sub>(123 MiB / 48.3% CPU)</sub> | **30,934**<br><sub>(123 MiB / 48.3% CPU)</sub> |
-| HTTP/2 · plain | HTTP/2 · plain | 🥇 **72,944**<br><sub>(92 MiB / 41.7% CPU)</sub> | **72,944**<br><sub>(92 MiB / 41.7% CPU)</sub> | *Not possible* | *Not possible* | **54,718**<br><sub>(128 MiB / 46.7% CPU)</sub> | **54,718**<br><sub>(128 MiB / 46.7% CPU)</sub> |
-| HTTP/2 · plain | HTTP/2 · TLS | 🥇 **55,901**<br><sub>(107 MiB / 40.2% CPU)</sub> | **55,901**<br><sub>(107 MiB / 40.2% CPU)</sub> | *Not possible* | *Not possible* | **45,144**<br><sub>(139 MiB / 46.2% CPU)</sub> | **45,144**<br><sub>(139 MiB / 46.2% CPU)</sub> |
-| HTTP/2 · plain | HTTP/3 · QUIC | 🥇 **28,574**<br><sub>(154 MiB / 50.8% CPU)</sub> | **28,574**<br><sub>(154 MiB / 50.8% CPU)</sub> | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **28,377**<br><sub>(154 MiB / 46.2% CPU)</sub> | **28,377**<br><sub>(154 MiB / 46.2% CPU)</sub> |
-| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **37,915**<br><sub>(117 MiB / 51.7% CPU)</sub> | **37,915**<br><sub>(117 MiB / 51.7% CPU)</sub> | **17,694**<br><sub>(97 MiB / 19.3% CPU)</sub> | **17,694**<br><sub>(97 MiB / 19.3% CPU)</sub> | **33,210**<br><sub>(123 MiB / 48.3% CPU)</sub> | **33,210**<br><sub>(123 MiB / 48.3% CPU)</sub> |
-| HTTP/2 · TLS | HTTP/1 · TLS | 🥇 **30,357**<br><sub>(123 MiB / 50.8% CPU)</sub> | **30,357**<br><sub>(123 MiB / 50.8% CPU)</sub> | *Not possible* | *Not possible* | **27,396**<br><sub>(126 MiB / 48.2% CPU)</sub> | **27,396**<br><sub>(126 MiB / 48.2% CPU)</sub> |
-| HTTP/2 · TLS | HTTP/2 · plain | 🥇 **66,908**<br><sub>(114 MiB / 41.1% CPU)</sub> | **66,908**<br><sub>(114 MiB / 41.1% CPU)</sub> | *Not possible* | *Not possible* | **43,903**<br><sub>(122 MiB / 46.0% CPU)</sub> | **43,903**<br><sub>(122 MiB / 46.0% CPU)</sub> |
-| HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **53,536**<br><sub>(117 MiB / 38.9% CPU)</sub> | **53,536**<br><sub>(117 MiB / 38.9% CPU)</sub> | *Not possible* | *Not possible* | **37,968**<br><sub>(121 MiB / 45.6% CPU)</sub> | **37,968**<br><sub>(121 MiB / 45.6% CPU)</sub> |
-| HTTP/2 · TLS | HTTP/3 · QUIC | 🥇 **27,857**<br><sub>(164 MiB / 50.2% CPU)</sub> | **27,857**<br><sub>(164 MiB / 50.2% CPU)</sub> | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **24,666**<br><sub>(152 MiB / 46.3% CPU)</sub> | **24,666**<br><sub>(152 MiB / 46.3% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **23,014**<br><sub>(147 MiB / 52.2% CPU)</sub> | **23,014**<br><sub>(147 MiB / 52.2% CPU)</sub> | **0**<br><sub>(104 MiB / 22.0% CPU)</sub> | **19,321**<br><sub>(104 MiB / 22.0% CPU)</sub> | **21,338**<br><sub>(183 MiB / 49.8% CPU)</sub> | **21,338**<br><sub>(183 MiB / 49.8% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/1 · TLS | 🥇 **18,453**<br><sub>(148 MiB / 48.7% CPU)</sub> | **18,453**<br><sub>(148 MiB / 48.7% CPU)</sub> | *Not possible* | *Not possible* | **18,029**<br><sub>(193 MiB / 49.5% CPU)</sub> | **18,029**<br><sub>(193 MiB / 49.5% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/2 · plain | 🥇 **28,338**<br><sub>(142 MiB / 55.2% CPU)</sub> | **28,338**<br><sub>(142 MiB / 55.2% CPU)</sub> | *Not possible* (no H3→H2) | *Not possible* (no H3→H2) | **26,918**<br><sub>(197 MiB / 48.8% CPU)</sub> | **26,918**<br><sub>(197 MiB / 48.8% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/2 · TLS | 🥇 **25,501**<br><sub>(146 MiB / 53.1% CPU)</sub> | **25,501**<br><sub>(146 MiB / 53.1% CPU)</sub> | *Not possible* (no H3→H2) | *Not possible* (no H3→H2) | **24,075**<br><sub>(192 MiB / 47.8% CPU)</sub> | **24,075**<br><sub>(192 MiB / 47.8% CPU)</sub> |
-| HTTP/3 · QUIC | HTTP/3 · QUIC | 🥇 **20,599**<br><sub>(154 MiB / 47.7% CPU)</sub> | **20,599**<br><sub>(154 MiB / 47.7% CPU)</sub> | *Not possible* (no H3 origin) | *Not possible* (no H3 origin) | **17,472**<br><sub>(195 MiB / 47.1% CPU)</sub> | **17,472**<br><sub>(195 MiB / 47.1% CPU)</sub> |
+| HTTP/1 · plain | HTTP/1 · plain | **31836**<br><sub>(88 MiB / 50.9% CPU)</sub> | **31836**<br><sub>(88 MiB / 50.9% CPU)</sub> | 🥇 **38620**<br><sub>(72 MiB / 41.4% CPU)</sub> | 🥇 **38620**<br><sub>(72 MiB / 41.4% CPU)</sub> | **27841**<br><sub>(114 MiB / 50.3% CPU)</sub> | **27841**<br><sub>(114 MiB / 50.3% CPU)</sub> |
+| HTTP/1 · plain | HTTP/1 · TLS | 🥇 **23817**<br><sub>(100 MiB / 50.3% CPU)</sub> | 🥇 **23817**<br><sub>(100 MiB / 50.3% CPU)</sub> | *Not possible* | *Not possible* | **21746**<br><sub>(130 MiB / 50.7% CPU)</sub> | **21746**<br><sub>(130 MiB / 50.7% CPU)</sub> |
+| HTTP/1 · plain | HTTP/2 · plain | 🥇 **38025**<br><sub>(123 MiB / 52.0% CPU)</sub> | 🥇 **38025**<br><sub>(123 MiB / 52.0% CPU)</sub> | *Not possible* | *Not possible* | **35226**<br><sub>(123 MiB / 49.3% CPU)</sub> | **35226**<br><sub>(123 MiB / 49.3% CPU)</sub> |
+| HTTP/1 · plain | HTTP/2 · TLS | 🥇 **30443**<br><sub>(133 MiB / 50.7% CPU)</sub> | 🥇 **30443**<br><sub>(133 MiB / 50.7% CPU)</sub> | *Not possible* | *Not possible* | **29690**<br><sub>(134 MiB / 48.6% CPU)</sub> | **29690**<br><sub>(134 MiB / 48.6% CPU)</sub> |
+| HTTP/1 · plain | HTTP/3 · QUIC | 🥇 **22739**<br><sub>(124 MiB / 52.6% CPU)</sub> | 🥇 **22739**<br><sub>(124 MiB / 52.6% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **21340**<br><sub>(153 MiB / 49.7% CPU)</sub> | **21340**<br><sub>(153 MiB / 49.7% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/1 · plain | **23351**<br><sub>(103 MiB / 49.6% CPU)</sub> | **23351**<br><sub>(103 MiB / 49.6% CPU)</sub> | 🥇 **26878**<br><sub>(97 MiB / 41.9% CPU)</sub> | 🥇 **26878**<br><sub>(97 MiB / 41.9% CPU)</sub> | **20514**<br><sub>(135 MiB / 51.2% CPU)</sub> | **20514**<br><sub>(135 MiB / 51.2% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/1 · TLS | 🥇 **18926**<br><sub>(105 MiB / 48.6% CPU)</sub> | 🥇 **18926**<br><sub>(105 MiB / 48.6% CPU)</sub> | *Not possible* | *Not possible* | **16984**<br><sub>(142 MiB / 49.7% CPU)</sub> | **16984**<br><sub>(142 MiB / 49.7% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/2 · plain | 🥇 **26557**<br><sub>(166 MiB / 50.1% CPU)</sub> | 🥇 **26557**<br><sub>(166 MiB / 50.1% CPU)</sub> | *Not possible* | *Not possible* | **24950**<br><sub>(144 MiB / 49.3% CPU)</sub> | **24950**<br><sub>(144 MiB / 49.3% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/2 · TLS | 🥇 **23273**<br><sub>(146 MiB / 48.9% CPU)</sub> | 🥇 **23273**<br><sub>(146 MiB / 48.9% CPU)</sub> | *Not possible* | *Not possible* | **22008**<br><sub>(142 MiB / 48.5% CPU)</sub> | **22008**<br><sub>(142 MiB / 48.5% CPU)</sub> |
+| HTTP/1 · TLS | HTTP/3 · QUIC | 🥇 **17287**<br><sub>(137 MiB / 52.0% CPU)</sub> | 🥇 **17287**<br><sub>(137 MiB / 52.0% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **16420**<br><sub>(155 MiB / 49.8% CPU)</sub> | **16420**<br><sub>(155 MiB / 49.8% CPU)</sub> |
+| HTTP/2 · plain | HTTP/1 · plain | 🥇 **36337**<br><sub>(111 MiB / 53.0% CPU)</sub> | 🥇 **36337**<br><sub>(111 MiB / 53.0% CPU)</sub> | *Not possible* | *Not possible* | **33384**<br><sub>(113 MiB / 50.5% CPU)</sub> | **33384**<br><sub>(113 MiB / 50.5% CPU)</sub> |
+| HTTP/2 · plain | HTTP/1 · TLS | 🥇 **27778**<br><sub>(117 MiB / 51.2% CPU)</sub> | 🥇 **27778**<br><sub>(117 MiB / 51.2% CPU)</sub> | *Not possible* | *Not possible* | **25716**<br><sub>(126 MiB / 51.0% CPU)</sub> | **25716**<br><sub>(126 MiB / 51.0% CPU)</sub> |
+| HTTP/2 · plain | HTTP/2 · plain | 🥇 **65304**<br><sub>(105 MiB / 39.5% CPU)</sub> | 🥇 **65304**<br><sub>(105 MiB / 39.5% CPU)</sub> | *Not possible* | *Not possible* | **48698**<br><sub>(122 MiB / 47.0% CPU)</sub> | **48698**<br><sub>(122 MiB / 47.0% CPU)</sub> |
+| HTTP/2 · plain | HTTP/2 · TLS | 🥇 **50667**<br><sub>(106 MiB / 40.0% CPU)</sub> | 🥇 **50667**<br><sub>(106 MiB / 40.0% CPU)</sub> | *Not possible* | *Not possible* | **39100**<br><sub>(129 MiB / 45.5% CPU)</sub> | **39100**<br><sub>(129 MiB / 45.5% CPU)</sub> |
+| HTTP/2 · plain | HTTP/3 · QUIC | 🥇 **26929**<br><sub>(152 MiB / 49.8% CPU)</sub> | 🥇 **26929**<br><sub>(152 MiB / 49.8% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **25808**<br><sub>(146 MiB / 47.4% CPU)</sub> | **25808**<br><sub>(146 MiB / 47.4% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **35378**<br><sub>(118 MiB / 52.6% CPU)</sub> | 🥇 **35378**<br><sub>(118 MiB / 52.6% CPU)</sub> | **14942**<br><sub>(97 MiB / 19.5% CPU)</sub> | **14942**<br><sub>(97 MiB / 19.5% CPU)</sub> | **28932**<br><sub>(121 MiB / 49.9% CPU)</sub> | **28932**<br><sub>(121 MiB / 49.9% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/1 · TLS | 🥇 **26503**<br><sub>(115 MiB / 50.4% CPU)</sub> | 🥇 **26503**<br><sub>(115 MiB / 50.4% CPU)</sub> | *Not possible* | *Not possible* | **22815**<br><sub>(128 MiB / 49.8% CPU)</sub> | **22815**<br><sub>(128 MiB / 49.8% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/2 · plain | 🥇 **59192**<br><sub>(110 MiB / 39.6% CPU)</sub> | 🥇 **59192**<br><sub>(110 MiB / 39.6% CPU)</sub> | *Not possible* | *Not possible* | **38829**<br><sub>(127 MiB / 46.6% CPU)</sub> | **38829**<br><sub>(127 MiB / 46.6% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **47179**<br><sub>(116 MiB / 39.2% CPU)</sub> | 🥇 **47179**<br><sub>(116 MiB / 39.2% CPU)</sub> | *Not possible* | *Not possible* | **33516**<br><sub>(131 MiB / 46.0% CPU)</sub> | **33516**<br><sub>(131 MiB / 46.0% CPU)</sub> |
+| HTTP/2 · TLS | HTTP/3 · QUIC | 🥇 **25377**<br><sub>(142 MiB / 49.8% CPU)</sub> | 🥇 **25377**<br><sub>(142 MiB / 49.8% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **22512**<br><sub>(155 MiB / 46.7% CPU)</sub> | **22512**<br><sub>(155 MiB / 46.7% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **20297**<br><sub>(142 MiB / 50.1% CPU)</sub> | 🥇 **20297**<br><sub>(142 MiB / 50.1% CPU)</sub> | **12455**<br><sub>(103 MiB / 22.6% CPU)</sub> | **15237**<br><sub>(103 MiB / 22.6% CPU)</sub> | **18486**<br><sub>(181 MiB / 50.4% CPU)</sub> | **18486**<br><sub>(181 MiB / 50.4% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/1 · TLS | 🥇 **16283**<br><sub>(152 MiB / 48.1% CPU)</sub> | 🥇 **16283**<br><sub>(152 MiB / 48.1% CPU)</sub> | *Not possible* | *Not possible* | **15599**<br><sub>(191 MiB / 51.9% CPU)</sub> | **15599**<br><sub>(191 MiB / 51.9% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/2 · plain | 🥇 **26636**<br><sub>(142 MiB / 52.8% CPU)</sub> | 🥇 **26636**<br><sub>(142 MiB / 52.8% CPU)</sub> | *Not possible* (no H3→H2) | *Not possible* (no H3→H2) | **23873**<br><sub>(195 MiB / 48.2% CPU)</sub> | **23873**<br><sub>(195 MiB / 48.2% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/2 · TLS | 🥇 **23302**<br><sub>(148 MiB / 51.7% CPU)</sub> | 🥇 **23302**<br><sub>(148 MiB / 51.7% CPU)</sub> | *Not possible* (no H3→H2) | *Not possible* (no H3→H2) | **21221**<br><sub>(193 MiB / 47.8% CPU)</sub> | **21221**<br><sub>(193 MiB / 47.8% CPU)</sub> |
+| HTTP/3 · QUIC | HTTP/3 · QUIC | 🥇 **18687**<br><sub>(147 MiB / 46.7% CPU)</sub> | 🥇 **18687**<br><sub>(147 MiB / 46.7% CPU)</sub> | *Not possible* (no QUIC) | *Not possible* (no QUIC) | **15592**<br><sub>(201 MiB / 47.8% CPU)</sub> | **15592**<br><sub>(201 MiB / 47.8% CPU)</sub> |
 
 ### MITM (TWP only)
 
-Same Client×Origin wires with interception on (`compare-product` [32866706475](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32866706475)). nginx/YARP cannot MITM. **MITM÷Reverse** is the interception tax vs bare reverse on the same arm (same job).
+Same Client×Origin wires with interception on (`compare-product` [32895736984](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32895736984)). nginx/YARP cannot MITM. **MITM÷Reverse** is the interception tax vs bare reverse on the same arm (same job).
 
 | Client | Origin | TWP sustain | TWP peak | MITM÷Reverse |
 |---|---|---:|---:|---:|
-| HTTP/1 · plain | HTTP/1 · plain | 🥇 **29,788**<br><sub>(98 MiB / 51.4% CPU)</sub> | **29,788**<br><sub>(98 MiB / 51.4% CPU)</sub> | **0.81×** |
-| HTTP/1 · plain | HTTP/1 · TLS | 🥇 **24,566**<br><sub>(108 MiB / 51.0% CPU)</sub> | **24,566**<br><sub>(108 MiB / 51.0% CPU)</sub> | **0.85×** |
-| HTTP/1 · plain | HTTP/2 · plain | 🥇 **0**<br><sub>(1088 MiB / 58.9% CPU)</sub> | **5,063**<br><sub>(1088 MiB / 58.9% CPU)</sub> | **0.00×** |
-| HTTP/1 · plain | HTTP/2 · TLS | 🥇 **0**<br><sub>(353 MiB / 51.0% CPU)</sub> | **791**<br><sub>(353 MiB / 51.0% CPU)</sub> | **0.00×** |
-| HTTP/1 · plain | HTTP/3 · QUIC | 🥇 **25,169**<br><sub>(131 MiB / 54.6% CPU)</sub> | **25,169**<br><sub>(131 MiB / 54.6% CPU)</sub> | **1.00×** |
-| HTTP/1 · TLS | HTTP/1 · plain | 🥇 **22,970**<br><sub>(111 MiB / 51.4% CPU)</sub> | **22,970**<br><sub>(111 MiB / 51.4% CPU)</sub> | **0.83×** |
-| HTTP/1 · TLS | HTTP/1 · TLS | 🥇 **19,555**<br><sub>(117 MiB / 49.6% CPU)</sub> | **19,555**<br><sub>(117 MiB / 49.6% CPU)</sub> | **0.82×** |
-| HTTP/1 · TLS | HTTP/2 · plain | 🥇 **0**<br><sub>(303 MiB / 51.9% CPU)</sub> | **848**<br><sub>(303 MiB / 51.9% CPU)</sub> | **0.00×** |
-| HTTP/1 · TLS | HTTP/2 · TLS | 🥇 **0**<br><sub>(257 MiB / 50.8% CPU)</sub> | **456**<br><sub>(257 MiB / 50.8% CPU)</sub> | **0.00×** |
-| HTTP/1 · TLS | HTTP/3 · QUIC | 🥇 **20,452**<br><sub>(143 MiB / 52.6% CPU)</sub> | **20,452**<br><sub>(143 MiB / 52.6% CPU)</sub> | **1.00×** |
-| HTTP/2 · plain | HTTP/1 · plain | 🥇 **40,955**<br><sub>(114 MiB / 53.8% CPU)</sub> | **40,955**<br><sub>(114 MiB / 53.8% CPU)</sub> | **1.04×** |
-| HTTP/2 · plain | HTTP/1 · TLS | 🥇 **32,110**<br><sub>(125 MiB / 52.0% CPU)</sub> | **32,110**<br><sub>(125 MiB / 52.0% CPU)</sub> | **0.98×** |
-| HTTP/2 · plain | HTTP/2 · plain | 🥇 **17,272**<br><sub>(104 MiB / 50.7% CPU)</sub> | **17,272**<br><sub>(104 MiB / 50.7% CPU)</sub> | **0.24×** |
-| HTTP/2 · plain | HTTP/2 · TLS | 🥇 **12,812**<br><sub>(96 MiB / 50.7% CPU)</sub> | **12,812**<br><sub>(96 MiB / 50.7% CPU)</sub> | **0.23×** |
-| HTTP/2 · plain | HTTP/3 · QUIC | 🥇 **29,069**<br><sub>(160 MiB / 51.4% CPU)</sub> | **29,069**<br><sub>(160 MiB / 51.4% CPU)</sub> | **1.02×** |
-| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **38,526**<br><sub>(129 MiB / 53.2% CPU)</sub> | **38,526**<br><sub>(129 MiB / 53.2% CPU)</sub> | **1.02×** |
-| HTTP/2 · TLS | HTTP/1 · TLS | 🥇 **30,925**<br><sub>(129 MiB / 50.0% CPU)</sub> | **30,925**<br><sub>(129 MiB / 50.0% CPU)</sub> | **1.02×** |
-| HTTP/2 · TLS | HTTP/2 · plain | 🥇 **16,628**<br><sub>(105 MiB / 50.8% CPU)</sub> | **16,628**<br><sub>(105 MiB / 50.8% CPU)</sub> | **0.25×** |
-| HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **13,130**<br><sub>(104 MiB / 48.6% CPU)</sub> | **13,130**<br><sub>(104 MiB / 48.6% CPU)</sub> | **0.25×** |
-| HTTP/2 · TLS | HTTP/3 · QUIC | 🥇 **27,641**<br><sub>(156 MiB / 50.9% CPU)</sub> | **27,641**<br><sub>(156 MiB / 50.9% CPU)</sub> | **0.99×** |
-| HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **15,548**<br><sub>(140 MiB / 48.5% CPU)</sub> | **15,548**<br><sub>(140 MiB / 48.5% CPU)</sub> | **0.68×** |
-| HTTP/3 · QUIC | HTTP/1 · TLS | 🥇 **12,697**<br><sub>(164 MiB / 47.1% CPU)</sub> | **12,697**<br><sub>(164 MiB / 47.1% CPU)</sub> | **0.69×** |
-| HTTP/3 · QUIC | HTTP/2 · plain | 🥇 **27,694**<br><sub>(160 MiB / 57.2% CPU)</sub> | **27,694**<br><sub>(160 MiB / 57.2% CPU)</sub> | **0.98×** |
-| HTTP/3 · QUIC | HTTP/2 · TLS | 🥇 **24,728**<br><sub>(160 MiB / 56.1% CPU)</sub> | **24,728**<br><sub>(160 MiB / 56.1% CPU)</sub> | **0.97×** |
-| HTTP/3 · QUIC | HTTP/3 · QUIC | 🥇 **19,045**<br><sub>(161 MiB / 50.1% CPU)</sub> | **19,045**<br><sub>(161 MiB / 50.1% CPU)</sub> | **0.92×** |
-| HTTP/1 · plain (CONNECT) | HTTP/1 · TLS | 🥇 **18,575**<br><sub>(128 MiB / 51.7% CPU)</sub> | **18,575**<br><sub>(128 MiB / 51.7% CPU)</sub> | *n/a* |
+| HTTP/1 · plain | HTTP/1 · plain | 🥇 **26203**<br><sub>(94 MiB / 51.4% CPU)</sub> | **26203**<br><sub>(94 MiB / 51.4% CPU)</sub> | **0.82×** |
+| HTTP/1 · plain | HTTP/1 · TLS | 🥇 **20254**<br><sub>(113 MiB / 50.8% CPU)</sub> | **20254**<br><sub>(113 MiB / 50.8% CPU)</sub> | **0.85×** |
+| HTTP/1 · plain | HTTP/2 · plain | 🥇 **37147**<br><sub>(143 MiB / 52.7% CPU)</sub> | **37147**<br><sub>(143 MiB / 52.7% CPU)</sub> | **0.98×** |
+| HTTP/1 · plain | HTTP/2 · TLS | 🥇 **30122**<br><sub>(142 MiB / 50.9% CPU)</sub> | **30122**<br><sub>(142 MiB / 50.9% CPU)</sub> | **0.99×** |
+| HTTP/1 · plain | HTTP/3 · QUIC | 🥇 **21738**<br><sub>(135 MiB / 53.3% CPU)</sub> | **21738**<br><sub>(135 MiB / 53.3% CPU)</sub> | **0.96×** |
+| HTTP/1 · TLS | HTTP/1 · plain | 🥇 **18302**<br><sub>(112 MiB / 50.9% CPU)</sub> | **18302**<br><sub>(112 MiB / 50.9% CPU)</sub> | **0.78×** |
+| HTTP/1 · TLS | HTTP/1 · TLS | 🥇 **15678**<br><sub>(116 MiB / 49.3% CPU)</sub> | **15678**<br><sub>(116 MiB / 49.3% CPU)</sub> | **0.83×** |
+| HTTP/1 · TLS | HTTP/2 · plain | 🥇 **26138**<br><sub>(160 MiB / 51.5% CPU)</sub> | **26138**<br><sub>(160 MiB / 51.5% CPU)</sub> | **0.98×** |
+| HTTP/1 · TLS | HTTP/2 · TLS | 🥇 **23002**<br><sub>(153 MiB / 50.0% CPU)</sub> | **23002**<br><sub>(153 MiB / 50.0% CPU)</sub> | **0.99×** |
+| HTTP/1 · TLS | HTTP/3 · QUIC | 🥇 **17180**<br><sub>(148 MiB / 52.8% CPU)</sub> | **17180**<br><sub>(148 MiB / 52.8% CPU)</sub> | **0.99×** |
+| HTTP/2 · plain | HTTP/1 · plain | 🥇 **36148**<br><sub>(110 MiB / 53.8% CPU)</sub> | **36148**<br><sub>(110 MiB / 53.8% CPU)</sub> | **0.99×** |
+| HTTP/2 · plain | HTTP/1 · TLS | 🥇 **27172**<br><sub>(117 MiB / 52.0% CPU)</sub> | **27172**<br><sub>(117 MiB / 52.0% CPU)</sub> | **0.98×** |
+| HTTP/2 · plain | HTTP/2 · plain | 🥇 **15361**<br><sub>(95 MiB / 52.5% CPU)</sub> | **15361**<br><sub>(95 MiB / 52.5% CPU)</sub> | **0.24×** |
+| HTTP/2 · plain | HTTP/2 · TLS | 🥇 **10112**<br><sub>(99 MiB / 48.7% CPU)</sub> | **10112**<br><sub>(99 MiB / 48.7% CPU)</sub> | **0.20×** |
+| HTTP/2 · plain | HTTP/3 · QUIC | 🥇 **26753**<br><sub>(134 MiB / 50.2% CPU)</sub> | **26753**<br><sub>(134 MiB / 50.2% CPU)</sub> | **0.99×** |
+| HTTP/2 · TLS | HTTP/1 · plain | 🥇 **33977**<br><sub>(121 MiB / 53.1% CPU)</sub> | **33977**<br><sub>(121 MiB / 53.1% CPU)</sub> | **0.96×** |
+| HTTP/2 · TLS | HTTP/1 · TLS | 🥇 **25979**<br><sub>(117 MiB / 51.7% CPU)</sub> | **25979**<br><sub>(117 MiB / 51.7% CPU)</sub> | **0.98×** |
+| HTTP/2 · TLS | HTTP/2 · plain | 🥇 **14391**<br><sub>(108 MiB / 50.3% CPU)</sub> | **14391**<br><sub>(108 MiB / 50.3% CPU)</sub> | **0.24×** |
+| HTTP/2 · TLS | HTTP/2 · TLS | 🥇 **9849**<br><sub>(108 MiB / 49.1% CPU)</sub> | **9849**<br><sub>(108 MiB / 49.1% CPU)</sub> | **0.21×** |
+| HTTP/2 · TLS | HTTP/3 · QUIC | 🥇 **24649**<br><sub>(147 MiB / 49.5% CPU)</sub> | **24649**<br><sub>(147 MiB / 49.5% CPU)</sub> | **0.97×** |
+| HTTP/3 · QUIC | HTTP/1 · plain | 🥇 **12928**<br><sub>(136 MiB / 47.6% CPU)</sub> | **12928**<br><sub>(136 MiB / 47.6% CPU)</sub> | **0.64×** |
+| HTTP/3 · QUIC | HTTP/1 · TLS | 🥇 **9750**<br><sub>(156 MiB / 47.3% CPU)</sub> | **9750**<br><sub>(156 MiB / 47.3% CPU)</sub> | **0.60×** |
+| HTTP/3 · QUIC | HTTP/2 · plain | 🥇 **24742**<br><sub>(155 MiB / 55.9% CPU)</sub> | **24742**<br><sub>(155 MiB / 55.9% CPU)</sub> | **0.93×** |
+| HTTP/3 · QUIC | HTTP/2 · TLS | 🥇 **20714**<br><sub>(145 MiB / 53.4% CPU)</sub> | **20714**<br><sub>(145 MiB / 53.4% CPU)</sub> | **0.89×** |
+| HTTP/3 · QUIC | HTTP/3 · QUIC | 🥇 **17222**<br><sub>(152 MiB / 48.1% CPU)</sub> | **17222**<br><sub>(152 MiB / 48.1% CPU)</sub> | **0.92×** |
+| HTTP/1 · plain (CONNECT) | HTTP/1 · TLS | 🥇 **14553**<br><sub>(130 MiB / 51.8% CPU)</sub> | **14553**<br><sub>(130 MiB / 51.8% CPU)</sub> | *n/a* |
 
 ### Tiny JSON reverse is nginx’s best case on Linux
 
