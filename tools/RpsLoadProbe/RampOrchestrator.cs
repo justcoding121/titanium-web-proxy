@@ -947,7 +947,7 @@ internal static class RampOrchestrator
             // H2 TLS client
             new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
             new("yarp-reverse-http2", ProbeMode.YarpReverseHttp2, null),
-            new("twp-mitm-http2-to-http1", ProbeMode.MitmHttp2ToHttp1, null),
+            new("twp-reverse-http2-to-https-http1", ProbeMode.MitmHttp2ToHttp1, null),
             new("yarp-reverse-http2-to-https-http1", ProbeMode.YarpReverseHttp2ToHttpsHttp1, null),
             new("twp-reverse-http2-to-h2c", ProbeMode.ReverseHttp2ToH2c, null),
             new("yarp-reverse-http2-to-h2c", ProbeMode.YarpReverseHttp2ToH2c, null),
@@ -958,7 +958,7 @@ internal static class RampOrchestrator
             // H3 QUIC client
             new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
             new("yarp-reverse-http3-cleartext", ProbeMode.YarpReverseHttp3Cleartext, null),
-            new("twp-mitm-http3-to-http1", ProbeMode.MitmHttp3ToHttp1, null),
+            new("twp-reverse-http3-to-https-http1", ProbeMode.MitmHttp3ToHttp1, null),
             new("yarp-reverse-http3-to-https-http1", ProbeMode.YarpReverseHttp3ToHttpsHttp1, null),
             new("twp-reverse-http3-to-h2c", ProbeMode.ReverseHttp3ToH2c, null),
             new("yarp-reverse-http3-to-h2c", ProbeMode.YarpReverseHttp3ToH2c, null),
