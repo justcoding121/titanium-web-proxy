@@ -6,6 +6,29 @@ Published numbers and external control-arm comparisons live only on the wiki [Pe
 
 Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workflow_dispatch`, both `ubuntu-latest` and `windows-latest`).
 
+## Full 5×5 reverse matrix
+
+Client × origin wire cartesian: **H1·plain, H1·TLS, H2·plain (h2c), H2·TLS, H3·QUIC** (25 cells). Each cell has a TWP reverse arm and a YARP peer.
+
+```powershell
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-matrix
+```
+
+New bridge arms that complete the grid (beyond the historical subset):
+
+| Arm | Topology |
+|---|---|
+| `reverse-http3-to-h2c` | H3 → prior-knowledge h2c |
+| `reverse-http1-to-h2c` | H1 TLS → prior-knowledge h2c |
+| `reverse-http1-plain-to-h2c` | H1 plain → prior-knowledge h2c |
+| `reverse-http1-plain-to-http2` | H1 plain → HTTPS h2 |
+| `reverse-http1-plain-to-http3` | H1 plain → QUIC/h3 |
+| `reverse-h2c-to-https` | h2c → HTTPS HTTP/1 |
+
+YARP dual-crypto peers: `yarp-reverse-http1-tls-to-https`, `yarp-reverse-http2-to-https-http1`, `yarp-reverse-http3-to-https-http1`.
+
+**Not supported:** `Upgrade: h2c`. Explicit-proxy inbound h2c is not implemented. Outbound and inbound prior-knowledge h2c on transparent reverse are supported. H3 is always QUIC/TLS for TWP (no cleartext H3 client or origin).
+
 ## Same-protocol matrix
 
 ```powershell
@@ -20,8 +43,6 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-same
 | `reverse-http2` | H2 TLS MITM → HTTPS H2 |
 | `reverse-http3` | H3 QUIC → H3 origin (dual-listen reverse) |
 | `yarp-reverse-http3-to-http3` | Managed reverse peer H3 → H3 |
-
-**Not supported:** `Upgrade: h2c`. Explicit-proxy inbound h2c is not implemented. Outbound and inbound prior-knowledge h2c on transparent reverse are supported. H3 is always QUIC/TLS for TWP.
 
 ## Fair terminate compare
 
@@ -81,13 +102,13 @@ Lossy link is a userspace shim (not kernel netem): TCP gets per-buffer delay + o
 
 CLI knobs (also usable on single arms): `--method`, `--response-bytes`, `--request-bytes`, `--no-keepalive`, `--delay-ms`, `--loss-percent`.
 
-## MITM matrix (dual-crypto)
+## MITM / inspectable matrix (5×5 + CONNECT)
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-mitm
 ```
 
-Explicit H1 MITM, transparent H2/H3 MITM, H2→H1 / H3→H1 MITM to HTTPS origins, and dual-crypto bridges (H1↔H2↔H3).
+All 25 Client×Origin wire pairs (TWP reverse / inspectable arms) plus explicit `https-mitm` CONNECT. nginx/YARP cannot MITM.
 
 ## Bridge matrix (cross-version)
 
@@ -101,15 +122,21 @@ pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-bridges
 | `reverse-http2-to-h2c` | H2 TLS → prior-knowledge h2c → cleartext H2 |
 | `reverse-h2c-to-h1` | h2c → H2→H1 → cleartext H1 |
 | `reverse-h2c-to-h2c` | h2c → cleartext H2 |
+| `reverse-h2c-to-https` | h2c → H2→H1 → HTTPS H1 |
 | `reverse-h2c-to-h3` | h2c → H2→H3 → QUIC/h3 |
 | `reverse-http11-to-http2` | H1 TLS → H1→H2 → HTTPS h2 |
+| `reverse-http1-to-h2c` | H1 TLS → prior-knowledge h2c |
+| `reverse-http1-plain-to-h2c` | H1 plain → prior-knowledge h2c |
+| `reverse-http1-plain-to-http2` | H1 plain → HTTPS h2 |
+| `reverse-http1-plain-to-http3` | H1 plain → QUIC/h3 |
 | `reverse-http1-to-http3` | H1 TLS → H1→H3 → QUIC/h3 |
 | `reverse-http2-to-http3` | H2 TLS → H2→H3 → QUIC/h3 |
 | `reverse-http3-cleartext` | H3 → cleartext H1 |
 | `nginx-reverse-http3-cleartext` | Native reverse H3 → cleartext H1 (`http_v3_module`) |
+| `reverse-http3-to-h2c` | H3 → prior-knowledge h2c |
 | `reverse-http3-to-http2` | H3 → H3→H2 → HTTPS h2 |
 
-Also: `reverse-h2c` (h2c → HTTPS h2) in `compare-same`.
+Also: `reverse-h2c` (h2c → HTTPS h2) in `compare-same`. Full TWP+YARP 5×5: `compare-matrix`.
 
 Other modes: `compare`, `compare-tls`, `compare-http2`, `explicit-pool-sweep`. See `--help`.
 

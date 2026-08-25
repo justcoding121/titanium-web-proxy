@@ -184,16 +184,25 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     private static OriginRecipe OriginRecipeFor(ProbeMode mode) => mode switch
     {
         ProbeMode.ReverseHttp2ToH2c or ProbeMode.ReverseH2cToH2c
-            or ProbeMode.YarpReverseHttp2ToH2c or ProbeMode.YarpReverseH2cToH2c => OriginRecipe.H2c,
+            or ProbeMode.YarpReverseHttp2ToH2c or ProbeMode.YarpReverseH2cToH2c
+            or ProbeMode.ReverseHttp3ToH2c or ProbeMode.YarpReverseHttp3ToH2c
+            or ProbeMode.ReverseHttp1ToH2c or ProbeMode.YarpReverseHttp1ToH2c
+            or ProbeMode.ReverseHttp1PlainToH2c or ProbeMode.YarpReverseHttp1PlainToH2c => OriginRecipe.H2c,
         ProbeMode.HttpsMitm or ProbeMode.ReverseHttp1Mitm
-            or ProbeMode.ReverseHttp1ToHttps or ProbeMode.YarpReverseHttp1ToHttps => OriginRecipe.Https,
-        ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1 => OriginRecipe.HttpsHttp1Only,
+            or ProbeMode.ReverseHttp1ToHttps or ProbeMode.YarpReverseHttp1ToHttps
+            or ProbeMode.YarpReverseHttp1TlsToHttps => OriginRecipe.Https,
+        ProbeMode.MitmHttp2ToHttp1 or ProbeMode.MitmHttp3ToHttp1
+            or ProbeMode.ReverseH2cToHttps or ProbeMode.YarpReverseH2cToHttps
+            or ProbeMode.YarpReverseHttp2ToHttpsHttp1 or ProbeMode.YarpReverseHttp3ToHttpsHttp1 =>
+            OriginRecipe.HttpsHttp1Only,
         ProbeMode.ExplicitHttp1Multi or ProbeMode.ExplicitHttp2Multi => OriginRecipe.HttpsMulti,
         ProbeMode.ReverseHttp2 or ProbeMode.ReverseH2c or ProbeMode.YarpReverseH2c
             or ProbeMode.ReverseHttp11ToHttp2 or ProbeMode.YarpReverseHttp11ToHttp2
+            or ProbeMode.ReverseHttp1PlainToHttp2 or ProbeMode.YarpReverseHttp1PlainToHttp2
             or ProbeMode.ReverseHttp3ToHttp2 or ProbeMode.YarpReverseHttp3ToHttp2
             or ProbeMode.YarpReverseHttp2ToHttps => OriginRecipe.HttpsOnly,
         ProbeMode.ReverseHttp3 or ProbeMode.ReverseHttp1ToHttp3 or ProbeMode.YarpReverseHttp1ToHttp3
+            or ProbeMode.ReverseHttp1PlainToHttp3 or ProbeMode.YarpReverseHttp1PlainToHttp3
             or ProbeMode.ReverseHttp2ToHttp3 or ProbeMode.YarpReverseHttp2ToHttp3
             or ProbeMode.ReverseH2cToH3 or ProbeMode.YarpReverseH2cToH3
             or ProbeMode.YarpReverseHttp3ToHttp3 => OriginRecipe.Quic,
