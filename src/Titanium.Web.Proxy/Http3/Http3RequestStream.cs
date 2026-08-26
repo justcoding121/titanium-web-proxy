@@ -359,7 +359,9 @@ internal static class Http3RequestStream
 
                     await onBeforeResponse(sessionArgs);
 
-                    var responseUnchanged = response.Headers.MutationCount == respHeaderBaseline
+                    var responseUnchanged = MitmFastPathHelper.AllowsCompressedRelay(
+                                                    respHeaderBaseline, response.Headers.MutationCount,
+                                                    response.Headers)
                                             && response.StatusCode == respStatusBaseline
                                             && response.IsBodyRead == respBodyRead
                                             && response.BodyAvailable == respBodyAvailable
@@ -368,6 +370,16 @@ internal static class Http3RequestStream
                     if (responseUnchanged && fwd.PreencodedQpackHeaders != null
                                           && string.IsNullOrEmpty(server.ViaHeaderPseudonym))
                     {
+                        var qpackHeaders = fwd.PreencodedQpackHeaders;
+                        if (MitmFastPathHelper.IsProbeOnlyMutation(
+                                respHeaderBaseline, response.Headers.MutationCount, response.Headers))
+                        {
+                            var probeVal = response.Headers.GetHeaderValueOrNull(
+                                               MitmFastPathHelper.ProbeHeaderName) ?? "1";
+                            qpackHeaders = QpackEncoder.AppendLiteralHeader(qpackHeaders,
+                                MitmFastPathHelper.ProbeHeaderName, probeVal);
+                        }
+
                         var body = fwd.PreencodedBody;
                         var bodyLen = fwd.PreencodedBodyLength > 0
                             ? fwd.PreencodedBodyLength
@@ -377,7 +389,7 @@ internal static class Http3RequestStream
                             : ReadOnlyMemory<byte>.Empty;
                         try
                         {
-                            await SendPreencodedResponseAsync(stream, fwd.PreencodedQpackHeaders,
+                            await SendPreencodedResponseAsync(stream, qpackHeaders,
                                 bodyMem, fwd.PreencodedStreamBodyWriter, cancellationToken);
                         }
                         finally
@@ -720,7 +732,8 @@ internal static class Http3RequestStream
             return false;
         if (method is not ("GET" or "HEAD" or "DELETE" or "OPTIONS"))
             return false;
-        if (request.Headers.MutationCount != requestHeaderMutationBaseline)
+        if (!MitmFastPathHelper.AllowsCompressedRelay(
+                requestHeaderMutationBaseline, request.Headers.MutationCount, request.Headers))
             return false;
         if (!string.Equals(request.Method, capturedRequestMethod, StringComparison.Ordinal))
             return false;

@@ -1487,13 +1487,23 @@ namespace Titanium.Web.Proxy.Http2
                                     && relayState.CapturedCompressedHeaders != null
                                     && !request.IsBodyRead
                                     && !request.BodyAvailable
-                                    && request.Headers.MutationCount == relayState.HeadersMutationBaseline
+                                    && MitmFastPathHelper.AllowsCompressedRelay(
+                                        relayState.HeadersMutationBaseline, request.Headers.MutationCount,
+                                        request.Headers)
                                     && string.Equals(request.Method, relayState.CapturedMethod, StringComparison.Ordinal)
                                     && request.RequestUriString8.Equals(relayState.CapturedPath)
                                     && request.Authority.Equals(relayState.CapturedAuthority))
                                 {
                                     var captured = relayState.CapturedCompressedHeaders;
-                                    await RelayCompressedHeaderBlockAsync(hbStreamId, captured, endStreamFlag);
+                                    var blockToRelay = captured;
+                                    if (MitmFastPathHelper.IsProbeOnlyMutation(
+                                            relayState.HeadersMutationBaseline, request.Headers.MutationCount,
+                                            request.Headers))
+                                    {
+                                        blockToRelay = AppendProbeLiteralToStaticHpackBlock(captured, request.Headers);
+                                    }
+
+                                    await RelayCompressedHeaderBlockAsync(hbStreamId, blockToRelay, endStreamFlag);
                                     relayState.EnableRequestDataCompressedRelay();
                                 }
                                 else
@@ -1706,11 +1716,22 @@ namespace Titanium.Web.Proxy.Http2
                                 && connectionState.Streams.TryGetValue(hbStreamId, out var respRelay)
                                 && respRelay.CapturedCompressedHeaders != null
                                 && !finalResponse.IsBodyRead
-                                && finalResponse.Headers.MutationCount == respRelay.HeadersMutationBaseline
+                                && MitmFastPathHelper.AllowsCompressedRelay(
+                                    respRelay.HeadersMutationBaseline, finalResponse.Headers.MutationCount,
+                                    finalResponse.Headers)
                                 && finalResponse.StatusCode == respRelay.CapturedStatusCode)
                             {
                                 var captured = respRelay.CapturedCompressedHeaders;
-                                await RelayCompressedHeaderBlockAsync(hbStreamId, captured, endStreamFlag);
+                                var blockToRelay = captured;
+                                if (MitmFastPathHelper.IsProbeOnlyMutation(
+                                        respRelay.HeadersMutationBaseline, finalResponse.Headers.MutationCount,
+                                        finalResponse.Headers))
+                                {
+                                    blockToRelay = AppendProbeLiteralToStaticHpackBlock(captured,
+                                        finalResponse.Headers);
+                                }
+
+                                await RelayCompressedHeaderBlockAsync(hbStreamId, blockToRelay, endStreamFlag);
                                 respRelay.EnableResponseDataCompressedRelay();
                             }
                             else
@@ -4164,8 +4185,57 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 writer.Flush();
-                return GetMemoryStreamMemory(ms).ToArray();
+            return GetMemoryStreamMemory(ms).ToArray();
             }
+        }
+
+        /// <summary>
+        ///     Appends <c>x-twp-rps-probe</c> as a literal without indexing on a HEADER_TABLE_SIZE=0 block
+        ///     (MITM Full probe-only compressed relay — no Decoder round-trip).
+        /// </summary>
+        private static byte[] AppendProbeLiteralToStaticHpackBlock(byte[] block, HeaderCollection headers)
+        {
+            var probeVal = headers.GetHeaderValueOrNull(MitmFastPathHelper.ProbeHeaderName) ?? "1";
+            var nameBytes = System.Text.Encoding.ASCII.GetBytes(MitmFastPathHelper.ProbeHeaderName);
+            var valueBytes = System.Text.Encoding.ASCII.GetBytes(probeVal);
+            var result = new byte[block.Length + nameBytes.Length + valueBytes.Length + 8];
+            Buffer.BlockCopy(block, 0, result, 0, block.Length);
+            var offset = block.Length;
+            result[offset++] = 0x00; // Literal without indexing, new name (name index 0)
+            offset += WriteHpackStringLiteral(result.AsSpan(offset), nameBytes);
+            offset += WriteHpackStringLiteral(result.AsSpan(offset), valueBytes);
+            if (offset != result.Length)
+                Array.Resize(ref result, offset);
+            return result;
+        }
+
+        private static int WriteHpackStringLiteral(Span<byte> dest, ReadOnlySpan<byte> bytes)
+        {
+            var written = WriteHpackPrefixedInt(dest, 0x00, 7, (ulong)bytes.Length);
+            bytes.CopyTo(dest.Slice(written));
+            return written + bytes.Length;
+        }
+
+        private static int WriteHpackPrefixedInt(Span<byte> dest, byte patternByte, int prefixBits, ulong value)
+        {
+            var mask = (uint)((1 << prefixBits) - 1);
+            if (value < mask)
+            {
+                dest[0] = (byte)(patternByte | (byte)value);
+                return 1;
+            }
+
+            dest[0] = (byte)(patternByte | (byte)mask);
+            var written = 1;
+            value -= mask;
+            while (value >= 0x80)
+            {
+                dest[written++] = (byte)((value & 0x7F) | 0x80);
+                value >>= 7;
+            }
+
+            dest[written++] = (byte)value;
+            return written;
         }
 
         internal static async Task SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.

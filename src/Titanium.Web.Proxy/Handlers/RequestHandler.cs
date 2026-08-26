@@ -465,7 +465,8 @@ public partial class ProxyServer
                                     EnableWinAuth, GetCustomUpStreamProxyFunc != null)
                                 && !request.IsBodyRead
                                 && !request.BodyAvailable
-                                && request.Headers.MutationCount == requestHeaderMutationBaseline
+                                && MitmFastPathHelper.AllowsCompressedRelay(
+                                    requestHeaderMutationBaseline, request.Headers.MutationCount, request.Headers)
                                 && string.Equals(request.Method, capturedRequestMethod, StringComparison.Ordinal)
                                 && request.RequestUriString8.Equals(capturedRequestPath)
                                 && request.Authority.Equals(capturedRequestAuthority)
