@@ -502,17 +502,27 @@ public class HeaderCollection : IEnumerable<HttpHeader>
         }
 
         if (headers.TryGetValue(headerName.String, out var header))
+        {
+            MutationCount++;
             header.SetValue(value);
+        }
         else
-            headers.Add(headerName.String, new HttpHeader(headerName, value));
+        {
+            AddHeader(new HttpHeader(headerName, value));
+        }
     }
 
     internal void SetOrAddHeaderValue(KnownHeader headerName, KnownHeader value)
     {
         if (headers.TryGetValue(headerName.String, out var header))
+        {
+            MutationCount++;
             header.SetValue(value);
+        }
         else
-            headers.Add(headerName.String, new HttpHeader(headerName, value));
+        {
+            AddHeader(new HttpHeader(headerName, value));
+        }
     }
 
     /// <summary>

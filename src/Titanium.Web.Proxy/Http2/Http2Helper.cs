@@ -1320,31 +1320,13 @@ namespace Titanium.Web.Proxy.Http2
                         bool bridgeOwnsRequestPrep = output is NullOriginStream
                             || viaOwnerState?.IsExternalBridge == true;
 
-                        if (!request.CancelRequest && !bridgeOwnsRequestPrep)
-                        {
-                            // The h2-to-h1 / h2-to-h3 bridges own request preparation before they start
-                            // their background origin operation; doing it here afterward races
-                            // with that operation and can mutate headers while they are sent.
-                            prepareRequestHeaders?.Invoke(request.Headers);
-                            if (!sessionArgs.IsFastPath && !sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
-                                !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym))
-                            {
-                                var pseudonym = sessionArgs.Server.ViaHeaderPseudonym;
-                                if (ProxyServer.HasLoopedVia(request.Headers, pseudonym))
-                                {
-                                    sessionArgs.GenericResponse(string.Empty, (HttpStatusCode)508);
-                                }
-                                else
-                                {
-                                    ProxyServer.AddViaHeader(request.Headers, request.HttpVersion, pseudonym);
-                                }
-                            }
-                        }
-
                         // Did the consumer answer this request synthetically during BeforeRequest (Ok,
                         // GenericResponse, Redirect, buffered Respond, or RespondStreaming - all funnel
                         // through Respond(), which is the single source of truth for "short-circuit this
                         // request" and is what HTTP/1.x's RequestHandler already keys off of)?
+                        // PrepareRequestHeaders / Via run only on the re-encode forward path below —
+                        // applying them before the unchanged-relay check would rewrite Accept-Encoding
+                        // (MutationCount) and either block relay or diverge from the compressed block.
                         if (sessionArgs.HttpClient.Request.CancelRequest)
                         {
                             // do not forward the request upstream; answer the client directly. Run this in
@@ -1460,6 +1442,8 @@ namespace Titanium.Web.Proxy.Http2
                                         BindOriginForHttp2Stream(sessionArgs, originConnection);
                                     ApplyCleartextOriginScheme(request, originConnection,
                                         sessionArgs.ClientConnection);
+                                    if (!bridgeOwnsRequestPrep)
+                                        prepareRequestHeaders?.Invoke(request.Headers);
                                     // Encode HPACK under the ordered dispatch chain and queue copied wire
                                     // bytes without awaiting origin socket I/O.
                                     QueueSendHeaderTowardServer(connectionState, outputWriteLock,
@@ -1477,10 +1461,19 @@ namespace Titanium.Web.Proxy.Http2
                                     sessionArgs.ClientConnection);
 
                                 // True MITM noop-safe: relay the original compressed HEADERS when handlers
-                                // did not mutate method/path/authority/headers (avoids HPACK re-encode).
+                                // did not mutate method/path/authority/headers or buffer/replace the body
+                                // (GetRequestBody sets IsBodyRead and would leave origin without DATA).
+                                // Skip relay when Via would be injected (explicit MITM) — that header is
+                                // not in the captured compressed block.
+                                var wouldInjectVia = !sessionArgs.IsFastPath && !sessionArgs.IsTransparent
+                                    && !sessionArgs.IsSocks
+                                    && !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym);
                                 if (canCompressedRelayTopology
+                                    && !wouldInjectVia
                                     && connectionState.Streams.TryGetValue(hbStreamId, out var relayState)
                                     && relayState.CapturedCompressedHeaders != null
+                                    && !request.IsBodyRead
+                                    && !request.BodyAvailable
                                     && request.Headers.MutationCount == relayState.HeadersMutationBaseline
                                     && string.Equals(request.Method, relayState.CapturedMethod, StringComparison.Ordinal)
                                     && request.RequestUriString8.Equals(relayState.CapturedPath)
@@ -1492,11 +1485,59 @@ namespace Titanium.Web.Proxy.Http2
                                 }
                                 else
                                 {
-                                    if (connectionState.Streams.TryGetValue(hbStreamId, out var clearCapture))
-                                        clearCapture.CapturedCompressedHeaders = null;
-                                    QueueSendHeaderTowardServer(connectionState, outputWriteLock,
-                                        remoteSettings, dispatchFrameHeader, dispatchFrameHeaderBuffer, request,
-                                        endStreamFlag, output, isPromise);
+                                    if (!bridgeOwnsRequestPrep)
+                                    {
+                                        // The h2-to-h1 / h2-to-h3 bridges own request preparation before they
+                                        // start their background origin operation; doing it here afterward
+                                        // races with that operation and can mutate headers while they are sent.
+                                        prepareRequestHeaders?.Invoke(request.Headers);
+                                        if (wouldInjectVia)
+                                        {
+                                            var pseudonym = sessionArgs.Server.ViaHeaderPseudonym!;
+                                            if (ProxyServer.HasLoopedVia(request.Headers, pseudonym))
+                                            {
+                                                sessionArgs.GenericResponse(string.Empty, (HttpStatusCode)508);
+                                            }
+                                            else
+                                            {
+                                                ProxyServer.AddViaHeader(request.Headers, request.HttpVersion,
+                                                    pseudonym);
+                                            }
+                                        }
+                                    }
+
+                                    if (sessionArgs.HttpClient.Request.CancelRequest)
+                                    {
+                                        syntheticStreams.TryAdd(hbStreamId, 0);
+                                        connectionState.Streams.TryGetValue(hbStreamId, out var loopStreamState);
+                                        var linkedCts508 = loopStreamState != null
+                                            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
+                                                loopStreamState.Cancellation.Token)
+                                            : null;
+                                        var loopToken = linkedCts508?.Token ?? cancellationToken;
+                                        var synthTask508 = EmitSyntheticResponseAsync(sessionArgs, hbStreamId,
+                                                connectionState, input, loopToken, onAfterResponse, logger)
+                                            .ContinueWith(t =>
+                                            {
+                                                linkedCts508?.Dispose();
+                                                if (t.IsFaulted)
+                                                {
+                                                    ReportException(logger, new ProxyHttpException(
+                                                        "HTTP/2 synthetic response failed",
+                                                        t.Exception.GetBaseException(), sessionArgs));
+                                                }
+                                            }, TaskScheduler.Default);
+                                        if (loopStreamState != null) loopStreamState.SyntheticTask = synthTask508;
+                                        pendingSynthetics.Track(synthTask508);
+                                    }
+                                    else
+                                    {
+                                        if (connectionState.Streams.TryGetValue(hbStreamId, out var clearCapture))
+                                            clearCapture.CapturedCompressedHeaders = null;
+                                        QueueSendHeaderTowardServer(connectionState, outputWriteLock,
+                                            remoteSettings, dispatchFrameHeader, dispatchFrameHeaderBuffer, request,
+                                            endStreamFlag, output, isPromise);
+                                    }
                                 }
                             }
                         }
@@ -1646,10 +1687,12 @@ namespace Titanium.Web.Proxy.Http2
                             }
 
                             // True MITM noop-safe: relay original compressed response HEADERS when unchanged.
+                            // GetResponseBody / SetResponseBody set IsBodyRead/BodyAvailable — must re-encode.
                             if (canCompressedRelayTopology
                                 && ReferenceEquals(finalResponse, response)
                                 && connectionState.Streams.TryGetValue(hbStreamId, out var respRelay)
                                 && respRelay.CapturedCompressedHeaders != null
+                                && !finalResponse.IsBodyRead
                                 && finalResponse.Headers.MutationCount == respRelay.HeadersMutationBaseline
                                 && finalResponse.StatusCode == respRelay.CapturedStatusCode)
                             {

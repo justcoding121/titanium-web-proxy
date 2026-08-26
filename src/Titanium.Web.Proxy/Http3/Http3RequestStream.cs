@@ -249,6 +249,8 @@ internal static class Http3RequestStream
                 // 6. Fire BeforeRequest (stamp timing milestone just before).
                 var requestHeaderMutationBaseline = request.Headers.MutationCount;
                 var capturedRequestMethod = request.Method;
+                var capturedRequestPath = request.RequestUriString8;
+                var capturedRequestAuthority = request.Authority;
                 sessionArgs.Timing?.MarkRequestHeadersReceived();
                 try
                 {
@@ -270,7 +272,7 @@ internal static class Http3RequestStream
                 // dirtied MutationCount and defeat the lite finish.
                 var mitmUnchangedH3H1 = TryMitmUnchangedH3ToH1Lite(
                     sessionArgs, authArgs, request, requestHeaderMutationBaseline,
-                    capturedRequestMethod, method);
+                    capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
 
                 if (!mitmUnchangedH3H1 && !sessionArgs.IsFastPath
                                        && !string.IsNullOrEmpty(server.ViaHeaderPseudonym))
@@ -704,6 +706,8 @@ internal static class Http3RequestStream
         Request request,
         int requestHeaderMutationBaseline,
         string? capturedRequestMethod,
+        ByteString capturedRequestPath,
+        ByteString capturedRequestAuthority,
         string method)
     {
         if (sessionArgs.IsFastPath)
@@ -712,13 +716,17 @@ internal static class Http3RequestStream
             return false;
         if (request.CancelRequest || sessionArgs.HttpClient.Response.Locked)
             return false;
-        if (request.IsBodyRead)
+        if (request.IsBodyRead || request.BodyAvailable)
             return false;
         if (method is not ("GET" or "HEAD" or "DELETE" or "OPTIONS"))
             return false;
         if (request.Headers.MutationCount != requestHeaderMutationBaseline)
             return false;
-        return string.Equals(request.Method, capturedRequestMethod, StringComparison.Ordinal);
+        if (!string.Equals(request.Method, capturedRequestMethod, StringComparison.Ordinal))
+            return false;
+        if (!request.RequestUriString8.Equals(capturedRequestPath))
+            return false;
+        return request.Authority.Equals(capturedRequestAuthority);
     }
 
     /// <summary>

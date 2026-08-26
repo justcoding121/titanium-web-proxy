@@ -324,6 +324,9 @@ public partial class ProxyServer
                         args.IsFastPath = fastPath;
 
                         var requestHeaderMutationBaseline = request.Headers.MutationCount;
+                        var capturedRequestMethod = request.Method;
+                        var capturedRequestPath = request.RequestUriString8;
+                        var capturedRequestAuthority = request.Authority;
 
                         // If user requested interception do it
                         try
@@ -460,7 +463,12 @@ public partial class ProxyServer
                                 && endPoint is TransparentBaseProxyEndPoint mitmTerminateEp
                                 && CanUseH1TerminateLite(endPoint, request, Enable100ContinueBehaviour,
                                     EnableWinAuth, GetCustomUpStreamProxyFunc != null)
+                                && !request.IsBodyRead
+                                && !request.BodyAvailable
                                 && request.Headers.MutationCount == requestHeaderMutationBaseline
+                                && string.Equals(request.Method, capturedRequestMethod, StringComparison.Ordinal)
+                                && request.RequestUriString8.Equals(capturedRequestPath)
+                                && request.Authority.Equals(capturedRequestAuthority)
                                 && !args.HttpClient.Response.Locked)
                             {
                                 var keepClient = await ForwardH1TerminateSessionLiteAsync(
