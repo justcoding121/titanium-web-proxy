@@ -1,3 +1,4 @@
+using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -137,5 +138,56 @@ public class MitmCompressedRelayHelperTests
 
         Assert.IsFalse(MitmCompressedRelayHelper.AllowsCompressedRelay(
             baselineCount, headers, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out _));
+    }
+
+    [TestMethod]
+    public void AppendFourUniqueHeaders_AllowsRelay()
+    {
+        var before = new HeaderCollection();
+        before.AddHeader("accept", "*/*");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
+
+        var after = new HeaderCollection();
+        after.AddHeader("accept", "*/*");
+        for (var i = 0; i < 4; i++)
+            after.AddHeader($"X-H{i}", "v");
+
+        Assert.IsTrue(MitmCompressedRelayHelper.AllowsCompressedRelay(
+            baseline, after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out var added));
+        Assert.AreEqual(4, added.Count);
+    }
+
+    [TestMethod]
+    public void AddedHeaderBuffer_ContainsName_IgnoreCase()
+    {
+        var before = new HeaderCollection();
+        before.AddHeader("accept", "*/*");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
+
+        var after = new HeaderCollection();
+        after.AddHeader("accept", "*/*");
+        after.AddHeader("Via", "3.0 proxy");
+
+        Assert.IsTrue(MitmCompressedRelayHelper.AllowsCompressedRelay(
+            baseline, after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out var added));
+        Assert.IsTrue(added.ContainsName("via"));
+        Assert.IsFalse(added.ContainsName("accept"));
+    }
+
+    [TestMethod]
+    public void NonUniqueHeadersAtCapture_UnchangedMutationCount_AllowsRelay()
+    {
+        var before = new HeaderCollection();
+        before.AddHeader("set-cookie", "a=1");
+        before.AddHeader("set-cookie", "b=2");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
+
+        var after = new HeaderCollection();
+        after.AddHeader("set-cookie", "a=1");
+        after.AddHeader("set-cookie", "b=2");
+
+        Assert.IsTrue(baseline.TryDiffAppendOnly(
+            after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out var added));
+        Assert.AreEqual(0, added.Count);
     }
 }
