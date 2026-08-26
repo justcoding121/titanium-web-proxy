@@ -590,7 +590,7 @@ public partial class ProxyServer
             // docs promise it for cleartext sessions, not only prior-knowledge h2c.
             if (!isHttps && !endPoint.DecryptSsl && !string.IsNullOrEmpty(endPoint.ForwardHost))
             {
-                var seededHost = endPoint.ForwardHost!;
+                var seededHost = endPoint.ForwardHost;
                 var seededPort = endPoint.ForwardPort ?? port;
                 var httpArgs = new BeforeHttpAuthenticateEventArgs(this, clientConnection, cancellationTokenSource,
                     seededHost, seededPort);
@@ -617,7 +617,7 @@ public partial class ProxyServer
                     }
 
                     var negotiationSession =
-                        new SessionEventArgs(this, endPoint, clientStream!, null, cancellationTokenSource);
+                        new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
                     var negotiation = await ResolveHttp2ForClientAsync(negotiationSession,
                         clientOffersHttp2: false, remoteHostName, remotePort, http2ConnectHost, http2ConnectPort,
                         httpArgs.UpstreamHttpProtocol, httpArgs.AllowHttpProtocolTranslation,
@@ -626,7 +626,7 @@ public partial class ProxyServer
 
                     if (negotiation.RequiresH2OriginBridge)
                     {
-                        await SendHttp11ToHttp2Bridge(clientStream!, endPoint, null, null, remoteHostName,
+                        await SendHttp11ToHttp2Bridge(clientStream, endPoint, null, null, remoteHostName,
                             remotePort, http2ConnectHost, http2ConnectPort, negotiation.RetainedConnectionTask,
                             cancellationTokenSource);
                         return;

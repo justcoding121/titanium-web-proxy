@@ -45,6 +45,7 @@ namespace Titanium.Web.Proxy.Http2
         public static readonly byte[] ConnectionPreface = Encoding.ASCII.GetBytes("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
 
         private static readonly byte[] ConnectMethodBytes = "CONNECT"u8.ToArray();
+        private const string SyntheticResponseFailedMessage = "HTTP/2 synthetic response failed";
 
         /// <summary>
         ///     Connection-level WINDOW_UPDATE increment matching Chrome/Edge (0xEF0001). Grows the peer's
@@ -1363,7 +1364,7 @@ namespace Titanium.Web.Proxy.Http2
                                     if (t.IsFaulted)
                                     {
                                         ReportException(logger, new ProxyHttpException(
-                                            "HTTP/2 synthetic response failed", t.Exception.GetBaseException(),
+                                            SyntheticResponseFailedMessage, t.Exception.GetBaseException(),
                                             sessionArgs));
                                     }
                                 }, TaskScheduler.Default);
@@ -1428,7 +1429,7 @@ namespace Titanium.Web.Proxy.Http2
                                             linkedCts751?.Dispose();
                                             if (t.IsFaulted)
                                                 ReportException(logger, new ProxyHttpException(
-                                                    "HTTP/2 synthetic response failed",
+                                                    SyntheticResponseFailedMessage,
                                                     t.Exception.GetBaseException(), sessionArgs));
                                         }, TaskScheduler.Default);
                                     if (unknProtoState != null) unknProtoState.SyntheticTask = synthTask501;
@@ -1505,7 +1506,7 @@ namespace Titanium.Web.Proxy.Http2
                                         prepareRequestHeaders?.Invoke(request.Headers);
                                         if (wouldInjectVia)
                                         {
-                                            var pseudonym = sessionArgs.Server.ViaHeaderPseudonym!;
+                                            var pseudonym = sessionArgs.Server.ViaHeaderPseudonym;
                                             if (ProxyServer.HasLoopedVia(request.Headers, pseudonym))
                                             {
                                                 sessionArgs.GenericResponse(string.Empty, (HttpStatusCode)508);
@@ -1535,7 +1536,7 @@ namespace Titanium.Web.Proxy.Http2
                                                 if (t.IsFaulted)
                                                 {
                                                     ReportException(logger, new ProxyHttpException(
-                                                        "HTTP/2 synthetic response failed",
+                                                        SyntheticResponseFailedMessage,
                                                         t.Exception.GetBaseException(), sessionArgs));
                                                 }
                                             }, TaskScheduler.Default);
@@ -1679,7 +1680,7 @@ namespace Titanium.Web.Proxy.Http2
                                         if (t.IsFaulted)
                                         {
                                             ReportException(logger, new ProxyHttpException(
-                                                "HTTP/2 synthetic response failed", t.Exception.GetBaseException(),
+                                                SyntheticResponseFailedMessage, t.Exception.GetBaseException(),
                                                 sessionArgs));
                                         }
                                     }, TaskScheduler.Default);

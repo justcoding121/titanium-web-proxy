@@ -700,7 +700,7 @@ internal static class Http3RequestStream
     ///     True MITM H3→H1: after BeforeRequest left the exchange unchanged, reuse reverse's
     ///     <see cref="Http3OriginBridge.ForwardOverTcpFastAsync"/> instead of full session forward.
     /// </summary>
-    private static bool TryMitmUnchangedH3ToH1Lite(
+    private static bool TryMitmUnchangedH3ToH1Lite( // NOSONAR S107 -- Baseline capture args kept explicit to avoid allocating context structs on the H3 MITM hot path.
         SessionEventArgs sessionArgs,
         BeforeQuicAuthenticateEventArgs authArgs,
         Request request,
