@@ -218,7 +218,7 @@ internal static class QpackEncoder
         ResponseBlockBuilder.Rent(statusCode, context);
 
     /// <summary>
-    ///     Appends one literal header to an existing static-table QPACK block (probe MITM response patch).
+    ///     Appends one literal header to an existing static-table QPACK block (append-only MITM patch).
     ///     Caller must ensure <paramref name="block"/> used no dynamic-table inserts (RIC prefix 0x00 0x00).
     /// </summary>
     internal static byte[] AppendLiteralHeader(byte[] block, string lowerName, string value)

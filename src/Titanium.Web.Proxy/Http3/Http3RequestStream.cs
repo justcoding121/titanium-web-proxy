@@ -247,7 +247,8 @@ internal static class Http3RequestStream
                 }
 
                 // 6. Fire BeforeRequest (stamp timing milestone just before).
-                var requestHeaderMutationBaseline = request.Headers.MutationCount;
+                var requestHeaderRelayBaseline =
+                    MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(request.Headers);
                 var capturedRequestMethod = request.Method;
                 var capturedRequestPath = request.RequestUriString8;
                 var capturedRequestAuthority = request.Authority;
@@ -271,7 +272,7 @@ internal static class Http3RequestStream
                 // unchanged-lite / IsFastPath). Adding Via before the unchanged check would
                 // dirtied MutationCount and defeat the lite finish.
                 var mitmUnchangedH3H1 = TryMitmUnchangedH3ToH1Lite(
-                    sessionArgs, authArgs, request, requestHeaderMutationBaseline,
+                    sessionArgs, authArgs, request, requestHeaderRelayBaseline,
                     capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
 
                 if (!mitmUnchangedH3H1 && !sessionArgs.IsFastPath
@@ -351,7 +352,8 @@ internal static class Http3RequestStream
                         ColdOpenSessionFactory, qpackContext);
 
                     var response = sessionArgs.HttpClient.Response;
-                    var respHeaderBaseline = response.Headers.MutationCount;
+                    var respHeaderRelayBaseline =
+                        MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(response.Headers);
                     var respStatusBaseline = response.StatusCode;
                     var respBodyRead = response.IsBodyRead;
                     var respBodyAvailable = response.BodyAvailable;
@@ -359,15 +361,16 @@ internal static class Http3RequestStream
 
                     await onBeforeResponse(sessionArgs);
 
-                    var responseUnchanged = MitmFastPathHelper.AllowsCompressedRelay(
-                                                    respHeaderBaseline, response.Headers.MutationCount,
-                                                    response.Headers)
+                    var responseUnchanged = MitmCompressedRelayHelper.AllowsCompressedRelay(
+                                                    respHeaderRelayBaseline, response.Headers,
+                                                    MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
+                                                    out var addedRespHeaders)
                                             && response.StatusCode == respStatusBaseline
                                             && response.IsBodyRead == respBodyRead
                                             && response.BodyAvailable == respBodyAvailable
                                             && response.StreamBodyWriter == respWriter;
 
-                    // Match H2 fast-path: skip Via on transparent/SOCKS; append probe/Via literals
+                    // Match H2 fast-path: skip Via on transparent/SOCKS; append handler/Via literals
                     // onto static QPACK instead of full re-encode when handlers left body unchanged.
                     var injectVia = !sessionArgs.IsFastPath
                                     && !sessionArgs.IsTransparent
@@ -380,16 +383,13 @@ internal static class Http3RequestStream
                     if (canRelayPreencoded)
                     {
                         var qpackHeaders = fwd.PreencodedQpackHeaders!;
-                        if (MitmFastPathHelper.IsProbeOnlyMutation(
-                                respHeaderBaseline, response.Headers.MutationCount, response.Headers))
+                        for (var i = 0; i < addedRespHeaders.Count; i++)
                         {
-                            var probeVal = response.Headers.GetHeaderValueOrNull(
-                                               MitmFastPathHelper.ProbeHeaderName) ?? "1";
-                            qpackHeaders = QpackEncoder.AppendLiteralHeader(qpackHeaders,
-                                MitmFastPathHelper.ProbeHeaderName, probeVal);
+                            var h = addedRespHeaders[i];
+                            qpackHeaders = QpackEncoder.AppendLiteralHeader(qpackHeaders, h.Name, h.Value);
                         }
 
-                        if (injectVia)
+                        if (injectVia && !addedRespHeaders.ContainsName("via"))
                         {
                             qpackHeaders = QpackEncoder.AppendLiteralHeader(qpackHeaders, "via",
                                 $"3.0 {server.ViaHeaderPseudonym}");
@@ -738,7 +738,7 @@ internal static class Http3RequestStream
         SessionEventArgs sessionArgs,
         BeforeQuicAuthenticateEventArgs authArgs,
         Request request,
-        int requestHeaderMutationBaseline,
+        MitmCompressedRelayHelper.HeaderRelayBaseline requestHeaderRelayBaseline,
         string? capturedRequestMethod,
         ByteString capturedRequestPath,
         ByteString capturedRequestAuthority,
@@ -754,8 +754,9 @@ internal static class Http3RequestStream
             return false;
         if (method is not ("GET" or "HEAD" or "DELETE" or "OPTIONS"))
             return false;
-        if (!MitmFastPathHelper.AllowsCompressedRelay(
-                requestHeaderMutationBaseline, request.Headers.MutationCount, request.Headers))
+        if (!MitmCompressedRelayHelper.AllowsCompressedRelay(
+                requestHeaderRelayBaseline, request.Headers,
+                MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out _))
             return false;
         if (!string.Equals(request.Method, capturedRequestMethod, StringComparison.Ordinal))
             return false;

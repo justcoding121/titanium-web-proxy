@@ -495,6 +495,9 @@ internal static class Cli
             case "compare-product":
                 mode = ProbeMode.CompareProduct;
                 return true;
+            case "compare-spot":
+                mode = ProbeMode.CompareSpot;
+                return true;
             case "compare-ceiling":
                 mode = ProbeMode.CompareCeiling;
                 return true;

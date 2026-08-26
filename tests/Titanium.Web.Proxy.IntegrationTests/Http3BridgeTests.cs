@@ -225,17 +225,17 @@ public class Http3BridgeTests
     }
 
     [TestMethod]
-    public async Task Http3Client_ForcedHttp11Origin_ProbeOnlyMutation_WithDefaultVia_Succeeds()
+    public async Task Http3Client_ForcedHttp11Origin_AppendOnlyMutation_WithDefaultVia_Succeeds()
     {
         RequireQuic();
 
-        const string probeHeader = "x-twp-rps-probe";
+        const string trackingHeader = "x-custom-tracking";
 
         using var testSuite = new TestSuite();
         var server = testSuite.GetServer();
         server.HandleRequest(async ctx =>
         {
-            await ctx.Response.WriteAsync("h3-to-h1-probe");
+            await ctx.Response.WriteAsync("h3-to-h1-append");
         });
 
         var quicEp = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
@@ -267,12 +267,12 @@ public class Http3BridgeTests
         };
         proxy.BeforeRequest += (_, args) =>
         {
-            args.HttpClient.Request.Headers.AddHeader(probeHeader, "1");
+            args.HttpClient.Request.Headers.AddHeader(trackingHeader, "1");
             return Task.CompletedTask;
         };
         proxy.BeforeResponse += (_, args) =>
         {
-            args.HttpClient.Response.Headers.AddHeader(probeHeader, "1");
+            args.HttpClient.Response.Headers.AddHeader(trackingHeader, "1");
             return Task.CompletedTask;
         };
 
@@ -286,7 +286,7 @@ public class Http3BridgeTests
 
             var response = await client.SendAsync("GET", $"localhost:{server.HttpsListeningPort}", "/tcp");
             Assert.AreEqual(200, response.StatusCode, response.TextBody);
-            Assert.AreEqual("h3-to-h1-probe", response.TextBody);
+            Assert.AreEqual("h3-to-h1-append", response.TextBody);
         }
         finally
         {

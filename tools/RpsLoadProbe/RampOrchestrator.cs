@@ -119,6 +119,8 @@ internal enum ProbeMode
     /// Same-job product refresh: <see cref="CompareMatrix"/> reverse peers + <see cref="CompareMitm"/> TWP.
     /// </summary>
     CompareProduct,
+    /// <summary>PR2 local spot gate: MITM Full÷Reverse + reverse TWP÷YARP pairs @ c=64.</summary>
+    CompareSpot,
     /// <summary>TWP vs bare C# reverse vs native reverse peer on the three Linux native-winning reverse rows.</summary>
     CompareCeiling,
     /// <summary>Heavier reverse GET bodies (64 KiB / 256 KiB) vs native reverse peer where possible.</summary>
@@ -820,6 +822,7 @@ internal static class RampOrchestrator
                 ..BuildMitmArms(),
                 ..BuildMitmFullArms()
             ],
+            ProbeMode.CompareSpot => BuildSpotArms(),
             ProbeMode.CompareCeiling => nginxAvailable
                 ?
                 [
@@ -974,6 +977,36 @@ internal static class RampOrchestrator
                 MutateHttpInterception: mutate),
             new("twp-mitm-full-https-connect", ProbeMode.HttpsMitm, null, EnableHttpInterception: intercept,
                 MutateHttpInterception: mutate)
+        ];
+    }
+
+    /// <summary>Local PR2 spot matrix: reverse + Full MITM pairs and YARP reverse peers.</summary>
+    private static IReadOnlyList<ArmSpec> BuildSpotArms()
+    {
+        const bool intercept = true;
+        const bool mutate = true;
+        return
+        [
+            new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
+            new("twp-mitm-full-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-reverse-http3-to-https-http1", ProbeMode.MitmHttp3ToHttp1, null),
+            new("twp-mitm-full-http3-to-http1", ProbeMode.MitmHttp3ToHttp1, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-reverse-http3", ProbeMode.ReverseHttp3, null),
+            new("twp-mitm-full-http3", ProbeMode.ReverseHttp3, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
+            new("twp-mitm-full-http1", ProbeMode.ReverseHttp1, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
+            new("twp-mitm-full-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
+            new("twp-mitm-full-http2", ProbeMode.ReverseHttp2, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("yarp-reverse-http3-to-https-http1", ProbeMode.YarpReverseHttp3ToHttpsHttp1, null),
+            new("yarp-reverse-http3-to-http3", ProbeMode.YarpReverseHttp3ToHttp3, null)
         ];
     }
 
