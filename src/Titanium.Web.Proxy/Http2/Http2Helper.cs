@@ -571,11 +571,14 @@ namespace Titanium.Web.Proxy.Http2
             // cleartext h2 origin): the verbatim compressed block still carries the client's ':scheme',
             // and strict ASP.NET Core origins reset every stream whose :scheme does not match the
             // origin transport with RST_STREAM(PROTOCOL_ERROR). Detect the mismatch once here; request
-            // blocks are then decoded with a collecting listener and re-encoded with the origin-transport
-            // scheme in RelayCompressedHeaderBlockAsync. Same-transport connections keep the zero-work
-            // verbatim relay (decode stays NoOp).
+            // blocks are then patched/re-encoded with the origin-transport scheme in
+            // RelayCompressedHeaderBlockAsync. Same-transport connections keep the zero-work verbatim
+            // relay (decode stays NoOp).
+            // Apply whenever compressed blocks may be relayed: gate-off (useCompressedRelay) *and*
+            // MITM unchanged-lite (forceStaticHpackTable) — the latter also calls
+            // RelayCompressedHeaderBlockAsync with the captured client block.
             ByteString compressedRelaySchemeOverride = default;
-            if (useCompressedRelay && isClient && originConnection != null
+            if (forceStaticHpackTable && isClient && originConnection != null
                 && input is HttpClientStream { Connection: { } relayClientConnection }
                 && originConnection.IsHttps == relayClientConnection.Http2CleartextClient)
             {
