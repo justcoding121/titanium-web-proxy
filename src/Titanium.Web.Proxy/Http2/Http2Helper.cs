@@ -220,7 +220,8 @@ namespace Titanium.Web.Proxy.Http2
             TcpServerConnection? originConnection = null,
             bool httpInterceptionEnabled = true,
             Func<HttpInterceptionContext, bool>? shouldInterceptHttp = null,
-            Func<CancellationToken, Task<TcpServerConnection>>? openOriginConnectionAsync = null)
+            Func<CancellationToken, Task<TcpServerConnection>>? openOriginConnectionAsync = null,
+            bool forceStaticHpackForMitmUnchangedRelay = false)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
             var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource,
@@ -234,8 +235,9 @@ namespace Titanium.Web.Proxy.Http2
 
             Http2OriginRelayPool? originPool = null;
             // Same-protocol H2↔H2 (not NullOrigin / RFC 8441) can use compressed-relay topology.
-            // Multi-origin + HEADER_TABLE_SIZE=0 apply whenever that topology is valid — including
-            // true MITM — so unchanged-after-handlers can relay compressed blocks safely.
+            // HEADER_TABLE_SIZE=0 is forced only for gate-off compressed-relay, or for transparent/
+            // socks MITM that can finish unchanged streams via compressed relay. Explicit MITM
+            // injects Via and re-encodes — keep the peer's table size (Chrome/YouTube HPACK).
             var canCompressedRelayTopology = !enableRfc8441
                 && originConnection != null
                 && serverStream is not NullOriginStream;
@@ -270,7 +272,8 @@ namespace Titanium.Web.Proxy.Http2
                 CopyHttp2FrameAsync(clientStream, serverStream, connectionState,
                     sessionFactory, onBeforeRequest, onAfterResponse, prepareRequestHeaders, true,
                     cancellationTokenSource.Token, logger, maxDecodedHeaderListBytes, enableRfc8441,
-                    resourceLimits, originConnection, httpInterceptionEnabled, shouldInterceptHttp);
+                    resourceLimits, originConnection, httpInterceptionEnabled, shouldInterceptHttp,
+                    forceStaticHpackForMitmUnchangedRelay: forceStaticHpackForMitmUnchangedRelay);
 
             Task receiveRelay;
             if (originPool != null)
@@ -288,7 +291,8 @@ namespace Titanium.Web.Proxy.Http2
                         sessionFactory, onBeforeResponse, onAfterResponse, null, false,
                         cancellationTokenSource.Token,
                         logger, maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, originConnection,
-                        httpInterceptionEnabled, shouldInterceptHttp);
+                        httpInterceptionEnabled, shouldInterceptHttp,
+                        forceStaticHpackForMitmUnchangedRelay: forceStaticHpackForMitmUnchangedRelay);
             }
 
             await Task.WhenAny(sendRelay, receiveRelay);
@@ -539,19 +543,24 @@ namespace Titanium.Web.Proxy.Http2
             TcpServerConnection? originConnection = null,
             bool httpInterceptionEnabled = true,
             Func<HttpInterceptionContext, bool>? shouldInterceptHttp = null,
-            Http2OriginRelayPool.OriginLeg? originReceiveLeg = null)
+            Http2OriginRelayPool.OriginLeg? originReceiveLeg = null,
+            bool forceStaticHpackForMitmUnchangedRelay = false)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
             var cancellationTokenSource = connectionState.CancellationTokenSource;
 
             // Same-protocol H2↔H2 (not NullOrigin / RFC 8441): compressed-relay topology.
-            // Gate-off: full compressed-relay (no SessionEventArgs). Gate-on: decode + handlers,
-            // then relay compressed bytes when handlers leave the exchange unchanged.
+            // Gate-off: full compressed-relay (no SessionEventArgs). Gate-on (transparent/socks):
+            // decode + handlers, then relay compressed bytes when unchanged — requires static HPACK.
+            // Explicit MITM re-encodes (Via) and must not force HEADER_TABLE_SIZE=0.
             bool canCompressedRelayTopology = !enableRfc8441
                 && output is not NullOriginStream
                 && input is not NullOriginStream;
             bool useCompressedRelay = canCompressedRelayTopology && !httpInterceptionEnabled;
-            if (canCompressedRelayTopology)
+            bool forceStaticHpackTable = useCompressedRelay
+                || (canCompressedRelayTopology && httpInterceptionEnabled
+                    && forceStaticHpackForMitmUnchangedRelay);
+            if (forceStaticHpackTable)
             {
                 // Static-table-only on both legs so compressed blocks are interchangeable.
                 connectionState.ClientSettings.UpdateHeaderTableSize(0);
@@ -1236,8 +1245,8 @@ namespace Titanium.Web.Proxy.Http2
                         request.Headers.AddHeader(header);
                     }
 
-                    // Capture compressed block for intercept unchanged → relay (same-protocol only).
-                    if (httpInterceptionEnabled && canCompressedRelayTopology
+                    // Capture compressed block for intercept unchanged → relay (static-HPACK MITM only).
+                    if (httpInterceptionEnabled && forceStaticHpackTable
                         && connectionState.Streams.TryGetValue(hbStreamId, out var captureState))
                     {
                         captureState.CapturedCompressedHeaders = compressed;
@@ -1468,7 +1477,7 @@ namespace Titanium.Web.Proxy.Http2
                                 var wouldInjectVia = !sessionArgs.IsFastPath && !sessionArgs.IsTransparent
                                     && !sessionArgs.IsSocks
                                     && !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym);
-                                if (canCompressedRelayTopology
+                                if (forceStaticHpackTable
                                     && !wouldInjectVia
                                     && connectionState.Streams.TryGetValue(hbStreamId, out var relayState)
                                     && relayState.CapturedCompressedHeaders != null
@@ -1604,7 +1613,7 @@ namespace Titanium.Web.Proxy.Http2
                             response.Headers.AddHeader(header);
                         }
 
-                        if (httpInterceptionEnabled && canCompressedRelayTopology
+                        if (httpInterceptionEnabled && forceStaticHpackTable
                             && connectionState.Streams.TryGetValue(hbStreamId, out var respCapture))
                         {
                             respCapture.CapturedCompressedHeaders = compressed;
@@ -1688,7 +1697,7 @@ namespace Titanium.Web.Proxy.Http2
 
                             // True MITM noop-safe: relay original compressed response HEADERS when unchanged.
                             // GetResponseBody / SetResponseBody set IsBodyRead/BodyAvailable — must re-encode.
-                            if (canCompressedRelayTopology
+                            if (forceStaticHpackTable
                                 && ReferenceEquals(finalResponse, response)
                                 && connectionState.Streams.TryGetValue(hbStreamId, out var respRelay)
                                 && respRelay.CapturedCompressedHeaders != null
@@ -2933,7 +2942,7 @@ namespace Titanium.Web.Proxy.Http2
                         if (identifier == (int)Http2SettingsId.HeaderTableSize)
                         {
                             sawHeaderTableSize = true;
-                            if (canCompressedRelayTopology)
+                            if (forceStaticHpackTable)
                             {
                                 // Force static-table-only so compressed HEADERS are interchangeable across legs.
                                 localSettings.UpdateHeaderTableSize(0);
@@ -3128,7 +3137,7 @@ namespace Titanium.Web.Proxy.Http2
                         frameHeader.Length = length;
                     }
 
-                    if (canCompressedRelayTopology && !sawHeaderTableSize && (flags & Http2FrameFlag.Ack) == 0 &&
+                    if (forceStaticHpackTable && !sawHeaderTableSize && (flags & Http2FrameFlag.Ack) == 0 &&
                         length + 6 <= buffer.Length)
                     {
                         // Peer omitted SETTINGS_HEADER_TABLE_SIZE (RFC default 4096). Inject 0 so the
