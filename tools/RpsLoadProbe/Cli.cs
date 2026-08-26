@@ -618,7 +618,7 @@ internal static class Cli
               compare-same            Same-protocol: H1 cleartext, H1 TLS, H1 MITM, H2 MITM, H3 MITM (+ control arms)
               compare-bridges         Cross-version bridges (H1↔H2↔H3; TWP + control arms)
               compare-http3-cleartext H3→H1 cleartext only (TWP + YARP + nginx when available)
-              compare-mitm            True MITM 5×5 (TWP interception on) + CONNECT
+              compare-mitm            True MITM 5×5 lite + full-session mutate twins + CONNECT
               compare-matrix          Full 5×5 reverse matrix: all TWP + YARP (+ nginx terminate peers)
               compare-product         Same-job: compare-matrix reverse peers + compare-mitm TWP
               compare-ceiling         TWP vs bare C# vs control arms on H1 / H1 TLS / H2→H1 reverse

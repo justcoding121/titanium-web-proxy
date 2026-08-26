@@ -106,11 +106,18 @@ CLI knobs (also usable on single arms): `--method`, `--response-bytes`, `--reque
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-mitm
-# Same-job reverse peers + MITM (for wiki MITM÷Reverse ratios):
+# Same-job reverse peers + MITM lite + MITM full (for wiki Lite÷Reverse / Full÷Reverse):
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-product
 ```
 
-All 25 Client×Origin wires with `EnableHttpInterception` + no-op `BeforeRequest`/`BeforeResponse` (session path, not session-lite), plus explicit CONNECT. nginx/YARP cannot MITM — omit peer columns on the MITM wiki table.
+Two TWP-only MITM shapes on the same Client×Origin wires (+ CONNECT). nginx/YARP cannot MITM.
+
+| Shape | Arms | Child env | Path |
+|---|---|---|---|
+| **Lite** | `twp-mitm-*` | `TWP_RPS_HTTP_INTERCEPTION=1` | No-op `BeforeRequest`/`BeforeResponse`; after unchanged-lite finish, can reuse reverse compressed-relay / terminate-lite |
+| **Full** | `twp-mitm-full-*` | `…_INTERCEPTION=1` + `TWP_RPS_HTTP_INTERCEPTION_MUTATE=1` | Handlers set `x-twp-rps-probe` on request and response so MutationCount refuses lite finish (full decode/re-encode) |
+
+`compare-mitm` and `compare-product` both run Lite then Full (Full roughly doubles MITM wall time). Wiki MITM table columns: Lite sustain, Full sustain, Lite÷Reverse, Full÷Reverse (RSS/CPU footnotes on sustain cells).
 
 **Reverse** (`compare-matrix` / reverse half of `compare-product`) is bare terminate (no handlers). nginx conf matches TWP/YARP streaming: `keepalive 256`, `proxy_buffering off`, `proxy_request_buffering off`.
 
