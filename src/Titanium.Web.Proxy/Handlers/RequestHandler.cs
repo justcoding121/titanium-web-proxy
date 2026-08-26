@@ -48,6 +48,7 @@ public partial class ProxyServer
         TcpServerConnection? connection = null;
         var closeServerConnection = false;
         SessionEventArgs? reusable = null;
+        var allowMitmUnchangedRecycle = false;
 
         try
         {
@@ -64,6 +65,8 @@ public partial class ProxyServer
             while (true)
             {
                 if (clientStream.IsClosed) return;
+
+                allowMitmUnchangedRecycle = false;
 
                 // Bounds the request line and header read together as one continuous window - not
                 // Socket.ReceiveTimeout, which only bounds a single blocking Receive and does nothing for
@@ -320,6 +323,8 @@ public partial class ProxyServer
 
                         args.IsFastPath = fastPath;
 
+                        var requestHeaderMutationBaseline = request.Headers.MutationCount;
+
                         // If user requested interception do it
                         try
                         {
@@ -440,6 +445,31 @@ public partial class ProxyServer
 
                                 if (!response.KeepAlive) return;
 
+                                continue;
+                            }
+
+                            // True MITM noop-safe H1 terminate: after handlers left the request unchanged,
+                            // reuse terminate-lite origin exchange + enable KA session recycle.
+                            var sessionUpstream = args.UpstreamHttpProtocol
+                                                  ?? upstreamHttpProtocol
+                                                  ?? connectArgs?.UpstreamHttpProtocol;
+                            if (!fastPath
+                                && connectRequest == null
+                                && sessionUpstream is not UpstreamHttpProtocol.Http2
+                                && sessionUpstream is not UpstreamHttpProtocol.Http3
+                                && endPoint is TransparentBaseProxyEndPoint mitmTerminateEp
+                                && CanUseH1TerminateLite(endPoint, request, Enable100ContinueBehaviour,
+                                    EnableWinAuth, GetCustomUpStreamProxyFunc != null)
+                                && request.Headers.MutationCount == requestHeaderMutationBaseline
+                                && !args.HttpClient.Response.Locked)
+                            {
+                                var keepClient = await ForwardH1TerminateSessionLiteAsync(
+                                    mitmTerminateEp, clientStream, args, requestToken);
+                                args.IsClientResponseCommitted = true;
+                                if (!keepClient)
+                                    return;
+
+                                allowMitmUnchangedRecycle = true;
                                 continue;
                             }
 
@@ -610,7 +640,8 @@ public partial class ProxyServer
                     await OnAfterResponse(args);
                     // Fast-path keep-alive: reuse the session shell + request HeaderCollection.
                     // Always replace Response (StreamBodyWriter leftover hung a prior recycle).
-                    if (args.Exception == null && args.IsFastPath && !closeServerConnection)
+                    if (args.Exception == null && !closeServerConnection
+                                               && (args.IsFastPath || allowMitmUnchangedRecycle))
                         reusable = args;
                     else
                         args.Dispose();

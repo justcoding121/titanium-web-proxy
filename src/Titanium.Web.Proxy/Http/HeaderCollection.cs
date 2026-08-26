@@ -21,6 +21,13 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     private readonly Dictionary<string, IReadOnlyList<HttpHeader>> nonUniqueHeadersReadOnly;
 
     /// <summary>
+    ///     Monotonic counter bumped on every mutating API (<see cref="AddHeader"/>, <see cref="RemoveHeader"/>,
+    ///     <see cref="Clear"/>, <see cref="SetOrAddHeaderValue"/>). Used by H2/H3/H1 intercept fast-finish to
+    ///     detect whether session handlers changed headers after the wire decode / lite seed.
+    /// </summary>
+    internal int MutationCount { get; private set; }
+
+    /// <summary>
     ///     Initializes a new instance of the <see cref="HeaderCollection" /> class.
     /// </summary>
     public HeaderCollection()
@@ -266,6 +273,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     /// <param name="newHeader"></param>
     public void AddHeader(HttpHeader newHeader)
     {
+        MutationCount++;
         // if header exist in non-unique header collection add it there
         if (nonUniqueHeaders.TryGetValue(newHeader.Name, out var list))
         {
@@ -352,6 +360,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
             result = true;
         }
 
+        if (result) MutationCount++;
         return result;
     }
 
@@ -374,6 +383,7 @@ public class HeaderCollection : IEnumerable<HttpHeader>
             result = true;
         }
 
+        if (result) MutationCount++;
         return result;
     }
 
@@ -386,12 +396,19 @@ public class HeaderCollection : IEnumerable<HttpHeader>
         if (headers.TryGetValue(header.Name, out var existing))
         {
             if (!existing.Equals(header)) return false;
-            return headers.Remove(header.Name);
+            if (headers.Remove(header.Name))
+            {
+                MutationCount++;
+                return true;
+            }
+
+            return false;
         }
 
         if (nonUniqueHeaders.TryGetValue(header.Name, out var matchingHeaders) &&
             matchingHeaders.RemoveAll(x => x.Equals(header)) > 0)
         {
+            MutationCount++;
             return true;
         }
 
@@ -403,6 +420,8 @@ public class HeaderCollection : IEnumerable<HttpHeader>
     /// </summary>
     public void Clear()
     {
+        if (headers.Count > 0 || nonUniqueHeaders.Count > 0)
+            MutationCount++;
         headers.Clear();
         nonUniqueHeaders.Clear();
         nonUniqueHeadersReadOnly.Clear();

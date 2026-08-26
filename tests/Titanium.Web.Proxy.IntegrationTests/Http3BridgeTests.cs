@@ -153,6 +153,78 @@ public class Http3BridgeTests
     }
 
     [TestMethod]
+    public async Task Http3Client_ForcedHttp11Origin_NoopHandlers_UsesMitmLiteFinish()
+    {
+        RequireQuic();
+
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+        server.HandleRequest(async ctx =>
+        {
+            await ctx.Response.WriteAsync("h3-to-h1-mitm");
+        });
+
+        var quicEp = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = server.HttpsListeningPort
+        };
+        quicEp.BeforeQuicAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        var proxy = new ProxyServer(false, false, false)
+        {
+            EnableHttp3 = true,
+            EnableHttpsSvcbDnsDiscovery = false
+        };
+        proxy.CertificateManager.RootCertificateName = TestCertificateAuthority.RootCertificateName;
+        proxy.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
+        proxy.CertificateManager.SaveFakeCertificates = false;
+        proxy.ServerCertificateValidationCallback += (_, args) =>
+        {
+            args.IsValid = TestCertificateAuthority.Validate(args.Certificate, args.SslPolicyErrors);
+            return Task.CompletedTask;
+        };
+
+        var beforeReq = 0;
+        var beforeResp = 0;
+        proxy.BeforeRequest += (_, _) =>
+        {
+            System.Threading.Interlocked.Increment(ref beforeReq);
+            return Task.CompletedTask;
+        };
+        proxy.BeforeResponse += (_, _) =>
+        {
+            System.Threading.Interlocked.Increment(ref beforeResp);
+            return Task.CompletedTask;
+        };
+
+        proxy.AddEndPoint(quicEp);
+        proxy.Start();
+
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+
+            var response = await client.SendAsync("GET", $"localhost:{server.HttpsListeningPort}", "/tcp");
+            Assert.AreEqual(200, response.StatusCode, response.TextBody);
+            Assert.AreEqual("h3-to-h1-mitm", response.TextBody);
+            Assert.AreEqual(1, beforeReq);
+            Assert.AreEqual(1, beforeResp);
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    [TestMethod]
     public async Task Http2Client_WarmHttp3Origin_BridgesSuccessfully()
     {
         RequireQuic();

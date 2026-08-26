@@ -34,7 +34,8 @@ internal static class H3H1QpackResponseReader
         HttpStream reader,
         int statusCode,
         QpackContext? qpackContext,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        HeaderCollection? alsoPopulate = null)
     {
         using var builder = QpackEncoder.RentResponseBlockBuilder(statusCode, qpackContext);
         long contentLength = -1;
@@ -45,7 +46,8 @@ internal static class H3H1QpackResponseReader
         {
             if (emptyLine)
                 return Finish(builder, contentLength, isChunked, connectionClose);
-            ConsumeLine(lineBytes, builder, ref contentLength, ref isChunked, ref connectionClose);
+            ConsumeLine(lineBytes, builder, ref contentLength, ref isChunked, ref connectionClose,
+                alsoPopulate);
         }
 
         while (true)
@@ -54,7 +56,8 @@ internal static class H3H1QpackResponseReader
             {
                 if (emptyLine)
                     return Finish(builder, contentLength, isChunked, connectionClose);
-                ConsumeLine(lineBytes, builder, ref contentLength, ref isChunked, ref connectionClose);
+                ConsumeLine(lineBytes, builder, ref contentLength, ref isChunked, ref connectionClose,
+                    alsoPopulate);
             }
 
             var (tmpLine, cancelled) = await reader.ReadLineWithResultAsync(cancellationToken);
@@ -62,7 +65,8 @@ internal static class H3H1QpackResponseReader
                 return null;
             if (string.IsNullOrEmpty(tmpLine))
                 return Finish(builder, contentLength, isChunked, connectionClose);
-            ConsumeLine(tmpLine, builder, ref contentLength, ref isChunked, ref connectionClose);
+            ConsumeLine(tmpLine, builder, ref contentLength, ref isChunked, ref connectionClose,
+                alsoPopulate);
         }
     }
 
@@ -84,7 +88,8 @@ internal static class H3H1QpackResponseReader
         QpackEncoder.ResponseBlockBuilder builder,
         ref long contentLength,
         ref bool isChunked,
-        ref bool connectionClose)
+        ref bool connectionClose,
+        HeaderCollection? alsoPopulate)
     {
         var colonIndex = tmpLine.IndexOf((byte)':');
         if (colonIndex == -1)
@@ -113,6 +118,11 @@ internal static class H3H1QpackResponseReader
             contentLength = cl;
 
         builder.AddHeader(lowerName, valueSpan);
+        if (alsoPopulate != null)
+        {
+            var value = System.Text.Encoding.ASCII.GetString(valueSpan);
+            alsoPopulate.AddHeader(new HttpHeader(lowerName, value));
+        }
     }
 
     private static void ConsumeLine(
@@ -120,7 +130,8 @@ internal static class H3H1QpackResponseReader
         QpackEncoder.ResponseBlockBuilder builder,
         ref long contentLength,
         ref bool isChunked,
-        ref bool connectionClose)
+        ref bool connectionClose,
+        HeaderCollection? alsoPopulate)
     {
         var colonIndex = tmpLine.IndexOf(':');
         if (colonIndex == -1)
@@ -149,7 +160,9 @@ internal static class H3H1QpackResponseReader
             && long.TryParse(valueSpan, out var cl) && cl >= 0)
             contentLength = cl;
 
-        builder.AddHeader(lowerName, valueSpan.ToString());
+        var value = valueSpan.ToString();
+        builder.AddHeader(lowerName, value);
+        alsoPopulate?.AddHeader(new HttpHeader(lowerName, value));
     }
 
     private static string LowerAsciiName(ReadOnlySpan<byte> name)

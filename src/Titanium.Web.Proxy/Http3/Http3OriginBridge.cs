@@ -14,6 +14,7 @@ using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
@@ -1060,13 +1061,24 @@ internal static class Http3OriginBridge
             }
 
             // One-pass H1 headers → QPACK (no Response/HeaderCollection) for the interception-off
-            // path. Large/chunked still streams via PreencodedStreamBodyWriter.
+            // path. When fwd.Response is set (MITM unchanged-after-handlers), also seed that graph
+            // so BeforeResponse can inspect/mutate before Preencoded or EncodeResponse emit.
+            var populate = fwd.Response?.Headers;
             var parsed = await H3H1QpackResponseReader.TryReadAsync(
-                connection.Stream, httpStatus.Value.StatusCode, qpackContext, cancellationToken);
+                connection.Stream, httpStatus.Value.StatusCode, qpackContext, cancellationToken,
+                populate);
             if (parsed is null)
                 throw new OperationCanceledException(cancellationToken);
 
             var statusCode = httpStatus.Value.StatusCode;
+            if (fwd.Response != null)
+            {
+                fwd.Response.HttpVersion = HttpHeader.Version30;
+                fwd.Response.StatusCode = statusCode;
+                fwd.Response.StatusDescription =
+                    GenericResponse.Get(statusCode) ?? string.Empty;
+            }
+
             var method = request.Method;
             var contentLength = parsed.Value.ContentLength;
             var isChunked = parsed.Value.IsChunked;
@@ -1139,6 +1151,17 @@ internal static class Http3OriginBridge
                     fwd.PreencodedBody = bodyBytes;
                     fwd.PreencodedBodyLength = bodyLength;
                     fwd.PreencodedBodyRented = rented;
+                    if (fwd.Response != null)
+                    {
+                        // Copy for BeforeResponse; PreencodedBody remains the wire emit when unchanged.
+                        var copy = bodyLength == 0 ? Array.Empty<byte>() : new byte[bodyLength];
+                        if (bodyLength > 0)
+                            Buffer.BlockCopy(bodyBytes, 0, copy, 0, bodyLength);
+                        fwd.Response.Body = copy;
+                        fwd.Response.BodyIsWireEncoded = true;
+                        fwd.Response.IsBodyReceived = true;
+                        fwd.Response.IsBodyRead = true;
+                    }
                 }
                 else
                 {
@@ -1184,12 +1207,19 @@ internal static class Http3OriginBridge
                             server.BufferPool.ReturnBuffer(buffer);
                         }
                     };
+                    if (fwd.Response != null)
+                        fwd.Response.StreamBodyWriter = fwd.PreencodedStreamBodyWriter;
                 }
             }
             else
             {
                 fwd.PreencodedQpackHeaders = parsed.Value.QpackHeaders;
                 fwd.PreencodedBody = null;
+                if (fwd.Response != null)
+                {
+                    fwd.Response.IsBodyReceived = true;
+                    fwd.Response.IsBodyRead = true;
+                }
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

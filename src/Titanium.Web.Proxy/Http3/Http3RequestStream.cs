@@ -247,6 +247,8 @@ internal static class Http3RequestStream
                 }
 
                 // 6. Fire BeforeRequest (stamp timing milestone just before).
+                var requestHeaderMutationBaseline = request.Headers.MutationCount;
+                var capturedRequestMethod = request.Method;
                 sessionArgs.Timing?.MarkRequestHeadersReceived();
                 try
                 {
@@ -263,10 +265,15 @@ internal static class Http3RequestStream
                     return;
                 }
 
-                // Inject Via header (RFC 9110 §7.6.3) on the request before forwarding.
-                // Fast path (no interception): skip — matches SessionEventArgs.IsFastPath contract and
-                // removes a dynamic-table-sensitive header from origin HPACK under writeLock.
-                if (!sessionArgs.IsFastPath && !string.IsNullOrEmpty(server.ViaHeaderPseudonym))
+                // Inject Via only when we stay on the full session forward path (not MITM
+                // unchanged-lite / IsFastPath). Adding Via before the unchanged check would
+                // dirtied MutationCount and defeat the lite finish.
+                var mitmUnchangedH3H1 = TryMitmUnchangedH3ToH1Lite(
+                    sessionArgs, authArgs, request, requestHeaderMutationBaseline,
+                    capturedRequestMethod, method);
+
+                if (!mitmUnchangedH3H1 && !sessionArgs.IsFastPath
+                                       && !string.IsNullOrEmpty(server.ViaHeaderPseudonym))
                     sessionArgs.HttpClient.Request.Headers.AddHeader(
                         new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
 
@@ -287,6 +294,110 @@ internal static class Http3RequestStream
                         sessionArgs.HttpClient.Response.Headers.AddHeader(
                             new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
                     await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext, cancellationToken);
+                }
+                else if (mitmUnchangedH3H1)
+                {
+                    // True MITM noop-safe H3→H1: reuse ForwardOverTcpFastAsync after handlers left
+                    // the request unchanged (same lite machinery as reverse).
+                    if (!streamState.RequestClosed)
+                    {
+                        sessionArgs.Http3BufferedBodyReader = null;
+                        sessionArgs.Http3RequestBodyPump = null;
+                        await DrainClientFinOnlyAsync(stream, cancellationToken);
+                        streamState.RequestClosed = true;
+                        request.IsBodyReceived = true;
+                    }
+
+                    request.Locked = true;
+
+                    var originAuthorityHost = authority;
+                    var colonAuth = authority.LastIndexOf(':');
+                    if (colonAuth > 0 && int.TryParse(authority.AsSpan(colonAuth + 1), out _))
+                        originAuthorityHost = authority[..colonAuth];
+                    else if (authority.Length > 0 && authority[0] == '[')
+                    {
+                        var closing = authority.IndexOf(']');
+                        if (closing > 0)
+                            originAuthorityHost = authority[1..closing];
+                    }
+
+                    var fwd = new H3H2FastForward
+                    {
+                        Request = request,
+                        Response = sessionArgs.HttpClient.Response,
+                        ProxyEndPoint = endPoint,
+                        CustomUpStreamProxy = sessionArgs.CustomUpStreamProxy ?? authArgs.CustomUpStreamProxy,
+                        UpStreamEndPoint = server.UpStreamEndPoint,
+                        MaxBufferedBodyBytes = server.MaxBufferedBodyBytes,
+                        OriginAuthorityHost = originAuthorityHost
+                    };
+
+                    SessionEventArgs ColdOpenSessionFactory()
+                    {
+                        var nullStream = new HttpClientStream(
+                            server, clientConnection, System.IO.Stream.Null,
+                            server.BufferPool, CancellationToken.None, rentReadBuffer: false);
+                        var stubCts = new CancellationTokenSource();
+                        var stub = new SessionEventArgs(server, endPoint, nullStream, null, stubCts);
+                        stub.IsFastPath = true;
+                        stub.CustomUpStreamProxy = fwd.CustomUpStreamProxy;
+                        stub.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+                        return stub;
+                    }
+
+                    await Http3OriginBridge.ForwardOverTcpFastAsync(fwd, server, logger, cancellationToken,
+                        ColdOpenSessionFactory, qpackContext);
+
+                    var response = sessionArgs.HttpClient.Response;
+                    var respHeaderBaseline = response.Headers.MutationCount;
+                    var respStatusBaseline = response.StatusCode;
+                    var respBodyRead = response.IsBodyRead;
+                    var respBodyAvailable = response.BodyAvailable;
+                    var respWriter = response.StreamBodyWriter;
+
+                    await onBeforeResponse(sessionArgs);
+
+                    var responseUnchanged = response.Headers.MutationCount == respHeaderBaseline
+                                            && response.StatusCode == respStatusBaseline
+                                            && response.IsBodyRead == respBodyRead
+                                            && response.BodyAvailable == respBodyAvailable
+                                            && response.StreamBodyWriter == respWriter;
+
+                    if (responseUnchanged && fwd.PreencodedQpackHeaders != null
+                                          && string.IsNullOrEmpty(server.ViaHeaderPseudonym))
+                    {
+                        var body = fwd.PreencodedBody;
+                        var bodyLen = fwd.PreencodedBodyLength > 0
+                            ? fwd.PreencodedBodyLength
+                            : body?.Length ?? 0;
+                        ReadOnlyMemory<byte> bodyMem = body is { Length: > 0 }
+                            ? body.AsMemory(0, Math.Min(bodyLen, body.Length))
+                            : ReadOnlyMemory<byte>.Empty;
+                        try
+                        {
+                            await SendPreencodedResponseAsync(stream, fwd.PreencodedQpackHeaders,
+                                bodyMem, fwd.PreencodedStreamBodyWriter, cancellationToken);
+                        }
+                        finally
+                        {
+                            if (fwd.PreencodedBodyRented && body != null)
+                                server.BufferPool.ReturnBuffer(body);
+                        }
+                    }
+                    else
+                    {
+                        if (!sessionArgs.IsFastPath && !string.IsNullOrEmpty(server.ViaHeaderPseudonym))
+                            response.Headers.AddHeader(
+                                new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
+                        if (fwd.PreencodedBodyRented && fwd.PreencodedBody != null)
+                        {
+                            // Response.Body holds an owned copy; return the rented Preencoded buffer.
+                            server.BufferPool.ReturnBuffer(fwd.PreencodedBody);
+                            fwd.PreencodedBodyRented = false;
+                        }
+
+                        await SendResponseAsync(stream, response, qpackContext, cancellationToken);
+                    }
                 }
                 else
                 {
@@ -581,6 +692,33 @@ internal static class Http3RequestStream
             if (Interlocked.CompareExchange(ref streamState.FinalizedFlag, 1, 0) == 0)
                 cts.Dispose();
         }
+    }
+
+    /// <summary>
+    ///     True MITM H3→H1: after BeforeRequest left the exchange unchanged, reuse reverse's
+    ///     <see cref="Http3OriginBridge.ForwardOverTcpFastAsync"/> instead of full session forward.
+    /// </summary>
+    private static bool TryMitmUnchangedH3ToH1Lite(
+        SessionEventArgs sessionArgs,
+        BeforeQuicAuthenticateEventArgs authArgs,
+        Request request,
+        int requestHeaderMutationBaseline,
+        string? capturedRequestMethod,
+        string method)
+    {
+        if (sessionArgs.IsFastPath)
+            return false;
+        if (authArgs.UpstreamHttpProtocol != UpstreamHttpProtocol.Http11)
+            return false;
+        if (request.CancelRequest || sessionArgs.HttpClient.Response.Locked)
+            return false;
+        if (request.IsBodyRead)
+            return false;
+        if (method is not ("GET" or "HEAD" or "DELETE" or "OPTIONS"))
+            return false;
+        if (request.Headers.MutationCount != requestHeaderMutationBaseline)
+            return false;
+        return string.Equals(request.Method, capturedRequestMethod, StringComparison.Ordinal);
     }
 
     /// <summary>

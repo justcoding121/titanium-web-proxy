@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http2;
 
@@ -37,6 +38,55 @@ internal sealed class Http2StreamState
     public SessionEventArgs? SessionArgs { get; private set; }
 
     public bool IsCompressedRelay { get; private set; }
+
+    /// <summary>
+    ///     Original compressed HEADERS block captured during decode when interception is on but the
+    ///     topology could use compressed-relay. After noop-safe BeforeRequest/BeforeResponse the block
+    ///     is forwarded verbatim instead of HPACK re-encode.
+    /// </summary>
+    internal byte[]? CapturedCompressedHeaders { get; set; }
+
+    /// <summary><see cref="HeaderCollection.MutationCount"/> after wire decode / seed.</summary>
+    internal int HeadersMutationBaseline { get; set; }
+
+    /// <summary>Request <c>:method</c> snapshot for intercept unchanged check (request leg only).</summary>
+    internal string? CapturedMethod { get; set; }
+
+    /// <summary>Request <c>:path</c> snapshot.</summary>
+    internal ByteString CapturedPath { get; set; }
+
+    /// <summary>Request <c>:authority</c> snapshot.</summary>
+    internal ByteString CapturedAuthority { get; set; }
+
+    /// <summary>Response <c>:status</c> snapshot for intercept unchanged check.</summary>
+    internal int CapturedStatusCode { get; set; }
+
+    /// <summary>
+    ///     After intercept handlers leave request headers unchanged: client→origin DATA uses the
+    ///     compressed-relay wire path. Response DATA stays on the session path until response HEADERS
+    ///     are similarly committed (avoids DATA overtaking response HEADERS).
+    /// </summary>
+    internal bool RequestDataCompressedRelay { get; set; }
+
+    /// <summary>
+    ///     After intercept handlers leave response headers unchanged: origin→client DATA uses compressed relay.
+    /// </summary>
+    internal bool ResponseDataCompressedRelay { get; set; }
+
+    /// <summary>Mark request-side DATA for compressed relay after unchanged BeforeRequest.</summary>
+    internal void EnableRequestDataCompressedRelay()
+    {
+        RequestDataCompressedRelay = true;
+        CapturedCompressedHeaders = null;
+    }
+
+    /// <summary>Mark response-side DATA for compressed relay after unchanged BeforeResponse.</summary>
+    internal void EnableResponseDataCompressedRelay()
+    {
+        ResponseDataCompressedRelay = true;
+        IsCompressedRelay = true;
+        CapturedCompressedHeaders = null;
+    }
 
     /// <summary>
     ///     Cancelled when this stream is individually reset (RST_STREAM) or the peer GOAWAYs past it, so a
@@ -170,5 +220,13 @@ internal sealed class Http2StreamState
         InboundRequestBodyChannel = null;
         OriginHeadersFlushed = null;
         IsExternalBridge = false;
+        CapturedCompressedHeaders = null;
+        HeadersMutationBaseline = 0;
+        CapturedMethod = null;
+        CapturedPath = default;
+        CapturedAuthority = default;
+        CapturedStatusCode = 0;
+        RequestDataCompressedRelay = false;
+        ResponseDataCompressedRelay = false;
     }
 }

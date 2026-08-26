@@ -233,14 +233,20 @@ namespace Titanium.Web.Proxy.Http2
                 new Http2FrameWriter(serverStream, connectionState.ServerWriteLock);
 
             Http2OriginRelayPool? originPool = null;
-            // The pool only serves compressed-relay streams, so it must mirror the useCompressedRelay
-            // gate in CopyHttp2FrameAsync (including the RFC 8441 exclusion below).
-            var useMultiOrigin = !httpInterceptionEnabled
-                && !enableRfc8441
+            // Same-protocol H2↔H2 (not NullOrigin / RFC 8441) can use compressed-relay topology.
+            // Multi-origin + HEADER_TABLE_SIZE=0 apply whenever that topology is valid — including
+            // true MITM — so unchanged-after-handlers can relay compressed blocks safely.
+            var canCompressedRelayTopology = !enableRfc8441
                 && originConnection != null
-                && openOriginConnectionAsync != null
-                && resourceLimits.MaxOriginHttp2ConnectionsPerAuthority > 1
                 && serverStream is not NullOriginStream;
+            // Multi-origin pool is for gate-off compressed-relay only. Under true MITM, unchanged
+            // streams may relay via the primary leg while mutated streams re-encode through
+            // QueueSendHeaderTowardServer onto the same serverStream — enabling the pool would
+            // dispose ServerFrameWriter and race those writes with the pool's primary Writer.
+            var useMultiOrigin = canCompressedRelayTopology
+                && !httpInterceptionEnabled
+                && openOriginConnectionAsync != null
+                && resourceLimits.MaxOriginHttp2ConnectionsPerAuthority > 1;
 
             if (useMultiOrigin)
             {
@@ -538,18 +544,14 @@ namespace Titanium.Web.Proxy.Http2
             resourceLimits ??= ProxyResourceLimits.Default;
             var cancellationTokenSource = connectionState.CancellationTokenSource;
 
-            // Gate-off same-protocol H2↔H2: relay compressed HEADERS/DATA without SessionEventArgs.
-            // Bridges (NullOriginStream on either leg) still need decoded headers to translate protocols.
-            // RFC 8441 also forces the decoded path: the proxy owns SETTINGS_ENABLE_CONNECT_PROTOCOL per
-            // leg (it advertises 1 to the client regardless of origin support, and never forwards either
-            // leg's value), so it must also own extended-CONNECT gating - REFUSED_STREAM when the origin
-            // lacks setting 8, pseudo-header validation, 501 for non-websocket tokens, and rejection of
-            // post-establishment HEADERS - all of which need decoded headers and per-stream tunnel state.
-            bool useCompressedRelay = !httpInterceptionEnabled
-                && !enableRfc8441
+            // Same-protocol H2↔H2 (not NullOrigin / RFC 8441): compressed-relay topology.
+            // Gate-off: full compressed-relay (no SessionEventArgs). Gate-on: decode + handlers,
+            // then relay compressed bytes when handlers leave the exchange unchanged.
+            bool canCompressedRelayTopology = !enableRfc8441
                 && output is not NullOriginStream
                 && input is not NullOriginStream;
-            if (useCompressedRelay)
+            bool useCompressedRelay = canCompressedRelayTopology && !httpInterceptionEnabled;
+            if (canCompressedRelayTopology)
             {
                 // Static-table-only on both legs so compressed blocks are interchangeable.
                 connectionState.ClientSettings.UpdateHeaderTableSize(0);
@@ -1234,6 +1236,17 @@ namespace Titanium.Web.Proxy.Http2
                         request.Headers.AddHeader(header);
                     }
 
+                    // Capture compressed block for intercept unchanged → relay (same-protocol only).
+                    if (httpInterceptionEnabled && canCompressedRelayTopology
+                        && connectionState.Streams.TryGetValue(hbStreamId, out var captureState))
+                    {
+                        captureState.CapturedCompressedHeaders = compressed;
+                        captureState.HeadersMutationBaseline = request.Headers.MutationCount;
+                        captureState.CapturedMethod = request.Method;
+                        captureState.CapturedPath = request.RequestUriString8;
+                        captureState.CapturedAuthority = request.Authority;
+                    }
+
                     // Per-stream predicate: gate is on but this stream may still be passthrough.
                     if (httpInterceptionEnabled && shouldInterceptHttp != null && isMainHeaders)
                     {
@@ -1462,9 +1475,29 @@ namespace Titanium.Web.Proxy.Http2
                                     BindOriginForHttp2Stream(sessionArgs, originConnection);
                                 ApplyCleartextOriginScheme(request, originConnection,
                                     sessionArgs.ClientConnection);
-                                QueueSendHeaderTowardServer(connectionState, outputWriteLock,
-                                    remoteSettings, dispatchFrameHeader, dispatchFrameHeaderBuffer, request,
-                                    endStreamFlag, output, isPromise);
+
+                                // True MITM noop-safe: relay the original compressed HEADERS when handlers
+                                // did not mutate method/path/authority/headers (avoids HPACK re-encode).
+                                if (canCompressedRelayTopology
+                                    && connectionState.Streams.TryGetValue(hbStreamId, out var relayState)
+                                    && relayState.CapturedCompressedHeaders != null
+                                    && request.Headers.MutationCount == relayState.HeadersMutationBaseline
+                                    && string.Equals(request.Method, relayState.CapturedMethod, StringComparison.Ordinal)
+                                    && request.RequestUriString8.Equals(relayState.CapturedPath)
+                                    && request.Authority.Equals(relayState.CapturedAuthority))
+                                {
+                                    var captured = relayState.CapturedCompressedHeaders;
+                                    await RelayCompressedHeaderBlockAsync(hbStreamId, captured, endStreamFlag);
+                                    relayState.EnableRequestDataCompressedRelay();
+                                }
+                                else
+                                {
+                                    if (connectionState.Streams.TryGetValue(hbStreamId, out var clearCapture))
+                                        clearCapture.CapturedCompressedHeaders = null;
+                                    QueueSendHeaderTowardServer(connectionState, outputWriteLock,
+                                        remoteSettings, dispatchFrameHeader, dispatchFrameHeaderBuffer, request,
+                                        endStreamFlag, output, isPromise);
+                                }
                             }
                         }
                         }
@@ -1528,6 +1561,14 @@ namespace Titanium.Web.Proxy.Http2
                         foreach (var header in collected)
                         {
                             response.Headers.AddHeader(header);
+                        }
+
+                        if (httpInterceptionEnabled && canCompressedRelayTopology
+                            && connectionState.Streams.TryGetValue(hbStreamId, out var respCapture))
+                        {
+                            respCapture.CapturedCompressedHeaders = compressed;
+                            respCapture.HeadersMutationBaseline = response.Headers.MutationCount;
+                            respCapture.CapturedStatusCode = statusCode;
                         }
 
                         // Matches HTTP/1.x's ResponseHeadersReceivedAt timing mark (see
@@ -1604,9 +1645,26 @@ namespace Titanium.Web.Proxy.Http2
                                     sessionArgs.Server.ViaHeaderPseudonym);
                             }
 
-                            QueueSendHeader(connectionState, towardServer: false, outputWriteLock,
-                                remoteSettings, frameHeader, frameHeaderBuffer, finalResponse,
-                                endStreamFlag, output, isPromise);
+                            // True MITM noop-safe: relay original compressed response HEADERS when unchanged.
+                            if (canCompressedRelayTopology
+                                && ReferenceEquals(finalResponse, response)
+                                && connectionState.Streams.TryGetValue(hbStreamId, out var respRelay)
+                                && respRelay.CapturedCompressedHeaders != null
+                                && finalResponse.Headers.MutationCount == respRelay.HeadersMutationBaseline
+                                && finalResponse.StatusCode == respRelay.CapturedStatusCode)
+                            {
+                                var captured = respRelay.CapturedCompressedHeaders;
+                                await RelayCompressedHeaderBlockAsync(hbStreamId, captured, endStreamFlag);
+                                respRelay.EnableResponseDataCompressedRelay();
+                            }
+                            else
+                            {
+                                if (connectionState.Streams.TryGetValue(hbStreamId, out var clearResp))
+                                    clearResp.CapturedCompressedHeaders = null;
+                                QueueSendHeader(connectionState, towardServer: false, outputWriteLock,
+                                    remoteSettings, frameHeader, frameHeaderBuffer, finalResponse,
+                                    endStreamFlag, output, isPromise);
+                            }
 
                             // RFC 8441: once a final 2xx response to a native h2↔h2 extended CONNECT is
                             // forwarded to the client, the stream enters tunnel state. DATA frames from either
@@ -1853,7 +1911,9 @@ namespace Titanium.Web.Proxy.Http2
                     }
 
                     if (connectionState.Streams.TryGetValue(dataStreamId, out var compressedDataState)
-                        && compressedDataState.IsCompressedRelay)
+                        && (compressedDataState.IsCompressedRelay
+                            || (isClient && compressedDataState.RequestDataCompressedRelay)
+                            || (!isClient && compressedDataState.ResponseDataCompressedRelay)))
                     {
                         bool dataEndStream = (flags & Http2FrameFlag.EndStream) != 0;
                         var creditStreamId = originReceiveLeg != null ? peerStreamId : dataStreamId;
@@ -2830,7 +2890,7 @@ namespace Titanium.Web.Proxy.Http2
                         if (identifier == (int)Http2SettingsId.HeaderTableSize)
                         {
                             sawHeaderTableSize = true;
-                            if (useCompressedRelay)
+                            if (canCompressedRelayTopology)
                             {
                                 // Force static-table-only so compressed HEADERS are interchangeable across legs.
                                 localSettings.UpdateHeaderTableSize(0);
@@ -3025,7 +3085,7 @@ namespace Titanium.Web.Proxy.Http2
                         frameHeader.Length = length;
                     }
 
-                    if (useCompressedRelay && !sawHeaderTableSize && (flags & Http2FrameFlag.Ack) == 0 &&
+                    if (canCompressedRelayTopology && !sawHeaderTableSize && (flags & Http2FrameFlag.Ack) == 0 &&
                         length + 6 <= buffer.Length)
                     {
                         // Peer omitted SETTINGS_HEADER_TABLE_SIZE (RFC default 4096). Inject 0 so the
