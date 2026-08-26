@@ -824,6 +824,7 @@ internal static class ServeProxyHost
         ProbeMode.CompareMitm => "compare-mitm",
         ProbeMode.CompareMatrix => "compare-matrix",
         ProbeMode.CompareProduct => "compare-product",
+        ProbeMode.CompareSpot => "compare-spot",
         ProbeMode.CompareCeiling => "compare-ceiling",
         ProbeMode.CompareBodies => "compare-bodies",
         ProbeMode.ComparePost => "compare-post",

@@ -87,7 +87,7 @@ internal static class MitmCompressedRelayHelper
 
         internal int MutationCount => _mutationCount;
 
-        internal bool AllowsCompressedRelay(HeaderCollection after, int maxAdds, out AddedHeaderBuffer added)
+        internal bool TryDiffAppendOnly(HeaderCollection after, int maxAdds, out AddedHeaderBuffer added)
         {
             added = default;
 
@@ -125,7 +125,7 @@ internal static class MitmCompressedRelayHelper
         HeaderCollection after,
         int maxAdds,
         out AddedHeaderBuffer added) =>
-        baseline.AllowsCompressedRelay(after, maxAdds, out added);
+        baseline.TryDiffAppendOnly(after, maxAdds, out added);
 
     /// <summary>
     ///     MutationCount-only gate for unchanged headers. When counts diverge, caller must use

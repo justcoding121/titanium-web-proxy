@@ -1254,7 +1254,8 @@ namespace Titanium.Web.Proxy.Http2
                         && connectionState.Streams.TryGetValue(hbStreamId, out var captureState))
                     {
                         captureState.CapturedCompressedHeaders = compressed;
-                        captureState.HeadersMutationBaseline = request.Headers.MutationCount;
+                        captureState.HeadersRelayBaseline =
+                            MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(request.Headers);
                         captureState.CapturedMethod = request.Method;
                         captureState.CapturedPath = request.RequestUriString8;
                         captureState.CapturedAuthority = request.Authority;
@@ -1476,24 +1477,34 @@ namespace Titanium.Web.Proxy.Http2
                                 // True MITM noop-safe: relay the original compressed HEADERS when handlers
                                 // did not mutate method/path/authority/headers or buffer/replace the body
                                 // (GetRequestBody sets IsBodyRead and would leave origin without DATA).
-                                // Skip relay when Via would be injected (explicit MITM) — that header is
-                                // not in the captured compressed block.
-                                var wouldInjectVia = !sessionArgs.IsFastPath && !sessionArgs.IsTransparent
+                                // Skip relay when Via would be injected (explicit MITM) — append as HPACK
+                                // literal on the static block instead of full re-encode (matches H3).
+                                var injectVia = !sessionArgs.IsFastPath && !sessionArgs.IsTransparent
                                     && !sessionArgs.IsSocks
                                     && !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym);
                                 if (forceStaticHpackTable
-                                    && !wouldInjectVia
                                     && connectionState.Streams.TryGetValue(hbStreamId, out var relayState)
                                     && relayState.CapturedCompressedHeaders != null
                                     && !request.IsBodyRead
                                     && !request.BodyAvailable
-                                    && request.Headers.MutationCount == relayState.HeadersMutationBaseline
+                                    && MitmCompressedRelayHelper.AllowsCompressedRelay(
+                                        relayState.HeadersRelayBaseline, request.Headers,
+                                        MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out var addedReqHeaders)
                                     && string.Equals(request.Method, relayState.CapturedMethod, StringComparison.Ordinal)
                                     && request.RequestUriString8.Equals(relayState.CapturedPath)
                                     && request.Authority.Equals(relayState.CapturedAuthority))
                                 {
-                                    var captured = relayState.CapturedCompressedHeaders;
-                                    await RelayCompressedHeaderBlockAsync(hbStreamId, captured, endStreamFlag);
+                                    var blockToRelay = relayState.CapturedCompressedHeaders;
+                                    if (addedReqHeaders.Count > 0)
+                                        blockToRelay = AppendAddedLiteralsToStaticHpackBlock(blockToRelay, addedReqHeaders);
+                                    if (injectVia && !addedReqHeaders.ContainsName("via"))
+                                    {
+                                        var viaVal =
+                                            $"{request.HttpVersion.Major}.{request.HttpVersion.Minor} {sessionArgs.Server.ViaHeaderPseudonym}";
+                                        blockToRelay = AppendOneLiteralToStaticHpackBlock(blockToRelay, "via", viaVal);
+                                    }
+
+                                    await RelayCompressedHeaderBlockAsync(hbStreamId, blockToRelay, endStreamFlag);
                                     relayState.EnableRequestDataCompressedRelay();
                                 }
                                 else
@@ -1504,7 +1515,7 @@ namespace Titanium.Web.Proxy.Http2
                                         // start their background origin operation; doing it here afterward
                                         // races with that operation and can mutate headers while they are sent.
                                         prepareRequestHeaders?.Invoke(request.Headers);
-                                        if (wouldInjectVia)
+                                        if (injectVia)
                                         {
                                             var pseudonym = sessionArgs.Server.ViaHeaderPseudonym;
                                             if (ProxyServer.HasLoopedVia(request.Headers, pseudonym))
@@ -1621,7 +1632,8 @@ namespace Titanium.Web.Proxy.Http2
                             && connectionState.Streams.TryGetValue(hbStreamId, out var respCapture))
                         {
                             respCapture.CapturedCompressedHeaders = compressed;
-                            respCapture.HeadersMutationBaseline = response.Headers.MutationCount;
+                            respCapture.HeadersRelayBaseline =
+                                MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(response.Headers);
                             respCapture.CapturedStatusCode = statusCode;
                         }
 
@@ -1690,14 +1702,11 @@ namespace Titanium.Web.Proxy.Http2
                                 return false;
                             }
 
-                            // Match H1/H3 fast-path: skip Via when no HTTP interception — saves header
-                            // mutation + encode work on the hot client write path (h2c / H2 TLS reverse).
-                            if (!sessionArgs.IsFastPath && !sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
-                                !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym))
-                            {
-                                ProxyServer.AddViaHeader(finalResponse.Headers, finalResponse.HttpVersion,
-                                    sessionArgs.Server.ViaHeaderPseudonym);
-                            }
+                            // Match H1/H3 fast-path: skip Via when no HTTP interception — append as HPACK
+                            // literal on compressed relay instead of mutating before the relay gate.
+                            var injectViaResp = !sessionArgs.IsFastPath && !sessionArgs.IsTransparent
+                                                && !sessionArgs.IsSocks
+                                                && !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym);
 
                             // True MITM noop-safe: relay original compressed response HEADERS when unchanged.
                             // GetResponseBody / SetResponseBody set IsBodyRead/BodyAvailable — must re-encode.
@@ -1706,15 +1715,32 @@ namespace Titanium.Web.Proxy.Http2
                                 && connectionState.Streams.TryGetValue(hbStreamId, out var respRelay)
                                 && respRelay.CapturedCompressedHeaders != null
                                 && !finalResponse.IsBodyRead
-                                && finalResponse.Headers.MutationCount == respRelay.HeadersMutationBaseline
+                                && MitmCompressedRelayHelper.AllowsCompressedRelay(
+                                    respRelay.HeadersRelayBaseline, finalResponse.Headers,
+                                    MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out var addedRespHeaders)
                                 && finalResponse.StatusCode == respRelay.CapturedStatusCode)
                             {
-                                var captured = respRelay.CapturedCompressedHeaders;
-                                await RelayCompressedHeaderBlockAsync(hbStreamId, captured, endStreamFlag);
+                                var blockToRelay = respRelay.CapturedCompressedHeaders;
+                                if (addedRespHeaders.Count > 0)
+                                    blockToRelay = AppendAddedLiteralsToStaticHpackBlock(blockToRelay, addedRespHeaders);
+                                if (injectViaResp && !addedRespHeaders.ContainsName("via"))
+                                {
+                                    var viaVal =
+                                        $"{finalResponse.HttpVersion.Major}.{finalResponse.HttpVersion.Minor} {sessionArgs.Server.ViaHeaderPseudonym}";
+                                    blockToRelay = AppendOneLiteralToStaticHpackBlock(blockToRelay, "via", viaVal);
+                                }
+
+                                await RelayCompressedHeaderBlockAsync(hbStreamId, blockToRelay, endStreamFlag);
                                 respRelay.EnableResponseDataCompressedRelay();
                             }
                             else
                             {
+                                if (injectViaResp)
+                                {
+                                    ProxyServer.AddViaHeader(finalResponse.Headers, finalResponse.HttpVersion,
+                                        sessionArgs.Server.ViaHeaderPseudonym);
+                                }
+
                                 if (connectionState.Streams.TryGetValue(hbStreamId, out var clearResp))
                                     clearResp.CapturedCompressedHeaders = null;
                                 QueueSendHeader(connectionState, towardServer: false, outputWriteLock,
@@ -4164,8 +4190,69 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 writer.Flush();
-                return GetMemoryStreamMemory(ms).ToArray();
+            return GetMemoryStreamMemory(ms).ToArray();
             }
+        }
+
+        /// <summary>
+        ///     Appends append-only MITM header literals without indexing on a HEADER_TABLE_SIZE=0 block
+        ///     (no Decoder round-trip).
+        /// </summary>
+        private static byte[] AppendAddedLiteralsToStaticHpackBlock(
+            byte[] block, MitmCompressedRelayHelper.AddedHeaderBuffer added)
+        {
+            var result = block;
+            for (var i = 0; i < added.Count; i++)
+            {
+                var h = added[i];
+                result = AppendOneLiteralToStaticHpackBlock(result, h.Name, h.Value);
+            }
+
+            return result;
+        }
+
+        private static byte[] AppendOneLiteralToStaticHpackBlock(byte[] block, string name, string value)
+        {
+            var nameBytes = System.Text.Encoding.ASCII.GetBytes(name);
+            var valueBytes = System.Text.Encoding.ASCII.GetBytes(value);
+            var result = new byte[block.Length + nameBytes.Length + valueBytes.Length + 8];
+            Buffer.BlockCopy(block, 0, result, 0, block.Length);
+            var offset = block.Length;
+            result[offset++] = 0x00; // Literal without indexing, new name (name index 0)
+            offset += WriteHpackStringLiteral(result.AsSpan(offset), nameBytes);
+            offset += WriteHpackStringLiteral(result.AsSpan(offset), valueBytes);
+            if (offset != result.Length)
+                Array.Resize(ref result, offset);
+            return result;
+        }
+
+        private static int WriteHpackStringLiteral(Span<byte> dest, ReadOnlySpan<byte> bytes)
+        {
+            var written = WriteHpackPrefixedInt(dest, 0x00, 7, (ulong)bytes.Length);
+            bytes.CopyTo(dest.Slice(written));
+            return written + bytes.Length;
+        }
+
+        private static int WriteHpackPrefixedInt(Span<byte> dest, byte patternByte, int prefixBits, ulong value)
+        {
+            var mask = (uint)((1 << prefixBits) - 1);
+            if (value < mask)
+            {
+                dest[0] = (byte)(patternByte | (byte)value);
+                return 1;
+            }
+
+            dest[0] = (byte)(patternByte | (byte)mask);
+            var written = 1;
+            value -= mask;
+            while (value >= 0x80)
+            {
+                dest[written++] = (byte)((value & 0x7F) | 0x80);
+                value >>= 7;
+            }
+
+            dest[written++] = (byte)value;
+            return written;
         }
 
         internal static async Task SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.

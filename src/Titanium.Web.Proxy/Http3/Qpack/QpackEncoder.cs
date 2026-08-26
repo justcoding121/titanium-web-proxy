@@ -217,6 +217,28 @@ internal static class QpackEncoder
     internal static ResponseBlockBuilder RentResponseBlockBuilder(int statusCode, QpackContext? context) =>
         ResponseBlockBuilder.Rent(statusCode, context);
 
+    /// <summary>
+    ///     Appends one literal header to an existing static-table QPACK block (append-only MITM patch).
+    ///     Caller must ensure <paramref name="block"/> used no dynamic-table inserts (RIC prefix 0x00 0x00).
+    /// </summary>
+    internal static byte[] AppendLiteralHeader(byte[] block, string lowerName, string value)
+    {
+        if (block.Length < 2)
+            throw new ArgumentException("QPACK block too short.", nameof(block));
+
+        var body = reusableBuffer ??= new MemoryStream();
+        body.SetLength(0);
+        body.Write(block, 2, block.Length - 2);
+
+        var nameOnlyStaticIndex = QpackStaticTable.FindName(lowerName);
+        if (nameOnlyStaticIndex >= 0)
+            WriteLiteralWithStaticNameRef(body, (ulong)nameOnlyStaticIndex, value);
+        else
+            WriteLiteralNewName(body, lowerName, value);
+
+        return FinishBlock(body, 0, null, null);
+    }
+
     private static string StatusCodeToString(int statusCode) => statusCode switch
     {
         200 => "200",

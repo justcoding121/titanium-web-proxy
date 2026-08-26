@@ -861,6 +861,8 @@ internal static class Http3OriginBridge
 
                     // Verbatim origin→client frame copy (HEADERS + DATA + trailers). Skip QPACK
                     // decode/re-encode — same idea as H2 compressed same-protocol relay.
+                    // Tiny GET: coalesce HEADERS+DATA into one Quic write (origin probe sends both).
+                    const int relayCoalesceMaxBytes = 16 * 1024;
                     var maxPayload = Math.Max(fwd.MaxBufferedBodyBytes, server.MaxDecodedHeaderListBytes);
                     var sawFinalHeaders = false;
                     while (true)
@@ -875,6 +877,47 @@ internal static class Http3OriginBridge
                             {
                                 // Ignore interim 1xx on the fast path (probes never send them).
                                 // Still forward the first HEADERS block and any trailers.
+                                if (!sawFinalHeaders)
+                                {
+                                    var headersPayload = frame.Payload;
+                                    var next = await Http3Frame.ReadAsync(originStream,
+                                        maxPayloadBytes: maxPayload, cancellationToken);
+                                    if (next is { Type: Http3FrameType.Data }
+                                        && headersPayload.Length + next.Payload.Length <= relayCoalesceMaxBytes)
+                                    {
+                                        try
+                                        {
+                                            await Http3Frame.WriteHeadersAndDataAsync(clientStream,
+                                                headersPayload, next.Payload, cancellationToken);
+                                        }
+                                        finally
+                                        {
+                                            next.ReturnPayload();
+                                        }
+
+                                        sawFinalHeaders = true;
+                                        continue;
+                                    }
+
+                                    if (next != null)
+                                    {
+                                        await Http3Frame.WriteAsync(clientStream, Http3FrameType.Headers,
+                                            headersPayload, cancellationToken);
+                                        sawFinalHeaders = true;
+                                        if (next.Type == Http3FrameType.Data)
+                                        {
+                                            if (next.Payload.Length > 0)
+                                                await Http3Frame.WriteAsync(clientStream, Http3FrameType.Data,
+                                                    next.Payload, cancellationToken);
+                                        }
+                                        else if (IsForbiddenOnRequestStream(next.Type))
+                                            throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
+                                                $"Frame type 0x{next.Type:X} not permitted on request stream.");
+                                        next.ReturnPayload();
+                                        continue;
+                                    }
+                                }
+
                                 await Http3Frame.WriteAsync(clientStream, Http3FrameType.Headers,
                                     frame.Payload, cancellationToken);
                                 sawFinalHeaders = true;

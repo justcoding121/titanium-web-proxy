@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Http2;
@@ -46,8 +47,8 @@ internal sealed class Http2StreamState
     /// </summary>
     internal byte[]? CapturedCompressedHeaders { get; set; }
 
-    /// <summary><see cref="HeaderCollection.MutationCount"/> after wire decode / seed.</summary>
-    internal int HeadersMutationBaseline { get; set; }
+    /// <summary>Unique-header snapshot after wire decode / seed for append-only relay diff.</summary>
+    internal MitmCompressedRelayHelper.HeaderRelayBaseline HeadersRelayBaseline { get; set; }
 
     /// <summary>Request <c>:method</c> snapshot for intercept unchanged check (request leg only).</summary>
     internal string? CapturedMethod { get; set; }
@@ -221,7 +222,7 @@ internal sealed class Http2StreamState
         OriginHeadersFlushed = null;
         IsExternalBridge = false;
         CapturedCompressedHeaders = null;
-        HeadersMutationBaseline = 0;
+        HeadersRelayBaseline = default;
         CapturedMethod = null;
         CapturedPath = default;
         CapturedAuthority = default;

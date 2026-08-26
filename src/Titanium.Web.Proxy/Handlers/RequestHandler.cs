@@ -323,7 +323,8 @@ public partial class ProxyServer
 
                         args.IsFastPath = fastPath;
 
-                        var requestHeaderMutationBaseline = request.Headers.MutationCount;
+                        var requestHeaderRelayBaseline =
+                            MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(request.Headers);
                         var capturedRequestMethod = request.Method;
                         var capturedRequestPath = request.RequestUriString8;
                         var capturedRequestAuthority = request.Authority;
@@ -465,7 +466,9 @@ public partial class ProxyServer
                                     EnableWinAuth, GetCustomUpStreamProxyFunc != null)
                                 && !request.IsBodyRead
                                 && !request.BodyAvailable
-                                && request.Headers.MutationCount == requestHeaderMutationBaseline
+                                && MitmCompressedRelayHelper.AllowsCompressedRelay(
+                                    requestHeaderRelayBaseline, request.Headers,
+                                    MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out _)
                                 && string.Equals(request.Method, capturedRequestMethod, StringComparison.Ordinal)
                                 && request.RequestUriString8.Equals(capturedRequestPath)
                                 && request.Authority.Equals(capturedRequestAuthority)

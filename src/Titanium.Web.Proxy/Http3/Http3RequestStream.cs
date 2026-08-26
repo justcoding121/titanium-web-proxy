@@ -247,7 +247,8 @@ internal static class Http3RequestStream
                 }
 
                 // 6. Fire BeforeRequest (stamp timing milestone just before).
-                var requestHeaderMutationBaseline = request.Headers.MutationCount;
+                var requestHeaderRelayBaseline =
+                    MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(request.Headers);
                 var capturedRequestMethod = request.Method;
                 var capturedRequestPath = request.RequestUriString8;
                 var capturedRequestAuthority = request.Authority;
@@ -271,7 +272,7 @@ internal static class Http3RequestStream
                 // unchanged-lite / IsFastPath). Adding Via before the unchanged check would
                 // dirtied MutationCount and defeat the lite finish.
                 var mitmUnchangedH3H1 = TryMitmUnchangedH3ToH1Lite(
-                    sessionArgs, authArgs, request, requestHeaderMutationBaseline,
+                    sessionArgs, authArgs, request, requestHeaderRelayBaseline,
                     capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
 
                 if (!mitmUnchangedH3H1 && !sessionArgs.IsFastPath
@@ -351,7 +352,8 @@ internal static class Http3RequestStream
                         ColdOpenSessionFactory, qpackContext);
 
                     var response = sessionArgs.HttpClient.Response;
-                    var respHeaderBaseline = response.Headers.MutationCount;
+                    var respHeaderRelayBaseline =
+                        MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(response.Headers);
                     var respStatusBaseline = response.StatusCode;
                     var respBodyRead = response.IsBodyRead;
                     var respBodyAvailable = response.BodyAvailable;
@@ -359,15 +361,40 @@ internal static class Http3RequestStream
 
                     await onBeforeResponse(sessionArgs);
 
-                    var responseUnchanged = response.Headers.MutationCount == respHeaderBaseline
+                    var responseUnchanged = MitmCompressedRelayHelper.AllowsCompressedRelay(
+                                                    respHeaderRelayBaseline, response.Headers,
+                                                    MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
+                                                    out var addedRespHeaders)
                                             && response.StatusCode == respStatusBaseline
                                             && response.IsBodyRead == respBodyRead
                                             && response.BodyAvailable == respBodyAvailable
                                             && response.StreamBodyWriter == respWriter;
 
-                    if (responseUnchanged && fwd.PreencodedQpackHeaders != null
-                                          && string.IsNullOrEmpty(server.ViaHeaderPseudonym))
+                    // Match H2 fast-path: skip Via on transparent/SOCKS; append handler/Via literals
+                    // onto static QPACK instead of full re-encode when handlers left body unchanged.
+                    var injectVia = !sessionArgs.IsFastPath
+                                    && !sessionArgs.IsTransparent
+                                    && !sessionArgs.IsSocks
+                                    && !string.IsNullOrEmpty(server.ViaHeaderPseudonym);
+                    var canRelayPreencoded = responseUnchanged
+                                             && fwd.PreencodedQpackHeaders != null
+                                             && IsStaticOnlyQpackBlock(fwd.PreencodedQpackHeaders);
+
+                    if (canRelayPreencoded)
                     {
+                        var qpackHeaders = fwd.PreencodedQpackHeaders!;
+                        for (var i = 0; i < addedRespHeaders.Count; i++)
+                        {
+                            var h = addedRespHeaders[i];
+                            qpackHeaders = QpackEncoder.AppendLiteralHeader(qpackHeaders, h.Name, h.Value);
+                        }
+
+                        if (injectVia && !addedRespHeaders.ContainsName("via"))
+                        {
+                            qpackHeaders = QpackEncoder.AppendLiteralHeader(qpackHeaders, "via",
+                                $"3.0 {server.ViaHeaderPseudonym}");
+                        }
+
                         var body = fwd.PreencodedBody;
                         var bodyLen = fwd.PreencodedBodyLength > 0
                             ? fwd.PreencodedBodyLength
@@ -377,7 +404,7 @@ internal static class Http3RequestStream
                             : ReadOnlyMemory<byte>.Empty;
                         try
                         {
-                            await SendPreencodedResponseAsync(stream, fwd.PreencodedQpackHeaders,
+                            await SendPreencodedResponseAsync(stream, qpackHeaders,
                                 bodyMem, fwd.PreencodedStreamBodyWriter, cancellationToken);
                         }
                         finally
@@ -388,7 +415,7 @@ internal static class Http3RequestStream
                     }
                     else
                     {
-                        if (!sessionArgs.IsFastPath && !string.IsNullOrEmpty(server.ViaHeaderPseudonym))
+                        if (injectVia)
                             response.Headers.AddHeader(
                                 new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
                         if (fwd.PreencodedBodyRented && fwd.PreencodedBody != null)
@@ -697,6 +724,13 @@ internal static class Http3RequestStream
     }
 
     /// <summary>
+    ///     True when the QPACK block used no dynamic-table inserts (RIC prefix 0x00 0x00).
+    ///     Required before <see cref="QpackEncoder.AppendLiteralHeader"/>.
+    /// </summary>
+    private static bool IsStaticOnlyQpackBlock(byte[] block) =>
+        block.Length >= 2 && block[0] == 0 && block[1] == 0;
+
+    /// <summary>
     ///     True MITM H3→H1: after BeforeRequest left the exchange unchanged, reuse reverse's
     ///     <see cref="Http3OriginBridge.ForwardOverTcpFastAsync"/> instead of full session forward.
     /// </summary>
@@ -704,7 +738,7 @@ internal static class Http3RequestStream
         SessionEventArgs sessionArgs,
         BeforeQuicAuthenticateEventArgs authArgs,
         Request request,
-        int requestHeaderMutationBaseline,
+        MitmCompressedRelayHelper.HeaderRelayBaseline requestHeaderRelayBaseline,
         string? capturedRequestMethod,
         ByteString capturedRequestPath,
         ByteString capturedRequestAuthority,
@@ -720,7 +754,9 @@ internal static class Http3RequestStream
             return false;
         if (method is not ("GET" or "HEAD" or "DELETE" or "OPTIONS"))
             return false;
-        if (request.Headers.MutationCount != requestHeaderMutationBaseline)
+        if (!MitmCompressedRelayHelper.AllowsCompressedRelay(
+                requestHeaderRelayBaseline, request.Headers,
+                MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out _))
             return false;
         if (!string.Equals(request.Method, capturedRequestMethod, StringComparison.Ordinal))
             return false;
