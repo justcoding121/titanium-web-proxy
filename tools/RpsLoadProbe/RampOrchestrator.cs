@@ -106,7 +106,8 @@ internal enum ProbeMode
     CompareHttp3Cleartext,
     /// <summary>
     /// True MITM 5×5: same Client×Origin wires as reverse, but TWP_RPS_HTTP_INTERCEPTION=1
-    /// (no-op BeforeRequest/BeforeResponse). TWP-only; plus explicit CONNECT.
+    /// (no-op BeforeRequest/BeforeResponse = lite finish possible). TWP-only; plus explicit CONNECT.
+    /// compare-mitm / compare-product also append mutate (full-session) twins.
     /// </summary>
     CompareMitm,
     /// <summary>
@@ -491,7 +492,7 @@ internal static class RampOrchestrator
 
     private sealed record ArmSpec(string Name, ProbeMode Mode, int? MaxCachedConnections,
         WorkloadOptions? Workload = null, string? PreferredGenerator = null,
-        bool EnableHttpInterception = false);
+        bool EnableHttpInterception = false, bool MutateHttpInterception = false);
 
     private static IReadOnlyList<ArmSpec> HeavierReverseArms(bool nginxAvailable, bool nginxHttp3Available,
         WorkloadOptions workload, string nameSuffix, bool includeHttp3 = true)
@@ -807,12 +808,17 @@ internal static class RampOrchestrator
                     }
                     : [])
             ],
-            ProbeMode.CompareMitm => BuildMitmArms(),
+            ProbeMode.CompareMitm =>
+            [
+                ..BuildMitmArms(),
+                ..BuildMitmFullArms()
+            ],
             ProbeMode.CompareMatrix => BuildFullMatrixArms(nginxAvailable, nginxHttp3Available),
             ProbeMode.CompareProduct =>
             [
                 ..BuildFullMatrixArms(nginxAvailable, nginxHttp3Available),
-                ..BuildMitmArms()
+                ..BuildMitmArms(),
+                ..BuildMitmFullArms()
             ],
             ProbeMode.CompareCeiling => nginxAvailable
                 ?
@@ -870,7 +876,7 @@ internal static class RampOrchestrator
 
     /// <summary>
     /// TWP-only true MITM 5×5 + CONNECT. Same ProbeModes/wires as reverse twins, but
-    /// <see cref="ArmSpec.EnableHttpInterception"/> so session handlers run.
+    /// <see cref="ArmSpec.EnableHttpInterception"/> so noop session handlers run (lite finish OK).
     /// </summary>
     private static IReadOnlyList<ArmSpec> BuildMitmArms()
     {
@@ -903,6 +909,71 @@ internal static class RampOrchestrator
             new("twp-mitm-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null, EnableHttpInterception: intercept),
             new("twp-mitm-http3", ProbeMode.ReverseHttp3, null, EnableHttpInterception: intercept),
             new("twp-mitm-https-connect", ProbeMode.HttpsMitm, null, EnableHttpInterception: intercept)
+        ];
+    }
+
+    /// <summary>
+    /// Same wires as <see cref="BuildMitmArms"/> but handlers mutate headers so unchanged-lite /
+    /// compressed-relay is refused (full session re-encode). Names are <c>twp-mitm-full-*</c>.
+    /// </summary>
+    private static IReadOnlyList<ArmSpec> BuildMitmFullArms()
+    {
+        const bool intercept = true;
+        const bool mutate = true;
+        return
+        [
+            new("twp-mitm-full-http1", ProbeMode.ReverseHttp1, null, EnableHttpInterception: intercept,
+                MutateHttpInterception: mutate),
+            new("twp-mitm-full-http1-to-https", ProbeMode.ReverseHttp1ToHttps, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-http1-plain-to-h2c", ProbeMode.ReverseHttp1PlainToH2c, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-http1-plain-to-http2", ProbeMode.ReverseHttp1PlainToHttp2, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-http1-plain-to-http3", ProbeMode.ReverseHttp1PlainToHttp3, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-http1-tls", ProbeMode.ReverseHttp1Tls, null, EnableHttpInterception: intercept,
+                MutateHttpInterception: mutate),
+            new("twp-mitm-full-http1-tls-to-https", ProbeMode.ReverseHttp1Mitm, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-http1-to-h2c", ProbeMode.ReverseHttp1ToH2c, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-http11-to-http2", ProbeMode.ReverseHttp11ToHttp2, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-http1-to-http3", ProbeMode.ReverseHttp1ToHttp3, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-h2c-to-h1", ProbeMode.ReverseH2cToH1, null, EnableHttpInterception: intercept,
+                MutateHttpInterception: mutate),
+            new("twp-mitm-full-h2c-to-https", ProbeMode.ReverseH2cToHttps, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null, EnableHttpInterception: intercept,
+                MutateHttpInterception: mutate),
+            new("twp-mitm-full-h2c", ProbeMode.ReverseH2c, null, EnableHttpInterception: intercept,
+                MutateHttpInterception: mutate),
+            new("twp-mitm-full-h2c-to-h3", ProbeMode.ReverseH2cToH3, null, EnableHttpInterception: intercept,
+                MutateHttpInterception: mutate),
+            new("twp-mitm-full-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-http2-to-http1", ProbeMode.MitmHttp2ToHttp1, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-http2-to-h2c", ProbeMode.ReverseHttp2ToH2c, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-http2", ProbeMode.ReverseHttp2, null, EnableHttpInterception: intercept,
+                MutateHttpInterception: mutate),
+            new("twp-mitm-full-http2-to-http3", ProbeMode.ReverseHttp2ToHttp3, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-http3-to-http1", ProbeMode.MitmHttp3ToHttp1, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-http3-to-h2c", ProbeMode.ReverseHttp3ToH2c, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-http3-to-http2", ProbeMode.ReverseHttp3ToHttp2, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("twp-mitm-full-http3", ProbeMode.ReverseHttp3, null, EnableHttpInterception: intercept,
+                MutateHttpInterception: mutate),
+            new("twp-mitm-full-https-connect", ProbeMode.HttpsMitm, null, EnableHttpInterception: intercept,
+                MutateHttpInterception: mutate)
         ];
     }
 
@@ -1076,7 +1147,7 @@ internal static class RampOrchestrator
         var workload = arm.Workload ?? options.Workload;
         var maxCached = arm.MaxCachedConnections ?? options.MaxCachedConnections;
         await using var stack = await ChildProcessStack.StartAsync(arm.Mode, options.NginxPath, maxCached,
-            cancellationToken, workload, arm.EnableHttpInterception);
+            cancellationToken, workload, arm.EnableHttpInterception, arm.MutateHttpInterception);
         var nginxVersion = stack.NginxVersion ?? nginxVersionHint;
 
         var p99Slo = workload.ResolveP99SloMs(options.Http1P99MsSlo, options.Http2P99MsSlo,

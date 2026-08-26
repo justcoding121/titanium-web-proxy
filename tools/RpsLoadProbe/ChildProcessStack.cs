@@ -70,13 +70,13 @@ internal sealed class ChildProcessStack : IAsyncDisposable
 
     public static async Task<ChildProcessStack> StartAsync(ProbeMode mode, string? nginxPath,
         int? maxCachedConnections, CancellationToken cancellationToken, WorkloadOptions? workload = null,
-        bool enableHttpInterception = false)
+        bool enableHttpInterception = false, bool mutateHttpInterception = false)
     {
         workload ??= WorkloadOptions.TinyGet;
         var exe = Environment.ProcessPath
                   ?? throw new InvalidOperationException("Cannot locate current process path for child spawn.");
         var certDir = LoopbackCertificateAuthority.SeedDirectory();
-        var childEnv = BuildChildEnv(workload, certDir, enableHttpInterception);
+        var childEnv = BuildChildEnv(workload, certDir, enableHttpInterception, mutateHttpInterception);
 
         var origin = StartChild(exe, FormatOriginSpawnArgs(mode, workload), childEnv);
         Dictionary<string, string> originLines;
@@ -222,16 +222,20 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     }
 
     private static Dictionary<string, string> BuildChildEnv(WorkloadOptions workload, string certDir,
-        bool enableHttpInterception = false)
+        bool enableHttpInterception = false, bool mutateHttpInterception = false)
     {
         var env = new Dictionary<string, string>
         {
             [LoopbackCertificateAuthority.CertDirEnvironmentVariable] = certDir
         };
-        if (enableHttpInterception
+        if (enableHttpInterception || mutateHttpInterception
             || string.Equals(Environment.GetEnvironmentVariable("TWP_RPS_HTTP_INTERCEPTION"), "1",
                 StringComparison.Ordinal))
             env["TWP_RPS_HTTP_INTERCEPTION"] = "1";
+        if (mutateHttpInterception
+            || string.Equals(Environment.GetEnvironmentVariable("TWP_RPS_HTTP_INTERCEPTION_MUTATE"), "1",
+                StringComparison.Ordinal))
+            env["TWP_RPS_HTTP_INTERCEPTION_MUTATE"] = "1";
         if (workload.CaptureTlsTiming)
             env["TWP_RPS_CAPTURE_TLS"] = "1";
         return env;

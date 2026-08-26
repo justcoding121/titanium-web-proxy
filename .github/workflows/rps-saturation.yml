@@ -114,7 +114,8 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
-    timeout-minutes: 240
+    # compare-product with MITM Lite+Full can exceed 3.5h per OS on hosted runners.
+    timeout-minutes: 420
     steps:
       - uses: actions/checkout@v6
 

@@ -789,10 +789,17 @@ internal sealed class TwpProxyHost : IDisposable
             StageTimingCollector.Attach(proxy);
         }
 
-        // True-MITM product arms: child sets TWP_RPS_HTTP_INTERCEPTION=1 so session handlers run
-        // (disables session-lite / no-interception fast paths). Bare reverse leaves this unset.
-        if (string.Equals(Environment.GetEnvironmentVariable("TWP_RPS_HTTP_INTERCEPTION"), "1",
+        // True-MITM product arms: child sets TWP_RPS_HTTP_INTERCEPTION=1 so session handlers run.
+        // TWP_RPS_HTTP_INTERCEPTION_MUTATE=1 forces non-lite (header mutation refuses unchanged relay).
+        // Bare reverse leaves both unset.
+        if (string.Equals(Environment.GetEnvironmentVariable("TWP_RPS_HTTP_INTERCEPTION_MUTATE"), "1",
                 StringComparison.Ordinal))
+        {
+            EnableMutatingInterception(proxy);
+            Console.Error.WriteLine("rps: EnableMutatingInterception (TWP_RPS_HTTP_INTERCEPTION_MUTATE=1)");
+        }
+        else if (string.Equals(Environment.GetEnvironmentVariable("TWP_RPS_HTTP_INTERCEPTION"), "1",
+                     StringComparison.Ordinal))
         {
             EnableNoopInterception(proxy);
             Console.Error.WriteLine("rps: EnableNoopInterception (TWP_RPS_HTTP_INTERCEPTION=1)");
@@ -821,8 +828,16 @@ internal sealed class TwpProxyHost : IDisposable
     /// <summary>
     /// No-op BeforeRequest/BeforeResponse so <see cref="ProxyServer.NeedsHttpInterception"/> is true
     /// (real MITM session path). Hits are counted for smoke verification.
+    /// After unchanged-lite finish, this path can still reuse reverse lite/relay.
     /// </summary>
     internal static long NoopInterceptionHits;
+
+    /// <summary>
+    /// Mutating handlers that refuse unchanged-lite / compressed-relay (full session re-encode).
+    /// </summary>
+    internal static long MutatingInterceptionHits;
+
+    private const string RpsProbeHeaderName = "x-twp-rps-probe";
 
     internal static void EnableNoopInterception(ProxyServer proxy)
     {
@@ -833,6 +848,23 @@ internal sealed class TwpProxyHost : IDisposable
             return Task.CompletedTask;
         };
         proxy.BeforeResponse += (_, _) => Task.CompletedTask;
+    }
+
+    internal static void EnableMutatingInterception(ProxyServer proxy)
+    {
+        proxy.EnableHttpInterception = true;
+        proxy.BeforeRequest += (_, args) =>
+        {
+            Interlocked.Increment(ref MutatingInterceptionHits);
+            args.HttpClient.Request.Headers.AddHeader(RpsProbeHeaderName, "1");
+            return Task.CompletedTask;
+        };
+        proxy.BeforeResponse += (_, args) =>
+        {
+            // Force response-side re-encode too (H2 compressed response relay checks MutationCount).
+            args.HttpClient.Response.Headers.AddHeader(RpsProbeHeaderName, "1");
+            return Task.CompletedTask;
+        };
     }
 
     private static void ConfigureSharedTestCa(ProxyServer proxy)

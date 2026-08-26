@@ -454,7 +454,10 @@ public partial class ProxyServer
                                         shouldInterceptHttp: ShouldInterceptHttp,
                                         openOriginConnectionAsync: ct => OpenAdditionalOriginHttp2ConnectionAsync(
                                             httpsHostName, args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
-                                            originIsHttps, sessionForCacheKey, ct));
+                                            originIsHttps, sessionForCacheKey, ct),
+                                        // Transparent/socks MITM can finish unchanged H2↔H2 via compressed
+                                        // relay (no Via). Requires static-table-only HPACK on both legs.
+                                        forceStaticHpackForMitmUnchangedRelay: NeedsHttpInterception(endPoint));
                                 }
                                 finally
                                 {
@@ -795,7 +798,8 @@ public partial class ProxyServer
                 shouldInterceptHttp: ShouldInterceptHttp,
                 openOriginConnectionAsync: ct => OpenAdditionalOriginHttp2ConnectionAsync(
                     remoteHostName, remotePort, http2ConnectHost, http2ConnectPort,
-                    originIsHttps, negotiationSession, ct));
+                    originIsHttps, negotiationSession, ct),
+                forceStaticHpackForMitmUnchangedRelay: NeedsHttpInterception(endPoint));
         }
         finally
         {
