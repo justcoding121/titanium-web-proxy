@@ -225,6 +225,77 @@ public class Http3BridgeTests
     }
 
     [TestMethod]
+    public async Task Http3Client_ForcedHttp11Origin_ProbeOnlyMutation_WithDefaultVia_Succeeds()
+    {
+        RequireQuic();
+
+        const string probeHeader = "x-twp-rps-probe";
+
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+        server.HandleRequest(async ctx =>
+        {
+            await ctx.Response.WriteAsync("h3-to-h1-probe");
+        });
+
+        var quicEp = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = server.HttpsListeningPort
+        };
+        quicEp.BeforeQuicAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        var proxy = new ProxyServer(false, false, false)
+        {
+            EnableHttp3 = true,
+            EnableHttpsSvcbDnsDiscovery = false,
+            EnableHttpInterception = true
+            // ViaHeaderPseudonym defaults to "titanium-web-proxy" — must not force full QPACK re-encode.
+        };
+        proxy.CertificateManager.RootCertificateName = TestCertificateAuthority.RootCertificateName;
+        proxy.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
+        proxy.CertificateManager.SaveFakeCertificates = false;
+        proxy.ServerCertificateValidationCallback += (_, args) =>
+        {
+            args.IsValid = TestCertificateAuthority.Validate(args.Certificate, args.SslPolicyErrors);
+            return Task.CompletedTask;
+        };
+        proxy.BeforeRequest += (_, args) =>
+        {
+            args.HttpClient.Request.Headers.AddHeader(probeHeader, "1");
+            return Task.CompletedTask;
+        };
+        proxy.BeforeResponse += (_, args) =>
+        {
+            args.HttpClient.Response.Headers.AddHeader(probeHeader, "1");
+            return Task.CompletedTask;
+        };
+
+        proxy.AddEndPoint(quicEp);
+        proxy.Start();
+
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+
+            var response = await client.SendAsync("GET", $"localhost:{server.HttpsListeningPort}", "/tcp");
+            Assert.AreEqual(200, response.StatusCode, response.TextBody);
+            Assert.AreEqual("h3-to-h1-probe", response.TextBody);
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    [TestMethod]
     public async Task Http2Client_WarmHttp3Origin_BridgesSuccessfully()
     {
         RequireQuic();

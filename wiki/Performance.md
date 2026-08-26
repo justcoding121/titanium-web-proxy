@@ -201,6 +201,8 @@ Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB). Bare reverse 5×5
 
 Same Client×Origin wires with interception on (`compare-product` [32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = mutating handlers (`x-twp-rps-probe`) forcing non-lite re-encode. nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job).
 
+**Post-fix note (2026-08-26):** Phase 2 closed the H3→H1 Full gap: preencoded QPACK relay was gated on empty `ViaHeaderPseudonym` while the default is `"titanium-web-proxy"`. Cool paired laptop gates (`h3h1-spot/`, c=64): H3→H1 plain Full÷Reverse **0.91×**, H3→H1 TLS **0.995×**, H1 plain **0.91×** — all ≥0.80. Published table below is still pre-fix CI; remasure via GHA `compare-product` ×3 is pending.
+
 | Client | Origin | Lite sustain | Full sustain | Lite÷Reverse | Full÷Reverse |
 |---|---|---:|---:|---:|---:|
 | HTTP/1 · plain | HTTP/1 · plain | 🥇 **40598**<br><sub>(76 MiB / 48.1% CPU)</sub> | **35091**<br><sub>(79 MiB / 52.6% CPU)</sub> | **0.99×** | **0.86×** |
@@ -267,6 +269,8 @@ Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB). Bare reverse 5×5 
 ### MITM (TWP only)
 
 Same Client×Origin wires with interception on (`compare-product` [32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = mutating handlers (`x-twp-rps-probe`) forcing non-lite re-encode. nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job).
+
+**Post-fix note (2026-08-26):** Phase 2 closed the H3→H1 Full gap: preencoded QPACK relay was gated on empty `ViaHeaderPseudonym` while the default is `"titanium-web-proxy"`. Cool paired laptop gates (`h3h1-spot/`, c=64): H3→H1 plain Full÷Reverse **0.91×**, H3→H1 TLS **0.995×**, H1 plain **0.91×** — all ≥0.80. Published table below is still pre-fix CI; remasure via GHA `compare-product` ×3 is pending.
 
 | Client | Origin | Lite sustain | Full sustain | Lite÷Reverse | Full÷Reverse |
 |---|---|---:|---:|---:|---:|

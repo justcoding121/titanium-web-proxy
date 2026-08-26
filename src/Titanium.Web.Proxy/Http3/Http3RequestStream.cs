@@ -367,10 +367,19 @@ internal static class Http3RequestStream
                                             && response.BodyAvailable == respBodyAvailable
                                             && response.StreamBodyWriter == respWriter;
 
-                    if (responseUnchanged && fwd.PreencodedQpackHeaders != null
-                                          && string.IsNullOrEmpty(server.ViaHeaderPseudonym))
+                    // Match H2 fast-path: skip Via on transparent/SOCKS; append probe/Via literals
+                    // onto static QPACK instead of full re-encode when handlers left body unchanged.
+                    var injectVia = !sessionArgs.IsFastPath
+                                    && !sessionArgs.IsTransparent
+                                    && !sessionArgs.IsSocks
+                                    && !string.IsNullOrEmpty(server.ViaHeaderPseudonym);
+                    var canRelayPreencoded = responseUnchanged
+                                             && fwd.PreencodedQpackHeaders != null
+                                             && IsStaticOnlyQpackBlock(fwd.PreencodedQpackHeaders);
+
+                    if (canRelayPreencoded)
                     {
-                        var qpackHeaders = fwd.PreencodedQpackHeaders;
+                        var qpackHeaders = fwd.PreencodedQpackHeaders!;
                         if (MitmFastPathHelper.IsProbeOnlyMutation(
                                 respHeaderBaseline, response.Headers.MutationCount, response.Headers))
                         {
@@ -378,6 +387,12 @@ internal static class Http3RequestStream
                                                MitmFastPathHelper.ProbeHeaderName) ?? "1";
                             qpackHeaders = QpackEncoder.AppendLiteralHeader(qpackHeaders,
                                 MitmFastPathHelper.ProbeHeaderName, probeVal);
+                        }
+
+                        if (injectVia)
+                        {
+                            qpackHeaders = QpackEncoder.AppendLiteralHeader(qpackHeaders, "via",
+                                $"3.0 {server.ViaHeaderPseudonym}");
                         }
 
                         var body = fwd.PreencodedBody;
@@ -400,7 +415,7 @@ internal static class Http3RequestStream
                     }
                     else
                     {
-                        if (!sessionArgs.IsFastPath && !string.IsNullOrEmpty(server.ViaHeaderPseudonym))
+                        if (injectVia)
                             response.Headers.AddHeader(
                                 new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
                         if (fwd.PreencodedBodyRented && fwd.PreencodedBody != null)
@@ -707,6 +722,13 @@ internal static class Http3RequestStream
                 cts.Dispose();
         }
     }
+
+    /// <summary>
+    ///     True when the QPACK block used no dynamic-table inserts (RIC prefix 0x00 0x00).
+    ///     Required before <see cref="QpackEncoder.AppendLiteralHeader"/>.
+    /// </summary>
+    private static bool IsStaticOnlyQpackBlock(byte[] block) =>
+        block.Length >= 2 && block[0] == 0 && block[1] == 0;
 
     /// <summary>
     ///     True MITM H3→H1: after BeforeRequest left the exchange unchanged, reuse reverse's
