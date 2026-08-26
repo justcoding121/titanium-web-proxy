@@ -328,8 +328,17 @@ public partial class ProxyServer
             sessionArgs.CustomUpStreamProxyUsed = customUpStreamProxy;
 
             var upstreamIsHttps = sessionArgs.HttpClient.Request.IsHttps;
-            if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
-                upstreamIsHttps = false;
+            // Transparent fixed-forward reverse: origin TLS follows ForwardCleartext, not the client's
+            // :scheme / Request.IsHttps. Cleartext-listen h2c clients use http:// (:scheme=http) even when
+            // forwarding to an HTTPS origin (ForwardCleartext=false) — matching TransparentClientHandler
+            // (originIsHttps: !ForwardCleartext) and the cleartext H1 reverse isHttps assignment.
+            if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint
+                {
+                    ForwardHost.Length: > 0
+                } forwardEp)
+            {
+                upstreamIsHttps = !forwardEp.ForwardCleartext;
+            }
 
             // Shared pool is required under multiplexed fan-out (noCache caused ephemeral-port storms).
             // Residual framing is detected after the body copy via HttpStream.DataAvailable (below).

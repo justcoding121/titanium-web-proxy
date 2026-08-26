@@ -245,7 +245,9 @@ internal static class Cli
     private static bool IsMultiArmMode(ProbeMode mode) => mode is ProbeMode.Compare or ProbeMode.CompareHttp2
         or ProbeMode.CompareTls or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
         or ProbeMode.CompareHttp3Cleartext
-        or ProbeMode.CompareMitm or ProbeMode.CompareCeiling or ProbeMode.CompareBodies or ProbeMode.ComparePost
+        or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareProduct
+        or ProbeMode.CompareCeiling or ProbeMode.CompareBodies
+        or ProbeMode.ComparePost
         or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost or ProbeMode.CompareArch
         or ProbeMode.CompareSaturation
         or ProbeMode.ExplicitPoolSweep;
@@ -409,6 +411,51 @@ internal static class Cli
             case "yarp-reverse-http3-to-http2":
                 mode = ProbeMode.YarpReverseHttp3ToHttp2;
                 return true;
+            case "reverse-http3-to-h2c":
+                mode = ProbeMode.ReverseHttp3ToH2c;
+                return true;
+            case "yarp-reverse-http3-to-h2c":
+                mode = ProbeMode.YarpReverseHttp3ToH2c;
+                return true;
+            case "reverse-http1-to-h2c":
+                mode = ProbeMode.ReverseHttp1ToH2c;
+                return true;
+            case "yarp-reverse-http1-to-h2c":
+                mode = ProbeMode.YarpReverseHttp1ToH2c;
+                return true;
+            case "reverse-http1-plain-to-h2c":
+                mode = ProbeMode.ReverseHttp1PlainToH2c;
+                return true;
+            case "yarp-reverse-http1-plain-to-h2c":
+                mode = ProbeMode.YarpReverseHttp1PlainToH2c;
+                return true;
+            case "reverse-http1-plain-to-http2":
+                mode = ProbeMode.ReverseHttp1PlainToHttp2;
+                return true;
+            case "yarp-reverse-http1-plain-to-http2":
+                mode = ProbeMode.YarpReverseHttp1PlainToHttp2;
+                return true;
+            case "reverse-http1-plain-to-http3":
+                mode = ProbeMode.ReverseHttp1PlainToHttp3;
+                return true;
+            case "yarp-reverse-http1-plain-to-http3":
+                mode = ProbeMode.YarpReverseHttp1PlainToHttp3;
+                return true;
+            case "reverse-h2c-to-https":
+                mode = ProbeMode.ReverseH2cToHttps;
+                return true;
+            case "yarp-reverse-h2c-to-https":
+                mode = ProbeMode.YarpReverseH2cToHttps;
+                return true;
+            case "yarp-reverse-http1-tls-to-https":
+                mode = ProbeMode.YarpReverseHttp1TlsToHttps;
+                return true;
+            case "yarp-reverse-http2-to-https-http1":
+                mode = ProbeMode.YarpReverseHttp2ToHttpsHttp1;
+                return true;
+            case "yarp-reverse-http3-to-https-http1":
+                mode = ProbeMode.YarpReverseHttp3ToHttpsHttp1;
+                return true;
             case "yarp-reverse-http3-to-http3":
                 mode = ProbeMode.YarpReverseHttp3ToHttp3;
                 return true;
@@ -441,6 +488,12 @@ internal static class Cli
                 return true;
             case "compare-mitm":
                 mode = ProbeMode.CompareMitm;
+                return true;
+            case "compare-matrix":
+                mode = ProbeMode.CompareMatrix;
+                return true;
+            case "compare-product":
+                mode = ProbeMode.CompareProduct;
                 return true;
             case "compare-ceiling":
                 mode = ProbeMode.CompareCeiling;
@@ -540,6 +593,21 @@ internal static class Cli
               yarp-reverse-http2-to-http3 Control arm: H2 TLS -> HTTP/3 origin
               reverse-http3-to-http2  TWP H3 -> H3→H2 bridge -> Kestrel HTTPS/h2
               yarp-reverse-http3-to-http2 Control arm: H3 -> HTTPS/h2
+              reverse-http3-to-h2c    TWP H3 -> H3→H2 bridge -> prior-knowledge h2c
+              yarp-reverse-http3-to-h2c Control arm: H3 -> h2c
+              reverse-http1-to-h2c    TWP H1 TLS -> H1→H2 bridge -> prior-knowledge h2c
+              yarp-reverse-http1-to-h2c Control arm: H1 TLS -> h2c
+              reverse-http1-plain-to-h2c TWP H1 plain -> H1→H2 bridge -> prior-knowledge h2c
+              yarp-reverse-http1-plain-to-h2c Control arm: H1 plain -> h2c
+              reverse-http1-plain-to-http2 TWP H1 plain -> H1→H2 bridge -> Kestrel HTTPS/h2
+              yarp-reverse-http1-plain-to-http2 Control arm: H1 plain -> HTTPS/h2
+              reverse-http1-plain-to-http3 TWP H1 plain -> H1→H3 bridge -> Quic/h3 origin
+              yarp-reverse-http1-plain-to-http3 Control arm: H1 plain -> HTTP/3 origin
+              reverse-h2c-to-https    TWP cleartext h2c -> H2→H1 bridge -> Kestrel HTTPS/h1
+              yarp-reverse-h2c-to-https Control arm: cleartext h2c -> HTTPS/h1
+              yarp-reverse-http1-tls-to-https Control arm: H1 TLS -> HTTPS/h1 (dual-crypto)
+              yarp-reverse-http2-to-https-http1 Control arm: H2 TLS -> HTTPS/h1
+              yarp-reverse-http3-to-https-http1 Control arm: H3 -> HTTPS/h1
               yarp-reverse-http3-to-http3 Control arm: H3 -> HTTP/3 origin
               explicit-http1-multi    Explicit MITM across 16 HTTPS origins (fan-out)
               explicit-http2-multi    Same fan-out forcing HTTP/2
@@ -550,7 +618,9 @@ internal static class Cli
               compare-same            Same-protocol: H1 cleartext, H1 TLS, H1 MITM, H2 MITM, H3 MITM (+ control arms)
               compare-bridges         Cross-version bridges (H1↔H2↔H3; TWP + control arms)
               compare-http3-cleartext H3→H1 cleartext only (TWP + YARP + nginx when available)
-              compare-mitm            MITM matrix: same 15 Client×Origin pairs as reverse (inspectable/decrypt) + dual-crypto extras (TWP only)
+              compare-mitm            True MITM 5×5 (TWP interception on) + CONNECT
+              compare-matrix          Full 5×5 reverse matrix: all TWP + YARP (+ nginx terminate peers)
+              compare-product         Same-job: compare-matrix reverse peers + compare-mitm TWP
               compare-ceiling         TWP vs bare C# vs control arms on H1 / H1 TLS / H2→H1 reverse
               compare-bodies          Heavier reverse GET (64 KiB + 256 KiB) vs control arms
               compare-post            POST 64 KiB request+response reverse vs control arms

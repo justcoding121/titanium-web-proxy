@@ -10,7 +10,7 @@
 param(
     [ValidateSet(
         'compare', 'compare-http2', 'compare-tls', 'compare-terminate', 'compare-same', 'compare-bridges',
-        'compare-http3-cleartext', 'compare-mitm', 'compare-ceiling',
+        'compare-http3-cleartext', 'compare-mitm', 'compare-matrix', 'compare-product', 'compare-ceiling',
         'compare-bodies', 'compare-post', 'compare-lossy', 'compare-tls-cost', 'compare-arch', 'compare-saturation',
         'origin-direct', 'explicit-pool-sweep',
         'reverse-http1', 'bare-reverse-http1', 'nginx-reverse-http1', 'yarp-reverse-http1',
@@ -19,13 +19,20 @@ param(
         'https-mitm', 'http-mitm', 'reverse-http1-mitm', 'mitm-http2-to-http1', 'mitm-http3-to-http1',
         'reverse-http2', 'reverse-http2-cleartext', 'reverse-http2-to-h2c', 'yarp-reverse-http2-to-h2c',
         'reverse-h2c', 'yarp-reverse-h2c', 'reverse-h2c-to-h2c', 'yarp-reverse-h2c-to-h2c',
-        'reverse-h2c-to-h1', 'yarp-reverse-h2c-to-h1', 'reverse-h2c-to-h3', 'yarp-reverse-h2c-to-h3',
+        'reverse-h2c-to-h1', 'yarp-reverse-h2c-to-h1', 'reverse-h2c-to-https', 'yarp-reverse-h2c-to-https',
+        'reverse-h2c-to-h3', 'yarp-reverse-h2c-to-h3',
         'nginx-reverse-http2', 'nginx-reverse-http3-cleartext', 'yarp-reverse-http2', 'yarp-reverse-http2-to-https',
+        'yarp-reverse-http2-to-https-http1', 'yarp-reverse-http1-tls-to-https', 'yarp-reverse-http3-to-https-http1',
         'reverse-http3', 'reverse-http3-cleartext', 'yarp-reverse-http3-cleartext',
         'reverse-http11-to-http2', 'yarp-reverse-http11-to-http2',
+        'reverse-http1-to-h2c', 'yarp-reverse-http1-to-h2c',
+        'reverse-http1-plain-to-h2c', 'yarp-reverse-http1-plain-to-h2c',
+        'reverse-http1-plain-to-http2', 'yarp-reverse-http1-plain-to-http2',
+        'reverse-http1-plain-to-http3', 'yarp-reverse-http1-plain-to-http3',
         'reverse-http1-to-http3', 'yarp-reverse-http1-to-http3',
         'reverse-http2-to-http3', 'yarp-reverse-http2-to-http3',
-        'reverse-http3-to-http2', 'yarp-reverse-http3-to-http2', 'yarp-reverse-http3-to-http3',
+        'reverse-http3-to-http2', 'yarp-reverse-http3-to-http2',
+        'reverse-http3-to-h2c', 'yarp-reverse-http3-to-h2c', 'yarp-reverse-http3-to-http3',
         'explicit-http1-multi', 'explicit-http2-multi')]
     [string] $Mode = 'compare',
 

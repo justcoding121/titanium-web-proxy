@@ -581,6 +581,56 @@ public partial class ProxyServer
                 }
             }
 
+            // Cleartext reverse (DecryptSsl=false): fire BeforeHttpAuthenticate for plain HTTP/1 as well
+            // as h2c (h2c already invoked it above and returned). Without this, UpstreamHttpProtocol /
+            // AllowHttpProtocolTranslation on DecryptSsl=false endpoints is ignored — the public event
+            // docs promise it for cleartext sessions, not only prior-knowledge h2c.
+            if (!isHttps && !endPoint.DecryptSsl && !string.IsNullOrEmpty(endPoint.ForwardHost))
+            {
+                var seededHost = endPoint.ForwardHost!;
+                var seededPort = endPoint.ForwardPort ?? port;
+                var httpArgs = new BeforeHttpAuthenticateEventArgs(this, clientConnection, cancellationTokenSource,
+                    seededHost, seededPort);
+                await endPoint.InvokeBeforeHttpAuthenticate(this, httpArgs, logger);
+                if (cancellationTokenSource.IsCancellationRequested)
+                    return;
+
+                transparentUpstreamProtocol = httpArgs.UpstreamHttpProtocol;
+
+                // H1 client → H2 origin bridge (mirror the TLS-decrypt RequiresH2OriginBridge path).
+                if (EnableHttp2
+                    && httpArgs.UpstreamHttpProtocol == UpstreamHttpProtocol.Http2
+                    && httpArgs.AllowHttpProtocolTranslation)
+                {
+                    var identityHost = endPoint.GenericCertificateName;
+                    var remoteHostName = identityHost;
+                    var remotePort = httpArgs.ForwardPort;
+                    string? http2ConnectHost = null;
+                    int? http2ConnectPort = null;
+                    if (!string.Equals(httpArgs.ForwardHostName, identityHost, StringComparison.OrdinalIgnoreCase))
+                    {
+                        http2ConnectHost = httpArgs.ForwardHostName;
+                        http2ConnectPort = httpArgs.ForwardPort;
+                    }
+
+                    var negotiationSession =
+                        new SessionEventArgs(this, endPoint, clientStream!, null, cancellationTokenSource);
+                    var negotiation = await ResolveHttp2ForClientAsync(negotiationSession,
+                        clientOffersHttp2: false, remoteHostName, remotePort, http2ConnectHost, http2ConnectPort,
+                        httpArgs.UpstreamHttpProtocol, httpArgs.AllowHttpProtocolTranslation,
+                        EnableTcpServerConnectionPrefetch, cancellationToken,
+                        originIsHttps: !endPoint.ForwardCleartext);
+
+                    if (negotiation.RequiresH2OriginBridge)
+                    {
+                        await SendHttp11ToHttp2Bridge(clientStream!, endPoint, null, null, remoteHostName,
+                            remotePort, http2ConnectHost, http2ConnectPort, negotiation.RetainedConnectionTask,
+                            cancellationTokenSource);
+                        return;
+                    }
+                }
+            }
+
             // Cleartext-listen reverse (DecryptSsl=false): origin TLS follows ForwardCleartext,
             // matching inbound-h2c (originIsHttps: !ForwardCleartext). DecryptSsl=true endpoints that
             // still receive plain HTTP keep isHttps=false (existing reverse-proxy test fixture shape).

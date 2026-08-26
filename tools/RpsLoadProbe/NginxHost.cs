@@ -190,7 +190,7 @@ internal sealed class NginxHost : IDisposable
             scgi_temp_path temp/scgi;
             upstream origin {
                 server 127.0.0.1:{{originHttpPort}};
-                keepalive 32;
+                keepalive 256;
             }
             server {
                 listen 127.0.0.1:{{port}};
@@ -198,6 +198,8 @@ internal sealed class NginxHost : IDisposable
                     proxy_http_version 1.1;
                     proxy_set_header Connection "";
                     proxy_set_header Host $host;
+                    proxy_buffering off;
+                    proxy_request_buffering off;
                     proxy_pass http://origin;
                 }
             }
@@ -233,7 +235,7 @@ internal sealed class NginxHost : IDisposable
                     scgi_temp_path temp/scgi;
                     upstream origin {
                         server 127.0.0.1:{{originHttpPort}};
-                        keepalive 32;
+                        keepalive 256;
                     }
                     map $http_upgrade $connection_upgrade {
                         default upgrade;
@@ -249,12 +251,16 @@ internal sealed class NginxHost : IDisposable
                             proxy_set_header Upgrade $http_upgrade;
                             proxy_set_header Connection $connection_upgrade;
                             proxy_set_header Host $host;
+                            proxy_buffering off;
+                            proxy_request_buffering off;
                             proxy_pass http://origin;
                         }
                         location / {
                             proxy_http_version 1.1;
                             proxy_set_header Connection "";
                             proxy_set_header Host $host;
+                            proxy_buffering off;
+                            proxy_request_buffering off;
                             proxy_pass http://origin;
                         }
                     }
@@ -297,7 +303,7 @@ internal sealed class NginxHost : IDisposable
                     scgi_temp_path temp/scgi;
                     upstream origin {
                         server 127.0.0.1:{{originHttpPort}};
-                        keepalive 32;
+                        keepalive 256;
                     }
                     server {
                         {{listenAndHttp2}}
@@ -308,6 +314,8 @@ internal sealed class NginxHost : IDisposable
                             proxy_http_version 1.1;
                             proxy_set_header Connection "";
                             proxy_set_header Host $host;
+                            proxy_buffering off;
+                            proxy_request_buffering off;
                             proxy_pass http://origin;
                         }
                     }
@@ -346,7 +354,7 @@ internal sealed class NginxHost : IDisposable
                     scgi_temp_path temp/scgi;
                     upstream origin {
                         server 127.0.0.1:{{originHttpPort}};
-                        keepalive 32;
+                        keepalive 256;
                     }
                     server {
                         listen 127.0.0.1:{{port}} ssl;
@@ -362,6 +370,8 @@ internal sealed class NginxHost : IDisposable
                             proxy_http_version 1.1;
                             proxy_set_header Connection "";
                             proxy_set_header Host $host;
+                            proxy_buffering off;
+                            proxy_request_buffering off;
                             proxy_pass http://origin;
                         }
                     }
