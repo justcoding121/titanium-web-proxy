@@ -772,6 +772,8 @@ internal sealed class TwpProxyHost : IDisposable
         int? maxCachedConnections = null, int? maxConcurrentStreamsPerConnection = null)
     {
         var proxy = new ProxyServer(false, false, false);
+        // Benchmark arms model reverse-style MITM (handler header add only), not explicit-proxy Via.
+        proxy.ViaHeaderPseudonym = string.Empty;
         // Saturation runs must not format or enqueue diagnostics on session threads.
         proxy.Logging.Enabled = false;
         proxy.CertificateManager.SaveFakeCertificates = false;
