@@ -143,7 +143,7 @@ Same layout as Block B. Requires QuicListener; nginx only with `http_v3_module` 
 
 **How to read the tables**
 
-- **Reverse** = bare transparent fixed-forward (no TWP plugins / interception). nginx knobs match TWP/YARP streaming (`keepalive 256`, `proxy_buffering off`). **MITM** = TWP-only table on the same Client×Origin wires: **Lite** = no-op handlers (unchanged-lite finish may reuse reverse relay); **Full** = mutating handlers (`x-twp-rps-probe`) forcing decode/re-encode. nginx/YARP cannot MITM. **HTTP/3 has no cleartext client** (QUIC always encrypted).
+- **Reverse** = bare transparent fixed-forward (no TWP plugins / interception). nginx knobs match TWP/YARP streaming (`keepalive 256`, `proxy_buffering off`). **MITM** = TWP-only table on the same Client×Origin wires: **Lite** = no-op handlers (unchanged-lite finish reuses reverse compressed relay); **Full** = mutating handlers that append up to four unique headers per direction (RPS harness adds one; product uses `MitmCompressedRelayHelper` — no probe name in library code). Remove/replace/non-unique header growth and body mutation still force full decode/re-encode. nginx/YARP cannot MITM. **HTTP/3 has no cleartext client** (QUIC always encrypted).
 - **Sustainable** = last concurrency that still met error/latency SLOs. **Peak** = highest RPS in that ramp.
 - 🥇 = best among **TWP / nginx / YARP** on Reverse rows (or saturation blocks): highest RPS; on an RPS tie, lower Memory (RSS) then lower CPU%. MITM is TWP-only. **Lite÷Reverse** / **Full÷Reverse** = TWP MITM lite or full sustain ÷ TWP Reverse sustain on the same Client×Origin from the same `compare-product` job.
 - *Not possible* = product cannot do that path. *Not measured* = path exists but no published number yet for that OS.
@@ -199,7 +199,7 @@ Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB). Bare reverse 5×5
 
 ### MITM (TWP only)
 
-Same Client×Origin wires with interception on (`compare-product` [32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = mutating handlers (`x-twp-rps-probe`) forcing non-lite re-encode. nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job).
+Same Client×Origin wires with interception on (`compare-product` [32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job).
 
 **Post-fix note (2026-08-26):** Phase 2 closed the H3→H1 Full gap: preencoded QPACK relay was gated on empty `ViaHeaderPseudonym` while the default is `"titanium-web-proxy"`. Cool paired laptop gates (`h3h1-spot/`, c=64): H3→H1 plain Full÷Reverse **0.91×**, H3→H1 TLS **0.995×**, H1 plain **0.91×** — all ≥0.80. Published table below is still pre-fix CI; remasure via GHA `compare-product` ×3 is pending.
 
@@ -268,7 +268,7 @@ Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB). Bare reverse 5×5 
 
 ### MITM (TWP only)
 
-Same Client×Origin wires with interception on (`compare-product` [32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = mutating handlers (`x-twp-rps-probe`) forcing non-lite re-encode. nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job).
+Same Client×Origin wires with interception on (`compare-product` [32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job).
 
 **Post-fix note (2026-08-26):** Phase 2 closed the H3→H1 Full gap: preencoded QPACK relay was gated on empty `ViaHeaderPseudonym` while the default is `"titanium-web-proxy"`. Cool paired laptop gates (`h3h1-spot/`, c=64): H3→H1 plain Full÷Reverse **0.91×**, H3→H1 TLS **0.995×**, H1 plain **0.91×** — all ≥0.80. Published table below is still pre-fix CI; remasure via GHA `compare-product` ×3 is pending.
 
