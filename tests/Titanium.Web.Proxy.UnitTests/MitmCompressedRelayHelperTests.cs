@@ -102,7 +102,7 @@ public class MitmCompressedRelayHelperTests
     }
 
     [TestMethod]
-    public void SecondSetCookie_NonUniqueGrowth_Rejected()
+    public void SecondSetCookie_NonUniqueGrowth_AllowedInV2()
     {
         var before = new HeaderCollection();
         before.AddHeader("cookie", "a=1");
@@ -112,8 +112,11 @@ public class MitmCompressedRelayHelperTests
         after.AddHeader("cookie", "a=1");
         after.AddHeader("cookie", "b=2");
 
-        Assert.IsFalse(MitmCompressedRelayHelper.AllowsCompressedRelay(
-            baseline, after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out _));
+        Assert.IsTrue(MitmCompressedRelayHelper.AllowsCompressedRelay(
+            baseline, after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out var added));
+        Assert.AreEqual(1, added.Count);
+        Assert.AreEqual("cookie", added[0].Name);
+        Assert.AreEqual("b=2", added[0].Value);
     }
 
     [TestMethod]

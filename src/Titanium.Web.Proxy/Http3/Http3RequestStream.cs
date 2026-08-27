@@ -361,14 +361,10 @@ internal static class Http3RequestStream
 
                     await onBeforeResponse(sessionArgs);
 
-                    var responseUnchanged = MitmCompressedRelayHelper.AllowsCompressedRelay(
-                                                    respHeaderRelayBaseline, response.Headers,
-                                                    MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
-                                                    out var addedRespHeaders)
-                                            && response.StatusCode == respStatusBaseline
-                                            && response.IsBodyRead == respBodyRead
-                                            && response.BodyAvailable == respBodyAvailable
-                                            && response.StreamBodyWriter == respWriter;
+                    var responseBodyUnchanged = response.StatusCode == respStatusBaseline
+                                                && response.IsBodyRead == respBodyRead
+                                                && response.BodyAvailable == respBodyAvailable
+                                                && response.StreamBodyWriter == respWriter;
 
                     // Match H2 fast-path: skip Via on transparent/SOCKS; append handler/Via literals
                     // onto static QPACK instead of full re-encode when handlers left body unchanged.
@@ -376,20 +372,25 @@ internal static class Http3RequestStream
                                     && !sessionArgs.IsTransparent
                                     && !sessionArgs.IsSocks
                                     && !string.IsNullOrEmpty(server.ViaHeaderPseudonym);
-                    var canRelayPreencoded = responseUnchanged
+                    byte[] qpackHeaders = null!;
+                    MitmCompressedRelayHelper.AddedHeaderBuffer addedRespHeaders = default;
+                    var canRelayPreencoded = responseBodyUnchanged
                                              && fwd.PreencodedQpackHeaders != null
-                                             && IsStaticOnlyQpackBlock(fwd.PreencodedQpackHeaders);
+                                             && IsStaticOnlyQpackBlock(fwd.PreencodedQpackHeaders)
+                                             && MitmStaticRebuildHelper.TryPrepareStaticQpackRelay(
+                                                 fwd.PreencodedQpackHeaders, respHeaderRelayBaseline,
+                                                 response.Headers, out qpackHeaders, out addedRespHeaders);
 
                     if (canRelayPreencoded)
                     {
-                        var qpackHeaders = fwd.PreencodedQpackHeaders!;
                         for (var i = 0; i < addedRespHeaders.Count; i++)
                         {
                             var h = addedRespHeaders[i];
                             qpackHeaders = QpackEncoder.AppendLiteralHeader(qpackHeaders, h.Name, h.Value);
                         }
 
-                        if (injectVia && !addedRespHeaders.ContainsName("via"))
+                        if (injectVia && !addedRespHeaders.ContainsName("via")
+                                       && !response.Headers.HeaderExists("via"))
                         {
                             qpackHeaders = QpackEncoder.AppendLiteralHeader(qpackHeaders, "via",
                                 $"3.0 {server.ViaHeaderPseudonym}");

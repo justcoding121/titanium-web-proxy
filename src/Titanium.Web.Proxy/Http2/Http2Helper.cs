@@ -1489,23 +1489,20 @@ namespace Titanium.Web.Proxy.Http2
                                     && relayState.CapturedCompressedHeaders != null
                                     && !request.IsBodyRead
                                     && !request.BodyAvailable
-                                    && MitmCompressedRelayHelper.AllowsCompressedRelay(
+                                    && TryPrepareMitmStaticHpackRelay(
+                                        relayState.CapturedCompressedHeaders,
                                         relayState.HeadersRelayBaseline, request.Headers,
-                                        MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out var addedReqHeaders)
+                                        injectVia,
+                                        injectVia
+                                            ? $"{request.HttpVersion.Major}.{request.HttpVersion.Minor} {sessionArgs.Server.ViaHeaderPseudonym}"
+                                            : null,
+                                        out var reqBlockToRelay, out var reqAppendSuffix)
                                     && string.Equals(request.Method, relayState.CapturedMethod, StringComparison.Ordinal)
                                     && request.RequestUriString8.Equals(relayState.CapturedPath)
                                     && request.Authority.Equals(relayState.CapturedAuthority))
                                 {
-                                    var blockToRelay = relayState.CapturedCompressedHeaders;
-                                    var appendSuffix = BuildStaticLiteralAppendSuffix(
-                                        addedReqHeaders,
-                                        injectVia && !addedReqHeaders.ContainsName("via") ? "via" : null,
-                                        injectVia && !addedReqHeaders.ContainsName("via")
-                                            ? $"{request.HttpVersion.Major}.{request.HttpVersion.Minor} {sessionArgs.Server.ViaHeaderPseudonym}"
-                                            : null);
-
-                                    await RelayCompressedHeaderBlockAsync(hbStreamId, blockToRelay, endStreamFlag,
-                                        appendSuffix);
+                                    await RelayCompressedHeaderBlockAsync(hbStreamId, reqBlockToRelay, endStreamFlag,
+                                        reqAppendSuffix);
                                     relayState.EnableRequestDataCompressedRelay();
                                 }
                                 else
@@ -1716,21 +1713,18 @@ namespace Titanium.Web.Proxy.Http2
                                 && connectionState.Streams.TryGetValue(hbStreamId, out var respRelay)
                                 && respRelay.CapturedCompressedHeaders != null
                                 && !finalResponse.IsBodyRead
-                                && MitmCompressedRelayHelper.AllowsCompressedRelay(
+                                && TryPrepareMitmStaticHpackRelay(
+                                    respRelay.CapturedCompressedHeaders,
                                     respRelay.HeadersRelayBaseline, finalResponse.Headers,
-                                    MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out var addedRespHeaders)
+                                    injectViaResp,
+                                    injectViaResp
+                                        ? $"{finalResponse.HttpVersion.Major}.{finalResponse.HttpVersion.Minor} {sessionArgs.Server.ViaHeaderPseudonym}"
+                                        : null,
+                                    out var respBlockToRelay, out var respAppendSuffix)
                                 && finalResponse.StatusCode == respRelay.CapturedStatusCode)
                             {
-                                var blockToRelay = respRelay.CapturedCompressedHeaders;
-                                var appendSuffix = BuildStaticLiteralAppendSuffix(
-                                    addedRespHeaders,
-                                    injectViaResp && !addedRespHeaders.ContainsName("via") ? "via" : null,
-                                    injectViaResp && !addedRespHeaders.ContainsName("via")
-                                        ? $"{finalResponse.HttpVersion.Major}.{finalResponse.HttpVersion.Minor} {sessionArgs.Server.ViaHeaderPseudonym}"
-                                        : null);
-
-                                await RelayCompressedHeaderBlockAsync(hbStreamId, blockToRelay, endStreamFlag,
-                                    appendSuffix);
+                                await RelayCompressedHeaderBlockAsync(hbStreamId, respBlockToRelay, endStreamFlag,
+                                    respAppendSuffix);
                                 respRelay.EnableResponseDataCompressedRelay();
                             }
                             else
@@ -4223,6 +4217,30 @@ namespace Titanium.Web.Proxy.Http2
                 WriteStaticLiteralWithoutIndexing(result, offset, extraName, extraValue!);
 
             return result;
+        }
+
+        private static bool TryPrepareMitmStaticHpackRelay(
+            byte[] capturedBlock,
+            MitmCompressedRelayHelper.HeaderRelayBaseline baseline,
+            HeaderCollection after,
+            bool injectVia,
+            string? viaValue,
+            out byte[] blockToRelay,
+            out byte[]? appendSuffix)
+        {
+            blockToRelay = capturedBlock;
+            appendSuffix = null;
+
+            if (!MitmStaticRebuildHelper.TryPrepareStaticHpackRelay(
+                    capturedBlock, baseline, after, out blockToRelay, out var added))
+                return false;
+
+            var injectViaLiteral = injectVia && !after.HeaderExists("via");
+            appendSuffix = BuildStaticLiteralAppendSuffix(
+                added,
+                injectViaLiteral && !added.ContainsName("via") ? "via" : null,
+                injectViaLiteral && !added.ContainsName("via") ? viaValue : null);
+            return true;
         }
 
         /// <summary>
