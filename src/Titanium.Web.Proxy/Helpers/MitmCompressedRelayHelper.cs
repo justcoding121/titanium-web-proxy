@@ -107,12 +107,15 @@ internal static class MitmCompressedRelayHelper
     {
         private readonly int _mutationCount;
         private readonly Dictionary<string, string> _unique;
+        private readonly Dictionary<string, List<string>> _nonUniqueSnapshot;
         private readonly int _nonUniqueNamesAtCapture;
 
-        internal HeaderRelayBaseline(int mutationCount, Dictionary<string, string> unique, int nonUniqueNamesAtCapture)
+        internal HeaderRelayBaseline(int mutationCount, Dictionary<string, string> unique,
+            Dictionary<string, List<string>> nonUniqueSnapshot, int nonUniqueNamesAtCapture)
         {
             _mutationCount = mutationCount;
             _unique = unique;
+            _nonUniqueSnapshot = nonUniqueSnapshot;
             _nonUniqueNamesAtCapture = nonUniqueNamesAtCapture;
         }
 
@@ -121,7 +124,18 @@ internal static class MitmCompressedRelayHelper
             var unique = new Dictionary<string, string>(headers.Headers.Count, StringComparer.OrdinalIgnoreCase);
             foreach (var kv in headers.Headers)
                 unique[kv.Key] = kv.Value.Value;
-            return new HeaderRelayBaseline(headers.MutationCount, unique, headers.NonUniqueHeaders.Count);
+
+            var nonUnique = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in headers.NonUniqueHeaders)
+            {
+                var values = new List<string>(kv.Value.Count);
+                foreach (var h in kv.Value)
+                    values.Add(h.Value);
+                nonUnique[kv.Key] = values;
+            }
+
+            return new HeaderRelayBaseline(headers.MutationCount, unique, nonUnique,
+                headers.NonUniqueHeaders.Count);
         }
 
         internal int MutationCount => _mutationCount;
@@ -130,9 +144,8 @@ internal static class MitmCompressedRelayHelper
         {
             added = default;
 
-            // v1: non-unique header lists (Set-Cookie chains) require full re-encode.
             if (_nonUniqueNamesAtCapture > 0 || after.NonUniqueHeaders.Count > 0)
-                return after.MutationCount == _mutationCount;
+                return TryDiffNonUniqueTrailingAppend(after, maxAdds, out added);
 
             foreach (var kv in _unique)
             {
@@ -150,6 +163,80 @@ internal static class MitmCompressedRelayHelper
                     return false;
 
                 added.Add(kv.Key, kv.Value.Value);
+            }
+
+            if (added.Count == 0)
+                return after.MutationCount == _mutationCount;
+
+            return added.Count <= maxAdds;
+        }
+
+        /// <summary>Allow trailing values on existing non-unique header names (e.g. second Set-Cookie).</summary>
+        private bool TryDiffNonUniqueTrailingAppend(HeaderCollection after, int maxAdds, out AddedHeaderBuffer added)
+        {
+            added = default;
+
+            foreach (var kv in _unique)
+            {
+                if (after.NonUniqueHeaders.TryGetValue(kv.Key, out var grownList))
+                {
+                    if (grownList.Count < 1
+                        || !string.Equals(kv.Value, grownList[0].Value, StringComparison.Ordinal))
+                        return false;
+
+                    for (var i = 1; i < grownList.Count; i++)
+                    {
+                        if (added.Count >= maxAdds)
+                            return false;
+                        added.Add(kv.Key, grownList[i].Value);
+                    }
+
+                    continue;
+                }
+
+                if (!after.Headers.TryGetValue(kv.Key, out var header)
+                    || !string.Equals(header.Value, kv.Value, StringComparison.Ordinal))
+                    return false;
+            }
+
+            foreach (var kv in after.Headers)
+            {
+                if (_unique.ContainsKey(kv.Key))
+                    continue;
+
+                if (added.Count >= maxAdds)
+                    return false;
+
+                added.Add(kv.Key, kv.Value.Value);
+            }
+
+            foreach (var kv in _nonUniqueSnapshot)
+            {
+                if (!after.NonUniqueHeaders.TryGetValue(kv.Key, out var afterList))
+                    return false;
+
+                var beforeList = kv.Value;
+                if (afterList.Count < beforeList.Count)
+                    return false;
+
+                for (var i = 0; i < beforeList.Count; i++)
+                {
+                    if (!string.Equals(beforeList[i], afterList[i].Value, StringComparison.Ordinal))
+                        return false;
+                }
+
+                for (var i = beforeList.Count; i < afterList.Count; i++)
+                {
+                    if (added.Count >= maxAdds)
+                        return false;
+                    added.Add(kv.Key, afterList[i].Value);
+                }
+            }
+
+            foreach (var name in after.NonUniqueHeaders.Keys)
+            {
+                if (!_nonUniqueSnapshot.ContainsKey(name) && !_unique.ContainsKey(name))
+                    return false;
             }
 
             if (added.Count == 0)

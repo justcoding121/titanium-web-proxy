@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2.Hpack;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
@@ -111,6 +112,27 @@ internal static class MitmStaticRebuildHelper
 
         rebuilt = QpackEncoder.Encode(filtered);
         return true;
+    }
+
+    internal static bool TryPrepareStaticQpackRelay(
+        byte[] capturedBlock,
+        MitmCompressedRelayHelper.HeaderRelayBaseline baseline,
+        HeaderCollection after,
+        out byte[] blockToRelay,
+        out MitmCompressedRelayHelper.AddedHeaderBuffer appendLiterals)
+    {
+        blockToRelay = capturedBlock;
+        appendLiterals = default;
+
+        if (baseline.TryDiffAppendOnly(after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
+                out appendLiterals))
+            return true;
+
+        if (baseline.TryDiffDropOnly(after, MitmCompressedRelayHelper.DefaultMaxDrops, out var dropped)
+            && TryRebuildStaticQpackBlock(capturedBlock, dropped, out blockToRelay))
+            return true;
+
+        return false;
     }
 
     private static List<(ByteString Name, ByteString Value)>? DecodeStaticHpackBlock(ReadOnlySpan<byte> block)
