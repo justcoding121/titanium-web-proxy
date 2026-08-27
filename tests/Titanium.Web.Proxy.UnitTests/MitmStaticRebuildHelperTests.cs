@@ -155,7 +155,96 @@ public class MitmStaticRebuildHelperTests
     }
 
     [TestMethod]
-    public void RebuildStaticHpackBlock_IncrementalIndexingBlock_Rejected()
+    public void TryPrepareStaticQpackRelay_AppendOnly_ReturnsOriginalBlock()
+    {
+        var original = QpackEncoder.Encode(new[]
+        {
+            (":method", "GET"),
+            ("accept", "*/*")
+        });
+
+        var before = new HeaderCollection();
+        before.AddHeader("accept", "*/*");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
+
+        var after = new HeaderCollection();
+        after.AddHeader("accept", "*/*");
+        after.AddHeader("X-Track", "1");
+
+        Assert.IsTrue(MitmStaticRebuildHelper.TryPrepareStaticQpackRelay(
+            original, baseline, after, out var block, out var added));
+        Assert.AreSame(original, block);
+        Assert.AreEqual(1, added.Count);
+    }
+
+    [TestMethod]
+    public void TryPrepareStaticQpackRelay_DropOnly_RebuildsBlock()
+    {
+        var original = QpackEncoder.Encode(new[]
+        {
+            (":method", "GET"),
+            ("accept", "*/*"),
+            ("user-agent", "test")
+        });
+
+        var before = new HeaderCollection();
+        before.AddHeader("accept", "*/*");
+        before.AddHeader("user-agent", "test");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
+
+        var after = new HeaderCollection();
+        after.AddHeader("accept", "*/*");
+
+        Assert.IsTrue(MitmStaticRebuildHelper.TryPrepareStaticQpackRelay(
+            original, baseline, after, out var block, out var added));
+        Assert.AreNotSame(original, block);
+        Assert.AreEqual(0, added.Count);
+        var decoded = QpackDecoder.Decode(block);
+        Assert.AreEqual(2, decoded.Count);
+        Assert.IsFalse(decoded.Exists(h => h.Name == "user-agent"));
+    }
+
+    [TestMethod]
+    public void NonUniqueSnapshot_TrailingAppend_AllowsRelay()
+    {
+        var before = new HeaderCollection();
+        before.AddHeader("set-cookie", "a=1");
+        before.AddHeader("set-cookie", "b=2");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
+
+        var after = new HeaderCollection();
+        after.AddHeader("set-cookie", "a=1");
+        after.AddHeader("set-cookie", "b=2");
+        after.AddHeader("set-cookie", "c=3");
+
+        Assert.IsTrue(baseline.TryDiffAppendOnly(
+            after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out var added));
+        Assert.AreEqual(1, added.Count);
+        Assert.AreEqual("c=3", added[0].Value);
+    }
+
+    [TestMethod]
+    public void RebuildStaticHpackBlock_DropFourHeaders_RoundTrips()
+    {
+        var original = EncodeStaticHpack(
+            (StaticTable.KnownHeaderMethod, (ByteString)"GET"),
+            ((ByteString)"h1", (ByteString)"1"),
+            ((ByteString)"h2", (ByteString)"2"),
+            ((ByteString)"h3", (ByteString)"3"),
+            ((ByteString)"h4", (ByteString)"4"),
+            ((ByteString)"h5", (ByteString)"5"));
+
+        var dropped = default(MitmCompressedRelayHelper.DroppedNameBuffer);
+        dropped.Add("h2");
+        dropped.Add("h4");
+        Assert.IsTrue(MitmStaticRebuildHelper.TryRebuildStaticHpackBlock(original, dropped, out var rebuilt));
+
+        var decoded = DecodeHpack(rebuilt);
+        Assert.AreEqual(4, decoded.Count);
+        Assert.IsFalse(decoded.Contains(("h2", "2")));
+        Assert.IsFalse(decoded.Contains(("h4", "4")));
+    }
+
     {
         var encoder = new Encoder(4096);
         using var ms = new MemoryStream();
