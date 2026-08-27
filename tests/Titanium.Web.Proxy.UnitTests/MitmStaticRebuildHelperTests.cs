@@ -245,6 +245,8 @@ public class MitmStaticRebuildHelperTests
         Assert.IsFalse(decoded.Contains(("h4", "4")));
     }
 
+    [TestMethod]
+    public void RebuildStaticHpackBlock_IncrementalIndexingBlock_Rejected()
     {
         var encoder = new Encoder(4096);
         using var ms = new MemoryStream();
