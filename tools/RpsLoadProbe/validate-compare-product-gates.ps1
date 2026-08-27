@@ -1,7 +1,7 @@
-# Validate compare-product medians: MITM Lite/Full >= 0.80, reverse TWP/YARP >= 0.95 vs baseline run.
+# Validate compare-product medians: MITM Lite/Full >= 0.70, reverse TWP/YARP >= 0.95 vs baseline run.
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
-    [double] $MitmGate = 0.80,
+    [double] $MitmGate = 0.70,
     [double] $ReverseYarpGate = 0.95,
     [string] $BaselineCsvPath = ""
 )

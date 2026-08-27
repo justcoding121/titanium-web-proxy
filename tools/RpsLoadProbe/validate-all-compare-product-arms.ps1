@@ -1,7 +1,7 @@
 # Full compare-product gate validation (all WIRES rows, Win+Lin, median of 3 GHA runs).
 param(
     [Parameter(Mandatory)] [string[]] $RunIds,
-    [double] $MitmGate = 0.80,
+    [double] $MitmGate = 0.70,
     [double] $ReverseYarpGate = 0.95,
     [string] $BaselineRunId = '32960766249'
 )

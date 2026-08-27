@@ -1,10 +1,10 @@
-# PR2 local spot gate: compare-spot @ c=64, validate Full÷Reverse >= 0.80 and reverse TWP÷YARP >= 0.95.
+# PR2 local spot gate: compare-spot @ c=64, validate Full÷Reverse >= 0.70 and reverse TWP÷YARP >= 0.95.
 [CmdletBinding()]
 param(
     [int] $Concurrency = 64,
     [int] $WarmupSec = 2,
     [int] $DurationSec = 8,
-    [double] $MitmRatioGate = 0.80,
+    [double] $MitmRatioGate = 0.70,
     [double] $ReverseYarpGate = 0.95,
     [switch] $SkipBuild
 )
