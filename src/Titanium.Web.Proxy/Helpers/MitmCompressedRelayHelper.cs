@@ -11,7 +11,46 @@ namespace Titanium.Web.Proxy.Helpers;
 /// </summary>
 internal static class MitmCompressedRelayHelper
 {
+    /// <summary>Stack-friendly buffer for up to four dropped unique header names.</summary>
+    internal struct DroppedNameBuffer
+    {
+        private string _n0, _n1, _n2, _n3;
+        internal int Count { get; private set; }
+
+        internal void Add(string name)
+        {
+            switch (Count++)
+            {
+                case 0: _n0 = name; break;
+                case 1: _n1 = name; break;
+                case 2: _n2 = name; break;
+                default: _n3 = name; break;
+            }
+        }
+
+        internal readonly string this[int index] => index switch
+        {
+            0 => _n0,
+            1 => _n1,
+            2 => _n2,
+            3 => _n3,
+            _ => throw new ArgumentOutOfRangeException(nameof(index))
+        };
+
+        internal readonly bool Contains(string name, StringComparison comparison = StringComparison.OrdinalIgnoreCase)
+        {
+            for (var i = 0; i < Count; i++)
+            {
+                if (string.Equals(this[i], name, comparison))
+                    return true;
+            }
+
+            return false;
+        }
+    }
+
     internal const int DefaultMaxAppendHeaders = 4;
+    internal const int DefaultMaxDrops = 4;
 
     internal readonly struct AddedHeader
     {
@@ -117,6 +156,46 @@ internal static class MitmCompressedRelayHelper
                 return after.MutationCount == _mutationCount;
 
             return added.Count <= maxAdds;
+        }
+
+        /// <summary>Detect drop-only mutations (1..maxDrops unique keys removed, no adds/modifies).</summary>
+        internal bool TryDiffDropOnly(HeaderCollection after, int maxDrops, out DroppedNameBuffer dropped)
+        {
+            dropped = default;
+
+            if (_mutationCount == after.MutationCount)
+                return false;
+
+            if (_nonUniqueNamesAtCapture > 0 || after.NonUniqueHeaders.Count > 0)
+                return false;
+
+            var dropCount = 0;
+            foreach (var kv in _unique)
+            {
+                if (after.Headers.TryGetValue(kv.Key, out var header))
+                {
+                    if (!string.Equals(header.Value, kv.Value, StringComparison.Ordinal))
+                        return false;
+                }
+                else
+                {
+                    if (dropCount >= maxDrops)
+                        return false;
+                    dropped.Add(kv.Key);
+                    dropCount++;
+                }
+            }
+
+            if (dropCount == 0)
+                return false;
+
+            foreach (var kv in after.Headers)
+            {
+                if (!_unique.ContainsKey(kv.Key))
+                    return false;
+            }
+
+            return dropCount <= maxDrops;
         }
     }
 
