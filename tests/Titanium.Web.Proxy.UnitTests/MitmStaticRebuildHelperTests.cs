@@ -224,7 +224,69 @@ public class MitmStaticRebuildHelperTests
     }
 
     [TestMethod]
-    public void RebuildStaticHpackBlock_DropFourHeaders_RoundTrips()
+    public void TryPrepareStaticHpackRelay_DropOnly_RebuildsBlock()
+    {
+        var original = EncodeStaticHpack(
+            (StaticTable.KnownHeaderMethod, (ByteString)"GET"),
+            ((ByteString)"accept", (ByteString)"*/*"),
+            ((ByteString)"user-agent", (ByteString)"test"));
+
+        var before = new HeaderCollection();
+        before.AddHeader("accept", "*/*");
+        before.AddHeader("user-agent", "test");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
+
+        var after = new HeaderCollection();
+        after.AddHeader("accept", "*/*");
+
+        Assert.IsTrue(MitmStaticRebuildHelper.TryPrepareStaticHpackRelay(
+            original, baseline, after, out var block, out var added));
+        Assert.AreNotSame(original, block);
+        Assert.AreEqual(0, added.Count);
+    }
+
+    [TestMethod]
+    public void TryPrepareStaticHpackRelay_ModifyValue_Rejected()
+    {
+        var original = EncodeStaticHpack(
+            (StaticTable.KnownHeaderMethod, (ByteString)"GET"),
+            ((ByteString)"accept", (ByteString)"*/*"));
+
+        var before = new HeaderCollection();
+        before.AddHeader("accept", "*/*");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
+
+        var after = new HeaderCollection();
+        after.AddHeader("accept", "text/plain");
+
+        Assert.IsFalse(MitmStaticRebuildHelper.TryPrepareStaticHpackRelay(
+            original, baseline, after, out _, out _));
+    }
+
+    [TestMethod]
+    public void DropOnly_UnchangedHeaders_ReturnsFalse()
+    {
+        var headers = new HeaderCollection();
+        headers.AddHeader("accept", "*/*");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(headers);
+        Assert.IsFalse(baseline.TryDiffDropOnly(headers, MitmCompressedRelayHelper.DefaultMaxDrops, out _));
+    }
+
+    [TestMethod]
+    public void NonUnique_RemoveFromList_Rejected()
+    {
+        var before = new HeaderCollection();
+        before.AddHeader("set-cookie", "a=1");
+        before.AddHeader("set-cookie", "b=2");
+        var baseline = MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(before);
+
+        var after = new HeaderCollection();
+        after.AddHeader("set-cookie", "a=1");
+
+        Assert.IsFalse(baseline.TryDiffAppendOnly(
+            after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out _));
+    }
+
     {
         var original = EncodeStaticHpack(
             (StaticTable.KnownHeaderMethod, (ByteString)"GET"),

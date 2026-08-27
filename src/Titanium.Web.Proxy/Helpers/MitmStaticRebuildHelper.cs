@@ -135,6 +135,27 @@ internal static class MitmStaticRebuildHelper
         return false;
     }
 
+    internal static bool TryPrepareStaticHpackRelay(
+        byte[] capturedBlock,
+        MitmCompressedRelayHelper.HeaderRelayBaseline baseline,
+        HeaderCollection after,
+        out byte[] blockToRelay,
+        out MitmCompressedRelayHelper.AddedHeaderBuffer appendLiterals)
+    {
+        blockToRelay = capturedBlock;
+        appendLiterals = default;
+
+        if (baseline.TryDiffAppendOnly(after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
+                out appendLiterals))
+            return true;
+
+        if (baseline.TryDiffDropOnly(after, MitmCompressedRelayHelper.DefaultMaxDrops, out var dropped)
+            && TryRebuildStaticHpackBlock(capturedBlock, dropped, out blockToRelay))
+            return true;
+
+        return false;
+    }
+
     private static List<(ByteString Name, ByteString Value)>? DecodeStaticHpackBlock(ReadOnlySpan<byte> block)
     {
         var headers = new List<(ByteString, ByteString)>();

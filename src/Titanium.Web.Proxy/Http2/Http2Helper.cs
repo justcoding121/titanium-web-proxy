@@ -4230,29 +4230,17 @@ namespace Titanium.Web.Proxy.Http2
         {
             blockToRelay = capturedBlock;
             appendSuffix = null;
+
+            if (!MitmStaticRebuildHelper.TryPrepareStaticHpackRelay(
+                    capturedBlock, baseline, after, out blockToRelay, out var added))
+                return false;
+
             var injectViaLiteral = injectVia && !after.HeaderExists("via");
-
-            if (baseline.TryDiffAppendOnly(after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders,
-                    out var added))
-            {
-                appendSuffix = BuildStaticLiteralAppendSuffix(
-                    added,
-                    injectViaLiteral && !added.ContainsName("via") ? "via" : null,
-                    injectViaLiteral && !added.ContainsName("via") ? viaValue : null);
-                return true;
-            }
-
-            if (baseline.TryDiffDropOnly(after, MitmCompressedRelayHelper.DefaultMaxDrops, out var dropped)
-                && MitmStaticRebuildHelper.TryRebuildStaticHpackBlock(capturedBlock, dropped, out blockToRelay))
-            {
-                appendSuffix = BuildStaticLiteralAppendSuffix(
-                    default,
-                    injectViaLiteral ? "via" : null,
-                    injectViaLiteral ? viaValue : null);
-                return true;
-            }
-
-            return false;
+            appendSuffix = BuildStaticLiteralAppendSuffix(
+                added,
+                injectViaLiteral && !added.ContainsName("via") ? "via" : null,
+                injectViaLiteral && !added.ContainsName("via") ? viaValue : null);
+            return true;
         }
 
         /// <summary>
