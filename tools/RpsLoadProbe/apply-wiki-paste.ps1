@@ -15,21 +15,17 @@ $ge = [char]0x2265
 $rarr = [char]0x2192
 $endash = [char]0x2013
 
-function Fix-Utf8Mojibake([string]$text) {
-    if ([string]::IsNullOrEmpty($text)) { return $text }
-    try {
-        $bytes = [System.Text.Encoding]::GetEncoding(28591).GetBytes($text)
-        return [System.Text.Encoding]::UTF8.GetString($bytes)
-    }
-    catch {
-        return $text
-    }
+function Test-Utf8Mojibake([string]$text) {
+    return $text -match ([string][char]0x00C2 + [char]0x00B7) -or
+           $text -match ([string][char]0x00C3 + [char]0x2014) -or
+           $text -match ([string][char]0x00C3 + [char]0x00B7) -or
+           $text -match ([string][char]0x00F0 + [char]0x0178 + [char]0x00A5 + [char]0x2021)
 }
 
 $raw = [System.IO.File]::ReadAllText((Resolve-Path $PasteFile), [System.Text.Encoding]::UTF8)
-# Optional fix only when paste was saved with wrong console encoding (legacy one-line sections).
-if ($raw -notmatch '(?s)---WIN_MITM---\r?\n\| Client \| Origin \| Lite sustain \| Full sustain \|.*?\r?\n\| HTTP/1') {
-    $raw = Fix-Utf8Mojibake $raw
+if (Test-Utf8Mojibake $raw) {
+    & "$PSScriptRoot/repair-wiki-mojibake.ps1" -WikiFile $PasteFile
+    $raw = [System.IO.File]::ReadAllText((Resolve-Path $PasteFile), [System.Text.Encoding]::UTF8)
 }
 
 function Get-Section([string]$name) {
