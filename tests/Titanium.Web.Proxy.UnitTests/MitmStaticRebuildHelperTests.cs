@@ -287,6 +287,8 @@ public class MitmStaticRebuildHelperTests
             after, MitmCompressedRelayHelper.DefaultMaxAppendHeaders, out _));
     }
 
+    [TestMethod]
+    public void RebuildStaticHpackBlock_DropFourHeaders_RoundTrips()
     {
         var original = EncodeStaticHpack(
             (StaticTable.KnownHeaderMethod, (ByteString)"GET"),
