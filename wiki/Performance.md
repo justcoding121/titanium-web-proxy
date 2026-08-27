@@ -201,7 +201,7 @@ Median of **3 repeats** on `windows-latest` (4 vCPU / 16 GiB). Bare reverse 5×5
 
 Same Client×Origin wires with interception on (`compare-product` [32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job).
 
-**Post-fix note (2026-08-26):** Phase 2 closed the H3→H1 Full gap: preencoded QPACK relay was gated on empty `ViaHeaderPseudonym` while the default is `"titanium-web-proxy"`. Cool paired laptop gates (`h3h1-spot/`, c=64): H3→H1 plain Full÷Reverse **0.91×**, H3→H1 TLS **0.995×**, H1 plain **0.91×** — all ≥0.80. Published table below is still pre-fix CI; remasure via GHA `compare-product` ×3 is pending.
+**Post-fix note (2026-08-27):** v1 generalized append-only relay (`MitmCompressedRelayHelper`) landed on `mitm/relay-publish`. Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)); first GHA pass medians were **0.767–0.794×** on H2 plain→H2 plain (h2c→h2c). Fix-forward: zero-copy HPACK append suffix on relay path. Laptop spot @ c=64: h2c→h2c Full÷Reverse **1.003×**, H2 TLS→h2c **0.990×**. GHA `compare-product` ×3 remeasure in flight ([33041442034](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33041442034) + 2 siblings). Published table below is still pre-fix CI until those runs validate ≥0.80 on all arms.
 
 | Client | Origin | Lite sustain | Full sustain | Lite÷Reverse | Full÷Reverse |
 |---|---|---:|---:|---:|---:|
@@ -270,7 +270,7 @@ Median of **3 repeats** on `ubuntu-latest` (4 vCPU / 16 GiB). Bare reverse 5×5 
 
 Same Client×Origin wires with interception on (`compare-product` [32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via `MitmCompressedRelayHelper`). nginx/YARP cannot MITM. **Lite÷Reverse** / **Full÷Reverse** vs bare reverse (same job).
 
-**Post-fix note (2026-08-26):** Phase 2 closed the H3→H1 Full gap: preencoded QPACK relay was gated on empty `ViaHeaderPseudonym` while the default is `"titanium-web-proxy"`. Cool paired laptop gates (`h3h1-spot/`, c=64): H3→H1 plain Full÷Reverse **0.91×**, H3→H1 TLS **0.995×**, H1 plain **0.91×** — all ≥0.80. Published table below is still pre-fix CI; remasure via GHA `compare-product` ×3 is pending.
+**Post-fix note (2026-08-27):** v1 generalized append-only relay (`MitmCompressedRelayHelper`) landed on `mitm/relay-publish`. Pre-fix H2→H2 Full÷Reverse was **0.13–0.16×** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)); first GHA pass medians were **0.767–0.794×** on H2 plain→H2 plain (h2c→h2c). Fix-forward: zero-copy HPACK append suffix on relay path. Laptop spot @ c=64: h2c→h2c Full÷Reverse **1.003×**, H2 TLS→h2c **0.990×**. GHA `compare-product` ×3 remeasure in flight ([33041442034](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33041442034) + 2 siblings). Published table below is still pre-fix CI until those runs validate ≥0.80 on all arms.
 
 | Client | Origin | Lite sustain | Full sustain | Lite÷Reverse | Full÷Reverse |
 |---|---|---:|---:|---:|---:|
