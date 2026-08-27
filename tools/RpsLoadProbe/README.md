@@ -115,7 +115,7 @@ Two TWP-only MITM shapes on the same Client×Origin wires (+ CONNECT). nginx/YAR
 | Shape | Arms | Child env | Path |
 |---|---|---|---|
 | **Lite** | `twp-mitm-*` | `TWP_RPS_HTTP_INTERCEPTION=1` | No-op `BeforeRequest`/`BeforeResponse`; after unchanged-lite finish, can reuse reverse compressed-relay / terminate-lite |
-| **Full** | `twp-mitm-full-*` | `…_INTERCEPTION=1` + `TWP_RPS_HTTP_INTERCEPTION_MUTATE=1` | Handlers set `x-twp-rps-probe` on request and response so MutationCount refuses lite finish (full decode/re-encode) |
+| **Full** | `twp-mitm-full-*` | `…_INTERCEPTION=1` + `TWP_RPS_HTTP_INTERCEPTION_MUTATE=1` | Handlers append `x-twp-rps-probe` on request and response; product uses generic append-only relay via `MitmCompressedRelayHelper` |
 
 `compare-mitm` and `compare-product` both run Lite then Full (Full roughly doubles MITM wall time; GHA `rps-saturation` job timeout is 420m so `compare-product` ×3 can finish). Wiki MITM table columns: Lite sustain, Full sustain, Lite÷Reverse, Full÷Reverse (RSS/CPU footnotes on sustain cells).
 

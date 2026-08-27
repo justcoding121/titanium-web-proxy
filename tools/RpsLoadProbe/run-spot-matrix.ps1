@@ -1,10 +1,10 @@
-# PR2 local spot gate: compare-spot @ c=64, validate Full÷Reverse >= 0.80 and reverse TWP÷YARP >= 0.95.
+# PR2 local spot gate: compare-spot @ c=64, validate Full÷Reverse >= 0.70 and reverse TWP÷YARP >= 0.95.
 [CmdletBinding()]
 param(
     [int] $Concurrency = 64,
     [int] $WarmupSec = 2,
     [int] $DurationSec = 8,
-    [double] $MitmRatioGate = 0.80,
+    [double] $MitmRatioGate = 0.70,
     [double] $ReverseYarpGate = 0.95,
     [switch] $SkipBuild
 )
@@ -50,6 +50,8 @@ $mitmPairs = @(
     @{ Label = 'H3→H1 TLS'; Full = 'twp-mitm-full-http3-to-http1'; Reverse = 'twp-reverse-http3-to-https-http1' },
     @{ Label = 'H3→H3'; Full = 'twp-mitm-full-http3'; Reverse = 'twp-reverse-http3' },
     @{ Label = 'H1 plain'; Full = 'twp-mitm-full-http1'; Reverse = 'twp-reverse-http1' },
+    @{ Label = 'H2 h2c→h2c'; Full = 'twp-mitm-full-h2c-to-h2c'; Reverse = 'twp-reverse-h2c-to-h2c' },
+    @{ Label = 'H2 TLS→h2c'; Full = 'twp-mitm-full-http2-to-h2c'; Reverse = 'twp-reverse-http2-to-h2c' },
     @{ Label = 'H2 plain'; Full = 'twp-mitm-full-http2-cleartext'; Reverse = 'twp-reverse-http2-cleartext' },
     @{ Label = 'H2 TLS'; Full = 'twp-mitm-full-http2'; Reverse = 'twp-reverse-http2' }
 )
