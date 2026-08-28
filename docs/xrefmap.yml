@@ -1638,6 +1638,15 @@ references:
   fullName.vb: Titanium.Web.Proxy.EventArguments.SessionEventArgs.RespondStreaming(Titanium.Web.Proxy.Http.Response, System.Func(Of System.IO.Stream, System.Threading.CancellationToken, System.Threading.Tasks.Task), Boolean)
   nameWithType: SessionEventArgs.RespondStreaming(Response, Func<Stream, CancellationToken, Task>, bool)
   nameWithType.vb: SessionEventArgs.RespondStreaming(Response, Func(Of Stream, CancellationToken, Task), Boolean)
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.RespondStreaming(Titanium.Web.Proxy.Http.StreamingProxyResult,System.Boolean)
+  name: RespondStreaming(StreamingProxyResult, bool)
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_RespondStreaming_Titanium_Web_Proxy_Http_StreamingProxyResult_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgs.RespondStreaming(Titanium.Web.Proxy.Http.StreamingProxyResult,System.Boolean)
+  name.vb: RespondStreaming(StreamingProxyResult, Boolean)
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgs.RespondStreaming(Titanium.Web.Proxy.Http.StreamingProxyResult, bool)
+  fullName.vb: Titanium.Web.Proxy.EventArguments.SessionEventArgs.RespondStreaming(Titanium.Web.Proxy.Http.StreamingProxyResult, Boolean)
+  nameWithType: SessionEventArgs.RespondStreaming(StreamingProxyResult, bool)
+  nameWithType.vb: SessionEventArgs.RespondStreaming(StreamingProxyResult, Boolean)
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgs.RespondStreaming*
   name: RespondStreaming
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_RespondStreaming_
@@ -3559,6 +3568,153 @@ references:
   commentId: F:Titanium.Web.Proxy.Http.KnownHeaders.UpgradeWebsocket
   fullName: Titanium.Web.Proxy.Http.KnownHeaders.UpgradeWebsocket
   nameWithType: KnownHeaders.UpgradeWebsocket
+- uid: Titanium.Web.Proxy.Http.ProxyResults
+  name: ProxyResults
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html
+  commentId: T:Titanium.Web.Proxy.Http.ProxyResults
+  fullName: Titanium.Web.Proxy.Http.ProxyResults
+  nameWithType: ProxyResults
+- uid: Titanium.Web.Proxy.Http.ProxyResults.Bytes(System.Byte[],System.String,System.Net.HttpStatusCode)
+  name: Bytes(byte[], string, HttpStatusCode)
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_Bytes_System_Byte___System_String_System_Net_HttpStatusCode_
+  commentId: M:Titanium.Web.Proxy.Http.ProxyResults.Bytes(System.Byte[],System.String,System.Net.HttpStatusCode)
+  name.vb: Bytes(Byte(), String, HttpStatusCode)
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.Bytes(byte[], string, System.Net.HttpStatusCode)
+  fullName.vb: Titanium.Web.Proxy.Http.ProxyResults.Bytes(Byte(), String, System.Net.HttpStatusCode)
+  nameWithType: ProxyResults.Bytes(byte[], string, HttpStatusCode)
+  nameWithType.vb: ProxyResults.Bytes(Byte(), String, HttpStatusCode)
+- uid: Titanium.Web.Proxy.Http.ProxyResults.Bytes*
+  name: Bytes
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_Bytes_
+  commentId: Overload:Titanium.Web.Proxy.Http.ProxyResults.Bytes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.Bytes
+  nameWithType: ProxyResults.Bytes
+- uid: Titanium.Web.Proxy.Http.ProxyResults.File(System.String,System.String,System.Net.HttpStatusCode)
+  name: File(string, string, HttpStatusCode)
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_File_System_String_System_String_System_Net_HttpStatusCode_
+  commentId: M:Titanium.Web.Proxy.Http.ProxyResults.File(System.String,System.String,System.Net.HttpStatusCode)
+  name.vb: File(String, String, HttpStatusCode)
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.File(string, string, System.Net.HttpStatusCode)
+  fullName.vb: Titanium.Web.Proxy.Http.ProxyResults.File(String, String, System.Net.HttpStatusCode)
+  nameWithType: ProxyResults.File(string, string, HttpStatusCode)
+  nameWithType.vb: ProxyResults.File(String, String, HttpStatusCode)
+- uid: Titanium.Web.Proxy.Http.ProxyResults.File*
+  name: File
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_File_
+  commentId: Overload:Titanium.Web.Proxy.Http.ProxyResults.File
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.File
+  nameWithType: ProxyResults.File
+- uid: Titanium.Web.Proxy.Http.ProxyResults.Html(System.String,System.Net.HttpStatusCode)
+  name: Html(string, HttpStatusCode)
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_Html_System_String_System_Net_HttpStatusCode_
+  commentId: M:Titanium.Web.Proxy.Http.ProxyResults.Html(System.String,System.Net.HttpStatusCode)
+  name.vb: Html(String, HttpStatusCode)
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.Html(string, System.Net.HttpStatusCode)
+  fullName.vb: Titanium.Web.Proxy.Http.ProxyResults.Html(String, System.Net.HttpStatusCode)
+  nameWithType: ProxyResults.Html(string, HttpStatusCode)
+  nameWithType.vb: ProxyResults.Html(String, HttpStatusCode)
+- uid: Titanium.Web.Proxy.Http.ProxyResults.Html*
+  name: Html
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_Html_
+  commentId: Overload:Titanium.Web.Proxy.Http.ProxyResults.Html
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.Html
+  nameWithType: ProxyResults.Html
+- uid: Titanium.Web.Proxy.Http.ProxyResults.Json*
+  name: Json
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_Json_
+  commentId: Overload:Titanium.Web.Proxy.Http.ProxyResults.Json
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.Json
+  nameWithType: ProxyResults.Json
+- uid: Titanium.Web.Proxy.Http.ProxyResults.Json``1(``0,System.Net.HttpStatusCode,System.Text.Json.Serialization.Metadata.JsonTypeInfo{``0})
+  name: Json<T>(T, HttpStatusCode, JsonTypeInfo<T>?)
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_Json__1___0_System_Net_HttpStatusCode_System_Text_Json_Serialization_Metadata_JsonTypeInfo___0__
+  commentId: M:Titanium.Web.Proxy.Http.ProxyResults.Json``1(``0,System.Net.HttpStatusCode,System.Text.Json.Serialization.Metadata.JsonTypeInfo{``0})
+  name.vb: Json(Of T)(T, HttpStatusCode, JsonTypeInfo(Of T))
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.Json<T>(T, System.Net.HttpStatusCode, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>?)
+  fullName.vb: Titanium.Web.Proxy.Http.ProxyResults.Json(Of T)(T, System.Net.HttpStatusCode, System.Text.Json.Serialization.Metadata.JsonTypeInfo(Of T))
+  nameWithType: ProxyResults.Json<T>(T, HttpStatusCode, JsonTypeInfo<T>?)
+  nameWithType.vb: ProxyResults.Json(Of T)(T, HttpStatusCode, JsonTypeInfo(Of T))
+- uid: Titanium.Web.Proxy.Http.ProxyResults.NoContent
+  name: NoContent()
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_NoContent
+  commentId: M:Titanium.Web.Proxy.Http.ProxyResults.NoContent
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.NoContent()
+  nameWithType: ProxyResults.NoContent()
+- uid: Titanium.Web.Proxy.Http.ProxyResults.NoContent*
+  name: NoContent
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_NoContent_
+  commentId: Overload:Titanium.Web.Proxy.Http.ProxyResults.NoContent
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.NoContent
+  nameWithType: ProxyResults.NoContent
+- uid: Titanium.Web.Proxy.Http.ProxyResults.Redirect(System.String,System.Net.HttpStatusCode)
+  name: Redirect(string, HttpStatusCode)
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_Redirect_System_String_System_Net_HttpStatusCode_
+  commentId: M:Titanium.Web.Proxy.Http.ProxyResults.Redirect(System.String,System.Net.HttpStatusCode)
+  name.vb: Redirect(String, HttpStatusCode)
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.Redirect(string, System.Net.HttpStatusCode)
+  fullName.vb: Titanium.Web.Proxy.Http.ProxyResults.Redirect(String, System.Net.HttpStatusCode)
+  nameWithType: ProxyResults.Redirect(string, HttpStatusCode)
+  nameWithType.vb: ProxyResults.Redirect(String, HttpStatusCode)
+- uid: Titanium.Web.Proxy.Http.ProxyResults.Redirect*
+  name: Redirect
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_Redirect_
+  commentId: Overload:Titanium.Web.Proxy.Http.ProxyResults.Redirect
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.Redirect
+  nameWithType: ProxyResults.Redirect
+- uid: Titanium.Web.Proxy.Http.ProxyResults.Stream(System.Net.HttpStatusCode,System.String,System.Func{System.IO.Stream,System.Threading.CancellationToken,System.Threading.Tasks.Task},System.Nullable{System.Int64})
+  name: Stream(HttpStatusCode, string, Func<Stream, CancellationToken, Task>, long?)
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_Stream_System_Net_HttpStatusCode_System_String_System_Func_System_IO_Stream_System_Threading_CancellationToken_System_Threading_Tasks_Task__System_Nullable_System_Int64__
+  commentId: M:Titanium.Web.Proxy.Http.ProxyResults.Stream(System.Net.HttpStatusCode,System.String,System.Func{System.IO.Stream,System.Threading.CancellationToken,System.Threading.Tasks.Task},System.Nullable{System.Int64})
+  name.vb: Stream(HttpStatusCode, String, Func(Of Stream, CancellationToken, Task), Long?)
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.Stream(System.Net.HttpStatusCode, string, System.Func<System.IO.Stream, System.Threading.CancellationToken, System.Threading.Tasks.Task>, long?)
+  fullName.vb: Titanium.Web.Proxy.Http.ProxyResults.Stream(System.Net.HttpStatusCode, String, System.Func(Of System.IO.Stream, System.Threading.CancellationToken, System.Threading.Tasks.Task), Long?)
+  nameWithType: ProxyResults.Stream(HttpStatusCode, string, Func<Stream, CancellationToken, Task>, long?)
+  nameWithType.vb: ProxyResults.Stream(HttpStatusCode, String, Func(Of Stream, CancellationToken, Task), Long?)
+- uid: Titanium.Web.Proxy.Http.ProxyResults.Stream*
+  name: Stream
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_Stream_
+  commentId: Overload:Titanium.Web.Proxy.Http.ProxyResults.Stream
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.Stream
+  nameWithType: ProxyResults.Stream
+- uid: Titanium.Web.Proxy.Http.ProxyResults.Text(System.String,System.Net.HttpStatusCode)
+  name: Text(string, HttpStatusCode)
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_Text_System_String_System_Net_HttpStatusCode_
+  commentId: M:Titanium.Web.Proxy.Http.ProxyResults.Text(System.String,System.Net.HttpStatusCode)
+  name.vb: Text(String, HttpStatusCode)
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.Text(string, System.Net.HttpStatusCode)
+  fullName.vb: Titanium.Web.Proxy.Http.ProxyResults.Text(String, System.Net.HttpStatusCode)
+  nameWithType: ProxyResults.Text(string, HttpStatusCode)
+  nameWithType.vb: ProxyResults.Text(String, HttpStatusCode)
+- uid: Titanium.Web.Proxy.Http.ProxyResults.Text*
+  name: Text
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_Text_
+  commentId: Overload:Titanium.Web.Proxy.Http.ProxyResults.Text
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.Text
+  nameWithType: ProxyResults.Text
+- uid: Titanium.Web.Proxy.Http.ProxyResults.WithStatus(System.Net.HttpStatusCode,System.String)
+  name: WithStatus(HttpStatusCode, string)
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_WithStatus_System_Net_HttpStatusCode_System_String_
+  commentId: M:Titanium.Web.Proxy.Http.ProxyResults.WithStatus(System.Net.HttpStatusCode,System.String)
+  name.vb: WithStatus(HttpStatusCode, String)
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.WithStatus(System.Net.HttpStatusCode, string)
+  fullName.vb: Titanium.Web.Proxy.Http.ProxyResults.WithStatus(System.Net.HttpStatusCode, String)
+  nameWithType: ProxyResults.WithStatus(HttpStatusCode, string)
+  nameWithType.vb: ProxyResults.WithStatus(HttpStatusCode, String)
+- uid: Titanium.Web.Proxy.Http.ProxyResults.WithStatus*
+  name: WithStatus
+  href: api/Titanium.Web.Proxy.Http.ProxyResults.html#Titanium_Web_Proxy_Http_ProxyResults_WithStatus_
+  commentId: Overload:Titanium.Web.Proxy.Http.ProxyResults.WithStatus
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.ProxyResults.WithStatus
+  nameWithType: ProxyResults.WithStatus
 - uid: Titanium.Web.Proxy.Http.Request
   name: Request
   href: api/Titanium.Web.Proxy.Http.Request.html
@@ -4159,6 +4315,57 @@ references:
   fullName.vb: Titanium.Web.Proxy.Http.Responses.RedirectResponse.New
   nameWithType: RedirectResponse.RedirectResponse
   nameWithType.vb: RedirectResponse.New
+- uid: Titanium.Web.Proxy.Http.StreamingProxyResult
+  name: StreamingProxyResult
+  href: api/Titanium.Web.Proxy.Http.StreamingProxyResult.html
+  commentId: T:Titanium.Web.Proxy.Http.StreamingProxyResult
+  fullName: Titanium.Web.Proxy.Http.StreamingProxyResult
+  nameWithType: StreamingProxyResult
+- uid: Titanium.Web.Proxy.Http.StreamingProxyResult.#ctor(Titanium.Web.Proxy.Http.Response,System.Func{System.IO.Stream,System.Threading.CancellationToken,System.Threading.Tasks.Task})
+  name: StreamingProxyResult(Response, Func<Stream, CancellationToken, Task>)
+  href: api/Titanium.Web.Proxy.Http.StreamingProxyResult.html#Titanium_Web_Proxy_Http_StreamingProxyResult__ctor_Titanium_Web_Proxy_Http_Response_System_Func_System_IO_Stream_System_Threading_CancellationToken_System_Threading_Tasks_Task__
+  commentId: M:Titanium.Web.Proxy.Http.StreamingProxyResult.#ctor(Titanium.Web.Proxy.Http.Response,System.Func{System.IO.Stream,System.Threading.CancellationToken,System.Threading.Tasks.Task})
+  name.vb: New(Response, Func(Of Stream, CancellationToken, Task))
+  fullName: Titanium.Web.Proxy.Http.StreamingProxyResult.StreamingProxyResult(Titanium.Web.Proxy.Http.Response, System.Func<System.IO.Stream, System.Threading.CancellationToken, System.Threading.Tasks.Task>)
+  fullName.vb: Titanium.Web.Proxy.Http.StreamingProxyResult.New(Titanium.Web.Proxy.Http.Response, System.Func(Of System.IO.Stream, System.Threading.CancellationToken, System.Threading.Tasks.Task))
+  nameWithType: StreamingProxyResult.StreamingProxyResult(Response, Func<Stream, CancellationToken, Task>)
+  nameWithType.vb: StreamingProxyResult.New(Response, Func(Of Stream, CancellationToken, Task))
+- uid: Titanium.Web.Proxy.Http.StreamingProxyResult.#ctor*
+  name: StreamingProxyResult
+  href: api/Titanium.Web.Proxy.Http.StreamingProxyResult.html#Titanium_Web_Proxy_Http_StreamingProxyResult__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Http.StreamingProxyResult.#ctor
+  isSpec: "True"
+  name.vb: New
+  fullName: Titanium.Web.Proxy.Http.StreamingProxyResult.StreamingProxyResult
+  fullName.vb: Titanium.Web.Proxy.Http.StreamingProxyResult.New
+  nameWithType: StreamingProxyResult.StreamingProxyResult
+  nameWithType.vb: StreamingProxyResult.New
+- uid: Titanium.Web.Proxy.Http.StreamingProxyResult.Response
+  name: Response
+  href: api/Titanium.Web.Proxy.Http.StreamingProxyResult.html#Titanium_Web_Proxy_Http_StreamingProxyResult_Response
+  commentId: P:Titanium.Web.Proxy.Http.StreamingProxyResult.Response
+  fullName: Titanium.Web.Proxy.Http.StreamingProxyResult.Response
+  nameWithType: StreamingProxyResult.Response
+- uid: Titanium.Web.Proxy.Http.StreamingProxyResult.Response*
+  name: Response
+  href: api/Titanium.Web.Proxy.Http.StreamingProxyResult.html#Titanium_Web_Proxy_Http_StreamingProxyResult_Response_
+  commentId: Overload:Titanium.Web.Proxy.Http.StreamingProxyResult.Response
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.StreamingProxyResult.Response
+  nameWithType: StreamingProxyResult.Response
+- uid: Titanium.Web.Proxy.Http.StreamingProxyResult.WriteBody
+  name: WriteBody
+  href: api/Titanium.Web.Proxy.Http.StreamingProxyResult.html#Titanium_Web_Proxy_Http_StreamingProxyResult_WriteBody
+  commentId: P:Titanium.Web.Proxy.Http.StreamingProxyResult.WriteBody
+  fullName: Titanium.Web.Proxy.Http.StreamingProxyResult.WriteBody
+  nameWithType: StreamingProxyResult.WriteBody
+- uid: Titanium.Web.Proxy.Http.StreamingProxyResult.WriteBody*
+  name: WriteBody
+  href: api/Titanium.Web.Proxy.Http.StreamingProxyResult.html#Titanium_Web_Proxy_Http_StreamingProxyResult_WriteBody_
+  commentId: Overload:Titanium.Web.Proxy.Http.StreamingProxyResult.WriteBody
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.StreamingProxyResult.WriteBody
+  nameWithType: StreamingProxyResult.WriteBody
 - uid: Titanium.Web.Proxy.Http.TunnelType
   name: TunnelType
   href: api/Titanium.Web.Proxy.Http.TunnelType.html
