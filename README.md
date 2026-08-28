@@ -37,14 +37,14 @@ A lightweight, high-performance HTTP(S) proxy — reverse / edge CLI, desktop In
 
 ## Editions
 
-| Product | What it is | License | How you get it |
-|---------|------------|---------|----------------|
-| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge proxy for any stack: `run`, `test`, `version`, `update` | MIT | GitHub Releases, winget, or `dotnet tool` |
-| **Titanium Inspector** | Desktop MITM debugger (session grid, inspectors, AutoResponder, breakpoints, HAR) | [PolyForm NC](licenses/PolyForm-Noncommercial-1.0.0.txt) | Windows MSI, winget, or GitHub Releases |
-| **Titanium.Plus** | Optional advanced features: control plane, ops, observability, and dashboard | [PolyForm NC](licenses/PolyForm-Noncommercial-1.0.0.txt) | `titanium update --plus` |
-| **Titanium.Web.Proxy** | Core library. Embed a MITM and/or reverse proxy in a .NET app | MIT | NuGet |
+| Product | What it is | How you get it |
+|---------|------------|----------------|
+| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge proxy for any stack: `run`, `test`, `version`, `update` | GitHub Releases, winget, or `dotnet tool` |
+| **Titanium Inspector** | Desktop MITM debugger (session grid, inspectors, AutoResponder, breakpoints, HAR) | Windows MSI, winget, or GitHub Releases |
+| **Titanium.Plus** | Optional advanced features: control plane, ops, observability, and dashboard | `titanium update --plus` |
+| **Titanium.Web.Proxy** | Core library. Embed a MITM and/or reverse proxy in a .NET app | NuGet |
 
-CLI and Plus target reverse-proxy / edge workloads (routing, load balancing, health, discovery) on Windows, Linux, and macOS. Inspector is the MITM debugging product. The Core library is the embed path for .NET.
+CLI and Plus target reverse-proxy / edge workloads (routing, load balancing, health, discovery) on Windows, Linux, and macOS. Inspector is the MITM debugging product. The Core library is the embed path for .NET. Requires .NET 10 or later.
 
 ## Installation
 
@@ -84,13 +84,6 @@ Optional Plus: run `titanium update --plus`, then enable Plus in config (`plus.e
 ### Titanium Inspector
 
 On Windows, winget id `justcoding121.TitaniumInspector`, or MSI / portable zip from [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when those assets are published. Start interception from the Capture menu, install the root CA, then toggle system proxy.
-
-## Supported frameworks
-
-- .NET 10
-
-> Versions prior to 4.0 also supported .NET Framework 4.6.2 and .NET 8; starting with 4.0, the package
-> targets .NET 10 only so the codebase can take full advantage of modern APIs.
 
 > **Breaking change:** `ProxyServer.ExceptionFunc` and `SessionEventArgsBase.TimeLine` were removed in
 > favor of the unified `ProxyServer.Logging`/`EnableRequestTimingCapture` APIs described in
@@ -183,4 +176,4 @@ Past contributors:
 
 ## License
 
-Titanium Web Proxy is available under the [MIT License](LICENSE).
+Titanium.Web.Proxy and Titanium.Cli are available under the [MIT License](LICENSE). Titanium Inspector and Titanium.Plus are licensed under [PolyForm Noncommercial 1.0.0](licenses/PolyForm-Noncommercial-1.0.0.txt).
