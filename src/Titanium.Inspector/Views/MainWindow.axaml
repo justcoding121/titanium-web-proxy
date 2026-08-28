@@ -4,46 +4,67 @@
         x:Class="Titanium.Inspector.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Titanium Inspector"
-        Width="1200" Height="760">
+        Width="1280" Height="800">
   <DockPanel>
     <Menu DockPanel.Dock="Top">
       <MenuItem Header="_File">
         <MenuItem Header="Export HAR…" Command="{Binding ExportHarCommand}" />
         <MenuItem Header="Export archive…" Command="{Binding ExportArchiveCommand}" />
+        <MenuItem Header="Import archive from Desktop…" Command="{Binding ImportArchiveCommand}" />
       </MenuItem>
       <MenuItem Header="_Capture">
         <MenuItem Header="Start interception" Command="{Binding StartCaptureCommand}" />
         <MenuItem Header="Stop interception" Command="{Binding StopCaptureCommand}" />
-        <MenuItem Header="Set as system proxy" Command="{Binding SystemProxyCommand}" />
+        <MenuItem Header="Capturing on/off" Command="{Binding ToggleCapturingCommand}" />
+        <MenuItem Header="Clear sessions" Command="{Binding ClearSessionsCommand}" />
+        <Separator />
+        <MenuItem Header="Toggle system proxy" Command="{Binding ToggleSystemProxyCommand}" />
+        <MenuItem Header="Install root CA (current user)" Command="{Binding InstallCaCommand}" />
+        <MenuItem Header="Untrust root CA" Command="{Binding UntrustCaCommand}" />
+        <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" />
+      </MenuItem>
+      <MenuItem Header="_Session">
+        <MenuItem Header="Replay selected" Command="{Binding ReplayCommand}" />
       </MenuItem>
       <MenuItem Header="_Help">
         <MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}" />
       </MenuItem>
     </Menu>
     <Grid ColumnDefinitions="2*,*" RowDefinitions="Auto,*,Auto">
-      <TextBox Grid.Row="0" Grid.ColumnSpan="2" Margin="8" Watermark="Search: method:GET status:200 host:example is:ws"
-               Text="{Binding SearchQuery}" />
+      <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="8" Spacing="12">
+        <TextBox Width="420" Watermark="Search: method:GET status:200 host:example is:ws"
+                 Text="{Binding SearchQuery}" />
+        <CheckBox Content="Capturing" IsChecked="{Binding Capturing}" />
+        <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}" IsEnabled="False" />
+      </StackPanel>
       <DataGrid Grid.Row="1" Grid.Column="0" Margin="8"
                 ItemsSource="{Binding Sessions}"
                 SelectedItem="{Binding SelectedSession}"
                 IsReadOnly="True"
                 AutoGenerateColumns="False">
         <DataGrid.Columns>
-          <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="70" />
+          <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="60" />
           <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="70" />
+          <DataGridTextColumn Header="Status" Binding="{Binding StatusCode}" Width="60" />
+          <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="140" />
           <DataGridTextColumn Header="URL" Binding="{Binding Url}" Width="*" />
-          <DataGridTextColumn Header="Status" Binding="{Binding StatusCode}" Width="70" />
+          <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="110" />
+          <DataGridTextColumn Header="Size" Binding="{Binding BodySize}" Width="70" />
+          <DataGridTextColumn Header="Process" Binding="{Binding ProcessDisplay}" Width="120" />
         </DataGrid.Columns>
       </DataGrid>
       <TabControl Grid.Row="1" Grid.Column="1" Margin="8">
         <TabItem Header="Headers">
-          <TextBox IsReadOnly="True" Text="{Binding SelectedHeaders}" AcceptsReturn="True" TextWrapping="Wrap" />
+          <TextBox IsReadOnly="True" Text="{Binding SelectedHeaders}" AcceptsReturn="True" TextWrapping="Wrap"
+                   FontFamily="Consolas,Courier New,monospace" />
         </TabItem>
         <TabItem Header="Body">
-          <TextBox IsReadOnly="True" Text="{Binding SelectedBody}" AcceptsReturn="True" TextWrapping="Wrap" />
+          <TextBox IsReadOnly="True" Text="{Binding SelectedBody}" AcceptsReturn="True" TextWrapping="Wrap"
+                   FontFamily="Consolas,Courier New,monospace" />
         </TabItem>
         <TabItem Header="Hex">
-          <TextBox IsReadOnly="True" Text="{Binding SelectedHex}" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" />
+          <TextBox IsReadOnly="True" Text="{Binding SelectedHex}" AcceptsReturn="True" TextWrapping="Wrap"
+                   FontFamily="Consolas,Courier New,monospace" />
         </TabItem>
         <TabItem Header="Breakpoints">
           <StackPanel Margin="8" Spacing="8">
@@ -58,7 +79,11 @@
         <TabItem Header="AutoResponder">
           <StackPanel Margin="8" Spacing="8">
             <CheckBox Content="Enabled (before breakpoints)" IsChecked="{Binding AutoResponder.Enabled}" />
-            <TextBlock Text="Rules are evaluated before breakpoints." />
+            <TextBox Watermark="Match URL (* wildcards)" Text="{Binding AutoResponderMatch}" />
+            <TextBox Watermark="Status" Text="{Binding AutoResponderStatus}" Width="80" />
+            <TextBox Watermark="Response body" Text="{Binding AutoResponderBody}" AcceptsReturn="True" Height="80" />
+            <Button Content="Add rule" Command="{Binding AddAutoResponderRuleCommand}" HorizontalAlignment="Left" />
+            <TextBlock Text="{Binding PlusPanelsSummary}" TextWrapping="Wrap" Opacity="0.7" />
           </StackPanel>
         </TabItem>
       </TabControl>

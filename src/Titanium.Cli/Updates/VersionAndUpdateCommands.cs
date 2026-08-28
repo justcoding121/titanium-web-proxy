@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Titanium.Cli.Config;
 
@@ -28,16 +30,56 @@ internal static class VersionCommand
         }
 
         var local = typeof(Program).Assembly.GetName().Version ?? new Version(0, 0);
-        var remote = Version.TryParse(manifest.Version, out var v) ? v : new Version(0, 0);
+        var remote = Version.TryParse(StripPrerelease(manifest.Version), out var v) ? v : new Version(0, 0);
         Console.WriteLine($"Remote Cli ({channel}): {manifest.Version}");
+
+        var exit = 0;
         if (remote > local)
         {
             Console.WriteLine("A newer Cli build is available. Run: titanium update");
-            return 2;
+            exit = 2;
+        }
+        else
+        {
+            Console.WriteLine("Cli is up to date.");
         }
 
-        Console.WriteLine("Cli is up to date.");
-        return 0;
+        if (plus)
+        {
+            var plusLocal = TryGetLocalPlusVersion();
+            var plusRemote = manifest.Products?.Plus?.Version;
+            if (!string.IsNullOrEmpty(plusRemote) &&
+                Version.TryParse(StripPrerelease(plusRemote), out var pr) &&
+                (plusLocal is null || pr > plusLocal))
+            {
+                Console.WriteLine($"A newer Plus build is available ({plusRemote}). Run: titanium update --plus");
+                exit = 2;
+            }
+            else if (plusLocal is not null)
+            {
+                Console.WriteLine($"Plus is up to date ({plusLocal}).");
+            }
+        }
+
+        return exit;
+    }
+
+    private static Version? TryGetLocalPlusVersion()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Titanium.Plus.dll");
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            return AssemblyName.GetAssemblyName(path).Version;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static void PrintLocalVersions(bool includePlus)
@@ -83,6 +125,17 @@ internal static class VersionCommand
 
         return Environment.GetEnvironmentVariable("TITANIUM_UPDATE_CHANNEL") ?? "stable";
     }
+
+    internal static string StripPrerelease(string? version)
+    {
+        if (string.IsNullOrEmpty(version))
+        {
+            return "0.0.0";
+        }
+
+        var dash = version.IndexOf('-');
+        return dash > 0 ? version[..dash] : version.TrimStart('v');
+    }
 }
 
 internal static class UpdateCommand
@@ -101,18 +154,115 @@ internal static class UpdateCommand
 
         if (plus)
         {
-            Console.WriteLine($"Plus update ({channel}): download asset from GitHub Releases and place Titanium.Plus.dll beside this executable, then restart.");
-            if (manifest.Products?.Plus?.Asset?.Url is string url)
-            {
-                Console.WriteLine(url);
-            }
+            return await UpdatePlusAsync(manifest);
+        }
 
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("winget", "upgrade --id justcoding121.TitaniumCli -e --accept-package-agreements --accept-source-agreements")
+                {
+                    UseShellExecute = false,
+                };
+                using var proc = Process.Start(psi);
+                if (proc is not null)
+                {
+                    await proc.WaitForExitAsync();
+                    if (proc.ExitCode == 0)
+                    {
+                        Console.WriteLine("Updated via winget.");
+                        return 0;
+                    }
+                }
+            }
+            catch
+            {
+                // fall through to download
+            }
+        }
+
+        var rid = ResolveRid();
+        var asset = manifest.Products?.Cli?.Assets?.GetValueOrDefault(rid);
+        if (asset?.Url is null)
+        {
+            Console.WriteLine($"Cli update ({channel}): re-download Titanium.Cli-{rid}.zip from GitHub Releases.");
+            Console.WriteLine($"Remote version: {manifest.Version}");
             return 0;
         }
 
-        Console.WriteLine($"Cli update ({channel}): prefer winget upgrade or re-download from GitHub Releases.");
-        Console.WriteLine($"Remote version: {manifest.Version}");
+        var destZip = Path.Combine(Path.GetTempPath(), $"Titanium.Cli-{rid}-{manifest.Version}.zip");
+        Console.WriteLine($"Downloading {asset.Url}");
+        using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) })
+        {
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
+            var bytes = await http.GetByteArrayAsync(asset.Url);
+            if (!string.IsNullOrEmpty(asset.Sha256))
+            {
+                var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+                if (!hash.Equals(asset.Sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.Error.WriteLine("SHA256 mismatch — aborting update.");
+                    return 1;
+                }
+            }
+
+            await File.WriteAllBytesAsync(destZip, bytes);
+        }
+
+        Console.WriteLine($"Downloaded to {destZip}. Extract over the install directory and restart.");
+        Console.WriteLine("If this process is locked, stop titanium and unzip manually.");
         return 0;
+    }
+
+    private static async Task<int> UpdatePlusAsync(ReleaseManifest manifest)
+    {
+        var asset = manifest.Products?.Plus?.Asset;
+        if (asset?.Url is null)
+        {
+            Console.WriteLine("Plus update: download Titanium.Plus.dll from GitHub Releases and place beside this executable, then restart.");
+            return 0;
+        }
+
+        var dest = Path.Combine(AppContext.BaseDirectory, "Titanium.Plus.dll");
+        var backup = dest + ".bak";
+        Console.WriteLine($"Downloading {asset.Url}");
+        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
+        var bytes = await http.GetByteArrayAsync(asset.Url);
+        if (!string.IsNullOrEmpty(asset.Sha256))
+        {
+            var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            if (!hash.Equals(asset.Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                Console.Error.WriteLine("SHA256 mismatch — aborting Plus update.");
+                return 1;
+            }
+        }
+
+        if (File.Exists(dest))
+        {
+            File.Copy(dest, backup, overwrite: true);
+        }
+
+        await File.WriteAllBytesAsync(dest + ".new", bytes);
+        Console.WriteLine($"Wrote {dest}.new — stop `titanium run` then rename to Titanium.Plus.dll (backup at .bak).");
+        return 0;
+    }
+
+    private static string ResolveRid()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return "win-x64";
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            return "osx-x64";
+        }
+
+        return "linux-x64";
     }
 }
 
@@ -133,46 +283,72 @@ internal sealed class UpdateFeedClient
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            var url = string.IsNullOrEmpty(feed)
-                ? "https://api.github.com/repos/justcoding121/titanium-web-proxy/releases/latest"
-                : feed;
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
 
-            if (_channel.Equals("beta", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(feed))
+            if (!string.IsNullOrEmpty(feed))
             {
-                url = "https://api.github.com/repos/justcoding121/titanium-web-proxy/releases";
+                var json = await http.GetStringAsync(feed);
+                return JsonSerializer.Deserialize<ReleaseManifest>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                });
             }
 
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
-            var json = await http.GetStringAsync(url);
-            if (_channel.Equals("beta", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(feed))
+            // Prefer release-manifest.json asset on latest (or first prerelease for beta).
+            var api = _channel.Equals("beta", StringComparison.OrdinalIgnoreCase)
+                ? "https://api.github.com/repos/justcoding121/titanium-web-proxy/releases"
+                : "https://api.github.com/repos/justcoding121/titanium-web-proxy/releases/latest";
+
+            var payload = await http.GetStringAsync(api);
+            using var doc = JsonDocument.Parse(payload);
+            JsonElement release = default;
+            if (_channel.Equals("beta", StringComparison.OrdinalIgnoreCase))
             {
-                using var doc = JsonDocument.Parse(json);
                 foreach (var el in doc.RootElement.EnumerateArray())
                 {
                     if (el.TryGetProperty("prerelease", out var pre) && pre.GetBoolean())
                     {
-                        return new ReleaseManifest
-                        {
-                            Version = el.GetProperty("tag_name").GetString()?.TrimStart('v') ?? "0.0.0",
-                            Channel = "beta",
-                        };
+                        release = el;
+                        break;
                     }
                 }
 
-                return null;
-            }
-
-            using var latest = JsonDocument.Parse(json);
-            if (latest.RootElement.TryGetProperty("tag_name", out var tag))
-            {
-                return new ReleaseManifest
+                if (release.ValueKind == JsonValueKind.Undefined)
                 {
-                    Version = tag.GetString()?.TrimStart('v') ?? "0.0.0",
-                    Channel = _channel,
-                };
+                    return null;
+                }
+            }
+            else
+            {
+                release = doc.RootElement;
             }
 
-            return JsonSerializer.Deserialize<ReleaseManifest>(json);
+            var version = release.GetProperty("tag_name").GetString()?.TrimStart('v') ?? "0.0.0";
+            if (release.TryGetProperty("assets", out var assets))
+            {
+                foreach (var asset in assets.EnumerateArray())
+                {
+                    var name = asset.GetProperty("name").GetString() ?? "";
+                    if (name.Equals("release-manifest.json", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var url = asset.GetProperty("browser_download_url").GetString();
+                        if (url is not null)
+                        {
+                            var manifestJson = await http.GetStringAsync(url);
+                            var manifest = JsonSerializer.Deserialize<ReleaseManifest>(manifestJson,
+                                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            if (manifest is not null)
+                            {
+                                manifest.Version ??= version;
+                                manifest.Channel ??= _channel;
+                                return manifest;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return new ReleaseManifest { Version = version, Channel = _channel };
         }
         catch
         {
@@ -190,11 +366,18 @@ internal sealed class ReleaseManifest
 
 internal sealed class ProductsBlock
 {
-    public PlusBlock? Plus { get; set; }
+    public CliBlock? Cli { get; set; }
+    public PlusProductBlock? Plus { get; set; }
 }
 
-internal sealed class PlusBlock
+internal sealed class CliBlock
 {
+    public Dictionary<string, AssetBlock>? Assets { get; set; }
+}
+
+internal sealed class PlusProductBlock
+{
+    public string? Version { get; set; }
     public AssetBlock? Asset { get; set; }
 }
 

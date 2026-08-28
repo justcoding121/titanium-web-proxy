@@ -1,7 +1,11 @@
 using Titanium.Plus.ControlPlane;
 using Titanium.Plus.Dashboard;
+using Titanium.Plus.Discovery;
 using Titanium.Plus.Observability;
 using Titanium.Plus.Operations;
+using Titanium.Plus.Resilience;
+using Titanium.Plus.Security;
+using Titanium.Plus.State;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 
 namespace Titanium.Plus;
@@ -21,19 +25,24 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
                      ?? "changeme";
         var host = options.GetValueOrDefault("controlPlane.host") ?? "127.0.0.1";
         var port = int.TryParse(options.GetValueOrDefault("controlPlane.port"), out var p) ? p : 9080;
+        var allowDev = string.Equals(
+            Environment.GetEnvironmentVariable("TITANIUM_PLUS_ALLOW_DEV_SECRET"), "1",
+            StringComparison.Ordinal);
+
+        ControlPlaneServer.ValidateSecret(host, secret, allowDev);
 
         var controlPlane = new ControlPlaneServer(context.ClusterManager, host, port, secret);
         controlPlane.Start();
 
         var operations = new DrainOperations(context.ClusterManager);
         var metrics = new PrometheusMetricsExporter(context.ClusterManager, context.LatencyRecorder);
-        var dashboard = new DashboardHost(controlPlane, operations, metrics);
+        var dashboard = new DashboardHost(controlPlane, operations, metrics, context.ClusterManager);
         dashboard.Start();
 
-        // Stretch modules are registered as no-ops until configured.
-        _ = new Discovery.DiscoveryPlaceholder();
-        _ = new Resilience.ResiliencePlaceholder();
-        _ = new State.StatePlaceholder();
-        _ = new Security.SecurityPlaceholder();
+        // Stretch modules — activate only when configured.
+        _ = ServiceDiscovery.TryStart(context, options);
+        _ = SharedStateStore.TryStart(context, options);
+        _ = AccessSecurity.TryStart(context, options);
+        _ = ResilienceController.TryStart(context, options);
     }
 }

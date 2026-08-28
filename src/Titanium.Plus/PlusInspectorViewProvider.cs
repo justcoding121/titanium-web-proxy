@@ -12,8 +12,33 @@ public sealed class PlusInspectorViewProvider : IPlusInspectorViewProvider
         _ = context;
         return
         [
-            new { Title = "Plus Control Plane", Description = "Destination drain and cluster snapshot (NC)" },
-            new { Title = "Plus Observability", Description = "Prometheus scrape endpoint status" },
+            new PlusInspectorPanel(
+                "Plus Control Plane",
+                "Cluster snapshot GET/PUT and destination drain (requires control secret).",
+                "control-plane"),
+            new PlusInspectorPanel(
+                "Plus Observability",
+                "Prometheus scrape endpoint on the dashboard port (/metrics).",
+                "observability"),
+            new PlusInspectorPanel(
+                "Plus Dashboard",
+                "Live destination table with drain/healthy actions.",
+                "dashboard"),
         ];
     }
+}
+
+/// <summary>Typed panel descriptor consumed by Titanium Inspector.</summary>
+public sealed class PlusInspectorPanel
+{
+    public PlusInspectorPanel(string title, string description, string id)
+    {
+        Title = title;
+        Description = description;
+        Id = id;
+    }
+
+    public string Id { get; }
+    public string Title { get; }
+    public string Description { get; }
 }

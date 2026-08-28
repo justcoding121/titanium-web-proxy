@@ -28,7 +28,25 @@ public sealed class ControlPlaneServer : IDisposable
         _sharedSecret = sharedSecret;
     }
 
+    public string Host => _host;
+    public int Port => _port;
+    public string SharedSecret => _sharedSecret;
     public string Prefix => $"http://{_host}:{_port}/";
+
+    public static void ValidateSecret(string host, string sharedSecret, bool allowInsecureDevSecret = false)
+    {
+        var isLoopback = host is "127.0.0.1" or "localhost" or "::1";
+        if (string.IsNullOrWhiteSpace(sharedSecret) ||
+            sharedSecret.Equals("changeme", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!(isLoopback && allowInsecureDevSecret))
+            {
+                throw new InvalidOperationException(
+                    "Plus control plane requires a non-default shared secret " +
+                    "(set controlPlane.sharedSecret). For loopback-only dev, set TITANIUM_PLUS_ALLOW_DEV_SECRET=1.");
+            }
+        }
+    }
 
     public void Start()
     {
@@ -87,7 +105,15 @@ public sealed class ControlPlaneServer : IDisposable
                     var snap = _clusters?.Snapshot ?? ImmutableClusterSnapshot.Empty;
                     var json = JsonSerializer.Serialize(new
                     {
-                        clusters = snap.Clusters.Keys,
+                        clusters = snap.Clusters.ToDictionary(
+                            kv => kv.Key,
+                            kv => kv.Value.Destinations.Select(d => new
+                            {
+                                d.Id,
+                                d.Address,
+                                d.Port,
+                                state = snap.DestinationStates.GetValueOrDefault(d.Id),
+                            })),
                         destinationStates = snap.DestinationStates,
                     });
                     ctx.Response.ContentType = "application/json";
@@ -99,9 +125,34 @@ public sealed class ControlPlaneServer : IDisposable
                 {
                     using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
                     var body = await reader.ReadToEndAsync();
-                    // Skeleton: accept body and acknowledge; full Apply wiring uses ClusterManager.
-                    ctx.Response.StatusCode = 202;
-                    await WriteAsync(ctx.Response, "{\"status\":\"accepted\",\"bytes\":" + body.Length + "}");
+                    try
+                    {
+                        var clusters = JsonSerializer.Deserialize<List<ClusterConfig>>(body,
+                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        if (clusters is null)
+                        {
+                            ctx.Response.StatusCode = 400;
+                            await WriteAsync(ctx.Response, "{\"error\":\"invalid body\"}");
+                            return;
+                        }
+
+                        if (_clusters is null)
+                        {
+                            ctx.Response.StatusCode = 503;
+                            await WriteAsync(ctx.Response, "{\"error\":\"no cluster manager\"}");
+                            return;
+                        }
+
+                        await _clusters.ApplyAsync(clusters);
+                        ctx.Response.StatusCode = 200;
+                        await WriteAsync(ctx.Response, "{\"status\":\"applied\",\"clusters\":" + clusters.Count + "}");
+                    }
+                    catch (Exception ex)
+                    {
+                        ctx.Response.StatusCode = 400;
+                        await WriteAsync(ctx.Response, JsonSerializer.Serialize(new { error = ex.Message }));
+                    }
+
                     return;
                 }
             }

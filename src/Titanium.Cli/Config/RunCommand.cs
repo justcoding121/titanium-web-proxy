@@ -1,5 +1,6 @@
+using System.Net;
+using System.Text;
 using Titanium.Cli.Certificates;
-using Titanium.Cli.Config;
 using Titanium.Cli.Parsers;
 using Titanium.Cli.StaticFiles;
 using Titanium.Web.Proxy;
@@ -8,6 +9,8 @@ using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.Configuration;
 using Titanium.Web.Proxy.Configuration.Models;
+using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Routing;
 using Titanium.Web.Proxy.Transforms;
@@ -33,7 +36,6 @@ internal static class RunCommand
         var requiresSessionPath = ConfigNeedsSessionPath(loaded.Config);
         using var proxy = new ProxyServer();
 
-        // Fast-path: simple reverse must NOT set EnableHttpInterception or subscribe session handlers.
         if (requiresSessionPath)
         {
             proxy.EnableHttpInterception = true;
@@ -49,21 +51,43 @@ internal static class RunCommand
         {
             var host = listener.Host ?? "0.0.0.0";
             var ip = host is "0.0.0.0" or "*"
-                ? System.Net.IPAddress.Any
-                : System.Net.IPAddress.Parse(host);
-            var ep = new ExplicitProxyEndPoint(ip, listener.Port, listener.DecryptSsl);
-            if (!string.IsNullOrEmpty(listener.ForwardHost))
-            {
-                // Transparent reverse uses TransparentProxyEndPoint; for skeleton, bind explicit and document ForwardHost.
-                Console.WriteLine($"Listener {host}:{listener.Port} ForwardHost={listener.ForwardHost}:{listener.ForwardPort ?? 80}");
-            }
+                ? IPAddress.Any
+                : IPAddress.Parse(host);
 
-            proxy.AddEndPoint(ep);
+            if (!string.IsNullOrEmpty(listener.ForwardHost) && !listener.DecryptSsl)
+            {
+                var ep = new TransparentProxyEndPoint(ip, listener.Port, decryptSsl: false)
+                {
+                    ForwardHost = listener.ForwardHost,
+                    ForwardPort = listener.ForwardPort ?? 80,
+                    ForwardCleartext = true,
+                };
+                proxy.AddEndPoint(ep);
+                Console.WriteLine(
+                    $"Listener {host}:{listener.Port} transparent ForwardHost={listener.ForwardHost}:{listener.ForwardPort ?? 80}");
+            }
+            else if (!string.IsNullOrEmpty(listener.ForwardHost) && listener.DecryptSsl)
+            {
+                var ep = new TransparentProxyEndPoint(ip, listener.Port, decryptSsl: true)
+                {
+                    ForwardHost = listener.ForwardHost,
+                    ForwardPort = listener.ForwardPort ?? 443,
+                };
+                proxy.AddEndPoint(ep);
+                Console.WriteLine(
+                    $"Listener {host}:{listener.Port} TLS-terminate ForwardHost={listener.ForwardHost}:{listener.ForwardPort ?? 443}");
+            }
+            else
+            {
+                var ep = new ExplicitProxyEndPoint(ip, listener.Port, listener.DecryptSsl);
+                proxy.AddEndPoint(ep);
+                Console.WriteLine($"Listener {host}:{listener.Port} explicit decryptSsl={listener.DecryptSsl}");
+            }
         }
 
         if (loaded.Config.Listeners.Count == 0)
         {
-            proxy.AddEndPoint(new ExplicitProxyEndPoint(System.Net.IPAddress.Loopback, 8000, false));
+            proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, false));
         }
 
         CertificateBootstrap.Apply(proxy, loaded.Config.Certificates);
@@ -82,7 +106,7 @@ internal static class RunCommand
             {
                 ProxyServer = proxy,
                 ClusterManager = clusterManager,
-                Options = loaded.Config.Plus.Options,
+                Options = BuildPlusOptions(loaded.Config.Plus),
             });
         }
 
@@ -107,6 +131,25 @@ internal static class RunCommand
         await tcs.Task;
         proxy.Stop();
         return 0;
+    }
+
+    internal static Dictionary<string, string> BuildPlusOptions(PlusConfig plus)
+    {
+        var options = plus.Options is null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(plus.Options, StringComparer.OrdinalIgnoreCase);
+
+        if (plus.ControlPlane is not null)
+        {
+            options["controlPlane.host"] = plus.ControlPlane.Host;
+            options["controlPlane.port"] = plus.ControlPlane.Port.ToString();
+            if (!string.IsNullOrEmpty(plus.ControlPlane.SharedSecret))
+            {
+                options["controlPlane.sharedSecret"] = plus.ControlPlane.SharedSecret;
+            }
+        }
+
+        return options;
     }
 
     internal static bool ConfigNeedsSessionPath(TwpConfig config)

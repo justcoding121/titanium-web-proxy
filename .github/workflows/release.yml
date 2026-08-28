@@ -39,6 +39,12 @@ jobs:
       - name: Publish Cli
         run: |
           dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:AssemblyName=titanium -o artifacts/cli/${{ matrix.rid }}
+          # Ship twp alias next to titanium (same binary).
+          if [ -f artifacts/cli/${{ matrix.rid }}/titanium.exe ]; then
+            cp artifacts/cli/${{ matrix.rid }}/titanium.exe artifacts/cli/${{ matrix.rid }}/twp.exe
+          elif [ -f artifacts/cli/${{ matrix.rid }}/titanium ]; then
+            cp artifacts/cli/${{ matrix.rid }}/titanium artifacts/cli/${{ matrix.rid }}/twp
+          fi
           (cd artifacts/cli/${{ matrix.rid }} && zip -r ../../../Titanium.Cli-${{ matrix.rid }}.zip .)
       - uses: actions/upload-artifact@v4
         with:

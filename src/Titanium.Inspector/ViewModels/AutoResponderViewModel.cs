@@ -23,7 +23,7 @@ public sealed class AutoResponderViewModel : System.ComponentModel.INotifyProper
 
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 
-    public bool TryRespond(SessionSnapshot session, out AutoResponderRule? matched)
+    public bool TryMatch(string url, out AutoResponderRule? matched)
     {
         matched = null;
         if (!Enabled)
@@ -38,7 +38,7 @@ public sealed class AutoResponderViewModel : System.ComponentModel.INotifyProper
                 continue;
             }
 
-            if (!Matches(rule.MatchUrl, session.Url))
+            if (!Matches(rule.MatchUrl, url))
             {
                 continue;
             }
@@ -49,6 +49,9 @@ public sealed class AutoResponderViewModel : System.ComponentModel.INotifyProper
 
         return false;
     }
+
+    public bool TryRespond(SessionSnapshot session, out AutoResponderRule? matched)
+        => TryMatch(session.Url, out matched);
 
     private static bool Matches(string filter, string url)
     {

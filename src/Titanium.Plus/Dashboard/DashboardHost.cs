@@ -1,35 +1,46 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Titanium.Plus.ControlPlane;
 using Titanium.Plus.Observability;
 using Titanium.Plus.Operations;
+using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Abstractions.Routing;
 
 namespace Titanium.Plus.Dashboard;
 
-/// <summary>Static HTML admin surface for config dump / destination states / drain.</summary>
+/// <summary>Authenticated HTML admin for destination states / drain / metrics.</summary>
 public sealed class DashboardHost : IDisposable
 {
     private readonly ControlPlaneServer _controlPlane;
     private readonly DrainOperations _operations;
     private readonly PrometheusMetricsExporter _metrics;
+    private readonly IClusterManager? _clusters;
     private HttpListener? _listener;
     private CancellationTokenSource? _cts;
 
-    public DashboardHost(ControlPlaneServer controlPlane, DrainOperations operations, PrometheusMetricsExporter metrics)
+    public DashboardHost(
+        ControlPlaneServer controlPlane,
+        DrainOperations operations,
+        PrometheusMetricsExporter metrics,
+        IClusterManager? clusters)
     {
         _controlPlane = controlPlane;
         _operations = operations;
         _metrics = metrics;
+        _clusters = clusters;
     }
+
+    public string? Prefix { get; private set; }
 
     public void Start()
     {
-        // Serve dashboard on control-plane port + 1 when possible; skeleton shares documentation only.
         var uri = new Uri(_controlPlane.Prefix);
         var dashPort = uri.Port + 1;
+        Prefix = $"http://{uri.Host}:{dashPort}/";
         _cts = new CancellationTokenSource();
         _listener = new HttpListener();
-        _listener.Prefixes.Add($"http://{uri.Host}:{dashPort}/");
+        _listener.Prefixes.Add(Prefix);
         try
         {
             _listener.Start();
@@ -37,8 +48,8 @@ public sealed class DashboardHost : IDisposable
         }
         catch
         {
-            // Port may be in use; dashboard is best-effort in skeleton.
             _listener = null;
+            Prefix = null;
         }
     }
 
@@ -63,25 +74,117 @@ public sealed class DashboardHost : IDisposable
                 return;
             }
 
-            var path = ctx.Request.Url?.AbsolutePath ?? "/";
-            if (path.StartsWith("/metrics", StringComparison.OrdinalIgnoreCase))
+            try
             {
-                var body = _metrics.Render();
-                await WriteAsync(ctx.Response, "text/plain; version=0.0.4", body);
-                continue;
-            }
+                if (!Authorize(ctx.Request))
+                {
+                    ctx.Response.StatusCode = 401;
+                    await WriteAsync(ctx.Response, "text/plain", "unauthorized");
+                    continue;
+                }
 
-            if (path.StartsWith("/drain/", StringComparison.OrdinalIgnoreCase) &&
-                ctx.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
+                var path = ctx.Request.Url?.AbsolutePath ?? "/";
+                if (path.StartsWith("/metrics", StringComparison.OrdinalIgnoreCase))
+                {
+                    await WriteAsync(ctx.Response, "text/plain; version=0.0.4", _metrics.Render());
+                    continue;
+                }
+
+                if (path.StartsWith("/api/snapshot", StringComparison.OrdinalIgnoreCase))
+                {
+                    var snap = _clusters?.Snapshot ?? ImmutableClusterSnapshot.Empty;
+                    var json = JsonSerializer.Serialize(new
+                    {
+                        destinationStates = snap.DestinationStates,
+                        clusters = snap.Clusters.Keys,
+                    });
+                    await WriteAsync(ctx.Response, "application/json", json);
+                    continue;
+                }
+
+                if (path.StartsWith("/drain/", StringComparison.OrdinalIgnoreCase) &&
+                    ctx.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
+                {
+                    var id = Uri.UnescapeDataString(path["/drain/".Length..]);
+                    _operations.Drain(id);
+                    await WriteAsync(ctx.Response, "text/plain", "ok");
+                    continue;
+                }
+
+                if (path.StartsWith("/healthy/", StringComparison.OrdinalIgnoreCase) &&
+                    ctx.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
+                {
+                    var id = Uri.UnescapeDataString(path["/healthy/".Length..]);
+                    _operations.MarkHealthy(id);
+                    await WriteAsync(ctx.Response, "text/plain", "ok");
+                    continue;
+                }
+
+                await WriteAsync(ctx.Response, "text/html; charset=utf-8", BuildHtml());
+            }
+            catch
             {
-                var id = path["/drain/".Length..];
-                _operations.Drain(id);
-                await WriteAsync(ctx.Response, "text/plain", "ok");
-                continue;
+                try
+                {
+                    ctx.Response.StatusCode = 500;
+                    ctx.Response.Close();
+                }
+                catch
+                {
+                    // ignore
+                }
             }
-
-            await WriteAsync(ctx.Response, "text/html; charset=utf-8", Html);
         }
+    }
+
+    private bool Authorize(HttpListenerRequest request)
+    {
+        var header = request.Headers[ControlPlaneServer.SharedSecretHeader];
+        return !string.IsNullOrEmpty(header) &&
+               string.Equals(header, _controlPlane.SharedSecret, StringComparison.Ordinal);
+    }
+
+    private string BuildHtml()
+    {
+        var snap = _clusters?.Snapshot ?? ImmutableClusterSnapshot.Empty;
+        var rows = new StringBuilder();
+        foreach (var (id, state) in snap.DestinationStates.OrderBy(kv => kv.Key))
+        {
+            rows.Append("<tr><td>").Append(WebUtility.HtmlEncode(id)).Append("</td><td>")
+                .Append(state).Append("</td><td>")
+                .Append("<button onclick=\"post('/drain/").Append(Uri.EscapeDataString(id))
+                .Append("')\">Drain</button> ")
+                .Append("<button onclick=\"post('/healthy/").Append(Uri.EscapeDataString(id))
+                .Append("')\">Healthy</button>")
+                .Append("</td></tr>");
+        }
+
+        if (rows.Length == 0)
+        {
+            rows.Append("<tr><td colspan=\"3\">No destinations in snapshot.</td></tr>");
+        }
+
+        return new StringBuilder()
+            .Append("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"/>")
+            .Append("<title>Titanium Plus Dashboard</title>")
+            .Append("<style>body{font-family:system-ui,sans-serif;margin:1.5rem}")
+            .Append("table{border-collapse:collapse;width:100%;max-width:720px}")
+            .Append("th,td{border:1px solid #ccc;padding:.4rem .6rem;text-align:left}")
+            .Append("code{background:#f4f4f4;padding:.1rem .3rem}</style></head><body>")
+            .Append("<h1>Titanium Plus</h1><p>Authenticated with <code>")
+            .Append(ControlPlaneServer.SharedSecretHeader)
+            .Append("</code>. Control plane: <code>")
+            .Append(WebUtility.HtmlEncode(_controlPlane.Prefix))
+            .Append("</code></p><p><a href=\"/metrics\">Prometheus metrics</a> · ")
+            .Append("<a href=\"/api/snapshot\">JSON snapshot</a></p><table>")
+            .Append("<thead><tr><th>Destination</th><th>State</th><th>Actions</th></tr></thead><tbody>")
+            .Append(rows)
+            .Append("</tbody></table><script>")
+            .Append("async function post(path){const secret=prompt('Control secret');")
+            .Append("if(!secret)return;await fetch(path,{method:'POST',headers:{'")
+            .Append(ControlPlaneServer.SharedSecretHeader)
+            .Append("':secret}});location.reload();}</script></body></html>")
+            .ToString();
     }
 
     private static async Task WriteAsync(HttpListenerResponse response, string contentType, string body)
@@ -92,19 +195,4 @@ public sealed class DashboardHost : IDisposable
         await response.OutputStream.WriteAsync(bytes);
         response.Close();
     }
-
-    private const string Html = """
-        <!DOCTYPE html>
-        <html lang="en">
-        <head><meta charset="utf-8"/><title>Titanium Plus Dashboard</title></head>
-        <body>
-          <h1>Titanium Plus</h1>
-          <p>Control plane binds loopback by default and requires the shared-secret header.</p>
-          <ul>
-            <li><a href="/metrics">Prometheus metrics</a></li>
-            <li>POST /drain/{destinationId} to drain</li>
-          </ul>
-        </body>
-        </html>
-        """;
 }
