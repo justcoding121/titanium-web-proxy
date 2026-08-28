@@ -1,4 +1,5 @@
 using Titanium.Cli.Config;
+using Titanium.Cli.Http3;
 using Titanium.Cli.Updates;
 
 namespace Titanium.Cli;
@@ -22,6 +23,7 @@ internal static class Program
                 "test" => TestCommand.Execute(ParseConfigPath(args)),
                 "version" => await VersionCommand.ExecuteAsync(args),
                 "update" => await UpdateCommand.ExecuteAsync(args),
+                "http3-deps" => await Http3DepsCommand.ExecuteAsync(args),
                 "help" or "-h" or "--help" => PrintHelp(),
                 _ => await UnknownAsync(command),
             };
@@ -69,6 +71,7 @@ internal static class Program
               titanium test -c <config>
               titanium version [--check] [--plus] [--channel beta]
               titanium update [--plus] [--channel beta]
+              titanium http3-deps status|install
             """);
         return 0;
     }

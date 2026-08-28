@@ -10,13 +10,43 @@ proxyServer.EnableHttp3 = true;
 
 ## Prerequisites
 
-- .NET 10+
-- MsQuic:
-  - **Windows**: in-box with the .NET runtime (Windows 11 / Server 2022+)
-  - **Linux**: install `libmsquic` from packages.microsoft.com
-  - **macOS**: not bundled; see the wiki for bundling notes
-- `System.Net.Quic.QuicListener.IsSupported == true` before enabling
-- Inbound endpoint: `TransparentQuicProxyEndPoint` or `TransparentProxyEndPoint` with `EnableHttp3 = true`
+### CLI / Inspector (bundled)
+
+Self-contained GitHub Release zips **ship MsQuic natives** for common RIDs. Pick the zip that matches your OS / libc / arch:
+
+| Environment | RID zip |
+| --- | --- |
+| Windows 11 / Server 2022+ | `win-x64` (OS MsQuic; no extra DLL) |
+| Ubuntu/Debian/RHEL-like (glibc) x64 | `linux-x64` |
+| glibc arm64 (Graviton, Arm nodes) | `linux-arm64` |
+| Alpine / musl containers (K8s sidecars) x64 | `linux-musl-x64` |
+| Alpine / musl arm64 | `linux-musl-arm64` |
+| macOS Intel | `osx-x64` |
+| macOS Apple Silicon | `osx-arm64` |
+
+Check at runtime:
+
+```bash
+titanium http3-deps status
+```
+
+Edge OS / old glibc: `titanium http3-deps install` (apt / dnf / apk / brew; needs network + sudo).
+
+### Alpine / Kubernetes
+
+Use the **`linux-musl-*`** zip inside Alpine images. A `linux-x64` (glibc) zip will not load MsQuic on musl.
+
+### NuGet library hosts
+
+Embedding `Titanium.Web.Proxy` in your own app does **not** bundle MsQuic:
+
+- **Windows**: Windows 11 / Server 2022+
+- **Linux**: install `libmsquic` (e.g. packages.microsoft.com / `apk add libmsquic`)
+- **macOS**: bundle `libmsquic` + OpenSSL with `@loader_path`, or `brew install libmsquic`
+
+Confirm `System.Net.Quic.QuicListener.IsSupported == true` before enabling.
+
+Inbound endpoint: `TransparentQuicProxyEndPoint` or `TransparentProxyEndPoint` with `EnableHttp3 = true`.
 
 ## Dual-listen reverse (TCP + UDP)
 
@@ -47,6 +77,11 @@ listeners:
     enableHttp3: true
 ```
 
+```bash
+titanium http3-deps status
+titanium http3-deps install   # only if status shows unsupported
+```
+
 ## Full guide
 
-Setup, macOS notes, Alt-Svc, bridges, and gap list: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).
+Packaging, Alt-Svc, bridges, and gap list: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).

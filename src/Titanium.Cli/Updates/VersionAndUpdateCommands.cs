@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Titanium.Cli.Config;
+using Titanium.Cli.Http3;
 
 namespace Titanium.Cli.Updates;
 
@@ -256,20 +257,7 @@ internal static class UpdateCommand
         return 0;
     }
 
-    private static string ResolveRid()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            return "win-x64";
-        }
-
-        if (OperatingSystem.IsMacOS())
-        {
-            return "osx-x64";
-        }
-
-        return "linux-x64";
-    }
+    private static string ResolveRid() => Http3DepsCommand.SuggestRid();
 
     private static string? ResolveWingetPath()
     {

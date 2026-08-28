@@ -9,6 +9,7 @@ titanium run -c <config> [-v|--verbose]
 titanium test -c <config>
 titanium version [--check] [--plus] [--channel beta]
 titanium update [--plus] [--channel beta]
+titanium http3-deps status|install
 ```
 
 `twp` is an alias for the same binary.
@@ -19,8 +20,11 @@ titanium update [--plus] [--channel beta]
 | `test` | Validate config without serving traffic |
 | `version` | Print local version; `--check` compares to the update feed |
 | `update` | Download a newer CLI zip; `--plus` updates the Plus sidecar DLL |
+| `http3-deps` | Report Quic availability; optionally install system MsQuic on edge hosts |
 
 Channels: `stable` (default) or `beta` via `--channel` or `TITANIUM_UPDATE_CHANNEL`.
+
+**Alpine / Kubernetes:** download the `linux-musl-*` RID zip (not `linux-x64`). See [HTTP/3](/docs/http3).
 
 ## Minimal ForwardHost reverse
 

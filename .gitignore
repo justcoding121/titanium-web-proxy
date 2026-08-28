@@ -229,3 +229,6 @@ tmp/
 website/.vitepress/dist/
 website/.vitepress/cache/
 
+# HTTP/3 native download cache (CI / local packaging)
+tools/packaging/.cache/
+

@@ -22,30 +22,61 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
+          cache: true
       - name: Test
         run: dotnet test src/Titanium.Web.Proxy.sln -c Release --nologo
 
   build-cli:
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        rid: [win-x64, linux-x64, osx-x64]
+        include:
+          - rid: linux-x64
+            os: ubuntu-latest
+          - rid: linux-arm64
+            os: ubuntu-latest
+          - rid: linux-musl-x64
+            os: ubuntu-latest
+          - rid: linux-musl-arm64
+            os: ubuntu-latest
+          - rid: win-x64
+            os: ubuntu-latest
+          - rid: osx-x64
+            os: macos-latest
+          - rid: osx-arm64
+            os: macos-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
+          cache: true
+      - uses: actions/cache@v4
+        with:
+          path: tools/packaging/.cache/http3-natives
+          key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-${{ matrix.rid }}
+          restore-keys: |
+            http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-
       - name: Publish Cli
+        shell: pwsh
         run: |
-          dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:AssemblyName=titanium -o artifacts/cli/${{ matrix.rid }}
-          # Ship twp alias next to titanium (same binary).
-          if [ -f artifacts/cli/${{ matrix.rid }}/titanium.exe ]; then
-            cp artifacts/cli/${{ matrix.rid }}/titanium.exe artifacts/cli/${{ matrix.rid }}/twp.exe
-          elif [ -f artifacts/cli/${{ matrix.rid }}/titanium ]; then
-            cp artifacts/cli/${{ matrix.rid }}/titanium artifacts/cli/${{ matrix.rid }}/twp
-          fi
-          (cd artifacts/cli/${{ matrix.rid }} && zip -r ../../../Titanium.Cli-${{ matrix.rid }}.zip .)
+          $rid = "${{ matrix.rid }}"
+          $out = "artifacts/cli/$rid"
+          dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r $rid --self-contained true -o $out
+          if (Test-Path "$out/titanium.exe") {
+            Copy-Item "$out/titanium.exe" "$out/twp.exe"
+          } elseif (Test-Path "$out/titanium") {
+            Copy-Item "$out/titanium" "$out/twp"
+          }
+          ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
+          if ($IsWindows) {
+            Compress-Archive -Path "$out/*" -DestinationPath "Titanium.Cli-$rid.zip"
+          } else {
+            Push-Location $out
+            try { zip -r "../../../Titanium.Cli-$rid.zip" . } finally { Pop-Location }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: cli-${{ matrix.rid }}
@@ -59,6 +90,7 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
+          cache: true
       - name: Build Plus
         run: |
           dotnet build src/Titanium.Plus/Titanium.Plus.csproj -c Release -o artifacts/plus
@@ -70,24 +102,64 @@ jobs:
 
   build-inspector:
     needs: test
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+            msi: true
+          - rid: linux-x64
+            os: ubuntu-latest
+            msi: false
+          - rid: linux-arm64
+            os: ubuntu-latest
+            msi: false
+          - rid: linux-musl-x64
+            os: ubuntu-latest
+            msi: false
+          - rid: linux-musl-arm64
+            os: ubuntu-latest
+            msi: false
+          - rid: osx-x64
+            os: macos-latest
+            msi: false
+          - rid: osx-arm64
+            os: macos-latest
+            msi: false
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
+          cache: true
+      - uses: actions/cache@v4
+        with:
+          path: tools/packaging/.cache/http3-natives
+          key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-${{ matrix.rid }}
+          restore-keys: |
+            http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-
       - name: Publish Inspector
         shell: pwsh
         run: |
-          dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r win-x64 --self-contained true -o artifacts/inspector/win-x64
-          Compress-Archive -Path artifacts/inspector/win-x64/* -DestinationPath TitaniumInspector-win-x64.zip
+          $rid = "${{ matrix.rid }}"
+          $out = "artifacts/inspector/$rid"
+          dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r $rid --self-contained true -o $out
+          ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
+          if ($IsWindows) {
+            Compress-Archive -Path "$out/*" -DestinationPath "TitaniumInspector-$rid.zip"
+          } else {
+            Push-Location $out
+            try { zip -r "../../../TitaniumInspector-$rid.zip" . } finally { Pop-Location }
+          }
       - name: Build MSI (WiX)
+        if: matrix.msi
         shell: pwsh
         run: |
           $ver = "${{ github.ref_name }}"
           if ($ver.StartsWith("v")) { $ver = $ver.Substring(1) }
           if ($ver -notmatch '^\d+\.\d+\.\d+') { $ver = "7.0.0" }
-          # WiX Version is Major.Minor.Build only
           $ver = ($ver -split "-")[0]
           ./tools/packaging/build-inspector-msi.ps1 `
             -PayloadDir artifacts/inspector/win-x64 `
@@ -95,13 +167,60 @@ jobs:
             -Version $ver
       - uses: actions/upload-artifact@v4
         with:
-          name: inspector-win-x64
+          name: inspector-${{ matrix.rid }}
+          if-no-files-found: error
           path: |
-            TitaniumInspector-win-x64.zip
-            TitaniumInspector-win-x64.msi
+            TitaniumInspector-${{ matrix.rid }}.zip
+      - uses: actions/upload-artifact@v4
+        if: matrix.msi
+        with:
+          name: inspector-${{ matrix.rid }}-msi
+          path: TitaniumInspector-${{ matrix.rid }}.msi
+
+  smoke-http3:
+    needs: build-cli
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            container: ""
+          - rid: linux-musl-x64
+            container: alpine:3.24
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-${{ matrix.rid }}
+          path: dist
+      - name: Smoke QuicListener (host ubuntu / glibc)
+        if: matrix.container == ''
+        run: |
+          set -euo pipefail
+          unzip -q dist/Titanium.Cli-${{ matrix.rid }}.zip -d cli
+          chmod +x cli/titanium
+          # Soft probe: http3-deps status exits 0 and prints IsSupported
+          ./cli/titanium http3-deps status | tee smoke-out.txt
+          grep -qi 'IsSupported' smoke-out.txt
+          # Bundled natives must be present for glibc zip
+          test -e cli/libmsquic.so -o -e cli/libmsquic.so.2 -o -e cli/libmsquic.so.2.6.0
+      - name: Smoke QuicListener (Alpine musl container)
+        if: matrix.container != ''
+        uses: addnab/docker-run-action@v3
+        with:
+          image: ${{ matrix.container }}
+          options: -v ${{ github.workspace }}/dist:/dist
+          run: |
+            set -euo pipefail
+            apk add --no-cache unzip libstdc++ libgcc icu-libs
+            unzip -q /dist/Titanium.Cli-${{ matrix.rid }}.zip -d /cli
+            chmod +x /cli/titanium
+            /cli/titanium http3-deps status | tee /cli/smoke-out.txt
+            grep -qi 'IsSupported' /cli/smoke-out.txt
+            test -e /cli/libmsquic.so -o -e /cli/libmsquic.so.2 -o -e /cli/libmsquic.so.2.5.7
 
   publish-release:
-    needs: [build-cli, build-plus, build-inspector]
+    needs: [build-cli, build-plus, build-inspector, smoke-http3]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:

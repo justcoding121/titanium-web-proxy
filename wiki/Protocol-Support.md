@@ -137,9 +137,9 @@ tunnel). See [RFC 8441](#http2-safety-and-frame-validation) below. QUIC endpoint
 ## HTTP/3 (QUIC) — opt-in, experimental
 
 HTTP/3 support is gated behind `ProxyServer.EnableHttp3 = true` (marked `[Experimental("TWP001")]`).
-It requires the MsQuic native library and `System.Net.Quic.QuicListener.IsSupported == true` at runtime
-(available on Windows 11/Server 2022+ and Linux with a recent `libmsquic` package; on macOS, bundle
-`libmsquic`, `libssl`, and `libcrypto` with `@loader_path` RPATH — see [HTTP-3](HTTP-3) for details).
+It requires the MsQuic native library and `System.Net.Quic.QuicListener.IsSupported == true` at runtime.
+CLI/Inspector Release zips bundle natives per RID (Windows uses OS MsQuic on Win11/Server 2022+).
+NuGet library hosts install system `libmsquic` on Linux/macOS (or bundle with `@loader_path` on macOS) — see [HTTP-3](HTTP-3).
 The H3-related rows below are the HTTP/3 legs of the [protocol bridges](#protocol-bridges) matrix.
 
 | Feature | Support | Notes |

@@ -1,6 +1,15 @@
 /// <reference types="vitepress/client" />
 import { defineLoader } from 'vitepress'
 
+export type CliRid =
+  | 'win-x64'
+  | 'linux-x64'
+  | 'linux-arm64'
+  | 'linux-musl-x64'
+  | 'linux-musl-arm64'
+  | 'osx-x64'
+  | 'osx-arm64'
+
 export interface DownloadAsset {
   name: string
   url: string
@@ -8,15 +17,11 @@ export interface DownloadAsset {
 }
 
 export interface DownloadLinks {
-  cli: {
-    'win-x64'?: DownloadAsset
-    'linux-x64'?: DownloadAsset
-    'osx-x64'?: DownloadAsset
-  }
+  cli: Partial<Record<CliRid, DownloadAsset>>
   inspector: {
     msi?: DownloadAsset
     zip?: DownloadAsset
-  }
+  } & Partial<Record<CliRid, DownloadAsset>>
   releasesUrl: string
   latestTag: string | null
 }
@@ -25,6 +30,16 @@ declare const data: DownloadLinks
 export { data }
 
 const RELEASES = 'https://github.com/justcoding121/titanium-web-proxy/releases'
+
+const CLI_RIDS: CliRid[] = [
+  'win-x64',
+  'linux-x64',
+  'linux-arm64',
+  'linux-musl-x64',
+  'linux-musl-arm64',
+  'osx-x64',
+  'osx-arm64',
+]
 
 export default defineLoader({
   async load(): Promise<DownloadLinks> {
@@ -65,20 +80,12 @@ export default defineLoader({
       for (const r of releases) {
         for (const a of r.assets ?? []) {
           const asset = { name: a.name, url: a.browser_download_url, tag: r.tag_name }
-          if (a.name === 'Titanium.Cli-win-x64.zip' && !out.cli['win-x64']) out.cli['win-x64'] = asset
-          if (a.name === 'Titanium.Cli-linux-x64.zip' && !out.cli['linux-x64']) out.cli['linux-x64'] = asset
-          if (a.name === 'Titanium.Cli-osx-x64.zip' && !out.cli['osx-x64']) out.cli['osx-x64'] = asset
+          for (const rid of CLI_RIDS) {
+            if (a.name === `Titanium.Cli-${rid}.zip` && !out.cli[rid]) out.cli[rid] = asset
+            if (a.name === `TitaniumInspector-${rid}.zip` && !out.inspector[rid]) out.inspector[rid] = asset
+          }
           if (a.name === 'TitaniumInspector-win-x64.msi' && !out.inspector.msi) out.inspector.msi = asset
           if (a.name === 'TitaniumInspector-win-x64.zip' && !out.inspector.zip) out.inspector.zip = asset
-        }
-        if (
-          out.cli['win-x64'] &&
-          out.cli['linux-x64'] &&
-          out.cli['osx-x64'] &&
-          out.inspector.msi &&
-          out.inspector.zip
-        ) {
-          break
         }
       }
       return out

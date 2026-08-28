@@ -301,9 +301,10 @@ inbound h2c is not implemented. See
 
 ## HTTP/3
 
-HTTP/3 support is available as an opt-in feature.  See the **[HTTP/3](HTTP-3)** page for the full
-setup guide, and [Protocol Support — Protocol bridges](Protocol-Support#protocol-bridges) for every
-client→origin direction (including TCP HTTP/1.1 ↔ HTTP/2 translation).  Quick start:
+HTTP/3 support is available as an opt-in feature. See the **[HTTP/3](HTTP-3)** page for setup,
+**CLI/Inspector packaging** (which RID zip to download, Alpine/K8s musl zips, `http3-deps`), Alt-Svc,
+and gaps. See also [Protocol Support — Protocol bridges](Protocol-Support#protocol-bridges) for every
+client→origin direction (including TCP HTTP/1.1 ↔ HTTP/2 translation). Quick start:
 
 ```csharp
 proxy.EnableHttp3 = true;

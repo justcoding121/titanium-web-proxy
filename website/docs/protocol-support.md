@@ -1,6 +1,6 @@
 # Protocol support
 
-Feature snapshot for HTTP/1.0, HTTP/1.1, HTTP/2, and HTTP/3. HTTP/2 is **on by default** (`ProxyServer.EnableHttp2 = true`). HTTP/3 is experimental (`TWP001`) and opt-in (`EnableHttp3 = true`).
+Feature snapshot for HTTP/1.0, HTTP/1.1, HTTP/2, and HTTP/3. HTTP/2 is **on by default** (`ProxyServer.EnableHttp2 = true`). HTTP/3 is experimental (`TWP001`) and opt-in (`EnableHttp3 = true`). CLI/Inspector Release zips bundle MsQuic natives per RID; NuGet library hosts install system MsQuic — see [HTTP/3](/docs/http3).
 
 ## Protocol bridges
 
