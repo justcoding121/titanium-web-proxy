@@ -222,6 +222,111 @@ internal sealed class YarpProxyHost : IDisposable
             AcceptAnyServerCertificate = true
         });
 
+    /// <summary>H3 → prior-knowledge h2c.</summary>
+    public static Task<YarpProxyHost> StartHttp3ToH2cAsync(int originHttpPort) =>
+        StartAsync(new YarpListenOptions
+        {
+            UseTls = true,
+            InboundProtocols = HttpProtocols.Http1AndHttp2AndHttp3,
+            DestinationAddress = $"http://127.0.0.1:{originHttpPort}/",
+            OutboundVersion = HttpVersion.Version20,
+            OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact
+        });
+
+    /// <summary>H1 TLS → prior-knowledge h2c.</summary>
+    public static Task<YarpProxyHost> StartHttp1ToH2cAsync(int originHttpPort) =>
+        StartAsync(new YarpListenOptions
+        {
+            UseTls = true,
+            InboundProtocols = HttpProtocols.Http1,
+            DestinationAddress = $"http://127.0.0.1:{originHttpPort}/",
+            OutboundVersion = HttpVersion.Version20,
+            OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact
+        });
+
+    /// <summary>H1 plain → prior-knowledge h2c.</summary>
+    public static Task<YarpProxyHost> StartHttp1PlainToH2cAsync(int originHttpPort) =>
+        StartAsync(new YarpListenOptions
+        {
+            UseTls = false,
+            InboundProtocols = HttpProtocols.Http1,
+            DestinationAddress = $"http://127.0.0.1:{originHttpPort}/",
+            OutboundVersion = HttpVersion.Version20,
+            OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact
+        });
+
+    /// <summary>H1 plain → HTTPS h2.</summary>
+    public static Task<YarpProxyHost> StartHttp1PlainToHttp2Async(int originHttpsPort) =>
+        StartAsync(new YarpListenOptions
+        {
+            UseTls = false,
+            InboundProtocols = HttpProtocols.Http1,
+            DestinationAddress = $"https://127.0.0.1:{originHttpsPort}/",
+            OutboundVersion = HttpVersion.Version20,
+            OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            AcceptAnyServerCertificate = true
+        });
+
+    /// <summary>H1 plain → HTTP/3 origin.</summary>
+    public static Task<YarpProxyHost> StartHttp1PlainToHttp3Async(int originQuicPort) =>
+        StartAsync(new YarpListenOptions
+        {
+            UseTls = false,
+            InboundProtocols = HttpProtocols.Http1,
+            DestinationAddress = $"https://127.0.0.1:{originQuicPort}/",
+            OutboundVersion = HttpVersion.Version30,
+            OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            AcceptAnyServerCertificate = true
+        });
+
+    /// <summary>h2c → HTTPS HTTP/1.</summary>
+    public static Task<YarpProxyHost> StartH2cToHttpsHttp1Async(int originHttpsPort) =>
+        StartAsync(new YarpListenOptions
+        {
+            UseTls = false,
+            InboundProtocols = HttpProtocols.Http2,
+            DestinationAddress = $"https://127.0.0.1:{originHttpsPort}/",
+            OutboundVersion = HttpVersion.Version11,
+            OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            AcceptAnyServerCertificate = true
+        });
+
+    /// <summary>H1 TLS → HTTPS HTTP/1 (dual-crypto).</summary>
+    public static Task<YarpProxyHost> StartHttp1TlsToHttpsAsync(int originHttpsPort) =>
+        StartAsync(new YarpListenOptions
+        {
+            UseTls = true,
+            InboundProtocols = HttpProtocols.Http1,
+            DestinationAddress = $"https://127.0.0.1:{originHttpsPort}/",
+            OutboundVersion = HttpVersion.Version11,
+            OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            AcceptAnyServerCertificate = true
+        });
+
+    /// <summary>H2 TLS → HTTPS HTTP/1.</summary>
+    public static Task<YarpProxyHost> StartHttp2ToHttpsHttp1Async(int originHttpsPort) =>
+        StartAsync(new YarpListenOptions
+        {
+            UseTls = true,
+            InboundProtocols = HttpProtocols.Http1AndHttp2,
+            DestinationAddress = $"https://127.0.0.1:{originHttpsPort}/",
+            OutboundVersion = HttpVersion.Version11,
+            OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            AcceptAnyServerCertificate = true
+        });
+
+    /// <summary>H3 → HTTPS HTTP/1.</summary>
+    public static Task<YarpProxyHost> StartHttp3ToHttpsHttp1Async(int originHttpsPort) =>
+        StartAsync(new YarpListenOptions
+        {
+            UseTls = true,
+            InboundProtocols = HttpProtocols.Http1AndHttp2AndHttp3,
+            DestinationAddress = $"https://127.0.0.1:{originHttpsPort}/",
+            OutboundVersion = HttpVersion.Version11,
+            OutboundVersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            AcceptAnyServerCertificate = true
+        });
+
     /// <summary>H3 → HTTP/3 origin.</summary>
     public static Task<YarpProxyHost> StartHttp3ToHttp3Async(int originQuicPort) =>
         StartAsync(new YarpListenOptions

@@ -707,11 +707,8 @@ public class SessionEventArgs : SessionEventArgsBase
     public void Ok(string html, IEnumerable<HttpHeader>? headers = null,
         bool closeServerConnection = false)
     {
-        var response = new OkResponse();
+        var response = ProxyResults.Html(html);
         if (headers != null) response.Headers.AddHeaders(headers);
-
-        response.HttpVersion = HttpClient.Request.HttpVersion;
-        response.Body = response.Encoding.GetBytes(html ?? string.Empty);
 
         Respond(response, closeServerConnection);
     }
@@ -844,6 +841,8 @@ public class SessionEventArgs : SessionEventArgsBase
     /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
     public void Respond(Response response, bool closeServerConnection = false)
     {
+        ApplySyntheticResponseDefaults(response);
+
         // request already send/ready to be sent.
         if (HttpClient.Request.Locked)
         {
@@ -872,6 +871,19 @@ public class SessionEventArgs : SessionEventArgsBase
             HttpClient.Response = response;
             HttpClient.Response.Locked = true;
         }
+    }
+
+    /// <summary>
+    ///     Respond to the client with a streamed body produced by <see cref="ProxyResults.Stream" /> or
+    ///     <see cref="ProxyResults.File" />.
+    /// </summary>
+    /// <param name="result">Streaming response metadata and body writer.</param>
+    /// <param name="closeServerConnection">Close the server connection used by request if any?</param>
+    public void RespondStreaming(StreamingProxyResult result, bool closeServerConnection)
+    {
+        ArgumentNullException.ThrowIfNull(result.WriteBody);
+        ApplySyntheticResponseDefaults(result.Response);
+        RespondStreaming(result.Response, result.WriteBody, closeServerConnection);
     }
 
     /// <summary>
@@ -910,6 +922,12 @@ public class SessionEventArgs : SessionEventArgsBase
     public void TerminateServerConnection()
     {
         HttpClient.CloseServerConnection = true;
+    }
+
+    private void ApplySyntheticResponseDefaults(Response response)
+    {
+        if (response.HttpVersion == HttpHeader.VersionUnknown)
+            response.HttpVersion = HttpClient.Request.HttpVersion;
     }
 
     /// <summary>

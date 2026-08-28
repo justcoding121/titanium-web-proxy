@@ -45,6 +45,7 @@ namespace Titanium.Web.Proxy.Http2
         public static readonly byte[] ConnectionPreface = Encoding.ASCII.GetBytes("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
 
         private static readonly byte[] ConnectMethodBytes = "CONNECT"u8.ToArray();
+        private const string SyntheticResponseFailedMessage = "HTTP/2 synthetic response failed";
 
         /// <summary>
         ///     Connection-level WINDOW_UPDATE increment matching Chrome/Edge (0xEF0001). Grows the peer's
@@ -220,7 +221,8 @@ namespace Titanium.Web.Proxy.Http2
             TcpServerConnection? originConnection = null,
             bool httpInterceptionEnabled = true,
             Func<HttpInterceptionContext, bool>? shouldInterceptHttp = null,
-            Func<CancellationToken, Task<TcpServerConnection>>? openOriginConnectionAsync = null)
+            Func<CancellationToken, Task<TcpServerConnection>>? openOriginConnectionAsync = null,
+            bool forceStaticHpackForMitmUnchangedRelay = false)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
             var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource,
@@ -233,14 +235,21 @@ namespace Titanium.Web.Proxy.Http2
                 new Http2FrameWriter(serverStream, connectionState.ServerWriteLock);
 
             Http2OriginRelayPool? originPool = null;
-            // The pool only serves compressed-relay streams, so it must mirror the useCompressedRelay
-            // gate in CopyHttp2FrameAsync (including the RFC 8441 exclusion below).
-            var useMultiOrigin = !httpInterceptionEnabled
-                && !enableRfc8441
+            // Same-protocol H2↔H2 (not NullOrigin / RFC 8441) can use compressed-relay topology.
+            // HEADER_TABLE_SIZE=0 is forced only for gate-off compressed-relay, or for transparent/
+            // socks MITM that can finish unchanged streams via compressed relay. Explicit MITM
+            // injects Via and re-encodes — keep the peer's table size (Chrome/YouTube HPACK).
+            var canCompressedRelayTopology = !enableRfc8441
                 && originConnection != null
-                && openOriginConnectionAsync != null
-                && resourceLimits.MaxOriginHttp2ConnectionsPerAuthority > 1
                 && serverStream is not NullOriginStream;
+            // Multi-origin pool is for gate-off compressed-relay only. Under true MITM, unchanged
+            // streams may relay via the primary leg while mutated streams re-encode through
+            // QueueSendHeaderTowardServer onto the same serverStream — enabling the pool would
+            // dispose ServerFrameWriter and race those writes with the pool's primary Writer.
+            var useMultiOrigin = canCompressedRelayTopology
+                && !httpInterceptionEnabled
+                && openOriginConnectionAsync != null
+                && resourceLimits.MaxOriginHttp2ConnectionsPerAuthority > 1;
 
             if (useMultiOrigin)
             {
@@ -264,7 +273,8 @@ namespace Titanium.Web.Proxy.Http2
                 CopyHttp2FrameAsync(clientStream, serverStream, connectionState,
                     sessionFactory, onBeforeRequest, onAfterResponse, prepareRequestHeaders, true,
                     cancellationTokenSource.Token, logger, maxDecodedHeaderListBytes, enableRfc8441,
-                    resourceLimits, originConnection, httpInterceptionEnabled, shouldInterceptHttp);
+                    resourceLimits, originConnection, httpInterceptionEnabled, shouldInterceptHttp,
+                    forceStaticHpackForMitmUnchangedRelay: forceStaticHpackForMitmUnchangedRelay);
 
             Task receiveRelay;
             if (originPool != null)
@@ -282,7 +292,8 @@ namespace Titanium.Web.Proxy.Http2
                         sessionFactory, onBeforeResponse, onAfterResponse, null, false,
                         cancellationTokenSource.Token,
                         logger, maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, originConnection,
-                        httpInterceptionEnabled, shouldInterceptHttp);
+                        httpInterceptionEnabled, shouldInterceptHttp,
+                        forceStaticHpackForMitmUnchangedRelay: forceStaticHpackForMitmUnchangedRelay);
             }
 
             await Task.WhenAny(sendRelay, receiveRelay);
@@ -533,23 +544,24 @@ namespace Titanium.Web.Proxy.Http2
             TcpServerConnection? originConnection = null,
             bool httpInterceptionEnabled = true,
             Func<HttpInterceptionContext, bool>? shouldInterceptHttp = null,
-            Http2OriginRelayPool.OriginLeg? originReceiveLeg = null)
+            Http2OriginRelayPool.OriginLeg? originReceiveLeg = null,
+            bool forceStaticHpackForMitmUnchangedRelay = false)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
             var cancellationTokenSource = connectionState.CancellationTokenSource;
 
-            // Gate-off same-protocol H2↔H2: relay compressed HEADERS/DATA without SessionEventArgs.
-            // Bridges (NullOriginStream on either leg) still need decoded headers to translate protocols.
-            // RFC 8441 also forces the decoded path: the proxy owns SETTINGS_ENABLE_CONNECT_PROTOCOL per
-            // leg (it advertises 1 to the client regardless of origin support, and never forwards either
-            // leg's value), so it must also own extended-CONNECT gating - REFUSED_STREAM when the origin
-            // lacks setting 8, pseudo-header validation, 501 for non-websocket tokens, and rejection of
-            // post-establishment HEADERS - all of which need decoded headers and per-stream tunnel state.
-            bool useCompressedRelay = !httpInterceptionEnabled
-                && !enableRfc8441
+            // Same-protocol H2↔H2 (not NullOrigin / RFC 8441): compressed-relay topology.
+            // Gate-off: full compressed-relay (no SessionEventArgs). Gate-on (transparent/socks):
+            // decode + handlers, then relay compressed bytes when unchanged — requires static HPACK.
+            // Explicit MITM re-encodes (Via) and must not force HEADER_TABLE_SIZE=0.
+            bool canCompressedRelayTopology = !enableRfc8441
                 && output is not NullOriginStream
                 && input is not NullOriginStream;
-            if (useCompressedRelay)
+            bool useCompressedRelay = canCompressedRelayTopology && !httpInterceptionEnabled;
+            bool forceStaticHpackTable = useCompressedRelay
+                || (canCompressedRelayTopology && httpInterceptionEnabled
+                    && forceStaticHpackForMitmUnchangedRelay);
+            if (forceStaticHpackTable)
             {
                 // Static-table-only on both legs so compressed blocks are interchangeable.
                 connectionState.ClientSettings.UpdateHeaderTableSize(0);
@@ -560,11 +572,14 @@ namespace Titanium.Web.Proxy.Http2
             // cleartext h2 origin): the verbatim compressed block still carries the client's ':scheme',
             // and strict ASP.NET Core origins reset every stream whose :scheme does not match the
             // origin transport with RST_STREAM(PROTOCOL_ERROR). Detect the mismatch once here; request
-            // blocks are then decoded with a collecting listener and re-encoded with the origin-transport
-            // scheme in RelayCompressedHeaderBlockAsync. Same-transport connections keep the zero-work
-            // verbatim relay (decode stays NoOp).
+            // blocks are then patched/re-encoded with the origin-transport scheme in
+            // RelayCompressedHeaderBlockAsync. Same-transport connections keep the zero-work verbatim
+            // relay (decode stays NoOp).
+            // Apply whenever compressed blocks may be relayed: gate-off (useCompressedRelay) *and*
+            // MITM unchanged-lite (forceStaticHpackTable) — the latter also calls
+            // RelayCompressedHeaderBlockAsync with the captured client block.
             ByteString compressedRelaySchemeOverride = default;
-            if (useCompressedRelay && isClient && originConnection != null
+            if (forceStaticHpackTable && isClient && originConnection != null
                 && input is HttpClientStream { Connection: { } relayClientConnection }
                 && originConnection.IsHttps == relayClientConnection.Http2CleartextClient)
             {
@@ -792,7 +807,8 @@ namespace Titanium.Web.Proxy.Http2
 
             // Gate-off same-protocol path: keep HPACK decoder in sync with a no-op listener, then
             // forward the compressed block unchanged (valid when both legs negotiated table size 0).
-            async Task RelayCompressedHeaderBlockAsync(int hbStreamId, byte[] compressed, bool endStreamFlag)
+            async Task RelayCompressedHeaderBlockAsync(int hbStreamId, byte[] compressed, bool endStreamFlag,
+                byte[]? appendSuffix = null)
             {
                 // Mixed-transport: prefer a structural HPACK walk that only rewrites Indexed
                 // :scheme (0x86↔0x87) — no Decoder, no HeaderCollection. .NET HttpClient and most
@@ -889,8 +905,9 @@ namespace Titanium.Web.Proxy.Http2
 
                 var relayFrameHeader = new Http2FrameHeader { StreamId = wireStreamId };
                 var relayFrameHeaderBuffer = new byte[9];
+                var appendMemory = appendSuffix == null ? ReadOnlyMemory<byte>.Empty : appendSuffix.AsMemory();
                 var framed = RentFramedHeaderBlock(relayFrameHeader, relayFrameHeaderBuffer, wireStreamId,
-                    Http2FrameType.Headers, endStreamFlag, hasPriority: false, blockToRelay,
+                    Http2FrameType.Headers, endStreamFlag, hasPriority: false, blockToRelay, appendMemory,
                     remoteSettings.MaxFrameSize);
                 if (dedicatedWriter != null)
                     dedicatedWriter.EnqueueRented(framed.Array!, framed.Count);
@@ -1234,6 +1251,18 @@ namespace Titanium.Web.Proxy.Http2
                         request.Headers.AddHeader(header);
                     }
 
+                    // Capture compressed block for intercept unchanged → relay (static-HPACK MITM only).
+                    if (httpInterceptionEnabled && forceStaticHpackTable
+                        && connectionState.Streams.TryGetValue(hbStreamId, out var captureState))
+                    {
+                        captureState.CapturedCompressedHeaders = compressed;
+                        captureState.HeadersRelayBaseline =
+                            MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(request.Headers);
+                        captureState.CapturedMethod = request.Method;
+                        captureState.CapturedPath = request.RequestUriString8;
+                        captureState.CapturedAuthority = request.Authority;
+                    }
+
                     // Per-stream predicate: gate is on but this stream may still be passthrough.
                     if (httpInterceptionEnabled && shouldInterceptHttp != null && isMainHeaders)
                     {
@@ -1307,31 +1336,13 @@ namespace Titanium.Web.Proxy.Http2
                         bool bridgeOwnsRequestPrep = output is NullOriginStream
                             || viaOwnerState?.IsExternalBridge == true;
 
-                        if (!request.CancelRequest && !bridgeOwnsRequestPrep)
-                        {
-                            // The h2-to-h1 / h2-to-h3 bridges own request preparation before they start
-                            // their background origin operation; doing it here afterward races
-                            // with that operation and can mutate headers while they are sent.
-                            prepareRequestHeaders?.Invoke(request.Headers);
-                            if (!sessionArgs.IsFastPath && !sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
-                                !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym))
-                            {
-                                var pseudonym = sessionArgs.Server.ViaHeaderPseudonym;
-                                if (ProxyServer.HasLoopedVia(request.Headers, pseudonym))
-                                {
-                                    sessionArgs.GenericResponse(string.Empty, (HttpStatusCode)508);
-                                }
-                                else
-                                {
-                                    ProxyServer.AddViaHeader(request.Headers, request.HttpVersion, pseudonym);
-                                }
-                            }
-                        }
-
                         // Did the consumer answer this request synthetically during BeforeRequest (Ok,
                         // GenericResponse, Redirect, buffered Respond, or RespondStreaming - all funnel
                         // through Respond(), which is the single source of truth for "short-circuit this
                         // request" and is what HTTP/1.x's RequestHandler already keys off of)?
+                        // PrepareRequestHeaders / Via run only on the re-encode forward path below —
+                        // applying them before the unchanged-relay check would rewrite Accept-Encoding
+                        // (MutationCount) and either block relay or diverge from the compressed block.
                         if (sessionArgs.HttpClient.Request.CancelRequest)
                         {
                             // do not forward the request upstream; answer the client directly. Run this in
@@ -1356,7 +1367,7 @@ namespace Titanium.Web.Proxy.Http2
                                     if (t.IsFaulted)
                                     {
                                         ReportException(logger, new ProxyHttpException(
-                                            "HTTP/2 synthetic response failed", t.Exception.GetBaseException(),
+                                            SyntheticResponseFailedMessage, t.Exception.GetBaseException(),
                                             sessionArgs));
                                     }
                                 }, TaskScheduler.Default);
@@ -1421,7 +1432,7 @@ namespace Titanium.Web.Proxy.Http2
                                             linkedCts751?.Dispose();
                                             if (t.IsFaulted)
                                                 ReportException(logger, new ProxyHttpException(
-                                                    "HTTP/2 synthetic response failed",
+                                                    SyntheticResponseFailedMessage,
                                                     t.Exception.GetBaseException(), sessionArgs));
                                         }, TaskScheduler.Default);
                                     if (unknProtoState != null) unknProtoState.SyntheticTask = synthTask501;
@@ -1447,6 +1458,8 @@ namespace Titanium.Web.Proxy.Http2
                                         BindOriginForHttp2Stream(sessionArgs, originConnection);
                                     ApplyCleartextOriginScheme(request, originConnection,
                                         sessionArgs.ClientConnection);
+                                    if (!bridgeOwnsRequestPrep)
+                                        prepareRequestHeaders?.Invoke(request.Headers);
                                     // Encode HPACK under the ordered dispatch chain and queue copied wire
                                     // bytes without awaiting origin socket I/O.
                                     QueueSendHeaderTowardServer(connectionState, outputWriteLock,
@@ -1462,9 +1475,92 @@ namespace Titanium.Web.Proxy.Http2
                                     BindOriginForHttp2Stream(sessionArgs, originConnection);
                                 ApplyCleartextOriginScheme(request, originConnection,
                                     sessionArgs.ClientConnection);
-                                QueueSendHeaderTowardServer(connectionState, outputWriteLock,
-                                    remoteSettings, dispatchFrameHeader, dispatchFrameHeaderBuffer, request,
-                                    endStreamFlag, output, isPromise);
+
+                                // True MITM noop-safe: relay the original compressed HEADERS when handlers
+                                // did not mutate method/path/authority/headers or buffer/replace the body
+                                // (GetRequestBody sets IsBodyRead and would leave origin without DATA).
+                                // Skip relay when Via would be injected (explicit MITM) — append as HPACK
+                                // literal on the static block instead of full re-encode (matches H3).
+                                var injectVia = !sessionArgs.IsFastPath && !sessionArgs.IsTransparent
+                                    && !sessionArgs.IsSocks
+                                    && !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym);
+                                if (forceStaticHpackTable
+                                    && connectionState.Streams.TryGetValue(hbStreamId, out var relayState)
+                                    && relayState.CapturedCompressedHeaders != null
+                                    && !request.IsBodyRead
+                                    && !request.BodyAvailable
+                                    && TryPrepareMitmStaticHpackRelay(
+                                        relayState.CapturedCompressedHeaders,
+                                        relayState.HeadersRelayBaseline, request.Headers,
+                                        injectVia,
+                                        injectVia
+                                            ? $"{request.HttpVersion.Major}.{request.HttpVersion.Minor} {sessionArgs.Server.ViaHeaderPseudonym}"
+                                            : null,
+                                        out var reqBlockToRelay, out var reqAppendSuffix)
+                                    && string.Equals(request.Method, relayState.CapturedMethod, StringComparison.Ordinal)
+                                    && request.RequestUriString8.Equals(relayState.CapturedPath)
+                                    && request.Authority.Equals(relayState.CapturedAuthority))
+                                {
+                                    await RelayCompressedHeaderBlockAsync(hbStreamId, reqBlockToRelay, endStreamFlag,
+                                        reqAppendSuffix);
+                                    relayState.EnableRequestDataCompressedRelay();
+                                }
+                                else
+                                {
+                                    if (!bridgeOwnsRequestPrep)
+                                    {
+                                        // The h2-to-h1 / h2-to-h3 bridges own request preparation before they
+                                        // start their background origin operation; doing it here afterward
+                                        // races with that operation and can mutate headers while they are sent.
+                                        prepareRequestHeaders?.Invoke(request.Headers);
+                                        if (injectVia)
+                                        {
+                                            var pseudonym = sessionArgs.Server.ViaHeaderPseudonym;
+                                            if (ProxyServer.HasLoopedVia(request.Headers, pseudonym))
+                                            {
+                                                sessionArgs.GenericResponse(string.Empty, (HttpStatusCode)508);
+                                            }
+                                            else
+                                            {
+                                                ProxyServer.AddViaHeader(request.Headers, request.HttpVersion,
+                                                    pseudonym);
+                                            }
+                                        }
+                                    }
+
+                                    if (sessionArgs.HttpClient.Request.CancelRequest)
+                                    {
+                                        syntheticStreams.TryAdd(hbStreamId, 0);
+                                        connectionState.Streams.TryGetValue(hbStreamId, out var loopStreamState);
+                                        var linkedCts508 = loopStreamState != null
+                                            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
+                                                loopStreamState.Cancellation.Token)
+                                            : null;
+                                        var loopToken = linkedCts508?.Token ?? cancellationToken;
+                                        var synthTask508 = EmitSyntheticResponseAsync(sessionArgs, hbStreamId,
+                                                connectionState, input, loopToken, onAfterResponse, logger)
+                                            .ContinueWith(t =>
+                                            {
+                                                linkedCts508?.Dispose();
+                                                if (t.IsFaulted)
+                                                {
+                                                    ReportException(logger, new ProxyHttpException(
+                                                        SyntheticResponseFailedMessage,
+                                                        t.Exception.GetBaseException(), sessionArgs));
+                                                }
+                                            }, TaskScheduler.Default);
+                                        if (loopStreamState != null) loopStreamState.SyntheticTask = synthTask508;
+                                        pendingSynthetics.Track(synthTask508);
+                                    }
+                                    else
+                                    {
+                                        if (connectionState.Streams.TryGetValue(hbStreamId, out var clearCapture))
+                                            clearCapture.CapturedCompressedHeaders = null;
+                                        QueueSendHeaderTowardServer(connectionState, outputWriteLock,
+                                            remoteSettings, dispatchFrameHeader, dispatchFrameHeaderBuffer, request,
+                                            endStreamFlag, output, isPromise);
+                                    }
+                                }
                             }
                         }
                         }
@@ -1530,6 +1626,15 @@ namespace Titanium.Web.Proxy.Http2
                             response.Headers.AddHeader(header);
                         }
 
+                        if (httpInterceptionEnabled && forceStaticHpackTable
+                            && connectionState.Streams.TryGetValue(hbStreamId, out var respCapture))
+                        {
+                            respCapture.CapturedCompressedHeaders = compressed;
+                            respCapture.HeadersRelayBaseline =
+                                MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(response.Headers);
+                            respCapture.CapturedStatusCode = statusCode;
+                        }
+
                         // Matches HTTP/1.x's ResponseHeadersReceivedAt timing mark (see
                         // ResponseHandler.HandleHttpSessionResponse), stamped here at the same logical point:
                         // right after the final (non-interim) response headers are parsed, before BeforeResponse runs.
@@ -1585,7 +1690,7 @@ namespace Titanium.Web.Proxy.Http2
                                         if (t.IsFaulted)
                                         {
                                             ReportException(logger, new ProxyHttpException(
-                                                "HTTP/2 synthetic response failed", t.Exception.GetBaseException(),
+                                                SyntheticResponseFailedMessage, t.Exception.GetBaseException(),
                                                 sessionArgs));
                                         }
                                     }, TaskScheduler.Default);
@@ -1595,18 +1700,47 @@ namespace Titanium.Web.Proxy.Http2
                                 return false;
                             }
 
-                            // Match H1/H3 fast-path: skip Via when no HTTP interception — saves header
-                            // mutation + encode work on the hot client write path (h2c / H2 TLS reverse).
-                            if (!sessionArgs.IsFastPath && !sessionArgs.IsTransparent && !sessionArgs.IsSocks &&
-                                !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym))
-                            {
-                                ProxyServer.AddViaHeader(finalResponse.Headers, finalResponse.HttpVersion,
-                                    sessionArgs.Server.ViaHeaderPseudonym);
-                            }
+                            // Match H1/H3 fast-path: skip Via when no HTTP interception — append as HPACK
+                            // literal on compressed relay instead of mutating before the relay gate.
+                            var injectViaResp = !sessionArgs.IsFastPath && !sessionArgs.IsTransparent
+                                                && !sessionArgs.IsSocks
+                                                && !string.IsNullOrEmpty(sessionArgs.Server.ViaHeaderPseudonym);
 
-                            QueueSendHeader(connectionState, towardServer: false, outputWriteLock,
-                                remoteSettings, frameHeader, frameHeaderBuffer, finalResponse,
-                                endStreamFlag, output, isPromise);
+                            // True MITM noop-safe: relay original compressed response HEADERS when unchanged.
+                            // GetResponseBody / SetResponseBody set IsBodyRead/BodyAvailable — must re-encode.
+                            if (forceStaticHpackTable
+                                && ReferenceEquals(finalResponse, response)
+                                && connectionState.Streams.TryGetValue(hbStreamId, out var respRelay)
+                                && respRelay.CapturedCompressedHeaders != null
+                                && !finalResponse.IsBodyRead
+                                && TryPrepareMitmStaticHpackRelay(
+                                    respRelay.CapturedCompressedHeaders,
+                                    respRelay.HeadersRelayBaseline, finalResponse.Headers,
+                                    injectViaResp,
+                                    injectViaResp
+                                        ? $"{finalResponse.HttpVersion.Major}.{finalResponse.HttpVersion.Minor} {sessionArgs.Server.ViaHeaderPseudonym}"
+                                        : null,
+                                    out var respBlockToRelay, out var respAppendSuffix)
+                                && finalResponse.StatusCode == respRelay.CapturedStatusCode)
+                            {
+                                await RelayCompressedHeaderBlockAsync(hbStreamId, respBlockToRelay, endStreamFlag,
+                                    respAppendSuffix);
+                                respRelay.EnableResponseDataCompressedRelay();
+                            }
+                            else
+                            {
+                                if (injectViaResp)
+                                {
+                                    ProxyServer.AddViaHeader(finalResponse.Headers, finalResponse.HttpVersion,
+                                        sessionArgs.Server.ViaHeaderPseudonym);
+                                }
+
+                                if (connectionState.Streams.TryGetValue(hbStreamId, out var clearResp))
+                                    clearResp.CapturedCompressedHeaders = null;
+                                QueueSendHeader(connectionState, towardServer: false, outputWriteLock,
+                                    remoteSettings, frameHeader, frameHeaderBuffer, finalResponse,
+                                    endStreamFlag, output, isPromise);
+                            }
 
                             // RFC 8441: once a final 2xx response to a native h2↔h2 extended CONNECT is
                             // forwarded to the client, the stream enters tunnel state. DATA frames from either
@@ -1853,7 +1987,9 @@ namespace Titanium.Web.Proxy.Http2
                     }
 
                     if (connectionState.Streams.TryGetValue(dataStreamId, out var compressedDataState)
-                        && compressedDataState.IsCompressedRelay)
+                        && (compressedDataState.IsCompressedRelay
+                            || (isClient && compressedDataState.RequestDataCompressedRelay)
+                            || (!isClient && compressedDataState.ResponseDataCompressedRelay)))
                     {
                         bool dataEndStream = (flags & Http2FrameFlag.EndStream) != 0;
                         var creditStreamId = originReceiveLeg != null ? peerStreamId : dataStreamId;
@@ -2830,7 +2966,7 @@ namespace Titanium.Web.Proxy.Http2
                         if (identifier == (int)Http2SettingsId.HeaderTableSize)
                         {
                             sawHeaderTableSize = true;
-                            if (useCompressedRelay)
+                            if (forceStaticHpackTable)
                             {
                                 // Force static-table-only so compressed HEADERS are interchangeable across legs.
                                 localSettings.UpdateHeaderTableSize(0);
@@ -3025,7 +3161,7 @@ namespace Titanium.Web.Proxy.Http2
                         frameHeader.Length = length;
                     }
 
-                    if (useCompressedRelay && !sawHeaderTableSize && (flags & Http2FrameFlag.Ack) == 0 &&
+                    if (forceStaticHpackTable && !sawHeaderTableSize && (flags & Http2FrameFlag.Ack) == 0 &&
                         length + 6 <= buffer.Length)
                     {
                         // Peer omitted SETTINGS_HEADER_TABLE_SIZE (RFC default 4096). Inject 0 so the
@@ -4048,8 +4184,160 @@ namespace Titanium.Web.Proxy.Http2
                 }
 
                 writer.Flush();
-                return GetMemoryStreamMemory(ms).ToArray();
+            return GetMemoryStreamMemory(ms).ToArray();
             }
+        }
+
+        private static byte[]? BuildStaticLiteralAppendSuffix(
+            MitmCompressedRelayHelper.AddedHeaderBuffer added, string? extraName, string? extraValue)
+        {
+            var literalCount = added.Count + (extraName != null ? 1 : 0);
+            if (literalCount == 0)
+                return null;
+
+            var extraSize = 0;
+            for (var i = 0; i < added.Count; i++)
+            {
+                var h = added[i];
+                extraSize += GetStaticLiteralAppendSize(h.Name.Length, h.Value.Length);
+            }
+
+            if (extraName != null)
+                extraSize += GetStaticLiteralAppendSize(extraName.Length, extraValue!.Length);
+
+            var result = new byte[extraSize];
+            var offset = 0;
+            for (var i = 0; i < added.Count; i++)
+            {
+                var h = added[i];
+                offset = WriteStaticLiteralWithoutIndexing(result, offset, h.Name, h.Value);
+            }
+
+            if (extraName != null)
+                WriteStaticLiteralWithoutIndexing(result, offset, extraName, extraValue!);
+
+            return result;
+        }
+
+        private static bool TryPrepareMitmStaticHpackRelay(
+            byte[] capturedBlock,
+            MitmCompressedRelayHelper.HeaderRelayBaseline baseline,
+            HeaderCollection after,
+            bool injectVia,
+            string? viaValue,
+            out byte[] blockToRelay,
+            out byte[]? appendSuffix)
+        {
+            blockToRelay = capturedBlock;
+            appendSuffix = null;
+
+            if (!MitmStaticRebuildHelper.TryPrepareStaticHpackRelay(
+                    capturedBlock, baseline, after, out blockToRelay, out var added))
+                return false;
+
+            var injectViaLiteral = injectVia && !after.HeaderExists("via");
+            appendSuffix = BuildStaticLiteralAppendSuffix(
+                added,
+                injectViaLiteral && !added.ContainsName("via") ? "via" : null,
+                injectViaLiteral && !added.ContainsName("via") ? viaValue : null);
+            return true;
+        }
+
+        /// <summary>
+        ///     Appends append-only MITM header literals without indexing on a HEADER_TABLE_SIZE=0 block
+        ///     (no Decoder round-trip). Uses one allocation for the whole batch.
+        /// </summary>
+        private static byte[] AppendAddedLiteralsToStaticHpackBlock(
+            byte[] block, MitmCompressedRelayHelper.AddedHeaderBuffer added) =>
+            AppendAddedLiteralsToStaticHpackBlock(block, BuildStaticLiteralAppendSuffix(added, null, null));
+
+        private static byte[] AppendAddedLiteralsToStaticHpackBlock(byte[] block, byte[]? appendSuffix)
+        {
+            if (appendSuffix == null || appendSuffix.Length == 0)
+                return block;
+
+            var result = new byte[block.Length + appendSuffix.Length];
+            Buffer.BlockCopy(block, 0, result, 0, block.Length);
+            Buffer.BlockCopy(appendSuffix, 0, result, block.Length, appendSuffix.Length);
+            return result;
+        }
+
+        private static byte[] AppendOneLiteralToStaticHpackBlock(byte[] block, string name, string value) =>
+            AppendAddedLiteralsToStaticHpackBlock(block, SingleAddedHeader(name, value));
+
+        private static MitmCompressedRelayHelper.AddedHeaderBuffer SingleAddedHeader(string name, string value)
+        {
+            var added = default(MitmCompressedRelayHelper.AddedHeaderBuffer);
+            added.Add(name, value);
+            return added;
+        }
+
+        private static int GetStaticLiteralAppendSize(int nameLength, int valueLength) =>
+            1 + GetHpackStringLiteralEncodedSize(nameLength) + GetHpackStringLiteralEncodedSize(valueLength);
+
+        private static int GetHpackStringLiteralEncodedSize(int byteLength) =>
+            byteLength < 127 ? 1 + byteLength : WriteHpackPrefixedIntSize(0x00, 7, (ulong)byteLength) + byteLength;
+
+        private static int WriteHpackPrefixedIntSize(byte patternByte, int prefixBits, ulong value)
+        {
+            var mask = (uint)((1 << prefixBits) - 1);
+            if (value < mask)
+                return 1;
+
+            var size = 1;
+            value -= mask;
+            while (value >= 0x80)
+            {
+                size++;
+                value >>= 7;
+            }
+
+            return size + 1;
+        }
+
+        private static int WriteStaticLiteralWithoutIndexing(byte[] dest, int offset, string name, string value)
+        {
+            dest[offset++] = 0x00; // Literal without indexing, new name (name index 0)
+            offset += WriteHpackAsciiStringLiteral(dest.AsSpan(offset), name);
+            offset += WriteHpackAsciiStringLiteral(dest.AsSpan(offset), value);
+            return offset;
+        }
+
+        private static int WriteHpackAsciiStringLiteral(Span<byte> dest, string value)
+        {
+            var written = WriteHpackPrefixedInt(dest, 0x00, 7, (ulong)value.Length);
+            for (var i = 0; i < value.Length; i++)
+                dest[written + i] = (byte)value[i];
+            return written + value.Length;
+        }
+
+        private static int WriteHpackStringLiteral(Span<byte> dest, ReadOnlySpan<byte> bytes)
+        {
+            var written = WriteHpackPrefixedInt(dest, 0x00, 7, (ulong)bytes.Length);
+            bytes.CopyTo(dest.Slice(written));
+            return written + bytes.Length;
+        }
+
+        private static int WriteHpackPrefixedInt(Span<byte> dest, byte patternByte, int prefixBits, ulong value)
+        {
+            var mask = (uint)((1 << prefixBits) - 1);
+            if (value < mask)
+            {
+                dest[0] = (byte)(patternByte | (byte)value);
+                return 1;
+            }
+
+            dest[0] = (byte)(patternByte | (byte)mask);
+            var written = 1;
+            value -= mask;
+            while (value >= 0x80)
+            {
+                dest[written++] = (byte)((value & 0x7F) | 0x80);
+                value >>= 7;
+            }
+
+            dest[written++] = (byte)value;
+            return written;
         }
 
         internal static async Task SendHeader(Http2Settings settings, Http2FrameHeader frameHeader, byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Stream output, bool pushPromise) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
@@ -4199,11 +4487,17 @@ namespace Titanium.Web.Proxy.Http2
         /// </summary>
         private static ArraySegment<byte> RentFramedHeaderBlock(Http2FrameHeader frameHeader, // NOSONAR S107 -- Frame fields stay explicit.
             byte[] frameHeaderBuffer, int streamId, Http2FrameType type, bool endStream, bool hasPriority,
-            ReadOnlyMemory<byte> data, int maxFrameSize)
+            ReadOnlyMemory<byte> data, int maxFrameSize) =>
+            RentFramedHeaderBlock(frameHeader, frameHeaderBuffer, streamId, type, endStream, hasPriority, data,
+                ReadOnlyMemory<byte>.Empty, maxFrameSize);
+
+        private static ArraySegment<byte> RentFramedHeaderBlock(Http2FrameHeader frameHeader, // NOSONAR S107 -- Frame fields stay explicit.
+            byte[] frameHeaderBuffer, int streamId, Http2FrameType type, bool endStream, bool hasPriority,
+            ReadOnlyMemory<byte> data, ReadOnlyMemory<byte> append, int maxFrameSize)
         {
             if (maxFrameSize <= 0) maxFrameSize = 16384;
 
-            var dataLen = data.Length;
+            var dataLen = data.Length + append.Length;
             var frameCount = dataLen == 0 ? 1 : (dataLen + maxFrameSize - 1) / maxFrameSize;
             var total = frameCount * 9 + dataLen;
             var rented = ArrayPool<byte>.Shared.Rent(total);
@@ -4237,7 +4531,7 @@ namespace Titanium.Web.Proxy.Http2
                 destPos += 9;
                 if (chunkLength > 0)
                 {
-                    data.Span.Slice(pos, chunkLength).CopyTo(dest.Slice(destPos));
+                    CopyHeaderBlockSegment(data, append, pos, dest.Slice(destPos, chunkLength));
                     destPos += chunkLength;
                 }
 
@@ -4246,6 +4540,26 @@ namespace Titanium.Web.Proxy.Http2
             } while (pos < dataLen);
 
             return new ArraySegment<byte>(rented, 0, total);
+        }
+
+        private static void CopyHeaderBlockSegment(ReadOnlyMemory<byte> data, ReadOnlyMemory<byte> append, int start,
+            Span<byte> dest)
+        {
+            if (start >= data.Length)
+            {
+                append.Span.Slice(start - data.Length, dest.Length).CopyTo(dest);
+                return;
+            }
+
+            if (start + dest.Length <= data.Length)
+            {
+                data.Span.Slice(start, dest.Length).CopyTo(dest);
+                return;
+            }
+
+            var fromData = data.Length - start;
+            data.Span.Slice(start, fromData).CopyTo(dest);
+            append.Span.Slice(0, dest.Length - fromData).CopyTo(dest.Slice(fromData));
         }
 
         /// <summary>

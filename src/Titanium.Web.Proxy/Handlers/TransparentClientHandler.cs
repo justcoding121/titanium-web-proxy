@@ -454,7 +454,10 @@ public partial class ProxyServer
                                         shouldInterceptHttp: ShouldInterceptHttp,
                                         openOriginConnectionAsync: ct => OpenAdditionalOriginHttp2ConnectionAsync(
                                             httpsHostName, args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
-                                            originIsHttps, sessionForCacheKey, ct));
+                                            originIsHttps, sessionForCacheKey, ct),
+                                        // Transparent/socks MITM can finish unchanged H2↔H2 via compressed
+                                        // relay (no Via). Requires static-table-only HPACK on both legs.
+                                        forceStaticHpackForMitmUnchangedRelay: NeedsHttpInterception(endPoint));
                                 }
                                 finally
                                 {
@@ -578,6 +581,56 @@ public partial class ProxyServer
                     await HandleInboundHttp2CleartextAsync(endPoint, clientStream, clientConnection,
                         cancellationTokenSource, cancellationToken, socksTargetHost: null, port);
                     return;
+                }
+            }
+
+            // Cleartext reverse (DecryptSsl=false): fire BeforeHttpAuthenticate for plain HTTP/1 as well
+            // as h2c (h2c already invoked it above and returned). Without this, UpstreamHttpProtocol /
+            // AllowHttpProtocolTranslation on DecryptSsl=false endpoints is ignored — the public event
+            // docs promise it for cleartext sessions, not only prior-knowledge h2c.
+            if (!isHttps && !endPoint.DecryptSsl && !string.IsNullOrEmpty(endPoint.ForwardHost))
+            {
+                var seededHost = endPoint.ForwardHost;
+                var seededPort = endPoint.ForwardPort ?? port;
+                var httpArgs = new BeforeHttpAuthenticateEventArgs(this, clientConnection, cancellationTokenSource,
+                    seededHost, seededPort);
+                await endPoint.InvokeBeforeHttpAuthenticate(this, httpArgs, logger);
+                if (cancellationTokenSource.IsCancellationRequested)
+                    return;
+
+                transparentUpstreamProtocol = httpArgs.UpstreamHttpProtocol;
+
+                // H1 client → H2 origin bridge (mirror the TLS-decrypt RequiresH2OriginBridge path).
+                if (EnableHttp2
+                    && httpArgs.UpstreamHttpProtocol == UpstreamHttpProtocol.Http2
+                    && httpArgs.AllowHttpProtocolTranslation)
+                {
+                    var identityHost = endPoint.GenericCertificateName;
+                    var remoteHostName = identityHost;
+                    var remotePort = httpArgs.ForwardPort;
+                    string? http2ConnectHost = null;
+                    int? http2ConnectPort = null;
+                    if (!string.Equals(httpArgs.ForwardHostName, identityHost, StringComparison.OrdinalIgnoreCase))
+                    {
+                        http2ConnectHost = httpArgs.ForwardHostName;
+                        http2ConnectPort = httpArgs.ForwardPort;
+                    }
+
+                    var negotiationSession =
+                        new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource);
+                    var negotiation = await ResolveHttp2ForClientAsync(negotiationSession,
+                        clientOffersHttp2: false, remoteHostName, remotePort, http2ConnectHost, http2ConnectPort,
+                        httpArgs.UpstreamHttpProtocol, httpArgs.AllowHttpProtocolTranslation,
+                        EnableTcpServerConnectionPrefetch, cancellationToken,
+                        originIsHttps: !endPoint.ForwardCleartext);
+
+                    if (negotiation.RequiresH2OriginBridge)
+                    {
+                        await SendHttp11ToHttp2Bridge(clientStream, endPoint, null, null, remoteHostName,
+                            remotePort, http2ConnectHost, http2ConnectPort, negotiation.RetainedConnectionTask,
+                            cancellationTokenSource);
+                        return;
+                    }
                 }
             }
 
@@ -745,7 +798,8 @@ public partial class ProxyServer
                 shouldInterceptHttp: ShouldInterceptHttp,
                 openOriginConnectionAsync: ct => OpenAdditionalOriginHttp2ConnectionAsync(
                     remoteHostName, remotePort, http2ConnectHost, http2ConnectPort,
-                    originIsHttps, negotiationSession, ct));
+                    originIsHttps, negotiationSession, ct),
+                forceStaticHpackForMitmUnchangedRelay: NeedsHttpInterception(endPoint));
         }
         finally
         {

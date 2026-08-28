@@ -1,0 +1,27 @@
+# Linux spot-check image: .NET 10 SDK + libmsquic + nginx.org mainline (HTTP/3).
+# Build: docker build -f tools/RpsLoadProbe/Dockerfile.rps-spot -t twp-rps-linux tools/RpsLoadProbe
+FROM mcr.microsoft.com/dotnet/sdk:10.0
+
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates gnupg pwsh \
+    && . /etc/os-release \
+    && curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+         "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb" \
+         -o /tmp/packages-microsoft-prod.deb \
+    && dpkg -i /tmp/packages-microsoft-prod.deb \
+    && rm -f /tmp/packages-microsoft-prod.deb \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends libmsquic \
+    && curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+         https://nginx.org/keys/nginx_signing.key \
+         | gpg --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://nginx.org/packages/mainline/${ID} ${VERSION_CODENAME} nginx" \
+         > /etc/apt/sources.list.d/nginx.list \
+    && printf 'Package: *\nPin: origin nginx.org\nPin-Priority: 900\n' > /etc/apt/preferences.d/99nginx \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends nginx \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+ENTRYPOINT ["pwsh"]

@@ -745,7 +745,12 @@ public partial class ProxyServer
         if (response.HasTrailingHeaders)
             response.IsChunked = true;
         else if (response.StreamBodyWriter == null)
+        {
             response.ContentLength = body.Length;
+            // Match fast path: stamp Body so WriteResponseAsync can coalesce and set IsBodySent.
+            response.Body = body;
+            response.BodyIsWireEncoded = true;
+        }
         else if (response.ContentLength < 0 && !response.IsChunked)
         {
             // The h2 origin sent no content-length (END_STREAM delimits its body). Buffer it here -
@@ -758,6 +763,8 @@ public partial class ProxyServer
             await streamBody(buffered, cancellationToken);
             body = buffered.ToArray();
             response.ContentLength = body.Length;
+            response.Body = body;
+            response.BodyIsWireEncoded = true;
         }
 
         await clientStream.WriteResponseAsync(response, cancellationToken);
@@ -770,7 +777,7 @@ public partial class ProxyServer
                 cancellationToken);
             response.IsBodySent = true;
         }
-        else if (response.HasBody || response.HasTrailingHeaders)
+        else if (!response.IsBodySent && (response.HasBody || response.HasTrailingHeaders))
         {
             await clientStream.WriteBodyAsync(body, response.IsChunked,
                 response.HasTrailingHeaders ? response.TrailingHeaders : null, cancellationToken);

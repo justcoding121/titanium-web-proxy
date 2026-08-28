@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
+using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.IntegrationTests;
@@ -425,5 +426,124 @@ public class Http2TransparentTests
         var statusLine = await reader.ReadLineAsync();
         Assert.IsTrue(statusLine != null && statusLine.StartsWith("HTTP/1.1 200"),
             $"Expected an HTTP/1.1 200 response, got: '{statusLine}'.");
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task Http2_H2c_Transparent_AppendOnlyMutation_Succeeds()
+    {
+        const string trackingHeader = "x-custom-tracking";
+        const string body = "h2c-append";
+
+        using var rawServer = Http2RawOriginServer.CreateCleartext();
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.SendInitialSettingsAsync();
+            var (streamId, _, _) = await connection.ReadRequestAsync();
+            var headers = connection.EncodeHeaders(
+                new[] { (":status", "200") },
+                new[] { ("content-type", "text/plain"), ("content-length", body.Length.ToString()) });
+            await connection.WriteHeaderBlockAsync(streamId, headers, endStream: false);
+            await connection.WriteFrameAsync(Http2FrameType.Data, streamId, Http2FrameFlag.EndStream,
+                Encoding.ASCII.GetBytes(body));
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetReverseProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableHttpInterception = true;
+        proxy.ViaHeaderPseudonym = string.Empty;
+
+        proxy.BeforeRequest += (_, args) =>
+        {
+            args.HttpClient.Request.Headers.AddHeader(trackingHeader, "1");
+            return Task.CompletedTask;
+        };
+        proxy.BeforeResponse += (_, args) =>
+        {
+            args.HttpClient.Response.Headers.AddHeader(trackingHeader, "1");
+            return Task.CompletedTask;
+        };
+
+        var endpoint = proxy.ProxyEndPoints.OfType<TransparentProxyEndPoint>().First();
+        endpoint.ForwardHost = "127.0.0.1";
+        endpoint.ForwardPort = rawServer.Port;
+        endpoint.ForwardCleartext = true;
+        endpoint.BeforeHttpAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            return Task.CompletedTask;
+        };
+
+        using var rawClient = await Http2RawClient.ConnectCleartextDirectAsync(proxy.ProxyEndPoints[0].Port);
+
+        var requestHeaders = rawClient.Connection.EncodeHeaders(
+            new[] { (":method", "GET"), (":scheme", "http"), (":authority", "localhost"), (":path", "/") },
+            Array.Empty<(string, string)>());
+        await rawClient.Connection.WriteHeaderBlockAsync(1, requestHeaders, true);
+
+        var (_, responseHeaders, endStream) = await rawClient.Connection.ReadHeaderBlockAsync();
+        Assert.AreEqual("200", responseHeaders.Single(h => h.Name == ":status").Value);
+        Assert.IsFalse(endStream);
+
+        var dataFrame = await rawClient.Connection.ReadFrameAsync();
+        Assert.AreEqual(Http2FrameType.Data, dataFrame.Type);
+        Assert.AreEqual(body, Encoding.ASCII.GetString(dataFrame.Payload));
+    }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task Http2_Transparent_AppendOnlyMutation_WithDefaultVia_Succeeds()
+    {
+        const string trackingHeader = "x-custom-tracking";
+        const string body = "h2-append";
+
+        using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.SendInitialSettingsAsync();
+            var (streamId, _, _) = await connection.ReadRequestAsync();
+            var headers = connection.EncodeHeaders(
+                new[] { (":status", "200") },
+                new[] { ("content-type", "text/plain"), ("content-length", body.Length.ToString()) });
+            await connection.WriteHeaderBlockAsync(streamId, headers, endStream: false);
+            await connection.WriteFrameAsync(Http2FrameType.Data, streamId, Http2FrameFlag.EndStream,
+                Encoding.ASCII.GetBytes(body));
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetReverseProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableHttpInterception = true;
+
+        proxy.BeforeRequest += (_, args) =>
+        {
+            args.HttpClient.Request.Headers.AddHeader(trackingHeader, "1");
+            return Task.CompletedTask;
+        };
+        proxy.BeforeResponse += (_, args) =>
+        {
+            args.HttpClient.Response.Headers.AddHeader(trackingHeader, "1");
+            return Task.CompletedTask;
+        };
+
+        var endpoint = proxy.ProxyEndPoints.OfType<TransparentProxyEndPoint>().First();
+        endpoint.ForwardHost = "127.0.0.1";
+        endpoint.ForwardPort = rawServer.Port;
+
+        using var rawClient = await Http2RawClient.ConnectDirectAsync(proxy.ProxyEndPoints[0].Port, "localhost");
+
+        var requestHeaders = rawClient.Connection.EncodeHeaders(
+            new[] { (":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/") },
+            Array.Empty<(string, string)>());
+        await rawClient.Connection.WriteHeaderBlockAsync(1, requestHeaders, true);
+
+        var (_, responseHeaders, endStream) = await rawClient.Connection.ReadHeaderBlockAsync();
+        Assert.AreEqual("200", responseHeaders.Single(h => h.Name == ":status").Value);
+        Assert.IsFalse(endStream);
+
+        var dataFrame = await rawClient.Connection.ReadFrameAsync();
+        Assert.AreEqual(Http2FrameType.Data, dataFrame.Type);
+        Assert.AreEqual(body, Encoding.ASCII.GetString(dataFrame.Payload));
     }
 }

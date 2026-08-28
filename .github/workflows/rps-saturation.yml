@@ -24,6 +24,8 @@ on:
           - compare-bridges
           - compare-http3-cleartext
           - compare-mitm
+          - compare-matrix
+          - compare-product
           - compare-ceiling
           - compare-bodies
           - compare-post
@@ -55,6 +57,8 @@ on:
           - yarp-reverse-h2c-to-h2c
           - reverse-h2c-to-h1
           - yarp-reverse-h2c-to-h1
+          - reverse-h2c-to-https
+          - yarp-reverse-h2c-to-https
           - reverse-h2c-to-h3
           - yarp-reverse-h2c-to-h3
           - reverse-http3
@@ -62,12 +66,25 @@ on:
           - yarp-reverse-http3-cleartext
           - reverse-http11-to-http2
           - yarp-reverse-http11-to-http2
+          - reverse-http1-to-h2c
+          - yarp-reverse-http1-to-h2c
+          - reverse-http1-plain-to-h2c
+          - yarp-reverse-http1-plain-to-h2c
+          - reverse-http1-plain-to-http2
+          - yarp-reverse-http1-plain-to-http2
+          - reverse-http1-plain-to-http3
+          - yarp-reverse-http1-plain-to-http3
           - reverse-http1-to-http3
           - yarp-reverse-http1-to-http3
           - reverse-http2-to-http3
           - yarp-reverse-http2-to-http3
           - reverse-http3-to-http2
           - yarp-reverse-http3-to-http2
+          - reverse-http3-to-h2c
+          - yarp-reverse-http3-to-h2c
+          - yarp-reverse-http1-tls-to-https
+          - yarp-reverse-http2-to-https-http1
+          - yarp-reverse-http3-to-https-http1
           - nginx-reverse-http2
           - nginx-reverse-http3-cleartext
           - yarp-reverse-http2
@@ -97,7 +114,8 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
-    timeout-minutes: 120
+    # compare-product with MITM Lite+Full can exceed 3.5h per OS on hosted runners.
+    timeout-minutes: 420
     steps:
       - uses: actions/checkout@v6
 

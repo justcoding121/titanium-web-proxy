@@ -553,6 +553,182 @@ internal sealed class TwpProxyHost : IDisposable
     }
 
     /// <summary>
+    /// Dual-listen reverse: client H3 → H3→H2 bridge → prior-knowledge h2c origin.
+    /// </summary>
+    public static TwpProxyHost StartReverseHttp3ToH2c(int originHttpPort)
+    {
+        if (!QuicListener.IsSupported)
+            throw new PlatformNotSupportedException("QuicListener is not supported on this platform.");
+
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: true);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
+        {
+            EnableHttp3 = true,
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpPort,
+            ForwardCleartext = true,
+            GenericCertificateName = "localhost",
+            MaxInboundBidirectionalStreams = 256,
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeQuicAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            return Task.CompletedTask;
+        };
+        endPoint.BeforeSslAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
+        return new TwpProxyHost(proxy, endPoint.Port, $"https://localhost:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
+    /// <summary>
+    /// Client H1 TLS → H1→H2 bridge → prior-knowledge h2c origin.
+    /// </summary>
+    public static TwpProxyHost StartReverseHttp1ToH2c(int originHttpPort)
+    {
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpPort,
+            ForwardCleartext = true,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeSslAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        WarmTlsTerminateCertificate(proxy, endPoint, "localhost");
+        proxy.Start();
+        return new TwpProxyHost(proxy, endPoint.Port, $"https://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
+    /// <summary>
+    /// Client H1 plain → H1→H2 bridge → prior-knowledge h2c origin.
+    /// </summary>
+    public static TwpProxyHost StartReverseHttp1PlainToH2c(int originHttpPort)
+    {
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpPort,
+            ForwardCleartext = true,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeHttpAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
+    /// <summary>
+    /// Client H1 plain → H1→H2 bridge → origin HTTPS with ALPN h2.
+    /// </summary>
+    public static TwpProxyHost StartReverseHttp1PlainToHttp2(int originHttpsPort)
+    {
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpsPort,
+            ForwardCleartext = false,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeHttpAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
+    /// <summary>
+    /// Client H1 plain → H1→H3 bridge → origin QUIC/h3.
+    /// </summary>
+    public static TwpProxyHost StartReverseHttp1PlainToHttp3(int originQuicPort)
+    {
+        if (!QuicListener.IsSupported)
+            throw new PlatformNotSupportedException("QuicListener is not supported on this platform.");
+
+        var proxy = CreateBaseProxy(enableHttp2: false, enableHttp3: true);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = originQuicPort,
+            ForwardCleartext = false,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeHttpAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
+    /// <summary>
+    /// Cleartext reverse: client prior-knowledge h2c → H2→H1 bridge → origin HTTPS HTTP/1.
+    /// </summary>
+    public static TwpProxyHost StartReverseH2cToHttps(int originHttpsPort)
+    {
+        var proxy = CreateBaseProxy(enableHttp2: true, enableHttp3: false);
+        ConfigureSharedTestCa(proxy);
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originHttpsPort,
+            ForwardCleartext = false,
+            GenericCertificateName = "localhost",
+            MaxCachedConnections = 256
+        };
+        endPoint.BeforeHttpAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+        proxy.AddEndPoint(endPoint);
+        proxy.Start();
+        return new TwpProxyHost(proxy, endPoint.Port, $"http://127.0.0.1:{endPoint.Port}/", isExplicitProxy: false);
+    }
+
+    /// <summary>
     /// Client H1 TLS → H1→H3 bridge → origin QUIC/h3.
     /// </summary>
     public static TwpProxyHost StartReverseHttp1ToHttp3(int originQuicPort)
@@ -596,6 +772,8 @@ internal sealed class TwpProxyHost : IDisposable
         int? maxCachedConnections = null, int? maxConcurrentStreamsPerConnection = null)
     {
         var proxy = new ProxyServer(false, false, false);
+        // Benchmark arms model reverse-style MITM (handler header add only), not explicit-proxy Via.
+        proxy.ViaHeaderPseudonym = string.Empty;
         // Saturation runs must not format or enqueue diagnostics on session threads.
         proxy.Logging.Enabled = false;
         proxy.CertificateManager.SaveFakeCertificates = false;
@@ -612,6 +790,23 @@ internal sealed class TwpProxyHost : IDisposable
             proxy.EnableRequestTimingCapture = true;
             StageTimingCollector.Attach(proxy);
         }
+
+        // True-MITM product arms: child sets TWP_RPS_HTTP_INTERCEPTION=1 so session handlers run.
+        // TWP_RPS_HTTP_INTERCEPTION_MUTATE=1 forces non-lite (header mutation refuses unchanged relay).
+        // Bare reverse leaves both unset.
+        if (string.Equals(Environment.GetEnvironmentVariable("TWP_RPS_HTTP_INTERCEPTION_MUTATE"), "1",
+                StringComparison.Ordinal))
+        {
+            EnableMutatingInterception(proxy);
+            Console.Error.WriteLine("rps: EnableMutatingInterception (TWP_RPS_HTTP_INTERCEPTION_MUTATE=1)");
+        }
+        else if (string.Equals(Environment.GetEnvironmentVariable("TWP_RPS_HTTP_INTERCEPTION"), "1",
+                     StringComparison.Ordinal))
+        {
+            EnableNoopInterception(proxy);
+            Console.Error.WriteLine("rps: EnableNoopInterception (TWP_RPS_HTTP_INTERCEPTION=1)");
+        }
+
         proxy.EnableConnectionPool = true;
         proxy.EnableHttp2 = enableHttp2;
         proxy.EnableHttp3 = enableHttp3;
@@ -630,6 +825,48 @@ internal sealed class TwpProxyHost : IDisposable
         proxy.TrackSessionCancellations = false;
 
         return proxy;
+    }
+
+    /// <summary>
+    /// No-op BeforeRequest/BeforeResponse so <see cref="ProxyServer.NeedsHttpInterception"/> is true
+    /// (real MITM session path). Hits are counted for smoke verification.
+    /// After unchanged-lite finish, this path can still reuse reverse lite/relay.
+    /// </summary>
+    internal static long NoopInterceptionHits;
+
+    /// <summary>
+    /// Mutating handlers that refuse unchanged-lite / compressed-relay (full session re-encode).
+    /// </summary>
+    internal static long MutatingInterceptionHits;
+
+    private const string RpsProbeHeaderName = "x-twp-rps-probe";
+
+    internal static void EnableNoopInterception(ProxyServer proxy)
+    {
+        proxy.EnableHttpInterception = true;
+        proxy.BeforeRequest += (_, _) =>
+        {
+            Interlocked.Increment(ref NoopInterceptionHits);
+            return Task.CompletedTask;
+        };
+        proxy.BeforeResponse += (_, _) => Task.CompletedTask;
+    }
+
+    internal static void EnableMutatingInterception(ProxyServer proxy)
+    {
+        proxy.EnableHttpInterception = true;
+        proxy.BeforeRequest += (_, args) =>
+        {
+            Interlocked.Increment(ref MutatingInterceptionHits);
+            args.HttpClient.Request.Headers.AddHeader(RpsProbeHeaderName, "1");
+            return Task.CompletedTask;
+        };
+        proxy.BeforeResponse += (_, args) =>
+        {
+            // Force response-side re-encode too (H2 compressed response relay checks MutationCount).
+            args.HttpClient.Response.Headers.AddHeader(RpsProbeHeaderName, "1");
+            return Task.CompletedTask;
+        };
     }
 
     private static void ConfigureSharedTestCa(ProxyServer proxy)

@@ -239,6 +239,185 @@ public partial class ProxyServer
         }
     }
 
+    /// <summary>
+    ///     True MITM after noop-safe BeforeRequest: same origin exchange as
+    ///     <see cref="ForwardH1TerminateLiteAsync"/> but uses the session bag, fires BeforeResponse,
+    ///     and supports keep-alive session recycle without setting <see cref="SessionEventArgs.IsFastPath"/>.
+    /// </summary>
+    private async Task<bool> ForwardH1TerminateSessionLiteAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+        TransparentBaseProxyEndPoint endPoint,
+        HttpClientStream clientStream,
+        SessionEventArgs args,
+        CancellationToken cancellationToken)
+    {
+        var request = args.HttpClient.Request;
+        request.Locked = true;
+        request.IsBodyReceived = true;
+
+        var clientRequestedClose = H1TerminateClientRequestedClose(request);
+        request.StripHopByHopConnectionForTransparentOrigin();
+
+        var isHttps = !endPoint.ForwardCleartext && request.IsHttps;
+        if (endPoint.ForwardCleartext)
+            isHttps = false;
+
+        var connectHost = endPoint.ForwardHost;
+        var connectPort = endPoint.ForwardPort;
+
+        string? poolKey = null;
+        if (endPoint.CachedHttp11PoolKey != null && endPoint.CachedHttp11PoolIsHttps == isHttps)
+            poolKey = endPoint.CachedHttp11PoolKey;
+
+        TcpServerConnection? connection = null;
+        SessionEventArgs? openSession = null;
+        var closeConnection = false;
+        try
+        {
+            if (poolKey != null)
+                TcpConnectionFactory.TryRentPooled(this, poolKey, SslExtensions.Http11ProtocolAsList,
+                    out connection);
+
+            if (connection == null)
+            {
+                string host;
+                int port;
+                if (connectHost != null && connectPort is { } fwdPort)
+                {
+                    host = connectHost;
+                    port = fwdPort;
+                }
+                else
+                {
+                    (host, port) = request.GetOriginHostPort(isHttps ? 443 : 80);
+                }
+
+                openSession = CreateH1TerminateLiteColdSession(endPoint, clientStream);
+                connection = await TcpConnectionFactory.GetServerConnection(
+                    this, host, port, HttpHeader.Version11, isHttps,
+                    SslExtensions.Http11ProtocolAsList, false, openSession,
+                    UpStreamEndPoint,
+                    isHttps ? UpStreamHttpsProxy : UpStreamHttpProxy,
+                    false, false, cancellationToken, connectHost, connectPort,
+                    precomputedCacheKey: poolKey)
+                    ?? throw new InvalidOperationException(
+                        $"Failed to establish an HTTP/1.1 origin connection to '{host}:{port}'.");
+
+                endPoint.CachedHttp11PoolKey = connection.CacheKey;
+                endPoint.CachedHttp11PoolIsHttps = isHttps;
+            }
+
+            var http = new HttpWebClient(null, request, H1TerminateLiteProcessId);
+            http.SetConnection(connection);
+            await http.SendRequest(false, isTransparent: true, OriginHttpVersionPolicy, cancellationToken);
+            await http.ReceiveResponse(cancellationToken);
+
+            var response = http.Response;
+            if (response.StatusCode is >= 100 and <= 199)
+            {
+                throw new InvalidOperationException(
+                    "H1 terminate MITM lite does not handle interim 1xx responses.");
+            }
+
+            try
+            {
+                Http1FramingValidator.Validate(response, FramingSource.Http1WireTransparent,
+                    PolicyModes.AllowAmbiguousFraming);
+            }
+            catch (Http1FramingException framingEx)
+            {
+                ProxyMetrics.ParserError("framing");
+                ProxyDiagnostics.ReportBenign(logger, "Origin response has ambiguous HTTP/1 framing", framingEx);
+                closeConnection = true;
+                var badGateway = new GenericResponse(System.Net.HttpStatusCode.BadGateway)
+                {
+                    HttpVersion = request.HttpVersion
+                };
+                badGateway.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionClose);
+                await clientStream.WriteResponseAsync(badGateway, cancellationToken);
+                return false;
+            }
+
+            // Known-CL ≤64 KiB: materialize before BeforeResponse so handlers can read the body.
+            const int coalesceBodyLimit = 64 * 1024;
+            if (response.HasBody
+                && !response.IsChunked
+                && !response.HasTrailingHeaders
+                && response.ContentLength is > 0 and <= coalesceBodyLimit)
+            {
+                var length = (int)response.ContentLength;
+                var body = new byte[length];
+                var read = 0;
+                while (read < length)
+                {
+                    var n = await connection.Stream.ReadAsync(body.AsMemory(read, length - read),
+                        cancellationToken);
+                    if (n == 0)
+                        break;
+                    read += n;
+                }
+
+                if (read != length)
+                {
+                    Array.Resize(ref body, read);
+                    closeConnection = true;
+                }
+
+                response.Body = body;
+                response.BodyIsWireEncoded = true;
+                response.IsBodyReceived = true;
+                response.IsBodyRead = true;
+            }
+
+            args.HttpClient.Response = response;
+            await OnBeforeResponse(args);
+            response = args.HttpClient.Response;
+            response.Locked = true;
+
+            if (response.HasBody && response.IsBodyRead)
+            {
+                await clientStream.WriteResponseAsync(response, cancellationToken);
+            }
+            else if (response.HasBody)
+            {
+                await clientStream.WriteResponseAsync(response, cancellationToken);
+                await connection.Stream.CopyBodyAsync(response, false, clientStream, TransformationMode.None,
+                    false, args, cancellationToken);
+                response.IsBodyReceived = true;
+            }
+            else
+            {
+                await clientStream.WriteResponseAsync(response, cancellationToken);
+            }
+
+            if (!response.KeepAlive
+                || (connection.Stream is HttpStream residual && residual.DataAvailable))
+                closeConnection = true;
+
+            return response.KeepAlive && !clientRequestedClose;
+        }
+        catch (RetryableServerConnectionException)
+        {
+            closeConnection = true;
+            throw;
+        }
+        catch
+        {
+            closeConnection = true;
+            throw;
+        }
+        finally
+        {
+            if (connection != null)
+                await TcpConnectionFactory.Release(connection, closeConnection);
+
+            if (openSession != null)
+            {
+                openSession.CancellationTokenSource.Dispose();
+                openSession.Dispose();
+            }
+        }
+    }
+
     private static bool H1TerminateClientRequestedClose(Request request)
     {
         var headerValue = request.Headers.GetHeaderValueOrNull(KnownHeaders.Connection);

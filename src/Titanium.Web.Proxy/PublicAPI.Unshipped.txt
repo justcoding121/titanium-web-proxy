@@ -81,3 +81,28 @@ Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp.get -> System.Func<Titanium.W
 Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp.set -> void
 *REMOVED*Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
 Titanium.Web.Proxy.StreamExtended.Network.IHttpStreamWriter.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.EventArguments.SessionEventArgs.RespondStreaming(Titanium.Web.Proxy.Http.StreamingProxyResult result, bool closeServerConnection) -> void
+Titanium.Web.Proxy.Http.ProxyResults
+static Titanium.Web.Proxy.Http.ProxyResults.Bytes(byte[]! data, string! contentType, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.OK) -> Titanium.Web.Proxy.Http.Response!
+static Titanium.Web.Proxy.Http.ProxyResults.File(string! path, string! contentType, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.OK) -> Titanium.Web.Proxy.Http.StreamingProxyResult
+static Titanium.Web.Proxy.Http.ProxyResults.Html(string! content, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.OK) -> Titanium.Web.Proxy.Http.Response!
+static Titanium.Web.Proxy.Http.ProxyResults.Json<T>(T value, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.OK, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>? typeInfo = null) -> Titanium.Web.Proxy.Http.Response!
+static Titanium.Web.Proxy.Http.ProxyResults.NoContent() -> Titanium.Web.Proxy.Http.Response!
+static Titanium.Web.Proxy.Http.ProxyResults.Redirect(string! url, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.Found) -> Titanium.Web.Proxy.Http.Response!
+static Titanium.Web.Proxy.Http.ProxyResults.Stream(System.Net.HttpStatusCode status, string! contentType, System.Func<System.IO.Stream!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! writeBody, long? contentLength = null) -> Titanium.Web.Proxy.Http.StreamingProxyResult
+static Titanium.Web.Proxy.Http.ProxyResults.Text(string! content, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.OK) -> Titanium.Web.Proxy.Http.Response!
+static Titanium.Web.Proxy.Http.ProxyResults.WithStatus(System.Net.HttpStatusCode status, string! body = "") -> Titanium.Web.Proxy.Http.Response!
+Titanium.Web.Proxy.Http.StreamingProxyResult
+Titanium.Web.Proxy.Http.StreamingProxyResult.Deconstruct(out Titanium.Web.Proxy.Http.Response! Response, out System.Func<System.IO.Stream!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! WriteBody) -> void
+Titanium.Web.Proxy.Http.StreamingProxyResult.Equals(Titanium.Web.Proxy.Http.StreamingProxyResult other) -> bool
+~override Titanium.Web.Proxy.Http.StreamingProxyResult.Equals(object obj) -> bool
+override Titanium.Web.Proxy.Http.StreamingProxyResult.GetHashCode() -> int
+Titanium.Web.Proxy.Http.StreamingProxyResult.Response.get -> Titanium.Web.Proxy.Http.Response!
+Titanium.Web.Proxy.Http.StreamingProxyResult.Response.init -> void
+Titanium.Web.Proxy.Http.StreamingProxyResult.StreamingProxyResult() -> void
+Titanium.Web.Proxy.Http.StreamingProxyResult.StreamingProxyResult(Titanium.Web.Proxy.Http.Response! Response, System.Func<System.IO.Stream!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! WriteBody) -> void
+static Titanium.Web.Proxy.Http.StreamingProxyResult.operator ==(Titanium.Web.Proxy.Http.StreamingProxyResult left, Titanium.Web.Proxy.Http.StreamingProxyResult right) -> bool
+static Titanium.Web.Proxy.Http.StreamingProxyResult.operator !=(Titanium.Web.Proxy.Http.StreamingProxyResult left, Titanium.Web.Proxy.Http.StreamingProxyResult right) -> bool
+~override Titanium.Web.Proxy.Http.StreamingProxyResult.ToString() -> string
+Titanium.Web.Proxy.Http.StreamingProxyResult.WriteBody.get -> System.Func<System.IO.Stream!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>!
+Titanium.Web.Proxy.Http.StreamingProxyResult.WriteBody.init -> void
