@@ -21,10 +21,16 @@ public sealed class InterceptionService : IDisposable
 
     private static long _nextId = 1;
     private readonly ConcurrentDictionary<object, SessionSnapshot> _live = new();
+    private readonly ISystemProxyController _systemProxy;
     private ProxyServer? _proxy;
     private ExplicitProxyEndPoint? _endPoint;
     private bool _systemProxyEnabled;
     private string? _rootPfxPath;
+
+    public InterceptionService(ISystemProxyController? systemProxy = null)
+    {
+        _systemProxy = systemProxy ?? new WinInetSystemProxyController();
+    }
 
     public bool IsRunning => _proxy?.ProxyRunning == true;
 
@@ -38,7 +44,7 @@ public sealed class InterceptionService : IDisposable
     public string? PacUrl { get; set; }
     public bool IgnoreServerCertificateErrors { get; set; }
 
-    /// <summary>When true, trust is applied only after an explicit InstallRootCertificate call (never silent).</summary>
+    /// <summary>When true, call <see cref="InstallRootCertificate"/> after start (explicit trust).</summary>
     public bool AutoTrustRootOnStart { get; set; }
 
     public AutoResponderViewModel? AutoResponder { get; set; }
@@ -64,7 +70,9 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
-        _proxy = new ProxyServer();
+        // Explicit trust flags: do not silently install into the user store on start.
+        // Callers must InstallRootCertificate (or set AutoTrustRootOnStart) so UI can report success/failure.
+        _proxy = new ProxyServer(userTrustRootCertificate: false, machineTrustRootCertificate: false);
         _proxy.EnableHttpInterception = true;
         _proxy.EnableRequestTimingCapture = true;
         _proxy.BeforeRequest += OnBeforeRequest;
@@ -88,6 +96,8 @@ public sealed class InterceptionService : IDisposable
         _endPoint.BeforeTunnelConnectRequest += OnBeforeTunnelConnect;
         _proxy.AddEndPoint(_endPoint);
         _proxy.Start();
+
+        IsRootTrusted = IsRootPresentInStore(machineStore: false);
 
         if (AutoTrustRootOnStart)
         {
@@ -124,37 +134,52 @@ public sealed class InterceptionService : IDisposable
         _proxy = null;
         _endPoint = null;
         _live.Clear();
+        IsRootTrusted = false;
     }
 
-    public void SetSystemProxy(bool enable)
+    /// <summary>
+    /// Enable or disable system proxy. Returns false if the proxy is not running or the underlying call failed.
+    /// </summary>
+    public bool SetSystemProxy(bool enable)
     {
-        if (_proxy is null || _endPoint is null)
+        if (_proxy is null || _endPoint is null || !_proxy.ProxyRunning)
         {
-            return;
+            return false;
         }
 
-        if (enable)
+        try
         {
-            var settings = MitmBypass.CreateSystemProxySettings();
-            _proxy.SetAsSystemProxy(_endPoint, ProxyProtocolType.AllHttp, settings);
-            _systemProxyEnabled = true;
+            if (enable)
+            {
+                _systemProxy.SetAsSystemProxy(_proxy, _endPoint);
+                _systemProxyEnabled = true;
+            }
+            else
+            {
+                _systemProxy.RestoreOriginalProxySettings(_proxy);
+                _systemProxyEnabled = false;
+            }
+
+            return true;
         }
-        else
+        catch
         {
-            _proxy.RestoreOriginalProxySettings();
-            _systemProxyEnabled = false;
+            return false;
         }
     }
 
-    public void InstallRootCertificate(bool machineStore)
+    /// <summary>Install root CA and refresh <see cref="IsRootTrusted"/> from the store.</summary>
+    /// <returns>True when the cert is present in the target Root store after install.</returns>
+    public bool InstallRootCertificate(bool machineStore)
     {
         if (_proxy is null)
         {
-            return;
+            return false;
         }
 
         _proxy.CertificateManager.TrustRootCertificate(machineStore);
-        IsRootTrusted = true;
+        IsRootTrusted = IsRootPresentInStore(machineStore);
+        return IsRootTrusted;
     }
 
     public void UntrustRootCertificate(bool machineStore)
@@ -165,7 +190,35 @@ public sealed class InterceptionService : IDisposable
         }
 
         _proxy.CertificateManager.RemoveTrustedRootCertificate(machineStore);
-        IsRootTrusted = false;
+        IsRootTrusted = IsRootPresentInStore(machineStore);
+    }
+
+    public bool RefreshTrustState(bool machineStore = false)
+    {
+        IsRootTrusted = IsRootPresentInStore(machineStore);
+        return IsRootTrusted;
+    }
+
+    public bool IsRootPresentInStore(bool machineStore)
+    {
+        var cert = RootCertificate;
+        if (cert is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var store = new X509Store(StoreName.Root,
+                machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser);
+            store.Open(OpenFlags.ReadOnly);
+            var found = store.Certificates.Find(X509FindType.FindByThumbprint, cert.Thumbprint, validOnly: false);
+            return found.Count > 0;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public string? ExportRootCertificate(string? destinationPath = null)

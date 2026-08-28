@@ -18,7 +18,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly SessionRegistry _registry;
     private readonly UpdateService _updates;
     private readonly SettingsService _settings;
-    private readonly InterceptionService _interception = new();
+    private readonly InterceptionService _interception;
     private readonly ObservableCollection<SessionSnapshot> _all = new();
     private string _statusText = "Ready";
     private string _searchQuery = "";
@@ -49,12 +49,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         SessionStreamBuffer buffer,
         SessionRegistry registry,
         UpdateService updates,
-        SettingsService settings)
+        SettingsService settings,
+        InterceptionService? interception = null)
     {
         _buffer = buffer;
         _registry = registry;
         _updates = updates;
         _settings = settings;
+        _interception = interception ?? new InterceptionService();
         Sessions = new ObservableCollection<SessionSnapshot>();
         Breakpoints = new BreakpointViewModel();
         AutoResponder = new AutoResponderViewModel();
@@ -98,6 +100,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         WireEventHandlers();
         LoadPlusPanels();
     }
+
+    /// <summary>Exposed for E2E / headless tests.</summary>
+    public InterceptionService Interception => _interception;
 
     private void WireEventHandlers()
     {
@@ -184,9 +189,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return Task.CompletedTask;
         }
 
-        SystemProxy = !SystemProxy;
-        _interception.SetSystemProxy(SystemProxy);
-        StatusText = SystemProxy ? "System proxy enabled (with identity bypass)" : "System proxy restored";
+        var enable = !SystemProxy;
+        if (!_interception.SetSystemProxy(enable))
+        {
+            StatusText = enable
+                ? "Failed to enable system proxy (check permissions / platform support)"
+                : "Failed to restore system proxy settings";
+            return Task.CompletedTask;
+        }
+
+        SystemProxy = enable;
+        StatusText = enable
+            ? "System proxy enabled (identity bypass). For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy."
+            : "System proxy restored";
         return Task.CompletedTask;
     }
 
@@ -198,8 +213,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return Task.CompletedTask;
         }
 
-        _interception.InstallRootCertificate(machineStore: false);
-        StatusText = "Root CA trusted in current user store";
+        var ok = _interception.InstallRootCertificate(machineStore: false);
+        StatusText = ok
+            ? "Root CA trusted in current user store"
+            : "Root CA install failed or not present in store — try Export CA and install manually";
         return Task.CompletedTask;
     }
 
@@ -212,7 +229,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         _interception.UntrustRootCertificate(machineStore: false);
-        StatusText = "Root CA removed from current user store";
+        StatusText = _interception.IsRootTrusted
+            ? "Untrust requested but CA still present in store"
+            : "Root CA removed from current user store";
         return Task.CompletedTask;
     }
 
@@ -635,7 +654,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         await _interception.StartAsync(address, BindPort);
         Capturing = true;
         var display = address.Equals(IPAddress.Any) ? "0.0.0.0" : BindAddress;
-        StatusText = $"Listening on {display}:{BindPort} — install CA and enable system proxy from Capture menu";
+        StatusText = $"Listening on {display}:{BindPort} — install CA, then enable system proxy (Capture menu). Chrome: use --disable-quic or H3 may bypass.";
     }
 
     private static IPAddress ParseBindAddress(string bindAddress)

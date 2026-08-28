@@ -17,6 +17,7 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Titanium.Cli.Tests" />
+    <InternalsVisibleTo Include="Titanium.E2E.Tests" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />

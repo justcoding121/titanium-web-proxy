@@ -58,6 +58,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Inspector.Tests", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.Cli.Tests", "..\tests\Titanium.Cli.Tests\Titanium.Cli.Tests.csproj", "{97D3849D-90AA-42BF-86CC-A0E475609715}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Titanium.E2E.Tests", "..\tests\Titanium.E2E.Tests\Titanium.E2E.Tests.csproj", "{BB0831F7-781F-488A-A642-1C12501E7D5E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -284,6 +286,18 @@ Global
 		{97D3849D-90AA-42BF-86CC-A0E475609715}.Release|x64.Build.0 = Release|Any CPU
 		{97D3849D-90AA-42BF-86CC-A0E475609715}.Release|x86.ActiveCfg = Release|Any CPU
 		{97D3849D-90AA-42BF-86CC-A0E475609715}.Release|x86.Build.0 = Release|Any CPU
+		{BB0831F7-781F-488A-A642-1C12501E7D5E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BB0831F7-781F-488A-A642-1C12501E7D5E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BB0831F7-781F-488A-A642-1C12501E7D5E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{BB0831F7-781F-488A-A642-1C12501E7D5E}.Debug|x64.Build.0 = Debug|Any CPU
+		{BB0831F7-781F-488A-A642-1C12501E7D5E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{BB0831F7-781F-488A-A642-1C12501E7D5E}.Debug|x86.Build.0 = Debug|Any CPU
+		{BB0831F7-781F-488A-A642-1C12501E7D5E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BB0831F7-781F-488A-A642-1C12501E7D5E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BB0831F7-781F-488A-A642-1C12501E7D5E}.Release|x64.ActiveCfg = Release|Any CPU
+		{BB0831F7-781F-488A-A642-1C12501E7D5E}.Release|x64.Build.0 = Release|Any CPU
+		{BB0831F7-781F-488A-A642-1C12501E7D5E}.Release|x86.ActiveCfg = Release|Any CPU
+		{BB0831F7-781F-488A-A642-1C12501E7D5E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
