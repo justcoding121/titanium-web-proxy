@@ -1,6 +1,6 @@
 {
   "CallerReference": "titaniumproxy-website-v1",
-  "Comment": "titaniumproxy.com → GitHub Pages origin",
+  "Comment": "titaniumproxy.com → GitHub Pages origin (path rewrite via CloudFront Function titaniumproxy-path-rewrite)",
   "Enabled": true,
   "Aliases": {
     "Quantity": 2,
@@ -13,7 +13,7 @@
       {
         "Id": "github-pages",
         "DomainName": "justcoding121.github.io",
-        "OriginPath": "/titanium-web-proxy",
+        "OriginPath": "",
         "CustomOriginConfig": {
           "HTTPPort": 80,
           "HTTPSPort": 443,
@@ -47,24 +47,19 @@
     },
     "Compress": true,
     "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
-    "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3"
+    "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3",
+    "FunctionAssociations": {
+      "Quantity": 1,
+      "Items": [
+        {
+          "EventType": "viewer-request",
+          "FunctionARN": "arn:aws:cloudfront::ACCOUNT_ID:function/titaniumproxy-path-rewrite"
+        }
+      ]
+    }
   },
   "CustomErrorResponses": {
-    "Quantity": 2,
-    "Items": [
-      {
-        "ErrorCode": 404,
-        "ResponsePagePath": "/404.html",
-        "ResponseCode": "404",
-        "ErrorCachingMinTTL": 60
-      },
-      {
-        "ErrorCode": 403,
-        "ResponsePagePath": "/404.html",
-        "ResponseCode": "404",
-        "ErrorCachingMinTTL": 60
-      }
-    ]
+    "Quantity": 0
   },
   "ViewerCertificate": {
     "ACMCertificateArn": "REPLACE_WITH_ACM_CERTIFICATE_ARN",
