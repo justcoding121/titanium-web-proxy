@@ -1,0 +1,68 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Titanium.Inspector.ViewModels"
+        x:Class="Titanium.Inspector.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Titanium Inspector"
+        Width="1200" Height="760">
+  <DockPanel>
+    <Menu DockPanel.Dock="Top">
+      <MenuItem Header="_File">
+        <MenuItem Header="Export HAR…" Command="{Binding ExportHarCommand}" />
+        <MenuItem Header="Export archive…" Command="{Binding ExportArchiveCommand}" />
+      </MenuItem>
+      <MenuItem Header="_Capture">
+        <MenuItem Header="Start interception" Command="{Binding StartCaptureCommand}" />
+        <MenuItem Header="Stop interception" Command="{Binding StopCaptureCommand}" />
+        <MenuItem Header="Set as system proxy" Command="{Binding SystemProxyCommand}" />
+      </MenuItem>
+      <MenuItem Header="_Help">
+        <MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}" />
+      </MenuItem>
+    </Menu>
+    <Grid ColumnDefinitions="2*,*" RowDefinitions="Auto,*,Auto">
+      <TextBox Grid.Row="0" Grid.ColumnSpan="2" Margin="8" Watermark="Search: method:GET status:200 host:example is:ws"
+               Text="{Binding SearchQuery}" />
+      <DataGrid Grid.Row="1" Grid.Column="0" Margin="8"
+                ItemsSource="{Binding Sessions}"
+                SelectedItem="{Binding SelectedSession}"
+                IsReadOnly="True"
+                AutoGenerateColumns="False">
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="70" />
+          <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="70" />
+          <DataGridTextColumn Header="URL" Binding="{Binding Url}" Width="*" />
+          <DataGridTextColumn Header="Status" Binding="{Binding StatusCode}" Width="70" />
+        </DataGrid.Columns>
+      </DataGrid>
+      <TabControl Grid.Row="1" Grid.Column="1" Margin="8">
+        <TabItem Header="Headers">
+          <TextBox IsReadOnly="True" Text="{Binding SelectedHeaders}" AcceptsReturn="True" TextWrapping="Wrap" />
+        </TabItem>
+        <TabItem Header="Body">
+          <TextBox IsReadOnly="True" Text="{Binding SelectedBody}" AcceptsReturn="True" TextWrapping="Wrap" />
+        </TabItem>
+        <TabItem Header="Hex">
+          <TextBox IsReadOnly="True" Text="{Binding SelectedHex}" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" />
+        </TabItem>
+        <TabItem Header="Breakpoints">
+          <StackPanel Margin="8" Spacing="8">
+            <CheckBox Content="Enabled" IsChecked="{Binding Breakpoints.Enabled}" />
+            <TextBox Watermark="URL filter" Text="{Binding Breakpoints.UrlFilter}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="Continue" Command="{Binding ContinueBreakpointCommand}" />
+              <Button Content="Abort" Command="{Binding AbortBreakpointCommand}" />
+            </StackPanel>
+          </StackPanel>
+        </TabItem>
+        <TabItem Header="AutoResponder">
+          <StackPanel Margin="8" Spacing="8">
+            <CheckBox Content="Enabled (before breakpoints)" IsChecked="{Binding AutoResponder.Enabled}" />
+            <TextBlock Text="Rules are evaluated before breakpoints." />
+          </StackPanel>
+        </TabItem>
+      </TabControl>
+      <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="8" Text="{Binding StatusText}" />
+    </Grid>
+  </DockPanel>
+</Window>

@@ -62,8 +62,8 @@ jobs:
         /o:"justcoding121"
         /d:sonar.token="$env:SONAR_TOKEN"
         /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml"
-        /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**"
-        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/Http3/Http3OriginBridge.cs,**/Http3/Http3OriginClientSession.cs"
+        /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**,**/*.axaml"
+        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/Http3/Http3OriginBridge.cs,**/Http3/Http3OriginClientSession.cs,**/Titanium.Plus/Dashboard/**,**/Titanium.Inspector/Views/**"
 
     - name: Build for SonarCloud analysis
       if: env.SONAR_TOKEN != ''
@@ -73,6 +73,14 @@ jobs:
       shell: pwsh
       run: |
         dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/unit
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        # Additional MIT + NC unit suites (coverage merged below)
+        dotnet test tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/configuration
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/plus
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/inspector
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         # The integration suite spins up real listening sockets and TLS handshakes, which
@@ -136,11 +144,17 @@ jobs:
 
     - name: Pack Beta
       if: github.ref == 'refs/heads/beta'
-      run: dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release --version-suffix "beta"
+      run: |
+        dotnet pack src/Titanium.Web.Proxy.Abstractions/Titanium.Web.Proxy.Abstractions.csproj --configuration Release --version-suffix "beta"
+        dotnet pack src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj --configuration Release --version-suffix "beta"
+        dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release --version-suffix "beta"
 
     - name: Pack Stable
       if: github.ref == 'refs/heads/stable'
-      run: dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release
+      run: |
+        dotnet pack src/Titanium.Web.Proxy.Abstractions/Titanium.Web.Proxy.Abstractions.csproj --configuration Release
+        dotnet pack src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj --configuration Release
+        dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release
 
     - name: Log in to NuGet
       uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
@@ -149,7 +163,11 @@ jobs:
         user: ${{ secrets.NUGET_USER }}
 
     - name: Publish Package
-      run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
+      # MIT packages only — never push Titanium.Plus or Titanium.Inspector
+      run: |
+        Get-ChildItem -Recurse -Filter *.nupkg |
+          Where-Object { $_.Name -notlike '*Plus*' -and $_.Name -notlike '*Inspector*' -and $_.Name -notlike '*.symbols.nupkg' } |
+          ForEach-Object { dotnet nuget push $_.FullName --source https://api.nuget.org/v3/index.json --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" }
 
     - name: Create GitHub Release
       env:

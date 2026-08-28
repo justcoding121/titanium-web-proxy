@@ -1,0 +1,150 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'stable or beta'
+        required: true
+        default: 'stable'
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test
+        run: dotnet test src/Titanium.Web.Proxy.sln -c Release --nologo
+
+  build-cli:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rid: [win-x64, linux-x64, osx-x64]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish Cli
+        run: |
+          dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:AssemblyName=titanium -o artifacts/cli/${{ matrix.rid }}
+          (cd artifacts/cli/${{ matrix.rid }} && zip -r ../../../Titanium.Cli-${{ matrix.rid }}.zip .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.rid }}
+          path: Titanium.Cli-${{ matrix.rid }}.zip
+
+  build-plus:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build Plus
+        run: |
+          dotnet build src/Titanium.Plus/Titanium.Plus.csproj -c Release -o artifacts/plus
+          cp artifacts/plus/Titanium.Plus.dll Titanium.Plus-${{ github.ref_name }}.dll
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plus
+          path: Titanium.Plus-*.dll
+
+  build-inspector:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish Inspector
+        shell: pwsh
+        run: |
+          dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r win-x64 --self-contained true -o artifacts/inspector/win-x64
+          Compress-Archive -Path artifacts/inspector/win-x64/* -DestinationPath TitaniumInspector-win-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inspector-win-x64
+          path: TitaniumInspector-win-x64.zip
+
+  publish-release:
+    needs: [build-cli, build-plus, build-inspector]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Build release-manifest and create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          CHANNEL=stable
+          if [[ "$VERSION" == *beta* || "$VERSION" == *-* ]]; then CHANNEL=beta; fi
+          mkdir -p dist
+          find artifacts -type f \( -name '*.zip' -o -name '*.dll' \) -exec cp {} dist/ \;
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, datetime
+          version = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          channel = "beta" if ("-" in version or "beta" in version.lower()) else "stable"
+          dist = pathlib.Path("dist")
+          def sha(p):
+            h = hashlib.sha256()
+            h.update(p.read_bytes())
+            return h.hexdigest()
+          assets = {}
+          for p in dist.iterdir():
+            assets[p.name] = {"path": str(p), "sha256": sha(p)}
+          manifest = {
+            "version": version,
+            "channel": channel,
+            "releasedUtc": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "abstractionsVersion": version.split("-")[0],
+            "products": {
+              "cli": {"assets": {}},
+              "plus": {"requiredAbstractions": "7.0.0", "asset": None},
+              "inspector": {"assets": {}},
+            },
+            "nuget": {
+              "Titanium.Web.Proxy": version.split("-")[0],
+              "Titanium.Web.Proxy.Abstractions": version.split("-")[0],
+              "Titanium.Web.Proxy.Configuration": version.split("-")[0],
+            },
+          }
+          for name, meta in assets.items():
+            url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{os.environ['GITHUB_REF_NAME']}/{name}"
+            entry = {"url": url, "sha256": meta["sha256"]}
+            if name.startswith("Titanium.Cli-"):
+              rid = name.removeprefix("Titanium.Cli-").removesuffix(".zip")
+              manifest["products"]["cli"]["assets"][rid] = entry
+            elif name.startswith("TitaniumInspector-"):
+              rid = name.removeprefix("TitaniumInspector-").removesuffix(".zip")
+              manifest["products"]["inspector"]["assets"][rid] = entry
+            elif name.startswith("Titanium.Plus"):
+              manifest["products"]["plus"]["asset"] = entry
+          pathlib.Path("dist/release-manifest.json").write_text(json.dumps(manifest, indent=2))
+          print(json.dumps(manifest, indent=2))
+          PY
+          PRE=""
+          if [[ "$CHANNEL" == "beta" ]]; then PRE="--prerelease"; fi
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --target "$GITHUB_SHA" \
+            $PRE

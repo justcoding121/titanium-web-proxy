@@ -30,14 +30,27 @@ public partial class ProxyServer
     ///     Callers must also refuse <see cref="UpstreamHttpProtocol.Http2"/> / <see cref="UpstreamHttpProtocol.Http3"/>
     ///     at the connection level — this path only speaks HTTP/1.1 TCP to the origin.
     /// </summary>
-    private static bool CanUseH1TerminateLite(ProxyEndPoint endPoint, Request request, bool enable100Continue,
+    private bool CanUseH1TerminateLite(ProxyEndPoint endPoint, Request request, bool enable100Continue,
         bool enableWinAuth, bool hasCustomUpstreamProxyFunc)
     {
         if (enable100Continue || enableWinAuth || hasCustomUpstreamProxyFunc)
             return false;
 
-        if (endPoint is not TransparentBaseProxyEndPoint { ForwardHost.Length: > 0 })
+        if (endPoint is not TransparentBaseProxyEndPoint { ForwardHost.Length: > 0 } transparent)
             return false;
+
+        // Route table present but not ForwardHost-equivalent → full session / LB path.
+        var reverse = ReverseProxy;
+        if (reverse?.Routes is { Count: > 0 })
+        {
+            var snapshot = reverse.ClusterManager?.Snapshot;
+            if (!Routing.ReverseProxyFastPath.IsForwardHostEquivalent(
+                    reverse.Routes, snapshot, transparent.ForwardHost, transparent.ForwardPort ?? 80))
+                return false;
+
+            if (reverse.Middleware is { Count: > 0 })
+                return false;
+        }
 
         if (request.HasBody || request.UpgradeToWebSocket)
             return false;

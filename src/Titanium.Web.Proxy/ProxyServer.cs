@@ -24,6 +24,7 @@ using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Network.WinAuth;
+using Titanium.Web.Proxy.Abstractions;
 using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
@@ -1227,6 +1228,12 @@ public partial class ProxyServer : IDisposable
     ///     Intercept connect request sent to upstream proxy.
     /// </summary>
     public event AsyncEventHandler<ConnectRequest>? BeforeUpStreamConnectRequest; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
+
+    /// <summary>
+    /// Optional reverse-proxy route/cluster configuration. When <see langword="null"/> (default),
+    /// Core keeps 6.x <c>ForwardHost</c> behavior with zero added cost on the hot path.
+    /// </summary>
+    public ReverseProxyOptions? ReverseProxy { get; set; }
 
     /// <summary>
     /// Forces the full interception path (SessionEventArgs, BeforeRequest, etc.) even when

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Titanium.Cli</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <SignAssembly>false</SignAssembly>
+    <VersionPrefix>7.0.0</VersionPrefix>
+    <Authors>Jehonathan Thomas</Authors>
+    <Description>Titanium Web Proxy CLI (titanium / twp).</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <AssemblyName>titanium</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
+    <ProjectReference Include="..\Titanium.Web.Proxy.Abstractions\Titanium.Web.Proxy.Abstractions.csproj" />
+    <ProjectReference Include="..\Titanium.Web.Proxy.Configuration\Titanium.Web.Proxy.Configuration.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="LICENSE" Pack="true" PackagePath="" />
+  </ItemGroup>
+</Project>

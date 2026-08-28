@@ -33,12 +33,32 @@ A lightweight, high performing HTTP(S) proxy server for .NET. It acts as a man i
 - Connection, certificate, and buffer pooling
 - Built-in, zero-overhead-when-disabled logging (every caught exception, optionally to console/file or your own `ILoggerFactory`) and opt-in structured request/connection timing — see [Logging and diagnostics](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#logging-and-diagnostics) in the wiki
 
+## Editions
+
+| Product | Path | License | Distribution |
+|---------|------|---------|--------------|
+| **Titanium.Web.Proxy** (engine) | `src/Titanium.Web.Proxy` | MIT | NuGet |
+| **Titanium.Web.Proxy.Abstractions** | `src/Titanium.Web.Proxy.Abstractions` | MIT | NuGet |
+| **Titanium.Web.Proxy.Configuration** | `src/Titanium.Web.Proxy.Configuration` | MIT | NuGet |
+| **Titanium.Cli** (`titanium` / `twp`) | `src/Titanium.Cli` | MIT | GitHub Releases, winget, optional `dotnet tool` |
+| **Titanium.Plus** | `src/Titanium.Plus` | [PolyForm Noncommercial](licenses/PolyForm-Noncommercial-1.0.0.txt) | GitHub Release plugin DLL (not nuget.org) |
+| **Titanium Inspector** | `src/Titanium.Inspector` | [PolyForm Noncommercial](licenses/PolyForm-Noncommercial-1.0.0.txt) | Desktop app (Windows MSI/winget; GitHub Releases) |
+
+External contributions are welcome on MIT trees after signing the [CLA](CLA.md). PolyForm Noncommercial paths are maintainer-only; see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Installation
 
 Install the stable package from [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy):
 
 ```shell
 dotnet add package Titanium.Web.Proxy
+```
+
+Related MIT packages (7.0+):
+
+```shell
+dotnet add package Titanium.Web.Proxy.Abstractions
+dotnet add package Titanium.Web.Proxy.Configuration
 ```
 
 To use the latest prerelease:

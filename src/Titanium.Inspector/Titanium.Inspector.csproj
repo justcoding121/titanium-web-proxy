@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Titanium.Inspector</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <SignAssembly>false</SignAssembly>
+    <VersionPrefix>7.0.0</VersionPrefix>
+    <Authors>Jehonathan Thomas</Authors>
+    <Description>Titanium Inspector desktop traffic debugger (PolyForm Noncommercial).</Description>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <ApplicationId>com.justcoding121.titaniuminspector</ApplicationId>
+    <AssemblyName>TitaniumInspector</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <!-- Bundle id: com.justcoding121.titaniuminspector -->
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.8" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.8" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.2.8" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.8" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.8" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Titanium.Web.Proxy.Abstractions\Titanium.Web.Proxy.Abstractions.csproj" />
+    <ProjectReference Include="..\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="LICENSE" Pack="true" PackagePath="" />
+  </ItemGroup>
+</Project>

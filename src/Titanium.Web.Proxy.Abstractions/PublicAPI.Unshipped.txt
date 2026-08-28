@@ -1,0 +1,154 @@
+#nullable enable
+static Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot.Empty.get -> Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot!
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Algorithm.get -> Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Algorithm.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.ClusterConfig() -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Destinations.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig!>!
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Destinations.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Id.get -> string!
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Id.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Address.get -> string!
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Address.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.DestinationConfig() -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Id.get -> string!
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Id.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Port.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Port.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.UseHttps.get -> bool
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.UseHttps.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Weight.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Weight.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationState
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationState.Draining = 2 -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationState
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationState.Healthy = 0 -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationState
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationState.Maintenance = 3 -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationState
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationState.Unhealthy = 1 -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationState
+Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot
+Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot.Clusters.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>!
+Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot.DestinationStates.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState>!
+Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot.ImmutableClusterSnapshot(System.Collections.Generic.IReadOnlyDictionary<string!, Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>! clusters, System.Collections.Generic.IReadOnlyDictionary<string!, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState>! destinationStates) -> void
+Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm
+Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm.LeastRequests = 2 -> Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm
+Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm.Random = 1 -> Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm
+Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm.RoundRobin = 0 -> Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm
+Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware
+Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware.InvokeAsync(Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext! context, Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareDelegate! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.IsHandled.get -> bool
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.IsHandled.set -> void
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.Items.get -> System.Collections.Generic.Dictionary<string!, object?>!
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.ProxyMiddlewareContext() -> void
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.Session.get -> object!
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.Session.init -> void
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareDelegate
+Titanium.Web.Proxy.Abstractions.Plugins.IGrpcTranscodeHook
+Titanium.Web.Proxy.Abstractions.Plugins.IGrpcTranscodeHook.TryTranscode(System.ReadOnlySpan<byte> requestBody, out byte[]? responseBody) -> bool
+Titanium.Web.Proxy.Abstractions.Plugins.ILatencyRecorder
+Titanium.Web.Proxy.Abstractions.Plugins.ILatencyRecorder.Record(string! name, System.TimeSpan duration) -> void
+Titanium.Web.Proxy.Abstractions.Plugins.InspectorPanelContext
+Titanium.Web.Proxy.Abstractions.Plugins.InspectorPanelContext.HostWindow.get -> object!
+Titanium.Web.Proxy.Abstractions.Plugins.InspectorPanelContext.HostWindow.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.InspectorPanelContext.InspectorPanelContext() -> void
+Titanium.Web.Proxy.Abstractions.Plugins.InspectorPanelContext.Services.get -> System.IServiceProvider?
+Titanium.Web.Proxy.Abstractions.Plugins.InspectorPanelContext.Services.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.IPlusInspectorViewProvider
+Titanium.Web.Proxy.Abstractions.Plugins.IPlusInspectorViewProvider.CreatePanels(Titanium.Web.Proxy.Abstractions.Plugins.InspectorPanelContext! context) -> System.Collections.Generic.IReadOnlyList<object!>!
+Titanium.Web.Proxy.Abstractions.Plugins.IPlusInspectorViewProvider.RequiredAbstractionsVersion.get -> System.Version!
+Titanium.Web.Proxy.Abstractions.Plugins.ITitaniumPlusModule
+Titanium.Web.Proxy.Abstractions.Plugins.ITitaniumPlusModule.Apply(Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext! context) -> void
+Titanium.Web.Proxy.Abstractions.Plugins.ITitaniumPlusModule.RequiredAbstractionsVersion.get -> System.Version!
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ClusterManager.get -> Titanium.Web.Proxy.Abstractions.Routing.IClusterManager?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ClusterManager.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.LatencyRecorder.get -> Titanium.Web.Proxy.Abstractions.Plugins.ILatencyRecorder?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.LatencyRecorder.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Middleware.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware!>?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Middleware.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Options.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Options.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.PlusActivationContext() -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ProxyServer.get -> object!
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ProxyServer.init -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.ClusterManager.get -> Titanium.Web.Proxy.Abstractions.Routing.IClusterManager?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.ClusterManager.init -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.Clusters.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.Clusters.init -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.GrpcTranscodeHook.get -> Titanium.Web.Proxy.Abstractions.Plugins.IGrpcTranscodeHook?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.GrpcTranscodeHook.init -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.LatencyRecorder.get -> Titanium.Web.Proxy.Abstractions.Plugins.ILatencyRecorder?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.LatencyRecorder.init -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.LoadBalancer.get -> Titanium.Web.Proxy.Abstractions.Routing.ILoadBalancer?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.LoadBalancer.init -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.Middleware.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware!>?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.Middleware.init -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.ReverseProxyOptions() -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.RouteMatcher.get -> Titanium.Web.Proxy.Abstractions.Routing.IRouteMatcher?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.RouteMatcher.init -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.Routes.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.RouteConfig!>?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.Routes.init -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.TransformEngine.get -> Titanium.Web.Proxy.Abstractions.Routing.ITransformEngine?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.TransformEngine.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.IClusterManager
+Titanium.Web.Proxy.Abstractions.Routing.IClusterManager.ApplyAsync(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>! clusters, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.Abstractions.Routing.IClusterManager.GetDestinationState(string! destinationId) -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationState
+Titanium.Web.Proxy.Abstractions.Routing.IClusterManager.SetDestinationState(string! destinationId, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState state) -> void
+Titanium.Web.Proxy.Abstractions.Routing.IClusterManager.Snapshot.get -> Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot!
+Titanium.Web.Proxy.Abstractions.Routing.ILoadBalancer
+Titanium.Web.Proxy.Abstractions.Routing.ILoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig! cluster, Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot! snapshot) -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig?
+Titanium.Web.Proxy.Abstractions.Routing.IRouteMatcher
+Titanium.Web.Proxy.Abstractions.Routing.IRouteMatcher.Match(Titanium.Web.Proxy.Abstractions.Routing.RouteMatchContext context, System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.RouteConfig!>! routes) -> Titanium.Web.Proxy.Abstractions.Routing.RouteConfig?
+Titanium.Web.Proxy.Abstractions.Routing.ITransformEngine
+Titanium.Web.Proxy.Abstractions.Routing.ITransformEngine.ApplyRequestTransforms(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.TransformConfig!>? transforms, Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext! context) -> void
+Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind.Exact = 0 -> Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind.Prefix = 1 -> Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind.Template = 2 -> Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.ClusterId.get -> string!
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.ClusterId.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Id.get -> string!
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Id.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Match.get -> Titanium.Web.Proxy.Abstractions.Routing.RouteMatch!
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Match.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Order.get -> int
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Order.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.RouteConfig() -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Transforms.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.TransformConfig!>?
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Transforms.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Headers.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Headers.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Host.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Host.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Method.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Method.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Path.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Path.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.PathKind.get -> Titanium.Web.Proxy.Abstractions.Routing.PathMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.PathKind.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Query.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.Query.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.RouteMatch() -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatchContext
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatchContext.Headers.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatchContext.Host.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatchContext.Method.get -> string!
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatchContext.Path.get -> string!
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatchContext.Query.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatchContext.RouteMatchContext() -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatchContext.RouteMatchContext(string? host, string! path, string! method, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? headers, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? query) -> void
+Titanium.Web.Proxy.Abstractions.Routing.TransformConfig
+Titanium.Web.Proxy.Abstractions.Routing.TransformConfig.Kind.get -> string!
+Titanium.Web.Proxy.Abstractions.Routing.TransformConfig.Kind.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.TransformConfig.Parameters.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+Titanium.Web.Proxy.Abstractions.Routing.TransformConfig.Parameters.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.TransformConfig.TransformConfig() -> void
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.Headers.get -> System.Collections.Generic.Dictionary<string!, string!>!
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.Path.get -> string!
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.Path.set -> void
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.TransformRequestContext() -> void
+virtual Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareDelegate.Invoke(Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
