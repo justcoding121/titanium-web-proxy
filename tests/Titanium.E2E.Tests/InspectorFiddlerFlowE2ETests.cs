@@ -192,6 +192,10 @@ public class InspectorFiddlerFlowE2ETests
         }
 
         await Task.Delay(500);
+        Assert.IsTrue(
+            captured.Any(s => s.IsTunnel || s.Method.Equals("CONNECT", StringComparison.OrdinalIgnoreCase)),
+            "With DecryptHttps=false expect CONNECT tunnel session(s). Got: " +
+            string.Join(", ", captured.Select(s => s.Method + " " + s.Url)));
         Assert.IsFalse(
             captured.Any(s => s.Url.Contains("opaque-connect", StringComparison.OrdinalIgnoreCase) && !s.IsTunnel),
             "With DecryptHttps=false should not MITM to a decrypted URL session. Got: " +

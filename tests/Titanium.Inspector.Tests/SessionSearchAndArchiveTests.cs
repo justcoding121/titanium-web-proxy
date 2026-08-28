@@ -19,6 +19,9 @@ public class SessionSearchAndArchiveTests
         var filtered = SessionSearch.Filter(sessions, "method:GET is:ws").ToList();
         Assert.AreEqual(1, filtered.Count);
         Assert.AreEqual(2, filtered[0].Id);
+        Assert.IsTrue(SessionSearch.Matches(sessions[1], "method:GET is:ws"));
+        Assert.IsFalse(SessionSearch.Matches(sessions[0], "method:GET is:ws"));
+        Assert.IsTrue(SessionSearch.Matches(sessions[0], null));
     }
 
     [TestMethod]

@@ -113,6 +113,7 @@ public sealed class InterceptionService : IDisposable
 
         _endPoint = new ExplicitProxyEndPoint(address, port, decryptSsl: true);
         _endPoint.BeforeTunnelConnectRequest += OnBeforeTunnelConnect;
+        _endPoint.BeforeTunnelConnectResponse += OnBeforeTunnelConnectResponse;
         _proxy.AddEndPoint(_endPoint);
         _proxy.Start();
 
@@ -236,6 +237,7 @@ public sealed class InterceptionService : IDisposable
         if (_endPoint is not null)
         {
             _endPoint.BeforeTunnelConnectRequest -= OnBeforeTunnelConnect;
+            _endPoint.BeforeTunnelConnectResponse -= OnBeforeTunnelConnectResponse;
         }
 
         _proxy.Stop();
@@ -382,9 +384,97 @@ public sealed class InterceptionService : IDisposable
 
     private Task OnBeforeTunnelConnect(object sender, TunnelConnectSessionEventArgs e)
     {
-        var host = e.HttpClient.Request.RequestUri?.Host;
+        var host = e.HttpClient.Request.RequestUri?.Host
+                   ?? TryHost(e.HttpClient.Request);
         e.DecryptSsl = DecryptHttps && !MitmBypass.ShouldDisableSslDecrypt(host);
+
+        if (!Capturing)
+        {
+            return Task.CompletedTask;
+        }
+
+        try
+        {
+            // Opaque HTTPS (DecryptHttps=false) never hits BeforeRequest — publish CONNECT here
+            // so the session list matches Fiddler when decryption is off.
+            var snap = CreateTunnelSnapshot(e);
+            _live[e.HttpClient] = snap;
+            SessionCaptured?.Invoke(this, snap);
+        }
+        catch
+        {
+            // never break the proxy pipeline for capture failures
+        }
+
         return Task.CompletedTask;
+    }
+
+    private Task OnBeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
+    {
+        if (!_live.TryGetValue(e.HttpClient, out var snap))
+        {
+            return Task.CompletedTask;
+        }
+
+        try
+        {
+            var resp = e.HttpClient.Response;
+            snap.StatusCode = resp.StatusCode != 0 ? resp.StatusCode : 200;
+            snap.ResponseHeadersText = FormatHeaders(resp.Headers);
+            if (!e.DecryptSsl)
+            {
+                snap.Protocol = "CONNECT tunnel";
+            }
+
+            SessionUpdated?.Invoke(this, snap);
+        }
+        catch
+        {
+            // ignore
+        }
+        finally
+        {
+            // Tunnel sessions are complete after CONNECT response (no AfterResponse for opaque tunnels).
+            if (!e.DecryptSsl)
+            {
+                _live.TryRemove(e.HttpClient, out _);
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private SessionSnapshot CreateTunnelSnapshot(TunnelConnectSessionEventArgs e)
+    {
+        var req = e.HttpClient.Request;
+        var processId = 0;
+        string? processName = null;
+        try
+        {
+            processId = e.HttpClient.ProcessId.Value;
+            if (processId > 0)
+            {
+                processName = System.Diagnostics.Process.GetProcessById(processId).ProcessName;
+            }
+        }
+        catch
+        {
+            // process may have exited
+        }
+
+        return new SessionSnapshot
+        {
+            Id = Interlocked.Increment(ref _nextId),
+            Method = "CONNECT",
+            Url = req.RequestUriString ?? req.Url ?? "",
+            Host = TryHost(req),
+            StartedUtc = DateTimeOffset.UtcNow,
+            RequestHeadersText = FormatHeaders(req.Headers),
+            Protocol = FormatProtocol(req.HttpVersion),
+            ProcessId = processId,
+            ProcessName = processName,
+            IsTunnel = true,
+        };
     }
 
     private async Task OnBeforeRequest(object sender, SessionEventArgs e)

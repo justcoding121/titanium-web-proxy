@@ -148,8 +148,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             SystemProxy = true;
             StatusText =
-                $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS is CONNECT until Decrypt HTTPS is enabled." +
-                (DecryptHttps ? "" : " Chrome: --disable-quic if H3 bypasses the proxy.");
+                $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shows as CONNECT until Decrypt HTTPS is enabled." +
+                " Chrome/Edge: --disable-quic or HTTP/3 may bypass the proxy.";
+        }
+        else
+        {
+            StatusText =
+                $"Listening on {FormatBindDisplay()}:{BindPort}, but system proxy failed to enable — use Capture → Toggle system proxy.";
         }
     }
 
@@ -907,16 +912,33 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private void OnSessionAdded(SessionSnapshot snapshot)
     {
         _all.Add(snapshot);
-        ApplyFilter();
+        // Append in place — never Clear/rebuild here or DataGrid multi-select (Ctrl+A) is wiped
+        // every time a new session arrives.
+        if (SessionSearch.Matches(snapshot, SearchQuery))
+        {
+            Sessions.Add(snapshot);
+        }
+
         StatusText = $"Sessions: {_all.Count}";
     }
 
     private void ApplyFilter()
     {
+        var previouslySelected = SelectedSession;
         Sessions.Clear();
         foreach (var s in SessionSearch.Filter(_all, SearchQuery))
         {
             Sessions.Add(s);
+        }
+
+        // Restore single selection used by the detail pane when the row still matches the filter.
+        if (previouslySelected is not null && Sessions.Contains(previouslySelected))
+        {
+            SelectedSession = previouslySelected;
+        }
+        else if (previouslySelected is not null)
+        {
+            SelectedSession = null;
         }
     }
 

@@ -14,6 +14,7 @@
     <ApplicationId>com.justcoding121.titaniuminspector</ApplicationId>
     <AssemblyName>TitaniumInspector</AssemblyName>
     <IsPackable>false</IsPackable>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <!-- Bundle id: com.justcoding121.titaniuminspector -->
   </PropertyGroup>
   <ItemGroup>
@@ -29,6 +30,7 @@
     <ProjectReference Include="..\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <AvaloniaResource Include="Assets\app.ico" />
     <None Include="LICENSE" Pack="true" PackagePath="" />
   </ItemGroup>
 </Project>

@@ -23,6 +23,18 @@ public static class SessionSearch
         return sessions.Where(s => tokens.All(t => MatchToken(s, t)));
     }
 
+    /// <summary>True when <paramref name="session"/> would appear under the current search query.</summary>
+    public static bool Matches(SessionSnapshot session, string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return true;
+        }
+
+        var tokens = Tokenize(query);
+        return tokens.All(t => MatchToken(session, t));
+    }
+
     private static List<(string Key, string Value)> Tokenize(string query)
     {
         var list = new List<(string, string)>();
