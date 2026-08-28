@@ -77,7 +77,7 @@ jobs:
         /d:sonar.token="$env:SONAR_TOKEN"
         /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml"
         /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**,**/*.axaml,**/website/**,**/.github/**"
-        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/Http3/Http3OriginBridge.cs,**/Http3/Http3OriginClientSession.cs,**/Titanium.Plus/Dashboard/**,**/Titanium.Inspector/Views/**"
+        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/Http3/Http3OriginBridge.cs,**/Http3/Http3OriginClientSession.cs,**/Titanium.Plus/Dashboard/**,**/Titanium.Inspector/Views/**,**/Titanium.Inspector/Services/AppContainerLoopback.cs,**/Titanium.Inspector/App.axaml.cs"
 
     - name: Build for SonarCloud analysis
       if: env.SONAR_TOKEN != ''

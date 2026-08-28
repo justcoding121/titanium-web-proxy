@@ -247,29 +247,29 @@ public static class AppContainerLoopback
             public IntPtr binaries;
         }
 
-        [DllImport("FirewallAPI.dll", ExactSpelling = true)] // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
-        public static extern uint NetworkIsolationEnumAppContainers(
+        [DllImport("FirewallAPI.dll", ExactSpelling = true)]
+        public static extern uint NetworkIsolationEnumAppContainers( // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
             uint flags,
             out uint pdwCntPublicACs,
             out IntPtr ppACs);
 
-        [DllImport("FirewallAPI.dll", ExactSpelling = true)] // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
-        public static extern void NetworkIsolationFreeAppContainers(IntPtr pACs);
+        [DllImport("FirewallAPI.dll", ExactSpelling = true)]
+        public static extern void NetworkIsolationFreeAppContainers(IntPtr pACs); // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
 
-        [DllImport("FirewallAPI.dll", ExactSpelling = true)] // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
-        public static extern uint NetworkIsolationGetAppContainerConfig(
+        [DllImport("FirewallAPI.dll", ExactSpelling = true)]
+        public static extern uint NetworkIsolationGetAppContainerConfig( // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
             out uint pdwCntACs,
             out IntPtr appContainerSids);
 
-        [DllImport("FirewallAPI.dll", ExactSpelling = true)] // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
-        public static extern uint NetworkIsolationSetAppContainerConfig(
+        [DllImport("FirewallAPI.dll", ExactSpelling = true)]
+        public static extern uint NetworkIsolationSetAppContainerConfig( // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
             uint dwNumPublicAppCs,
             [In] SID_AND_ATTRIBUTES[]? appContainerSids);
 
-        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
-        public static extern bool ConvertStringSidToSid(string strSid, out IntPtr pSid);
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        public static extern bool ConvertStringSidToSid(string strSid, out IntPtr pSid); // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
 
-        [DllImport("kernel32.dll", SetLastError = true)] // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
-        public static extern IntPtr LocalFree(IntPtr hMem);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern IntPtr LocalFree(IntPtr hMem); // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
     }
 }

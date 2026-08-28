@@ -20,7 +20,11 @@ internal static class PlusLog
         var logger = context.Logger;
         if (logger is not null)
         {
-            logger.Log(level, "{Message}", message);
+            if (logger.IsEnabled(level))
+            {
+                logger.Log(level, "{Message}", message);
+            }
+
             return;
         }
 
