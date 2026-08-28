@@ -225,3 +225,7 @@ tools/ChromeLoadProbe/results/
 .tmp-rps/
 tmp/
 
+# VitePress site (website/)
+website/.vitepress/dist/
+website/.vitepress/cache/
+

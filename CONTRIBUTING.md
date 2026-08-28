@@ -6,7 +6,7 @@ Thanks for contributing to Titanium Web Proxy.
 
 | Paths | License | External PRs |
 |-------|---------|--------------|
-| `src/Titanium.Web.Proxy/`, `src/Titanium.Web.Proxy.Abstractions/`, `src/Titanium.Web.Proxy.Configuration/`, `src/Titanium.Cli/`, related MIT tests/examples/tools/docs | MIT | Welcome after CLA |
+| `src/Titanium.Web.Proxy/`, `src/Titanium.Web.Proxy.Abstractions/`, `src/Titanium.Web.Proxy.Configuration/`, `src/Titanium.Cli/`, related MIT tests/examples/tools/docs, `website/` | MIT | Welcome after CLA |
 | `src/Titanium.Plus/`, `src/Titanium.Inspector/`, `tests/Titanium.Plus.Tests/`, `tests/Titanium.Inspector.Tests/` | PolyForm Noncommercial | Maintainer allowlist only |
 
 See [CLA.md](CLA.md) and [README.md](README.md) Editions section.

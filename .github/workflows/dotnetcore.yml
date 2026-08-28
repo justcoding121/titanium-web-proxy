@@ -6,12 +6,26 @@ on:
         - develop
         - beta
         - stable
+    paths-ignore:
+      - 'website/**'
+      - 'wiki/**'
+      - 'docs/**'
+      - '*.md'
+      - '.github/workflows/deploy-website.yml'
+      - '.github/dns/**'
   pull_request:
     branches:
         - develop
         - beta
         - stable
-      
+    paths-ignore:
+      - 'website/**'
+      - 'wiki/**'
+      - 'docs/**'
+      - '*.md'
+      - '.github/workflows/deploy-website.yml'
+      - '.github/dns/**'
+
 jobs:
   build:
     runs-on: windows-latest

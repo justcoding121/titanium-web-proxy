@@ -1,0 +1,48 @@
+# Plus
+
+Optional ops plugin for the CLI (and Inspector panels). Licensed under [PolyForm Noncommercial](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt) — **not for commercial use** without a separate agreement.
+
+## Install
+
+Plus is distributed as a sidecar DLL next to the CLI. There is **no** public Plus download button on this site.
+
+```shell
+titanium update --plus
+titanium version --check --plus
+```
+
+## Enable
+
+```yaml
+plus:
+  enabled: true
+  controlPlane:
+    host: "127.0.0.1"
+    port: 9080
+    sharedSecret: "<shared-secret>"
+  options:
+    cache.enable: "true"
+```
+
+Use a strong secret in production. Dev-only default secrets require an explicit environment opt-in on loopback.
+
+## What you get
+
+| Area | Capability |
+|------|------------|
+| Control plane | Loopback HTTP API with shared-secret header; snapshot get/put; cache purge |
+| Dashboard | HTML admin on control-plane port + 1 |
+| Observability | Prometheus-style metrics for destination state / latency |
+| Operations | Drain / healthy / maintenance destination states |
+| Discovery | File watch, DNS poll; Consul / Kubernetes best-effort |
+| Security | CIDR allow-list, JWT/OIDC (JWKS) |
+| WAF | Thin deny-list (paths, methods, headers, body size) — not a full WAF suite |
+| State | Redis fixed-window per-IP rate limit |
+| Resilience | Active HTTP/TCP health probes |
+| Cache | In-memory HTTP response cache (`cache.enable`) |
+
+## See also
+
+- [CLI](/docs/cli)
+- [Configuration](/docs/configuration)
+- [Editions](/docs/editions)

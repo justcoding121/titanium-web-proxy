@@ -1,6 +1,8 @@
 # Titanium Web Proxy
 
-A lightweight, asynchronous HTTP(S) proxy server for .NET. This wiki documents the major features and the most common APIs. For the full type reference, see the [API documentation](https://justcoding121.github.io/titanium-web-proxy/docs/api/Titanium.Web.Proxy.ProxyServer.html).
+> Canonical product docs, downloads, and release notes: **[https://titaniumproxy.com](https://titaniumproxy.com)**
+
+A lightweight, asynchronous HTTP(S) proxy server for .NET. This wiki documents the major features and the most common APIs. For the full type reference, see the [API documentation](https://titaniumproxy.com/api/Titanium.Web.Proxy.ProxyServer.html).
 
 ## Contents
 

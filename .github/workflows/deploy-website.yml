@@ -1,0 +1,77 @@
+name: Deploy website
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'website/**'
+      - 'docs/api/**'
+      - '.github/workflows/deploy-website.yml'
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'website/**'
+      - 'docs/api/**'
+      - '.github/workflows/deploy-website.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install and build
+        working-directory: website
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm ci
+          npm run docs:build
+
+      - name: Copy DocFX API into site
+        shell: bash
+        run: |
+          mkdir -p website/.vitepress/dist/api
+          if [ -d docs/api ]; then
+            cp -a docs/api/. website/.vitepress/dist/api/
+          else
+            echo "Warning: docs/api missing; API pages will not be published"
+          fi
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/.vitepress/dist
+
+  deploy:
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/develop' || github.event_name == 'release' || github.event_name == 'workflow_dispatch')
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
