@@ -27,4 +27,7 @@
   <ItemGroup>
     <None Include="LICENSE" Pack="true" PackagePath="" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Certes" Version="3.0.4" />
+  </ItemGroup>
 </Project>

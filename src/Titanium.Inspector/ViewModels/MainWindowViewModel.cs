@@ -41,6 +41,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _breakpointEditBody = "";
     private string? _scriptOnRequest;
     private string? _scriptOnResponse;
+    private int _selectedDetailTabIndex;
     private string _composerMethod = "GET";
     private string _composerUrl = "";
     private string _composerHeaders = "";
@@ -562,6 +563,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public string SelectedHex { get => _selectedHex; set => SetField(ref _selectedHex, value); }
     public string SelectedFrames { get => _selectedFrames; set => SetField(ref _selectedFrames, value); }
 
+    /// <summary>Bound to detail TabControl SelectedIndex for automation / tests.</summary>
+    public int SelectedDetailTabIndex
+    {
+        get => _selectedDetailTabIndex;
+        set => SetField(ref _selectedDetailTabIndex, value);
+    }
+
     public string StatusText
     {
         get => _statusText;
@@ -1007,7 +1015,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 internal sealed class RelayCommand(Func<Task> execute) : ICommand
 {
     public bool CanExecute(object? parameter) => true;
-    public async void Execute(object? parameter) => await execute();
+
+    public async void Execute(object? parameter)
+    {
+        try
+        {
+            await execute().ConfigureAwait(false);
+        }
+        catch
+        {
+            // UI commands must not tear down the process (async void).
+        }
+    }
+
 #pragma warning disable CS0067
     public event EventHandler? CanExecuteChanged;
 #pragma warning restore CS0067

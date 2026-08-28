@@ -38,9 +38,11 @@ A lightweight, high performing HTTP(S) proxy server for .NET. It acts as a man i
 | Product | What it is | License | How you get it |
 |---------|------------|---------|----------------|
 | **Titanium.Web.Proxy** | Core library. Embed a MITM and/or reverse proxy in your .NET app | MIT | NuGet |
-| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse proxy: `run`, `test`, `version`, `update` | MIT | GitHub Releases, winget, or `dotnet tool` |
-| **Titanium.Plus** | Optional add-on for control plane, ops, observability, and dashboard | [PolyForm NC](licenses/PolyForm-Noncommercial-1.0.0.txt) | GitHub Releases |
-| **Titanium Inspector** | Desktop HTTP(S) debugger (session grid, inspectors, AutoResponder, breakpoints, HAR) | [PolyForm NC](licenses/PolyForm-Noncommercial-1.0.0.txt) | Windows MSI, winget, or GitHub Releases |
+| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge proxy: `run`, `test`, `version`, `update` | MIT | GitHub Releases, winget, or `dotnet tool` |
+| **Titanium.Plus** | Optional advanced features: control plane, ops, observability, and dashboard | [PolyForm NC](licenses/PolyForm-Noncommercial-1.0.0.txt) | GitHub Releases |
+| **Titanium Inspector** | Desktop MITM debugger (session grid, inspectors, AutoResponder, breakpoints, HAR) | [PolyForm NC](licenses/PolyForm-Noncommercial-1.0.0.txt) | Windows MSI, winget, or GitHub Releases |
+
+CLI and Plus target reverse-proxy / edge workloads (routing, load balancing, health, discovery). Inspector is the MITM debugging product; the Core library supports both modes.
 
 ## Installation
 

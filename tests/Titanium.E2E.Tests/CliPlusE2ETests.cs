@@ -153,4 +153,222 @@ public class CliPlusE2ETests
             harness.Dispose();
         }
     }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Plus_PutThenLiveReroute()
+    {
+        using var originA = new EchoOrigin();
+        using var originB = new EchoOrigin();
+        var listen = CliProcessHarness.GetFreePort();
+        var control = CliProcessHarness.GetFreePort();
+        const string secret = "e2e-reroute";
+        var cfg = ConfigFixtures.WritePlusRoutes(_tempDir, listen, originA.Port, control, secret);
+        using var harness = new CliProcessHarness();
+        harness.EnsurePlusDllBesideCli(copy: true);
+        await harness.StartRunAsync(cfg, new Dictionary<string, string?>
+        {
+            ["TITANIUM_PLUS_ALLOW_DEV_SECRET"] = "1",
+        });
+        try
+        {
+            using var handler = new HttpClientHandler
+            {
+                Proxy = new WebProxy($"http://127.0.0.1:{listen}"),
+                UseProxy = true,
+            };
+            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+            using var directHandler = new HttpClientHandler { UseProxy = false };
+            using var direct = new HttpClient(directHandler) { Timeout = TimeSpan.FromSeconds(15) };
+
+            await WaitControlPlaneAsync(direct, control);
+
+            // Route match uses path; absolute-form URL host is ignored for Prefix /.
+            var first = await http.GetAsync("http://example.invalid/a");
+            Assert.AreEqual(HttpStatusCode.OK, first.StatusCode);
+            StringAssert.Contains(await first.Content.ReadAsStringAsync(), "echo:");
+
+            var putBody = $$"""
+                {
+                  "clusters": [
+                    {
+                      "id": "c1",
+                      "destinations": [ { "id": "dB", "address": "127.0.0.1", "port": {{originB.Port}} } ],
+                      "algorithm": "RoundRobin"
+                    }
+                  ],
+                  "routes": [
+                    {
+                      "id": "r1",
+                      "clusterId": "c1",
+                      "order": 1,
+                      "match": { "path": "/", "pathKind": "Prefix" }
+                    }
+                  ]
+                }
+                """;
+            using var put = new HttpRequestMessage(HttpMethod.Put, $"http://127.0.0.1:{control}/v1/snapshot")
+            {
+                Content = new StringContent(putBody, Encoding.UTF8, "application/json"),
+            };
+            put.Headers.TryAddWithoutValidation(ControlPlaneServer.SharedSecretHeader, secret);
+            Assert.AreEqual(HttpStatusCode.OK, (await direct.SendAsync(put)).StatusCode);
+
+            var second = await http.GetAsync("http://example.invalid/b");
+            Assert.AreEqual(HttpStatusCode.OK, second.StatusCode);
+            var body = await second.Content.ReadAsStringAsync();
+            StringAssert.Contains(body, "/b");
+        }
+        finally
+        {
+            harness.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Plus_WafDeniesPath_AndCidrAllow()
+    {
+        using var origin = new EchoOrigin();
+        var listen = CliProcessHarness.GetFreePort();
+        var control = CliProcessHarness.GetFreePort();
+        const string secret = "e2e-waf";
+        var cfg = ConfigFixtures.WritePlusOptions(_tempDir, listen, origin.Port, control, secret,
+            new Dictionary<string, string>
+            {
+                ["waf.enabled"] = "true",
+                ["waf.denyPaths"] = "^/blocked",
+                ["security.allowCidrs"] = "127.0.0.0/8,::1/128",
+                ["state.redis"] = "127.0.0.1:1",
+            },
+            useRoutes: true);
+        using var harness = new CliProcessHarness();
+        harness.EnsurePlusDllBesideCli(copy: true);
+        await harness.StartRunAsync(cfg, new Dictionary<string, string?>
+        {
+            ["TITANIUM_PLUS_ALLOW_DEV_SECRET"] = "1",
+        });
+        try
+        {
+            using var handler = new HttpClientHandler
+            {
+                Proxy = new WebProxy($"http://127.0.0.1:{listen}"),
+                UseProxy = true,
+            };
+            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+            using var direct = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            await WaitControlPlaneAsync(direct, control);
+
+            var ok = await http.GetAsync("http://example.invalid/ok");
+            Assert.AreEqual(HttpStatusCode.OK, ok.StatusCode);
+
+            var denied = await http.GetAsync("http://example.invalid/blocked");
+            Assert.AreEqual(HttpStatusCode.Forbidden, denied.StatusCode);
+
+            Assert.IsTrue(
+                harness.StdOut.Contains("redis", StringComparison.OrdinalIgnoreCase) ||
+                harness.StdErr.Contains("redis", StringComparison.OrdinalIgnoreCase) ||
+                harness.StdOut.Contains("fail-open", StringComparison.OrdinalIgnoreCase) ||
+                harness.StdOut.Contains("unreachable", StringComparison.OrdinalIgnoreCase) ||
+                harness.StdOut.Contains("running", StringComparison.OrdinalIgnoreCase),
+                harness.StdOut + harness.StdErr);
+
+            HttpResponseMessage? dash = null;
+            var deadline = DateTime.UtcNow.AddSeconds(20);
+            while (DateTime.UtcNow < deadline)
+            {
+                try
+                {
+                    using var dashReq = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{control + 1}/");
+                    dashReq.Headers.TryAddWithoutValidation(ControlPlaneServer.SharedSecretHeader, secret);
+                    dash = await direct.SendAsync(dashReq);
+                    break;
+                }
+                catch
+                {
+                    await Task.Delay(200);
+                }
+            }
+
+            Assert.IsNotNull(dash);
+            Assert.AreEqual(HttpStatusCode.OK, dash!.StatusCode);
+            StringAssert.Contains(await dash.Content.ReadAsStringAsync(), "Titanium Plus");
+        }
+        finally
+        {
+            harness.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Plus_DiscoveryFile_AppliesCluster()
+    {
+        using var origin = new EchoOrigin();
+        var listen = CliProcessHarness.GetFreePort();
+        var control = CliProcessHarness.GetFreePort();
+        const string secret = "e2e-disc";
+        var discFile = Path.Combine(_tempDir, "clusters.json");
+        await File.WriteAllTextAsync(discFile, $$"""
+            {"clusters":[{"id":"from-file","destinations":[{"id":"d1","address":"127.0.0.1","port":{{origin.Port}}}]}]}
+            """);
+        var cfg = ConfigFixtures.WritePlusOptions(_tempDir, listen, origin.Port, control, secret,
+            new Dictionary<string, string>
+            {
+                ["discovery.mode"] = "file",
+                ["discovery.file"] = discFile.Replace("\\", "/"),
+            });
+        using var harness = new CliProcessHarness();
+        harness.EnsurePlusDllBesideCli(copy: true);
+        await harness.StartRunAsync(cfg, new Dictionary<string, string?>
+        {
+            ["TITANIUM_PLUS_ALLOW_DEV_SECRET"] = "1",
+        });
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            await WaitControlPlaneAsync(http, control);
+            using var req = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{control}/v1/snapshot");
+            req.Headers.TryAddWithoutValidation(ControlPlaneServer.SharedSecretHeader, secret);
+            string json = "";
+            for (var i = 0; i < 40; i++)
+            {
+                var resp = await http.SendAsync(req);
+                json = await resp.Content.ReadAsStringAsync();
+                if (json.Contains("from-file", StringComparison.Ordinal))
+                {
+                    break;
+                }
+
+                await Task.Delay(100);
+            }
+
+            StringAssert.Contains(json, "from-file");
+        }
+        finally
+        {
+            harness.Dispose();
+        }
+    }
+
+    private static async Task WaitControlPlaneAsync(HttpClient http, int control)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                using var handler = new HttpClientHandler { UseProxy = false };
+                using var probe = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(2) };
+                _ = await probe.GetAsync($"http://127.0.0.1:{control}/v1/snapshot");
+                return;
+            }
+            catch
+            {
+                await Task.Delay(200);
+            }
+        }
+
+        throw new TimeoutException($"Control plane not reachable on {control}");
+    }
 }

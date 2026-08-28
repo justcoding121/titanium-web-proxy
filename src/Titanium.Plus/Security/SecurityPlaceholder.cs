@@ -1,7 +1,10 @@
+using System.Collections.Concurrent;
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
-using System.Text;
-using System.Text.Json;
+using System.Net.Http.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Tokens;
 using Titanium.Plus;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
@@ -38,8 +41,17 @@ public sealed class AccessSecurity
 
         if (hasJwt)
         {
-            context.Middleware.Add(new JwtAccessMiddleware(authority!));
-            PlusLog.Info(context, $"Plus Security: JWT authority={authority} (MVP structure/exp validation).");
+            options.TryGetValue("security.jwtAudience", out var audience);
+            options.TryGetValue("security.jwksUrl", out var jwksUrl);
+            var middleware = new JwtAccessMiddleware(
+                authority!,
+                audience,
+                jwksUrl,
+                httpClientFactory: null,
+                logger: context.Logger);
+            context.Middleware.Add(middleware);
+            PlusLog.Info(context,
+                $"Plus Security: JWT authority={authority} audience={audience ?? "(any)"} jwks={jwksUrl ?? "(oidc discovery)"}.");
         }
 
         return new AccessSecurity();
@@ -146,16 +158,32 @@ public sealed class CidrAccessMiddleware : IProxyMiddleware
 }
 
 /// <summary>
-/// Validates Authorization Bearer JWT structure and <c>exp</c> when <c>security.jwtAuthority</c> is set.
-/// Full OIDC signature verification can be added later; authority is logged for operators.
+/// Validates Authorization Bearer JWT via OIDC discovery / JWKS (RS256/ES256) with iss/aud/nbf/exp.
 /// </summary>
 public sealed class JwtAccessMiddleware : IProxyMiddleware
 {
+    private static readonly TimeSpan ClockSkew = TimeSpan.FromMinutes(2);
     private readonly string _authority;
+    private readonly string? _audience;
+    private readonly string? _jwksUrlOverride;
+    private readonly Func<HttpClient>? _httpClientFactory;
+    private readonly ILogger? _logger;
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private TokenValidationParameters? _validation;
+    private DateTimeOffset _keysLoadedAt = DateTimeOffset.MinValue;
 
-    public JwtAccessMiddleware(string jwtAuthority)
+    public JwtAccessMiddleware(
+        string jwtAuthority,
+        string? audience = null,
+        string? jwksUrl = null,
+        Func<HttpClient>? httpClientFactory = null,
+        ILogger? logger = null)
     {
-        _authority = jwtAuthority;
+        _authority = jwtAuthority.TrimEnd('/');
+        _audience = string.IsNullOrWhiteSpace(audience) ? null : audience;
+        _jwksUrlOverride = string.IsNullOrWhiteSpace(jwksUrl) ? null : jwksUrl;
+        _httpClientFactory = httpClientFactory;
+        _logger = logger;
     }
 
     public string Authority => _authority;
@@ -166,7 +194,7 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
         CancellationToken cancellationToken)
     {
         var token = TryGetBearerToken(context.Session);
-        if (token is null || !TryValidateJwt(token, out _))
+        if (token is null || !await TryValidateJwtAsync(token, cancellationToken).ConfigureAwait(false))
         {
             CidrAccessMiddleware.Deny(context, HttpStatusCode.Unauthorized, "unauthorized");
             return;
@@ -198,8 +226,35 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
         return null;
     }
 
-    /// <summary>MVP: three base64url segments, JSON payload, optional exp not expired.</summary>
-    public static bool TryValidateJwt(string token, out string? error)
+    /// <summary>Validates JWT signature and standard claims using cached JWKS keys.</summary>
+    public async Task<bool> TryValidateJwtAsync(string token, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var parameters = await EnsureValidationParametersAsync(cancellationToken).ConfigureAwait(false);
+            if (parameters is null)
+            {
+                return false;
+            }
+
+            var handler = new JwtSecurityTokenHandler();
+            handler.ValidateToken(token, parameters, out _);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogDebug(ex, "Plus Security: JWT validation failed");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Synchronous validate for unit tests when keys are preloaded via <see cref="SetValidationParametersForTests"/>.
+    /// </summary>
+    public static bool TryValidateJwt(string token, out string? error) =>
+        TryValidateJwt(token, validationParameters: null, out error);
+
+    public static bool TryValidateJwt(string token, TokenValidationParameters? validationParameters, out string? error)
     {
         error = null;
         var parts = token.Split('.');
@@ -209,35 +264,16 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
             return false;
         }
 
+        if (validationParameters is null)
+        {
+            error = "JWKS validation parameters required";
+            return false;
+        }
+
         try
         {
-            var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(parts[1]));
-            using var doc = JsonDocument.Parse(payloadJson);
-            if (doc.RootElement.TryGetProperty("exp", out var expEl))
-            {
-                long exp;
-                if (expEl.ValueKind == JsonValueKind.Number)
-                {
-                    exp = expEl.GetInt64();
-                }
-                else if (expEl.ValueKind == JsonValueKind.String && long.TryParse(expEl.GetString(), out var parsed))
-                {
-                    exp = parsed;
-                }
-                else
-                {
-                    error = "invalid exp";
-                    return false;
-                }
-
-                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                if (exp < now)
-                {
-                    error = "token expired";
-                    return false;
-                }
-            }
-
+            var handler = new JwtSecurityTokenHandler();
+            handler.ValidateToken(token, validationParameters, out _);
             return true;
         }
         catch (Exception ex)
@@ -247,16 +283,76 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
         }
     }
 
-    private static byte[] Base64UrlDecode(string input)
+    public void SetValidationParametersForTests(TokenValidationParameters parameters)
     {
-        var s = input.Replace('-', '+').Replace('_', '/');
-        switch (s.Length % 4)
+        _validation = parameters;
+        _keysLoadedAt = DateTimeOffset.UtcNow;
+    }
+
+    private async Task<TokenValidationParameters?> EnsureValidationParametersAsync(CancellationToken cancellationToken)
+    {
+        if (_validation is not null && DateTimeOffset.UtcNow - _keysLoadedAt < TimeSpan.FromHours(1))
         {
-            case 2: s += "=="; break;
-            case 3: s += "="; break;
+            return _validation;
         }
 
-        return Convert.FromBase64String(s);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_validation is not null && DateTimeOffset.UtcNow - _keysLoadedAt < TimeSpan.FromHours(1))
+            {
+                return _validation;
+            }
+
+            using var http = _httpClientFactory?.Invoke() ?? new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var jwksUrl = _jwksUrlOverride;
+            if (string.IsNullOrEmpty(jwksUrl))
+            {
+                var discoveryUrl = $"{_authority}/.well-known/openid-configuration";
+                var discovery = await http.GetFromJsonAsync<OidcDiscoveryDocument>(discoveryUrl, cancellationToken)
+                    .ConfigureAwait(false);
+                jwksUrl = discovery?.JwksUri;
+            }
+
+            if (string.IsNullOrEmpty(jwksUrl))
+            {
+                _logger?.LogWarning("Plus Security: could not resolve JWKS URL for {Authority}", _authority);
+                return null;
+            }
+
+            var jwksJson = await http.GetStringAsync(jwksUrl, cancellationToken).ConfigureAwait(false);
+            var keys = JsonWebKeySet.Create(jwksJson).GetSigningKeys();
+            _validation = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = _authority,
+                ValidateAudience = _audience is not null,
+                ValidAudience = _audience,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKeys = keys,
+                ClockSkew = ClockSkew,
+                RequireExpirationTime = true,
+                RequireSignedTokens = true,
+            };
+            _keysLoadedAt = DateTimeOffset.UtcNow;
+            return _validation;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Plus Security: failed to load JWKS for {Authority}", _authority);
+            return _validation;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private sealed class OidcDiscoveryDocument
+    {
+        [JsonPropertyName("jwks_uri")]
+        public string? JwksUri { get; set; }
     }
 }
 

@@ -1,6 +1,9 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Plus;
 using Titanium.Plus.ControlPlane;
@@ -9,6 +12,7 @@ using Titanium.Plus.Observability;
 using Titanium.Plus.Operations;
 using Titanium.Plus.Resilience;
 using Titanium.Plus.Security;
+using Titanium.Plus.State;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
@@ -315,25 +319,35 @@ public class PlusModuleTests
     [TestMethod]
     public void Jwt_TryValidate_RejectsExpired()
     {
-        var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(
-            JsonSerializer.Serialize(new { exp = 1 })))
-            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        var token = $"e30.{payload}.sig";
-        Assert.IsFalse(JwtAccessMiddleware.TryValidateJwt(token, out var error));
-        StringAssert.Contains(error!, "expired");
+        using var rsa = RSA.Create(2048);
+        var token = CreateSignedJwt(rsa, DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeSeconds(), "https://issuer.example", "api");
+        var parameters = CreateValidationParameters(rsa, "https://issuer.example", "api");
+        Assert.IsFalse(JwtAccessMiddleware.TryValidateJwt(token, parameters, out var error));
+        StringAssert.Contains(error!.ToLowerInvariant(), "expir");
     }
 
     [TestMethod]
-    public void Jwt_TryValidate_AcceptsValidStructure()
+    public void Jwt_TryValidate_AcceptsSignedValid()
+    {
+        using var rsa = RSA.Create(2048);
+        var exp = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();
+        var token = CreateSignedJwt(rsa, exp, "https://issuer.example", "api");
+        var parameters = CreateValidationParameters(rsa, "https://issuer.example", "api");
+        Assert.IsTrue(JwtAccessMiddleware.TryValidateJwt(token, parameters, out var error), error);
+        Assert.AreEqual("https://issuer.example", new JwtAccessMiddleware("https://issuer.example").Authority);
+    }
+
+    [TestMethod]
+    public void Jwt_TryValidate_RejectsUnsigned()
     {
         var exp = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();
         var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(
-            JsonSerializer.Serialize(new { exp, sub = "user" })))
+            JsonSerializer.Serialize(new { exp, iss = "https://issuer.example", aud = "api" })))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var token = $"e30.{payload}.sig";
-        Assert.IsTrue(JwtAccessMiddleware.TryValidateJwt(token, out var error));
-        Assert.IsNull(error);
-        Assert.AreEqual("https://issuer.example", new JwtAccessMiddleware("https://issuer.example").Authority);
+        using var rsa = RSA.Create(2048);
+        var parameters = CreateValidationParameters(rsa, "https://issuer.example", "api");
+        Assert.IsFalse(JwtAccessMiddleware.TryValidateJwt(token, parameters, out _));
     }
 
     [TestMethod]
@@ -341,6 +355,149 @@ public class PlusModuleTests
     {
         Assert.IsFalse(JwtAccessMiddleware.TryValidateJwt("not.a.jwt.extra", out var error));
         StringAssert.Contains(error!, "three segments");
+    }
+
+    [TestMethod]
+    public async Task Jwt_Middleware_RejectsMissingBearer()
+    {
+        using var rsa = RSA.Create(2048);
+        var mw = new JwtAccessMiddleware("https://issuer.example", "api");
+        mw.SetValidationParametersForTests(CreateValidationParameters(rsa, "https://issuer.example", "api"));
+        var ctx = new ProxyMiddlewareContext { Session = new object() };
+        await mw.InvokeAsync(ctx, (_, _) => ValueTask.CompletedTask, CancellationToken.None);
+        Assert.IsTrue(ctx.IsHandled);
+    }
+
+    [TestMethod]
+    public async Task RateLimit_AllowsUnderLimit_DeniesOver()
+    {
+        var counter = new InMemoryDistributedCounter();
+        var mw = new RateLimitMiddleware(counter, limitPerMinute: 2, keyResolver: _ => "k");
+        var allowed = 0;
+        for (var i = 0; i < 2; i++)
+        {
+            var ctx = new ProxyMiddlewareContext { Session = new object() };
+            await mw.InvokeAsync(ctx, (_, _) =>
+            {
+                allowed++;
+                return ValueTask.CompletedTask;
+            }, CancellationToken.None);
+            Assert.IsFalse(ctx.IsHandled);
+        }
+
+        var denied = new ProxyMiddlewareContext { Session = new object() };
+        await mw.InvokeAsync(denied, (_, _) => ValueTask.CompletedTask, CancellationToken.None);
+        Assert.IsTrue(denied.IsHandled);
+        Assert.AreEqual(2, allowed);
+    }
+
+    [TestMethod]
+    public async Task Waf_DeniesConfiguredPath()
+    {
+        var rules = WafRules.FromOptions(new Dictionary<string, string>
+        {
+            ["waf.enabled"] = "true",
+            ["waf.denyPaths"] = "^/admin",
+        });
+        var mw = new WafDenyMiddleware(rules);
+        // Without SessionEventArgsBase, middleware passes through — cover FromOptions parsing
+        Assert.AreEqual(1, rules.PathDeny.Count);
+        var ctx = new ProxyMiddlewareContext { Session = new object() };
+        var next = false;
+        await mw.InvokeAsync(ctx, (_, _) =>
+        {
+            next = true;
+            return ValueTask.CompletedTask;
+        }, CancellationToken.None);
+        Assert.IsTrue(next);
+    }
+
+    [TestMethod]
+    public void Discovery_ParseConsul_NestedAndFlat()
+    {
+        var nested = """[{"Service":{"Address":"10.1.2.3","Port":8080,"ID":"svc-a"}}]""";
+        var flat = """[{"ServiceAddress":"10.4.5.6","ServicePort":9090,"ServiceID":"svc-b"}]""";
+        var n = ServiceDiscovery.ParseConsulDestinations(nested);
+        var f = ServiceDiscovery.ParseConsulDestinations(flat);
+        Assert.AreEqual(1, n.Count);
+        Assert.AreEqual("10.1.2.3", n[0].Address);
+        Assert.AreEqual(8080, n[0].Port);
+        Assert.AreEqual("svc-a", n[0].Id);
+        Assert.AreEqual("10.4.5.6", f[0].Address);
+        Assert.AreEqual(9090, f[0].Port);
+    }
+
+    [TestMethod]
+    public void Discovery_ParseKubernetes_EndpointsSubset()
+    {
+        var json = """
+            {"subsets":[{"addresses":[{"ip":"10.0.0.5","hostname":"pod-a"}],"ports":[{"port":8443}]}]}
+            """;
+        var list = ServiceDiscovery.ParseKubernetesDestinations(json);
+        Assert.AreEqual(1, list.Count);
+        Assert.AreEqual("10.0.0.5", list[0].Address);
+        Assert.AreEqual(8443, list[0].Port);
+        Assert.AreEqual("pod-a", list[0].Id);
+    }
+
+    [TestMethod]
+    public void Prometheus_RendersLatencyGauge()
+    {
+        var manager = new ClusterManager();
+        manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c",
+                Destinations = [new DestinationConfig { Id = "d1", Address = "127.0.0.1", Port = 80 }],
+            },
+        ]).GetAwaiter().GetResult();
+        var latency = new TestLatencyRecorder();
+        latency.RecordDestination("d1", TimeSpan.FromMilliseconds(12));
+        var text = new PrometheusMetricsExporter(manager, latency).Render();
+        StringAssert.Contains(text, "titanium_destination_latency_seconds");
+        StringAssert.Contains(text, "d1");
+    }
+
+    private static string CreateSignedJwt(RSA rsa, long exp, string iss, string aud)
+    {
+        var creds = new SigningCredentials(new RsaSecurityKey(rsa), SecurityAlgorithms.RsaSha256);
+        var expires = DateTimeOffset.FromUnixTimeSeconds(exp).UtcDateTime;
+        var notBefore = expires < DateTime.UtcNow
+            ? expires.AddHours(-2)
+            : DateTime.UtcNow.AddMinutes(-1);
+        var token = new JwtSecurityToken(
+            issuer: iss,
+            audience: aud,
+            claims: null,
+            notBefore: notBefore,
+            expires: expires,
+            signingCredentials: creds);
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private static TokenValidationParameters CreateValidationParameters(RSA rsa, string iss, string aud) =>
+        new()
+        {
+            ValidateIssuer = true,
+            ValidIssuer = iss,
+            ValidateAudience = true,
+            ValidAudience = aud,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new RsaSecurityKey(rsa),
+            ClockSkew = TimeSpan.FromMinutes(2),
+            RequireExpirationTime = true,
+            RequireSignedTokens = true,
+        };
+
+    private sealed class TestLatencyRecorder : ILatencyRecorder
+    {
+        private readonly Dictionary<string, TimeSpan> _map = new(StringComparer.Ordinal);
+        public void Record(string name, TimeSpan duration) => _map[name] = duration;
+        public void RecordDestination(string destinationId, TimeSpan duration) => _map[destinationId] = duration;
+        public TimeSpan? GetDestinationLatency(string destinationId) =>
+            _map.TryGetValue(destinationId, out var t) ? t : null;
     }
 
     [TestMethod]

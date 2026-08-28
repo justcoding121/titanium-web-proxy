@@ -106,4 +106,7 @@ public sealed class CertificatesConfig
     public string? AcmeEmail { get; set; }
 
     public string? AcmeDomain { get; set; }
+
+    /// <summary>ACME directory URL (e.g. Pebble or Let's Encrypt). Required for automated issue.</summary>
+    public string? AcmeDirectory { get; set; }
 }

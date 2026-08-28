@@ -61,8 +61,19 @@ public sealed class CliProcessHarness : IDisposable
             return;
         }
 
-        var plus = LocatePlusDll();
-        File.Copy(plus, dest, overwrite: true);
+        var plusDir = Path.GetDirectoryName(LocatePlusDll())!;
+        foreach (var file in Directory.EnumerateFiles(plusDir, "*.dll"))
+        {
+            var name = Path.GetFileName(file);
+            // Skip Core/Abstractions already provided by the CLI host.
+            if (name.StartsWith("Titanium.Web.Proxy", StringComparison.OrdinalIgnoreCase) &&
+                !name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            File.Copy(file, Path.Combine(CliDirectory, name), overwrite: true);
+        }
     }
 
     public async Task<(int ExitCode, string StdOut, string StdErr)> RunOnceAsync(

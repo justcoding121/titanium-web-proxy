@@ -22,6 +22,12 @@ internal static class PlusLoader
         try
         {
             var alc = new AssemblyLoadContext("Titanium.Plus", isCollectible: true);
+            alc.Resolving += (_, name) =>
+            {
+                var candidate = Path.Combine(AppContext.BaseDirectory, name.Name + ".dll");
+                return File.Exists(candidate) ? alc.LoadFromAssemblyPath(candidate) : null;
+            };
+
             var asm = alc.LoadFromAssemblyPath(dllPath);
             foreach (var type in asm.GetExportedTypes())
             {

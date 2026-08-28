@@ -88,6 +88,27 @@ internal static class RunCommand
 
         RefreshReverseProxy();
         proxy.Start();
+
+        if (loaded.Config.Certificates is { AcmeEmail: not null, AcmeDomain: not null } certs)
+        {
+            var directory = certs.AcmeDirectory ?? Environment.GetEnvironmentVariable("TITANIUM_ACME_DIRECTORY");
+            if (!string.IsNullOrWhiteSpace(directory) ||
+                !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TITANIUM_ACME_CERT_PATH")))
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await CertificateBootstrap.IssueOrRenewAsync(proxy, certs).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        await Console.Error.WriteLineAsync($"ACME IssueOrRenew failed: {ex.Message}");
+                    }
+                });
+            }
+        }
+
         Console.WriteLine("Titanium proxy running. Press Ctrl+C to stop.");
         var tcs = new TaskCompletionSource();
         Console.CancelKeyPress += (_, e) =>

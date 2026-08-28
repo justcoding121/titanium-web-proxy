@@ -221,4 +221,182 @@ public static class ConfigFixtures
         File.WriteAllText(path, "listeners:\n  - port: -1\n");
         return path;
     }
+
+    public static string WriteSiteFile(string dir, int listenPort, int originPort)
+    {
+        // Site-file dialect has no listen directive — CLI defaults to explicit :8000.
+        // Use a free-port YAML wrapper is not the dialect; for process E2E we validate
+        // parse via `test` and run with an absolute listen via companion yaml is wrong.
+        // Instead write site-file that maps host→origin and rely on default listener when
+        // listenPort == 8000; callers should pass GetFreePort only for unique temp names.
+        var path = Path.Combine(dir, $"site-{listenPort}.twp");
+        File.WriteAllText(path, $"127.0.0.1 / => http://127.0.0.1:{originPort}\n");
+        return path;
+    }
+
+    public static string WriteHttpServerConf(string dir, int listenPort, int originPort)
+    {
+        var path = Path.Combine(dir, $"http-{listenPort}.conf");
+        File.WriteAllText(path, $$"""
+            listen {{listenPort}};
+            server_name localhost;
+            location / {
+              proxy_pass http://127.0.0.1:{{originPort}};
+            }
+            """);
+        return path;
+    }
+
+    public static string WriteLogging(string dir, int listenPort, int originPort, string logFile)
+    {
+        var path = Path.Combine(dir, $"log-{listenPort}.yaml");
+        File.WriteAllText(path, $"""
+            schemaVersion: "7.0"
+            listeners:
+              - host: "127.0.0.1"
+                port: {listenPort}
+                decryptSsl: false
+                forwardHost: "127.0.0.1"
+                forwardPort: {originPort}
+            logging:
+              enabled: true
+              minimumLevel: Information
+              enableConsole: true
+              enableFile: true
+              filePath: "{logFile.Replace("\\", "/")}"
+            """);
+        return path;
+    }
+
+    public static string WriteListenerFlags(string dir, int listenPort, int originPort, bool enableHttp2, bool enableHttp3)
+    {
+        var path = Path.Combine(dir, $"flags-{listenPort}.yaml");
+        // EnableHttp3 requires DecryptSsl on transparent endpoints.
+        File.WriteAllText(path, $"""
+            schemaVersion: "7.0"
+            listeners:
+              - host: "127.0.0.1"
+                port: {listenPort}
+                decryptSsl: {enableHttp3.ToString().ToLowerInvariant()}
+                forwardHost: "127.0.0.1"
+                forwardPort: {originPort}
+                enableHttp2: {enableHttp2.ToString().ToLowerInvariant()}
+                enableHttp3: {enableHttp3.ToString().ToLowerInvariant()}
+            """);
+        return path;
+    }
+
+    public static string WritePlusOptions(
+        string dir,
+        int listenPort,
+        int originPort,
+        int controlPort,
+        string secret,
+        Dictionary<string, string> options,
+        bool useRoutes = false)
+    {
+        var path = Path.Combine(dir, $"twp-plus-opts-{listenPort}.json");
+        var optsJson = string.Join(",\n", options.Select(kv =>
+            $"      \"{kv.Key}\": \"{kv.Value.Replace("\\", "\\\\")}\""));
+        var listener = useRoutes
+            ? $$"""{ "host": "127.0.0.1", "port": {{listenPort}}, "decryptSsl": false }"""
+            : $$"""{ "host": "127.0.0.1", "port": {{listenPort}}, "decryptSsl": false, "forwardHost": "127.0.0.1", "forwardPort": {{originPort}} }""";
+        var routesBlock = useRoutes
+            ? $$"""
+              "routes": [
+                {
+                  "id": "r1",
+                  "clusterId": "c1",
+                  "order": 1,
+                  "match": { "path": "/", "pathKind": "Prefix" }
+                }
+              ],
+              "clusters": [
+                {
+                  "id": "c1",
+                  "algorithm": "RoundRobin",
+                  "destinations": [
+                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}} }
+                  ]
+                }
+              ],
+            """
+            : "";
+        File.WriteAllText(path, $$"""
+            {
+              "schemaVersion": "7.0",
+              "listeners": [ {{listener}} ],
+              {{routesBlock}}
+              "plus": {
+                "enabled": true,
+                "controlPlane": {
+                  "host": "127.0.0.1",
+                  "port": {{controlPort}},
+                  "sharedSecret": "{{secret}}"
+                },
+                "options": {
+            {{optsJson}}
+                }
+              }
+            }
+            """);
+        return path;
+    }
+
+    public static string WritePlusRoutes(string dir, int listenPort, int originPort, int controlPort, string secret)
+    {
+        var path = Path.Combine(dir, $"twp-plus-routes-{listenPort}.json");
+        File.WriteAllText(path, $$"""
+            {
+              "schemaVersion": "7.0",
+              "listeners": [
+                { "host": "127.0.0.1", "port": {{listenPort}}, "decryptSsl": false }
+              ],
+              "routes": [
+                {
+                  "id": "r1",
+                  "clusterId": "c1",
+                  "order": 1,
+                  "match": { "path": "/", "pathKind": "Prefix" }
+                }
+              ],
+              "clusters": [
+                {
+                  "id": "c1",
+                  "algorithm": "RoundRobin",
+                  "destinations": [
+                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}} }
+                  ]
+                }
+              ],
+              "plus": {
+                "enabled": true,
+                "controlPlane": {
+                  "host": "127.0.0.1",
+                  "port": {{controlPort}},
+                  "sharedSecret": "{{secret}}"
+                }
+              }
+            }
+            """);
+        return path;
+    }
+
+    public static string WriteAcmeNoDirectory(string dir, int listenPort, int originPort)
+    {
+        var path = Path.Combine(dir, $"acme-{listenPort}.yaml");
+        File.WriteAllText(path, $"""
+            schemaVersion: "7.0"
+            listeners:
+              - host: "127.0.0.1"
+                port: {listenPort}
+                decryptSsl: true
+                forwardHost: "127.0.0.1"
+                forwardPort: {originPort}
+            certificates:
+              acmeEmail: "test@example.com"
+              acmeDomain: "example.test"
+            """);
+        return path;
+    }
 }

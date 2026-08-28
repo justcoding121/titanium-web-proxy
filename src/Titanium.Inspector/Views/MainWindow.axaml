@@ -6,18 +6,18 @@
         Title="Titanium Inspector"
         Width="1280" Height="800">
   <DockPanel>
-    <Menu DockPanel.Dock="Top">
-      <MenuItem Header="_File">
-        <MenuItem Header="Export HAR…" Command="{Binding ExportHarCommand}" />
-        <MenuItem Header="Import HAR…" Command="{Binding ImportHarCommand}" />
-        <MenuItem Header="Export archive…" Command="{Binding ExportArchiveCommand}" />
-        <MenuItem Header="Import archive from Desktop…" Command="{Binding ImportArchiveCommand}" />
+    <Menu DockPanel.Dock="Top" x:Name="MainMenu" AutomationProperties.AutomationId="MainMenu">
+      <MenuItem Header="_File" AutomationProperties.AutomationId="MenuFile">
+        <MenuItem Header="Export HAR…" Command="{Binding ExportHarCommand}" AutomationProperties.AutomationId="MenuExportHar" />
+        <MenuItem Header="Import HAR…" Command="{Binding ImportHarCommand}" AutomationProperties.AutomationId="MenuImportHar" />
+        <MenuItem Header="Export archive…" Command="{Binding ExportArchiveCommand}" AutomationProperties.AutomationId="MenuExportArchive" />
+        <MenuItem Header="Import archive from Desktop…" Command="{Binding ImportArchiveCommand}" AutomationProperties.AutomationId="MenuImportArchive" />
       </MenuItem>
-      <MenuItem Header="_Capture">
-        <MenuItem Header="Start interception" Command="{Binding StartCaptureCommand}" />
-        <MenuItem Header="Stop interception" Command="{Binding StopCaptureCommand}" />
+      <MenuItem Header="_Capture" AutomationProperties.AutomationId="MenuCapture">
+        <MenuItem Header="Start interception" Command="{Binding StartCaptureCommand}" AutomationProperties.AutomationId="MenuStartCapture" />
+        <MenuItem Header="Stop interception" Command="{Binding StopCaptureCommand}" AutomationProperties.AutomationId="MenuStopCapture" />
         <MenuItem Header="Capturing on/off" Command="{Binding ToggleCapturingCommand}" />
-        <MenuItem Header="Clear sessions" Command="{Binding ClearSessionsCommand}" />
+        <MenuItem Header="Clear sessions" Command="{Binding ClearSessionsCommand}" AutomationProperties.AutomationId="MenuClearSessions" />
         <Separator />
         <MenuItem Header="Bind address">
           <TextBox Width="160" Text="{Binding BindAddress}" Watermark="127.0.0.1 or 0.0.0.0" />
@@ -26,15 +26,15 @@
           <TextBox Width="80" Text="{Binding BindPort}" />
         </MenuItem>
         <Separator />
-        <MenuItem Header="Toggle system proxy" Command="{Binding ToggleSystemProxyCommand}" />
-        <MenuItem Header="Install root CA (current user)" Command="{Binding InstallCaCommand}" />
+        <MenuItem Header="Toggle system proxy" Command="{Binding ToggleSystemProxyCommand}" AutomationProperties.AutomationId="MenuToggleSystemProxy" />
+        <MenuItem Header="Install root CA (current user)" Command="{Binding InstallCaCommand}" AutomationProperties.AutomationId="MenuInstallCa" />
         <MenuItem Header="Untrust root CA" Command="{Binding UntrustCaCommand}" />
         <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" />
-        <MenuItem Header="Device CA setup…" Command="{Binding DeviceCaSetupCommand}" />
-        <MenuItem Header="Enable debug file logging" Command="{Binding ToggleDebugLoggingCommand}" />
+        <MenuItem Header="Device CA setup…" Command="{Binding DeviceCaSetupCommand}" AutomationProperties.AutomationId="MenuDeviceCa" />
+        <MenuItem Header="Enable debug file logging" Command="{Binding ToggleDebugLoggingCommand}" AutomationProperties.AutomationId="MenuDebugLog" />
       </MenuItem>
       <MenuItem Header="_Session">
-        <MenuItem Header="Replay selected" Command="{Binding ReplayCommand}" />
+        <MenuItem Header="Replay selected" Command="{Binding ReplayCommand}" AutomationProperties.AutomationId="MenuReplay" />
       </MenuItem>
       <MenuItem Header="_Help">
         <MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}" />
@@ -43,13 +43,15 @@
     <Grid ColumnDefinitions="2*,*" RowDefinitions="Auto,*,Auto">
       <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="8" Spacing="12">
         <TextBox Width="360" Watermark="Search: method:GET status:200 host:example is:ws"
-                 Text="{Binding SearchQuery}" />
+                 Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
         <TextBox Width="120" Watermark="Bind address" Text="{Binding BindAddress}" />
         <TextBox Width="70" Watermark="Port" Text="{Binding BindPort}" />
-        <CheckBox Content="Capturing" IsChecked="{Binding Capturing}" />
-        <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}" IsEnabled="False" />
+        <CheckBox Content="Capturing" IsChecked="{Binding Capturing}" AutomationProperties.AutomationId="CapturingCheck" />
+        <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}" IsEnabled="False" AutomationProperties.AutomationId="SystemProxyCheck" />
       </StackPanel>
       <DataGrid Grid.Row="1" Grid.Column="0" Margin="8"
+                x:Name="SessionsGrid"
+                AutomationProperties.AutomationId="SessionsGrid"
                 ItemsSource="{Binding Sessions}"
                 SelectedItem="{Binding SelectedSession}"
                 IsReadOnly="True"
@@ -67,83 +69,107 @@
           <DataGridTextColumn Header="Process" Binding="{Binding ProcessDisplay}" Width="110" />
         </DataGrid.Columns>
       </DataGrid>
-      <TabControl Grid.Row="1" Grid.Column="1" Margin="8">
-        <TabItem Header="Headers">
+      <TabControl Grid.Row="1" Grid.Column="1" Margin="8"
+                  x:Name="DetailTabs"
+                  AutomationProperties.AutomationId="DetailTabs"
+                  SelectedIndex="{Binding SelectedDetailTabIndex}">
+        <TabItem Header="Headers" AutomationProperties.AutomationId="TabHeaders">
           <TextBox IsReadOnly="True" Text="{Binding SelectedHeaders}" AcceptsReturn="True" TextWrapping="Wrap"
-                   FontFamily="Consolas,Courier New,monospace" />
+                   FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="HeadersText" />
         </TabItem>
-        <TabItem Header="Body">
+        <TabItem Header="Body" AutomationProperties.AutomationId="TabBody">
           <TextBox IsReadOnly="True" Text="{Binding SelectedBody}" AcceptsReturn="True" TextWrapping="Wrap"
-                   FontFamily="Consolas,Courier New,monospace" />
+                   FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="BodyText" />
         </TabItem>
-        <TabItem Header="Hex">
+        <TabItem Header="Hex" AutomationProperties.AutomationId="TabHex">
           <TextBox IsReadOnly="True" Text="{Binding SelectedHex}" AcceptsReturn="True" TextWrapping="Wrap"
-                   FontFamily="Consolas,Courier New,monospace" />
+                   FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="HexText" />
         </TabItem>
-        <TabItem Header="Frames">
+        <TabItem Header="Frames" AutomationProperties.AutomationId="TabFrames">
           <TextBox IsReadOnly="True" Text="{Binding SelectedFrames}" AcceptsReturn="True" TextWrapping="Wrap"
-                   FontFamily="Consolas,Courier New,monospace" />
+                   FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="FramesText" />
         </TabItem>
-        <TabItem Header="Composer">
+        <TabItem Header="Composer" AutomationProperties.AutomationId="TabComposer">
           <ScrollViewer>
             <StackPanel Margin="8" Spacing="8">
               <Grid ColumnDefinitions="Auto,*" Margin="0">
-                <TextBox Grid.Column="0" Width="80" Watermark="Method" Text="{Binding ComposerMethod}" Margin="0,0,8,0" />
-                <TextBox Grid.Column="1" Watermark="URL" Text="{Binding ComposerUrl}" />
+                <TextBox Grid.Column="0" Width="80" Watermark="Method" Text="{Binding ComposerMethod}" Margin="0,0,8,0"
+                         AutomationProperties.AutomationId="ComposerMethod" />
+                <TextBox Grid.Column="1" Watermark="URL" Text="{Binding ComposerUrl}"
+                         AutomationProperties.AutomationId="ComposerUrl" />
               </Grid>
               <TextBox Watermark="Headers (Name: Value per line)" Text="{Binding ComposerHeaders}"
-                       AcceptsReturn="True" Height="100" FontFamily="Consolas,Courier New,monospace" />
+                       AcceptsReturn="True" Height="100" FontFamily="Consolas,Courier New,monospace"
+                       AutomationProperties.AutomationId="ComposerHeaders" />
               <TextBox Watermark="Body" Text="{Binding ComposerBody}"
-                       AcceptsReturn="True" Height="120" FontFamily="Consolas,Courier New,monospace" />
+                       AcceptsReturn="True" Height="120" FontFamily="Consolas,Courier New,monospace"
+                       AutomationProperties.AutomationId="ComposerBody" />
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="Load from selected" Command="{Binding LoadFromSelectedCommand}" />
-                <Button Content="Send" Command="{Binding SendComposerCommand}" />
+                <Button Content="Load from selected" Command="{Binding LoadFromSelectedCommand}"
+                        AutomationProperties.AutomationId="ComposerLoad" />
+                <Button Content="Send" Command="{Binding SendComposerCommand}"
+                        AutomationProperties.AutomationId="ComposerSend" />
               </StackPanel>
             </StackPanel>
           </ScrollViewer>
         </TabItem>
-        <TabItem Header="Breakpoints">
+        <TabItem Header="Breakpoints" AutomationProperties.AutomationId="TabBreakpoints">
           <StackPanel Margin="8" Spacing="8">
-            <CheckBox Content="Enabled" IsChecked="{Binding Breakpoints.Enabled}" />
-            <CheckBox Content="Break on response" IsChecked="{Binding BreakpointOnResponse}" />
-            <TextBox Watermark="URL filter" Text="{Binding Breakpoints.UrlFilter}" />
+            <CheckBox Content="Enabled" IsChecked="{Binding Breakpoints.Enabled}"
+                      AutomationProperties.AutomationId="BreakpointEnabled" />
+            <CheckBox Content="Break on response" IsChecked="{Binding BreakpointOnResponse}"
+                      AutomationProperties.AutomationId="BreakpointOnResponse" />
+            <TextBox Watermark="URL filter" Text="{Binding Breakpoints.UrlFilter}"
+                     AutomationProperties.AutomationId="BreakpointUrlFilter" />
             <TextBox Watermark="Edit body (apply then Continue)" Text="{Binding BreakpointEditBody}"
-                     AcceptsReturn="True" Height="80" FontFamily="Consolas,Courier New,monospace" />
+                     AcceptsReturn="True" Height="80" FontFamily="Consolas,Courier New,monospace"
+                     AutomationProperties.AutomationId="BreakpointEditBody" />
             <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Content="Apply edit body" Command="{Binding ApplyEditBodyCommand}" />
-              <Button Content="Continue" Command="{Binding ContinueBreakpointCommand}" />
-              <Button Content="Abort" Command="{Binding AbortBreakpointCommand}" />
+              <Button Content="Apply edit body" Command="{Binding ApplyEditBodyCommand}"
+                      AutomationProperties.AutomationId="BreakpointApply" />
+              <Button Content="Continue" Command="{Binding ContinueBreakpointCommand}"
+                      AutomationProperties.AutomationId="BreakpointContinue" />
+              <Button Content="Abort" Command="{Binding AbortBreakpointCommand}"
+                      AutomationProperties.AutomationId="BreakpointAbort" />
             </StackPanel>
           </StackPanel>
         </TabItem>
-        <TabItem Header="AutoResponder">
+        <TabItem Header="AutoResponder" AutomationProperties.AutomationId="TabAutoResponder">
           <StackPanel Margin="8" Spacing="8">
-            <CheckBox Content="Enabled (before breakpoints)" IsChecked="{Binding AutoResponder.Enabled}" />
+            <CheckBox Content="Enabled (before breakpoints)" IsChecked="{Binding AutoResponder.Enabled}"
+                      AutomationProperties.AutomationId="AutoResponderEnabled" />
             <ListBox ItemsSource="{Binding AutoResponder.Rules}"
                      SelectedItem="{Binding AutoResponder.SelectedRule}"
                      Height="120"
-                     MinHeight="80">
+                     MinHeight="80"
+                     AutomationProperties.AutomationId="AutoResponderRules">
               <ListBox.ItemTemplate>
                 <DataTemplate>
                   <TextBlock Text="{Binding Display}" />
                 </DataTemplate>
               </ListBox.ItemTemplate>
             </ListBox>
-            <TextBox Watermark="Match URL (* wildcards)" Text="{Binding AutoResponderMatch}" />
+            <TextBox Watermark="Match URL (* wildcards)" Text="{Binding AutoResponderMatch}"
+                     AutomationProperties.AutomationId="AutoResponderMatch" />
             <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBox Watermark="Status" Text="{Binding AutoResponderStatus}" Width="80" />
+              <TextBox Watermark="Status" Text="{Binding AutoResponderStatus}" Width="80"
+                       AutomationProperties.AutomationId="AutoResponderStatus" />
               <TextBox Watermark="Content-Type" Text="{Binding AutoResponderContentType}" Width="160" />
             </StackPanel>
-            <TextBox Watermark="Response body" Text="{Binding AutoResponderBody}" AcceptsReturn="True" Height="80" />
+            <TextBox Watermark="Response body" Text="{Binding AutoResponderBody}" AcceptsReturn="True" Height="80"
+                     AutomationProperties.AutomationId="AutoResponderBody" />
             <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Content="Add rule" Command="{Binding AddAutoResponderRuleCommand}" />
-              <Button Content="Update rule" Command="{Binding UpdateAutoResponderRuleCommand}" />
-              <Button Content="Delete rule" Command="{Binding DeleteAutoResponderRuleCommand}" />
+              <Button Content="Add rule" Command="{Binding AddAutoResponderRuleCommand}"
+                      AutomationProperties.AutomationId="AutoResponderAdd" />
+              <Button Content="Update rule" Command="{Binding UpdateAutoResponderRuleCommand}"
+                      AutomationProperties.AutomationId="AutoResponderUpdate" />
+              <Button Content="Delete rule" Command="{Binding DeleteAutoResponderRuleCommand}"
+                      AutomationProperties.AutomationId="AutoResponderDelete" />
             </StackPanel>
             <TextBlock Text="{Binding PlusPanelsSummary}" TextWrapping="Wrap" Opacity="0.7" />
           </StackPanel>
         </TabItem>
-        <TabItem Header="Scripts">
+        <TabItem Header="Scripts" AutomationProperties.AutomationId="TabScripts">
           <StackPanel Margin="8" Spacing="8">
             <TextBlock Text="Lines: set-header Name: Value | set-status 404 | abort" Opacity="0.7" TextWrapping="Wrap" />
             <TextBlock Text="On request" />
@@ -155,7 +181,8 @@
           </StackPanel>
         </TabItem>
       </TabControl>
-      <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="8" Text="{Binding StatusText}" TextWrapping="Wrap" />
+      <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="8" Text="{Binding StatusText}" TextWrapping="Wrap"
+                 AutomationProperties.AutomationId="StatusText" />
     </Grid>
   </DockPanel>
 </Window>

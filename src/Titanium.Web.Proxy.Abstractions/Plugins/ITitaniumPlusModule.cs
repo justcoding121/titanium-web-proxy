@@ -45,7 +45,7 @@ public sealed class CachedHttpResponse
     public DateTimeOffset ExpiresUtc { get; init; }
 }
 
-/// <summary>Enterprise Plus plugin entry (ALC). Inspector must never call Apply.</summary>
+/// <summary>Plus plugin entry (ALC). Inspector must never call Apply.</summary>
 public interface ITitaniumPlusModule
 {
     /// <summary>Minimum Abstractions assembly version this Plus build requires (e.g. 7.0.0).</summary>

@@ -1,16 +1,21 @@
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
+using Certes;
+using Certes.Acme;
+using Certes.Acme.Resource;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Cli.Certificates;
 
-/// <summary>Applies certificate paths and ACME HTTP-01 challenge responses.</summary>
+/// <summary>Applies certificate paths and ACME HTTP-01 challenge / issuance.</summary>
 internal static class CertificateBootstrap
 {
-    // In-memory token store for HTTP-01 (operators/Plus can replace via ReplaceCertificate after issuance).
     private static readonly Dictionary<string, string> AcmeTokens = new(StringComparer.Ordinal);
+
+    /// <summary>Optional test hook replacing Certes issuance.</summary>
+    internal static Func<ProxyServer, CertificatesConfig, CancellationToken, Task>? IssueOverride { get; set; }
 
     public static void Apply(ProxyServer proxy, CertificatesConfig? certificates)
     {
@@ -80,7 +85,6 @@ internal static class CertificateBootstrap
                 return Task.CompletedTask;
             }
 
-            // Also try reading from a local challenge directory next to the process.
             var file = Path.Combine(AppContext.BaseDirectory, ".well-known", "acme-challenge", token);
             if (File.Exists(file))
             {
@@ -110,7 +114,6 @@ internal static class CertificateBootstrap
 
     /// <summary>
     /// Reloads a leaf certificate from disk and assigns it to all <see cref="ProxyEndPoint.DecryptSsl"/> endpoints.
-    /// Call after ACME issuance when cert files appear (or when <c>TITANIUM_ACME_CERT_PATH</c> is set).
     /// </summary>
     public static void ReplaceCertificate(ProxyServer proxy, string certPath, string? keyPath)
     {
@@ -128,10 +131,10 @@ internal static class CertificateBootstrap
     }
 
     /// <summary>
-    /// Stub ACME issuance: when email+domain are set, documents the operator path and seeds challenge tokens from env.
-    /// Does not write a self-signed leaf; after the challenge, place certs and call <see cref="ReplaceCertificate"/>.
+    /// Issues a certificate via ACME HTTP-01 when <see cref="CertificatesConfig.AcmeDirectory"/> is set;
+    /// otherwise documents the operator path and seeds challenge tokens from env.
     /// </summary>
-    public static Task IssueAcmeCertificateAsync(ProxyServer proxy, CertificatesConfig certificates,
+    public static async Task IssueAcmeCertificateAsync(ProxyServer proxy, CertificatesConfig certificates,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(proxy);
@@ -139,21 +142,86 @@ internal static class CertificateBootstrap
 
         if (string.IsNullOrEmpty(certificates.AcmeEmail) || string.IsNullOrEmpty(certificates.AcmeDomain))
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        Console.WriteLine(
-            $"ACME issue stub for {certificates.AcmeDomain} ({certificates.AcmeEmail}): " +
-            "operators should complete HTTP-01 externally and place PEM/PFX at CertificatePath, " +
-            "then call ReplaceCertificate / IssueOrRenewAsync.");
+        if (IssueOverride is not null)
+        {
+            await IssueOverride(proxy, certificates, cancellationToken).ConfigureAwait(false);
+            return;
+        }
 
         SeedTokenFromEnvironment();
-        return Task.CompletedTask;
+
+        var directory = certificates.AcmeDirectory
+                        ?? Environment.GetEnvironmentVariable("TITANIUM_ACME_DIRECTORY");
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            Console.WriteLine(
+                $"ACME: no AcmeDirectory for {certificates.AcmeDomain} — " +
+                "set certificates.acmeDirectory or TITANIUM_ACME_DIRECTORY for automated issue, " +
+                "or place PEM/PFX and call ReplaceCertificate / IssueOrRenewAsync.");
+            return;
+        }
+
+        Console.WriteLine($"ACME: issuing for {certificates.AcmeDomain} via {directory}");
+        await IssueWithCertesAsync(proxy, certificates, directory, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task IssueWithCertesAsync(
+        ProxyServer proxy,
+        CertificatesConfig certificates,
+        string directoryUrl,
+        CancellationToken cancellationToken)
+    {
+        var directoryUri = new Uri(directoryUrl);
+        var acme = new AcmeContext(directoryUri);
+        await acme.NewAccount(certificates.AcmeEmail!, true).ConfigureAwait(false);
+
+        var order = await acme.NewOrder([certificates.AcmeDomain!]).ConfigureAwait(false);
+        var authz = (await order.Authorizations().ConfigureAwait(false)).First();
+        var httpChallenge = await authz.Http().ConfigureAwait(false);
+        SetChallengeToken(httpChallenge.Token, httpChallenge.KeyAuthz);
+        await httpChallenge.Validate().ConfigureAwait(false);
+
+        // Poll authorization
+        for (var i = 0; i < 30; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var resource = await authz.Resource().ConfigureAwait(false);
+            if (resource.Status == AuthorizationStatus.Valid)
+            {
+                break;
+            }
+
+            if (resource.Status == AuthorizationStatus.Invalid)
+            {
+                throw new InvalidOperationException("ACME authorization invalid.");
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
+        }
+
+        var privateKey = KeyFactory.NewKey(KeyAlgorithm.ES256);
+        var cert = await order.Generate(new CsrInfo
+        {
+            CommonName = certificates.AcmeDomain,
+        }, privateKey).ConfigureAwait(false);
+
+        var certPem = cert.ToPem();
+        var keyPem = privateKey.ToPem();
+        var certPath = certificates.CertificatePath
+                       ?? Path.Combine(AppContext.BaseDirectory, "acme-cert.pem");
+        var keyPath = certificates.PrivateKeyPath
+                      ?? Path.Combine(AppContext.BaseDirectory, "acme-key.pem");
+        await File.WriteAllTextAsync(certPath, certPem, cancellationToken).ConfigureAwait(false);
+        await File.WriteAllTextAsync(keyPath, keyPem, cancellationToken).ConfigureAwait(false);
+        ReplaceCertificate(proxy, certPath, keyPath);
+        Console.WriteLine($"ACME: certificate written to {certPath}");
     }
 
     /// <summary>
-    /// After HTTP-01 challenge serving is active, waits for cert files (config paths or
-    /// <c>TITANIUM_ACME_CERT_PATH</c> / optional <c>TITANIUM_ACME_KEY_PATH</c>) then calls <see cref="ReplaceCertificate"/>.
+    /// Runs ACME issue (when directory configured), then polls for cert files and calls <see cref="ReplaceCertificate"/>.
     /// </summary>
     public static async Task IssueOrRenewAsync(ProxyServer proxy, CertificatesConfig certificates,
         TimeSpan? pollTimeout = null, CancellationToken cancellationToken = default)
@@ -164,6 +232,11 @@ internal static class CertificateBootstrap
         await IssueAcmeCertificateAsync(proxy, certificates, cancellationToken).ConfigureAwait(false);
 
         var timeout = pollTimeout ?? TimeSpan.FromMinutes(5);
+        if (int.TryParse(Environment.GetEnvironmentVariable("TITANIUM_ACME_POLL_SECONDS"), out var secs) && secs > 0)
+        {
+            timeout = TimeSpan.FromSeconds(secs);
+        }
+
         var deadline = DateTime.UtcNow + timeout;
 
         while (DateTime.UtcNow < deadline)

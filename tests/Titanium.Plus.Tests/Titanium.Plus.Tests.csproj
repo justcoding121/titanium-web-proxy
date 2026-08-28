@@ -9,6 +9,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="MSTest.TestAdapter" Version="3.9.3" />
     <PackageReference Include="MSTest.TestFramework" Version="3.9.3" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.6.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Plus\Titanium.Plus.csproj" />

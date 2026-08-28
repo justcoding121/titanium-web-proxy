@@ -47,11 +47,15 @@ public sealed class ServiceDiscovery : IDisposable
                 discovery.StartDnsLoop(context, options);
                 break;
             case "consul":
+                PlusLog.Info(context,
+                    "Plus Discovery: mode=consul — polling discovery.consulUrl (file/dns are primary).");
+                discovery.StartConsulBestEffort(context, options);
+                break;
             case "k8s":
             case "kubernetes":
                 PlusLog.Info(context,
-                    $"Plus Discovery: mode={mode} — file/dns are primary; attempting best-effort HTTP discovery if configured.");
-                discovery.StartConsulBestEffort(context, options);
+                    "Plus Discovery: mode=k8s — use discovery.k8sUrl with Endpoints/EndpointSlice JSON subset, or file/dns.");
+                discovery.StartK8sBestEffort(context, options);
                 break;
             default:
                 PlusLog.Warn(context, $"Plus Discovery: unknown mode={mode}");
@@ -305,7 +309,7 @@ public sealed class ServiceDiscovery : IDisposable
         return null;
     }
 
-    internal static List<DestinationConfig> ParseConsulDestinations(string json)
+    public static List<DestinationConfig> ParseConsulDestinations(string json)
     {
         var list = new List<DestinationConfig>();
         using var doc = JsonDocument.Parse(json);
@@ -361,8 +365,148 @@ public sealed class ServiceDiscovery : IDisposable
         return list;
     }
 
+    private void StartK8sBestEffort(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
+    {
+        if (!options.TryGetValue("discovery.k8sUrl", out var url) || string.IsNullOrWhiteSpace(url))
+        {
+            PlusLog.Warn(context,
+                "Plus Discovery: k8s mode requires discovery.k8sUrl (Endpoints/EndpointSlice JSON). Full API watch is not supported.");
+            return;
+        }
+
+        var intervalMs = int.TryParse(options.GetValueOrDefault("discovery.intervalMs"), out var ms) ? ms : 15000;
+        var clusterId = options.GetValueOrDefault("discovery.clusterId") ?? "k8s";
+        PlusLog.Info(context, $"Plus Discovery: k8s poll {url} every {intervalMs}ms");
+
+        _ = Task.Run(async () =>
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            while (!_cts.IsCancellationRequested)
+            {
+                try
+                {
+                    var json = await http.GetStringAsync(url, _cts.Token);
+                    var destinations = ParseKubernetesDestinations(json);
+                    if (destinations.Count > 0 && context.ClusterManager is not null)
+                    {
+                        await context.ClusterManager.ApplyAsync(
+                        [
+                            new ClusterConfig { Id = clusterId, Destinations = destinations },
+                        ], _cts.Token);
+                        context.RefreshReverseProxy?.Invoke();
+                    }
+
+                    await Task.Delay(intervalMs, _cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    PlusLog.Error(context, $"Plus Discovery: k8s poll failed: {ex.Message}");
+                    try
+                    {
+                        await Task.Delay(intervalMs, _cts.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Parses a documented subset: Endpoints-style <c>subsets[].addresses[].ip</c> + <c>ports[].port</c>,
+    /// or EndpointSlice-style <c>endpoints[].addresses[]</c> + <c>ports[].port</c>.
+    /// </summary>
+    public static List<DestinationConfig> ParseKubernetesDestinations(string json)
+    {
+        var list = new List<DestinationConfig>();
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        var i = 0;
+
+        if (root.TryGetProperty("subsets", out var subsets))
+        {
+            foreach (var subset in subsets.EnumerateArray())
+            {
+                var port = 80;
+                if (subset.TryGetProperty("ports", out var ports) && ports.GetArrayLength() > 0 &&
+                    ports[0].TryGetProperty("port", out var p) && p.TryGetInt32(out var pn))
+                {
+                    port = pn;
+                }
+
+                if (!subset.TryGetProperty("addresses", out var addresses))
+                {
+                    continue;
+                }
+
+                foreach (var addr in addresses.EnumerateArray())
+                {
+                    var ip = TryGetString(addr, "ip");
+                    if (string.IsNullOrWhiteSpace(ip))
+                    {
+                        continue;
+                    }
+
+                    list.Add(new DestinationConfig
+                    {
+                        Id = TryGetString(addr, "hostname") ?? $"k8s-{i}",
+                        Address = ip,
+                        Port = port,
+                    });
+                    i++;
+                }
+            }
+
+            return list;
+        }
+
+        if (root.TryGetProperty("endpoints", out var endpoints))
+        {
+            var port = 80;
+            if (root.TryGetProperty("ports", out var slicePorts) && slicePorts.GetArrayLength() > 0 &&
+                slicePorts[0].TryGetProperty("port", out var sp) && sp.TryGetInt32(out var spn))
+            {
+                port = spn;
+            }
+
+            foreach (var ep in endpoints.EnumerateArray())
+            {
+                if (!ep.TryGetProperty("addresses", out var addresses))
+                {
+                    continue;
+                }
+
+                foreach (var addr in addresses.EnumerateArray())
+                {
+                    var ip = addr.GetString();
+                    if (string.IsNullOrWhiteSpace(ip))
+                    {
+                        continue;
+                    }
+
+                    list.Add(new DestinationConfig
+                    {
+                        Id = $"k8s-{i}",
+                        Address = ip,
+                        Port = port,
+                    });
+                    i++;
+                }
+            }
+        }
+
+        return list;
+    }
+
     private static string? TryGetString(JsonElement element, string propertyName) =>
         element.TryGetProperty(propertyName, out var value) ? value.GetString() : null;
+
 
     public void Dispose()
     {

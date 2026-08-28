@@ -5,16 +5,17 @@ using Titanium.Web.Proxy.Abstractions.Routing;
 
 namespace Titanium.Plus.Observability;
 
-/// <summary>Prometheus text exposition for destination states and optional latency hooks.</summary>
+/// <summary>Prometheus text exposition for destination states and latency.</summary>
 public sealed class PrometheusMetricsExporter
 {
     private readonly IClusterManager? _clusters;
+    private readonly ILatencyRecorder? _latencyRecorder;
     private long _scrapes;
 
     public PrometheusMetricsExporter(IClusterManager? clusters, ILatencyRecorder? latencyRecorder)
     {
         _clusters = clusters;
-        _ = latencyRecorder;
+        _latencyRecorder = latencyRecorder;
     }
 
     public string Render()
@@ -32,6 +33,23 @@ public sealed class PrometheusMetricsExporter
         {
             sb.Append("titanium_destination_state{id=\"").Append(Escape(id)).Append("\"} ")
                 .Append((int)state).AppendLine();
+        }
+
+        sb.AppendLine("# HELP titanium_destination_latency_seconds Last observed destination RTT in seconds.");
+        sb.AppendLine("# TYPE titanium_destination_latency_seconds gauge");
+        if (_latencyRecorder is not null)
+        {
+            foreach (var id in snap.DestinationStates.Keys)
+            {
+                var latency = _latencyRecorder.GetDestinationLatency(id);
+                if (latency is null)
+                {
+                    continue;
+                }
+
+                sb.Append("titanium_destination_latency_seconds{id=\"").Append(Escape(id)).Append("\"} ")
+                    .Append(latency.Value.TotalSeconds.ToString("0.######")).AppendLine();
+            }
         }
 
         return sb.ToString();

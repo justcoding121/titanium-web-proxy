@@ -127,9 +127,32 @@ jobs:
         # DocFX often races another develop push; rebase instead of failing the job.
         pull: '--rebase --autostash'
 
+  ui-portable:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+    - uses: actions/checkout@v6
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: |
+          10.0.x
+    - name: Restore
+      run: dotnet restore src/Titanium.Web.Proxy.sln
+    - name: Build
+      run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore
+    - name: Inspector unit + E2E-UI
+      run: |
+        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI"
+
   publish:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
-    needs: build
+    needs: [build, ui-portable]
     runs-on: windows-latest
     environment: nuget-publish
     permissions:
