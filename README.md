@@ -102,6 +102,10 @@ Task OnRequest(object sender, SessionEventArgs e)
 
 Configure your client to use `127.0.0.1:8000` as its HTTP and HTTPS proxy. Trusting a generated root certificate changes the current user's certificate store; only do this on a machine you control.
 
+## Performance
+
+Typically at or above **YARP**; ahead of **nginx** on H2/H3→H1 reverse; near parity on H1 (nginx still edges tiny keep-alive). Details: [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
+
 ## Examples and documentation
 
 - [Wiki](https://github.com/justcoding121/titanium-web-proxy/wiki) — feature guides, including [performance measurements](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance), [streaming request/response bodies](https://github.com/justcoding121/titanium-web-proxy/wiki/Streaming-Bodies), the [HTTP/3 setup guide](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3), and a [protocol feature support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support) (what's supported for HTTP/1.x, HTTP/2, and HTTP/3, including [protocol bridges](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support#protocol-bridges))
