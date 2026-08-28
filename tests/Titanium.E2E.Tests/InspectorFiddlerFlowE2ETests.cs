@@ -201,6 +201,12 @@ public class InspectorFiddlerFlowE2ETests
             "With DecryptHttps=false should not MITM to a decrypted URL session. Got: " +
             string.Join(", ", captured.Select(s => s.Method + " " + s.Url)));
 
+        var tunnel = captured.First(s => s.IsTunnel || s.Method.Equals("CONNECT", StringComparison.OrdinalIgnoreCase));
+        Assert.IsTrue(tunnel.DurationMs is >= 0, "CONNECT handshake duration should be populated.");
+        Assert.IsTrue(tunnel.TtfbMs is >= 0, "CONNECT TTFB should be populated.");
+        Assert.IsTrue(tunnel.BodySize is >= 0, "CONNECT size should be 0 or tunneled bytes, not blank.");
+        StringAssert.Contains(tunnel.Protocol, "→");
+
         _interception.DecryptHttps = true;
 
         using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20)))

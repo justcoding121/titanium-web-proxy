@@ -6,6 +6,7 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using Titanium.Inspector.ViewModels;
 using Titanium.Web.Proxy;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -27,7 +28,8 @@ public sealed class InterceptionService : IDisposable
     private ProxyServer? _proxy;
     private ExplicitProxyEndPoint? _endPoint;
     private bool _systemProxyEnabled;
-    private bool _shutdownDone;
+    private int _shutdownStarted;
+    private readonly ManualResetEventSlim _shutdownCompleted = new(false);
     private string? _rootPfxPath;
     private InspectorSettings? _loggingSettings;
 
@@ -47,6 +49,18 @@ public sealed class InterceptionService : IDisposable
     /// </summary>
     public bool DecryptHttps { get; set; }
 
+    /// <summary>Allow HTTP/1.1 on decrypted origin connections. CONNECT itself is always HTTP/1.1.</summary>
+    public bool EnableHttp11 { get; set; } = true;
+
+    /// <summary>Allow HTTP/2 (ALPN h2) on new connections.</summary>
+    public bool EnableHttp2 { get; set; } = true;
+
+    /// <summary>Allow HTTP/3 to origins when MsQuic is available.</summary>
+    public bool EnableHttp3 { get; set; } = true;
+
+    /// <summary>True when the OS can host QUIC (MsQuic / <c>QuicListener.IsSupported</c>).</summary>
+    public static bool IsHttp3Supported => System.Net.Quic.QuicListener.IsSupported;
+
     /// <summary>
     /// When set (tests), skip the Windows certificate store and track trust in-memory.
     /// Avoids modal "Root Certificate Store" UI that hangs headless / CI runs.
@@ -58,6 +72,12 @@ public sealed class InterceptionService : IDisposable
     public bool SystemProxyEnabled => _systemProxyEnabled;
     public X509Certificate2? RootCertificate => _proxy?.CertificateManager.RootCertificate;
     public bool IsRootTrusted { get; private set; }
+
+    /// <summary>True when the running proxy currently allows HTTP/2.</summary>
+    public bool Http2Enabled { get; private set; } = true;
+
+    /// <summary>True when this capture session has HTTP/3 enabled (MsQuic available and opted in).</summary>
+    public bool Http3Enabled { get; private set; }
     public string? UpstreamProxyAddress { get; set; }
     public string? PacUrl { get; set; }
     public bool IgnoreServerCertificateErrors { get; set; }
@@ -94,6 +114,7 @@ public sealed class InterceptionService : IDisposable
         ApplyLoggingOptions(_loggingSettings);
         _proxy.EnableHttpInterception = true;
         _proxy.EnableRequestTimingCapture = true;
+        ApplyHttpProtocols();
         _proxy.BeforeRequest += OnBeforeRequest;
         _proxy.BeforeResponse += OnBeforeResponse;
         _proxy.AfterResponse += OnAfterResponse;
@@ -125,8 +146,28 @@ public sealed class InterceptionService : IDisposable
         }
 
         Capturing = true;
-        _shutdownDone = false;
+        Interlocked.Exchange(ref _shutdownStarted, 0);
+        _shutdownCompleted.Reset();
         await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Push current HTTP version flags to the proxy. Safe while capturing: new connections
+    /// pick up the change; in-flight sessions keep the protocol they already negotiated.
+    /// Inspector is an explicit TCP proxy, so HTTP/3 here is origin-side only.
+    /// </summary>
+    public void ApplyHttpProtocols()
+    {
+        if (_proxy is null)
+        {
+            Http2Enabled = EnableHttp2;
+            Http3Enabled = EnableHttp3 && IsHttp3Supported;
+            return;
+        }
+
+        _proxy.EnableHttp2 = EnableHttp2;
+        Http2Enabled = _proxy.EnableHttp2;
+        Http3Enabled = _proxy.SetHttp3Enabled(EnableHttp3);
     }
 
     /// <summary>Apply or refresh logging from Inspector settings (safe while running).</summary>
@@ -145,15 +186,18 @@ public sealed class InterceptionService : IDisposable
     /// <summary>
     /// Idempotent shutdown: restore system proxy (even if already stopped) and dispose the proxy.
     /// Matches WPF example <c>EnsureProxyShutdown</c> semantics.
+    /// Must not run on the Avalonia UI thread — WinINET <c>InternetSetOption</c> broadcasts
+    /// back to the closing window and deadlocks (title-bar Close hangs; taskbar Close often
+    /// terminates the process instead).
     /// </summary>
     public void EnsureShutdown()
     {
-        if (_shutdownDone)
+        if (Interlocked.Exchange(ref _shutdownStarted, 1) != 0)
         {
+            _shutdownCompleted.Wait(TimeSpan.FromSeconds(3));
             return;
         }
 
-        _shutdownDone = true;
         try
         {
             if (_proxy is not null && _proxy.ProxyRunning)
@@ -183,16 +227,41 @@ public sealed class InterceptionService : IDisposable
                 _proxy = null;
                 _endPoint = null;
                 _systemProxyEnabled = false;
-            }
-            else
-            {
-                // No live ProxyServer — nothing to restore via Core APIs.
+                Http3Enabled = false;
             }
         }
         catch
         {
-            // never throw from UI teardown
+            // never throw from teardown
         }
+        finally
+        {
+            _shutdownCompleted.Set();
+        }
+    }
+
+    /// <summary>
+    /// Persist-safe close path: queue <see cref="EnsureShutdown"/> on the thread pool so the
+    /// window can disappear immediately.
+    /// </summary>
+    public void BeginBackgroundShutdown()
+    {
+        if (Volatile.Read(ref _shutdownStarted) != 0)
+        {
+            return;
+        }
+
+        ThreadPool.UnsafeQueueUserWorkItem(_ =>
+        {
+            try
+            {
+                EnsureShutdown();
+            }
+            catch
+            {
+                // never throw from teardown
+            }
+        }, null);
     }
 
     private void ApplyLoggingOptions(InspectorSettings? settings)
@@ -247,6 +316,7 @@ public sealed class InterceptionService : IDisposable
         _live.Clear();
         IsRootTrusted = false;
         _systemProxyEnabled = false;
+        Http3Enabled = false;
     }
 
     /// <summary>
@@ -384,6 +454,7 @@ public sealed class InterceptionService : IDisposable
 
     private Task OnBeforeTunnelConnect(object sender, TunnelConnectSessionEventArgs e)
     {
+        ApplyUpstreamProtocolPolicy(e);
         var host = e.HttpClient.Request.RequestUri?.Host
                    ?? TryHost(e.HttpClient.Request);
         e.DecryptSsl = DecryptHttps && !MitmBypass.ShouldDisableSslDecrypt(host);
@@ -398,6 +469,7 @@ public sealed class InterceptionService : IDisposable
             // Opaque HTTPS (DecryptHttps=false) never hits BeforeRequest — publish CONNECT here
             // so the session list matches Fiddler when decryption is off.
             var snap = CreateTunnelSnapshot(e);
+            AttachTunnelByteCounters(e, snap);
             _live[e.HttpClient] = snap;
             SessionCaptured?.Invoke(this, snap);
         }
@@ -409,6 +481,51 @@ public sealed class InterceptionService : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// CONNECT is always HTTP/1.1. When HTTP/1.1 is unchecked, pin the origin to HTTP/2
+    /// (or HTTP/3 if that is the only remaining version) and allow translation so decrypted
+    /// clients that still speak HTTP/1.1 inside the tunnel are bridged.
+    /// </summary>
+    private void ApplyUpstreamProtocolPolicy(TunnelConnectSessionEventArgs e)
+    {
+        if (EnableHttp11)
+        {
+            return;
+        }
+
+        if (EnableHttp2)
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            e.AllowHttpProtocolTranslation = true;
+            return;
+        }
+
+        if (EnableHttp3 && IsHttp3Supported)
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
+            e.AllowHttpProtocolTranslation = true;
+        }
+    }
+
+    private void ApplyUpstreamProtocolPolicy(SessionEventArgs e)
+    {
+        if (EnableHttp11)
+        {
+            return;
+        }
+
+        if (EnableHttp2)
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            return;
+        }
+
+        if (EnableHttp3 && IsHttp3Supported)
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
+        }
+    }
+
     private Task OnBeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
     {
         if (!_live.TryGetValue(e.HttpClient, out var snap))
@@ -418,14 +535,7 @@ public sealed class InterceptionService : IDisposable
 
         try
         {
-            var resp = e.HttpClient.Response;
-            snap.StatusCode = resp.StatusCode != 0 ? resp.StatusCode : 200;
-            snap.ResponseHeadersText = FormatHeaders(resp.Headers);
-            if (!e.DecryptSsl)
-            {
-                snap.Protocol = "CONNECT tunnel";
-            }
-
+            ApplyConnectCompletion(snap, e);
             SessionUpdated?.Invoke(this, snap);
         }
         catch
@@ -470,7 +580,7 @@ public sealed class InterceptionService : IDisposable
             Host = TryHost(req),
             StartedUtc = DateTimeOffset.UtcNow,
             RequestHeadersText = FormatHeaders(req.Headers),
-            Protocol = FormatProtocol(req.HttpVersion),
+            Protocol = SessionDisplayFormat.FormatHttpProtocol(req.HttpVersion),
             ProcessId = processId,
             ProcessName = processName,
             IsTunnel = true,
@@ -481,6 +591,7 @@ public sealed class InterceptionService : IDisposable
     {
         try
         {
+            ApplyUpstreamProtocolPolicy(e);
             if (e.HttpClient.Request.HasBody)
             {
                 e.HttpClient.Request.KeepBody = true;
@@ -587,14 +698,9 @@ public sealed class InterceptionService : IDisposable
 
     private Task OnAfterResponse(object sender, SessionEventArgs e)
     {
-        if (_live.TryGetValue(e.HttpClient, out var snap) && e.Timing is not null)
+        if (_live.TryGetValue(e.HttpClient, out var snap))
         {
-            snap.DurationMs = e.Timing.TotalDuration.TotalMilliseconds;
-            if (e.Timing.TimeToFirstByte is TimeSpan ttfb)
-            {
-                snap.TtfbMs = ttfb.TotalMilliseconds;
-            }
-
+            ApplyTiming(snap, e.Timing, snap.StartedUtc);
             SessionUpdated?.Invoke(this, snap);
         }
 
@@ -642,7 +748,7 @@ public sealed class InterceptionService : IDisposable
             RequestBodyBytes = bodyBytes,
             RequestBodyText = bodyText,
             ContentType = req.ContentType,
-            Protocol = FormatProtocol(req.HttpVersion),
+            Protocol = SessionDisplayFormat.FormatHttpProtocol(req.HttpVersion),
             ProcessId = processId,
             ProcessName = processName,
             IsTunnel = req.Method?.Equals("CONNECT", StringComparison.OrdinalIgnoreCase) == true,
@@ -657,21 +763,15 @@ public sealed class InterceptionService : IDisposable
         var resp = e.HttpClient.Response;
         snap.StatusCode = resp.StatusCode;
         snap.ResponseHeadersText = FormatHeaders(resp.Headers);
-        snap.Protocol = FormatProtocol(e.HttpClient.Request.HttpVersion) + " ↔ " + FormatProtocol(resp.HttpVersion);
+        snap.Protocol = SessionDisplayFormat.FormatClientServer(
+            e.HttpClient.Request.HttpVersion, resp.HttpVersion);
         var bodyBytes = resp.IsBodyRead ? TruncateBytes(resp.Body) : null;
         snap.ResponseBodyBytes = bodyBytes;
         snap.ResponseBodyText = bodyBytes is null ? null : TruncateText(Encoding.UTF8.GetString(bodyBytes));
         snap.BodySize = bodyBytes?.LongLength
                         ?? (resp.ContentLength >= 0 ? resp.ContentLength : null);
 
-        if (e.Timing is not null)
-        {
-            snap.DurationMs = e.Timing.TotalDuration.TotalMilliseconds;
-            if (e.Timing.TimeToFirstByte is TimeSpan ttfb)
-            {
-                snap.TtfbMs = ttfb.TotalMilliseconds;
-            }
-        }
+        ApplyTiming(snap, e.Timing, snap.StartedUtc);
 
         if (snap.IsWebSocket)
         {
@@ -701,14 +801,54 @@ public sealed class InterceptionService : IDisposable
         }
     }
 
-    private static string FormatProtocol(Version? version)
+    private static void ApplyConnectCompletion(SessionSnapshot snap, TunnelConnectSessionEventArgs e)
     {
-        if (version is null || version.Major == 0)
+        var resp = e.HttpClient.Response;
+        snap.StatusCode = resp.StatusCode != 0 ? resp.StatusCode : 200;
+        snap.ResponseHeadersText = FormatHeaders(resp.Headers);
+        snap.Protocol = SessionDisplayFormat.FormatClientServer(
+            e.HttpClient.Request.HttpVersion, resp.HttpVersion);
+        ApplyTiming(snap, e.Timing, snap.StartedUtc);
+        snap.TtfbMs ??= snap.DurationMs;
+        snap.BodySize ??= 0;
+    }
+
+    private void AttachTunnelByteCounters(TunnelConnectSessionEventArgs e, SessionSnapshot snap)
+    {
+        e.DataSent += (_, args) => AddTunnelBytes(snap, sent: args.Count, received: 0);
+        e.DataReceived += (_, args) => AddTunnelBytes(snap, sent: 0, received: args.Count);
+    }
+
+    private static void AddTunnelBytes(SessionSnapshot snap, int sent, int received)
+    {
+        if (sent != 0)
         {
-            return "unknown";
+            snap.SentBytes += sent;
         }
 
-        return version.Major >= 2 ? "HTTP/" + version.Major : $"HTTP/{version.Major}.{version.Minor}";
+        if (received != 0)
+        {
+            snap.ReceivedBytes += received;
+        }
+
+        snap.BodySize = snap.SentBytes + snap.ReceivedBytes;
+    }
+
+    private static void ApplyTiming(SessionSnapshot snap, HttpRequestTiming? timing, DateTimeOffset startedUtc)
+    {
+        if (timing is not null)
+        {
+            snap.DurationMs = SessionDisplayFormat.RoundMs(timing.TotalDuration.TotalMilliseconds);
+            if (timing.TimeToFirstByte is TimeSpan ttfb)
+            {
+                snap.TtfbMs = SessionDisplayFormat.RoundMs(ttfb.TotalMilliseconds);
+            }
+
+            return;
+        }
+
+        snap.DurationMs = SessionDisplayFormat.RoundMs(
+            Math.Max(0, (DateTimeOffset.UtcNow - startedUtc).TotalMilliseconds));
     }
 
     private static string FormatHeaders(HeaderCollection headers)

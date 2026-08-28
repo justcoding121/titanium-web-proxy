@@ -71,4 +71,11 @@ public class SessionListFollowLatestTests
         Assert.IsTrue(SessionListFollowLatest.UpdateFollowAfterScroll(
             currentlyFollowing: false, programmatic: false, userMovedOffset: false, isNearBottom: true, allContentVisible: true));
     }
+
+    [TestMethod]
+    public void ShouldResumeFollowAfterReset_OnlyWhenEmpty()
+    {
+        Assert.IsTrue(SessionListFollowLatest.ShouldResumeFollowAfterReset(0));
+        Assert.IsFalse(SessionListFollowLatest.ShouldResumeFollowAfterReset(3));
+    }
 }

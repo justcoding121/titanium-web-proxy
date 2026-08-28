@@ -27,7 +27,7 @@ public partial class App : Application
                 DataContext = vm,
             };
 
-            // Safety net if the main window Closing handler did not run (matches WPF App.OnExit).
+            // Wait for the background close path (or run shutdown if Closing never fired).
             desktop.Exit += (_, _) => vm.EnsureShutdown();
         }
 

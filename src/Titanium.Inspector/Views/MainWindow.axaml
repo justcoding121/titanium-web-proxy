@@ -26,6 +26,16 @@
                   AutomationProperties.AutomationId="AutoSystemProxyCheck" />
         <MenuItem Header="Decrypt HTTPS" ToggleType="CheckBox" IsChecked="{Binding DecryptHttps}"
                   AutomationProperties.AutomationId="MenuDecryptHttps" />
+        <MenuItem Header="Protocols">
+          <MenuItem Header="HTTP/1.1" ToggleType="CheckBox" IsChecked="{Binding EnableHttp11}"
+                    AutomationProperties.AutomationId="MenuEnableHttp11" />
+          <MenuItem Header="HTTP/2" ToggleType="CheckBox" IsChecked="{Binding EnableHttp2}"
+                    AutomationProperties.AutomationId="MenuEnableHttp2" />
+          <MenuItem Header="HTTP/3" ToggleType="CheckBox" IsChecked="{Binding EnableHttp3}"
+                    IsEnabled="{Binding Http3Supported}"
+                    ToolTip.Tip="Requires Windows 11 / MsQuic. Inspector is an explicit TCP proxy, so HTTP/3 is origin-side only; Chrome may still bypass via native QUIC."
+                    AutomationProperties.AutomationId="MenuEnableHttp3" />
+        </MenuItem>
         <Separator />
         <MenuItem Header="Bind address">
           <TextBox Width="160" Text="{Binding BindAddress}" Watermark="127.0.0.1 or 0.0.0.0" />
@@ -46,45 +56,70 @@
       </MenuItem>
       <MenuItem Header="_Session">
         <MenuItem Header="Replay selected" Command="{Binding ReplayCommand}" AutomationProperties.AutomationId="MenuReplay" />
+        <Separator />
+        <MenuItem Header="Session details" ToggleType="CheckBox" IsChecked="{Binding ShowSessionDetails}"
+                  AutomationProperties.AutomationId="MenuSessionDetails" />
       </MenuItem>
       <MenuItem Header="_Help">
         <MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}" />
       </MenuItem>
     </Menu>
-    <Grid ColumnDefinitions="2*,*" RowDefinitions="Auto,*,Auto">
-      <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="8" Spacing="12">
+    <Grid RowDefinitions="Auto,*,Auto">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" MinWidth="200" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="{Binding SessionDetailsPaneWidth}" MinWidth="0" />
+      </Grid.ColumnDefinitions>
+      <StackPanel Grid.Row="0" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="8" Spacing="12">
         <TextBox Width="360" Watermark="Search: method:GET status:200 host:example is:ws"
                  Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
         <TextBox Width="120" Watermark="Bind address" Text="{Binding BindAddress}" />
         <TextBox Width="70" Watermark="Port" Text="{Binding BindPort}" />
         <CheckBox Content="Capturing" IsChecked="{Binding Capturing}" AutomationProperties.AutomationId="CapturingCheck" />
         <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}" AutomationProperties.AutomationId="DecryptHttpsCheck" />
+        <CheckBox Content="HTTP/1.1" IsChecked="{Binding EnableHttp11}"
+                  ToolTip.Tip="Allow HTTP/1.1. CONNECT is always HTTP/1.1."
+                  AutomationProperties.AutomationId="Http11Check" />
+        <CheckBox Content="HTTP/2" IsChecked="{Binding EnableHttp2}"
+                  ToolTip.Tip="Allow HTTP/2 (ALPN h2). Applies to new connections."
+                  AutomationProperties.AutomationId="Http2Check" />
+        <CheckBox Content="HTTP/3" IsChecked="{Binding EnableHttp3}" IsEnabled="{Binding Http3Supported}"
+                  ToolTip.Tip="Allow HTTP/3 to origins when MsQuic is available. Inspector does not listen on UDP."
+                  AutomationProperties.AutomationId="Http3Check" />
         <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}" IsEnabled="False" AutomationProperties.AutomationId="SystemProxyCheck" />
+        <CheckBox Content="Details" IsChecked="{Binding ShowSessionDetails}" AutomationProperties.AutomationId="DetailsPaneCheck" />
       </StackPanel>
-      <DataGrid Grid.Row="1" Grid.Column="0" Margin="8"
+      <DataGrid Grid.Row="1" Grid.Column="0" Margin="8,8,4,8"
                 x:Name="SessionsGrid"
                 AutomationProperties.AutomationId="SessionsGrid"
                 ItemsSource="{Binding Sessions}"
                 SelectedItem="{Binding SelectedSession}"
                 SelectionMode="Extended"
                 IsReadOnly="True"
+                CanUserResizeColumns="True"
+                CanUserReorderColumns="True"
+                CanUserSortColumns="True"
+                GridLinesVisibility="Horizontal"
                 AutoGenerateColumns="False">
         <DataGrid.Columns>
           <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="60" />
           <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="70" />
           <DataGridTextColumn Header="Status" Binding="{Binding StatusCode}" Width="60" />
-          <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="120" />
-          <DataGridTextColumn Header="URL" Binding="{Binding Url}" Width="*" />
-          <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="100" />
-          <DataGridTextColumn Header="Duration" Binding="{Binding DurationMs}" Width="80" />
-          <DataGridTextColumn Header="TTFB" Binding="{Binding TtfbMs}" Width="70" />
+          <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="140" />
+          <DataGridTextColumn Header="URL" Binding="{Binding Url}" Width="280" />
+          <DataGridTextColumn Header="Client→Server" Binding="{Binding Protocol}" Width="110" />
+          <DataGridTextColumn Header="Duration" Binding="{Binding DurationMs, StringFormat={}{0:0}}" Width="80" />
+          <DataGridTextColumn Header="TTFB" Binding="{Binding TtfbMs, StringFormat={}{0:0}}" Width="70" />
           <DataGridTextColumn Header="Size" Binding="{Binding BodySize}" Width="70" />
-          <DataGridTextColumn Header="Process" Binding="{Binding ProcessDisplay}" Width="110" />
+          <DataGridTextColumn Header="Process" Binding="{Binding ProcessDisplay}" Width="120" />
         </DataGrid.Columns>
       </DataGrid>
-      <TabControl Grid.Row="1" Grid.Column="1" Margin="8"
+      <GridSplitter Grid.Row="1" Grid.Column="1" Width="4" ResizeDirection="Columns"
+                    IsVisible="{Binding ShowSessionDetails}" />
+      <TabControl Grid.Row="1" Grid.Column="2" Margin="4,8,8,8"
                   x:Name="DetailTabs"
                   AutomationProperties.AutomationId="DetailTabs"
+                  IsVisible="{Binding ShowSessionDetails}"
                   SelectedIndex="{Binding SelectedDetailTabIndex}">
         <TabItem Header="Headers" AutomationProperties.AutomationId="TabHeaders">
           <TextBox IsReadOnly="True" Text="{Binding SelectedHeaders}" AcceptsReturn="True" TextWrapping="Wrap"
@@ -194,7 +229,7 @@
           </StackPanel>
         </TabItem>
       </TabControl>
-      <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="8" Text="{Binding StatusText}" TextWrapping="Wrap"
+      <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Margin="8" Text="{Binding StatusText}" TextWrapping="Wrap"
                  AutomationProperties.AutomationId="StatusText" />
     </Grid>
   </DockPanel>

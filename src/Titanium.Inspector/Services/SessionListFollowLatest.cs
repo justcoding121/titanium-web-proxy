@@ -27,6 +27,12 @@ public static class SessionListFollowLatest
         followLatest && unsorted && hasItems;
 
     /// <summary>
+    /// Clear empties the grid and should resume follow. A filter rebuild also fires Reset
+    /// then immediately re-adds; only resume when the collection is still empty afterward.
+    /// </summary>
+    public static bool ShouldResumeFollowAfterReset(int remainingCount) => remainingCount == 0;
+
+    /// <summary>
     /// Updates follow state after a scroll event.
     /// Programmatic and extent-only changes (new rows) must not unpin;
     /// an empty or fully-visible list re-enables follow.

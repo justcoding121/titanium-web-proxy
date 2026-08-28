@@ -26,6 +26,7 @@ public class InspectorServiceE2ETests
 
         await interception.StartAsync(IPAddress.Loopback, proxyPort);
         Assert.IsTrue(interception.IsRunning);
+        Assert.AreEqual(System.Net.Quic.QuicListener.IsSupported, interception.Http3Enabled);
 
         using var handler = new HttpClientHandler
         {
@@ -54,6 +55,8 @@ public class InspectorServiceE2ETests
         }
 
         Assert.AreEqual(200, updated?.StatusCode);
+        Assert.IsTrue(updated!.DurationMs is >= 0, "Duration should be filled after the HTTP response.");
+        StringAssert.Contains(updated.Protocol, "→");
         interception.Stop();
     }
 

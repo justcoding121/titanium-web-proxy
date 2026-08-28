@@ -394,6 +394,45 @@ public partial class ProxyServer : IDisposable
     [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
     public bool EnableHttp3 { get; set; } = false;
 
+    /// <summary>
+    ///     Turns on <see cref="EnableHttp3" /> when MsQuic is available
+    ///     (<see cref="System.Net.Quic.QuicListener.IsSupported" />). Hosts (CLI, Inspector, examples)
+    ///     should call this instead of setting <see cref="EnableHttp3" /> blindly. Returns
+    ///     <see langword="true" /> when HTTP/3 was enabled.
+    /// </summary>
+    public bool TryEnableHttp3IfSupported()
+    {
+#pragma warning disable TWP001
+        if (!System.Net.Quic.QuicListener.IsSupported)
+            return false;
+
+        EnableHttp3 = true;
+        return true;
+#pragma warning restore TWP001
+    }
+
+    /// <summary>
+    ///     Enables or disables <see cref="EnableHttp3" />. Enabling still requires MsQuic
+    ///     (<see cref="System.Net.Quic.QuicListener.IsSupported" />); disabling is always applied.
+    ///     Safe to call while the proxy is running — new origin connections pick up the change.
+    ///     Existing sessions keep the protocol they already negotiated.
+    /// </summary>
+    /// <returns>
+    ///     <see langword="true" /> when HTTP/3 is enabled after the call.
+    /// </returns>
+    public bool SetHttp3Enabled(bool enabled)
+    {
+#pragma warning disable TWP001
+        if (!enabled)
+        {
+            EnableHttp3 = false;
+            return false;
+        }
+
+        return TryEnableHttp3IfSupported();
+#pragma warning restore TWP001
+    }
+
     private bool? _enableHttpsSvcbDnsDiscovery;
 
     /// <summary>
@@ -1865,8 +1904,8 @@ public partial class ProxyServer : IDisposable
         CertificateManager?.StopClearIdleCertificates();
 
         if (clearPools) TcpConnectionFactory.ClearPools();
-        if (clearPools) QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
-        if (clearPools) Http2OriginConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
+        if (clearPools) DrainPoolBlocking(QuicConnectionPool.DrainAsync());
+        if (clearPools) DrainPoolBlocking(Http2OriginConnectionPool.DrainAsync());
 
         // Start() may have wired GetCustomUpStreamProxyFunc to GetSystemUpStreamProxy and created
         // systemProxyResolver to back it. Undo both together: leaving the callback in place while
@@ -2318,6 +2357,22 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
+    ///     Bound wait for pool drain so UI-thread Stop/Dispose cannot hang indefinitely
+    ///     (GetResult on an unbounded drain deadlocks Avalonia/WPF close).
+    /// </summary>
+    private static void DrainPoolBlocking(ValueTask drain)
+    {
+        try
+        {
+            drain.AsTask().Wait(TimeSpan.FromSeconds(2));
+        }
+        catch
+        {
+            // ignore — sockets are released on process exit
+        }
+    }
+
+    /// <summary>
     ///     Quit listening on the given end point.
     /// </summary>
     private static void QuitListen(ProxyEndPoint endPoint)
@@ -2535,7 +2590,7 @@ public partial class ProxyServer : IDisposable
 
         try
         {
-            QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
+            DrainPoolBlocking(QuicConnectionPool.DrainAsync());
         }
         catch
         {
@@ -2544,7 +2599,7 @@ public partial class ProxyServer : IDisposable
 
         try
         {
-            Http2OriginConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
+            DrainPoolBlocking(Http2OriginConnectionPool.DrainAsync());
         }
         catch
         {

@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -9,6 +10,12 @@ namespace Titanium.Inspector.Views;
 
 public partial class MainWindow : Window
 {
+    // Avalonia DataGridColumn.GetSortDescription() is internal (no public SortDirection).
+    private static readonly MethodInfo? GetSortDescriptionMethod =
+        typeof(DataGridColumn).GetMethod(
+            "GetSortDescription",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
     private bool _autoStartStarted;
     private bool _followLatest = true;
     private bool _programmaticScroll;
@@ -119,7 +126,7 @@ public partial class MainWindow : Window
 
         if (!_programmaticScroll
             && e.ExtentDelta.Y > 0.5
-            && SessionListFollowLatest.ShouldScrollToLatest(_followLatest, unsorted: true, hasItems: true))
+            && SessionListFollowLatest.ShouldScrollToLatest(_followLatest, IsUnsorted(), hasItems: true))
         {
             RequestScrollToLatest();
         }
@@ -127,13 +134,26 @@ public partial class MainWindow : Window
 
     private void OnSessionsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (e.Action == NotifyCollectionChangedAction.Reset
+            || (e.Action == NotifyCollectionChangedAction.Remove && _sessionsVm is { Sessions.Count: 0 }))
+        {
+            // Clear vs filter: filter Reset is immediately followed by Adds on this turn.
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (SessionListFollowLatest.ShouldResumeFollowAfterReset(_sessionsVm?.Sessions.Count ?? 0))
+                {
+                    _followLatest = true;
+                }
+            }, DispatcherPriority.Background);
+        }
+
         if (e.Action is not (NotifyCollectionChangedAction.Add or NotifyCollectionChangedAction.Reset))
         {
             return;
         }
 
         if (SessionListFollowLatest.ShouldScrollToLatest(
-                _followLatest, unsorted: true, _sessionsVm is { Sessions.Count: > 0 }))
+                _followLatest, IsUnsorted(), _sessionsVm is { Sessions.Count: > 0 }))
         {
             RequestScrollToLatest();
         }
@@ -158,18 +178,41 @@ public partial class MainWindow : Window
     {
         if (_sessionsVm is null
             || !SessionListFollowLatest.ShouldScrollToLatest(
-                _followLatest, unsorted: true, _sessionsVm.Sessions.Count > 0))
+                _followLatest, IsUnsorted(), _sessionsVm.Sessions.Count > 0))
         {
             return;
         }
 
         AttachSessionsScroll();
-        // Avalonia DataGrid does not expose column sort state publicly; last collection
-        // item is newest (capture order). ScrollIntoView realizes the virtualized row,
-        // then ScrollToEnd pins the viewport to the visual bottom.
+        // ScrollIntoView realizes the virtualized last row; ScrollToEnd pins the viewport.
         _programmaticScroll = true;
         SessionsGrid.ScrollIntoView(_sessionsVm.Sessions[^1], column: null);
         _sessionsScroll?.ScrollToEnd();
         Dispatcher.UIThread.Post(() => _programmaticScroll = false, DispatcherPriority.Background);
+    }
+
+    private bool IsUnsorted()
+    {
+        if (GetSortDescriptionMethod is null)
+        {
+            return true;
+        }
+
+        try
+        {
+            foreach (var column in SessionsGrid.Columns)
+            {
+                if (GetSortDescriptionMethod.Invoke(column, null) is not null)
+                {
+                    return false;
+                }
+            }
+        }
+        catch
+        {
+            return true;
+        }
+
+        return true;
     }
 }

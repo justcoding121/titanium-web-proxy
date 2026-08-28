@@ -75,6 +75,8 @@ Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeHttpAuthenticate -> Tit
 static readonly Titanium.Web.Proxy.Http.KnownHeaders.AltSvc -> Titanium.Web.Proxy.Http.KnownHeader!
 Titanium.Web.Proxy.ProxyServer.EnableHttpInterception.get -> bool
 Titanium.Web.Proxy.ProxyServer.EnableHttpInterception.set -> void
+Titanium.Web.Proxy.ProxyServer.TryEnableHttp3IfSupported() -> bool
+Titanium.Web.Proxy.ProxyServer.SetHttp3Enabled(bool enabled) -> bool
 Titanium.Web.Proxy.ProxyServer.MaxConcurrentHttp11HttpsOriginCreates.get -> int
 Titanium.Web.Proxy.ProxyServer.MaxConcurrentHttp11HttpsOriginCreates.set -> void
 Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp.get -> System.Func<Titanium.Web.Proxy.Models.HttpInterceptionContext, bool>?

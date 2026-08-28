@@ -128,15 +128,16 @@ internal static class RunCommand
             proxy.EnableHttpInterception = true;
         }
 
-        // Listener HTTP/2 / HTTP/3 switches (any EnableHttp2==false disables; any EnableHttp3 enables).
+        // HTTP/2: any explicit false disables. HTTP/3: on when the OS supports QUIC unless a
+        // listener sets enableHttp3: false. Plus uses this same ProxyServer.
         if (config.Listeners.Any(l => l.EnableHttp2 == false))
         {
             proxy.EnableHttp2 = false;
         }
 
-        if (config.Listeners.Any(l => l.EnableHttp3))
+        if (ShouldEnableHttp3(config))
         {
-            proxy.EnableHttp3 = true;
+            proxy.TryEnableHttp3IfSupported();
         }
     }
 
@@ -262,7 +263,7 @@ internal static class RunCommand
                 ForwardHost = listener.ForwardHost,
                 ForwardPort = listener.ForwardPort ?? 80,
                 ForwardCleartext = true,
-                EnableHttp3 = listener.EnableHttp3,
+                EnableHttp3 = ResolveListenerHttp3(listener, decryptSsl: false),
             });
             Console.WriteLine(
                 $"Listener {host}:{listener.Port} transparent ForwardHost={listener.ForwardHost}:{listener.ForwardPort ?? 80}");
@@ -275,7 +276,7 @@ internal static class RunCommand
             {
                 ForwardHost = listener.ForwardHost,
                 ForwardPort = listener.ForwardPort ?? 443,
-                EnableHttp3 = listener.EnableHttp3,
+                EnableHttp3 = ResolveListenerHttp3(listener, decryptSsl: true),
             });
             Console.WriteLine(
                 $"Listener {host}:{listener.Port} TLS-terminate ForwardHost={listener.ForwardHost}:{listener.ForwardPort ?? 443}");
@@ -285,6 +286,12 @@ internal static class RunCommand
         proxy.AddEndPoint(new ExplicitProxyEndPoint(ip, listener.Port, listener.DecryptSsl));
         Console.WriteLine($"Listener {host}:{listener.Port} explicit decryptSsl={listener.DecryptSsl}");
     }
+
+    internal static bool ShouldEnableHttp3(TwpConfig config) =>
+        !config.Listeners.Any(l => l.EnableHttp3 == false);
+
+    private static bool ResolveListenerHttp3(ListenerConfig listener, bool decryptSsl) =>
+        listener.EnableHttp3 ?? (decryptSsl && System.Net.Quic.QuicListener.IsSupported);
 
     private static bool IsTruthy(IReadOnlyDictionary<string, string> options, string key) =>
         options.TryGetValue(key, out var value) &&

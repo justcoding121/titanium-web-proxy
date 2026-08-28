@@ -62,8 +62,11 @@ public sealed class ListenerConfig
     /// <summary>When false, forces <c>ProxyServer.EnableHttp2=false</c>. Null inherits proxy default.</summary>
     public bool? EnableHttp2 { get; set; }
 
-    /// <summary>When true, enables HTTP/3 on the proxy and transparent endpoints.</summary>
-    public bool EnableHttp3 { get; set; }
+    /// <summary>
+    /// When true, enables HTTP/3 on the proxy and transparent endpoints.
+    /// When false, disables HTTP/3. Null inherits host default (on when the OS supports QUIC).
+    /// </summary>
+    public bool? EnableHttp3 { get; set; }
 }
 
 /// <summary>Static file serving options.</summary>

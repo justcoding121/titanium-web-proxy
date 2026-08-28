@@ -85,7 +85,7 @@ public static class JsonReverseProxyDocument
                     ForwardHost = l.ForwardHost,
                     ForwardPort = l.ForwardPort,
                     EnableHttp2 = l.EnableHttp2,
-                    EnableHttp3 = l.EnableHttp3 ?? false,
+                    EnableHttp3 = l.EnableHttp3,
                 });
             }
         }

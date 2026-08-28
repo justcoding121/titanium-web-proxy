@@ -48,6 +48,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string? _scriptOnRequest;
     private string? _scriptOnResponse;
     private int _selectedDetailTabIndex;
+    private bool _showSessionDetails = true;
+    private bool _enableHttp11 = true;
+    private bool _enableHttp2 = true;
+    private bool _enableHttp3 = true;
     private string _composerMethod = "GET";
     private string _composerUrl = "";
     private string _composerHeaders = "";
@@ -108,12 +112,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         });
         ApplyEditBodyCommand = new RelayCommand(ApplyEditBodyAsync);
         ToggleDebugLoggingCommand = new RelayCommand(ToggleDebugLoggingAsync);
+        ToggleSessionDetailsCommand = new RelayCommand(ToggleSessionDetailsAsync);
 
         WireEventHandlers();
         LoadPlusPanels();
         _interception.ConfigureLogging(_settings.Current);
         _interception.IgnoreServerCertificateErrors = _settings.Current.IgnoreServerCertificateErrors;
         _interception.DecryptHttps = _decryptHttps;
+        ApplyHttpProtocolSettings(announce: false);
         ShowLoopbackExemptMenu = AppContainerLoopback.IsSupported;
     }
 
@@ -158,7 +164,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>Idempotent teardown for window close / app exit (restores WinINET).</summary>
+    /// <summary>Idempotent teardown for tests / process exit (restores WinINET).</summary>
     public void EnsureShutdown()
     {
         try
@@ -172,6 +178,25 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         _interception.EnsureShutdown();
         SystemProxy = false;
+    }
+
+    /// <summary>
+    /// Title-bar close: save settings and stop the proxy off the UI thread so WinINET
+    /// refresh cannot deadlock the closing window.
+    /// </summary>
+    public void BeginBackgroundShutdown()
+    {
+        try
+        {
+            PersistSettings();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        SystemProxy = false;
+        _interception.BeginBackgroundShutdown();
     }
 
     private void WireEventHandlers()
@@ -489,6 +514,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand AbortBreakpointCommand { get; }
     public ICommand ApplyEditBodyCommand { get; }
     public ICommand ToggleDebugLoggingCommand { get; }
+    public ICommand ToggleSessionDetailsCommand { get; }
 
     public string BindAddress
     {
@@ -669,6 +695,43 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public bool ShowLoopbackExemptMenu { get; }
 
+    public bool ShowSessionDetails
+    {
+        get => _showSessionDetails;
+        set
+        {
+            if (SetField(ref _showSessionDetails, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SessionDetailsPaneWidth)));
+                PersistSettings();
+            }
+        }
+    }
+
+    /// <summary>True when the OS can host QUIC (HTTP/3 checkbox is enabled).</summary>
+    public bool Http3Supported => InterceptionService.IsHttp3Supported;
+
+    public bool EnableHttp11
+    {
+        get => _enableHttp11;
+        set => SetHttpProtocol(ref _enableHttp11, value, nameof(EnableHttp11));
+    }
+
+    public bool EnableHttp2
+    {
+        get => _enableHttp2;
+        set => SetHttpProtocol(ref _enableHttp2, value, nameof(EnableHttp2));
+    }
+
+    public bool EnableHttp3
+    {
+        get => _enableHttp3;
+        set => SetHttpProtocol(ref _enableHttp3, value, nameof(EnableHttp3));
+    }
+
+    public GridLength SessionDetailsPaneWidth =>
+        _showSessionDetails ? new GridLength(380) : new GridLength(0);
+
     public string SearchQuery
     {
         get => _searchQuery;
@@ -723,6 +786,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _autoStartCapture = s.AutoStartCapture;
         _autoSystemProxyOnStart = s.AutoSystemProxyOnStart;
         _decryptHttps = s.DecryptHttps;
+        _showSessionDetails = s.ShowSessionDetails;
+        _enableHttp11 = s.EnableHttp11;
+        _enableHttp2 = s.EnableHttp2;
+        _enableHttp3 = s.EnableHttp3;
+        if (!_enableHttp11 && !_enableHttp2 && !(_enableHttp3 && Http3Supported))
+        {
+            _enableHttp11 = true;
+        }
         AutoResponder.Enabled = s.AutoResponderEnabled;
         AutoResponder.LoadFromDtos(s.AutoResponderRules);
         Breakpoints.Enabled = s.BreakpointEnabled;
@@ -754,6 +825,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         s.AutoStartCapture = AutoStartCapture;
         s.AutoSystemProxyOnStart = AutoSystemProxyOnStart;
         s.DecryptHttps = DecryptHttps;
+        s.ShowSessionDetails = ShowSessionDetails;
+        s.EnableHttp11 = EnableHttp11;
+        s.EnableHttp2 = EnableHttp2;
+        s.EnableHttp3 = EnableHttp3;
         s.AutoResponderEnabled = AutoResponder.Enabled;
         s.AutoResponderRules = AutoResponder.ToDtos();
         s.BreakpointEnabled = Breakpoints.Enabled;
@@ -767,6 +842,54 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         s.LoggingEnableFile = _settings.Current.LoggingEnableFile;
         s.LoggingFilePath = _settings.Current.LoggingFilePath;
         _settings.Save();
+    }
+
+    private Task ToggleSessionDetailsAsync()
+    {
+        ShowSessionDetails = !ShowSessionDetails;
+        return Task.CompletedTask;
+    }
+
+    private void SetHttpProtocol(ref bool field, bool value, string name)
+    {
+        if (field == value)
+        {
+            return;
+        }
+
+        if (!value && !HasAnotherEnabledProtocol(name))
+        {
+            StatusText = "Keep at least one HTTP version enabled.";
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+            return;
+        }
+
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        ApplyHttpProtocolSettings(announce: true);
+        PersistSettings();
+    }
+
+    private bool HasAnotherEnabledProtocol(string turningOff)
+    {
+        var http11 = turningOff == nameof(EnableHttp11) ? false : _enableHttp11;
+        var http2 = turningOff == nameof(EnableHttp2) ? false : _enableHttp2;
+        var http3 = turningOff == nameof(EnableHttp3) ? false : (_enableHttp3 && Http3Supported);
+        return http11 || http2 || http3;
+    }
+
+    private void ApplyHttpProtocolSettings(bool announce)
+    {
+        _interception.EnableHttp11 = _enableHttp11;
+        _interception.EnableHttp2 = _enableHttp2;
+        _interception.EnableHttp3 = _enableHttp3;
+        _interception.ApplyHttpProtocols();
+        if (announce)
+        {
+            StatusText = _interception.IsRunning
+                ? "Protocol change applies to new connections. Existing sessions keep their negotiated version."
+                : "HTTP versions saved — they apply when capture starts.";
+        }
     }
 
     private async Task EnableDecryptHttpsAsync()
@@ -958,6 +1081,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.ScriptOnResponse = ScriptOnResponse;
         _interception.IgnoreServerCertificateErrors = _settings.Current.IgnoreServerCertificateErrors;
         _interception.DecryptHttps = _decryptHttps;
+        ApplyHttpProtocolSettings(announce: false);
         _interception.ConfigureLogging(_settings.Current);
         await _interception.StartAsync(address, BindPort);
         Capturing = true;

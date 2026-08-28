@@ -75,6 +75,29 @@ public class RunCommandTests
     }
 
     [TestMethod]
+    public void ShouldEnableHttp3_True_WhenUnset_OrExplicitTrue()
+    {
+        Assert.IsTrue(RunCommand.ShouldEnableHttp3(new TwpConfig()));
+        Assert.IsTrue(RunCommand.ShouldEnableHttp3(new TwpConfig
+        {
+            Listeners = [new ListenerConfig { Port = 8080 }],
+        }));
+        Assert.IsTrue(RunCommand.ShouldEnableHttp3(new TwpConfig
+        {
+            Listeners = [new ListenerConfig { Port = 8080, EnableHttp3 = true }],
+        }));
+    }
+
+    [TestMethod]
+    public void ShouldEnableHttp3_False_WhenAnyListenerDisables()
+    {
+        Assert.IsFalse(RunCommand.ShouldEnableHttp3(new TwpConfig
+        {
+            Listeners = [new ListenerConfig { Port = 8080, EnableHttp3 = false }],
+        }));
+    }
+
+    [TestMethod]
     public void BuildPlusOptions_MergesControlPlane()
     {
         var plus = new PlusConfig
