@@ -27,6 +27,15 @@ public class SessionListFollowLatestTests
     }
 
     [TestMethod]
+    public void IsNearBottomByScrollBar_MatchesOffsetExtentSemantics()
+    {
+        Assert.IsTrue(SessionListFollowLatest.IsNearBottomByScrollBar(value: 0, maximum: 0));
+        Assert.IsTrue(SessionListFollowLatest.IsNearBottomByScrollBar(value: 968, maximum: 968, threshold: 32));
+        Assert.IsTrue(SessionListFollowLatest.IsNearBottomByScrollBar(value: 940, maximum: 968, threshold: 32));
+        Assert.IsFalse(SessionListFollowLatest.IsNearBottomByScrollBar(value: 100, maximum: 968, threshold: 32));
+    }
+
+    [TestMethod]
     public void ShouldScrollToLatest_OnlyWhenFollowingUnsortedAndHasItems()
     {
         Assert.IsTrue(SessionListFollowLatest.ShouldScrollToLatest(true, true, true));

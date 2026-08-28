@@ -49,15 +49,6 @@ public sealed class InterceptionService : IDisposable
     /// </summary>
     public bool DecryptHttps { get; set; }
 
-    /// <summary>Allow HTTP/1.1 on decrypted origin connections. CONNECT itself is always HTTP/1.1.</summary>
-    public bool EnableHttp11 { get; set; } = true;
-
-    /// <summary>Allow HTTP/2 (ALPN h2) on new connections.</summary>
-    public bool EnableHttp2 { get; set; } = true;
-
-    /// <summary>Allow HTTP/3 to origins when MsQuic is available.</summary>
-    public bool EnableHttp3 { get; set; } = true;
-
     /// <summary>True when the OS can host QUIC (MsQuic / <c>QuicListener.IsSupported</c>).</summary>
     public static bool IsHttp3Supported => System.Net.Quic.QuicListener.IsSupported;
 
@@ -76,7 +67,7 @@ public sealed class InterceptionService : IDisposable
     /// <summary>True when the running proxy currently allows HTTP/2.</summary>
     public bool Http2Enabled { get; private set; } = true;
 
-    /// <summary>True when this capture session has HTTP/3 enabled (MsQuic available and opted in).</summary>
+    /// <summary>True when this capture session has HTTP/3 enabled (MsQuic available).</summary>
     public bool Http3Enabled { get; private set; }
     public string? UpstreamProxyAddress { get; set; }
     public string? PacUrl { get; set; }
@@ -152,7 +143,7 @@ public sealed class InterceptionService : IDisposable
     }
 
     /// <summary>
-    /// Push current HTTP version flags to the proxy. Safe while capturing: new connections
+    /// Enable HTTP/2 and HTTP/3 (when MsQuic is available). Safe while capturing: new connections
     /// pick up the change; in-flight sessions keep the protocol they already negotiated.
     /// Inspector is an explicit TCP proxy, so HTTP/3 here is origin-side only.
     /// </summary>
@@ -160,14 +151,14 @@ public sealed class InterceptionService : IDisposable
     {
         if (_proxy is null)
         {
-            Http2Enabled = EnableHttp2;
-            Http3Enabled = EnableHttp3 && IsHttp3Supported;
+            Http2Enabled = true;
+            Http3Enabled = IsHttp3Supported;
             return;
         }
 
-        _proxy.EnableHttp2 = EnableHttp2;
+        _proxy.EnableHttp2 = true;
         Http2Enabled = _proxy.EnableHttp2;
-        Http3Enabled = _proxy.SetHttp3Enabled(EnableHttp3);
+        Http3Enabled = _proxy.SetHttp3Enabled(true);
     }
 
     /// <summary>Apply or refresh logging from Inspector settings (safe while running).</summary>
@@ -454,7 +445,6 @@ public sealed class InterceptionService : IDisposable
 
     private Task OnBeforeTunnelConnect(object sender, TunnelConnectSessionEventArgs e)
     {
-        ApplyUpstreamProtocolPolicy(e);
         var host = e.HttpClient.Request.RequestUri?.Host
                    ?? TryHost(e.HttpClient.Request);
         e.DecryptSsl = DecryptHttps && !MitmBypass.ShouldDisableSslDecrypt(host);
@@ -479,51 +469,6 @@ public sealed class InterceptionService : IDisposable
         }
 
         return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// CONNECT is always HTTP/1.1. When HTTP/1.1 is unchecked, pin the origin to HTTP/2
-    /// (or HTTP/3 if that is the only remaining version) and allow translation so decrypted
-    /// clients that still speak HTTP/1.1 inside the tunnel are bridged.
-    /// </summary>
-    private void ApplyUpstreamProtocolPolicy(TunnelConnectSessionEventArgs e)
-    {
-        if (EnableHttp11)
-        {
-            return;
-        }
-
-        if (EnableHttp2)
-        {
-            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
-            e.AllowHttpProtocolTranslation = true;
-            return;
-        }
-
-        if (EnableHttp3 && IsHttp3Supported)
-        {
-            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
-            e.AllowHttpProtocolTranslation = true;
-        }
-    }
-
-    private void ApplyUpstreamProtocolPolicy(SessionEventArgs e)
-    {
-        if (EnableHttp11)
-        {
-            return;
-        }
-
-        if (EnableHttp2)
-        {
-            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
-            return;
-        }
-
-        if (EnableHttp3 && IsHttp3Supported)
-        {
-            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http3;
-        }
     }
 
     private Task OnBeforeTunnelConnectResponse(object sender, TunnelConnectSessionEventArgs e)
@@ -591,7 +536,6 @@ public sealed class InterceptionService : IDisposable
     {
         try
         {
-            ApplyUpstreamProtocolPolicy(e);
             if (e.HttpClient.Request.HasBody)
             {
                 e.HttpClient.Request.KeepBody = true;

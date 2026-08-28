@@ -2,6 +2,7 @@ namespace Titanium.Inspector.Services;
 
 /// <summary>
 /// Viewport rules for the session grid sticky-bottom (follow latest) behavior.
+/// Avalonia DataGrid scrolls via PART_VerticalScrollbar (not a ScrollViewer).
 /// Follow newest rows while the user is at the bottom; pause when they scroll away;
 /// resume when they return. Extent growth from new rows must not unpin.
 /// </summary>
@@ -21,6 +22,23 @@ public static class SessionListFollowLatest
         }
 
         return offset + viewport >= extent - threshold;
+    }
+
+    /// <summary>
+    /// Near-bottom check for DataGrid's vertical ScrollBar
+    /// (<c>Maximum = extent - viewport</c>, <c>Value = offset</c>).
+    /// </summary>
+    public static bool IsNearBottomByScrollBar(
+        double value,
+        double maximum,
+        double threshold = DefaultThresholdPx)
+    {
+        if (maximum <= 0)
+        {
+            return true;
+        }
+
+        return value >= maximum - threshold;
     }
 
     public static bool ShouldScrollToLatest(bool followLatest, bool unsorted, bool hasItems) =>

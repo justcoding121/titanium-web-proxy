@@ -26,16 +26,6 @@
                   AutomationProperties.AutomationId="AutoSystemProxyCheck" />
         <MenuItem Header="Decrypt HTTPS" ToggleType="CheckBox" IsChecked="{Binding DecryptHttps}"
                   AutomationProperties.AutomationId="MenuDecryptHttps" />
-        <MenuItem Header="Protocols">
-          <MenuItem Header="HTTP/1.1" ToggleType="CheckBox" IsChecked="{Binding EnableHttp11}"
-                    AutomationProperties.AutomationId="MenuEnableHttp11" />
-          <MenuItem Header="HTTP/2" ToggleType="CheckBox" IsChecked="{Binding EnableHttp2}"
-                    AutomationProperties.AutomationId="MenuEnableHttp2" />
-          <MenuItem Header="HTTP/3" ToggleType="CheckBox" IsChecked="{Binding EnableHttp3}"
-                    IsEnabled="{x:Static vm:MainWindowViewModel.Http3Supported}"
-                    ToolTip.Tip="Requires Windows 11 / MsQuic. Inspector is an explicit TCP proxy, so HTTP/3 is origin-side only; Chrome may still bypass via native QUIC."
-                    AutomationProperties.AutomationId="MenuEnableHttp3" />
-        </MenuItem>
         <Separator />
         <MenuItem Header="Bind address">
           <TextBox Width="160" Text="{Binding BindAddress}" Watermark="127.0.0.1 or 0.0.0.0" />
@@ -56,9 +46,6 @@
       </MenuItem>
       <MenuItem Header="_Session">
         <MenuItem Header="Replay selected" Command="{Binding ReplayCommand}" AutomationProperties.AutomationId="MenuReplay" />
-        <Separator />
-        <MenuItem Header="Session details" ToggleType="CheckBox" IsChecked="{Binding ShowSessionDetails}"
-                  AutomationProperties.AutomationId="MenuSessionDetails" />
       </MenuItem>
       <MenuItem Header="_Help">
         <MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}" />
@@ -77,17 +64,7 @@
         <TextBox Width="70" Watermark="Port" Text="{Binding BindPort}" />
         <CheckBox Content="Capturing" IsChecked="{Binding Capturing}" AutomationProperties.AutomationId="CapturingCheck" />
         <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}" AutomationProperties.AutomationId="DecryptHttpsCheck" />
-        <CheckBox Content="HTTP/1.1" IsChecked="{Binding EnableHttp11}"
-                  ToolTip.Tip="Allow HTTP/1.1. CONNECT is always HTTP/1.1."
-                  AutomationProperties.AutomationId="Http11Check" />
-        <CheckBox Content="HTTP/2" IsChecked="{Binding EnableHttp2}"
-                  ToolTip.Tip="Allow HTTP/2 (ALPN h2). Applies to new connections."
-                  AutomationProperties.AutomationId="Http2Check" />
-        <CheckBox Content="HTTP/3" IsChecked="{Binding EnableHttp3}" IsEnabled="{x:Static vm:MainWindowViewModel.Http3Supported}"
-                  ToolTip.Tip="Allow HTTP/3 to origins when MsQuic is available. Inspector does not listen on UDP."
-                  AutomationProperties.AutomationId="Http3Check" />
         <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}" IsEnabled="False" AutomationProperties.AutomationId="SystemProxyCheck" />
-        <CheckBox Content="Details" IsChecked="{Binding ShowSessionDetails}" AutomationProperties.AutomationId="DetailsPaneCheck" />
       </StackPanel>
       <DataGrid Grid.Row="1" Grid.Column="0" Margin="8,8,4,8"
                 x:Name="SessionsGrid"
@@ -116,11 +93,20 @@
       </DataGrid>
       <GridSplitter Grid.Row="1" Grid.Column="1" Width="4" ResizeDirection="Columns"
                     IsVisible="{Binding ShowSessionDetails}" />
-      <TabControl Grid.Row="1" Grid.Column="2" Margin="4,8,8,8"
-                  x:Name="DetailTabs"
-                  AutomationProperties.AutomationId="DetailTabs"
-                  IsVisible="{Binding ShowSessionDetails}"
-                  SelectedIndex="{Binding SelectedDetailTabIndex}">
+      <DockPanel Grid.Row="1" Grid.Column="2" Margin="4,8,8,8"
+                 IsVisible="{Binding ShowSessionDetails}">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4" LastChildFill="True">
+          <Button DockPanel.Dock="Right"
+                  Content="✕"
+                  Padding="8,2"
+                  ToolTip.Tip="Close details"
+                  Command="{Binding CloseSessionDetailsCommand}"
+                  AutomationProperties.AutomationId="CloseDetailsButton" />
+          <TextBlock Text="Details" VerticalAlignment="Center" FontWeight="SemiBold" />
+        </DockPanel>
+        <TabControl x:Name="DetailTabs"
+                    AutomationProperties.AutomationId="DetailTabs"
+                    SelectedIndex="{Binding SelectedDetailTabIndex}">
         <TabItem Header="Headers" AutomationProperties.AutomationId="TabHeaders">
           <TextBox IsReadOnly="True" Text="{Binding SelectedHeaders}" AcceptsReturn="True" TextWrapping="Wrap"
                    FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="HeadersText" />
@@ -228,7 +214,8 @@
                      FontFamily="Consolas,Courier New,monospace" Watermark="Optional response hooks" />
           </StackPanel>
         </TabItem>
-      </TabControl>
+        </TabControl>
+      </DockPanel>
       <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Margin="8" Text="{Binding StatusText}" TextWrapping="Wrap"
                  AutomationProperties.AutomationId="StatusText" />
     </Grid>

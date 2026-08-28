@@ -46,18 +46,6 @@ public sealed class InspectorSettings
 
     /// <summary>When false, HTTPS stays opaque CONNECT tunnels (Fiddler-like default).</summary>
     public bool DecryptHttps { get; set; }
-
-    /// <summary>Show the session detail tab sidebar (headers, body, composer, …).</summary>
-    public bool ShowSessionDetails { get; set; } = true;
-
-    /// <summary>Allow HTTP/1.1 (CONNECT is always HTTP/1.1 regardless).</summary>
-    public bool EnableHttp11 { get; set; } = true;
-
-    /// <summary>Allow HTTP/2 (ALPN h2) on new connections.</summary>
-    public bool EnableHttp2 { get; set; } = true;
-
-    /// <summary>Allow HTTP/3 to origins when MsQuic is available.</summary>
-    public bool EnableHttp3 { get; set; } = true;
 }
 
 public sealed class SettingsService
@@ -102,27 +90,6 @@ public sealed class SettingsService
             var json = File.ReadAllText(_path);
             var loaded = JsonSerializer.Deserialize<InspectorSettings>(json, JsonOptions)
                          ?? new InspectorSettings();
-            if (json.IndexOf("showSessionDetails", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                loaded.ShowSessionDetails = true;
-            }
-
-            // Older settings.json omitted these keys; default every protocol on.
-            if (json.IndexOf("enableHttp11", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                loaded.EnableHttp11 = true;
-            }
-
-            if (json.IndexOf("enableHttp2", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                loaded.EnableHttp2 = true;
-            }
-
-            if (json.IndexOf("enableHttp3", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                loaded.EnableHttp3 = true;
-            }
-
             return loaded;
         }
         catch

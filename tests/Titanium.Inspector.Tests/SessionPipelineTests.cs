@@ -58,13 +58,12 @@ public class SessionPipelineTests
     }
 
     [TestMethod]
-    public void ShowSessionDetails_DefaultsTrue_AndPersists()
+    public void SelectingSession_OpensDetails_CloseHidesPane()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-inspector-details-" + Guid.NewGuid().ToString("N") + ".json");
         try
         {
             var settings = new SettingsService(path);
-            Assert.IsTrue(settings.Current.ShowSessionDetails);
             var registry = new SessionRegistry();
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),
@@ -72,10 +71,31 @@ public class SessionPipelineTests
                 new UpdateService(settings),
                 settings,
                 new InterceptionService(new RecordingSystemProxyController()));
+            Assert.IsFalse(vm.ShowSessionDetails);
+
+            var snap = new SessionSnapshot
+            {
+                Id = 1,
+                Method = "GET",
+                Url = "https://example.com/",
+                Host = "example.com",
+            };
+            vm.SelectedSession = snap;
             Assert.IsTrue(vm.ShowSessionDetails);
-            vm.ShowSessionDetails = false;
-            var reloaded = new SettingsService(path);
-            Assert.IsFalse(reloaded.Current.ShowSessionDetails);
+
+            Assert.IsTrue(vm.CloseSessionDetailsCommand.CanExecute(null));
+            vm.CloseSessionDetailsCommand.Execute(null);
+            Assert.IsFalse(vm.ShowSessionDetails);
+            Assert.AreSame(snap, vm.SelectedSession);
+
+            vm.SelectedSession = new SessionSnapshot
+            {
+                Id = 2,
+                Method = "POST",
+                Url = "https://example.com/api",
+                Host = "example.com",
+            };
+            Assert.IsTrue(vm.ShowSessionDetails);
         }
         finally
         {
@@ -87,105 +107,14 @@ public class SessionPipelineTests
     }
 
     [TestMethod]
-    public void ShowSessionDetails_MissingJsonKey_DefaultsTrue()
-    {
-        var path = Path.Combine(Path.GetTempPath(), "twp-inspector-details-old-" + Guid.NewGuid().ToString("N") + ".json");
-        try
-        {
-            File.WriteAllText(path, """{"bindPort":8866,"decryptHttps":false}""");
-            var loaded = new SettingsService(path);
-            Assert.IsTrue(loaded.Current.ShowSessionDetails);
-        }
-        finally
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-    }
-
-    [TestMethod]
-    public void HttpProtocols_DefaultAllOn_MissingJsonKeys_AndRejectLastOff()
-    {
-        var path = Path.Combine(Path.GetTempPath(), "twp-inspector-proto-" + Guid.NewGuid().ToString("N") + ".json");
-        try
-        {
-            var settings = new SettingsService(path);
-            Assert.IsTrue(settings.Current.EnableHttp11);
-            Assert.IsTrue(settings.Current.EnableHttp2);
-            Assert.IsTrue(settings.Current.EnableHttp3);
-
-            var registry = new SessionRegistry();
-            var vm = new MainWindowViewModel(
-                new SessionStreamBuffer(registry),
-                registry,
-                new UpdateService(settings),
-                settings,
-                new InterceptionService(new RecordingSystemProxyController()));
-            Assert.IsTrue(vm.EnableHttp11);
-            Assert.IsTrue(vm.EnableHttp2);
-            Assert.IsTrue(vm.EnableHttp3);
-
-            vm.EnableHttp2 = false;
-            if (MainWindowViewModel.Http3Supported)
-            {
-                vm.EnableHttp3 = false;
-            }
-
-            vm.EnableHttp11 = false;
-            Assert.IsTrue(vm.EnableHttp11);
-            StringAssert.Contains(vm.StatusText, "at least one");
-
-            var reloaded = new SettingsService(path);
-            Assert.IsTrue(reloaded.Current.EnableHttp11);
-            Assert.IsFalse(reloaded.Current.EnableHttp2);
-        }
-        finally
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-    }
-
-    [TestMethod]
-    public void HttpProtocols_MissingJsonKeys_DefaultTrue()
-    {
-        var path = Path.Combine(Path.GetTempPath(), "twp-inspector-proto-old-" + Guid.NewGuid().ToString("N") + ".json");
-        try
-        {
-            File.WriteAllText(path, """{"bindPort":8866,"decryptHttps":false}""");
-            var loaded = new SettingsService(path);
-            Assert.IsTrue(loaded.Current.EnableHttp11);
-            Assert.IsTrue(loaded.Current.EnableHttp2);
-            Assert.IsTrue(loaded.Current.EnableHttp3);
-        }
-        finally
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-    }
-
-    [TestMethod]
-    public async Task Start_WithHttp2Disabled_ThenLiveToggle()
+    public async Task Start_EnablesHttp2AndHttp3WhenSupported()
     {
         using var interception = new InterceptionService(new RecordingSystemProxyController());
-        interception.EnableHttp2 = false;
-        interception.EnableHttp3 = false;
         var port = GetFreeTcpPort();
         await interception.StartAsync(System.Net.IPAddress.Loopback, port);
         Assert.IsTrue(interception.IsRunning);
-        Assert.IsFalse(interception.Http2Enabled);
-        Assert.IsFalse(interception.Http3Enabled);
-
-        interception.EnableHttp2 = true;
-        interception.ApplyHttpProtocols();
         Assert.IsTrue(interception.Http2Enabled);
+        Assert.AreEqual(InterceptionService.IsHttp3Supported, interception.Http3Enabled);
 
         interception.Stop();
     }

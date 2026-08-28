@@ -150,13 +150,13 @@ Typically at or above **YARP**; ahead of **nginx** on H2/H3→H1 reverse, near p
 
 ### Screenshots
 
+**Titanium Inspector:** session grid with request/response details:
+
+<img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
+
 **Basic console example:** compact per-request traffic tape:
 
 <img src="wiki/images/basic-screenshot.jpg" alt="Basic console proxy screenshot" width="900" />
-
-**WPF example:** session list with request/response inspection:
-
-<img src="wiki/images/wpf-screenshot.jpg" alt="WPF proxy application screenshot" width="900" />
 
 ## Support and contributing
 

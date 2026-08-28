@@ -1,6 +1,9 @@
 using System.Collections.Specialized;
 using System.Reflection;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Titanium.Inspector.Services;
@@ -20,7 +23,7 @@ public partial class MainWindow : Window
     private bool _followLatest = true;
     private bool _programmaticScroll;
     private bool _scrollQueued;
-    private ScrollViewer? _sessionsScroll;
+    private ScrollBar? _sessionsVScroll;
     private MainWindowViewModel? _sessionsVm;
 
     public MainWindow()
@@ -56,10 +59,10 @@ public partial class MainWindow : Window
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
         HookSessionsCollection(null);
-        if (_sessionsScroll is not null)
+        if (_sessionsVScroll is not null)
         {
-            _sessionsScroll.ScrollChanged -= OnSessionsScrollChanged;
-            _sessionsScroll = null;
+            _sessionsVScroll.PropertyChanged -= OnSessionsScrollBarPropertyChanged;
+            _sessionsVScroll = null;
         }
 
         if (DataContext is MainWindowViewModel vm)
@@ -92,44 +95,44 @@ public partial class MainWindow : Window
 
     private void AttachSessionsScroll()
     {
-        if (_sessionsScroll is not null)
+        if (_sessionsVScroll is not null)
         {
             return;
         }
 
-        _sessionsScroll = SessionsGrid.FindDescendantOfType<ScrollViewer>();
-        if (_sessionsScroll is null)
+        // DataGrid does not host a ScrollViewer; vertical scrolling is PART_VerticalScrollbar.
+        _sessionsVScroll = SessionsGrid.FindControl<ScrollBar>("PART_VerticalScrollbar")
+            ?? SessionsGrid.GetVisualDescendants()
+                .OfType<ScrollBar>()
+                .FirstOrDefault(bar => bar.Orientation == Orientation.Vertical);
+
+        if (_sessionsVScroll is null)
         {
             return;
         }
 
-        _sessionsScroll.ScrollChanged += OnSessionsScrollChanged;
+        _sessionsVScroll.PropertyChanged += OnSessionsScrollBarPropertyChanged;
     }
 
-    private void OnSessionsScrollChanged(object? sender, ScrollChangedEventArgs e)
+    private void OnSessionsScrollBarPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
-        if (_sessionsScroll is null)
+        if (_sessionsVScroll is null
+            || (e.Property != RangeBase.ValueProperty
+                && e.Property != RangeBase.MaximumProperty
+                && e.Property != ScrollBar.ViewportSizeProperty))
         {
             return;
         }
 
-        var offset = _sessionsScroll.Offset.Y;
-        var viewport = _sessionsScroll.Viewport.Height;
-        var extent = _sessionsScroll.Extent.Height;
-        var userMovedOffset = Math.Abs(e.OffsetDelta.Y) > 0.5;
-        var isNearBottom = SessionListFollowLatest.IsNearBottom(
-            offset, viewport, extent, SessionListFollowLatest.DefaultThresholdPx);
-        var allContentVisible = extent <= viewport;
+        var value = _sessionsVScroll.Value;
+        var maximum = _sessionsVScroll.Maximum;
+        var userMovedOffset = e.Property == RangeBase.ValueProperty;
+        var isNearBottom = SessionListFollowLatest.IsNearBottomByScrollBar(
+            value, maximum, SessionListFollowLatest.DefaultThresholdPx);
+        var allContentVisible = maximum <= 0;
 
         _followLatest = SessionListFollowLatest.UpdateFollowAfterScroll(
             _followLatest, _programmaticScroll, userMovedOffset, isNearBottom, allContentVisible);
-
-        if (!_programmaticScroll
-            && e.ExtentDelta.Y > 0.5
-            && SessionListFollowLatest.ShouldScrollToLatest(_followLatest, IsUnsorted(), hasItems: true))
-        {
-            RequestScrollToLatest();
-        }
     }
 
     private void OnSessionsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -184,11 +187,19 @@ public partial class MainWindow : Window
         }
 
         AttachSessionsScroll();
-        // ScrollIntoView realizes the virtualized last row; ScrollToEnd pins the viewport.
+        // ScrollIntoView realizes the virtualized last row; pin the scrollbar to Maximum.
         _programmaticScroll = true;
         SessionsGrid.ScrollIntoView(_sessionsVm.Sessions[^1], column: null);
-        _sessionsScroll?.ScrollToEnd();
-        Dispatcher.UIThread.Post(() => _programmaticScroll = false, DispatcherPriority.Background);
+        if (_sessionsVScroll is not null)
+        {
+            _sessionsVScroll.Value = _sessionsVScroll.Maximum;
+        }
+
+        // Layout/virtualization may raise ValueChanged after this method returns.
+        Dispatcher.UIThread.Post(() =>
+        {
+            Dispatcher.UIThread.Post(() => _programmaticScroll = false, DispatcherPriority.Background);
+        }, DispatcherPriority.Background);
     }
 
     private bool IsUnsorted()

@@ -84,6 +84,10 @@ Example apps live under [`examples/`](https://github.com/justcoding121/titanium-
 
 ## Screenshots
 
+**Titanium Inspector** — session grid with request/response details:
+
+<img src="images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
+
 **Basic console example** — compact per-request traffic tape:
 
 <img src="images/basic-screenshot.jpg" alt="Basic console proxy screenshot" width="900" />
