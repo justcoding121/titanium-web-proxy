@@ -198,3 +198,95 @@ public class ReverseProxyFastPathTests
         Assert.IsFalse(ReverseProxyFastPath.IsForwardHostEquivalent(routes, manager.Snapshot, "origin.local", 80));
     }
 }
+
+[TestClass]
+public class DestinationResolverTests
+{
+    [TestMethod]
+    public async Task TryResolve_SelectsClusterDestination()
+    {
+        var manager = new ClusterManager();
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c1",
+                Destinations =
+                [
+                    new DestinationConfig { Id = "d1", Address = "10.0.0.1", Port = 9000 },
+                ],
+            },
+        ]);
+
+        var options = new Abstractions.ReverseProxyOptions
+        {
+            Routes =
+            [
+                new RouteConfig
+                {
+                    Id = "r1",
+                    ClusterId = "c1",
+                    Match = new RouteMatch { Path = "/api", PathKind = PathMatchKind.Prefix },
+                },
+            ],
+            ClusterManager = manager,
+            RouteMatcher = new RouteMatcher(),
+            LoadBalancer = new LoadBalancer(),
+        };
+
+        var request = new Http.Request
+        {
+            Method = "GET",
+            RequestUriString8 = (Models.ByteString)"/api/v1",
+            Host = "app.example",
+        };
+
+        Assert.IsTrue(DestinationResolver.TryResolve(options, request, "fallback", 80,
+            out var dest, out var route));
+        Assert.AreEqual("r1", route?.Id);
+        Assert.AreEqual("d1", dest?.Id);
+        Assert.AreEqual("10.0.0.1", dest?.Address);
+        Assert.AreEqual(9000, dest?.Port);
+    }
+
+    [TestMethod]
+    public void TryResolve_False_WhenRoutesUnset()
+    {
+        var request = new Http.Request { Method = "GET", RequestUriString8 = (Models.ByteString)"/" };
+        Assert.IsFalse(DestinationResolver.TryResolve(null, request, "h", 80, out _, out _));
+        Assert.IsFalse(DestinationResolver.TryResolve(new Abstractions.ReverseProxyOptions(), request, "h", 80,
+            out _, out _));
+    }
+
+    [TestMethod]
+    public void StreamTrySelect_BuildsPoolKey()
+    {
+        var manager = new ClusterManager();
+        manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c1",
+                Destinations = [new DestinationConfig { Id = "d1", Address = "127.0.0.1", Port = 443, UseHttps = true }],
+            },
+        ]).AsTask().GetAwaiter().GetResult();
+
+        var options = new Abstractions.ReverseProxyOptions
+        {
+            Routes =
+            [
+                new RouteConfig
+                {
+                    Id = "r1",
+                    ClusterId = "c1",
+                    Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+                },
+            ],
+            ClusterManager = manager,
+        };
+
+        Assert.IsTrue(StreamDestinationDispatch.TrySelect(options, "app", "/", "GET", out var dest, out var poolKey));
+        Assert.AreEqual("d1", dest?.Id);
+        Assert.AreEqual("d1|h2h3", poolKey);
+    }
+}

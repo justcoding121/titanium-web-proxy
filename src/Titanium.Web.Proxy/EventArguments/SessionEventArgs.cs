@@ -83,6 +83,9 @@ public class SessionEventArgs : SessionEventArgsBase
         ConnectTimeout = null;
         CustomUpStreamProxy = null;
         CustomUpStreamProxyUsed = null;
+        UpstreamConnectHost = null;
+        UpstreamConnectPort = null;
+        UpstreamDestinationId = null;
         Deadlines.Reset();
         UserData = connectArgs?.UserData;
         HttpClient.ResetForKeepAlive();

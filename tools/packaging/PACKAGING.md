@@ -9,11 +9,22 @@ dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r win-x64 --self
 
 Zip the output folders as `TitaniumInspector-win-x64.zip` and `Titanium.Cli-win-x64.zip`.
 
-MSI: produce via WiX or Advanced Installer in CI once Authenticode secrets are available (stretch). Until then, winget can ship the portable zip (see `tools/packaging/winget/`).
+### MSI (Inspector)
+
+```powershell
+./tools/packaging/build-inspector-msi.ps1 `
+  -PayloadDir artifacts/inspector/win-x64 `
+  -OutputMsi TitaniumInspector-win-x64.msi `
+  -Version 7.0.0
+```
+
+Uses WiX 5 (`dotnet tool` manifest under `tools/packaging/wix/`). Authenticode signing is stretch; unsigned MSI is fine for GitHub Releases / early winget.
 
 Winget package IDs:
-- `justcoding121.TitaniumInspector`
-- `justcoding121.TitaniumCli`
+- `justcoding121.TitaniumInspector` (prefer MSI installer when attached to the Release)
+- `justcoding121.TitaniumCli` (portable zip)
+
+Manifest stubs live in `tools/packaging/winget/`.
 
 ## macOS / Linux (stretch)
 

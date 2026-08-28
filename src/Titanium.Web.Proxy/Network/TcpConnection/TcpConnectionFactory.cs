@@ -324,14 +324,7 @@ internal class TcpConnectionFactory : IDisposable
 
         // Mirror the connectHost/connectPort logic from GetServerConnection so that the key
         // computed here is identical to the key stored on connections created by that method.
-        string? connectHost = null;
-        int? connectPort = null;
-        if (session.ProxyEndPoint is TransparentBaseProxyEndPoint transparentEndPoint
-            && !string.IsNullOrEmpty(transparentEndPoint.ForwardHost))
-        {
-            connectHost = transparentEndPoint.ForwardHost;
-            connectPort = transparentEndPoint.ForwardPort;
-        }
+        var (connectHost, connectPort) = ResolveConnectTarget(session);
 
         return GetConnectionCacheKey(originHost, originPort, isHttps, applicationProtocols, upStreamEndPoint,
             upStreamProxy, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
@@ -344,6 +337,21 @@ internal class TcpConnectionFactory : IDisposable
             session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
             session.HttpClient.UpStreamEndPointIPv4 ?? server.UpStreamEndPointIPv4,
             session.HttpClient.UpStreamEndPointIPv6 ?? server.UpStreamEndPointIPv6);
+    }
+
+    /// <summary>
+    ///     Prefer per-session route dispatch override; else transparent ForwardHost.
+    /// </summary>
+    private static (string? Host, int? Port) ResolveConnectTarget(SessionEventArgsBase session)
+    {
+        if (session.UpstreamConnectHost is { Length: > 0 } routedHost)
+            return (routedHost, session.UpstreamConnectPort);
+
+        if (session.ProxyEndPoint is TransparentBaseProxyEndPoint transparentEndPoint
+            && !string.IsNullOrEmpty(transparentEndPoint.ForwardHost))
+            return (transparentEndPoint.ForwardHost, transparentEndPoint.ForwardPort);
+
+        return (null, null);
     }
 
 
@@ -414,16 +422,9 @@ internal class TcpConnectionFactory : IDisposable
         var upStreamProxy = customUpStreamProxy ??
                             (isHttps ? proxyServer.UpStreamHttpsProxy : proxyServer.UpStreamHttpProxy);
 
-        // For transparent endpoints with a fixed forward target, only the TCP connection
-        // destination is overridden; host/port stay the original for TLS SNI and Host header.
-        string? connectHost = null;
-        int? connectPort = null;
-        if (session.ProxyEndPoint is TransparentBaseProxyEndPoint transparentEndPoint
-            && !string.IsNullOrEmpty(transparentEndPoint.ForwardHost))
-        {
-            connectHost = transparentEndPoint.ForwardHost;
-            connectPort = transparentEndPoint.ForwardPort;
-        }
+        // Route dispatch may override connect target; else transparent ForwardHost.
+        // host/port stay the request authority for TLS SNI and Host header.
+        var (connectHost, connectPort) = ResolveConnectTarget(session);
 
         return await GetServerConnection(proxyServer, host, port, session.HttpClient.Request.HttpVersion, isHttps,
             applicationProtocols, isConnect, session, upStreamEndPoint, upStreamProxy, noCache, prefetch,

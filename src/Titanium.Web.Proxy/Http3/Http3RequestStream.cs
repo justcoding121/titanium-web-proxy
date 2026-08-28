@@ -268,6 +268,9 @@ internal static class Http3RequestStream
                     return;
                 }
 
+                // Per-stream route → destination (no-op when ReverseProxy routes unset).
+                Routing.ReverseProxySessionDispatch.TryApply(server, sessionArgs);
+
                 // Inject Via only when we stay on the full session forward path (not MITM
                 // unchanged-lite / IsFastPath). Adding Via before the unchanged check would
                 // dirtied MutationCount and defeat the lite finish.

@@ -75,10 +75,24 @@ jobs:
         run: |
           dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r win-x64 --self-contained true -o artifacts/inspector/win-x64
           Compress-Archive -Path artifacts/inspector/win-x64/* -DestinationPath TitaniumInspector-win-x64.zip
+      - name: Build MSI (WiX)
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}"
+          if ($ver.StartsWith("v")) { $ver = $ver.Substring(1) }
+          if ($ver -notmatch '^\d+\.\d+\.\d+') { $ver = "7.0.0" }
+          # WiX Version is Major.Minor.Build only
+          $ver = ($ver -split "-")[0]
+          ./tools/packaging/build-inspector-msi.ps1 `
+            -PayloadDir artifacts/inspector/win-x64 `
+            -OutputMsi TitaniumInspector-win-x64.msi `
+            -Version $ver
       - uses: actions/upload-artifact@v4
         with:
           name: inspector-win-x64
-          path: TitaniumInspector-win-x64.zip
+          path: |
+            TitaniumInspector-win-x64.zip
+            TitaniumInspector-win-x64.msi
 
   publish-release:
     needs: [build-cli, build-plus, build-inspector]
@@ -98,7 +112,7 @@ jobs:
           CHANNEL=stable
           if [[ "$VERSION" == *beta* || "$VERSION" == *-* ]]; then CHANNEL=beta; fi
           mkdir -p dist
-          find artifacts -type f \( -name '*.zip' -o -name '*.dll' \) -exec cp {} dist/ \;
+          find artifacts -type f \( -name '*.zip' -o -name '*.dll' -o -name '*.msi' \) -exec cp {} dist/ \;
           python3 - <<'PY'
           import hashlib, json, os, pathlib, datetime
           version = os.environ["GITHUB_REF_NAME"].lstrip("v")
@@ -133,6 +147,8 @@ jobs:
             if name.startswith("Titanium.Cli-"):
               rid = name.removeprefix("Titanium.Cli-").removesuffix(".zip")
               manifest["products"]["cli"]["assets"][rid] = entry
+            elif name.startswith("TitaniumInspector-") and name.endswith(".msi"):
+              manifest["products"]["inspector"]["assets"]["win-x64-msi"] = entry
             elif name.startswith("TitaniumInspector-"):
               rid = name.removeprefix("TitaniumInspector-").removesuffix(".zip")
               manifest["products"]["inspector"]["assets"][rid] = entry

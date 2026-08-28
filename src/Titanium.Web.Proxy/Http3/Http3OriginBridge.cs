@@ -1459,6 +1459,9 @@ internal static class Http3OriginBridge
     private static (string? ConnectHost, int? ConnectPort) ResolveTransparentForwardTarget(
         SessionEventArgs sessionArgs)
     {
+        if (sessionArgs.UpstreamConnectHost is { Length: > 0 } routedHost)
+            return (routedHost, sessionArgs.UpstreamConnectPort);
+
         if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint transparent
             && !string.IsNullOrEmpty(transparent.ForwardHost))
             return (transparent.ForwardHost, transparent.ForwardPort);
