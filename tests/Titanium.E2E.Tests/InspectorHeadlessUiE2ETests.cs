@@ -141,7 +141,8 @@ public class InspectorHeadlessUiE2ETests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
 
         deadline = DateTime.UtcNow.AddSeconds(8);
-        while (vm.Sessions.Count == 0 && DateTime.UtcNow < deadline)
+        while (!vm.Sessions.Any(s => s.Url.Contains("ui-session-grid", StringComparison.OrdinalIgnoreCase))
+               && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50);
         }
