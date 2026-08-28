@@ -15,6 +15,7 @@ public enum LoadBalanceAlgorithm
     RoundRobin = 0,
     Random = 1,
     LeastRequests = 2,
+    LeastTime = 3,
 }
 
 /// <summary>Single upstream destination.</summary>
@@ -33,6 +34,12 @@ public sealed class ClusterConfig
     public required string Id { get; init; }
     public required IReadOnlyList<DestinationConfig> Destinations { get; init; }
     public LoadBalanceAlgorithm Algorithm { get; init; } = LoadBalanceAlgorithm.RoundRobin;
+
+    /// <summary>When set, sticky sessions use this cookie value as the affinity key (destination id).</summary>
+    public string? AffinityCookie { get; init; }
+
+    /// <summary>When set, sticky sessions use this request header value as the affinity key (destination id).</summary>
+    public string? AffinityHeader { get; init; }
 }
 
 /// <summary>Immutable view of clusters after Apply; swap via Interlocked.Exchange.</summary>

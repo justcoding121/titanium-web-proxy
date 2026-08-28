@@ -5,8 +5,8 @@ using Titanium.Web.Proxy.Abstractions.Routing;
 
 namespace Titanium.Web.Proxy.Clusters;
 
-/// <summary>Passive health bookkeeping and drain flags for destination pools.</summary>
-internal sealed class DestinationHealthTracker
+/// <summary>Passive health bookkeeping and active-request counters for destination pools.</summary>
+public sealed class DestinationHealthTracker
 {
     private readonly ConcurrentDictionary<string, long> _failures = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, long> _activeRequests = new(StringComparer.Ordinal);

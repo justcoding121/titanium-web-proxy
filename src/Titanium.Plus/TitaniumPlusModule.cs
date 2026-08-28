@@ -10,7 +10,12 @@ using Titanium.Web.Proxy.Abstractions.Plugins;
 
 namespace Titanium.Plus;
 
-/// <summary>Plus plugin entry loaded by Cli via ALC.</summary>
+/// <summary>
+/// Plus plugin entry loaded by Cli via ALC.
+/// Sticky sessions: set <c>affinityCookie</c> / <c>affinityHeader</c> on cluster JSON
+/// (<see cref="Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig"/>); Core LoadBalancer honors them.
+/// Least-time LB: <c>algorithm</c> / loadBalancingPolicy <c>leastTime</c>, <c>leasttime</c>, or <c>least_time</c>.
+/// </summary>
 public sealed class TitaniumPlusModule : ITitaniumPlusModule
 {
     public Version RequiredAbstractionsVersion { get; } = new(7, 0, 0);
@@ -31,7 +36,14 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
 
         ControlPlaneServer.ValidateSecret(host, secret, allowDev);
 
-        var controlPlane = new ControlPlaneServer(context.ClusterManager, host, port, secret);
+        var controlPlane = new ControlPlaneServer(
+            context.ClusterManager,
+            host,
+            port,
+            secret,
+            context.Routes,
+            context.RefreshReverseProxy,
+            context.ResponseCache);
         controlPlane.Start();
 
         var operations = new DrainOperations(context.ClusterManager);

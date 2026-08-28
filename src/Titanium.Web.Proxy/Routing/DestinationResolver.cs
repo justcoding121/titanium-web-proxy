@@ -1,3 +1,5 @@
+using System;
+using Titanium.Web.Proxy.Abstractions;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Clusters;
@@ -9,7 +11,7 @@ namespace Titanium.Web.Proxy.Routing;
 internal static class DestinationResolver
 {
     public static bool TryResolve(
-        Abstractions.ReverseProxyOptions? options,
+        ReverseProxyOptions? options,
         Request request,
         string? fallbackHost,
         int fallbackPort,
@@ -40,8 +42,50 @@ internal static class DestinationResolver
             return false;
         }
 
+        var affinityKey = ExtractAffinityKey(request, cluster);
         var lb = options.LoadBalancer ?? new LoadBalancer();
-        destination = lb.Select(cluster, snapshot);
+        destination = lb.Select(cluster, snapshot, new LoadBalanceContext(affinityKey));
         return destination is not null;
+    }
+
+    private static string? ExtractAffinityKey(Request request, ClusterConfig cluster)
+    {
+        if (!string.IsNullOrEmpty(cluster.AffinityHeader))
+        {
+            var headers = request.Headers.GetHeaders(cluster.AffinityHeader);
+            if (headers is { Count: > 0 } && !string.IsNullOrEmpty(headers[0].Value))
+            {
+                return headers[0].Value;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(cluster.AffinityCookie))
+        {
+            var cookieHeaders = request.Headers.GetHeaders("Cookie");
+            if (cookieHeaders is null)
+            {
+                return null;
+            }
+
+            foreach (var header in cookieHeaders)
+            {
+                foreach (var part in header.Value.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var eq = part.IndexOf('=');
+                    if (eq <= 0)
+                    {
+                        continue;
+                    }
+
+                    var name = part[..eq];
+                    if (name.Equals(cluster.AffinityCookie, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return part[(eq + 1)..];
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 }

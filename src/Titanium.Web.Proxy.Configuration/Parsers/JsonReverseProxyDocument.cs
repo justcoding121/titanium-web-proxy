@@ -34,7 +34,9 @@ public static class JsonReverseProxyDocument
                 clusters.Add(new ClusterConfig
                 {
                     Id = c.Id ?? throw new FormatException("Cluster id is required."),
-                    Algorithm = ParseAlgorithm(c.LoadBalancingPolicy),
+                    Algorithm = ParseAlgorithm(c.LoadBalancingPolicy ?? c.Algorithm),
+                    AffinityCookie = c.AffinityCookie,
+                    AffinityHeader = c.AffinityHeader,
                     Destinations = (c.Destinations ?? []).Select((d, i) => new DestinationConfig
                     {
                         Id = d.Id ?? $"{c.Id}-d{i}",
@@ -82,6 +84,8 @@ public static class JsonReverseProxyDocument
                     DecryptSsl = l.DecryptSsl ?? false,
                     ForwardHost = l.ForwardHost,
                     ForwardPort = l.ForwardPort,
+                    EnableHttp2 = l.EnableHttp2,
+                    EnableHttp3 = l.EnableHttp3 ?? false,
                 });
             }
         }
@@ -101,6 +105,7 @@ public static class JsonReverseProxyDocument
         {
             "random" => LoadBalanceAlgorithm.Random,
             "leastrequests" or "least_requests" => LoadBalanceAlgorithm.LeastRequests,
+            "leasttime" or "least_time" or "leastresponsetime" => LoadBalanceAlgorithm.LeastTime,
             _ => LoadBalanceAlgorithm.RoundRobin,
         };
 
@@ -126,6 +131,8 @@ public static class JsonReverseProxyDocument
         public bool? DecryptSsl { get; set; }
         public string? ForwardHost { get; set; }
         public int? ForwardPort { get; set; }
+        public bool? EnableHttp2 { get; set; }
+        public bool? EnableHttp3 { get; set; }
     }
 
     private sealed class RouteDto
@@ -148,6 +155,9 @@ public static class JsonReverseProxyDocument
     {
         public string? Id { get; set; }
         public string? LoadBalancingPolicy { get; set; }
+        public string? Algorithm { get; set; }
+        public string? AffinityCookie { get; set; }
+        public string? AffinityHeader { get; set; }
         public List<DestinationDto>? Destinations { get; set; }
     }
 

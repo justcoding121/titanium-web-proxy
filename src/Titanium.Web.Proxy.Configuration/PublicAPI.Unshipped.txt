@@ -36,6 +36,10 @@ Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SharedSecret.set -> v
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.DecryptSsl.get -> bool
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.DecryptSsl.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.EnableHttp2.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.EnableHttp2.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.EnableHttp3.get -> bool
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.EnableHttp3.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ForwardHost.get -> string
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ForwardHost.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ForwardHost.set -> void

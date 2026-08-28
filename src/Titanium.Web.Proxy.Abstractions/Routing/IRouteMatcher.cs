@@ -40,10 +40,26 @@ public interface IClusterManager
     DestinationState GetDestinationState(string destinationId);
 }
 
+/// <summary>Optional per-request context for load balancing (affinity, counters).</summary>
+public readonly struct LoadBalanceContext
+{
+    public LoadBalanceContext(string? affinityKey = null)
+    {
+        AffinityKey = affinityKey;
+    }
+
+    /// <summary>Preferred destination id from cookie/header stickiness.</summary>
+    public string? AffinityKey { get; }
+}
+
 /// <summary>Selects a healthy destination from a cluster.</summary>
 public interface ILoadBalancer
 {
     DestinationConfig? Select(ClusterConfig cluster, ImmutableClusterSnapshot snapshot);
+
+    /// <summary>Select with affinity / algorithm context. Default forwards to <see cref="Select(ClusterConfig, ImmutableClusterSnapshot)"/>.</summary>
+    DestinationConfig? Select(ClusterConfig cluster, ImmutableClusterSnapshot snapshot, LoadBalanceContext context)
+        => Select(cluster, snapshot);
 }
 
 /// <summary>Applies transforms to request/response metadata.</summary>

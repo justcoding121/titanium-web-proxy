@@ -21,6 +21,8 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     private long _receivedBytes;
     private long _sentBytes;
     private string? _processName;
+    private double? _durationMs;
+    private double? _ttfbMs;
 
     public long Id { get; set; }
     public string Method { get; set; } = "GET";
@@ -122,6 +124,18 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     {
         get => _sentBytes;
         set => SetField(ref _sentBytes, value);
+    }
+
+    public double? DurationMs
+    {
+        get => _durationMs;
+        set => SetField(ref _durationMs, value);
+    }
+
+    public double? TtfbMs
+    {
+        get => _ttfbMs;
+        set => SetField(ref _ttfbMs, value);
     }
 
     public string ProcessDisplay =>

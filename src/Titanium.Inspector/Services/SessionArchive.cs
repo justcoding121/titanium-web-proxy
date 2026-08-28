@@ -1,35 +1,53 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
-using Titanium.Inspector.Services;
 
 namespace Titanium.Inspector.Services;
 
 /// <summary>HAR + native session archive zip import/export.</summary>
 public static class SessionArchive
 {
+    private static readonly JsonSerializerOptions HarJson = new() { WriteIndented = true };
+
     public static async Task ExportHarAsync(IEnumerable<SessionSnapshot> sessions, string path, CancellationToken ct = default)
     {
-        var entries = sessions.Select(s => new
+        var entries = sessions.Select(ToHarEntry).ToList();
+        var har = new
         {
-            startedDateTime = s.StartedUtc.UtcDateTime.ToString("o"),
-            request = new
+            log = new
             {
-                method = s.Method,
-                url = s.Url,
-                headers = ParseHeaders(s.RequestHeadersText),
-                bodySize = s.RequestBodyBytes?.Length ?? s.RequestBodyText?.Length ?? -1,
+                version = "1.2",
+                creator = new { name = "Titanium Inspector", version = "7.0.0" },
+                entries,
             },
-            response = new
-            {
-                status = s.StatusCode ?? 0,
-                headers = ParseHeaders(s.ResponseHeadersText),
-                bodySize = s.ResponseBodyBytes?.Length ?? s.ResponseBodyText?.Length ?? -1,
-            },
-        }).ToList();
+        };
+        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(har, HarJson), ct);
+    }
 
-        var har = new { log = new { version = "1.2", creator = new { name = "Titanium Inspector", version = "7.0.0" }, entries } };
-        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(har, new JsonSerializerOptions { WriteIndented = true }), ct);
+    public static async Task<List<SessionSnapshot>> ImportHarAsync(string path, CancellationToken ct = default)
+    {
+        await using var fs = File.OpenRead(path);
+        using var doc = await JsonDocument.ParseAsync(fs, cancellationToken: ct);
+        var list = new List<SessionSnapshot>();
+        if (!doc.RootElement.TryGetProperty("log", out var log) ||
+            !log.TryGetProperty("entries", out var entries) ||
+            entries.ValueKind != JsonValueKind.Array)
+        {
+            return list;
+        }
+
+        long id = 1;
+        foreach (var entry in entries.EnumerateArray())
+        {
+            ct.ThrowIfCancellationRequested();
+            var snap = FromHarEntry(entry, id++);
+            if (snap is not null)
+            {
+                list.Add(snap);
+            }
+        }
+
+        return list;
     }
 
     public static async Task ExportNativeArchiveAsync(IEnumerable<SessionSnapshot> sessions, string zipPath, CancellationToken ct = default)
@@ -69,6 +87,237 @@ public static class SessionArchive
         }
 
         return list;
+    }
+
+    private static object ToHarEntry(SessionSnapshot s)
+    {
+        var duration = s.DurationMs ?? 0;
+        var wait = s.TtfbMs ?? Math.Max(0, duration * 0.6);
+        var receive = Math.Max(0, duration - wait);
+        var send = Math.Max(0, duration * 0.05);
+        var mime = GuessMime(s);
+        var postText = s.RequestBodyText;
+        var contentText = s.ResponseBodyText;
+
+        return new
+        {
+            startedDateTime = s.StartedUtc.UtcDateTime.ToString("o"),
+            time = duration,
+            request = new
+            {
+                method = s.Method,
+                url = s.Url,
+                httpVersion = "HTTP/1.1",
+                headers = ParseHeaders(s.RequestHeadersText),
+                queryString = ParseQueryString(s.Url),
+                cookies = Array.Empty<object>(),
+                headersSize = -1,
+                bodySize = s.RequestBodyBytes?.Length ?? s.RequestBodyText?.Length ?? -1,
+                postData = string.IsNullOrEmpty(postText)
+                    ? null
+                    : new { mimeType = s.ContentType ?? "text/plain", text = postText },
+            },
+            response = new
+            {
+                status = s.StatusCode ?? 0,
+                statusText = "",
+                httpVersion = "HTTP/1.1",
+                headers = ParseHeaders(s.ResponseHeadersText),
+                cookies = Array.Empty<object>(),
+                content = new
+                {
+                    size = s.ResponseBodyBytes?.Length ?? s.ResponseBodyText?.Length ?? 0,
+                    mimeType = mime,
+                    text = contentText ?? "",
+                },
+                redirectURL = "",
+                headersSize = -1,
+                bodySize = s.ResponseBodyBytes?.Length ?? s.ResponseBodyText?.Length ?? -1,
+            },
+            timings = new
+            {
+                blocked = -1,
+                dns = -1,
+                connect = -1,
+                ssl = -1,
+                send,
+                wait,
+                receive,
+            },
+            cache = new { },
+        };
+    }
+
+    private static SessionSnapshot? FromHarEntry(JsonElement entry, long id)
+    {
+        try
+        {
+            if (!entry.TryGetProperty("request", out var req))
+            {
+                return null;
+            }
+
+            var method = req.TryGetProperty("method", out var m) ? m.GetString() ?? "GET" : "GET";
+            var url = req.TryGetProperty("url", out var u) ? u.GetString() ?? "" : "";
+            string? host = null;
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            {
+                host = uri.Host;
+            }
+
+            var reqHeaders = FormatHarHeaders(req);
+            string? reqBody = null;
+            string? contentType = null;
+            if (req.TryGetProperty("postData", out var post))
+            {
+                if (post.TryGetProperty("text", out var pt))
+                {
+                    reqBody = pt.GetString();
+                }
+
+                if (post.TryGetProperty("mimeType", out var mt))
+                {
+                    contentType = mt.GetString();
+                }
+            }
+
+            int? status = null;
+            string? respHeaders = null;
+            string? respBody = null;
+            string? respMime = null;
+            if (entry.TryGetProperty("response", out var resp))
+            {
+                if (resp.TryGetProperty("status", out var st) && st.TryGetInt32(out var code))
+                {
+                    status = code;
+                }
+
+                respHeaders = FormatHarHeaders(resp);
+                if (resp.TryGetProperty("content", out var content))
+                {
+                    if (content.TryGetProperty("text", out var ct))
+                    {
+                        respBody = ct.GetString();
+                    }
+
+                    if (content.TryGetProperty("mimeType", out var mime))
+                    {
+                        respMime = mime.GetString();
+                    }
+                }
+            }
+
+            double? durationMs = null;
+            double? ttfbMs = null;
+            if (entry.TryGetProperty("time", out var timeEl) && timeEl.TryGetDouble(out var time))
+            {
+                durationMs = time;
+            }
+
+            if (entry.TryGetProperty("timings", out var timings) &&
+                timings.TryGetProperty("wait", out var waitEl) &&
+                waitEl.TryGetDouble(out var wait) &&
+                wait >= 0)
+            {
+                ttfbMs = wait;
+            }
+
+            DateTimeOffset started = DateTimeOffset.UtcNow;
+            if (entry.TryGetProperty("startedDateTime", out var startedEl) &&
+                DateTimeOffset.TryParse(startedEl.GetString(), out var parsed))
+            {
+                started = parsed;
+            }
+
+            return new SessionSnapshot
+            {
+                Id = id,
+                Method = method,
+                Url = url,
+                Host = host,
+                StartedUtc = started,
+                StatusCode = status,
+                RequestHeadersText = reqHeaders,
+                ResponseHeadersText = respHeaders,
+                RequestBodyText = reqBody,
+                ResponseBodyText = respBody,
+                ContentType = contentType ?? respMime,
+                DurationMs = durationMs,
+                TtfbMs = ttfbMs,
+                BodySize = respBody?.Length,
+                Protocol = "HAR",
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string FormatHarHeaders(JsonElement parent)
+    {
+        if (!parent.TryGetProperty("headers", out var headers) || headers.ValueKind != JsonValueKind.Array)
+        {
+            return "";
+        }
+
+        var sb = new StringBuilder();
+        foreach (var h in headers.EnumerateArray())
+        {
+            var name = h.TryGetProperty("name", out var n) ? n.GetString() : null;
+            var value = h.TryGetProperty("value", out var v) ? v.GetString() : null;
+            if (!string.IsNullOrEmpty(name))
+            {
+                sb.Append(name).Append(": ").Append(value ?? "").AppendLine();
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static string GuessMime(SessionSnapshot s)
+    {
+        if (!string.IsNullOrEmpty(s.ContentType))
+        {
+            return s.ContentType!;
+        }
+
+        var headers = SessionInspectors.ParseHeaderBlock(s.ResponseHeadersText);
+        return headers.TryGetValue("Content-Type", out var ct) ? ct : "application/octet-stream";
+    }
+
+    private static object[] ParseQueryString(string url)
+    {
+        var q = url.IndexOf('?', StringComparison.Ordinal);
+        if (q < 0 || q == url.Length - 1)
+        {
+            return [];
+        }
+
+        return url[(q + 1)..].Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Select(pair =>
+            {
+                var eq = pair.IndexOf('=');
+                if (eq < 0)
+                {
+                    return (object)new { name = Decode(pair), value = "" };
+                }
+
+                return (object)new { name = Decode(pair[..eq]), value = Decode(pair[(eq + 1)..]) };
+            })
+            .ToArray();
+    }
+
+    private static string Decode(string value)
+    {
+        try
+        {
+            return Uri.UnescapeDataString(value.Replace('+', ' '));
+        }
+        catch
+        {
+            return value;
+        }
     }
 
     private static object[] ParseHeaders(string? text)

@@ -11,6 +11,7 @@ public static class ReplayService
         string? editedUrl = null,
         string? editedMethod = null,
         string? editedBody = null,
+        string? editedHeaders = null,
         CancellationToken cancellationToken = default)
     {
         var url = editedUrl ?? session.Url;
@@ -27,7 +28,8 @@ public static class ReplayService
         using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(60) };
         using var request = new HttpRequestMessage(new HttpMethod(editedMethod ?? session.Method), url);
 
-        foreach (var line in (session.RequestHeadersText ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        var headerBlock = editedHeaders ?? session.RequestHeadersText ?? "";
+        foreach (var line in headerBlock.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var idx = line.IndexOf(':');
             if (idx <= 0)
@@ -61,18 +63,39 @@ public static class ReplayService
                 request.Content.Headers.ContentType = MediaTypeHeaderValue.Parse(session.ContentType);
             }
         }
-        else if (session.RequestBodyBytes is { Length: > 0 })
+        else if (editedBody is null && session.RequestBodyBytes is { Length: > 0 })
         {
             request.Content = new ByteArrayContent(session.RequestBodyBytes);
         }
 
         using var response = await http.SendAsync(request, cancellationToken);
         var respBody = await response.Content.ReadAsStringAsync(cancellationToken);
-        return new ReplayResult(true, (int)response.StatusCode, Truncate(respBody, 64 * 1024));
+        var respHeaders = new StringBuilder();
+        foreach (var h in response.Headers)
+        {
+            respHeaders.Append(h.Key).Append(": ").Append(string.Join(", ", h.Value)).AppendLine();
+        }
+
+        foreach (var h in response.Content.Headers)
+        {
+            respHeaders.Append(h.Key).Append(": ").Append(string.Join(", ", h.Value)).AppendLine();
+        }
+
+        return new ReplayResult(
+            true,
+            (int)response.StatusCode,
+            Truncate(respBody, 64 * 1024),
+            respHeaders.ToString(),
+            Truncate(respBody, InterceptionService.MaxBodyTextChars));
     }
 
     private static string Truncate(string text, int max)
         => text.Length <= max ? text : text[..max] + "…";
 }
 
-public readonly record struct ReplayResult(bool Ok, int StatusCode, string Message);
+public readonly record struct ReplayResult(
+    bool Ok,
+    int StatusCode,
+    string Message,
+    string? ResponseHeaders = null,
+    string? ResponseBody = null);

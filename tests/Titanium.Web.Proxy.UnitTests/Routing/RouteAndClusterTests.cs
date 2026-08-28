@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -288,5 +289,81 @@ public class DestinationResolverTests
         Assert.IsTrue(StreamDestinationDispatch.TrySelect(options, "app", "/", "GET", out var dest, out var poolKey));
         Assert.AreEqual("d1", dest?.Id);
         Assert.AreEqual("d1|h2h3", poolKey);
+    }
+}
+
+[TestClass]
+public class LoadBalancerAlgorithmTests
+{
+    [TestMethod]
+    public void LeastRequests_PrefersLowerActiveCount()
+    {
+        var health = new DestinationHealthTracker();
+        using var _ = health.TrackRequest("busy");
+        using var __ = health.TrackRequest("busy");
+
+        var lb = new LoadBalancer(health);
+        var cluster = new ClusterConfig
+        {
+            Id = "c1",
+            Algorithm = LoadBalanceAlgorithm.LeastRequests,
+            Destinations =
+            [
+                new DestinationConfig { Id = "busy", Address = "10.0.0.1", Port = 80 },
+                new DestinationConfig { Id = "idle", Address = "10.0.0.2", Port = 80 },
+            ],
+        };
+
+        var selected = lb.Select(cluster, ImmutableClusterSnapshot.Empty);
+        Assert.AreEqual("idle", selected?.Id);
+    }
+
+    [TestMethod]
+    public void WeightedRoundRobin_ExpandsByWeight()
+    {
+        var lb = new LoadBalancer();
+        var cluster = new ClusterConfig
+        {
+            Id = "c1",
+            Algorithm = LoadBalanceAlgorithm.RoundRobin,
+            Destinations =
+            [
+                new DestinationConfig { Id = "heavy", Address = "10.0.0.1", Port = 80, Weight = 3 },
+                new DestinationConfig { Id = "light", Address = "10.0.0.2", Port = 80, Weight = 1 },
+            ],
+        };
+
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var i = 0; i < 40; i++)
+        {
+            var selected = lb.Select(cluster, ImmutableClusterSnapshot.Empty);
+            Assert.IsNotNull(selected);
+            counts[selected!.Id] = counts.GetValueOrDefault(selected.Id) + 1;
+        }
+
+        Assert.IsTrue(counts["heavy"] > counts["light"]);
+        Assert.AreEqual(30, counts["heavy"]);
+        Assert.AreEqual(10, counts["light"]);
+    }
+
+    [TestMethod]
+    public void LeastTime_PrefersLowerRecordedLatency()
+    {
+        var lb = new LoadBalancer();
+        lb.RecordDestination("slow", TimeSpan.FromMilliseconds(200));
+        lb.RecordDestination("fast", TimeSpan.FromMilliseconds(20));
+
+        var cluster = new ClusterConfig
+        {
+            Id = "c1",
+            Algorithm = LoadBalanceAlgorithm.LeastTime,
+            Destinations =
+            [
+                new DestinationConfig { Id = "slow", Address = "10.0.0.1", Port = 80 },
+                new DestinationConfig { Id = "fast", Address = "10.0.0.2", Port = 80 },
+            ],
+        };
+
+        Assert.AreEqual("fast", lb.Select(cluster, ImmutableClusterSnapshot.Empty)?.Id);
     }
 }

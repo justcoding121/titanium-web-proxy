@@ -1,16 +1,15 @@
 using System.Net;
-using System.Text;
 using Titanium.Cli.Certificates;
 using Titanium.Cli.Parsers;
 using Titanium.Cli.StaticFiles;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Abstractions;
+using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
+using Titanium.Web.Proxy.Caching;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.Configuration;
 using Titanium.Web.Proxy.Configuration.Models;
-using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Routing;
 using Titanium.Web.Proxy.Transforms;
@@ -41,6 +40,17 @@ internal static class RunCommand
             proxy.EnableHttpInterception = true;
         }
 
+        // Listener HTTP/2 / HTTP/3 switches (any EnableHttp2==false disables; any EnableHttp3 enables).
+        if (loaded.Config.Listeners.Any(l => l.EnableHttp2 == false))
+        {
+            proxy.EnableHttp2 = false;
+        }
+
+        if (loaded.Config.Listeners.Any(l => l.EnableHttp3))
+        {
+            proxy.EnableHttp3 = true;
+        }
+
         var clusterManager = new ClusterManager();
         if (loaded.Config.Clusters.Count > 0)
         {
@@ -61,6 +71,7 @@ internal static class RunCommand
                     ForwardHost = listener.ForwardHost,
                     ForwardPort = listener.ForwardPort ?? 80,
                     ForwardCleartext = true,
+                    EnableHttp3 = listener.EnableHttp3,
                 };
                 proxy.AddEndPoint(ep);
                 Console.WriteLine(
@@ -72,6 +83,7 @@ internal static class RunCommand
                 {
                     ForwardHost = listener.ForwardHost,
                     ForwardPort = listener.ForwardPort ?? 443,
+                    EnableHttp3 = listener.EnableHttp3,
                 };
                 proxy.AddEndPoint(ep);
                 Console.WriteLine(
@@ -93,6 +105,56 @@ internal static class RunCommand
         CertificateBootstrap.Apply(proxy, loaded.Config.Certificates);
         StaticFileHost.RegisterIfNeeded(proxy, loaded.Config.StaticFiles, requiresSessionPath);
 
+        var loadBalancer = new LoadBalancer();
+        var responseCache = new MemoryHttpResponseCache();
+        var middleware = new List<IProxyMiddleware>();
+        var routes = loaded.Config.Routes.ToList();
+
+        var plusOptions = loaded.Config.Plus is not null
+            ? BuildPlusOptions(loaded.Config.Plus)
+            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var cacheEnabled = IsTruthy(plusOptions, "cache.enable");
+        HttpResponseCacheMiddleware? cacheMiddleware = null;
+        if (cacheEnabled)
+        {
+            cacheMiddleware = new HttpResponseCacheMiddleware(responseCache);
+            middleware.Add(cacheMiddleware);
+            proxy.AfterResponse += async (_, e) =>
+            {
+                try
+                {
+                    if (e.HttpClient.Response.StatusCode == 200 &&
+                        !e.HttpClient.Response.IsBodyRead &&
+                        e.HttpClient.Response.HasBody)
+                    {
+                        await e.GetResponseBody().ConfigureAwait(false);
+                    }
+
+                    cacheMiddleware.TryCacheCurrentResponse(e);
+                }
+                catch
+                {
+                    // Cache best-effort only.
+                }
+            };
+        }
+
+        void RefreshReverseProxy()
+        {
+            proxy.ReverseProxy = new ReverseProxyOptions
+            {
+                Routes = routes.Count > 0 ? routes : null,
+                Clusters = loaded.Config.Clusters.Count > 0 ? loaded.Config.Clusters.ToList() : null,
+                ClusterManager = clusterManager,
+                RouteMatcher = new RouteMatcher(),
+                LoadBalancer = loadBalancer,
+                TransformEngine = new TransformEngine(),
+                Middleware = middleware.Count > 0 ? middleware : null,
+                LatencyRecorder = loadBalancer,
+            };
+        }
+
         ITitaniumPlusModule? plus = null;
         if (loaded.Config.Plus?.Enabled == true)
         {
@@ -106,19 +168,16 @@ internal static class RunCommand
             {
                 ProxyServer = proxy,
                 ClusterManager = clusterManager,
-                Options = BuildPlusOptions(loaded.Config.Plus),
+                Options = plusOptions,
+                Middleware = middleware,
+                Routes = routes,
+                RefreshReverseProxy = RefreshReverseProxy,
+                ResponseCache = responseCache,
+                LatencyRecorder = loadBalancer,
             });
         }
 
-        proxy.ReverseProxy = new ReverseProxyOptions
-        {
-            Routes = loaded.Config.Routes.Count > 0 ? loaded.Config.Routes.ToList() : null,
-            Clusters = loaded.Config.Clusters.Count > 0 ? loaded.Config.Clusters.ToList() : null,
-            ClusterManager = clusterManager,
-            RouteMatcher = new RouteMatcher(),
-            LoadBalancer = new LoadBalancer(),
-            TransformEngine = new TransformEngine(),
-        };
+        RefreshReverseProxy();
 
         proxy.Start();
         Console.WriteLine("Titanium proxy running. Press Ctrl+C to stop.");
@@ -132,6 +191,12 @@ internal static class RunCommand
         proxy.Stop();
         return 0;
     }
+
+    private static bool IsTruthy(IReadOnlyDictionary<string, string> options, string key) =>
+        options.TryGetValue(key, out var value) &&
+        (value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+         value.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+         value.Equals("yes", StringComparison.OrdinalIgnoreCase));
 
     internal static Dictionary<string, string> BuildPlusOptions(PlusConfig plus)
     {

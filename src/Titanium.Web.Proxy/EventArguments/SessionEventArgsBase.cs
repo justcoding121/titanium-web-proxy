@@ -217,6 +217,9 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// </summary>
     internal string? UpstreamDestinationId { get; set; }
 
+    /// <summary>Active-request lease for <see cref="Clusters.DestinationHealthTracker"/>.</summary>
+    internal IDisposable? DestinationRequestLease { get; set; }
+
     /// <summary>
     ///     Local endpoint via which we make the request.
     /// </summary>

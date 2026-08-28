@@ -12,7 +12,7 @@ namespace Titanium.Inspector.Services;
 
 /// <summary>
 /// Explicit MITM capture: full request/response bodies, system proxy, CA trust/export,
-/// capture pause, AutoResponder, and breakpoints.
+/// capture pause, AutoResponder, breakpoints, and light script hooks.
 /// </summary>
 public sealed class InterceptionService : IDisposable
 {
@@ -44,6 +44,15 @@ public sealed class InterceptionService : IDisposable
     public AutoResponderViewModel? AutoResponder { get; set; }
     public BreakpointViewModel? Breakpoints { get; set; }
 
+    /// <summary>When true, breakpoints also fire on BeforeResponse.</summary>
+    public bool BreakpointOnResponse { get; set; }
+
+    /// <summary>Optional light request script (set-header / set-status / abort).</summary>
+    public string? ScriptOnRequest { get; set; }
+
+    /// <summary>Optional light response script (set-header / set-status / abort).</summary>
+    public string? ScriptOnResponse { get; set; }
+
     public event EventHandler<SessionSnapshot>? SessionCaptured;
     public event EventHandler<SessionSnapshot>? SessionUpdated;
 
@@ -57,6 +66,7 @@ public sealed class InterceptionService : IDisposable
 
         _proxy = new ProxyServer();
         _proxy.EnableHttpInterception = true;
+        _proxy.EnableRequestTimingCapture = true;
         _proxy.BeforeRequest += OnBeforeRequest;
         _proxy.BeforeResponse += OnBeforeResponse;
         _proxy.AfterResponse += OnAfterResponse;
@@ -208,6 +218,11 @@ public sealed class InterceptionService : IDisposable
                 await e.GetRequestBody();
             }
 
+            if (SessionScriptHost.ApplyOnRequest(ScriptOnRequest, e))
+            {
+                return;
+            }
+
             // AutoResponder before breakpoints / origin.
             if (AutoResponder is not null &&
                 AutoResponder.TryMatch(e.HttpClient.Request.Url ?? "", out var rule) &&
@@ -261,6 +276,25 @@ public sealed class InterceptionService : IDisposable
                 await e.GetResponseBody();
             }
 
+            SessionScriptHost.ApplyOnResponse(ScriptOnResponse, e);
+
+            if (BreakpointOnResponse &&
+                Breakpoints is not null &&
+                Breakpoints.TryEnter(CreatePreviewSnapshot(e), out var hit))
+            {
+                var action = await hit.WaitAsync();
+                if (action == BreakpointAction.Abort)
+                {
+                    e.GenericResponse("Aborted by Titanium Inspector response breakpoint", HttpStatusCode.Forbidden);
+                    return;
+                }
+
+                if (hit.EditedBody is not null)
+                {
+                    e.SetResponseBodyString(hit.EditedBody);
+                }
+            }
+
             if (!_live.TryGetValue(e.HttpClient, out var snap))
             {
                 if (!Capturing)
@@ -284,6 +318,17 @@ public sealed class InterceptionService : IDisposable
 
     private Task OnAfterResponse(object sender, SessionEventArgs e)
     {
+        if (_live.TryGetValue(e.HttpClient, out var snap) && e.Timing is not null)
+        {
+            snap.DurationMs = e.Timing.TotalDuration.TotalMilliseconds;
+            if (e.Timing.TimeToFirstByte is TimeSpan ttfb)
+            {
+                snap.TtfbMs = ttfb.TotalMilliseconds;
+            }
+
+            SessionUpdated?.Invoke(this, snap);
+        }
+
         _live.TryRemove(e.HttpClient, out _);
         return Task.CompletedTask;
     }
@@ -350,6 +395,21 @@ public sealed class InterceptionService : IDisposable
         snap.ResponseBodyText = bodyBytes is null ? null : TruncateText(Encoding.UTF8.GetString(bodyBytes));
         snap.BodySize = bodyBytes?.LongLength
                         ?? (resp.ContentLength >= 0 ? resp.ContentLength : null);
+
+        if (e.Timing is not null)
+        {
+            snap.DurationMs = e.Timing.TotalDuration.TotalMilliseconds;
+            if (e.Timing.TimeToFirstByte is TimeSpan ttfb)
+            {
+                snap.TtfbMs = ttfb.TotalMilliseconds;
+            }
+        }
+
+        if (snap.IsWebSocket)
+        {
+            snap.WebSocketFrames = ProtocolFrameInspectors.ParseWebSocketFrames(bodyBytes ?? snap.RequestBodyBytes);
+        }
+
         if (snap.IsGrpc && bodyBytes is { Length: > 0 })
         {
             snap.GrpcFrames = ProtocolFrameInspectors.ParseGrpcFrames(bodyBytes);

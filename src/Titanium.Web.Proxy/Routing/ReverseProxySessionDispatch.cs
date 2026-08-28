@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Titanium.Web.Proxy.Abstractions.Routing;
+using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
@@ -55,12 +56,51 @@ internal static class ReverseProxySessionDispatch
         session.UpstreamConnectPort = port;
         session.UpstreamDestinationId = destination.Id;
 
+        if (options.LoadBalancer is LoadBalancer lb)
+        {
+            session.DestinationRequestLease?.Dispose();
+            session.DestinationRequestLease = lb.Health.TrackRequest(destination.Id);
+        }
+
         if (route.Transforms is { Count: > 0 })
         {
             ApplyTransforms(options, route.Transforms, request);
         }
 
         return true;
+    }
+
+    /// <summary>Reports passive health after a completed or failed upstream attempt.</summary>
+    public static void ReportUpstreamResult(ProxyServer server, SessionEventArgsBase session, bool success)
+    {
+        var id = session.UpstreamDestinationId;
+        if (id is null || server.ReverseProxy?.LoadBalancer is not LoadBalancer lb)
+        {
+            session.DestinationRequestLease?.Dispose();
+            session.DestinationRequestLease = null;
+            return;
+        }
+
+        session.DestinationRequestLease?.Dispose();
+        session.DestinationRequestLease = null;
+
+        if (success)
+        {
+            lb.Health.ReportSuccess(id);
+            if (session.Timing is not null)
+            {
+                var total = session.Timing.TotalDuration;
+                if (total > TimeSpan.Zero)
+                {
+                    lb.RecordDestination(id, total);
+                    server.ReverseProxy?.LatencyRecorder?.RecordDestination(id, total);
+                }
+            }
+        }
+        else
+        {
+            lb.Health.ReportFailure(id, server.ReverseProxy?.ClusterManager);
+        }
     }
 
     /// <summary>
@@ -87,13 +127,12 @@ internal static class ReverseProxySessionDispatch
     }
 
     private static void ApplyTransforms(
-        Abstractions.ReverseProxyOptions options,
+        Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options,
         IReadOnlyList<TransformConfig> transforms,
         Request request)
     {
         var engine = options.TransformEngine ?? new TransformEngine();
         var path = request.RequestUriString8.GetString();
-        // Origin-form may be path+query; absolute-form includes scheme — transforms expect path-like input.
         if (path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {

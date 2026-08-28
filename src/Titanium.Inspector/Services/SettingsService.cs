@@ -3,11 +3,33 @@ using System.Text.Json.Serialization;
 
 namespace Titanium.Inspector.Services;
 
+public sealed class AutoResponderRuleDto
+{
+    public string MatchUrl { get; set; } = "*";
+    public int StatusCode { get; set; } = 200;
+    public string Body { get; set; } = string.Empty;
+    public string ContentType { get; set; } = "text/plain";
+    public bool Enabled { get; set; } = true;
+}
+
 public sealed class InspectorSettings
 {
     public bool CheckForUpdatesOnStartup { get; set; }
     public DateTimeOffset? LastUpdateCheckUtc { get; set; }
     public string UpdateChannel { get; set; } = "Stable";
+
+    public string BindAddress { get; set; } = "127.0.0.1";
+    public int BindPort { get; set; } = 8866;
+
+    public bool AutoResponderEnabled { get; set; }
+    public List<AutoResponderRuleDto> AutoResponderRules { get; set; } = new();
+
+    public bool BreakpointEnabled { get; set; }
+    public string BreakpointUrlFilter { get; set; } = "*";
+    public bool BreakpointOnResponse { get; set; }
+
+    public string? ScriptOnRequest { get; set; }
+    public string? ScriptOnResponse { get; set; }
 }
 
 public sealed class SettingsService

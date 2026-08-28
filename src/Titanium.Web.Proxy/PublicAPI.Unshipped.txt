@@ -115,9 +115,30 @@ Titanium.Web.Proxy.Clusters.ClusterManager.ClusterManager() -> void
 Titanium.Web.Proxy.Clusters.ClusterManager.GetDestinationState(string! destinationId) -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationState
 Titanium.Web.Proxy.Clusters.ClusterManager.SetDestinationState(string! destinationId, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState state) -> void
 Titanium.Web.Proxy.Clusters.ClusterManager.Snapshot.get -> Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot!
+Titanium.Web.Proxy.Clusters.DestinationHealthTracker
+Titanium.Web.Proxy.Clusters.DestinationHealthTracker.DestinationHealthTracker() -> void
+Titanium.Web.Proxy.Clusters.DestinationHealthTracker.GetActiveRequests(string! destinationId) -> long
+Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportFailure(string! destinationId, Titanium.Web.Proxy.Abstractions.Routing.IClusterManager? manager, int unhealthyThreshold = 3) -> void
+Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportSuccess(string! destinationId) -> void
+Titanium.Web.Proxy.Clusters.DestinationHealthTracker.TrackRequest(string! destinationId) -> System.IDisposable!
 Titanium.Web.Proxy.Clusters.LoadBalancer
-Titanium.Web.Proxy.Clusters.LoadBalancer.LoadBalancer() -> void
+Titanium.Web.Proxy.Clusters.LoadBalancer.GetDestinationLatency(string! destinationId) -> System.TimeSpan?
+Titanium.Web.Proxy.Clusters.LoadBalancer.Health.get -> Titanium.Web.Proxy.Clusters.DestinationHealthTracker!
+Titanium.Web.Proxy.Clusters.LoadBalancer.LoadBalancer(Titanium.Web.Proxy.Clusters.DestinationHealthTracker? health = null) -> void
+Titanium.Web.Proxy.Clusters.LoadBalancer.Record(string! name, System.TimeSpan duration) -> void
+Titanium.Web.Proxy.Clusters.LoadBalancer.RecordDestination(string! destinationId, System.TimeSpan duration) -> void
 Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig! cluster, Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot! snapshot) -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig?
+Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig! cluster, Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot! snapshot, Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext context) -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig?
+Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware
+Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.HttpResponseCacheMiddleware(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache! cache, System.TimeSpan? defaultTtl = null) -> void
+Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.InvokeAsync(Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext! context, Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareDelegate! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.TryCacheCurrentResponse(Titanium.Web.Proxy.EventArguments.SessionEventArgs! session) -> void
+Titanium.Web.Proxy.Caching.MemoryHttpResponseCache
+Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Count.get -> int
+Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MemoryHttpResponseCache() -> void
+Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Purge(string? pathPrefix = null) -> int
+Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Set(string! cacheKey, Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse! response, System.TimeSpan ttl) -> void
+Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.TryGet(string! cacheKey, out Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse? response) -> bool
 Titanium.Web.Proxy.Middleware.ProxyMiddlewarePipeline
 Titanium.Web.Proxy.Routing.ReverseProxyFastPath
 Titanium.Web.Proxy.Routing.RouteMatcher

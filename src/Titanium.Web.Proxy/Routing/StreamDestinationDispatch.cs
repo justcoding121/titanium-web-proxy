@@ -11,6 +11,14 @@ namespace Titanium.Web.Proxy.Routing;
 /// Per-stream H2/H3 destination selection and connect-retry helpers.
 /// Pool by destination id; atomic cluster snapshot is owned by <see cref="IClusterManager"/>.
 /// </summary>
+/// <remarks>
+/// Live session routing for HTTP/1.1 (and shared route match) uses
+/// <see cref="ReverseProxySessionDispatch"/> → <see cref="DestinationResolver"/>.
+/// This type remains the H2/H3 pool-key helper and
+/// <see cref="TrySelectNextAfterFailure"/> entry for idempotent connect retry;
+/// calling it from <see cref="ReverseProxySessionDispatch.ReportUpstreamResult"/> is redundant
+/// with <see cref="DestinationHealthTracker.ReportFailure"/> for passive health marking.
+/// </remarks>
 internal static class StreamDestinationDispatch
 {
     /// <summary>

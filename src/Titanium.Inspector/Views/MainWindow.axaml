@@ -9,6 +9,7 @@
     <Menu DockPanel.Dock="Top">
       <MenuItem Header="_File">
         <MenuItem Header="Export HAR…" Command="{Binding ExportHarCommand}" />
+        <MenuItem Header="Import HAR…" Command="{Binding ImportHarCommand}" />
         <MenuItem Header="Export archive…" Command="{Binding ExportArchiveCommand}" />
         <MenuItem Header="Import archive from Desktop…" Command="{Binding ImportArchiveCommand}" />
       </MenuItem>
@@ -18,10 +19,18 @@
         <MenuItem Header="Capturing on/off" Command="{Binding ToggleCapturingCommand}" />
         <MenuItem Header="Clear sessions" Command="{Binding ClearSessionsCommand}" />
         <Separator />
+        <MenuItem Header="Bind address">
+          <TextBox Width="160" Text="{Binding BindAddress}" Watermark="127.0.0.1 or 0.0.0.0" />
+        </MenuItem>
+        <MenuItem Header="Bind port">
+          <TextBox Width="80" Text="{Binding BindPort}" />
+        </MenuItem>
+        <Separator />
         <MenuItem Header="Toggle system proxy" Command="{Binding ToggleSystemProxyCommand}" />
         <MenuItem Header="Install root CA (current user)" Command="{Binding InstallCaCommand}" />
         <MenuItem Header="Untrust root CA" Command="{Binding UntrustCaCommand}" />
         <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" />
+        <MenuItem Header="Device CA setup…" Command="{Binding DeviceCaSetupCommand}" />
       </MenuItem>
       <MenuItem Header="_Session">
         <MenuItem Header="Replay selected" Command="{Binding ReplayCommand}" />
@@ -32,8 +41,10 @@
     </Menu>
     <Grid ColumnDefinitions="2*,*" RowDefinitions="Auto,*,Auto">
       <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="8" Spacing="12">
-        <TextBox Width="420" Watermark="Search: method:GET status:200 host:example is:ws"
+        <TextBox Width="360" Watermark="Search: method:GET status:200 host:example is:ws"
                  Text="{Binding SearchQuery}" />
+        <TextBox Width="120" Watermark="Bind address" Text="{Binding BindAddress}" />
+        <TextBox Width="70" Watermark="Port" Text="{Binding BindPort}" />
         <CheckBox Content="Capturing" IsChecked="{Binding Capturing}" />
         <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}" IsEnabled="False" />
       </StackPanel>
@@ -46,11 +57,13 @@
           <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="60" />
           <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="70" />
           <DataGridTextColumn Header="Status" Binding="{Binding StatusCode}" Width="60" />
-          <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="140" />
+          <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="120" />
           <DataGridTextColumn Header="URL" Binding="{Binding Url}" Width="*" />
-          <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="110" />
+          <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="100" />
+          <DataGridTextColumn Header="Duration" Binding="{Binding DurationMs}" Width="80" />
+          <DataGridTextColumn Header="TTFB" Binding="{Binding TtfbMs}" Width="70" />
           <DataGridTextColumn Header="Size" Binding="{Binding BodySize}" Width="70" />
-          <DataGridTextColumn Header="Process" Binding="{Binding ProcessDisplay}" Width="120" />
+          <DataGridTextColumn Header="Process" Binding="{Binding ProcessDisplay}" Width="110" />
         </DataGrid.Columns>
       </DataGrid>
       <TabControl Grid.Row="1" Grid.Column="1" Margin="8">
@@ -66,11 +79,37 @@
           <TextBox IsReadOnly="True" Text="{Binding SelectedHex}" AcceptsReturn="True" TextWrapping="Wrap"
                    FontFamily="Consolas,Courier New,monospace" />
         </TabItem>
+        <TabItem Header="Frames">
+          <TextBox IsReadOnly="True" Text="{Binding SelectedFrames}" AcceptsReturn="True" TextWrapping="Wrap"
+                   FontFamily="Consolas,Courier New,monospace" />
+        </TabItem>
+        <TabItem Header="Composer">
+          <ScrollViewer>
+            <StackPanel Margin="8" Spacing="8">
+              <Grid ColumnDefinitions="Auto,*" Margin="0">
+                <TextBox Grid.Column="0" Width="80" Watermark="Method" Text="{Binding ComposerMethod}" Margin="0,0,8,0" />
+                <TextBox Grid.Column="1" Watermark="URL" Text="{Binding ComposerUrl}" />
+              </Grid>
+              <TextBox Watermark="Headers (Name: Value per line)" Text="{Binding ComposerHeaders}"
+                       AcceptsReturn="True" Height="100" FontFamily="Consolas,Courier New,monospace" />
+              <TextBox Watermark="Body" Text="{Binding ComposerBody}"
+                       AcceptsReturn="True" Height="120" FontFamily="Consolas,Courier New,monospace" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Load from selected" Command="{Binding LoadFromSelectedCommand}" />
+                <Button Content="Send" Command="{Binding SendComposerCommand}" />
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
         <TabItem Header="Breakpoints">
           <StackPanel Margin="8" Spacing="8">
             <CheckBox Content="Enabled" IsChecked="{Binding Breakpoints.Enabled}" />
+            <CheckBox Content="Break on response" IsChecked="{Binding BreakpointOnResponse}" />
             <TextBox Watermark="URL filter" Text="{Binding Breakpoints.UrlFilter}" />
+            <TextBox Watermark="Edit body (apply then Continue)" Text="{Binding BreakpointEditBody}"
+                     AcceptsReturn="True" Height="80" FontFamily="Consolas,Courier New,monospace" />
             <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="Apply edit body" Command="{Binding ApplyEditBodyCommand}" />
               <Button Content="Continue" Command="{Binding ContinueBreakpointCommand}" />
               <Button Content="Abort" Command="{Binding AbortBreakpointCommand}" />
             </StackPanel>
@@ -79,15 +118,43 @@
         <TabItem Header="AutoResponder">
           <StackPanel Margin="8" Spacing="8">
             <CheckBox Content="Enabled (before breakpoints)" IsChecked="{Binding AutoResponder.Enabled}" />
+            <ListBox ItemsSource="{Binding AutoResponder.Rules}"
+                     SelectedItem="{Binding AutoResponder.SelectedRule}"
+                     Height="120"
+                     MinHeight="80">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding Display}" />
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
             <TextBox Watermark="Match URL (* wildcards)" Text="{Binding AutoResponderMatch}" />
-            <TextBox Watermark="Status" Text="{Binding AutoResponderStatus}" Width="80" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBox Watermark="Status" Text="{Binding AutoResponderStatus}" Width="80" />
+              <TextBox Watermark="Content-Type" Text="{Binding AutoResponderContentType}" Width="160" />
+            </StackPanel>
             <TextBox Watermark="Response body" Text="{Binding AutoResponderBody}" AcceptsReturn="True" Height="80" />
-            <Button Content="Add rule" Command="{Binding AddAutoResponderRuleCommand}" HorizontalAlignment="Left" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="Add rule" Command="{Binding AddAutoResponderRuleCommand}" />
+              <Button Content="Update rule" Command="{Binding UpdateAutoResponderRuleCommand}" />
+              <Button Content="Delete rule" Command="{Binding DeleteAutoResponderRuleCommand}" />
+            </StackPanel>
             <TextBlock Text="{Binding PlusPanelsSummary}" TextWrapping="Wrap" Opacity="0.7" />
           </StackPanel>
         </TabItem>
+        <TabItem Header="Scripts">
+          <StackPanel Margin="8" Spacing="8">
+            <TextBlock Text="Lines: set-header Name: Value | set-status 404 | abort" Opacity="0.7" TextWrapping="Wrap" />
+            <TextBlock Text="On request" />
+            <TextBox Text="{Binding ScriptOnRequest}" AcceptsReturn="True" Height="100"
+                     FontFamily="Consolas,Courier New,monospace" Watermark="Optional request hooks" />
+            <TextBlock Text="On response" />
+            <TextBox Text="{Binding ScriptOnResponse}" AcceptsReturn="True" Height="100"
+                     FontFamily="Consolas,Courier New,monospace" Watermark="Optional response hooks" />
+          </StackPanel>
+        </TabItem>
       </TabControl>
-      <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="8" Text="{Binding StatusText}" />
+      <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="8" Text="{Binding StatusText}" TextWrapping="Wrap" />
     </Grid>
   </DockPanel>
 </Window>
