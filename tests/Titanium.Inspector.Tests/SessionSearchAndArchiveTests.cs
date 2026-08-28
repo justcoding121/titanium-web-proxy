@@ -131,4 +131,103 @@ public class SessionSearchAndArchiveTests
         Assert.AreEqual(4, frames[0].Length);
         Assert.AreEqual("DEADBEEF", frames[0].HexPreview);
     }
+
+    [TestMethod]
+    public void ProtocolFrameInspectors_ParseMultipart_NullAndNonMultipart()
+    {
+        Assert.AreEqual(0, ProtocolFrameInspectors.ParseMultipart(null, "x"u8.ToArray()).Count);
+        Assert.AreEqual(0, ProtocolFrameInspectors.ParseMultipart("multipart/form-data", null).Count);
+        Assert.AreEqual(0, ProtocolFrameInspectors.ParseMultipart("text/plain", "x"u8.ToArray()).Count);
+        Assert.AreEqual(0, ProtocolFrameInspectors.ParseMultipart("multipart/form-data", "x"u8.ToArray()).Count);
+    }
+
+    [TestMethod]
+    public void ProtocolFrameInspectors_ParseMultipart_NamedPartsWithBoundary()
+    {
+        const string boundary = "----twp";
+        var body = string.Join("\r\n",
+            $"--{boundary}",
+            "Content-Disposition: form-data; name=\"field1\"",
+            "Content-Type: text/plain",
+            "",
+            "hello",
+            $"--{boundary}",
+            "Content-Disposition: form-data; name=\"file\"; filename=\"a.txt\"",
+            "",
+            "bytes",
+            $"--{boundary}--",
+            "");
+        var parts = ProtocolFrameInspectors.ParseMultipart(
+            $"multipart/form-data; boundary=\"{boundary}\"",
+            System.Text.Encoding.UTF8.GetBytes(body));
+        Assert.AreEqual(2, parts.Count);
+        Assert.AreEqual("field1", parts[0].Name);
+        Assert.AreEqual("text/plain", parts[0].ContentType);
+        StringAssert.Contains(parts[0].Preview!, "hello");
+        Assert.AreEqual("file", parts[1].Name);
+    }
+
+    [TestMethod]
+    public void ProtocolFrameInspectors_ParseMultipart_NoHeaderSeparatorAndDispositionWithoutName()
+    {
+        const string boundary = "b";
+        var noSep = $"--{boundary}\r\njust-content\r\n--{boundary}--\r\n";
+        var parts = ProtocolFrameInspectors.ParseMultipart(
+            $"multipart/mixed; boundary={boundary}",
+            System.Text.Encoding.UTF8.GetBytes(noSep));
+        Assert.AreEqual(1, parts.Count);
+        Assert.IsNull(parts[0].Name);
+        StringAssert.Contains(parts[0].Preview!, "just-content");
+
+        // Disposition without name= (avoid filename= which contains the substring name=")
+        var noName = string.Join("\r\n",
+            $"--{boundary}",
+            "Content-Disposition: form-data",
+            "",
+            "data",
+            $"--{boundary}--",
+            "");
+        var unnamed = ProtocolFrameInspectors.ParseMultipart(
+            $"multipart/form-data; boundary={boundary}",
+            System.Text.Encoding.UTF8.GetBytes(noName));
+        Assert.AreEqual(1, unnamed.Count);
+        Assert.IsNull(unnamed[0].Name);
+    }
+
+    [TestMethod]
+    public void SessionSearch_TokenArms_StatusHostBodyIsAndBareUrl()
+    {
+        var s = new SessionSnapshot
+        {
+            Method = "POST",
+            Url = "https://api.example/v1/items?q=1",
+            StatusCode = 201,
+            IsGrpc = true,
+            IsTunnel = false,
+            IsMultipart = true,
+            RequestBodyText = "needle-req",
+            ResponseBodyText = "other",
+        };
+
+        Assert.IsTrue(SessionSearch.Matches(s, "status:201"));
+        Assert.IsFalse(SessionSearch.Matches(s, "status:404"));
+        Assert.IsTrue(SessionSearch.Matches(s, "host:api.example"));
+        Assert.IsTrue(SessionSearch.Matches(s, "url:items"));
+        Assert.IsTrue(SessionSearch.Matches(s, "body:needle"));
+        Assert.IsFalse(SessionSearch.Matches(s, "body:missing"));
+        Assert.IsTrue(SessionSearch.Matches(s, "is:grpc"));
+        Assert.IsTrue(SessionSearch.Matches(s, "is:multipart"));
+        Assert.IsFalse(SessionSearch.Matches(s, "is:tunnel"));
+        Assert.IsTrue(SessionSearch.Matches(s, "is:websocket") == s.IsWebSocket);
+        Assert.IsTrue(SessionSearch.Matches(s, "is:unknownflag")); // unknown is: → true
+        Assert.IsTrue(SessionSearch.Matches(s, "api.example")); // bare token → url
+        Assert.IsTrue(SessionSearch.Matches(s, "weirdkey:api.example")); // unknown key → url contains value
+
+        var ws = new SessionSnapshot { Url = "wss://x", IsWebSocket = true };
+        Assert.IsTrue(SessionSearch.Matches(ws, "is:ws"));
+        Assert.IsTrue(SessionSearch.Matches(ws, "is:websocket"));
+
+        var tunnel = new SessionSnapshot { Url = "https://t", IsTunnel = true };
+        Assert.IsTrue(SessionSearch.Matches(tunnel, "is:tunnel"));
+    }
 }

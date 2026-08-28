@@ -413,6 +413,60 @@ public class PlusModuleTests
     }
 
     [TestMethod]
+    public void Waf_FromOptions_DenyHeaderMethodsAndRulesFile()
+    {
+        var goodFile = Path.Combine(Path.GetTempPath(), "twp-waf-" + Guid.NewGuid().ToString("N") + ".json");
+        var badFile = Path.Combine(Path.GetTempPath(), "twp-waf-bad-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            File.WriteAllText(goodFile, """{"denyPaths":["^/secret","^/internal"]}""");
+            File.WriteAllText(badFile, "{not-json");
+
+            var rules = WafRules.FromOptions(new Dictionary<string, string>
+            {
+                ["waf.denyMethods"] = "TRACE, TRACK",
+                ["waf.denyHeader"] = "User-Agent=curl",
+                ["waf.rulesFile"] = goodFile,
+                ["waf.maxBodyBytes"] = "4096",
+            });
+            Assert.IsTrue(rules.MethodDeny.Contains("TRACE"));
+            Assert.IsTrue(rules.MethodDeny.Contains("TRACK"));
+            Assert.AreEqual(1, rules.HeaderDeny.Count);
+            Assert.AreEqual("User-Agent", rules.HeaderDeny[0].Header);
+            Assert.IsTrue(rules.HeaderDeny[0].Value.IsMatch("curl/8.0"));
+            Assert.AreEqual(2, rules.PathDeny.Count);
+            Assert.AreEqual(4096, rules.MaxBodyBytes);
+
+            // malformed denyHeader (no =) is ignored
+            var noEq = WafRules.FromOptions(new Dictionary<string, string>
+            {
+                ["waf.denyHeader"] = "NoEquals",
+            });
+            Assert.AreEqual(0, noEq.HeaderDeny.Count);
+
+            // bad rules file is ignored (no throw)
+            var bad = WafRules.FromOptions(new Dictionary<string, string>
+            {
+                ["waf.rulesFile"] = badFile,
+                ["waf.denyPaths"] = "^/ok",
+            });
+            Assert.AreEqual(1, bad.PathDeny.Count);
+
+            // missing file is ignored
+            var missing = WafRules.FromOptions(new Dictionary<string, string>
+            {
+                ["waf.rulesFile"] = Path.Combine(Path.GetTempPath(), "does-not-exist-" + Guid.NewGuid().ToString("N") + ".json"),
+            });
+            Assert.AreEqual(0, missing.PathDeny.Count);
+        }
+        finally
+        {
+            try { File.Delete(goodFile); } catch { /* ignore */ }
+            try { File.Delete(badFile); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
     public void Discovery_ParseConsul_NestedAndFlat()
     {
         var nested = """[{"Service":{"Address":"10.1.2.3","Port":8080,"ID":"svc-a"}}]""";
