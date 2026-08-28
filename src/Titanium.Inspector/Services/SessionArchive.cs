@@ -152,86 +152,13 @@ public static class SessionArchive
     {
         try
         {
-            if (!entry.TryGetProperty("request", out var req))
+            if (!TryReadHarRequest(entry, out var method, out var url, out var host, out var reqHeaders, out var reqBody, out var contentType))
             {
                 return null;
             }
 
-            var method = req.TryGetProperty("method", out var m) ? m.GetString() ?? "GET" : "GET";
-            var url = req.TryGetProperty("url", out var u) ? u.GetString() ?? "" : "";
-            string? host = null;
-            if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
-            {
-                host = uri.Host;
-            }
-
-            var reqHeaders = FormatHarHeaders(req);
-            string? reqBody = null;
-            string? contentType = null;
-            if (req.TryGetProperty("postData", out var post))
-            {
-                if (post.TryGetProperty("text", out var pt))
-                {
-                    reqBody = pt.GetString();
-                }
-
-                if (post.TryGetProperty("mimeType", out var mt))
-                {
-                    contentType = mt.GetString();
-                }
-            }
-
-            int? status = null;
-            string? respHeaders = null;
-            string? respBody = null;
-            string? respMime = null;
-            if (entry.TryGetProperty("response", out var resp))
-            {
-                if (resp.TryGetProperty("status", out var st) && st.TryGetInt32(out var code))
-                {
-                    status = code;
-                }
-
-                respHeaders = FormatHarHeaders(resp);
-                if (resp.TryGetProperty("content", out var content))
-                {
-                    if (content.TryGetProperty("text", out var ct))
-                    {
-                        respBody = ct.GetString();
-                    }
-
-                    if (content.TryGetProperty("mimeType", out var mime))
-                    {
-                        respMime = mime.GetString();
-                    }
-                }
-            }
-
-            double? durationMs = null;
-            double? ttfbMs = null;
-            if (entry.TryGetProperty("time", out var timeEl) && timeEl.TryGetDouble(out var time))
-            {
-                durationMs = time;
-            }
-
-            if (entry.TryGetProperty("timings", out var timings) &&
-                timings.TryGetProperty("wait", out var waitEl) &&
-                waitEl.TryGetDouble(out var wait) &&
-                wait >= 0)
-            {
-                ttfbMs = wait;
-            }
-
-            DateTimeOffset started = DateTimeOffset.UtcNow;
-            if (entry.TryGetProperty("startedDateTime", out var startedEl) &&
-                DateTimeOffset.TryParse(
-                    startedEl.GetString(),
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    System.Globalization.DateTimeStyles.RoundtripKind,
-                    out var parsed))
-            {
-                started = parsed;
-            }
+            TryReadHarResponse(entry, out var status, out var respHeaders, out var respBody, out var respMime);
+            ReadHarTiming(entry, out var durationMs, out var ttfbMs, out var started);
 
             return new SessionSnapshot
             {
@@ -255,6 +182,122 @@ public static class SessionArchive
         catch
         {
             return null;
+        }
+    }
+
+    private static bool TryReadHarRequest(
+        JsonElement entry,
+        out string method,
+        out string url,
+        out string? host,
+        out string reqHeaders,
+        out string? reqBody,
+        out string? contentType)
+    {
+        method = "GET";
+        url = "";
+        host = null;
+        reqHeaders = "";
+        reqBody = null;
+        contentType = null;
+
+        if (!entry.TryGetProperty("request", out var req))
+        {
+            return false;
+        }
+
+        method = req.TryGetProperty("method", out var m) ? m.GetString() ?? "GET" : "GET";
+        url = req.TryGetProperty("url", out var u) ? u.GetString() ?? "" : "";
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            host = uri.Host;
+        }
+
+        reqHeaders = FormatHarHeaders(req);
+        if (req.TryGetProperty("postData", out var post))
+        {
+            if (post.TryGetProperty("text", out var pt))
+            {
+                reqBody = pt.GetString();
+            }
+
+            if (post.TryGetProperty("mimeType", out var mt))
+            {
+                contentType = mt.GetString();
+            }
+        }
+
+        return true;
+    }
+
+    private static void TryReadHarResponse(
+        JsonElement entry,
+        out int? status,
+        out string? respHeaders,
+        out string? respBody,
+        out string? respMime)
+    {
+        status = null;
+        respHeaders = null;
+        respBody = null;
+        respMime = null;
+
+        if (!entry.TryGetProperty("response", out var resp))
+        {
+            return;
+        }
+
+        if (resp.TryGetProperty("status", out var st) && st.TryGetInt32(out var code))
+        {
+            status = code;
+        }
+
+        respHeaders = FormatHarHeaders(resp);
+        if (resp.TryGetProperty("content", out var content))
+        {
+            if (content.TryGetProperty("text", out var ct))
+            {
+                respBody = ct.GetString();
+            }
+
+            if (content.TryGetProperty("mimeType", out var mime))
+            {
+                respMime = mime.GetString();
+            }
+        }
+    }
+
+    private static void ReadHarTiming(
+        JsonElement entry,
+        out double? durationMs,
+        out double? ttfbMs,
+        out DateTimeOffset started)
+    {
+        durationMs = null;
+        ttfbMs = null;
+        started = DateTimeOffset.UtcNow;
+
+        if (entry.TryGetProperty("time", out var timeEl) && timeEl.TryGetDouble(out var time))
+        {
+            durationMs = time;
+        }
+
+        if (entry.TryGetProperty("timings", out var timings) &&
+            timings.TryGetProperty("wait", out var waitEl) &&
+            waitEl.TryGetDouble(out var wait) &&
+            wait >= 0)
+        {
+            ttfbMs = wait;
+        }
+
+        if (entry.TryGetProperty("startedDateTime", out var startedEl) &&
+            DateTimeOffset.TryParse(
+                startedEl.GetString(),
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind,
+                out var parsed))
+        {
+            started = parsed;
         }
     }
 

@@ -26,41 +26,45 @@ public static class SessionScriptHost
 
         foreach (var raw in script.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
         {
-            var line = raw.Trim();
-            if (line.Length == 0 || line.StartsWith('#') || line.StartsWith("//"))
-            {
-                continue;
-            }
-
-            if (line.Equals("abort", StringComparison.OrdinalIgnoreCase))
-            {
-                result.Abort = true;
-                continue;
-            }
-
-            if (line.StartsWith("set-status", StringComparison.OrdinalIgnoreCase))
-            {
-                var rest = line["set-status".Length..].Trim();
-                if (int.TryParse(rest, out var code))
-                {
-                    result.StatusCode = code;
-                }
-
-                continue;
-            }
-
-            if (line.StartsWith("set-header", StringComparison.OrdinalIgnoreCase))
-            {
-                var rest = line["set-header".Length..].Trim();
-                var colon = rest.IndexOf(':');
-                if (colon > 0)
-                {
-                    result.Headers.Add((rest[..colon].Trim(), rest[(colon + 1)..].Trim()));
-                }
-            }
+            ApplyDirective(result, raw.Trim());
         }
 
         return result;
+    }
+
+    private static void ApplyDirective(Result result, string line)
+    {
+        if (line.Length == 0 || line.StartsWith('#') || line.StartsWith("//"))
+        {
+            return;
+        }
+
+        if (line.Equals("abort", StringComparison.OrdinalIgnoreCase))
+        {
+            result.Abort = true;
+            return;
+        }
+
+        if (line.StartsWith("set-status", StringComparison.OrdinalIgnoreCase))
+        {
+            var rest = line["set-status".Length..].Trim();
+            if (int.TryParse(rest, out var code))
+            {
+                result.StatusCode = code;
+            }
+
+            return;
+        }
+
+        if (line.StartsWith("set-header", StringComparison.OrdinalIgnoreCase))
+        {
+            var rest = line["set-header".Length..].Trim();
+            var colon = rest.IndexOf(':');
+            if (colon > 0)
+            {
+                result.Headers.Add((rest[..colon].Trim(), rest[(colon + 1)..].Trim()));
+            }
+        }
     }
 
     public static bool ApplyOnRequest(string? script, SessionEventArgs e)

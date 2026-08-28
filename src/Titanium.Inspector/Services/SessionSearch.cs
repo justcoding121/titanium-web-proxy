@@ -38,15 +38,15 @@ public static class SessionSearch
     private static List<(string Key, string Value)> Tokenize(string query)
     {
         var list = new List<(string, string)>();
-        foreach (Match m in TokenRegex.Matches(query))
+        foreach (var groups in TokenRegex.Matches(query).Cast<Match>().Select(m => m.Groups))
         {
-            if (m.Groups[1].Success)
+            if (groups[1].Success)
             {
-                list.Add((m.Groups[1].Value.ToLowerInvariant(), m.Groups[2].Value));
+                list.Add((groups[1].Value.ToLowerInvariant(), groups[2].Value));
             }
             else
             {
-                list.Add(("url", m.Groups[3].Value));
+                list.Add(("url", groups[3].Value));
             }
         }
 

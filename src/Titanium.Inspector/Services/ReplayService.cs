@@ -36,7 +36,32 @@ public static class ReplayService
         using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(60) };
         using var request = new HttpRequestMessage(new HttpMethod(editedMethod ?? session.Method), url);
 
-        var headerBlock = editedHeaders ?? session.RequestHeadersText ?? "";
+        ApplyEditedHeaders(request, editedHeaders ?? session.RequestHeadersText ?? "");
+        AttachBody(request, session, editedBody);
+
+        using var response = await http.SendAsync(request, cancellationToken);
+        var respBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        var respHeaders = new StringBuilder();
+        foreach (var h in response.Headers)
+        {
+            respHeaders.Append(h.Key).Append(": ").Append(string.Join(", ", h.Value)).AppendLine();
+        }
+
+        foreach (var h in response.Content.Headers)
+        {
+            respHeaders.Append(h.Key).Append(": ").Append(string.Join(", ", h.Value)).AppendLine();
+        }
+
+        return new ReplayResult(
+            true,
+            (int)response.StatusCode,
+            Truncate(respBody, 64 * 1024),
+            respHeaders.ToString(),
+            Truncate(respBody, InterceptionService.MaxBodyTextChars));
+    }
+
+    private static void ApplyEditedHeaders(HttpRequestMessage request, string headerBlock)
+    {
         foreach (var line in headerBlock.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var idx = line.IndexOf(':');
@@ -60,7 +85,10 @@ public static class ReplayService
                 request.Content.Headers.TryAddWithoutValidation(name, value);
             }
         }
+    }
 
+    private static void AttachBody(HttpRequestMessage request, SessionSnapshot session, string? editedBody)
+    {
         var bodyText = editedBody ?? session.RequestBodyText;
         if (!string.IsNullOrEmpty(bodyText))
         {
@@ -75,26 +103,6 @@ public static class ReplayService
         {
             request.Content = new ByteArrayContent(session.RequestBodyBytes);
         }
-
-        using var response = await http.SendAsync(request, cancellationToken);
-        var respBody = await response.Content.ReadAsStringAsync(cancellationToken);
-        var respHeaders = new StringBuilder();
-        foreach (var h in response.Headers)
-        {
-            respHeaders.Append(h.Key).Append(": ").Append(string.Join(", ", h.Value)).AppendLine();
-        }
-
-        foreach (var h in response.Content.Headers)
-        {
-            respHeaders.Append(h.Key).Append(": ").Append(string.Join(", ", h.Value)).AppendLine();
-        }
-
-        return new ReplayResult(
-            true,
-            (int)response.StatusCode,
-            Truncate(respBody, 64 * 1024),
-            respHeaders.ToString(),
-            Truncate(respBody, InterceptionService.MaxBodyTextChars));
     }
 
     private static string Truncate(string text, int max)

@@ -15,6 +15,8 @@ public class StaticFileHostTests
         StaticFileHost.RegisterIfNeeded(proxy, null, sessionPathEnabled: true);
         StaticFileHost.RegisterIfNeeded(proxy, new StaticFilesConfig { Root = "" }, sessionPathEnabled: true);
         StaticFileHost.RegisterIfNeeded(proxy, new StaticFilesConfig { Root = null }, sessionPathEnabled: false);
+        Assert.IsFalse(proxy.EnableHttpInterception);
+        Assert.AreEqual(0, proxy.ProxyEndPoints.Count);
     }
 
     [TestMethod]

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Plugins;
@@ -46,12 +47,11 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
 
         if (!string.IsNullOrEmpty(context.AffinityKey))
         {
-            foreach (var dest in eligible)
+            var affinityMatch = eligible.FirstOrDefault(dest =>
+                string.Equals(dest.Id, context.AffinityKey, StringComparison.Ordinal));
+            if (affinityMatch is not null)
             {
-                if (string.Equals(dest.Id, context.AffinityKey, StringComparison.Ordinal))
-                {
-                    return dest;
-                }
+                return affinityMatch;
             }
         }
 

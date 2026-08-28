@@ -4243,25 +4243,6 @@ namespace Titanium.Web.Proxy.Http2
             return true;
         }
 
-        /// <summary>
-        ///     Appends append-only MITM header literals without indexing on a HEADER_TABLE_SIZE=0 block
-        ///     (no Decoder round-trip). Uses one allocation for the whole batch.
-        /// </summary>
-        private static byte[] AppendAddedLiteralsToStaticHpackBlock(
-            byte[] block, MitmCompressedRelayHelper.AddedHeaderBuffer added) =>
-            AppendAddedLiteralsToStaticHpackBlock(block, BuildStaticLiteralAppendSuffix(added, null, null));
-
-        private static byte[] AppendAddedLiteralsToStaticHpackBlock(byte[] block, byte[]? appendSuffix)
-        {
-            if (appendSuffix == null || appendSuffix.Length == 0)
-                return block;
-
-            var result = new byte[block.Length + appendSuffix.Length];
-            Buffer.BlockCopy(block, 0, result, 0, block.Length);
-            Buffer.BlockCopy(appendSuffix, 0, result, block.Length, appendSuffix.Length);
-            return result;
-        }
-
         private static int GetStaticLiteralAppendSize(int nameLength, int valueLength) =>
             1 + GetHpackStringLiteralEncodedSize(nameLength) + GetHpackStringLiteralEncodedSize(valueLength);
 

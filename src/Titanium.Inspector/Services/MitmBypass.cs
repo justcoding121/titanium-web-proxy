@@ -41,12 +41,9 @@ public static class MitmBypass
             return false;
         }
 
-        foreach (var rule in SystemProxyBypassRules)
+        if (SystemProxyBypassRules.Any(rule => HostnameMatches(hostname, rule)))
         {
-            if (HostnameMatches(hostname, rule))
-            {
-                return true;
-            }
+            return true;
         }
 
         return hostname.Contains("dropbox.com", StringComparison.OrdinalIgnoreCase)

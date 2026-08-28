@@ -158,35 +158,9 @@ internal static class UpdateCommand
             return await UpdatePlusAsync(manifest);
         }
 
-        if (OperatingSystem.IsWindows())
+        if (OperatingSystem.IsWindows() && await TryUpdateViaWingetAsync())
         {
-            try
-            {
-                var winget = ResolveWingetPath();
-                if (winget is null)
-                {
-                    throw new FileNotFoundException("winget.exe not found");
-                }
-
-                var psi = new ProcessStartInfo(winget, "upgrade --id justcoding121.TitaniumCli -e --accept-package-agreements --accept-source-agreements")
-                {
-                    UseShellExecute = false,
-                };
-                using var proc = Process.Start(psi);
-                if (proc is not null)
-                {
-                    await proc.WaitForExitAsync();
-                    if (proc.ExitCode == 0)
-                    {
-                        Console.WriteLine("Updated via winget.");
-                        return 0;
-                    }
-                }
-            }
-            catch
-            {
-                // fall through to download
-            }
+            return 0;
         }
 
         var rid = ResolveRid();
@@ -220,6 +194,39 @@ internal static class UpdateCommand
         Console.WriteLine($"Downloaded to {destZip}. Extract over the install directory and restart.");
         Console.WriteLine("If this process is locked, stop titanium and unzip manually.");
         return 0;
+    }
+
+    private static async Task<bool> TryUpdateViaWingetAsync()
+    {
+        try
+        {
+            var winget = ResolveWingetPath();
+            if (winget is null)
+            {
+                throw new FileNotFoundException("winget.exe not found");
+            }
+
+            var psi = new ProcessStartInfo(winget, "upgrade --id justcoding121.TitaniumCli -e --accept-package-agreements --accept-source-agreements")
+            {
+                UseShellExecute = false,
+            };
+            using var proc = Process.Start(psi);
+            if (proc is not null)
+            {
+                await proc.WaitForExitAsync();
+                if (proc.ExitCode == 0)
+                {
+                    Console.WriteLine("Updated via winget.");
+                    return true;
+                }
+            }
+        }
+        catch
+        {
+            // fall through to download
+        }
+
+        return false;
     }
 
     private static async Task<int> UpdatePlusAsync(ReleaseManifest manifest)

@@ -171,17 +171,9 @@ internal static class StaticFileHost
 
     private static bool ETagMatches(string clientValue, string etag)
     {
-        foreach (var part in clientValue.Split(',',
-                     StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (part.Equals("*", StringComparison.Ordinal) ||
-                string.Equals(part, etag, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return clientValue.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Any(part => part.Equals("*", StringComparison.Ordinal) ||
+                         string.Equals(part, etag, StringComparison.Ordinal));
     }
 
     private static bool TryParseBytesRange(string? rangeHeader, int totalLength, out int start, out int end)

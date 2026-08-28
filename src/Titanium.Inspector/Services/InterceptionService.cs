@@ -554,7 +554,7 @@ public sealed class InterceptionService : IDisposable
         return Task.CompletedTask;
     }
 
-    private SessionSnapshot CreateTunnelSnapshot(TunnelConnectSessionEventArgs e)
+    private static SessionSnapshot CreateTunnelSnapshot(TunnelConnectSessionEventArgs e)
     {
         var req = e.HttpClient.Request;
         var processId = 0;
@@ -717,7 +717,7 @@ public sealed class InterceptionService : IDisposable
         return Task.CompletedTask;
     }
 
-    private SessionSnapshot CreatePreviewSnapshot(SessionEventArgs e)
+    private static SessionSnapshot CreatePreviewSnapshot(SessionEventArgs e)
     {
         var req = e.HttpClient.Request;
         var bodyBytes = req.IsBodyRead ? TruncateBytes(req.Body) : null;

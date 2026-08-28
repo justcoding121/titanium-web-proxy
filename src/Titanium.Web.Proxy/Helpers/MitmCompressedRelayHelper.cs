@@ -270,7 +270,7 @@ internal static class MitmCompressedRelayHelper
 
         private static bool TryMatchNonUniquePrefixAndAppend(
             string name,
-            IReadOnlyList<string> beforeList,
+            List<string> beforeList,
             IReadOnlyList<HttpHeader> afterList,
             int maxAdds,
             ref AddedHeaderBuffer added)
@@ -296,7 +296,7 @@ internal static class MitmCompressedRelayHelper
 
         private bool NonUniqueNamesAreKnown(HeaderCollection after)
         {
-            foreach (var name in after.NonUniqueHeaders.Keys)
+            foreach (var name in after.NonUniqueHeaders.Keys) // NOSONAR S3267 -- Explicit loop avoids LINQ enumerator allocation on hot path.
             {
                 if (!_nonUniqueSnapshot.ContainsKey(name) && !_unique.ContainsKey(name))
                     return false;
@@ -319,7 +319,7 @@ internal static class MitmCompressedRelayHelper
             if (!TryCollectDrops(after, maxDrops, out dropped, out var dropCount) || dropCount == 0)
                 return false;
 
-            foreach (var kv in after.Headers)
+            foreach (var kv in after.Headers) // NOSONAR S3267 -- Explicit loop avoids LINQ enumerator allocation on hot path.
             {
                 if (!_unique.ContainsKey(kv.Key))
                     return false;

@@ -35,7 +35,9 @@ internal static class RunCommand
         }
 
         var requiresSessionPath = ConfigNeedsSessionPath(loaded.Config);
-        using var proxy = new ProxyServer();
+        // CLI is non-interactive: do not install the MITM root into the user trust store
+        // (Windows can block on a security prompt and hang headless CI / services).
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
         ApplyLogging(proxy, loaded.Config.Logging, verbose);
         ConfigureProxyFlags(proxy, loaded.Config, requiresSessionPath);
 
@@ -83,8 +85,18 @@ internal static class RunCommand
             };
         }
 
-        await TryActivatePlusAsync(proxy, loaded.Config, clusterManager, loadBalancer, responseCache,
-            middleware, routes, plusOptions, RefreshReverseProxy);
+        await TryActivatePlusAsync(loaded.Config, new PlusActivationContext
+        {
+            ProxyServer = proxy,
+            ClusterManager = clusterManager,
+            Options = plusOptions,
+            Middleware = middleware,
+            Routes = routes,
+            RefreshReverseProxy = RefreshReverseProxy,
+            ResponseCache = responseCache,
+            LatencyRecorder = loadBalancer,
+            Logger = proxy.Logger,
+        });
 
         RefreshReverseProxy();
         proxy.Start();
@@ -110,6 +122,7 @@ internal static class RunCommand
         }
 
         Console.WriteLine("Titanium proxy running. Press Ctrl+C to stop.");
+        Console.Out.Flush();
         var tcs = new TaskCompletionSource();
         Console.CancelKeyPress += (_, e) =>
         {
@@ -174,16 +187,7 @@ internal static class RunCommand
         };
     }
 
-    private static async Task TryActivatePlusAsync(
-        ProxyServer proxy,
-        TwpConfig config,
-        ClusterManager clusterManager,
-        LoadBalancer loadBalancer,
-        MemoryHttpResponseCache responseCache,
-        List<IProxyMiddleware> middleware,
-        List<RouteConfig> routes,
-        Dictionary<string, string> plusOptions,
-        Action refreshReverseProxy)
+    private static async Task TryActivatePlusAsync(TwpConfig config, PlusActivationContext context)
     {
         if (config.Plus?.Enabled != true)
         {
@@ -196,18 +200,7 @@ internal static class RunCommand
             await Console.Error.WriteLineAsync(warning);
         }
 
-        plus?.Apply(new PlusActivationContext
-        {
-            ProxyServer = proxy,
-            ClusterManager = clusterManager,
-            Options = plusOptions,
-            Middleware = middleware,
-            Routes = routes,
-            RefreshReverseProxy = refreshReverseProxy,
-            ResponseCache = responseCache,
-            LatencyRecorder = loadBalancer,
-            Logger = proxy.Logger,
-        });
+        plus?.Apply(context);
     }
 
     private static void ApplyLogging(ProxyServer proxy, LoggingConfig? logging, bool verbose)
@@ -330,14 +323,6 @@ internal static class RunCommand
             return true;
         }
 
-        foreach (var route in config.Routes)
-        {
-            if (route.Transforms is { Count: > 0 })
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return config.Routes.Any(r => r.Transforms is { Count: > 0 });
     }
 }

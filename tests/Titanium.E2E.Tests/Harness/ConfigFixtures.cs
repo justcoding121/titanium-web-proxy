@@ -391,6 +391,7 @@ public static class ConfigFixtures
               - host: "127.0.0.1"
                 port: {listenPort}
                 decryptSsl: true
+                enableHttp3: false
                 forwardHost: "127.0.0.1"
                 forwardPort: {originPort}
             certificates:

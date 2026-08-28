@@ -87,23 +87,8 @@ public sealed class CidrAccessMiddleware : IProxyMiddleware
     /// <summary>Returns true when <paramref name="clientIp"/> is inside any configured CIDR.</summary>
     public bool IsAllowed(IPAddress clientIp) => IsIpAllowed(clientIp, _networks);
 
-    public static bool IsIpAllowed(IPAddress clientIp, IReadOnlyList<IPNetwork> networks)
-    {
-        if (networks.Count == 0)
-        {
-            return false;
-        }
-
-        foreach (var network in networks)
-        {
-            if (network.Contains(clientIp))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    public static bool IsIpAllowed(IPAddress clientIp, IReadOnlyList<IPNetwork> networks) =>
+        networks.Count > 0 && networks.Any(network => network.Contains(clientIp));
 
     public async ValueTask InvokeAsync(
         ProxyMiddlewareContext context,
@@ -355,6 +340,3 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
         public string? JwksUri { get; set; }
     }
 }
-
-/// <summary>Legacy stub type name.</summary>
-public sealed class SecurityPlaceholder;

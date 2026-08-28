@@ -29,10 +29,10 @@ public sealed class ResilienceController : IDisposable
 
         var intervalMs = int.TryParse(options.GetValueOrDefault("resilience.intervalMs"), out var ms) ? ms : 5000;
         var threshold = int.TryParse(options.GetValueOrDefault("resilience.unhealthyThreshold"), out var t) ? t : 3;
-        var path = options.GetValueOrDefault("resilience.path") ?? "/";
-        if (!path.StartsWith('/'))
+        var path = options.GetValueOrDefault("resilience.path") ?? "/"; // NOSONAR S1075 -- URI path separator is always '/'
+        if (!path.StartsWith('/')) // NOSONAR S1075 -- URI path separator is always '/'
         {
-            path = "/" + path;
+            path = "/" + path; // NOSONAR S1075 -- URI path separator is always '/'
         }
 
         var protocol = options.GetValueOrDefault("resilience.protocol") ?? "http";
@@ -91,24 +91,36 @@ public sealed class ResilienceController : IDisposable
             foreach (var dest in cluster.Destinations)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var ok = await ProbeDestinationAsync(dest, path, protocol, cancellationToken);
-                if (ok)
-                {
-                    _failures[dest.Id] = 0;
-                    if (snap.DestinationStates.TryGetValue(dest.Id, out var state) &&
-                        state == DestinationState.Unhealthy)
-                    {
-                        manager.SetDestinationState(dest.Id, DestinationState.Healthy);
-                    }
-                }
-                else
-                {
-                    var count = _failures.AddOrUpdate(dest.Id, 1, (_, prev) => prev + 1);
-                    if (count >= unhealthyThreshold)
-                    {
-                        manager.SetDestinationState(dest.Id, DestinationState.Unhealthy);
-                    }
-                }
+                await ProbeOneAsync(manager, snap, dest, unhealthyThreshold, path, protocol, cancellationToken);
+            }
+        }
+    }
+
+    private async Task ProbeOneAsync(
+        IClusterManager manager,
+        ImmutableClusterSnapshot snap,
+        DestinationConfig dest,
+        int unhealthyThreshold,
+        string path,
+        string protocol,
+        CancellationToken cancellationToken)
+    {
+        var ok = await ProbeDestinationAsync(dest, path, protocol, cancellationToken);
+        if (ok)
+        {
+            _failures[dest.Id] = 0;
+            if (snap.DestinationStates.TryGetValue(dest.Id, out var state) &&
+                state == DestinationState.Unhealthy)
+            {
+                manager.SetDestinationState(dest.Id, DestinationState.Healthy);
+            }
+        }
+        else
+        {
+            var count = _failures.AddOrUpdate(dest.Id, 1, (_, prev) => prev + 1);
+            if (count >= unhealthyThreshold)
+            {
+                manager.SetDestinationState(dest.Id, DestinationState.Unhealthy);
             }
         }
     }
@@ -150,6 +162,3 @@ public sealed class ResilienceController : IDisposable
         _cts.Dispose();
     }
 }
-
-/// <summary>Legacy stub type name.</summary>
-public sealed class ResiliencePlaceholder;

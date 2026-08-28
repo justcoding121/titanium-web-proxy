@@ -17,12 +17,25 @@ public class CertificateBootstrapTests
     {
         using var proxy = new ProxyServer(false, false, false);
         CertificateBootstrap.Apply(proxy, null);
+        Assert.AreEqual(0, proxy.ProxyEndPoints.Count);
     }
 
     [TestMethod]
     public void SetChallengeToken_DoesNotThrow()
     {
-        CertificateBootstrap.SetChallengeToken("tok-" + Guid.NewGuid().ToString("N"), "key-auth");
+        var token = "tok-" + Guid.NewGuid().ToString("N");
+        Assert.IsFalse(string.IsNullOrEmpty(token));
+        CertificateBootstrap.SetChallengeToken(token, "key-auth");
+
+        using var proxy = new ProxyServer(false, false, false);
+        var ep = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false);
+        proxy.AddEndPoint(ep);
+        CertificateBootstrap.Apply(proxy, new CertificatesConfig
+        {
+            AcmeDomain = "example.test",
+            AcmeEmail = "ops@example.test",
+        });
+        Assert.IsTrue(proxy.ProxyEndPoints.Count >= 1);
     }
 
     [TestMethod]

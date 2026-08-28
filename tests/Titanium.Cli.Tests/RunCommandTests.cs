@@ -70,7 +70,7 @@ public class RunCommandTests
             EnableHttp2 = false,
             EnableHttp3 = true,
         };
-        Assert.AreEqual(false, listener.EnableHttp2);
+        Assert.IsFalse(listener.EnableHttp2!.Value);
         Assert.IsTrue(listener.EnableHttp3);
     }
 

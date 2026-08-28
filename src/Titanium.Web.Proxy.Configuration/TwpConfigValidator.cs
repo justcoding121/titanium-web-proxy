@@ -68,12 +68,9 @@ public static class TwpConfigValidator
 
     private static void ValidateListeners(IEnumerable<ListenerConfig> listeners, List<string> errors)
     {
-        foreach (var listener in listeners)
+        foreach (var listener in listeners.Where(l => l.Port is < 1 or > 65535))
         {
-            if (listener.Port is < 1 or > 65535)
-            {
-                errors.Add($"Listener port {listener.Port} is out of range.");
-            }
+            errors.Add($"Listener port {listener.Port} is out of range.");
         }
     }
 }

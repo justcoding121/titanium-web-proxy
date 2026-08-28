@@ -170,6 +170,3 @@ public sealed class RateLimitMiddleware : IProxyMiddleware
         return "unknown";
     }
 }
-
-/// <summary>Legacy stub type name.</summary>
-public sealed class StatePlaceholder;

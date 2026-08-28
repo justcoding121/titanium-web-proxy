@@ -354,7 +354,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        var owner = TryGetMainWindow() as Window;
+        var owner = TryGetMainWindow();
         if (!await _dialogs.ConfirmRemoveRootCaAsync(owner))
         {
             StatusText = "Remove root CA cancelled";
@@ -387,7 +387,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        var owner = TryGetMainWindow() as Window;
+        var owner = TryGetMainWindow();
         if (owner is null)
         {
             if (AppContainerLoopback.TryProbeApis(out var msg))
@@ -907,7 +907,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _interception.RefreshTrustState();
             if (!_interception.IsRootTrusted)
             {
-                var owner = TryGetMainWindow() as Window;
+                var owner = TryGetMainWindow();
                 if (!await _dialogs.ConfirmInstallRootCaAsync(owner))
                 {
                     StatusText = "Decrypt HTTPS cancelled — root CA not installed";
@@ -1289,7 +1289,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             .FirstOrDefault();
     }
 
-    private static TopLevel? TryGetMainWindow()
+    private static Window? TryGetMainWindow()
     {
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {

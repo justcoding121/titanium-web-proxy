@@ -27,7 +27,7 @@ public class PlusModuleTests
     [TestMethod]
     public void RequiredAbstractionsVersion_Is70()
     {
-        ITitaniumPlusModule module = new TitaniumPlusModule();
+        TitaniumPlusModule module = new TitaniumPlusModule();
         Assert.AreEqual(new Version(7, 0, 0), module.RequiredAbstractionsVersion);
     }
 
@@ -76,7 +76,7 @@ public class PlusModuleTests
     [TestMethod]
     public void ValidateSecret_RejectsChangeme_OnNonLoopback()
     {
-        Assert.ThrowsException<InvalidOperationException>(() =>
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
             ControlPlaneServer.ValidateSecret("0.0.0.0", "changeme"));
     }
 

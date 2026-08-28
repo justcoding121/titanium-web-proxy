@@ -75,20 +75,7 @@ public sealed class ServiceDiscovery : IDisposable
 
         var full = Path.GetFullPath(path);
         PlusLog.Info(context, $"Plus Discovery: watching file {full}");
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                if (File.Exists(full))
-                {
-                    await ApplyFileAsync(context, full, _cts.Token);
-                }
-            }
-            catch (Exception ex)
-            {
-                PlusLog.Error(context, $"Plus Discovery: initial file apply failed: {ex.Message}");
-            }
-        });
+        _ = Task.Run(() => ApplyFileInitialBestEffortAsync(context, full), _cts.Token);
 
         var dir = Path.GetDirectoryName(full);
         var name = Path.GetFileName(full);
@@ -97,6 +84,26 @@ public sealed class ServiceDiscovery : IDisposable
             return;
         }
 
+        AttachFileWatcher(context, full, dir, name);
+    }
+
+    private async Task ApplyFileInitialBestEffortAsync(PlusActivationContext context, string full)
+    {
+        try
+        {
+            if (File.Exists(full))
+            {
+                await ApplyFileAsync(context, full, _cts.Token);
+            }
+        }
+        catch (Exception ex)
+        {
+            PlusLog.Error(context, $"Plus Discovery: initial file apply failed: {ex.Message}");
+        }
+    }
+
+    private void AttachFileWatcher(PlusActivationContext context, string full, string dir, string name)
+    {
         _watcher = new FileSystemWatcher(dir, name)
         {
             NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
@@ -115,27 +122,11 @@ public sealed class ServiceDiscovery : IDisposable
                 pending = true;
             }
 
-            Task.Run(async () =>
+            QueueDebouncedFileApply(context, full, () =>
             {
-                try
+                lock (gate)
                 {
-                    await Task.Delay(200, _cts.Token);
-                    await ApplyFileAsync(context, full, _cts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    // shut down
-                }
-                catch (Exception ex)
-                {
-                    PlusLog.Error(context, $"Plus Discovery: file apply failed: {ex.Message}");
-                }
-                finally
-                {
-                    lock (gate)
-                    {
-                        pending = false;
-                    }
+                    pending = false;
                 }
             });
         }
@@ -144,6 +135,31 @@ public sealed class ServiceDiscovery : IDisposable
         _watcher.Created += OnChange;
         _watcher.Renamed += OnChange;
         _watcher.EnableRaisingEvents = true;
+    }
+
+    private void QueueDebouncedFileApply(
+        PlusActivationContext context, string full, Action clearPending)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(200, _cts.Token);
+                await ApplyFileAsync(context, full, _cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // shut down
+            }
+            catch (Exception ex)
+            {
+                PlusLog.Error(context, $"Plus Discovery: file apply failed: {ex.Message}");
+            }
+            finally
+            {
+                clearPending();
+            }
+        }, _cts.Token);
     }
 
     private void StartDnsLoop(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
@@ -159,33 +175,13 @@ public sealed class ServiceDiscovery : IDisposable
         var clusterId = options.GetValueOrDefault("discovery.clusterId") ?? dnsName;
         PlusLog.Info(context, $"Plus Discovery: DNS {dnsName}:{port} every {intervalMs}ms → cluster {clusterId}");
 
-        _ = Task.Run(async () =>
-        {
-            while (!_cts.IsCancellationRequested)
-            {
-                try
-                {
-                    await ApplyDnsAsync(context, dnsName, port, clusterId, _cts.Token);
-                    await Task.Delay(intervalMs, _cts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    PlusLog.Error(context, $"Plus Discovery: DNS apply failed: {ex.Message}");
-                    try
-                    {
-                        await Task.Delay(intervalMs, _cts.Token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        return;
-                    }
-                }
-            }
-        });
+        _ = Task.Run(
+            () => RunPeriodicAsync(
+                ct => ApplyDnsAsync(context, dnsName, port, clusterId, ct),
+                intervalMs,
+                "Plus Discovery: DNS apply failed",
+                context),
+            _cts.Token);
     }
 
     private void StartConsulBestEffort(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
@@ -203,41 +199,75 @@ public sealed class ServiceDiscovery : IDisposable
         _ = Task.Run(async () =>
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-            while (!_cts.IsCancellationRequested)
-            {
-                try
+            await RunPeriodicAsync(
+                async ct =>
                 {
-                    var json = await http.GetStringAsync(url, _cts.Token);
-                    var destinations = ParseConsulDestinations(json);
-                    if (destinations.Count > 0 && context.ClusterManager is not null)
-                    {
-                        await context.ClusterManager.ApplyAsync(
-                        [
-                            new ClusterConfig { Id = clusterId, Destinations = destinations },
-                        ], _cts.Token);
-                        context.RefreshReverseProxy?.Invoke();
-                    }
+                    var json = await http.GetStringAsync(url, ct);
+                    await ApplyDestinationsIfAnyAsync(context, clusterId, ParseConsulDestinations(json), ct);
+                },
+                intervalMs,
+                "Plus Discovery: consul poll failed",
+                context);
+        }, _cts.Token);
+    }
 
-                    await Task.Delay(intervalMs, _cts.Token);
-                }
-                catch (OperationCanceledException)
+    private async Task RunPeriodicAsync(
+        Func<CancellationToken, Task> tick,
+        int intervalMs,
+        string errorPrefix,
+        PlusActivationContext context)
+    {
+        while (!_cts.IsCancellationRequested)
+        {
+            try
+            {
+                await tick(_cts.Token);
+                await Task.Delay(intervalMs, _cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                PlusLog.Error(context, $"{errorPrefix}: {ex.Message}");
+                if (!await TryDelayAsync(intervalMs))
                 {
                     return;
                 }
-                catch (Exception ex)
-                {
-                    PlusLog.Error(context, $"Plus Discovery: consul poll failed: {ex.Message}");
-                    try
-                    {
-                        await Task.Delay(intervalMs, _cts.Token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        return;
-                    }
-                }
             }
-        });
+        }
+    }
+
+    private async Task<bool> TryDelayAsync(int intervalMs)
+    {
+        try
+        {
+            await Task.Delay(intervalMs, _cts.Token);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    private static async Task ApplyDestinationsIfAnyAsync(
+        PlusActivationContext context,
+        string clusterId,
+        List<DestinationConfig> destinations,
+        CancellationToken cancellationToken)
+    {
+        if (destinations.Count == 0 || context.ClusterManager is null)
+        {
+            return;
+        }
+
+        await context.ClusterManager.ApplyAsync(
+        [
+            new ClusterConfig { Id = clusterId, Destinations = destinations },
+        ], cancellationToken);
+        context.RefreshReverseProxy?.Invoke();
     }
 
     internal static async Task ApplyFileAsync(PlusActivationContext context, string path, CancellationToken cancellationToken)
@@ -322,47 +352,59 @@ public sealed class ServiceDiscovery : IDisposable
         var i = 0;
         foreach (var item in root.EnumerateArray())
         {
-            string? address = null;
-            var port = 80;
-            string? id = null;
-
-            if (item.TryGetProperty("Service", out var service))
-            {
-                address = TryGetString(service, "Address");
-                if (service.TryGetProperty("Port", out var p) && p.TryGetInt32(out var pn))
-                {
-                    port = pn;
-                }
-
-                id = TryGetString(service, "ID");
-            }
-            else
-            {
-                address = TryGetString(item, "ServiceAddress") ?? TryGetString(item, "Address");
-                if ((item.TryGetProperty("ServicePort", out var p) || item.TryGetProperty("Port", out p)) &&
-                    p.TryGetInt32(out var pn))
-                {
-                    port = pn;
-                }
-
-                id = TryGetString(item, "ServiceID") ?? TryGetString(item, "ID");
-            }
-
-            if (string.IsNullOrWhiteSpace(address))
+            if (!TryParseConsulItem(item, i, out var dest))
             {
                 continue;
             }
 
-            list.Add(new DestinationConfig
-            {
-                Id = id ?? $"consul-{i}",
-                Address = address,
-                Port = port,
-            });
+            list.Add(dest);
             i++;
         }
 
         return list;
+    }
+
+    private static bool TryParseConsulItem(JsonElement item, int index, out DestinationConfig dest)
+    {
+        dest = null!;
+        string? address;
+        var port = 80;
+        string? id;
+
+        if (item.TryGetProperty("Service", out var service))
+        {
+            address = TryGetString(service, "Address");
+            if (service.TryGetProperty("Port", out var p) && p.TryGetInt32(out var pn))
+            {
+                port = pn;
+            }
+
+            id = TryGetString(service, "ID");
+        }
+        else
+        {
+            address = TryGetString(item, "ServiceAddress") ?? TryGetString(item, "Address");
+            if ((item.TryGetProperty("ServicePort", out var p) || item.TryGetProperty("Port", out p)) &&
+                p.TryGetInt32(out var pn))
+            {
+                port = pn;
+            }
+
+            id = TryGetString(item, "ServiceID") ?? TryGetString(item, "ID");
+        }
+
+        if (string.IsNullOrWhiteSpace(address))
+        {
+            return false;
+        }
+
+        dest = new DestinationConfig
+        {
+            Id = id ?? $"consul-{index}",
+            Address = address,
+            Port = port,
+        };
+        return true;
     }
 
     private void StartK8sBestEffort(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
@@ -381,41 +423,16 @@ public sealed class ServiceDiscovery : IDisposable
         _ = Task.Run(async () =>
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-            while (!_cts.IsCancellationRequested)
-            {
-                try
+            await RunPeriodicAsync(
+                async ct =>
                 {
-                    var json = await http.GetStringAsync(url, _cts.Token);
-                    var destinations = ParseKubernetesDestinations(json);
-                    if (destinations.Count > 0 && context.ClusterManager is not null)
-                    {
-                        await context.ClusterManager.ApplyAsync(
-                        [
-                            new ClusterConfig { Id = clusterId, Destinations = destinations },
-                        ], _cts.Token);
-                        context.RefreshReverseProxy?.Invoke();
-                    }
-
-                    await Task.Delay(intervalMs, _cts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    PlusLog.Error(context, $"Plus Discovery: k8s poll failed: {ex.Message}");
-                    try
-                    {
-                        await Task.Delay(intervalMs, _cts.Token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        return;
-                    }
-                }
-            }
-        });
+                    var json = await http.GetStringAsync(url, ct);
+                    await ApplyDestinationsIfAnyAsync(context, clusterId, ParseKubernetesDestinations(json), ct);
+                },
+                intervalMs,
+                "Plus Discovery: k8s poll failed",
+                context);
+        }, _cts.Token);
     }
 
     /// <summary>
@@ -431,77 +448,86 @@ public sealed class ServiceDiscovery : IDisposable
 
         if (root.TryGetProperty("subsets", out var subsets))
         {
-            foreach (var subset in subsets.EnumerateArray())
-            {
-                var port = 80;
-                if (subset.TryGetProperty("ports", out var ports) && ports.GetArrayLength() > 0 &&
-                    ports[0].TryGetProperty("port", out var p) && p.TryGetInt32(out var pn))
-                {
-                    port = pn;
-                }
-
-                if (!subset.TryGetProperty("addresses", out var addresses))
-                {
-                    continue;
-                }
-
-                foreach (var addr in addresses.EnumerateArray())
-                {
-                    var ip = TryGetString(addr, "ip");
-                    if (string.IsNullOrWhiteSpace(ip))
-                    {
-                        continue;
-                    }
-
-                    list.Add(new DestinationConfig
-                    {
-                        Id = TryGetString(addr, "hostname") ?? $"k8s-{i}",
-                        Address = ip,
-                        Port = port,
-                    });
-                    i++;
-                }
-            }
-
+            AppendEndpointsSubsets(subsets, list, ref i);
             return list;
         }
 
         if (root.TryGetProperty("endpoints", out var endpoints))
         {
-            var port = 80;
-            if (root.TryGetProperty("ports", out var slicePorts) && slicePorts.GetArrayLength() > 0 &&
-                slicePorts[0].TryGetProperty("port", out var sp) && sp.TryGetInt32(out var spn))
+            AppendEndpointSlice(root, endpoints, list, ref i);
+        }
+
+        return list;
+    }
+
+    private static void AppendEndpointsSubsets(JsonElement subsets, List<DestinationConfig> list, ref int i)
+    {
+        foreach (var subset in subsets.EnumerateArray())
+        {
+            var port = ReadFirstPort(subset, "ports") ?? 80;
+            if (!subset.TryGetProperty("addresses", out var addresses))
             {
-                port = spn;
+                continue;
             }
 
-            foreach (var ep in endpoints.EnumerateArray())
+            foreach (var addr in addresses.EnumerateArray())
             {
-                if (!ep.TryGetProperty("addresses", out var addresses))
+                var ip = TryGetString(addr, "ip");
+                if (string.IsNullOrWhiteSpace(ip))
                 {
                     continue;
                 }
 
-                foreach (var addr in addresses.EnumerateArray())
+                list.Add(new DestinationConfig
                 {
-                    var ip = addr.GetString();
-                    if (string.IsNullOrWhiteSpace(ip))
-                    {
-                        continue;
-                    }
-
-                    list.Add(new DestinationConfig
-                    {
-                        Id = $"k8s-{i}",
-                        Address = ip,
-                        Port = port,
-                    });
-                    i++;
-                }
+                    Id = TryGetString(addr, "hostname") ?? $"k8s-{i}",
+                    Address = ip,
+                    Port = port,
+                });
+                i++;
             }
         }
+    }
 
-        return list;
+    private static void AppendEndpointSlice(
+        JsonElement root, JsonElement endpoints, List<DestinationConfig> list, ref int i)
+    {
+        var port = ReadFirstPort(root, "ports") ?? 80;
+        foreach (var ep in endpoints.EnumerateArray())
+        {
+            if (!ep.TryGetProperty("addresses", out var addresses))
+            {
+                continue;
+            }
+
+            foreach (var addr in addresses.EnumerateArray())
+            {
+                var ip = addr.GetString();
+                if (string.IsNullOrWhiteSpace(ip))
+                {
+                    continue;
+                }
+
+                list.Add(new DestinationConfig
+                {
+                    Id = $"k8s-{i}",
+                    Address = ip,
+                    Port = port,
+                });
+                i++;
+            }
+        }
+    }
+
+    private static int? ReadFirstPort(JsonElement parent, string portsProperty)
+    {
+        if (parent.TryGetProperty(portsProperty, out var ports) && ports.GetArrayLength() > 0 &&
+            ports[0].TryGetProperty("port", out var p) && p.TryGetInt32(out var pn))
+        {
+            return pn;
+        }
+
+        return null;
     }
 
     private static string? TryGetString(JsonElement element, string propertyName) =>
@@ -515,6 +541,3 @@ public sealed class ServiceDiscovery : IDisposable
         _cts.Dispose();
     }
 }
-
-/// <summary>Legacy stub type name.</summary>
-public sealed class DiscoveryPlaceholder;
