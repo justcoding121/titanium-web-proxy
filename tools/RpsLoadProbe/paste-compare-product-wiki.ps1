@@ -119,10 +119,10 @@ function Emit-ReverseTable([string]$OsFolder, [switch]$LinuxNginxH2Plain) {
         if ($nginx) { $candidates += @{ M = $nginx; K = 'nginx' } }
         $best = ($candidates | Where-Object { $_.M } | Sort-Object { $_.M.Sustain } -Descending | Select-Object -First 1).K
         $nS = if ($w.Nginx -and -not ($w.Nginx -eq 'nginx-reverse-http2' -and $LinuxNginxH2Plain)) {
-            if ($nginx) { Format-RpsCell $nginx ($best -eq 'nginx') } else { Format-Impossible }
+            if ($nginx) { Format-RpsCell $nginx -Medal:($best -eq 'nginx') } else { Format-Impossible }
         } else { Format-Impossible }
         $nP = if ($w.Nginx -and -not ($w.Nginx -eq 'nginx-reverse-http2' -and $LinuxNginxH2Plain)) {
-            if ($nginx) { Format-RpsCell $nginx ($best -eq 'nginx') } else { Format-Impossible }
+            if ($nginx) { Format-RpsCell $nginx -Medal:($best -eq 'nginx') } else { Format-Impossible }
         } else { Format-Impossible }
         if ($w.O -match 'QUIC' -and -not $w.Nginx) {
             if (-not $nginx) {
