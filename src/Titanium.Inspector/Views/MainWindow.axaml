@@ -19,6 +19,13 @@
         <MenuItem Header="Capturing on/off" Command="{Binding ToggleCapturingCommand}" />
         <MenuItem Header="Clear sessions" Command="{Binding ClearSessionsCommand}" AutomationProperties.AutomationId="MenuClearSessions" />
         <Separator />
+        <MenuItem Header="Auto-start capture" ToggleType="CheckBox" IsChecked="{Binding AutoStartCapture}"
+                  AutomationProperties.AutomationId="AutoStartCaptureCheck" />
+        <MenuItem Header="Auto system proxy on start" ToggleType="CheckBox" IsChecked="{Binding AutoSystemProxyOnStart}"
+                  AutomationProperties.AutomationId="AutoSystemProxyCheck" />
+        <MenuItem Header="Decrypt HTTPS" ToggleType="CheckBox" IsChecked="{Binding DecryptHttps}"
+                  AutomationProperties.AutomationId="MenuDecryptHttps" />
+        <Separator />
         <MenuItem Header="Bind address">
           <TextBox Width="160" Text="{Binding BindAddress}" Watermark="127.0.0.1 or 0.0.0.0" />
         </MenuItem>
@@ -28,9 +35,12 @@
         <Separator />
         <MenuItem Header="Toggle system proxy" Command="{Binding ToggleSystemProxyCommand}" AutomationProperties.AutomationId="MenuToggleSystemProxy" />
         <MenuItem Header="Install root CA (current user)" Command="{Binding InstallCaCommand}" AutomationProperties.AutomationId="MenuInstallCa" />
-        <MenuItem Header="Untrust root CA" Command="{Binding UntrustCaCommand}" />
+        <MenuItem Header="Remove root CA (current user)" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />
         <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" />
         <MenuItem Header="Device CA setup…" Command="{Binding DeviceCaSetupCommand}" AutomationProperties.AutomationId="MenuDeviceCa" />
+        <MenuItem Header="Enable loopback for sandboxed apps…" Command="{Binding OpenLoopbackExemptCommand}"
+                  IsVisible="{Binding ShowLoopbackExemptMenu}"
+                  AutomationProperties.AutomationId="MenuLoopbackExempt" />
         <MenuItem Header="Enable debug file logging" Command="{Binding ToggleDebugLoggingCommand}" AutomationProperties.AutomationId="MenuDebugLog" />
       </MenuItem>
       <MenuItem Header="_Session">
@@ -47,6 +57,7 @@
         <TextBox Width="120" Watermark="Bind address" Text="{Binding BindAddress}" />
         <TextBox Width="70" Watermark="Port" Text="{Binding BindPort}" />
         <CheckBox Content="Capturing" IsChecked="{Binding Capturing}" AutomationProperties.AutomationId="CapturingCheck" />
+        <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}" AutomationProperties.AutomationId="DecryptHttpsCheck" />
         <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}" IsEnabled="False" AutomationProperties.AutomationId="SystemProxyCheck" />
       </StackPanel>
       <DataGrid Grid.Row="1" Grid.Column="0" Margin="8"

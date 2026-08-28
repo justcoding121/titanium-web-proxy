@@ -27,7 +27,7 @@ public class InspectorUiActionsE2ETests
         var buffer = new SessionStreamBuffer(registry);
         var updates = new UpdateService(settings);
         _recorder = new RecordingSystemProxyController();
-        _interception = new InterceptionService(_recorder);
+        _interception = new InterceptionService(_recorder) { UseInMemoryTrustState = true };
         _vm = new MainWindowViewModel(buffer, registry, updates, settings, _interception);
         _origin = new EchoOrigin();
         _vm.BindPort = CliProcessHarness.GetFreePort();

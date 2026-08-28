@@ -37,6 +37,15 @@ public sealed class InspectorSettings
     public string? LoggingFilePath { get; set; }
 
     public bool IgnoreServerCertificateErrors { get; set; }
+
+    /// <summary>Start listener when the main window opens.</summary>
+    public bool AutoStartCapture { get; set; } = true;
+
+    /// <summary>Enable system proxy after auto-start (or first start when requested).</summary>
+    public bool AutoSystemProxyOnStart { get; set; } = true;
+
+    /// <summary>When false, HTTPS stays opaque CONNECT tunnels (Fiddler-like default).</summary>
+    public bool DecryptHttps { get; set; }
 }
 
 public sealed class SettingsService

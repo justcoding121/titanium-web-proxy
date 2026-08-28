@@ -73,6 +73,7 @@ public class InspectorServiceE2ETests
 
         await interception.StartAsync(IPAddress.Loopback, proxyPort);
         Assert.IsFalse(string.IsNullOrEmpty(interception.RootCertificate?.Thumbprint));
+        interception.DecryptHttps = true;
 
         using var handler = new HttpClientHandler
         {

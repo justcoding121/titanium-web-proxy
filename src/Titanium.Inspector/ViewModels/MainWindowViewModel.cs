@@ -10,6 +10,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Titanium.Inspector.Services;
+using Titanium.Inspector.Views;
 
 namespace Titanium.Inspector.ViewModels;
 
@@ -20,6 +21,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly UpdateService _updates;
     private readonly SettingsService _settings;
     private readonly InterceptionService _interception;
+    private readonly IInspectorDialogs _dialogs;
     private readonly ObservableCollection<SessionSnapshot> _all = new();
     private string _statusText = "Ready";
     private string _searchQuery = "";
@@ -30,6 +32,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _selectedFrames = "";
     private bool _capturing = true;
     private bool _systemProxy;
+    private bool _autoStartCapture = true;
+    private bool _autoSystemProxyOnStart = true;
+    private bool _decryptHttps;
+    private bool _decryptHttpsBusy;
     private string _autoResponderMatch = "*";
     private string _autoResponderBody = "OK";
     private string _autoResponderContentType = "text/plain";
@@ -52,13 +58,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         SessionRegistry registry,
         UpdateService updates,
         SettingsService settings,
-        InterceptionService? interception = null)
+        InterceptionService? interception = null,
+        IInspectorDialogs? dialogs = null)
     {
         _buffer = buffer;
         _registry = registry;
         _updates = updates;
         _settings = settings;
         _interception = interception ?? new InterceptionService();
+        _dialogs = dialogs ?? new AvaloniaInspectorDialogs();
         Sessions = new ObservableCollection<SessionSnapshot>();
         Breakpoints = new BreakpointViewModel();
         AutoResponder = new AutoResponderViewModel();
@@ -81,6 +89,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         UntrustCaCommand = new RelayCommand(UntrustCaAsync);
         ExportCaCommand = new RelayCommand(ExportCaAsync);
         DeviceCaSetupCommand = new RelayCommand(DeviceCaSetupAsync);
+        OpenLoopbackExemptCommand = new RelayCommand(OpenLoopbackExemptAsync);
         ReplayCommand = new RelayCommand(async () => await ReplaySelectedAsync());
         LoadFromSelectedCommand = new RelayCommand(LoadFromSelectedAsync);
         SendComposerCommand = new RelayCommand(async () => await SendComposerAsync());
@@ -104,10 +113,45 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         LoadPlusPanels();
         _interception.ConfigureLogging(_settings.Current);
         _interception.IgnoreServerCertificateErrors = _settings.Current.IgnoreServerCertificateErrors;
+        _interception.DecryptHttps = _decryptHttps;
+        ShowLoopbackExemptMenu = AppContainerLoopback.IsSupported;
     }
 
     /// <summary>Exposed for E2E / headless tests.</summary>
     public InterceptionService Interception => _interception;
+
+    /// <summary>Exposed for E2E / headless tests.</summary>
+    public IInspectorDialogs Dialogs => _dialogs;
+
+    /// <summary>
+    /// After the main window is shown: optionally start capture and system proxy.
+    /// Idempotent if already running.
+    /// </summary>
+    public async Task TryAutoStartAsync()
+    {
+        if (!AutoStartCapture)
+        {
+            return;
+        }
+
+        if (!_interception.IsRunning)
+        {
+            await StartCaptureAsync();
+        }
+
+        if (!AutoSystemProxyOnStart || !_interception.IsRunning || SystemProxy)
+        {
+            return;
+        }
+
+        if (_interception.SetSystemProxy(true))
+        {
+            SystemProxy = true;
+            StatusText =
+                $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS is CONNECT until Decrypt HTTPS is enabled." +
+                (DecryptHttps ? "" : " Chrome: --disable-quic if H3 bypasses the proxy.");
+        }
+    }
 
     /// <summary>Idempotent teardown for window close / app exit (restores WinINET).</summary>
     public void EnsureShutdown()
@@ -267,24 +311,35 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         var ok = _interception.InstallRootCertificate(machineStore: false);
         StatusText = ok
-            ? "Root CA trusted in current user store"
+            ? "Root CA trusted in current user store — ready to enable Decrypt HTTPS"
             : "Root CA install failed or not present in store — try Export CA and install manually";
         return Task.CompletedTask;
     }
 
-    private Task UntrustCaAsync()
+    private async Task UntrustCaAsync()
     {
         if (!_interception.IsRunning)
         {
             StatusText = "Start interception first";
-            return Task.CompletedTask;
+            return;
+        }
+
+        var owner = TryGetMainWindow() as Window;
+        if (!await _dialogs.ConfirmRemoveRootCaAsync(owner))
+        {
+            StatusText = "Remove root CA cancelled";
+            return;
         }
 
         _interception.UntrustRootCertificate(machineStore: false);
+        if (DecryptHttps)
+        {
+            SetDecryptHttpsCore(false);
+        }
+
         StatusText = _interception.IsRootTrusted
-            ? "Untrust requested but CA still present in store"
-            : "Root CA removed from current user store";
-        return Task.CompletedTask;
+            ? "Remove requested but CA still present in store"
+            : "Root CA removed from current user store; Decrypt HTTPS is off until you install the CA again";
     }
 
     private Task ExportCaAsync()
@@ -292,6 +347,33 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var path = _interception.ExportRootCertificate();
         StatusText = path is null ? "No root certificate yet — start interception first" : "Exported CA: " + path;
         return Task.CompletedTask;
+    }
+
+    private async Task OpenLoopbackExemptAsync()
+    {
+        if (!AppContainerLoopback.IsSupported)
+        {
+            StatusText = "Loopback exemptions require Windows 8 or later";
+            return;
+        }
+
+        var owner = TryGetMainWindow() as Window;
+        if (owner is null)
+        {
+            if (AppContainerLoopback.TryProbeApis(out var msg))
+            {
+                StatusText = "Loopback APIs OK (no UI owner): " + msg;
+            }
+            else
+            {
+                StatusText = msg;
+            }
+
+            return;
+        }
+
+        await LoopbackExemptWindow.ShowAsync(owner);
+        StatusText = "Loopback exemption dialog closed";
     }
 
     private Task DeviceCaSetupAsync()
@@ -391,6 +473,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand UntrustCaCommand { get; }
     public ICommand ExportCaCommand { get; }
     public ICommand DeviceCaSetupCommand { get; }
+    public ICommand OpenLoopbackExemptCommand { get; }
     public ICommand ReplayCommand { get; }
     public ICommand LoadFromSelectedCommand { get; }
     public ICommand SendComposerCommand { get; }
@@ -532,6 +615,55 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         set => SetField(ref _systemProxy, value);
     }
 
+    public bool AutoStartCapture
+    {
+        get => _autoStartCapture;
+        set
+        {
+            if (SetField(ref _autoStartCapture, value))
+            {
+                PersistSettings();
+            }
+        }
+    }
+
+    public bool AutoSystemProxyOnStart
+    {
+        get => _autoSystemProxyOnStart;
+        set
+        {
+            if (SetField(ref _autoSystemProxyOnStart, value))
+            {
+                PersistSettings();
+            }
+        }
+    }
+
+    /// <summary>When true, MITM decrypts HTTPS; when false, tunnels stay CONNECT.</summary>
+    public bool DecryptHttps
+    {
+        get => _decryptHttps;
+        set
+        {
+            if (_decryptHttpsBusy || _decryptHttps == value)
+            {
+                return;
+            }
+
+            if (value)
+            {
+                _ = EnableDecryptHttpsAsync();
+            }
+            else
+            {
+                SetDecryptHttpsCore(false);
+                StatusText = "Decrypt HTTPS off — HTTPS shown as CONNECT tunnels";
+            }
+        }
+    }
+
+    public bool ShowLoopbackExemptMenu { get; }
+
     public string SearchQuery
     {
         get => _searchQuery;
@@ -583,6 +715,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var s = _settings.Current;
         BindAddress = s.BindAddress;
         BindPort = s.BindPort is > 0 and < 65536 ? s.BindPort : 8866;
+        _autoStartCapture = s.AutoStartCapture;
+        _autoSystemProxyOnStart = s.AutoSystemProxyOnStart;
+        _decryptHttps = s.DecryptHttps;
         AutoResponder.Enabled = s.AutoResponderEnabled;
         AutoResponder.LoadFromDtos(s.AutoResponderRules);
         Breakpoints.Enabled = s.BreakpointEnabled;
@@ -594,6 +729,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.ScriptOnRequest = _scriptOnRequest;
         _interception.ScriptOnResponse = _scriptOnResponse;
         _interception.IgnoreServerCertificateErrors = s.IgnoreServerCertificateErrors;
+        _interception.DecryptHttps = _decryptHttps;
         _interception.ConfigureLogging(s);
     }
 
@@ -610,6 +746,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var s = _settings.Current;
         s.BindAddress = BindAddress;
         s.BindPort = BindPort;
+        s.AutoStartCapture = AutoStartCapture;
+        s.AutoSystemProxyOnStart = AutoSystemProxyOnStart;
+        s.DecryptHttps = DecryptHttps;
         s.AutoResponderEnabled = AutoResponder.Enabled;
         s.AutoResponderRules = AutoResponder.ToDtos();
         s.BreakpointEnabled = Breakpoints.Enabled;
@@ -623,6 +762,60 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         s.LoggingEnableFile = _settings.Current.LoggingEnableFile;
         s.LoggingFilePath = _settings.Current.LoggingFilePath;
         _settings.Save();
+    }
+
+    private async Task EnableDecryptHttpsAsync()
+    {
+        _decryptHttpsBusy = true;
+        try
+        {
+            if (!_interception.IsRunning)
+            {
+                StatusText = "Start interception before enabling Decrypt HTTPS";
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+                return;
+            }
+
+            _interception.RefreshTrustState();
+            if (!_interception.IsRootTrusted)
+            {
+                var owner = TryGetMainWindow() as Window;
+                if (!await _dialogs.ConfirmInstallRootCaAsync(owner))
+                {
+                    StatusText = "Decrypt HTTPS cancelled — root CA not installed";
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+                    return;
+                }
+
+                if (!_interception.InstallRootCertificate(machineStore: false))
+                {
+                    StatusText = "Root CA install failed — Decrypt HTTPS stays off";
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+                    return;
+                }
+            }
+
+            SetDecryptHttpsCore(true);
+            StatusText = "Decrypt HTTPS on — MITM decrypting TLS";
+        }
+        finally
+        {
+            _decryptHttpsBusy = false;
+        }
+    }
+
+    private void SetDecryptHttpsCore(bool enabled)
+    {
+        _decryptHttps = enabled;
+        _interception.DecryptHttps = enabled;
+        PersistSettings();
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+    }
+
+    private string FormatBindDisplay()
+    {
+        var address = ParseBindAddress(BindAddress);
+        return address.Equals(IPAddress.Any) ? "0.0.0.0" : BindAddress;
     }
 
     private Task ToggleDebugLoggingAsync()
@@ -742,11 +935,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.ScriptOnRequest = ScriptOnRequest;
         _interception.ScriptOnResponse = ScriptOnResponse;
         _interception.IgnoreServerCertificateErrors = _settings.Current.IgnoreServerCertificateErrors;
+        _interception.DecryptHttps = _decryptHttps;
         _interception.ConfigureLogging(_settings.Current);
         await _interception.StartAsync(address, BindPort);
         Capturing = true;
-        var display = address.Equals(IPAddress.Any) ? "0.0.0.0" : BindAddress;
-        StatusText = $"Listening on {display}:{BindPort} — install CA, then enable system proxy (Capture menu). Chrome: use --disable-quic or H3 may bypass.";
+
+        // If settings asked for decrypt but CA is gone, fall back to CONNECT (no silent re-trust).
+        if (_decryptHttps && !_interception.RefreshTrustState())
+        {
+            SetDecryptHttpsCore(false);
+            StatusText =
+                $"Listening on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.";
+            return;
+        }
+
+        StatusText = _decryptHttps
+            ? $"Listening on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS on. Enable system proxy from Capture menu. Chrome: --disable-quic or H3 may bypass."
+            : $"Listening on {FormatBindDisplay()}:{BindPort} — HTTPS as CONNECT until Decrypt HTTPS is enabled. Enable system proxy from Capture menu.";
     }
 
     private static IPAddress ParseBindAddress(string bindAddress)

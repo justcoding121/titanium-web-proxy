@@ -68,6 +68,10 @@ public class HappyPathSanityE2ETests
 
         Assert.IsTrue(interception.IsRunning, vm.StatusText);
 
+        interception.UseInMemoryTrustState = true;
+        interception.DecryptHttps = true;
+        interception.InstallRootCertificate(false);
+
         using var origin = new HttpsEchoOrigin();
         using var handler = new HttpClientHandler
         {

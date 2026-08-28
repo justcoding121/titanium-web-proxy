@@ -23,7 +23,7 @@ public class InspectorHeadlessUiE2ETests
         var buffer = new SessionStreamBuffer(registry);
         var updates = new UpdateService(settings);
         var recorder = new RecordingSystemProxyController();
-        var interception = new InterceptionService(recorder);
+        var interception = new InterceptionService(recorder) { UseInMemoryTrustState = true };
         var vm = new MainWindowViewModel(buffer, registry, updates, settings, interception);
 
         Assert.IsNotNull(vm.StartCaptureCommand);
@@ -43,7 +43,10 @@ public class InspectorHeadlessUiE2ETests
 
         Assert.IsTrue(interception.IsRunning, vm.StatusText);
         Assert.IsTrue(vm.Capturing);
-        Assert.IsTrue(vm.StatusText.Contains("quic", StringComparison.OrdinalIgnoreCase), vm.StatusText);
+        Assert.IsTrue(
+            vm.StatusText.Contains("Listening", StringComparison.OrdinalIgnoreCase) ||
+            vm.StatusText.Contains("CONNECT", StringComparison.OrdinalIgnoreCase),
+            vm.StatusText);
 
         vm.InstallCaCommand.Execute(null);
         await Task.Delay(100);
@@ -121,6 +124,9 @@ public class InspectorHeadlessUiE2ETests
 
         Assert.IsTrue(interception.IsRunning, vm.StatusText);
         Assert.IsTrue(interception.IgnoreServerCertificateErrors, "StartCapture must keep ignore-errors from settings");
+        interception.UseInMemoryTrustState = true;
+        interception.DecryptHttps = true;
+        interception.InstallRootCertificate(false);
 
         using var origin = new HttpsEchoOrigin();
         using var handler = new HttpClientHandler

@@ -41,6 +41,20 @@ public sealed class InterceptionService : IDisposable
     /// <summary>When false, the listener stays up but sessions are not published to the grid.</summary>
     public bool Capturing { get; set; } = true;
 
+    /// <summary>
+    /// When false, HTTPS CONNECT tunnels stay opaque (no MITM). Endpoint still has decrypt capability;
+    /// <see cref="OnBeforeTunnelConnect"/> gates per-request <c>DecryptSsl</c>.
+    /// </summary>
+    public bool DecryptHttps { get; set; }
+
+    /// <summary>
+    /// When set (tests), skip the Windows certificate store and track trust in-memory.
+    /// Avoids modal "Root Certificate Store" UI that hangs headless / CI runs.
+    /// </summary>
+    public bool UseInMemoryTrustState { get; set; }
+
+    private bool _inMemoryTrusted;
+
     public bool SystemProxyEnabled => _systemProxyEnabled;
     public X509Certificate2? RootCertificate => _proxy?.CertificateManager.RootCertificate;
     public bool IsRootTrusted { get; private set; }
@@ -102,7 +116,7 @@ public sealed class InterceptionService : IDisposable
         _proxy.AddEndPoint(_endPoint);
         _proxy.Start();
 
-        IsRootTrusted = IsRootPresentInStore(machineStore: false);
+        IsRootTrusted = UseInMemoryTrustState ? _inMemoryTrusted : IsRootPresentInStore(machineStore: false);
 
         if (AutoTrustRootOnStart)
         {
@@ -273,6 +287,13 @@ public sealed class InterceptionService : IDisposable
             return false;
         }
 
+        if (UseInMemoryTrustState)
+        {
+            _inMemoryTrusted = true;
+            IsRootTrusted = true;
+            return true;
+        }
+
         _proxy.CertificateManager.TrustRootCertificate(machineStore);
         IsRootTrusted = IsRootPresentInStore(machineStore);
         return IsRootTrusted;
@@ -285,18 +306,30 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
+        if (UseInMemoryTrustState)
+        {
+            _inMemoryTrusted = false;
+            IsRootTrusted = false;
+            return;
+        }
+
         _proxy.CertificateManager.RemoveTrustedRootCertificate(machineStore);
         IsRootTrusted = IsRootPresentInStore(machineStore);
     }
 
     public bool RefreshTrustState(bool machineStore = false)
     {
-        IsRootTrusted = IsRootPresentInStore(machineStore);
+        IsRootTrusted = UseInMemoryTrustState ? _inMemoryTrusted : IsRootPresentInStore(machineStore);
         return IsRootTrusted;
     }
 
     public bool IsRootPresentInStore(bool machineStore)
     {
+        if (UseInMemoryTrustState)
+        {
+            return _inMemoryTrusted;
+        }
+
         var cert = RootCertificate;
         if (cert is null)
         {
@@ -349,11 +382,8 @@ public sealed class InterceptionService : IDisposable
 
     private Task OnBeforeTunnelConnect(object sender, TunnelConnectSessionEventArgs e)
     {
-        if (MitmBypass.ShouldDisableSslDecrypt(e.HttpClient.Request.RequestUri.Host))
-        {
-            e.DecryptSsl = false;
-        }
-
+        var host = e.HttpClient.Request.RequestUri?.Host;
+        e.DecryptSsl = DecryptHttps && !MitmBypass.ShouldDisableSslDecrypt(host);
         return Task.CompletedTask;
     }
 
