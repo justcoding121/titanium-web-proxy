@@ -7,6 +7,8 @@ on:
     paths:
       - 'website/**'
       - 'docs/api/**'
+      - 'docs/styles/**'
+      - 'docs/fonts/**'
       - '.github/workflows/deploy-website.yml'
   pull_request:
     branches:
@@ -14,6 +16,8 @@ on:
     paths:
       - 'website/**'
       - 'docs/api/**'
+      - 'docs/styles/**'
+      - 'docs/fonts/**'
       - '.github/workflows/deploy-website.yml'
   release:
     types: [published]
@@ -54,6 +58,20 @@ jobs:
           mkdir -p website/.vitepress/dist/api
           if [ -d docs/api ]; then
             cp -a docs/api/. website/.vitepress/dist/api/
+            # DocFX HTML references ../styles and ../fonts from /api/*.html
+            if [ -d docs/styles ]; then
+              cp -a docs/styles website/.vitepress/dist/styles
+            fi
+            if [ -d docs/fonts ]; then
+              cp -a docs/fonts website/.vitepress/dist/fonts
+            fi
+            # Prefer DocFX logo only if VitePress did not already emit one
+            if [ -f docs/logo.svg ] && [ ! -f website/.vitepress/dist/logo.svg ]; then
+              cp docs/logo.svg website/.vitepress/dist/logo.svg
+            fi
+            if [ -f docs/favicon.ico ]; then
+              cp docs/favicon.ico website/.vitepress/dist/favicon.ico
+            fi
           else
             echo "Warning: docs/api missing; API pages will not be published"
           fi
