@@ -11,12 +11,11 @@ on:
         required: true
         default: 'stable'
 
-permissions:
-  contents: read
-
 jobs:
   test:
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-dotnet@v5
@@ -29,6 +28,8 @@ jobs:
   build-cli:
     needs: test
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -85,6 +86,8 @@ jobs:
   build-plus:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-dotnet@v5
@@ -103,6 +106,8 @@ jobs:
   build-inspector:
     needs: test
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -180,6 +185,8 @@ jobs:
   smoke-http3:
     needs: build-cli
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -206,7 +213,7 @@ jobs:
           test -e cli/libmsquic.so -o -e cli/libmsquic.so.2 -o -e cli/libmsquic.so.2.6.0
       - name: Smoke QuicListener (Alpine musl container)
         if: matrix.container != ''
-        uses: addnab/docker-run-action@v3
+        uses: addnab/docker-run-action@4f65fabd2431ebc8d299f8e5a018d79a769ae185 # v3
         with:
           image: ${{ matrix.container }}
           options: -v ${{ github.workspace }}/dist:/dist

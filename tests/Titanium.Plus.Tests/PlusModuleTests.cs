@@ -441,17 +441,17 @@ public class PlusModuleTests
     }
 
     [TestMethod]
-    public void Prometheus_RendersLatencyGauge()
+    public async Task Prometheus_RendersLatencyGauge()
     {
         var manager = new ClusterManager();
-        manager.ApplyAsync(
+        await manager.ApplyAsync(
         [
             new ClusterConfig
             {
                 Id = "c",
                 Destinations = [new DestinationConfig { Id = "d1", Address = "127.0.0.1", Port = 80 }],
             },
-        ]).GetAwaiter().GetResult();
+        ]);
         var latency = new TestLatencyRecorder();
         latency.RecordDestination("d1", TimeSpan.FromMilliseconds(12));
         var text = new PrometheusMetricsExporter(manager, latency).Render();

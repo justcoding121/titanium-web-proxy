@@ -128,7 +128,7 @@ public class SessionPipelineTests
             Assert.IsTrue(vm.EnableHttp3);
 
             vm.EnableHttp2 = false;
-            if (vm.Http3Supported)
+            if (MainWindowViewModel.Http3Supported)
             {
                 vm.EnableHttp3 = false;
             }

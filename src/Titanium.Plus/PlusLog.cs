@@ -20,7 +20,7 @@ internal static class PlusLog
         var logger = context.Logger;
         if (logger is not null)
         {
-            logger.Log(level, message);
+            logger.Log(level, "{Message}", message);
             return;
         }
 

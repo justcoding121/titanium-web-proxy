@@ -14,7 +14,7 @@ public partial class MainWindow : Window
     private static readonly MethodInfo? GetSortDescriptionMethod =
         typeof(DataGridColumn).GetMethod(
             "GetSortDescription",
-            BindingFlags.Instance | BindingFlags.NonPublic);
+            BindingFlags.Instance | BindingFlags.NonPublic); // NOSONAR S3011 -- Avalonia has no public SortDirection API
 
     private bool _autoStartStarted;
     private bool _followLatest = true;
@@ -200,19 +200,12 @@ public partial class MainWindow : Window
 
         try
         {
-            foreach (var column in SessionsGrid.Columns)
-            {
-                if (GetSortDescriptionMethod.Invoke(column, null) is not null)
-                {
-                    return false;
-                }
-            }
+            return !SessionsGrid.Columns.Any(column =>
+                GetSortDescriptionMethod.Invoke(column, null) is not null);
         }
         catch
         {
             return true;
         }
-
-        return true;
     }
 }

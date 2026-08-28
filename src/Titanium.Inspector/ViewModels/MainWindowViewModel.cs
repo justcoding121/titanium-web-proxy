@@ -201,6 +201,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private void WireEventHandlers()
     {
+        WireAutoResponderHandlers();
+        WireBreakpointHandlers();
+        WireSessionPipelineHandlers();
+    }
+
+    private void WireAutoResponderHandlers()
+    {
         AutoResponder.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(AutoResponderViewModel.SelectedRule) &&
@@ -214,7 +221,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         };
         AutoResponder.EnabledChanged += (_, _) => PersistAutoResponder();
         AutoResponder.Rules.CollectionChanged += (_, _) => { /* persistence via explicit commands */ };
+    }
 
+    private void WireBreakpointHandlers()
+    {
         Breakpoints.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(BreakpointViewModel.Enabled) or nameof(BreakpointViewModel.UrlFilter))
@@ -222,51 +232,41 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 PersistSettings();
             }
         };
+    }
 
-        _buffer.SessionAdded += snapshot =>
-        {
-            // SessionStreamBuffer publishes from a background reader — marshal to UI thread
-            // so ObservableCollection / DataGrid bindings actually update. When no Avalonia
-            // Application is running (unit/E2E), invoke synchronously.
-            if (Application.Current is null)
-            {
-                OnSessionAdded(snapshot);
-                return;
-            }
-
-            if (Dispatcher.UIThread.CheckAccess())
-            {
-                OnSessionAdded(snapshot);
-            }
-            else
-            {
-                Dispatcher.UIThread.Post(() => OnSessionAdded(snapshot));
-            }
-        };
+    private void WireSessionPipelineHandlers()
+    {
+        _buffer.SessionAdded += snapshot => MarshalToUi(() => OnSessionAdded(snapshot));
         _interception.SessionCaptured += (_, snap) =>
         {
             _registry.Add(snap);
             _buffer.Publish(snap);
         };
         _interception.SessionUpdated += (_, snap) =>
-        {
-            void Refresh()
+            MarshalToUi(() =>
             {
                 if (ReferenceEquals(SelectedSession, snap))
                 {
                     RefreshSelectedInspectors();
                 }
-            }
+            });
+    }
 
-            if (Application.Current is null || Dispatcher.UIThread.CheckAccess())
-            {
-                Refresh();
-            }
-            else
-            {
-                Dispatcher.UIThread.Post(Refresh);
-            }
-        };
+    /// <summary>
+    /// SessionStreamBuffer publishes from a background reader — marshal to UI thread
+    /// so ObservableCollection / DataGrid bindings actually update. When no Avalonia
+    /// Application is running (unit/E2E), invoke synchronously.
+    /// </summary>
+    private static void MarshalToUi(Action action)
+    {
+        if (Application.Current is null || Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(action);
+        }
     }
 
     private void LoadPlusPanels()
@@ -674,7 +674,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public bool DecryptHttps
     {
         get => _decryptHttps;
-        set
+        set // NOSONAR S4275 -- true path updates _decryptHttps via SetDecryptHttpsCore after async trust flow
         {
             if (_decryptHttpsBusy || _decryptHttps == value)
             {
@@ -709,7 +709,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     /// <summary>True when the OS can host QUIC (HTTP/3 checkbox is enabled).</summary>
-    public bool Http3Supported => InterceptionService.IsHttp3Supported;
+    public static bool Http3Supported => InterceptionService.IsHttp3Supported;
 
     public bool EnableHttp11
     {
@@ -872,9 +872,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private bool HasAnotherEnabledProtocol(string turningOff)
     {
-        var http11 = turningOff == nameof(EnableHttp11) ? false : _enableHttp11;
-        var http2 = turningOff == nameof(EnableHttp2) ? false : _enableHttp2;
-        var http3 = turningOff == nameof(EnableHttp3) ? false : (_enableHttp3 && Http3Supported);
+        var http11 = turningOff != nameof(EnableHttp11) && _enableHttp11;
+        var http2 = turningOff != nameof(EnableHttp2) && _enableHttp2;
+        var http3 = turningOff != nameof(EnableHttp3) && _enableHttp3 && Http3Supported;
         return http11 || http2 || http3;
     }
 

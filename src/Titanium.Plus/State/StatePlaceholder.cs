@@ -142,7 +142,11 @@ public sealed class RateLimitMiddleware : IProxyMiddleware
                 .ConfigureAwait(false);
             if (count > _limitPerMinute)
             {
-                _logger?.LogInformation("Plus State: rate limit exceeded for {Key}", key);
+                if (_logger?.IsEnabled(LogLevel.Information) == true)
+                {
+                    _logger.LogInformation("Plus State: rate limit exceeded for {Key}", key);
+                }
+
                 CidrAccessMiddleware.Deny(context, HttpStatusCode.TooManyRequests, "rate limit exceeded");
                 return;
             }

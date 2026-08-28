@@ -813,7 +813,7 @@ public sealed class InterceptionService : IDisposable
         snap.BodySize ??= 0;
     }
 
-    private void AttachTunnelByteCounters(TunnelConnectSessionEventArgs e, SessionSnapshot snap)
+    private static void AttachTunnelByteCounters(TunnelConnectSessionEventArgs e, SessionSnapshot snap)
     {
         e.DataSent += (_, args) => AddTunnelBytes(snap, sent: args.Count, received: 0);
         e.DataReceived += (_, args) => AddTunnelBytes(snap, sent: 0, received: args.Count);

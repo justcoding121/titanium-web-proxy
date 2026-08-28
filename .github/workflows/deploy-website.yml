@@ -23,11 +23,6 @@ on:
     types: [published]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -35,6 +30,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
 
@@ -49,7 +46,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm ci
+          npm ci --ignore-scripts
           npm run docs:build
 
       - name: Copy DocFX API into site
@@ -86,6 +83,9 @@ jobs:
     if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/develop' || github.event_name == 'release' || github.event_name == 'workflow_dispatch')
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

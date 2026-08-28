@@ -10,13 +10,17 @@ namespace Titanium.Cli.Http3;
 /// </summary>
 internal static class Http3DepsCommand
 {
+    private const string InstallSubcommand = "install";
+    private const string LibMsQuicPackage = "libmsquic";
+    private const string LddAbsolutePath = "/usr/bin/ldd";
+
     public static async Task<int> ExecuteAsync(string[] args)
     {
         var sub = args.Length > 1 ? args[1].ToLowerInvariant() : "status";
         return sub switch
         {
             "status" => Status(),
-            "install" => await InstallAsync(),
+            InstallSubcommand => await InstallAsync(),
             "help" or "-h" or "--help" => PrintHelp(),
             _ => await UnknownAsync(sub),
         };
@@ -61,7 +65,7 @@ internal static class Http3DepsCommand
         Console.WriteLine("Fixes:");
         Console.WriteLine("  1) Download the matching RID zip for your OS/arch (see /docs/http3).");
         Console.WriteLine("     Alpine/K8s musl images need linux-musl-x64 or linux-musl-arm64, not linux-x64.");
-        Console.WriteLine("  2) Or run: titanium http3-deps install");
+        Console.WriteLine($"  2) Or run: titanium http3-deps {InstallSubcommand}");
         if (OperatingSystem.IsWindows())
         {
             Console.WriteLine("  Windows requires Windows 11 or Windows Server 2022+ (OS MsQuic).");
@@ -89,16 +93,16 @@ internal static class Http3DepsCommand
         {
             return await RunPackageInstallAsync(
                 "brew",
-                ["install", "libmsquic"],
-                "Homebrew is required: https://brew.sh — then: brew install libmsquic");
+                [InstallSubcommand, LibMsQuicPackage],
+                $"Homebrew is required: https://brew.sh — then: brew {InstallSubcommand} {LibMsQuicPackage}");
         }
 
         if (File.Exists("/etc/alpine-release") || LooksLikeMusl())
         {
             return await RunPackageInstallAsync(
                 "apk",
-                ["add", "--no-cache", "libmsquic"],
-                "Enable the Alpine community repo, then: apk add libmsquic");
+                ["add", "--no-cache", LibMsQuicPackage],
+                $"Enable the Alpine community repo, then: apk add {LibMsQuicPackage}");
         }
 
         if (File.Exists("/etc/debian_version") || HasCommand("apt-get"))
@@ -110,20 +114,20 @@ internal static class Http3DepsCommand
         {
             return await RunPackageInstallAsync(
                 "dnf",
-                ["install", "-y", "libmsquic"],
-                "Configure packages.microsoft.com for your distro, then: dnf install libmsquic");
+                [InstallSubcommand, "-y", LibMsQuicPackage],
+                $"Configure packages.microsoft.com for your distro, then: dnf {InstallSubcommand} {LibMsQuicPackage}");
         }
 
         if (HasCommand("zypper"))
         {
             return await RunPackageInstallAsync(
                 "zypper",
-                ["install", "-y", "libmsquic"],
-                "Configure packages.microsoft.com for your distro, then: zypper install libmsquic");
+                [InstallSubcommand, "-y", LibMsQuicPackage],
+                $"Configure packages.microsoft.com for your distro, then: zypper {InstallSubcommand} {LibMsQuicPackage}");
         }
 
         await Console.Error.WriteLineAsync(
-            "No supported package manager detected. Install libmsquic manually or use a bundled RID zip.");
+            $"No supported package manager detected. Install {LibMsQuicPackage} manually or use a bundled RID zip.");
         return 1;
     }
 
@@ -147,7 +151,7 @@ internal static class Http3DepsCommand
         catch (Exception ex)
         {
             await Console.Error.WriteLineAsync(
-                $"Failed to download {prodDeb}: {ex.Message}. Install libmsquic manually from packages.microsoft.com.");
+                $"Failed to download {prodDeb}: {ex.Message}. Install {LibMsQuicPackage} manually from packages.microsoft.com.");
             return 1;
         }
 
@@ -161,7 +165,7 @@ internal static class Http3DepsCommand
             return update;
         }
 
-        return await RunAsync("sudo", ["apt-get", "install", "-y", "libmsquic"]);
+        return await RunAsync("sudo", ["apt-get", InstallSubcommand, "-y", LibMsQuicPackage]);
     }
 
     private static async Task<int> RunPackageInstallAsync(string fileName, string[] args, string hint)
@@ -274,7 +278,7 @@ internal static class Http3DepsCommand
         {
             var psi = new ProcessStartInfo
             {
-                FileName = "ldd",
+                FileName = LddAbsolutePath,
                 Arguments = "--version",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -304,15 +308,9 @@ internal static class Http3DepsCommand
             return null;
         }
 
-        foreach (var line in File.ReadLines(path))
-        {
-            if (line.StartsWith(key + "=", StringComparison.Ordinal))
-            {
-                return line[(key.Length + 1)..].Trim().Trim('"');
-            }
-        }
-
-        return null;
+        var prefix = key + "=";
+        var line = File.ReadLines(path).FirstOrDefault(l => l.StartsWith(prefix, StringComparison.Ordinal));
+        return line is null ? null : line[prefix.Length..].Trim().Trim('"');
     }
 
     internal static string SuggestRid()

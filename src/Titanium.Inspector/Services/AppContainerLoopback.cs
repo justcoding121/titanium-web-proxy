@@ -21,7 +21,7 @@ public static class AppContainerLoopback
     public static bool IsSupported =>
         OperatingSystem.IsWindowsVersionAtLeast(6, 2);
 
-    public static IReadOnlyList<AppContainerInfo> ListContainers()
+    public static List<AppContainerInfo> ListContainers()
     {
         if (!IsSupported)
         {
@@ -73,7 +73,7 @@ public static class AppContainerLoopback
     }
 
     [SupportedOSPlatform("windows")]
-    private static IReadOnlyList<AppContainerInfo> ListContainersWindows()
+    private static List<AppContainerInfo> ListContainersWindows()
     {
         var exempt = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var sid in GetExemptSidsWindows())
@@ -213,14 +213,14 @@ public static class AppContainerLoopback
     private static class NativeMethods
     {
         [StructLayout(LayoutKind.Sequential)]
-        public struct SID_AND_ATTRIBUTES
+        public struct SID_AND_ATTRIBUTES // NOSONAR S101 -- Win32 struct name required for P/Invoke
         {
             public IntPtr Sid;
             public uint Attributes;
         }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        public struct INET_FIREWALL_APP_CONTAINER
+        public struct INET_FIREWALL_APP_CONTAINER // NOSONAR S101 -- Win32 struct name required for P/Invoke
         {
             public IntPtr appContainerSid;
             public IntPtr userSid;
@@ -234,42 +234,42 @@ public static class AppContainerLoopback
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        public struct INET_FIREWALL_AC_CAPABILITIES
+        public struct INET_FIREWALL_AC_CAPABILITIES // NOSONAR S101 -- Win32 struct name required for P/Invoke
         {
             public uint count;
             public IntPtr capabilities;
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        public struct INET_FIREWALL_AC_BINARIES
+        public struct INET_FIREWALL_AC_BINARIES // NOSONAR S101 -- Win32 struct name required for P/Invoke
         {
             public uint count;
             public IntPtr binaries;
         }
 
-        [DllImport("FirewallAPI.dll", ExactSpelling = true)]
+        [DllImport("FirewallAPI.dll", ExactSpelling = true)] // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
         public static extern uint NetworkIsolationEnumAppContainers(
             uint flags,
             out uint pdwCntPublicACs,
             out IntPtr ppACs);
 
-        [DllImport("FirewallAPI.dll", ExactSpelling = true)]
+        [DllImport("FirewallAPI.dll", ExactSpelling = true)] // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
         public static extern void NetworkIsolationFreeAppContainers(IntPtr pACs);
 
-        [DllImport("FirewallAPI.dll", ExactSpelling = true)]
+        [DllImport("FirewallAPI.dll", ExactSpelling = true)] // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
         public static extern uint NetworkIsolationGetAppContainerConfig(
             out uint pdwCntACs,
             out IntPtr appContainerSids);
 
-        [DllImport("FirewallAPI.dll", ExactSpelling = true)]
+        [DllImport("FirewallAPI.dll", ExactSpelling = true)] // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
         public static extern uint NetworkIsolationSetAppContainerConfig(
             uint dwNumPublicAppCs,
             [In] SID_AND_ATTRIBUTES[]? appContainerSids);
 
-        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
         public static extern bool ConvertStringSidToSid(string strSid, out IntPtr pSid);
 
-        [DllImport("kernel32.dll", SetLastError = true)]
+        [DllImport("kernel32.dll", SetLastError = true)] // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
         public static extern IntPtr LocalFree(IntPtr hMem);
     }
 }

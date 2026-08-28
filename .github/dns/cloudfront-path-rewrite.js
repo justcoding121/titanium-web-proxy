@@ -1,6 +1,6 @@
 function handler(event) {
-  var request = event.request;
-  var uri = request.uri;
+  const request = event.request;
+  const uri = request.uri;
   if (uri.indexOf('/titanium-web-proxy') !== 0) {
     if (uri === '/') {
       request.uri = '/titanium-web-proxy/';

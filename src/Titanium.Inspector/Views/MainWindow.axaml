@@ -32,7 +32,7 @@
           <MenuItem Header="HTTP/2" ToggleType="CheckBox" IsChecked="{Binding EnableHttp2}"
                     AutomationProperties.AutomationId="MenuEnableHttp2" />
           <MenuItem Header="HTTP/3" ToggleType="CheckBox" IsChecked="{Binding EnableHttp3}"
-                    IsEnabled="{Binding Http3Supported}"
+                    IsEnabled="{x:Static vm:MainWindowViewModel.Http3Supported}"
                     ToolTip.Tip="Requires Windows 11 / MsQuic. Inspector is an explicit TCP proxy, so HTTP/3 is origin-side only; Chrome may still bypass via native QUIC."
                     AutomationProperties.AutomationId="MenuEnableHttp3" />
         </MenuItem>
@@ -83,7 +83,7 @@
         <CheckBox Content="HTTP/2" IsChecked="{Binding EnableHttp2}"
                   ToolTip.Tip="Allow HTTP/2 (ALPN h2). Applies to new connections."
                   AutomationProperties.AutomationId="Http2Check" />
-        <CheckBox Content="HTTP/3" IsChecked="{Binding EnableHttp3}" IsEnabled="{Binding Http3Supported}"
+        <CheckBox Content="HTTP/3" IsChecked="{Binding EnableHttp3}" IsEnabled="{x:Static vm:MainWindowViewModel.Http3Supported}"
                   ToolTip.Tip="Allow HTTP/3 to origins when MsQuic is available. Inspector does not listen on UDP."
                   AutomationProperties.AutomationId="Http3Check" />
         <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}" IsEnabled="False" AutomationProperties.AutomationId="SystemProxyCheck" />

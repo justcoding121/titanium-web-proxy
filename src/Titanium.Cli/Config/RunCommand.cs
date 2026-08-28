@@ -100,29 +100,17 @@ internal static class RunCommand
 
         RefreshReverseProxy();
         proxy.Start();
-
-        if (loaded.Config.Certificates is { AcmeEmail: not null, AcmeDomain: not null } certs)
-        {
-            var directory = certs.AcmeDirectory ?? Environment.GetEnvironmentVariable("TITANIUM_ACME_DIRECTORY");
-            if (!string.IsNullOrWhiteSpace(directory) ||
-                !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TITANIUM_ACME_CERT_PATH")))
-            {
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await CertificateBootstrap.IssueOrRenewAsync(proxy, certs).ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        await Console.Error.WriteLineAsync($"ACME IssueOrRenew failed: {ex.Message}");
-                    }
-                });
-            }
-        }
+        StartAcmeIfConfigured(proxy, loaded.Config);
 
         Console.WriteLine("Titanium proxy running. Press Ctrl+C to stop.");
-        Console.Out.Flush();
+        await Console.Out.FlushAsync();
+        await WaitForCtrlCAsync();
+        await proxy.StopAsync();
+        return 0;
+    }
+
+    private static async Task WaitForCtrlCAsync()
+    {
         var tcs = new TaskCompletionSource();
         Console.CancelKeyPress += (_, e) =>
         {
@@ -130,8 +118,33 @@ internal static class RunCommand
             tcs.TrySetResult();
         };
         await tcs.Task;
-        await proxy.StopAsync();
-        return 0;
+    }
+
+    private static void StartAcmeIfConfigured(ProxyServer proxy, TwpConfig config)
+    {
+        if (config.Certificates is not { AcmeEmail: not null, AcmeDomain: not null } certs)
+        {
+            return;
+        }
+
+        var directory = certs.AcmeDirectory ?? Environment.GetEnvironmentVariable("TITANIUM_ACME_DIRECTORY");
+        if (string.IsNullOrWhiteSpace(directory) &&
+            string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TITANIUM_ACME_CERT_PATH")))
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await CertificateBootstrap.IssueOrRenewAsync(proxy, certs).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await Console.Error.WriteLineAsync($"ACME IssueOrRenew failed: {ex.Message}");
+            }
+        });
     }
 
     private static void ConfigureProxyFlags(ProxyServer proxy, TwpConfig config, bool requiresSessionPath)

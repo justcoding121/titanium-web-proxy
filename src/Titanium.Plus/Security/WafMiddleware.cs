@@ -6,6 +6,7 @@ using Titanium.Plus;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Plus.Security;
 
@@ -37,6 +38,8 @@ public sealed class WafGuard
 /// <summary>Deny-list rules for path/method/header/body size (not ModSecurity/CRS).</summary>
 public sealed class WafRules
 {
+    private static readonly TimeSpan RegexMatchTimeout = TimeSpan.FromMilliseconds(250);
+
     public List<Regex> PathDeny { get; } = [];
     public List<(string Header, Regex Value)> HeaderDeny { get; } = [];
     public HashSet<string> MethodDeny { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -51,59 +54,91 @@ public sealed class WafRules
                 : 10 * 1024 * 1024,
         };
 
-        if (options.TryGetValue("waf.denyPaths", out var paths) && !string.IsNullOrWhiteSpace(paths))
-        {
-            foreach (var part in paths.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-            {
-                rules.PathDeny.Add(new Regex(part, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled));
-            }
-        }
-
-        if (options.TryGetValue("waf.denyMethods", out var methods) && !string.IsNullOrWhiteSpace(methods))
-        {
-            foreach (var part in methods.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-            {
-                rules.MethodDeny.Add(part);
-            }
-        }
-
-        if (options.TryGetValue("waf.denyHeader", out var headerRule) && !string.IsNullOrWhiteSpace(headerRule))
-        {
-            // format: HeaderName=regex
-            var eq = headerRule.IndexOf('=');
-            if (eq > 0)
-            {
-                var name = headerRule[..eq].Trim();
-                var pattern = headerRule[(eq + 1)..].Trim();
-                rules.HeaderDeny.Add((name, new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled)));
-            }
-        }
-
-        if (options.TryGetValue("waf.rulesFile", out var file) && !string.IsNullOrWhiteSpace(file) && File.Exists(file))
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(File.ReadAllText(file));
-                if (doc.RootElement.TryGetProperty("denyPaths", out var denyPaths))
-                {
-                    foreach (var el in denyPaths.EnumerateArray())
-                    {
-                        var p = el.GetString();
-                        if (!string.IsNullOrEmpty(p))
-                        {
-                            rules.PathDeny.Add(new Regex(p, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled));
-                        }
-                    }
-                }
-            }
-            catch
-            {
-                // ignore bad rules file; operator can fix
-            }
-        }
-
+        AddPathDenyFromCsv(rules, options);
+        AddMethodDenyFromCsv(rules, options);
+        AddHeaderDeny(rules, options);
+        AddRulesFromFile(rules, options);
         return rules;
     }
+
+    private static void AddPathDenyFromCsv(WafRules rules, IReadOnlyDictionary<string, string> options)
+    {
+        if (!options.TryGetValue("waf.denyPaths", out var paths) || string.IsNullOrWhiteSpace(paths))
+        {
+            return;
+        }
+
+        foreach (var part in paths.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            rules.PathDeny.Add(CompileRegex(part));
+        }
+    }
+
+    private static void AddMethodDenyFromCsv(WafRules rules, IReadOnlyDictionary<string, string> options)
+    {
+        if (!options.TryGetValue("waf.denyMethods", out var methods) || string.IsNullOrWhiteSpace(methods))
+        {
+            return;
+        }
+
+        foreach (var part in methods.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            rules.MethodDeny.Add(part);
+        }
+    }
+
+    private static void AddHeaderDeny(WafRules rules, IReadOnlyDictionary<string, string> options)
+    {
+        if (!options.TryGetValue("waf.denyHeader", out var headerRule) || string.IsNullOrWhiteSpace(headerRule))
+        {
+            return;
+        }
+
+        // format: HeaderName=regex
+        var eq = headerRule.IndexOf('=');
+        if (eq <= 0)
+        {
+            return;
+        }
+
+        var name = headerRule[..eq].Trim();
+        var pattern = headerRule[(eq + 1)..].Trim();
+        rules.HeaderDeny.Add((name, CompileRegex(pattern)));
+    }
+
+    private static void AddRulesFromFile(WafRules rules, IReadOnlyDictionary<string, string> options)
+    {
+        if (!options.TryGetValue("waf.rulesFile", out var file) || string.IsNullOrWhiteSpace(file) || !File.Exists(file))
+        {
+            return;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(file));
+            if (!doc.RootElement.TryGetProperty("denyPaths", out var denyPaths))
+            {
+                return;
+            }
+
+            foreach (var el in denyPaths.EnumerateArray())
+            {
+                var p = el.GetString();
+                if (!string.IsNullOrEmpty(p))
+                {
+                    rules.PathDeny.Add(CompileRegex(p));
+                }
+            }
+        }
+        catch
+        {
+            // ignore bad rules file; operator can fix
+        }
+    }
+
+    private static Regex CompileRegex(string pattern) =>
+        new(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled,
+            matchTimeout: RegexMatchTimeout);
 }
 
 /// <summary>Thin WAF deny middleware.</summary>
@@ -137,31 +172,16 @@ public sealed class WafDenyMiddleware : IProxyMiddleware
         }
 
         var path = request.RequestUri?.AbsolutePath ?? request.RequestUriString ?? "";
-        foreach (var regex in _rules.PathDeny)
+        if (_rules.PathDeny.Any(regex => regex.IsMatch(path)))
         {
-            if (regex.IsMatch(path))
-            {
-                Deny(context);
-                return;
-            }
+            Deny(context);
+            return;
         }
 
-        foreach (var (header, valueRegex) in _rules.HeaderDeny)
+        if (HeaderDenied(request))
         {
-            var values = request.Headers.GetHeaders(header);
-            if (values is null)
-            {
-                continue;
-            }
-
-            foreach (var h in values)
-            {
-                if (valueRegex.IsMatch(h.Value))
-                {
-                    Deny(context);
-                    return;
-                }
-            }
+            Deny(context);
+            return;
         }
 
         if (request.ContentLength > _rules.MaxBodyBytes)
@@ -172,6 +192,13 @@ public sealed class WafDenyMiddleware : IProxyMiddleware
 
         await next(context, cancellationToken);
     }
+
+    private bool HeaderDenied(Request request) =>
+        _rules.HeaderDeny.Any(rule =>
+        {
+            var values = request.Headers.GetHeaders(rule.Header);
+            return values is not null && values.Any(h => rule.Value.IsMatch(h.Value));
+        });
 
     private void Deny(ProxyMiddlewareContext context)
     {
