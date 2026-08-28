@@ -8960,6 +8960,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.SetAsSystemProxy
   nameWithType: ProxyServer.SetAsSystemProxy
+- uid: Titanium.Web.Proxy.ProxyServer.SetHttp3Enabled(System.Boolean)
+  name: SetHttp3Enabled(bool)
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SetHttp3Enabled_System_Boolean_
+  commentId: M:Titanium.Web.Proxy.ProxyServer.SetHttp3Enabled(System.Boolean)
+  name.vb: SetHttp3Enabled(Boolean)
+  fullName: Titanium.Web.Proxy.ProxyServer.SetHttp3Enabled(bool)
+  fullName.vb: Titanium.Web.Proxy.ProxyServer.SetHttp3Enabled(Boolean)
+  nameWithType: ProxyServer.SetHttp3Enabled(bool)
+  nameWithType.vb: ProxyServer.SetHttp3Enabled(Boolean)
+- uid: Titanium.Web.Proxy.ProxyServer.SetHttp3Enabled*
+  name: SetHttp3Enabled
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SetHttp3Enabled_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.SetHttp3Enabled
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.SetHttp3Enabled
+  nameWithType: ProxyServer.SetHttp3Enabled
 - uid: Titanium.Web.Proxy.ProxyServer.ShouldInterceptHttp
   name: ShouldInterceptHttp
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ShouldInterceptHttp
@@ -9067,6 +9083,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread
   nameWithType: ProxyServer.ThreadPoolWorkerThread
+- uid: Titanium.Web.Proxy.ProxyServer.TryEnableHttp3IfSupported
+  name: TryEnableHttp3IfSupported()
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryEnableHttp3IfSupported
+  commentId: M:Titanium.Web.Proxy.ProxyServer.TryEnableHttp3IfSupported
+  fullName: Titanium.Web.Proxy.ProxyServer.TryEnableHttp3IfSupported()
+  nameWithType: ProxyServer.TryEnableHttp3IfSupported()
+- uid: Titanium.Web.Proxy.ProxyServer.TryEnableHttp3IfSupported*
+  name: TryEnableHttp3IfSupported
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryEnableHttp3IfSupported_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.TryEnableHttp3IfSupported
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.TryEnableHttp3IfSupported
+  nameWithType: ProxyServer.TryEnableHttp3IfSupported
 - uid: Titanium.Web.Proxy.ProxyServer.UpStreamEndPoint
   name: UpStreamEndPoint
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_UpStreamEndPoint
