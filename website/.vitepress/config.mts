@@ -5,7 +5,7 @@ const repo = 'https://github.com/justcoding121/titanium-web-proxy'
 export default defineConfig({
   title: 'Titanium Web Proxy',
   description:
-    'High-performance HTTP(S) proxy for .NET — MITM library, reverse/edge CLI, Plus ops plugin, and Inspector.',
+    'High-performance HTTP(S) proxy — reverse/edge CLI, Plus ops, and Inspector on Windows, Linux, and macOS. Optional .NET library via NuGet.',
   lang: 'en-US',
   // Served at https://titaniumproxy.com via CloudFront (origin path maps GitHub Pages project URL).
   base: '/',

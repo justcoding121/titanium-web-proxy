@@ -2,12 +2,12 @@
 
 | Product | Role | License | How you get it |
 |---------|------|---------|----------------|
-| **Titanium.Web.Proxy** | Embed MITM and/or reverse proxy in a .NET app | MIT | NuGet |
-| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge daemon | MIT | [Download](/download) zips, winget |
-| **Titanium.Plus** | Control plane, ops, observability, dashboard | [PolyForm NC](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt) | `titanium update --plus` |
-| **Titanium Inspector** | Desktop MITM debugger | PolyForm NC | MSI / zip / winget |
+| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge daemon for any stack | MIT | [Download](/download) zips, winget |
+| **Titanium Inspector** | Desktop MITM debugger | [PolyForm NC](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt) | MSI / zip / winget |
+| **Titanium.Plus** | Control plane, ops, observability, dashboard | PolyForm NC | `titanium update --plus` |
+| **Titanium.Web.Proxy** | Optional embeddable library for .NET apps | MIT | NuGet |
 
-CLI and Plus target reverse-proxy / edge workloads (routing, load balancing, health, discovery). Inspector is the MITM debugging product. The Core library supports both modes.
+CLI and Plus target reverse-proxy / edge workloads (routing, load balancing, health, discovery) on Windows, Linux, and macOS. Inspector is the MITM debugging product. The Core library is for embedding the same engine in a .NET process.
 
 ## What PolyForm NC means
 

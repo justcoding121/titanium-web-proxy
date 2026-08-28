@@ -3,8 +3,8 @@ layout: home
 title: Titanium Web Proxy
 hero:
   name: Titanium Web Proxy
-  text: High-performance HTTP(S) proxy for .NET
-  tagline: MITM library and reverse / edge CLI on Windows, Linux, and macOS — with optional Plus ops and a desktop Inspector.
+  text: High-performance HTTP(S) proxy
+  tagline: Reverse / edge CLI, desktop Inspector, and optional Plus ops — on Windows, Linux, and macOS. Embed in .NET when you need a library.
   image:
     src: /logo.svg
     alt: Titanium Web Proxy
@@ -20,9 +20,9 @@ hero:
       link: https://github.com/justcoding121/titanium-web-proxy
 features:
   - title: Intercept & modify
-    details: Explicit, transparent, and SOCKS4/5 endpoints. Decrypt HTTPS, stream bodies, and shape traffic from your .NET code.
+    details: Explicit, transparent, and SOCKS4/5 endpoints. Decrypt HTTPS, stream bodies, and shape traffic — from the Inspector, CLI, or your own app.
   - title: Reverse / edge CLI
-    details: Run `titanium` / `twp` with twp.yaml — routes, clusters, load balancing, TLS terminate, and ACME.
+    details: Run `titanium` / `twp` with twp.yaml — routes, clusters, load balancing, TLS terminate, and ACME. Self-contained zips for every major OS.
   - title: HTTP/1 · HTTP/2 · HTTP/3
     details: HTTP/2 on by default. HTTP/3 (QUIC) opt-in. Protocol bridges between client and origin versions.
   - title: Measured performance
@@ -33,14 +33,14 @@ features:
 
 <div class="edition-grid">
   <div class="edition-card">
-    <h3>Titanium.Web.Proxy</h3>
-    <p class="license">MIT · NuGet</p>
-    <p>Embed a MITM and/or reverse proxy in your .NET app.</p>
-  </div>
-  <div class="edition-card">
     <h3>Titanium.Cli</h3>
     <p class="license">MIT · zip / winget</p>
-    <p>Standalone reverse / edge daemon: <code>run</code>, <code>test</code>, <code>version</code>, <code>update</code>.</p>
+    <p>Standalone reverse / edge daemon for any stack: <code>run</code>, <code>test</code>, <code>version</code>, <code>update</code>.</p>
+  </div>
+  <div class="edition-card">
+    <h3>Titanium Inspector</h3>
+    <p class="license">PolyForm NC · MSI / zip</p>
+    <p>Desktop MITM debugger — session grid, inspectors, AutoResponder, breakpoints, HAR.</p>
   </div>
   <div class="edition-card">
     <h3>Titanium.Plus</h3>
@@ -48,9 +48,9 @@ features:
     <p>Control plane, dashboard, observability, discovery, WAF. Install with <code>titanium update --plus</code>.</p>
   </div>
   <div class="edition-card">
-    <h3>Titanium Inspector</h3>
-    <p class="license">PolyForm NC · MSI / zip</p>
-    <p>Desktop MITM debugger — session grid, inspectors, AutoResponder, breakpoints, HAR.</p>
+    <h3>Titanium.Web.Proxy</h3>
+    <p class="license">MIT · NuGet</p>
+    <p>Optional .NET library — embed a MITM and/or reverse proxy in your app.</p>
   </div>
 </div>
 
@@ -74,7 +74,7 @@ listeners:
     forwardPort: 8080
 ```
 
-```csharp [Library]
+```csharp [Library (.NET)]
 using System.Net;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Models;

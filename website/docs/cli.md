@@ -1,6 +1,6 @@
 # CLI (`titanium` / `twp`)
 
-Standalone reverse / edge proxy. MIT licensed. Binaries: [Download](/download).
+Standalone reverse / edge proxy for any backend stack. MIT licensed. Self-contained binaries for Windows, Linux, and macOS — [Download](/download).
 
 ## Commands
 

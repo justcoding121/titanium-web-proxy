@@ -1,6 +1,6 @@
 # Titanium Web Proxy
 
-A lightweight, high performing HTTP(S) proxy server for .NET. It acts as a man in the middle (MITM) proxy and/or as a reverse proxy. Designed for high-performance. Works in Windows, Linux & Apple devices.
+A lightweight, high-performance HTTP(S) proxy — reverse / edge CLI, desktop Inspector, and optional Plus ops on Windows, Linux, and macOS. Embed the same engine in .NET via NuGet when you need a library.
 
 **[Website](https://titaniumproxy.com)** · [Download](https://titaniumproxy.com/download) · [Docs](https://titaniumproxy.com/docs/getting-started) · [Releases](https://titaniumproxy.com/releases)
 
@@ -39,12 +39,12 @@ A lightweight, high performing HTTP(S) proxy server for .NET. It acts as a man i
 
 | Product | What it is | License | How you get it |
 |---------|------------|---------|----------------|
-| **Titanium.Web.Proxy** | Core library. Embed a MITM and/or reverse proxy in your .NET app | MIT | NuGet |
-| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge proxy: `run`, `test`, `version`, `update` | MIT | GitHub Releases, winget, or `dotnet tool` |
-| **Titanium.Plus** | Optional advanced features: control plane, ops, observability, and dashboard | [PolyForm NC](licenses/PolyForm-Noncommercial-1.0.0.txt) | `titanium update --plus` |
+| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge proxy for any stack: `run`, `test`, `version`, `update` | MIT | GitHub Releases, winget, or `dotnet tool` |
 | **Titanium Inspector** | Desktop MITM debugger (session grid, inspectors, AutoResponder, breakpoints, HAR) | [PolyForm NC](licenses/PolyForm-Noncommercial-1.0.0.txt) | Windows MSI, winget, or GitHub Releases |
+| **Titanium.Plus** | Optional advanced features: control plane, ops, observability, and dashboard | [PolyForm NC](licenses/PolyForm-Noncommercial-1.0.0.txt) | `titanium update --plus` |
+| **Titanium.Web.Proxy** | Core library. Embed a MITM and/or reverse proxy in a .NET app | MIT | NuGet |
 
-CLI and Plus target reverse-proxy / edge workloads (routing, load balancing, health, discovery). Inspector is the MITM debugging product; the Core library supports both modes.
+CLI and Plus target reverse-proxy / edge workloads (routing, load balancing, health, discovery) on Windows, Linux, and macOS. Inspector is the MITM debugging product. The Core library is the embed path for .NET.
 
 ## Installation
 
