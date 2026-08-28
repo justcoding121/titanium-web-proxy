@@ -85,14 +85,23 @@ public sealed class CliProcessHarness : IDisposable
         return (process.ExitCode, StdOut, StdErr);
     }
 
-    public async Task StartRunAsync(string configPath, IDictionary<string, string?>? env = null)
+    public async Task StartRunAsync(
+        string configPath,
+        IDictionary<string, string?>? env = null,
+        bool verbose = false)
     {
         if (_process is not null)
         {
             throw new InvalidOperationException("Already started.");
         }
 
-        _process = StartProcess(["run", "-c", configPath], env);
+        var args = new List<string> { "run", "-c", configPath };
+        if (verbose)
+        {
+            args.Add("-v");
+        }
+
+        _process = StartProcess(args.ToArray(), env);
         await WaitForOutputAsync("running", TimeSpan.FromSeconds(45));
     }
 

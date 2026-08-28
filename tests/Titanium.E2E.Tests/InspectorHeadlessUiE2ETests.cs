@@ -97,6 +97,61 @@ public class InspectorHeadlessUiE2ETests
 
     [TestMethod]
     [TestCategory("E2E-UI")]
+    public async Task StartCapture_HttpsTraffic_AppearsInSessionsCollection()
+    {
+        var settingsPath = Path.Combine(Path.GetTempPath(), "twp-insp-sess-" + Guid.NewGuid().ToString("N") + ".json");
+        var settings = new SettingsService(settingsPath);
+        var registry = new SessionRegistry();
+        var buffer = new SessionStreamBuffer(registry);
+        var updates = new UpdateService(settings);
+        var interception = new InterceptionService(new RecordingSystemProxyController());
+        settings.Current.IgnoreServerCertificateErrors = true;
+        settings.Save();
+        var vm = new MainWindowViewModel(buffer, registry, updates, settings, interception);
+
+        vm.BindPort = CliProcessHarness.GetFreePort();
+        vm.BindAddress = "127.0.0.1";
+        vm.StartCaptureCommand.Execute(null);
+
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (!interception.IsRunning && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.IsTrue(interception.IsRunning, vm.StatusText);
+        Assert.IsTrue(interception.IgnoreServerCertificateErrors, "StartCapture must keep ignore-errors from settings");
+
+        using var origin = new HttpsEchoOrigin();
+        using var handler = new HttpClientHandler
+        {
+            Proxy = new WebProxy($"http://127.0.0.1:{vm.BindPort}"),
+            UseProxy = true,
+            ServerCertificateCustomValidationCallback = (_, cert, _, _) => cert is not null,
+        };
+        using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var response = await http.GetAsync($"https://127.0.0.1:{origin.Port}/ui-session-grid", cts.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+
+        deadline = DateTime.UtcNow.AddSeconds(8);
+        while (vm.Sessions.Count == 0 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.IsTrue(vm.Sessions.Count > 0, $"Expected sessions in UI collection; status={vm.StatusText}");
+        Assert.IsTrue(
+            vm.Sessions.Any(s => s.Url.Contains("ui-session-grid", StringComparison.OrdinalIgnoreCase)),
+            string.Join(", ", vm.Sessions.Select(s => s.Url)));
+        Assert.IsTrue(vm.StatusText.Contains("Sessions:", StringComparison.OrdinalIgnoreCase), vm.StatusText);
+
+        vm.EnsureShutdown();
+        try { File.Delete(settingsPath); } catch { /* ignore */ }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI")]
     public void ViewModel_ExposesBindAndInterception()
     {
         var settingsPath = Path.Combine(Path.GetTempPath(), "twp-insp-vm-" + Guid.NewGuid().ToString("N") + ".json");
@@ -115,5 +170,6 @@ public class InspectorHeadlessUiE2ETests
         Assert.AreEqual(8866, vm.BindPort);
         Assert.IsNotNull(vm.Interception);
         Assert.IsFalse(vm.Interception.IsRunning);
+        try { File.Delete(settingsPath); } catch { /* ignore */ }
     }
 }

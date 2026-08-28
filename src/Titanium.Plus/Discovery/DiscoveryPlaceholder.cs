@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Titanium.Plus.ControlPlane;
+using Titanium.Plus;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
@@ -48,12 +49,12 @@ public sealed class ServiceDiscovery : IDisposable
             case "consul":
             case "k8s":
             case "kubernetes":
-                Console.WriteLine(
+                PlusLog.Info(context,
                     $"Plus Discovery: mode={mode} — file/dns are primary; attempting best-effort HTTP discovery if configured.");
                 discovery.StartConsulBestEffort(context, options);
                 break;
             default:
-                Console.WriteLine($"Plus Discovery: unknown mode={mode}");
+                PlusLog.Warn(context, $"Plus Discovery: unknown mode={mode}");
                 break;
         }
 
@@ -64,12 +65,12 @@ public sealed class ServiceDiscovery : IDisposable
     {
         if (!options.TryGetValue("discovery.file", out var path) || string.IsNullOrWhiteSpace(path))
         {
-            Console.WriteLine("Plus Discovery: mode=file requires discovery.file");
+            PlusLog.Warn(context, "Plus Discovery: mode=file requires discovery.file");
             return;
         }
 
         var full = Path.GetFullPath(path);
-        Console.WriteLine($"Plus Discovery: watching file {full}");
+        PlusLog.Info(context, $"Plus Discovery: watching file {full}");
         _ = Task.Run(async () =>
         {
             try
@@ -81,7 +82,7 @@ public sealed class ServiceDiscovery : IDisposable
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Plus Discovery: initial file apply failed: {ex.Message}");
+                PlusLog.Error(context, $"Plus Discovery: initial file apply failed: {ex.Message}");
             }
         });
 
@@ -123,7 +124,7 @@ public sealed class ServiceDiscovery : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Plus Discovery: file apply failed: {ex.Message}");
+                    PlusLog.Error(context, $"Plus Discovery: file apply failed: {ex.Message}");
                 }
                 finally
                 {
@@ -145,14 +146,14 @@ public sealed class ServiceDiscovery : IDisposable
     {
         if (!options.TryGetValue("discovery.dnsName", out var dnsName) || string.IsNullOrWhiteSpace(dnsName))
         {
-            Console.WriteLine("Plus Discovery: mode=dns requires discovery.dnsName");
+            PlusLog.Warn(context, "Plus Discovery: mode=dns requires discovery.dnsName");
             return;
         }
 
         var port = int.TryParse(options.GetValueOrDefault("discovery.dnsPort"), out var p) ? p : 80;
         var intervalMs = int.TryParse(options.GetValueOrDefault("discovery.intervalMs"), out var ms) ? ms : 15000;
         var clusterId = options.GetValueOrDefault("discovery.clusterId") ?? dnsName;
-        Console.WriteLine($"Plus Discovery: DNS {dnsName}:{port} every {intervalMs}ms → cluster {clusterId}");
+        PlusLog.Info(context, $"Plus Discovery: DNS {dnsName}:{port} every {intervalMs}ms → cluster {clusterId}");
 
         _ = Task.Run(async () =>
         {
@@ -169,7 +170,7 @@ public sealed class ServiceDiscovery : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Plus Discovery: DNS apply failed: {ex.Message}");
+                    PlusLog.Error(context, $"Plus Discovery: DNS apply failed: {ex.Message}");
                     try
                     {
                         await Task.Delay(intervalMs, _cts.Token);
@@ -187,13 +188,13 @@ public sealed class ServiceDiscovery : IDisposable
     {
         if (!options.TryGetValue("discovery.consulUrl", out var url) || string.IsNullOrWhiteSpace(url))
         {
-            Console.WriteLine("Plus Discovery: no discovery.consulUrl — skipping HTTP poll.");
+            PlusLog.Warn(context, "Plus Discovery: no discovery.consulUrl — skipping HTTP poll.");
             return;
         }
 
         var intervalMs = int.TryParse(options.GetValueOrDefault("discovery.intervalMs"), out var ms) ? ms : 15000;
         var clusterId = options.GetValueOrDefault("discovery.clusterId") ?? "consul";
-        Console.WriteLine($"Plus Discovery: consul poll {url} every {intervalMs}ms");
+        PlusLog.Info(context, $"Plus Discovery: consul poll {url} every {intervalMs}ms");
 
         _ = Task.Run(async () =>
         {
@@ -221,7 +222,7 @@ public sealed class ServiceDiscovery : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Plus Discovery: consul poll failed: {ex.Message}");
+                    PlusLog.Error(context, $"Plus Discovery: consul poll failed: {ex.Message}");
                     try
                     {
                         await Task.Delay(intervalMs, _cts.Token);
@@ -246,7 +247,7 @@ public sealed class ServiceDiscovery : IDisposable
 
         await context.ClusterManager.ApplyAsync(clusters, cancellationToken);
         context.RefreshReverseProxy?.Invoke();
-        Console.WriteLine($"Plus Discovery: applied {clusters.Count} cluster(s) from {path}");
+        PlusLog.Info(context, $"Plus Discovery: applied {clusters.Count} cluster(s) from {path}");
     }
 
     internal static async Task ApplyDnsAsync(

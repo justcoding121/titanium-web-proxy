@@ -1,6 +1,7 @@
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Routing;
+using Microsoft.Extensions.Logging;
 
 namespace Titanium.Web.Proxy.Abstractions.Plugins;
 
@@ -21,6 +22,9 @@ public sealed class PlusActivationContext
 
     /// <summary>Optional HTTP response cache for authenticated purge.</summary>
     public IHttpResponseCache? ResponseCache { get; init; }
+
+    /// <summary>Host logger (typically <c>ProxyServer.Logger</c>). Prefer this over Console.</summary>
+    public ILogger? Logger { get; init; }
 }
 
 /// <summary>Opt-in GET/HEAD response cache (empty/off = zero cost when unused).</summary>

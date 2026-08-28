@@ -178,6 +178,43 @@ public static class ConfigFixtures
         return path;
     }
 
+    public static string WriteExplicitMitm(
+        string dir,
+        int listenPort,
+        string logFilePath,
+        bool plus = false,
+        int controlPort = 0,
+        string? secret = null)
+    {
+        var path = Path.Combine(dir, plus ? $"plus-mitm-{listenPort}.yaml" : $"mitm-{listenPort}.yaml");
+        var log = logFilePath.Replace("\\", "/");
+        var plusBlock = plus
+            ? $"""
+            plus:
+              enabled: true
+              controlPlane:
+                host: "127.0.0.1"
+                port: {controlPort}
+                sharedSecret: "{secret}"
+            """
+            : "";
+        File.WriteAllText(path, $"""
+            schemaVersion: "7.0"
+            listeners:
+              - host: "127.0.0.1"
+                port: {listenPort}
+                decryptSsl: true
+            logging:
+              enabled: true
+              minimumLevel: Debug
+              enableConsole: true
+              enableFile: true
+              filePath: "{log}"
+            {plusBlock}
+            """);
+        return path;
+    }
+
     public static string WriteInvalid(string dir)
     {
         var path = Path.Combine(dir, "invalid.yaml");

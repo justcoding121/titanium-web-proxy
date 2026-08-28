@@ -21,10 +21,14 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            var vm = new MainWindowViewModel(buffer, sessions, updates, settings);
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainWindowViewModel(buffer, sessions, updates, settings),
+                DataContext = vm,
             };
+
+            // Safety net if the main window Closing handler did not run (matches WPF App.OnExit).
+            desktop.Exit += (_, _) => vm.EnsureShutdown();
         }
 
         base.OnFrameworkInitializationCompleted();

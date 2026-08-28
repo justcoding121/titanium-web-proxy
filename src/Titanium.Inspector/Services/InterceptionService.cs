@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Titanium.Inspector.ViewModels;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.EventArguments;
@@ -25,7 +27,9 @@ public sealed class InterceptionService : IDisposable
     private ProxyServer? _proxy;
     private ExplicitProxyEndPoint? _endPoint;
     private bool _systemProxyEnabled;
+    private bool _shutdownDone;
     private string? _rootPfxPath;
+    private InspectorSettings? _loggingSettings;
 
     public InterceptionService(ISystemProxyController? systemProxy = null)
     {
@@ -73,6 +77,7 @@ public sealed class InterceptionService : IDisposable
         // Explicit trust flags: do not silently install into the user store on start.
         // Callers must InstallRootCertificate (or set AutoTrustRootOnStart) so UI can report success/failure.
         _proxy = new ProxyServer(userTrustRootCertificate: false, machineTrustRootCertificate: false);
+        ApplyLoggingOptions(_loggingSettings);
         _proxy.EnableHttpInterception = true;
         _proxy.EnableRequestTimingCapture = true;
         _proxy.BeforeRequest += OnBeforeRequest;
@@ -105,7 +110,97 @@ public sealed class InterceptionService : IDisposable
         }
 
         Capturing = true;
+        _shutdownDone = false;
         await Task.CompletedTask;
+    }
+
+    /// <summary>Apply or refresh logging from Inspector settings (safe while running).</summary>
+    public void ConfigureLogging(InspectorSettings settings)
+    {
+        _loggingSettings = settings;
+        if (_proxy is null)
+        {
+            return;
+        }
+
+        ApplyLoggingOptions(settings);
+        _proxy.ApplyLoggingConfiguration();
+    }
+
+    /// <summary>
+    /// Idempotent shutdown: restore system proxy (even if already stopped) and dispose the proxy.
+    /// Matches WPF example <c>EnsureProxyShutdown</c> semantics.
+    /// </summary>
+    public void EnsureShutdown()
+    {
+        if (_shutdownDone)
+        {
+            return;
+        }
+
+        _shutdownDone = true;
+        try
+        {
+            if (_proxy is not null && _proxy.ProxyRunning)
+            {
+                Stop();
+            }
+            else if (_proxy is not null)
+            {
+                try
+                {
+                    _systemProxy.RestoreOriginalProxySettings(_proxy);
+                }
+                catch
+                {
+                    // best-effort
+                }
+
+                try
+                {
+                    _proxy.Dispose();
+                }
+                catch
+                {
+                    // best-effort
+                }
+
+                _proxy = null;
+                _endPoint = null;
+                _systemProxyEnabled = false;
+            }
+            else
+            {
+                // No live ProxyServer — nothing to restore via Core APIs.
+            }
+        }
+        catch
+        {
+            // never throw from UI teardown
+        }
+    }
+
+    private void ApplyLoggingOptions(InspectorSettings? settings)
+    {
+        if (_proxy is null)
+        {
+            return;
+        }
+
+        var s = settings ?? new InspectorSettings();
+        _proxy.Logging.Enabled = s.LoggingEnabled;
+        if (Enum.TryParse<LogLevel>(s.LoggingMinimumLevel, ignoreCase: true, out var level))
+        {
+            _proxy.Logging.MinimumLevel = level;
+        }
+
+        _proxy.Logging.EnableConsole = false;
+        _proxy.Logging.EnableFile = s.LoggingEnableFile;
+        EnsureRootPfxPath();
+        var dir = Path.GetDirectoryName(_rootPfxPath!)!;
+        var defaultLog = Path.Combine(dir, "logs", "titanium-inspector.log");
+        _proxy.Logging.FilePath = string.IsNullOrWhiteSpace(s.LoggingFilePath) ? defaultLog : s.LoggingFilePath;
+        _proxy.ApplyLoggingConfiguration();
     }
 
     public void Stop()
@@ -135,6 +230,7 @@ public sealed class InterceptionService : IDisposable
         _endPoint = null;
         _live.Clear();
         IsRootTrusted = false;
+        _systemProxyEnabled = false;
     }
 
     /// <summary>
@@ -388,11 +484,10 @@ public sealed class InterceptionService : IDisposable
 
     private Task OnServerCertValidation(object sender, CertificateValidationEventArgs e)
     {
-        if (IgnoreServerCertificateErrors)
-        {
-            e.IsValid = true;
-        }
-
+        // When a callback is subscribed, Core returns args.IsValid only (default false).
+        // Accept valid public chains; optionally ignore all errors when the user opts in.
+        e.IsValid = IgnoreServerCertificateErrors
+                    || e.SslPolicyErrors == SslPolicyErrors.None;
         return Task.CompletedTask;
     }
 
@@ -520,5 +615,5 @@ public sealed class InterceptionService : IDisposable
     private static string TruncateText(string text)
         => text.Length <= MaxBodyTextChars ? text : text[..MaxBodyTextChars] + "…";
 
-    public void Dispose() => Stop();
+    public void Dispose() => EnsureShutdown();
 }

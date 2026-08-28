@@ -86,6 +86,8 @@ Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ClusterManager.get
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ClusterManager.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.LatencyRecorder.get -> Titanium.Web.Proxy.Abstractions.Plugins.ILatencyRecorder?
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.LatencyRecorder.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Logger.get -> Microsoft.Extensions.Logging.ILogger?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Logger.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Middleware.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware!>?
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Middleware.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Options.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?

@@ -31,6 +31,7 @@
         <MenuItem Header="Untrust root CA" Command="{Binding UntrustCaCommand}" />
         <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" />
         <MenuItem Header="Device CA setup…" Command="{Binding DeviceCaSetupCommand}" />
+        <MenuItem Header="Enable debug file logging" Command="{Binding ToggleDebugLoggingCommand}" />
       </MenuItem>
       <MenuItem Header="_Session">
         <MenuItem Header="Replay selected" Command="{Binding ReplayCommand}" />

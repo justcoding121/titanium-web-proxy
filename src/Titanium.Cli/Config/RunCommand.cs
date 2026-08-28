@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.Extensions.Logging;
 using Titanium.Cli.Certificates;
 using Titanium.Cli.Parsers;
 using Titanium.Cli.StaticFiles;
@@ -19,7 +20,7 @@ namespace Titanium.Cli.Config;
 
 internal static class RunCommand
 {
-    public static async Task<int> ExecuteAsync(string configPath)
+    public static async Task<int> ExecuteAsync(string configPath, bool verbose = false)
     {
         var loaded = ConfigLoader.Load(configPath);
         var errors = TwpConfigValidator.Validate(loaded.Config);
@@ -35,6 +36,7 @@ internal static class RunCommand
 
         var requiresSessionPath = ConfigNeedsSessionPath(loaded.Config);
         using var proxy = new ProxyServer();
+        ApplyLogging(proxy, loaded.Config.Logging, verbose);
         ConfigureProxyFlags(proxy, loaded.Config, requiresSessionPath);
 
         var clusterManager = new ClusterManager();
@@ -182,7 +184,47 @@ internal static class RunCommand
             RefreshReverseProxy = refreshReverseProxy,
             ResponseCache = responseCache,
             LatencyRecorder = loadBalancer,
+            Logger = proxy.Logger,
         });
+    }
+
+    private static void ApplyLogging(ProxyServer proxy, LoggingConfig? logging, bool verbose)
+    {
+        if (logging is not null)
+        {
+            proxy.Logging.Enabled = logging.Enabled;
+            if (Enum.TryParse<LogLevel>(logging.MinimumLevel, ignoreCase: true, out var level))
+            {
+                proxy.Logging.MinimumLevel = level;
+            }
+
+            proxy.Logging.EnableConsole = logging.EnableConsole;
+            proxy.Logging.EnableConsoleColors = logging.EnableConsoleColors;
+            proxy.Logging.EnableFile = logging.EnableFile;
+            if (!string.IsNullOrWhiteSpace(logging.FilePath))
+            {
+                proxy.Logging.FilePath = logging.FilePath;
+            }
+
+            if (logging.MaxFileSizeBytes is long maxSize)
+            {
+                proxy.Logging.MaxFileSizeBytes = maxSize;
+            }
+
+            if (logging.MaxRolledFiles is int maxFiles)
+            {
+                proxy.Logging.MaxRolledFiles = maxFiles;
+            }
+        }
+
+        if (verbose)
+        {
+            proxy.Logging.Enabled = true;
+            proxy.Logging.MinimumLevel = LogLevel.Debug;
+            proxy.Logging.EnableConsole = true;
+        }
+
+        proxy.ApplyLoggingConfiguration();
     }
 
     private static void AddListener(ProxyServer proxy, ListenerConfig listener)

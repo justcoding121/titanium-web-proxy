@@ -71,6 +71,24 @@ Titanium.Web.Proxy.Configuration.Models.StaticFilesConfig.Root.get -> string?
 Titanium.Web.Proxy.Configuration.Models.StaticFilesConfig.Root.set -> void
 Titanium.Web.Proxy.Configuration.Models.StaticFilesConfig.StaticFilesConfig() -> void
 Titanium.Web.Proxy.Configuration.Models.TwpConfig
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.Enabled.get -> bool
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.Enabled.set -> void
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.EnableConsole.get -> bool
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.EnableConsole.set -> void
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.EnableConsoleColors.get -> bool
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.EnableConsoleColors.set -> void
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.EnableFile.get -> bool
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.EnableFile.set -> void
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.FilePath.get -> string?
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.FilePath.set -> void
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.LoggingConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.MaxFileSizeBytes.get -> long?
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.MaxFileSizeBytes.set -> void
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.MaxRolledFiles.get -> int?
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.MaxRolledFiles.set -> void
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.MinimumLevel.get -> string!
+Titanium.Web.Proxy.Configuration.Models.LoggingConfig.MinimumLevel.set -> void
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Certificates.get -> Titanium.Web.Proxy.Configuration.Models.CertificatesConfig
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Certificates.get -> Titanium.Web.Proxy.Configuration.Models.CertificatesConfig?
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Certificates.set -> void
@@ -78,6 +96,8 @@ Titanium.Web.Proxy.Configuration.Models.TwpConfig.Clusters.get -> System.Collect
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Clusters.set -> void
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Listeners.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Configuration.Models.ListenerConfig!>!
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Listeners.set -> void
+Titanium.Web.Proxy.Configuration.Models.TwpConfig.Logging.get -> Titanium.Web.Proxy.Configuration.Models.LoggingConfig?
+Titanium.Web.Proxy.Configuration.Models.TwpConfig.Logging.set -> void
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Plus.get -> Titanium.Web.Proxy.Configuration.Models.PlusConfig
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Plus.get -> Titanium.Web.Proxy.Configuration.Models.PlusConfig?
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Plus.set -> void

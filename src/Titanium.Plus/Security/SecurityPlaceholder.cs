@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Titanium.Plus;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.EventArguments;
@@ -24,20 +26,20 @@ public sealed class AccessSecurity
 
         if (context.Middleware is null)
         {
-            Console.WriteLine("Plus Security: Middleware list is null — CIDR/JWT not registered.");
+            PlusLog.Warn(context, "Plus Security: Middleware list is null — CIDR/JWT not registered.");
             return new AccessSecurity();
         }
 
         if (hasCidr)
         {
-            context.Middleware.Add(new CidrAccessMiddleware(cidrs!));
-            Console.WriteLine($"Plus Security: CIDR allow list registered ({cidrs}).");
+            context.Middleware.Add(new CidrAccessMiddleware(cidrs!, logger: context.Logger));
+            PlusLog.Info(context, $"Plus Security: CIDR allow list registered ({cidrs}).");
         }
 
         if (hasJwt)
         {
             context.Middleware.Add(new JwtAccessMiddleware(authority!));
-            Console.WriteLine($"Plus Security: JWT authority={authority} (MVP structure/exp validation).");
+            PlusLog.Info(context, $"Plus Security: JWT authority={authority} (MVP structure/exp validation).");
         }
 
         return new AccessSecurity();
@@ -49,11 +51,13 @@ public sealed class CidrAccessMiddleware : IProxyMiddleware
 {
     private readonly List<IPNetwork> _networks = [];
     private readonly Func<object, IPAddress?>? _resolveClientIp;
+    private readonly ILogger? _logger;
     private static int _skipLogged;
 
-    public CidrAccessMiddleware(string allowCidrs, Func<object, IPAddress?>? resolveClientIp = null)
+    public CidrAccessMiddleware(string allowCidrs, Func<object, IPAddress?>? resolveClientIp = null, ILogger? logger = null)
     {
         _resolveClientIp = resolveClientIp;
+        _logger = logger;
         foreach (var part in allowCidrs.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
             if (IPNetwork.TryParse(part, out var network))
@@ -99,7 +103,7 @@ public sealed class CidrAccessMiddleware : IProxyMiddleware
         {
             if (Interlocked.Exchange(ref _skipLogged, 1) == 0)
             {
-                Console.WriteLine("Plus Security: could not resolve client IP from Session — CIDR check skipped.");
+                _logger?.LogWarning("Plus Security: could not resolve client IP from Session — CIDR check skipped.");
             }
 
             await next(context, cancellationToken);

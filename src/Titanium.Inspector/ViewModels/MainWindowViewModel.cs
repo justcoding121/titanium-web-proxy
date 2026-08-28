@@ -8,6 +8,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Titanium.Inspector.Services;
 
 namespace Titanium.Inspector.ViewModels;
@@ -96,13 +97,32 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return Task.CompletedTask;
         });
         ApplyEditBodyCommand = new RelayCommand(ApplyEditBodyAsync);
+        ToggleDebugLoggingCommand = new RelayCommand(ToggleDebugLoggingAsync);
 
         WireEventHandlers();
         LoadPlusPanels();
+        _interception.ConfigureLogging(_settings.Current);
+        _interception.IgnoreServerCertificateErrors = _settings.Current.IgnoreServerCertificateErrors;
     }
 
     /// <summary>Exposed for E2E / headless tests.</summary>
     public InterceptionService Interception => _interception;
+
+    /// <summary>Idempotent teardown for window close / app exit (restores WinINET).</summary>
+    public void EnsureShutdown()
+    {
+        try
+        {
+            PersistSettings();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        _interception.EnsureShutdown();
+        SystemProxy = false;
+    }
 
     private void WireEventHandlers()
     {
@@ -128,7 +148,26 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             }
         };
 
-        _buffer.SessionAdded += OnSessionAdded;
+        _buffer.SessionAdded += snapshot =>
+        {
+            // SessionStreamBuffer publishes from a background reader — marshal to UI thread
+            // so ObservableCollection / DataGrid bindings actually update. When no Avalonia
+            // Application is running (unit/E2E), invoke synchronously.
+            if (Application.Current is null)
+            {
+                OnSessionAdded(snapshot);
+                return;
+            }
+
+            if (Dispatcher.UIThread.CheckAccess())
+            {
+                OnSessionAdded(snapshot);
+            }
+            else
+            {
+                Dispatcher.UIThread.Post(() => OnSessionAdded(snapshot));
+            }
+        };
         _interception.SessionCaptured += (_, snap) =>
         {
             _registry.Add(snap);
@@ -136,9 +175,21 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         };
         _interception.SessionUpdated += (_, snap) =>
         {
-            if (ReferenceEquals(SelectedSession, snap))
+            void Refresh()
             {
-                RefreshSelectedInspectors();
+                if (ReferenceEquals(SelectedSession, snap))
+                {
+                    RefreshSelectedInspectors();
+                }
+            }
+
+            if (Application.Current is null || Dispatcher.UIThread.CheckAccess())
+            {
+                Refresh();
+            }
+            else
+            {
+                Dispatcher.UIThread.Post(Refresh);
             }
         };
     }
@@ -348,6 +399,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ContinueBreakpointCommand { get; }
     public ICommand AbortBreakpointCommand { get; }
     public ICommand ApplyEditBodyCommand { get; }
+    public ICommand ToggleDebugLoggingCommand { get; }
 
     public string BindAddress
     {
@@ -533,6 +585,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.BreakpointOnResponse = _breakpointOnResponse;
         _interception.ScriptOnRequest = _scriptOnRequest;
         _interception.ScriptOnResponse = _scriptOnResponse;
+        _interception.IgnoreServerCertificateErrors = s.IgnoreServerCertificateErrors;
+        _interception.ConfigureLogging(s);
     }
 
     private void PersistAutoResponder()
@@ -555,7 +609,35 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         s.BreakpointOnResponse = BreakpointOnResponse;
         s.ScriptOnRequest = ScriptOnRequest;
         s.ScriptOnResponse = ScriptOnResponse;
+        s.IgnoreServerCertificateErrors = _interception.IgnoreServerCertificateErrors;
+        s.LoggingEnabled = _settings.Current.LoggingEnabled;
+        s.LoggingMinimumLevel = _settings.Current.LoggingMinimumLevel;
+        s.LoggingEnableFile = _settings.Current.LoggingEnableFile;
+        s.LoggingFilePath = _settings.Current.LoggingFilePath;
         _settings.Save();
+    }
+
+    private Task ToggleDebugLoggingAsync()
+    {
+        var s = _settings.Current;
+        var enable = !s.LoggingEnableFile ||
+                     !string.Equals(s.LoggingMinimumLevel, "Debug", StringComparison.OrdinalIgnoreCase);
+        s.LoggingEnabled = true;
+        s.LoggingEnableFile = enable;
+        s.LoggingMinimumLevel = enable ? "Debug" : "Error";
+        if (string.IsNullOrWhiteSpace(s.LoggingFilePath))
+        {
+            s.LoggingFilePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "TitaniumInspector", "logs", "titanium-inspector.log");
+        }
+
+        _interception.ConfigureLogging(s);
+        _settings.Save();
+        StatusText = enable
+            ? $"Debug file logging on: {s.LoggingFilePath}"
+            : "Debug file logging off (Error level, file sink disabled)";
+        return Task.CompletedTask;
     }
 
     private void RefreshSelectedInspectors()
@@ -651,6 +733,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.BreakpointOnResponse = BreakpointOnResponse;
         _interception.ScriptOnRequest = ScriptOnRequest;
         _interception.ScriptOnResponse = ScriptOnResponse;
+        _interception.IgnoreServerCertificateErrors = _settings.Current.IgnoreServerCertificateErrors;
+        _interception.ConfigureLogging(_settings.Current);
         await _interception.StartAsync(address, BindPort);
         Capturing = true;
         var display = address.Equals(IPAddress.Any) ? "0.0.0.0" : BindAddress;

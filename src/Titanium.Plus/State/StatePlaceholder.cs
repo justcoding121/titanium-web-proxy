@@ -1,3 +1,4 @@
+using Titanium.Plus;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 
 namespace Titanium.Plus.State;
@@ -12,7 +13,7 @@ public sealed class SharedStateStore
             return null;
         }
 
-        Console.WriteLine($"Plus State: redis={redis} (middleware registration deferred until Redis client is configured).");
+        PlusLog.Info(context, $"Plus State: redis={redis} (middleware registration deferred until Redis client is configured).");
         _ = context;
         return new SharedStateStore();
     }

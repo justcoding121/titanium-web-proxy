@@ -13,7 +13,7 @@ public class InspectorServiceE2ETests
 {
     [TestMethod]
     [TestCategory("E2E")]
-    public async Task Mitm_HttpClient_ThroughExplicitProxy_CapturesHttps()
+    public async Task Mitm_HttpClient_ThroughExplicitProxy_CapturesHttp()
     {
         using var origin = new EchoOrigin();
         var proxyPort = CliProcessHarness.GetFreePort();
@@ -27,28 +27,13 @@ public class InspectorServiceE2ETests
         await interception.StartAsync(IPAddress.Loopback, proxyPort);
         Assert.IsTrue(interception.IsRunning);
 
-        // Do not require store trust: accept MITM leaf signed by Inspector root.
-        var rootThumb = interception.RootCertificate?.Thumbprint;
-        Assert.IsFalse(string.IsNullOrEmpty(rootThumb));
-
         using var handler = new HttpClientHandler
         {
             Proxy = new WebProxy($"http://127.0.0.1:{proxyPort}"),
             UseProxy = true,
-            ServerCertificateCustomValidationCallback = (_, cert, _, errors) =>
-            {
-                if (errors == SslPolicyErrors.None)
-                {
-                    return true;
-                }
-
-                // Accept chain that includes our Inspector root thumbprint when present.
-                return cert is not null;
-            },
         };
         using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
 
-        // HTTP through explicit MITM endpoint to a local origin
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         var response = await http.GetAsync($"http://127.0.0.1:{origin.Port}/mitm-e2e", cts.Token);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
@@ -69,8 +54,64 @@ public class InspectorServiceE2ETests
         }
 
         Assert.AreEqual(200, updated?.StatusCode);
-
         interception.Stop();
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Mitm_HttpClient_DecryptsHttps_LocalOrigin()
+    {
+        using var origin = new HttpsEchoOrigin();
+        var proxyPort = CliProcessHarness.GetFreePort();
+        using var interception = new InterceptionService(new RecordingSystemProxyController());
+        interception.IgnoreServerCertificateErrors = true;
+
+        SessionSnapshot? captured = null;
+        SessionSnapshot? updated = null;
+        interception.SessionCaptured += (_, s) => captured = s;
+        interception.SessionUpdated += (_, s) => updated = s;
+
+        await interception.StartAsync(IPAddress.Loopback, proxyPort);
+        Assert.IsFalse(string.IsNullOrEmpty(interception.RootCertificate?.Thumbprint));
+
+        using var handler = new HttpClientHandler
+        {
+            Proxy = new WebProxy($"http://127.0.0.1:{proxyPort}"),
+            UseProxy = true,
+            ServerCertificateCustomValidationCallback = (_, cert, _, _) => cert is not null,
+        };
+        using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var response = await http.GetAsync($"https://127.0.0.1:{origin.Port}/https-mitm", cts.Token);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        StringAssert.Contains(await response.Content.ReadAsStringAsync(cts.Token), "https-mitm");
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while ((captured is null || updated?.StatusCode is null) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50, cts.Token);
+        }
+
+        Assert.IsNotNull(captured);
+        StringAssert.Contains(captured!.Url, "https-mitm");
+        Assert.AreEqual(200, updated?.StatusCode);
+        interception.EnsureShutdown();
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task EnsureShutdown_RestoresSystemProxy_ViaSeam()
+    {
+        var proxyPort = CliProcessHarness.GetFreePort();
+        var recorder = new RecordingSystemProxyController();
+        using var interception = new InterceptionService(recorder);
+        await interception.StartAsync(IPAddress.Loopback, proxyPort);
+        Assert.IsTrue(interception.SetSystemProxy(true));
+        Assert.AreEqual(1, recorder.SetCount);
+        interception.EnsureShutdown();
+        Assert.IsTrue(recorder.RestoreCount >= 1);
+        interception.EnsureShutdown();
+        Assert.IsTrue(recorder.RestoreCount >= 1);
     }
 
     [TestMethod]

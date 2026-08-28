@@ -30,6 +30,13 @@ public sealed class InspectorSettings
 
     public string? ScriptOnRequest { get; set; }
     public string? ScriptOnResponse { get; set; }
+
+    public bool LoggingEnabled { get; set; } = true;
+    public string LoggingMinimumLevel { get; set; } = "Error";
+    public bool LoggingEnableFile { get; set; }
+    public string? LoggingFilePath { get; set; }
+
+    public bool IgnoreServerCertificateErrors { get; set; }
 }
 
 public sealed class SettingsService

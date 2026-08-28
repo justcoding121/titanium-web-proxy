@@ -19,6 +19,30 @@ public sealed class TwpConfig
     public PlusConfig? Plus { get; set; }
 
     public CertificatesConfig? Certificates { get; set; }
+
+    /// <summary>Optional diagnostic logging (maps to <c>ProxyServer.Logging</c>).</summary>
+    public LoggingConfig? Logging { get; set; }
+}
+
+/// <summary>Built-in async console/file logging options for CLI <c>ProxyServer</c>.</summary>
+public sealed class LoggingConfig
+{
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Trace, Debug, Information, Warning, Error, Critical, or None.</summary>
+    public string MinimumLevel { get; set; } = "Error";
+
+    public bool EnableConsole { get; set; } = true;
+
+    public bool EnableConsoleColors { get; set; } = true;
+
+    public bool EnableFile { get; set; }
+
+    public string? FilePath { get; set; }
+
+    public long? MaxFileSizeBytes { get; set; }
+
+    public int? MaxRolledFiles { get; set; }
 }
 
 /// <summary>Listen endpoint binding.</summary>

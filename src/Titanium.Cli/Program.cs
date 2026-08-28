@@ -18,7 +18,7 @@ internal static class Program
         {
             return command switch
             {
-                "run" => await RunCommand.ExecuteAsync(ParseConfigPath(args)),
+                "run" => await RunCommand.ExecuteAsync(ParseConfigPath(args), ParseVerbose(args)),
                 "test" => TestCommand.Execute(ParseConfigPath(args)),
                 "version" => await VersionCommand.ExecuteAsync(args),
                 "update" => await UpdateCommand.ExecuteAsync(args),
@@ -46,13 +46,26 @@ internal static class Program
         throw new ArgumentException("Missing required -c <config-path>.");
     }
 
+    private static bool ParseVerbose(string[] args)
+    {
+        for (var i = 1; i < args.Length; i++)
+        {
+            if (args[i] is "-v" or "--verbose")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static int PrintHelp()
     {
         Console.WriteLine("""
             Titanium Web Proxy CLI
 
             Usage:
-              titanium run -c <config>
+              titanium run -c <config> [-v|--verbose]
               titanium test -c <config>
               titanium version [--check] [--plus] [--channel beta]
               titanium update [--plus] [--channel beta]

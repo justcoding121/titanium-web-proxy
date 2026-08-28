@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.Sockets;
+using Titanium.Plus;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
@@ -41,7 +42,7 @@ public sealed class ResilienceController : IDisposable
         _ = Task.Run(() => controller.LoopAsync(
             context.ClusterManager, intervalMs, threshold, path, protocol, controller._cts.Token),
             controller._cts.Token);
-        Console.WriteLine(
+        PlusLog.Info(context,
             $"Plus Resilience: active health interval={intervalMs}ms protocol={protocol} path={path} threshold={threshold}");
         return controller;
     }
