@@ -86,3 +86,8 @@
   background: var(--vp-c-brand-soft);
   color: var(--vp-c-brand-1);
 }
+
+.vp-muted {
+  color: var(--vp-c-text-2);
+  font-size: 0.9rem;
+}

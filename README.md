@@ -62,11 +62,13 @@ dotnet add package Titanium.Web.Proxy --prerelease
 
 ### CLI (`titanium` / `twp`)
 
-Download the self-contained zip for your OS, extract, and run:
+On Windows, install with winget:
 
-- [Windows x64](https://github.com/justcoding121/titanium-web-proxy/releases/latest/download/Titanium.Cli-win-x64.zip)
-- [Linux x64](https://github.com/justcoding121/titanium-web-proxy/releases/latest/download/Titanium.Cli-linux-x64.zip)
-- [macOS x64](https://github.com/justcoding121/titanium-web-proxy/releases/latest/download/Titanium.Cli-osx-x64.zip)
+```shell
+winget install justcoding121.TitaniumCli
+```
+
+Or download self-contained zips from [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when a product release includes `Titanium.Cli-*.zip` assets (NuGet-only tags may not). Extract and run:
 
 ```shell
 titanium run -c twp.yaml
@@ -75,18 +77,13 @@ titanium version --check
 titanium update
 ```
 
-On Windows, the winget package id is `justcoding121.TitaniumCli`. Each zip also includes a `twp` alias binary.
+Each CLI zip also includes a `twp` alias binary.
 
 Optional Plus: run `titanium update --plus`, then enable Plus in config (`plus.enabled: true` with `plus.controlPlane.sharedSecret`). Check with `titanium version --check --plus`.
 
 ### Titanium Inspector
 
-Windows downloads:
-
-- [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/latest/download/TitaniumInspector-win-x64.msi)
-- [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/latest/download/TitaniumInspector-win-x64.zip)
-
-Or winget id `justcoding121.TitaniumInspector`. Start interception from the Capture menu, install the root CA, then toggle system proxy.
+On Windows, winget id `justcoding121.TitaniumInspector`, or MSI / portable zip from [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when those assets are published. Start interception from the Capture menu, install the root CA, then toggle system proxy.
 
 ## Supported frameworks
 

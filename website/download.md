@@ -1,6 +1,10 @@
 # Download
 
-Get the latest stable builds from [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases/latest). Links below always resolve to the newest non-prerelease assets.
+<script setup>
+import { data as links } from './download.data.ts'
+</script>
+
+Get CLI and Inspector builds from GitHub Releases, or install with winget on Windows.
 
 ## CLI (`titanium` / `twp`)
 
@@ -9,15 +13,21 @@ Self-contained zip. Extract and run. Each zip includes both `titanium` and `twp`
 <div class="download-grid">
   <div class="download-row">
     <strong>Windows x64</strong>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/releases/latest/download/Titanium.Cli-win-x64.zip">Titanium.Cli-win-x64.zip</a>
+    <a v-if="links.cli['win-x64']" :href="links.cli['win-x64'].url">{{ links.cli['win-x64'].name }}</a>
+    <span v-else class="vp-muted">Not in current releases yet — use winget or <a :href="links.releasesUrl">GitHub Releases</a></span>
+    <span v-if="links.cli['win-x64']" class="badge-pre">{{ links.cli['win-x64'].tag }}</span>
   </div>
   <div class="download-row">
     <strong>Linux x64</strong>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/releases/latest/download/Titanium.Cli-linux-x64.zip">Titanium.Cli-linux-x64.zip</a>
+    <a v-if="links.cli['linux-x64']" :href="links.cli['linux-x64'].url">{{ links.cli['linux-x64'].name }}</a>
+    <span v-else class="vp-muted">Not in current releases yet — see <a :href="links.releasesUrl">GitHub Releases</a></span>
+    <span v-if="links.cli['linux-x64']" class="badge-pre">{{ links.cli['linux-x64'].tag }}</span>
   </div>
   <div class="download-row">
     <strong>macOS x64</strong>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/releases/latest/download/Titanium.Cli-osx-x64.zip">Titanium.Cli-osx-x64.zip</a>
+    <a v-if="links.cli['osx-x64']" :href="links.cli['osx-x64'].url">{{ links.cli['osx-x64'].name }}</a>
+    <span v-else class="vp-muted">Not in current releases yet — see <a :href="links.releasesUrl">GitHub Releases</a></span>
+    <span v-if="links.cli['osx-x64']" class="badge-pre">{{ links.cli['osx-x64'].tag }}</span>
   </div>
 </div>
 
@@ -40,11 +50,15 @@ Desktop MITM debugger for Windows.
 <div class="download-grid">
   <div class="download-row">
     <strong>Windows MSI</strong>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/releases/latest/download/TitaniumInspector-win-x64.msi">TitaniumInspector-win-x64.msi</a>
+    <a v-if="links.inspector.msi" :href="links.inspector.msi.url">{{ links.inspector.msi.name }}</a>
+    <span v-else class="vp-muted">Not in current releases yet — use winget or <a :href="links.releasesUrl">GitHub Releases</a></span>
+    <span v-if="links.inspector.msi" class="badge-pre">{{ links.inspector.msi.tag }}</span>
   </div>
   <div class="download-row">
     <strong>Windows zip</strong>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/releases/latest/download/TitaniumInspector-win-x64.zip">TitaniumInspector-win-x64.zip</a>
+    <a v-if="links.inspector.zip" :href="links.inspector.zip.url">{{ links.inspector.zip.name }}</a>
+    <span v-else class="vp-muted">Not in current releases yet — see <a :href="links.releasesUrl">GitHub Releases</a></span>
+    <span v-if="links.inspector.zip" class="badge-pre">{{ links.inspector.zip.tag }}</span>
   </div>
 </div>
 
@@ -90,4 +104,8 @@ dotnet add package Titanium.Web.Proxy --prerelease
 
 ## Release notes
 
-See [Releases](/releases) or [all assets on GitHub](https://github.com/justcoding121/titanium-web-proxy/releases/latest).
+See [Releases](/releases) or [all assets on GitHub](https://github.com/justcoding121/titanium-web-proxy/releases).
+
+::: tip Product zips vs NuGet tags
+Recent tags such as `6.0.2` may publish only the NuGet package. CLI / Inspector / Plus zip assets are attached when a full product release is cut with the release workflow. Until then, prefer **winget** or the GitHub Releases page for available binaries.
+:::

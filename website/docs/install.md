@@ -11,19 +11,13 @@ dotnet add package Titanium.Web.Proxy --prerelease
 
 ## CLI
 
-Download a self-contained zip:
-
-- [Windows x64](https://github.com/justcoding121/titanium-web-proxy/releases/latest/download/Titanium.Cli-win-x64.zip)
-- [Linux x64](https://github.com/justcoding121/titanium-web-proxy/releases/latest/download/Titanium.Cli-linux-x64.zip)
-- [macOS x64](https://github.com/justcoding121/titanium-web-proxy/releases/latest/download/Titanium.Cli-osx-x64.zip)
-
-Or on Windows:
+On Windows:
 
 ```shell
 winget install justcoding121.TitaniumCli
 ```
 
-Update in place:
+Or take a self-contained zip from [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) / the [Download](/download) page when `Titanium.Cli-*.zip` assets are published.
 
 ```shell
 titanium update
@@ -40,12 +34,11 @@ See [Plus](/docs/plus). There is no separate Plus download link.
 
 ## Inspector
 
-- [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/latest/download/TitaniumInspector-win-x64.msi)
-- [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/latest/download/TitaniumInspector-win-x64.zip)
-
 ```shell
 winget install justcoding121.TitaniumInspector
 ```
+
+Or MSI / portable zip from [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) / [Download](/download) when those assets are published.
 
 ## See also
 
