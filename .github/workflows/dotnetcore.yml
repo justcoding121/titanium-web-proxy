@@ -82,6 +82,8 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/inspector
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/cli
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         # The integration suite spins up real listening sockets and TLS handshakes, which
         # occasionally hang or get "connection refused" on shared, resource-constrained CI

@@ -324,6 +324,83 @@ public class PlusModuleTests
     }
 
     [TestMethod]
+    public void Jwt_TryValidate_AcceptsValidStructure()
+    {
+        var exp = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();
+        var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(
+            JsonSerializer.Serialize(new { exp, sub = "user" })))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var token = $"e30.{payload}.sig";
+        Assert.IsTrue(JwtAccessMiddleware.TryValidateJwt(token, out var error));
+        Assert.IsNull(error);
+        Assert.AreEqual("https://issuer.example", new JwtAccessMiddleware("https://issuer.example").Authority);
+    }
+
+    [TestMethod]
+    public void Jwt_TryValidate_RejectsMalformed()
+    {
+        Assert.IsFalse(JwtAccessMiddleware.TryValidateJwt("not.a.jwt.extra", out var error));
+        StringAssert.Contains(error!, "three segments");
+    }
+
+    [TestMethod]
+    public async Task CidrMiddleware_AllowsInsideAllowList()
+    {
+        var mw = new CidrAccessMiddleware("10.0.0.0/8", _ => IPAddress.Parse("10.9.8.7"));
+        var handled = false;
+        var ctx = new ProxyMiddlewareContext { Session = new object() };
+        await mw.InvokeAsync(ctx, (_, _) =>
+        {
+            handled = true;
+            return ValueTask.CompletedTask;
+        }, CancellationToken.None);
+
+        Assert.IsFalse(ctx.IsHandled);
+        Assert.IsTrue(handled);
+        Assert.IsTrue(mw.IsAllowed(IPAddress.Parse("10.9.8.7")));
+    }
+
+    [TestMethod]
+    public async Task Discovery_FileMode_AppliesLeastTimeAlgorithm()
+    {
+        var manager = new ClusterManager();
+        var path = Path.Combine(Path.GetTempPath(), "twp-discovery-lt-" + Guid.NewGuid().ToString("N") + ".json");
+        await File.WriteAllTextAsync(path, """
+            {"clusters":[{"id":"lt","algorithm":"least_time","destinations":[{"id":"a","address":"10.0.0.1","port":80}]}]}
+            """);
+
+        try
+        {
+            var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["discovery.mode"] = "file",
+                ["discovery.file"] = path,
+            };
+            using var discovery = ServiceDiscovery.TryStart(
+                new PlusActivationContext
+                {
+                    ProxyServer = new object(),
+                    ClusterManager = manager,
+                    Options = options,
+                },
+                options);
+            Assert.IsNotNull(discovery);
+
+            for (var i = 0; i < 40 && !manager.Snapshot.Clusters.ContainsKey("lt"); i++)
+            {
+                await Task.Delay(50);
+            }
+
+            Assert.IsTrue(manager.Snapshot.Clusters.ContainsKey("lt"));
+            Assert.AreEqual(LoadBalanceAlgorithm.LeastTime, manager.Snapshot.Clusters["lt"].Algorithm);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
     public void PlusInspectorPanels_HaveTitles()
     {
         var panels = new PlusInspectorViewProvider().CreatePanels(new InspectorPanelContext { HostWindow = new object() });

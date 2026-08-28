@@ -23,12 +23,12 @@ internal static class Program
                 "version" => await VersionCommand.ExecuteAsync(args),
                 "update" => await UpdateCommand.ExecuteAsync(args),
                 "help" or "-h" or "--help" => PrintHelp(),
-                _ => Unknown(command),
+                _ => await UnknownAsync(command),
             };
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine(ex.Message);
+            await Console.Error.WriteLineAsync(ex.Message);
             return 1;
         }
     }
@@ -60,9 +60,9 @@ internal static class Program
         return 0;
     }
 
-    private static int Unknown(string command)
+    private static async Task<int> UnknownAsync(string command)
     {
-        Console.Error.WriteLine($"Unknown command: {command}");
+        await Console.Error.WriteLineAsync($"Unknown command: {command}");
         PrintHelp();
         return 1;
     }

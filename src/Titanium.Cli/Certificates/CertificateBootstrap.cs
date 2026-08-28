@@ -19,26 +19,37 @@ internal static class CertificateBootstrap
             return;
         }
 
-        if (!string.IsNullOrEmpty(certificates.CertificatePath))
-        {
-            Console.WriteLine($"Certificate path configured: {certificates.CertificatePath}");
-            if (TryLoadLeaf(certificates.CertificatePath, certificates.PrivateKeyPath, out var leaf) && leaf is not null)
-            {
-                AssignGenericCertificate(proxy, leaf);
-                Console.WriteLine("Loaded leaf certificate onto DecryptSsl endpoints.");
-            }
-            else if (File.Exists(certificates.CertificatePath))
-            {
-                Console.WriteLine(
-                    "Certificate file present but could not load (need PEM+PrivateKeyPath or PFX).");
-            }
-        }
-
+        TryApplyLeafCertificate(proxy, certificates);
         if (string.IsNullOrEmpty(certificates.AcmeDomain))
         {
             return;
         }
 
+        RegisterAcmeChallengeHandling(proxy, certificates);
+    }
+
+    private static void TryApplyLeafCertificate(ProxyServer proxy, CertificatesConfig certificates)
+    {
+        if (string.IsNullOrEmpty(certificates.CertificatePath))
+        {
+            return;
+        }
+
+        Console.WriteLine($"Certificate path configured: {certificates.CertificatePath}");
+        if (TryLoadLeaf(certificates.CertificatePath, certificates.PrivateKeyPath, out var leaf) && leaf is not null)
+        {
+            AssignGenericCertificate(proxy, leaf);
+            Console.WriteLine("Loaded leaf certificate onto DecryptSsl endpoints.");
+        }
+        else if (File.Exists(certificates.CertificatePath))
+        {
+            Console.WriteLine(
+                "Certificate file present but could not load (need PEM+PrivateKeyPath or PFX).");
+        }
+    }
+
+    private static void RegisterAcmeChallengeHandling(ProxyServer proxy, CertificatesConfig certificates)
+    {
         Console.WriteLine($"ACME domain configured: {certificates.AcmeDomain} (email={certificates.AcmeEmail ?? "(none)"})");
         Console.WriteLine("HTTP-01: place challenge tokens via env TITANIUM_ACME_TOKEN=token:keyAuth or file under .well-known.");
 
@@ -51,16 +62,7 @@ internal static class CertificateBootstrap
                 "or IssueOrRenewAsync (also honors TITANIUM_ACME_CERT_PATH).");
         }
 
-        // Optional single token from environment: TOKEN:KEYAUTH
-        var env = Environment.GetEnvironmentVariable("TITANIUM_ACME_TOKEN");
-        if (!string.IsNullOrEmpty(env))
-        {
-            var parts = env.Split(':', 2);
-            if (parts.Length == 2)
-            {
-                AcmeTokens[parts[0]] = parts[1];
-            }
-        }
+        SeedTokenFromEnvironment();
 
         proxy.BeforeRequest += (_, e) =>
         {
@@ -89,6 +91,21 @@ internal static class CertificateBootstrap
             e.GenericResponse("challenge not found", HttpStatusCode.NotFound);
             return Task.CompletedTask;
         };
+    }
+
+    private static void SeedTokenFromEnvironment()
+    {
+        var env = Environment.GetEnvironmentVariable("TITANIUM_ACME_TOKEN");
+        if (string.IsNullOrEmpty(env))
+        {
+            return;
+        }
+
+        var parts = env.Split(':', 2);
+        if (parts.Length == 2)
+        {
+            AcmeTokens[parts[0]] = parts[1];
+        }
     }
 
     /// <summary>
@@ -130,16 +147,7 @@ internal static class CertificateBootstrap
             "operators should complete HTTP-01 externally and place PEM/PFX at CertificatePath, " +
             "then call ReplaceCertificate / IssueOrRenewAsync.");
 
-        var env = Environment.GetEnvironmentVariable("TITANIUM_ACME_TOKEN");
-        if (!string.IsNullOrEmpty(env))
-        {
-            var parts = env.Split(':', 2);
-            if (parts.Length == 2)
-            {
-                SetChallengeToken(parts[0], parts[1]);
-            }
-        }
-
+        SeedTokenFromEnvironment();
         return Task.CompletedTask;
     }
 

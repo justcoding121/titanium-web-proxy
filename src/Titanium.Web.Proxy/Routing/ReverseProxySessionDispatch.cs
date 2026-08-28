@@ -49,9 +49,12 @@ internal static class ReverseProxySessionDispatch
             return false;
         }
 
-        var port = destination.Port == 0
-            ? (destination.UseHttps ? 443 : 80)
-            : destination.Port;
+        var port = destination.Port;
+        if (port == 0)
+        {
+            port = destination.UseHttps ? 443 : 80;
+        }
+
         session.UpstreamConnectHost = destination.Address;
         session.UpstreamConnectPort = port;
         session.UpstreamDestinationId = destination.Id;
@@ -133,13 +136,11 @@ internal static class ReverseProxySessionDispatch
     {
         var engine = options.TransformEngine ?? new TransformEngine();
         var path = request.RequestUriString8.GetString();
-        if (path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-            path.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        if ((path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+             path.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) &&
+            Uri.TryCreate(path, UriKind.Absolute, out var absolute))
         {
-            if (Uri.TryCreate(path, UriKind.Absolute, out var absolute))
-            {
-                path = absolute.PathAndQuery;
-            }
+            path = absolute.PathAndQuery;
         }
 
         var ctx = new TransformRequestContext { Path = path };

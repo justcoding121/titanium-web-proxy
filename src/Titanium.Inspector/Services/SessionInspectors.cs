@@ -7,6 +7,8 @@ namespace Titanium.Inspector.Services;
 /// <summary>Headers/cookies/query + raw/JSON/hex body views with optional decompress.</summary>
 public static class SessionInspectors
 {
+    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
+
     public static IReadOnlyDictionary<string, string> ParseHeaderBlock(string? text)
     {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -113,7 +115,7 @@ public static class SessionInspectors
         try
         {
             using var doc = JsonDocument.Parse(text);
-            return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+            return JsonSerializer.Serialize(doc.RootElement, IndentedJson);
         }
         catch (JsonException)
         {

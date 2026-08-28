@@ -110,7 +110,7 @@ public sealed class ServiceDiscovery : IDisposable
                 pending = true;
             }
 
-            _ = Task.Run(async () =>
+            Task.Run(async () =>
             {
                 try
                 {
@@ -323,29 +323,24 @@ public sealed class ServiceDiscovery : IDisposable
 
             if (item.TryGetProperty("Service", out var service))
             {
-                address = service.TryGetProperty("Address", out var a) ? a.GetString() : null;
+                address = TryGetString(service, "Address");
                 if (service.TryGetProperty("Port", out var p) && p.TryGetInt32(out var pn))
                 {
                     port = pn;
                 }
 
-                id = service.TryGetProperty("ID", out var sid) ? sid.GetString() : null;
+                id = TryGetString(service, "ID");
             }
             else
             {
-                address = item.TryGetProperty("ServiceAddress", out var a) ? a.GetString()
-                    : item.TryGetProperty("Address", out a) ? a.GetString() : null;
-                if (item.TryGetProperty("ServicePort", out var p) && p.TryGetInt32(out var pn))
-                {
-                    port = pn;
-                }
-                else if (item.TryGetProperty("Port", out p) && p.TryGetInt32(out pn))
+                address = TryGetString(item, "ServiceAddress") ?? TryGetString(item, "Address");
+                if ((item.TryGetProperty("ServicePort", out var p) || item.TryGetProperty("Port", out p)) &&
+                    p.TryGetInt32(out var pn))
                 {
                     port = pn;
                 }
 
-                id = item.TryGetProperty("ServiceID", out var sid) ? sid.GetString()
-                    : item.TryGetProperty("ID", out sid) ? sid.GetString() : null;
+                id = TryGetString(item, "ServiceID") ?? TryGetString(item, "ID");
             }
 
             if (string.IsNullOrWhiteSpace(address))
@@ -364,6 +359,9 @@ public sealed class ServiceDiscovery : IDisposable
 
         return list;
     }
+
+    private static string? TryGetString(JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var value) ? value.GetString() : null;
 
     public void Dispose()
     {

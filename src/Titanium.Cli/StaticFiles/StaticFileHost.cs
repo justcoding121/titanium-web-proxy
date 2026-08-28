@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Net;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Configuration.Models;
+using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Cli.StaticFiles;
@@ -29,94 +30,143 @@ internal static class StaticFileHost
 
         Console.WriteLine($"Static files root: {root} (gzip={config.EnableGzip}, brotli={config.EnableBrotli})");
 
-        proxy.BeforeRequest += async (_, e) =>
+        proxy.BeforeRequest += (_, e) => HandleStaticRequestAsync(e, root, config);
+    }
+
+    private static async Task HandleStaticRequestAsync(
+        SessionEventArgs e, string root, StaticFilesConfig config)
+    {
+        var requestPath = e.HttpClient.Request.RequestUri?.AbsolutePath ?? "/";
+        if (requestPath.Contains("..", StringComparison.Ordinal))
         {
-            var path = e.HttpClient.Request.RequestUri?.AbsolutePath ?? "/";
-            if (path.Contains("..", StringComparison.Ordinal))
-            {
-                e.GenericResponse("Invalid path", HttpStatusCode.BadRequest);
-                return;
-            }
+            e.GenericResponse("Invalid path", HttpStatusCode.BadRequest);
+            return;
+        }
 
-            var relative = path.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-            if (string.IsNullOrEmpty(relative))
-            {
-                relative = "index.html";
-            }
+        var resolved = TryResolveFile(requestPath, root);
+        if (resolved is null)
+        {
+            return;
+        }
 
-            var full = Path.GetFullPath(Path.Combine(root, relative));
-            if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase) || !File.Exists(full))
-            {
-                return; // fall through to reverse proxy / origin
-            }
+        var (full, info) = resolved.Value;
+        var etag = $"W/\"{info.Length:x}-{info.LastWriteTimeUtc.Ticks:x}\"";
+        if (TryNotModified(e, etag))
+        {
+            return;
+        }
 
-            var info = new FileInfo(full);
-            var etag = $"W/\"{info.Length:x}-{info.LastWriteTimeUtc.Ticks:x}\"";
+        var bytes = await File.ReadAllBytesAsync(full);
+        var status = HttpStatusCode.OK;
+        var headers = CreateBaseHeaders(full, etag);
 
-            var ifNoneMatch = e.HttpClient.Request.Headers.GetHeaders("If-None-Match");
-            if (ifNoneMatch is { Count: > 0 } &&
-                ifNoneMatch.Any(h => ETagMatches(h.Value, etag)))
-            {
-                e.GenericResponse(
-                    Array.Empty<byte>(),
-                    HttpStatusCode.NotModified,
-                    new[]
-                    {
-                        new HttpHeader("ETag", etag),
-                        new HttpHeader("Cache-Control", "public, max-age=60"),
-                        new HttpHeader("Accept-Ranges", "bytes"),
-                    });
-                return;
-            }
+        if (TryApplyRange(e, ref bytes, info.Length, headers, out var partial))
+        {
+            status = partial;
+        }
 
-            var bytes = await File.ReadAllBytesAsync(full);
-            var status = HttpStatusCode.OK;
-            var headers = new List<HttpHeader>
-            {
-                new("Content-Type", GuessContentType(full)),
-                new("Cache-Control", "public, max-age=60"),
-                new("ETag", etag),
-                new("Accept-Ranges", "bytes"),
-            };
+        ApplyCompression(config, e, ref bytes, headers);
 
-            var rangeHeaders = e.HttpClient.Request.Headers.GetHeaders("Range");
-            if (rangeHeaders is { Count: > 0 } &&
-                TryParseBytesRange(rangeHeaders[0].Value, bytes.Length, out var start, out var end))
-            {
-                var length = end - start + 1;
-                var slice = new byte[length];
-                Buffer.BlockCopy(bytes, start, slice, 0, length);
-                bytes = slice;
-                status = HttpStatusCode.PartialContent;
-                headers.Add(new HttpHeader("Content-Range", $"bytes {start}-{end}/{info.Length}"));
-            }
+        if (status == HttpStatusCode.OK)
+        {
+            e.Ok(bytes, (IEnumerable<HttpHeader>)headers);
+        }
+        else
+        {
+            e.GenericResponse(bytes, status, headers);
+        }
+    }
 
-            // Compression applied after range so Content-Range describes the identity representation slice.
-            var acceptHeaders = e.HttpClient.Request.Headers.GetHeaders("Accept-Encoding");
-            var accept = acceptHeaders is null
-                ? ""
-                : string.Join(",", acceptHeaders.Select(h => h.Value));
+    private static (string Full, FileInfo Info)? TryResolveFile(string requestPath, string root)
+    {
+        var relative = requestPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+        if (string.IsNullOrEmpty(relative))
+        {
+            relative = "index.html";
+        }
 
-            if (config.EnableBrotli && accept.Contains("br", StringComparison.OrdinalIgnoreCase))
-            {
-                bytes = BrotliCompress(bytes);
-                headers.Add(new HttpHeader("Content-Encoding", "br"));
-            }
-            else if (config.EnableGzip && accept.Contains("gzip", StringComparison.OrdinalIgnoreCase))
-            {
-                bytes = GzipCompress(bytes);
-                headers.Add(new HttpHeader("Content-Encoding", "gzip"));
-            }
+        var candidate = Path.GetFullPath(Path.Combine(root, relative));
+        if (!candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase) || !File.Exists(candidate))
+        {
+            return null;
+        }
 
-            if (status == HttpStatusCode.OK)
-            {
-                e.Ok(bytes, (IEnumerable<HttpHeader>)headers);
-            }
-            else
-            {
-                e.GenericResponse(bytes, status, headers);
-            }
-        };
+        return (candidate, new FileInfo(candidate));
+    }
+
+    private static bool TryNotModified(SessionEventArgs e, string etag)
+    {
+        var ifNoneMatch = e.HttpClient.Request.Headers.GetHeaders("If-None-Match");
+        if (ifNoneMatch is not { Count: > 0 } ||
+            !ifNoneMatch.Any(h => ETagMatches(h.Value, etag)))
+        {
+            return false;
+        }
+
+        e.GenericResponse(
+            Array.Empty<byte>(),
+            HttpStatusCode.NotModified,
+            [
+                new HttpHeader("ETag", etag),
+                new HttpHeader("Cache-Control", "public, max-age=60"),
+                new HttpHeader("Accept-Ranges", "bytes"),
+            ]);
+        return true;
+    }
+
+    private static List<HttpHeader> CreateBaseHeaders(string fullPath, string etag) =>
+    [
+        new("Content-Type", GuessContentType(fullPath)),
+        new("Cache-Control", "public, max-age=60"),
+        new("ETag", etag),
+        new("Accept-Ranges", "bytes"),
+    ];
+
+    private static bool TryApplyRange(
+        SessionEventArgs e,
+        ref byte[] bytes,
+        long totalLength,
+        List<HttpHeader> headers,
+        out HttpStatusCode status)
+    {
+        status = HttpStatusCode.OK;
+        var rangeHeaders = e.HttpClient.Request.Headers.GetHeaders("Range");
+        if (rangeHeaders is not { Count: > 0 } ||
+            !TryParseBytesRange(rangeHeaders[0].Value, bytes.Length, out var start, out var end))
+        {
+            return false;
+        }
+
+        var length = end - start + 1;
+        var slice = new byte[length];
+        Buffer.BlockCopy(bytes, start, slice, 0, length);
+        bytes = slice;
+        status = HttpStatusCode.PartialContent;
+        headers.Add(new HttpHeader("Content-Range", $"bytes {start}-{end}/{totalLength}"));
+        return true;
+    }
+
+    private static void ApplyCompression(
+        StaticFilesConfig config,
+        SessionEventArgs e,
+        ref byte[] bytes,
+        List<HttpHeader> headers)
+    {
+        var acceptHeaders = e.HttpClient.Request.Headers.GetHeaders("Accept-Encoding");
+        var accept = acceptHeaders is null
+            ? ""
+            : string.Join(",", acceptHeaders.Select(h => h.Value));
+
+        if (config.EnableBrotli && accept.Contains("br", StringComparison.OrdinalIgnoreCase))
+        {
+            bytes = BrotliCompress(bytes);
+            headers.Add(new HttpHeader("Content-Encoding", "br"));
+        }
+        else if (config.EnableGzip && accept.Contains("gzip", StringComparison.OrdinalIgnoreCase))
+        {
+            bytes = GzipCompress(bytes);
+            headers.Add(new HttpHeader("Content-Encoding", "gzip"));
+        }
     }
 
     private static bool ETagMatches(string clientValue, string etag)
@@ -150,7 +200,6 @@ internal static class StaticFileHost
         }
 
         var spec = rangeHeader[prefix.Length..].Trim();
-        // Only single range supported.
         if (spec.Contains(',', StringComparison.Ordinal))
         {
             return false;
@@ -167,7 +216,6 @@ internal static class StaticFileHost
 
         if (string.IsNullOrEmpty(startPart))
         {
-            // suffix: bytes=-N
             if (!int.TryParse(endPart, out var suffix) || suffix <= 0)
             {
                 return false;
@@ -199,7 +247,7 @@ internal static class StaticFileHost
         return true;
     }
 
-    private static string GuessContentType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    internal static string GuessContentType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
     {
         ".html" or ".htm" => "text/html; charset=utf-8",
         ".css" => "text/css; charset=utf-8",

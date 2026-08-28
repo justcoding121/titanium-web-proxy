@@ -37,27 +37,42 @@ public sealed class DashboardHost : IDisposable
     {
         var uri = new Uri(_controlPlane.Prefix);
         var dashPort = uri.Port + 1;
+        // Loopback-oriented dashboard over HttpListener; shared-secret auth, not public TLS.
+#pragma warning disable S5332
         Prefix = $"http://{uri.Host}:{dashPort}/";
+#pragma warning restore S5332
         _cts = new CancellationTokenSource();
         _listener = new HttpListener();
         _listener.Prefixes.Add(Prefix);
         try
         {
             _listener.Start();
-            _ = Task.Run(() => LoopAsync(_cts.Token));
+            _ = Task.Run(() => LoopAsync(_cts.Token), _cts.Token);
         }
         catch
         {
             _listener = null;
             Prefix = null;
+            _cts.Dispose();
+            _cts = null;
         }
     }
 
     public void Dispose()
     {
-        _cts?.Cancel();
+        try
+        {
+            _cts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // already disposed
+        }
+
         _listener?.Stop();
         _listener?.Close();
+        _cts?.Dispose();
+        _cts = null;
     }
 
     private async Task LoopAsync(CancellationToken cancellationToken)
@@ -76,51 +91,7 @@ public sealed class DashboardHost : IDisposable
 
             try
             {
-                if (!Authorize(ctx.Request))
-                {
-                    ctx.Response.StatusCode = 401;
-                    await WriteAsync(ctx.Response, "text/plain", "unauthorized");
-                    continue;
-                }
-
-                var path = ctx.Request.Url?.AbsolutePath ?? "/";
-                if (path.StartsWith("/metrics", StringComparison.OrdinalIgnoreCase))
-                {
-                    await WriteAsync(ctx.Response, "text/plain; version=0.0.4", _metrics.Render());
-                    continue;
-                }
-
-                if (path.StartsWith("/api/snapshot", StringComparison.OrdinalIgnoreCase))
-                {
-                    var snap = _clusters?.Snapshot ?? ImmutableClusterSnapshot.Empty;
-                    var json = JsonSerializer.Serialize(new
-                    {
-                        destinationStates = snap.DestinationStates,
-                        clusters = snap.Clusters.Keys,
-                    });
-                    await WriteAsync(ctx.Response, "application/json", json);
-                    continue;
-                }
-
-                if (path.StartsWith("/drain/", StringComparison.OrdinalIgnoreCase) &&
-                    ctx.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
-                {
-                    var id = Uri.UnescapeDataString(path["/drain/".Length..]);
-                    _operations.Drain(id);
-                    await WriteAsync(ctx.Response, "text/plain", "ok");
-                    continue;
-                }
-
-                if (path.StartsWith("/healthy/", StringComparison.OrdinalIgnoreCase) &&
-                    ctx.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
-                {
-                    var id = Uri.UnescapeDataString(path["/healthy/".Length..]);
-                    _operations.MarkHealthy(id);
-                    await WriteAsync(ctx.Response, "text/plain", "ok");
-                    continue;
-                }
-
-                await WriteAsync(ctx.Response, "text/html; charset=utf-8", BuildHtml());
+                await HandleRequestAsync(ctx, cancellationToken);
             }
             catch
             {
@@ -135,6 +106,60 @@ public sealed class DashboardHost : IDisposable
                 }
             }
         }
+    }
+
+    private async Task HandleRequestAsync(HttpListenerContext ctx, CancellationToken cancellationToken)
+    {
+        if (!Authorize(ctx.Request))
+        {
+            ctx.Response.StatusCode = 401;
+            await WriteAsync(ctx.Response, "text/plain", "unauthorized", cancellationToken);
+            return;
+        }
+
+        var path = ctx.Request.Url?.AbsolutePath ?? "/";
+        if (path.StartsWith("/metrics", StringComparison.OrdinalIgnoreCase))
+        {
+            await WriteAsync(ctx.Response, "text/plain; version=0.0.4", _metrics.Render(), cancellationToken);
+            return;
+        }
+
+        if (path.StartsWith("/api/snapshot", StringComparison.OrdinalIgnoreCase))
+        {
+            await WriteSnapshotAsync(ctx, cancellationToken);
+            return;
+        }
+
+        if (path.StartsWith("/drain/", StringComparison.OrdinalIgnoreCase) &&
+            ctx.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
+        {
+            var id = Uri.UnescapeDataString(path["/drain/".Length..]);
+            _operations.Drain(id);
+            await WriteAsync(ctx.Response, "text/plain", "ok", cancellationToken);
+            return;
+        }
+
+        if (path.StartsWith("/healthy/", StringComparison.OrdinalIgnoreCase) &&
+            ctx.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
+        {
+            var id = Uri.UnescapeDataString(path["/healthy/".Length..]);
+            _operations.MarkHealthy(id);
+            await WriteAsync(ctx.Response, "text/plain", "ok", cancellationToken);
+            return;
+        }
+
+        await WriteAsync(ctx.Response, "text/html; charset=utf-8", BuildHtml(), cancellationToken);
+    }
+
+    private async Task WriteSnapshotAsync(HttpListenerContext ctx, CancellationToken cancellationToken)
+    {
+        var snap = _clusters?.Snapshot ?? ImmutableClusterSnapshot.Empty;
+        var json = JsonSerializer.Serialize(new
+        {
+            destinationStates = snap.DestinationStates,
+            clusters = snap.Clusters.Keys,
+        });
+        await WriteAsync(ctx.Response, "application/json", json, cancellationToken);
     }
 
     private bool Authorize(HttpListenerRequest request)
@@ -187,12 +212,16 @@ public sealed class DashboardHost : IDisposable
             .ToString();
     }
 
-    private static async Task WriteAsync(HttpListenerResponse response, string contentType, string body)
+    private static async Task WriteAsync(
+        HttpListenerResponse response,
+        string contentType,
+        string body,
+        CancellationToken cancellationToken)
     {
         var bytes = Encoding.UTF8.GetBytes(body);
         response.ContentType = contentType;
         response.ContentLength64 = bytes.Length;
-        await response.OutputStream.WriteAsync(bytes);
+        await response.OutputStream.WriteAsync(bytes, cancellationToken);
         response.Close();
     }
 }

@@ -6,6 +6,7 @@ using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Abstractions;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
+using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Caching;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.Configuration;
@@ -26,7 +27,7 @@ internal static class RunCommand
         {
             foreach (var e in errors)
             {
-                Console.Error.WriteLine(e);
+                await Console.Error.WriteLineAsync(e);
             }
 
             return 1;
@@ -34,22 +35,7 @@ internal static class RunCommand
 
         var requiresSessionPath = ConfigNeedsSessionPath(loaded.Config);
         using var proxy = new ProxyServer();
-
-        if (requiresSessionPath)
-        {
-            proxy.EnableHttpInterception = true;
-        }
-
-        // Listener HTTP/2 / HTTP/3 switches (any EnableHttp2==false disables; any EnableHttp3 enables).
-        if (loaded.Config.Listeners.Any(l => l.EnableHttp2 == false))
-        {
-            proxy.EnableHttp2 = false;
-        }
-
-        if (loaded.Config.Listeners.Any(l => l.EnableHttp3))
-        {
-            proxy.EnableHttp3 = true;
-        }
+        ConfigureProxyFlags(proxy, loaded.Config, requiresSessionPath);
 
         var clusterManager = new ClusterManager();
         if (loaded.Config.Clusters.Count > 0)
@@ -59,42 +45,7 @@ internal static class RunCommand
 
         foreach (var listener in loaded.Config.Listeners)
         {
-            var host = listener.Host ?? "0.0.0.0";
-            var ip = host is "0.0.0.0" or "*"
-                ? IPAddress.Any
-                : IPAddress.Parse(host);
-
-            if (!string.IsNullOrEmpty(listener.ForwardHost) && !listener.DecryptSsl)
-            {
-                var ep = new TransparentProxyEndPoint(ip, listener.Port, decryptSsl: false)
-                {
-                    ForwardHost = listener.ForwardHost,
-                    ForwardPort = listener.ForwardPort ?? 80,
-                    ForwardCleartext = true,
-                    EnableHttp3 = listener.EnableHttp3,
-                };
-                proxy.AddEndPoint(ep);
-                Console.WriteLine(
-                    $"Listener {host}:{listener.Port} transparent ForwardHost={listener.ForwardHost}:{listener.ForwardPort ?? 80}");
-            }
-            else if (!string.IsNullOrEmpty(listener.ForwardHost) && listener.DecryptSsl)
-            {
-                var ep = new TransparentProxyEndPoint(ip, listener.Port, decryptSsl: true)
-                {
-                    ForwardHost = listener.ForwardHost,
-                    ForwardPort = listener.ForwardPort ?? 443,
-                    EnableHttp3 = listener.EnableHttp3,
-                };
-                proxy.AddEndPoint(ep);
-                Console.WriteLine(
-                    $"Listener {host}:{listener.Port} TLS-terminate ForwardHost={listener.ForwardHost}:{listener.ForwardPort ?? 443}");
-            }
-            else
-            {
-                var ep = new ExplicitProxyEndPoint(ip, listener.Port, listener.DecryptSsl);
-                proxy.AddEndPoint(ep);
-                Console.WriteLine($"Listener {host}:{listener.Port} explicit decryptSsl={listener.DecryptSsl}");
-            }
+            AddListener(proxy, listener);
         }
 
         if (loaded.Config.Listeners.Count == 0)
@@ -109,36 +60,11 @@ internal static class RunCommand
         var responseCache = new MemoryHttpResponseCache();
         var middleware = new List<IProxyMiddleware>();
         var routes = loaded.Config.Routes.ToList();
-
         var plusOptions = loaded.Config.Plus is not null
             ? BuildPlusOptions(loaded.Config.Plus)
             : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        var cacheEnabled = IsTruthy(plusOptions, "cache.enable");
-        HttpResponseCacheMiddleware? cacheMiddleware = null;
-        if (cacheEnabled)
-        {
-            cacheMiddleware = new HttpResponseCacheMiddleware(responseCache);
-            middleware.Add(cacheMiddleware);
-            proxy.AfterResponse += async (_, e) =>
-            {
-                try
-                {
-                    if (e.HttpClient.Response.StatusCode == 200 &&
-                        !e.HttpClient.Response.IsBodyRead &&
-                        e.HttpClient.Response.HasBody)
-                    {
-                        await e.GetResponseBody().ConfigureAwait(false);
-                    }
-
-                    cacheMiddleware.TryCacheCurrentResponse(e);
-                }
-                catch
-                {
-                    // Cache best-effort only.
-                }
-            };
-        }
+        ConfigureResponseCache(proxy, middleware, responseCache, plusOptions);
 
         void RefreshReverseProxy()
         {
@@ -155,30 +81,10 @@ internal static class RunCommand
             };
         }
 
-        ITitaniumPlusModule? plus = null;
-        if (loaded.Config.Plus?.Enabled == true)
-        {
-            plus = PlusLoader.TryLoad(out var warning);
-            if (warning is not null)
-            {
-                Console.Error.WriteLine(warning);
-            }
-
-            plus?.Apply(new PlusActivationContext
-            {
-                ProxyServer = proxy,
-                ClusterManager = clusterManager,
-                Options = plusOptions,
-                Middleware = middleware,
-                Routes = routes,
-                RefreshReverseProxy = RefreshReverseProxy,
-                ResponseCache = responseCache,
-                LatencyRecorder = loadBalancer,
-            });
-        }
+        await TryActivatePlusAsync(proxy, loaded.Config, clusterManager, loadBalancer, responseCache,
+            middleware, routes, plusOptions, RefreshReverseProxy);
 
         RefreshReverseProxy();
-
         proxy.Start();
         Console.WriteLine("Titanium proxy running. Press Ctrl+C to stop.");
         var tcs = new TaskCompletionSource();
@@ -188,8 +94,133 @@ internal static class RunCommand
             tcs.TrySetResult();
         };
         await tcs.Task;
-        proxy.Stop();
+        await proxy.StopAsync();
         return 0;
+    }
+
+    private static void ConfigureProxyFlags(ProxyServer proxy, TwpConfig config, bool requiresSessionPath)
+    {
+        if (requiresSessionPath)
+        {
+            proxy.EnableHttpInterception = true;
+        }
+
+        // Listener HTTP/2 / HTTP/3 switches (any EnableHttp2==false disables; any EnableHttp3 enables).
+        if (config.Listeners.Any(l => l.EnableHttp2 == false))
+        {
+            proxy.EnableHttp2 = false;
+        }
+
+        if (config.Listeners.Any(l => l.EnableHttp3))
+        {
+            proxy.EnableHttp3 = true;
+        }
+    }
+
+    private static void ConfigureResponseCache(
+        ProxyServer proxy,
+        List<IProxyMiddleware> middleware,
+        MemoryHttpResponseCache responseCache,
+        IReadOnlyDictionary<string, string> plusOptions)
+    {
+        if (!IsTruthy(plusOptions, "cache.enable"))
+        {
+            return;
+        }
+
+        var cacheMiddleware = new HttpResponseCacheMiddleware(responseCache);
+        middleware.Add(cacheMiddleware);
+        proxy.AfterResponse += async (_, e) =>
+        {
+            try
+            {
+                if (e.HttpClient.Response.StatusCode == 200 &&
+                    !e.HttpClient.Response.IsBodyRead &&
+                    e.HttpClient.Response.HasBody)
+                {
+                    await e.GetResponseBody().ConfigureAwait(false);
+                }
+
+                cacheMiddleware.TryCacheCurrentResponse(e);
+            }
+            catch
+            {
+                // Cache best-effort only.
+            }
+        };
+    }
+
+    private static async Task TryActivatePlusAsync(
+        ProxyServer proxy,
+        TwpConfig config,
+        ClusterManager clusterManager,
+        LoadBalancer loadBalancer,
+        MemoryHttpResponseCache responseCache,
+        List<IProxyMiddleware> middleware,
+        List<RouteConfig> routes,
+        Dictionary<string, string> plusOptions,
+        Action refreshReverseProxy)
+    {
+        if (config.Plus?.Enabled != true)
+        {
+            return;
+        }
+
+        var plus = PlusLoader.TryLoad(out var warning);
+        if (warning is not null)
+        {
+            await Console.Error.WriteLineAsync(warning);
+        }
+
+        plus?.Apply(new PlusActivationContext
+        {
+            ProxyServer = proxy,
+            ClusterManager = clusterManager,
+            Options = plusOptions,
+            Middleware = middleware,
+            Routes = routes,
+            RefreshReverseProxy = refreshReverseProxy,
+            ResponseCache = responseCache,
+            LatencyRecorder = loadBalancer,
+        });
+    }
+
+    private static void AddListener(ProxyServer proxy, ListenerConfig listener)
+    {
+        var host = listener.Host ?? "0.0.0.0";
+        var ip = host is "0.0.0.0" or "*"
+            ? IPAddress.Any
+            : IPAddress.Parse(host);
+
+        if (!string.IsNullOrEmpty(listener.ForwardHost) && !listener.DecryptSsl)
+        {
+            proxy.AddEndPoint(new TransparentProxyEndPoint(ip, listener.Port, decryptSsl: false)
+            {
+                ForwardHost = listener.ForwardHost,
+                ForwardPort = listener.ForwardPort ?? 80,
+                ForwardCleartext = true,
+                EnableHttp3 = listener.EnableHttp3,
+            });
+            Console.WriteLine(
+                $"Listener {host}:{listener.Port} transparent ForwardHost={listener.ForwardHost}:{listener.ForwardPort ?? 80}");
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(listener.ForwardHost) && listener.DecryptSsl)
+        {
+            proxy.AddEndPoint(new TransparentProxyEndPoint(ip, listener.Port, decryptSsl: true)
+            {
+                ForwardHost = listener.ForwardHost,
+                ForwardPort = listener.ForwardPort ?? 443,
+                EnableHttp3 = listener.EnableHttp3,
+            });
+            Console.WriteLine(
+                $"Listener {host}:{listener.Port} TLS-terminate ForwardHost={listener.ForwardHost}:{listener.ForwardPort ?? 443}");
+            return;
+        }
+
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(ip, listener.Port, listener.DecryptSsl));
+        Console.WriteLine($"Listener {host}:{listener.Port} explicit decryptSsl={listener.DecryptSsl}");
     }
 
     private static bool IsTruthy(IReadOnlyDictionary<string, string> options, string key) =>

@@ -99,7 +99,7 @@ public sealed class BreakpointViewModel : System.ComponentModel.INotifyPropertyC
         }
 
         var pattern = "^" + Regex.Escape(UrlFilter).Replace("\\*", ".*") + "$";
-        return Regex.IsMatch(url, pattern, RegexOptions.IgnoreCase);
+        return Regex.IsMatch(url, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
     }
 }
 

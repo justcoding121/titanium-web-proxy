@@ -52,6 +52,29 @@ public class RunCommandTests
     }
 
     [TestMethod]
+    public void ConfigNeedsSessionPath_True_ForAcmeDomain()
+    {
+        var cfg = new TwpConfig
+        {
+            Certificates = new CertificatesConfig { AcmeDomain = "example.test" },
+        };
+        Assert.IsTrue(RunCommand.ConfigNeedsSessionPath(cfg));
+    }
+
+    [TestMethod]
+    public void ListenerConfig_EnableHttp2AndHttp3_FieldsExist()
+    {
+        var listener = new ListenerConfig
+        {
+            Port = 8443,
+            EnableHttp2 = false,
+            EnableHttp3 = true,
+        };
+        Assert.AreEqual(false, listener.EnableHttp2);
+        Assert.IsTrue(listener.EnableHttp3);
+    }
+
+    [TestMethod]
     public void BuildPlusOptions_MergesControlPlane()
     {
         var plus = new PlusConfig

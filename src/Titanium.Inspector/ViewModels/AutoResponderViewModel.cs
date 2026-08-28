@@ -115,7 +115,7 @@ public sealed class AutoResponderViewModel : INotifyPropertyChanged
         }
 
         var pattern = "^" + Regex.Escape(filter).Replace("\\*", ".*") + "$";
-        return Regex.IsMatch(url, pattern, RegexOptions.IgnoreCase);
+        return Regex.IsMatch(url, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
     }
 }
 

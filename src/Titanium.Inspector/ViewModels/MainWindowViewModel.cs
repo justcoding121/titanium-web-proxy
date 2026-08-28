@@ -69,140 +69,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ExportArchiveCommand = new RelayCommand(async () => await ExportArchiveAsync());
         ImportArchiveCommand = new RelayCommand(async () => await ImportArchiveAsync());
         StartCaptureCommand = new RelayCommand(async () => await StartCaptureAsync());
-        StopCaptureCommand = new RelayCommand(() =>
-        {
-            _interception.Stop();
-            SystemProxy = false;
-            PersistSettings();
-            StatusText = "Stopped (system proxy restored if it was on)";
-            return Task.CompletedTask;
-        });
-        ToggleCapturingCommand = new RelayCommand(() =>
-        {
-            Capturing = !Capturing;
-            return Task.CompletedTask;
-        });
-        ClearSessionsCommand = new RelayCommand(() =>
-        {
-            _all.Clear();
-            Sessions.Clear();
-            SelectedSession = null;
-            StatusText = "Sessions cleared";
-            return Task.CompletedTask;
-        });
-        ToggleSystemProxyCommand = new RelayCommand(() =>
-        {
-            if (!_interception.IsRunning)
-            {
-                StatusText = "Start interception before toggling system proxy";
-                return Task.CompletedTask;
-            }
-
-            SystemProxy = !SystemProxy;
-            _interception.SetSystemProxy(SystemProxy);
-            StatusText = SystemProxy ? "System proxy enabled (with identity bypass)" : "System proxy restored";
-            return Task.CompletedTask;
-        });
-        InstallCaCommand = new RelayCommand(() =>
-        {
-            if (!_interception.IsRunning)
-            {
-                StatusText = "Start interception first";
-                return Task.CompletedTask;
-            }
-
-            _interception.InstallRootCertificate(machineStore: false);
-            StatusText = "Root CA trusted in current user store";
-            return Task.CompletedTask;
-        });
-        UntrustCaCommand = new RelayCommand(() =>
-        {
-            if (!_interception.IsRunning)
-            {
-                StatusText = "Start interception first";
-                return Task.CompletedTask;
-            }
-
-            _interception.UntrustRootCertificate(machineStore: false);
-            StatusText = "Root CA removed from current user store";
-            return Task.CompletedTask;
-        });
-        ExportCaCommand = new RelayCommand(() =>
-        {
-            var path = _interception.ExportRootCertificate();
-            StatusText = path is null ? "No root certificate yet — start interception first" : "Exported CA: " + path;
-            return Task.CompletedTask;
-        });
-        DeviceCaSetupCommand = new RelayCommand(() =>
-        {
-            StatusText =
-                $"Device CA setup: 1) Export root CA from Capture menu. 2) Install the .cer on the device as a trusted CA. " +
-                $"3) Set the device HTTP proxy to this PC's LAN IP on port {BindPort} (bind is {BindAddress}:{BindPort}). " +
-                "Use BindAddress 0.0.0.0 so other devices can reach the proxy.";
-            return Task.CompletedTask;
-        });
+        StopCaptureCommand = new RelayCommand(StopCaptureAsync);
+        ToggleCapturingCommand = new RelayCommand(ToggleCapturingAsync);
+        ClearSessionsCommand = new RelayCommand(ClearSessionsAsync);
+        ToggleSystemProxyCommand = new RelayCommand(ToggleSystemProxyAsync);
+        InstallCaCommand = new RelayCommand(InstallCaAsync);
+        UntrustCaCommand = new RelayCommand(UntrustCaAsync);
+        ExportCaCommand = new RelayCommand(ExportCaAsync);
+        DeviceCaSetupCommand = new RelayCommand(DeviceCaSetupAsync);
         ReplayCommand = new RelayCommand(async () => await ReplaySelectedAsync());
-        LoadFromSelectedCommand = new RelayCommand(() =>
-        {
-            if (SelectedSession is null)
-            {
-                StatusText = "Select a session to load into Composer";
-                return Task.CompletedTask;
-            }
-
-            ComposerMethod = SelectedSession.Method;
-            ComposerUrl = SelectedSession.Url;
-            ComposerHeaders = SelectedSession.RequestHeadersText ?? "";
-            ComposerBody = SelectedSession.RequestBodyText ?? "";
-            StatusText = "Composer loaded from selected session";
-            return Task.CompletedTask;
-        });
+        LoadFromSelectedCommand = new RelayCommand(LoadFromSelectedAsync);
         SendComposerCommand = new RelayCommand(async () => await SendComposerAsync());
-        AddAutoResponderRuleCommand = new RelayCommand(() =>
-        {
-            AutoResponder.Rules.Add(new AutoResponderRule
-            {
-                MatchUrl = AutoResponderMatch,
-                StatusCode = AutoResponderStatus,
-                Body = AutoResponderBody,
-                ContentType = AutoResponderContentType,
-                Enabled = true,
-            });
-            PersistAutoResponder();
-            StatusText = $"AutoResponder rule added ({AutoResponder.Rules.Count} total)";
-            return Task.CompletedTask;
-        });
-        DeleteAutoResponderRuleCommand = new RelayCommand(() =>
-        {
-            if (AutoResponder.SelectedRule is null)
-            {
-                StatusText = "Select an AutoResponder rule to delete";
-                return Task.CompletedTask;
-            }
-
-            AutoResponder.Rules.Remove(AutoResponder.SelectedRule);
-            AutoResponder.SelectedRule = null;
-            PersistAutoResponder();
-            StatusText = "AutoResponder rule deleted";
-            return Task.CompletedTask;
-        });
-        UpdateAutoResponderRuleCommand = new RelayCommand(() =>
-        {
-            if (AutoResponder.SelectedRule is null)
-            {
-                StatusText = "Select an AutoResponder rule to update";
-                return Task.CompletedTask;
-            }
-
-            var rule = AutoResponder.SelectedRule;
-            rule.MatchUrl = AutoResponderMatch;
-            rule.StatusCode = AutoResponderStatus;
-            rule.Body = AutoResponderBody;
-            rule.ContentType = AutoResponderContentType;
-            PersistAutoResponder();
-            StatusText = "AutoResponder rule updated";
-            return Task.CompletedTask;
-        });
+        AddAutoResponderRuleCommand = new RelayCommand(AddAutoResponderRuleAsync);
+        DeleteAutoResponderRuleCommand = new RelayCommand(DeleteAutoResponderRuleAsync);
+        UpdateAutoResponderRuleCommand = new RelayCommand(UpdateAutoResponderRuleAsync);
         ContinueBreakpointCommand = new RelayCommand(() =>
         {
             Breakpoints.Continue();
@@ -213,13 +93,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             Breakpoints.Abort();
             return Task.CompletedTask;
         });
-        ApplyEditBodyCommand = new RelayCommand(() =>
-        {
-            Breakpoints.EditBody(BreakpointEditBody);
-            StatusText = "Breakpoint body edit applied (Continue to send)";
-            return Task.CompletedTask;
-        });
+        ApplyEditBodyCommand = new RelayCommand(ApplyEditBodyAsync);
 
+        WireEventHandlers();
+        LoadPlusPanels();
+    }
+
+    private void WireEventHandlers()
+    {
         AutoResponder.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(AutoResponderViewModel.SelectedRule) &&
@@ -255,7 +136,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 RefreshSelectedInspectors();
             }
         };
+    }
 
+    private void LoadPlusPanels()
+    {
         var panels = PlusInspectorLoader.TryLoadPanels(out var plusWarning);
         if (plusWarning is not null)
         {
@@ -266,6 +150,157 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             PlusPanelsSummary = string.Join("; ", panels.Select(DescribePanel));
         }
+    }
+
+    private Task StopCaptureAsync()
+    {
+        _interception.Stop();
+        SystemProxy = false;
+        PersistSettings();
+        StatusText = "Stopped (system proxy restored if it was on)";
+        return Task.CompletedTask;
+    }
+
+    private Task ToggleCapturingAsync()
+    {
+        Capturing = !Capturing;
+        return Task.CompletedTask;
+    }
+
+    private Task ClearSessionsAsync()
+    {
+        _all.Clear();
+        Sessions.Clear();
+        SelectedSession = null;
+        StatusText = "Sessions cleared";
+        return Task.CompletedTask;
+    }
+
+    private Task ToggleSystemProxyAsync()
+    {
+        if (!_interception.IsRunning)
+        {
+            StatusText = "Start interception before toggling system proxy";
+            return Task.CompletedTask;
+        }
+
+        SystemProxy = !SystemProxy;
+        _interception.SetSystemProxy(SystemProxy);
+        StatusText = SystemProxy ? "System proxy enabled (with identity bypass)" : "System proxy restored";
+        return Task.CompletedTask;
+    }
+
+    private Task InstallCaAsync()
+    {
+        if (!_interception.IsRunning)
+        {
+            StatusText = "Start interception first";
+            return Task.CompletedTask;
+        }
+
+        _interception.InstallRootCertificate(machineStore: false);
+        StatusText = "Root CA trusted in current user store";
+        return Task.CompletedTask;
+    }
+
+    private Task UntrustCaAsync()
+    {
+        if (!_interception.IsRunning)
+        {
+            StatusText = "Start interception first";
+            return Task.CompletedTask;
+        }
+
+        _interception.UntrustRootCertificate(machineStore: false);
+        StatusText = "Root CA removed from current user store";
+        return Task.CompletedTask;
+    }
+
+    private Task ExportCaAsync()
+    {
+        var path = _interception.ExportRootCertificate();
+        StatusText = path is null ? "No root certificate yet — start interception first" : "Exported CA: " + path;
+        return Task.CompletedTask;
+    }
+
+    private Task DeviceCaSetupAsync()
+    {
+        StatusText =
+            $"Device CA setup: 1) Export root CA from Capture menu. 2) Install the .cer on the device as a trusted CA. " +
+            $"3) Set the device HTTP proxy to this PC's LAN IP on port {BindPort} (bind is {BindAddress}:{BindPort}). " +
+            "Use BindAddress 0.0.0.0 so other devices can reach the proxy.";
+        return Task.CompletedTask;
+    }
+
+    private Task LoadFromSelectedAsync()
+    {
+        if (SelectedSession is null)
+        {
+            StatusText = "Select a session to load into Composer";
+            return Task.CompletedTask;
+        }
+
+        ComposerMethod = SelectedSession.Method;
+        ComposerUrl = SelectedSession.Url;
+        ComposerHeaders = SelectedSession.RequestHeadersText ?? "";
+        ComposerBody = SelectedSession.RequestBodyText ?? "";
+        StatusText = "Composer loaded from selected session";
+        return Task.CompletedTask;
+    }
+
+    private Task AddAutoResponderRuleAsync()
+    {
+        AutoResponder.Rules.Add(new AutoResponderRule
+        {
+            MatchUrl = AutoResponderMatch,
+            StatusCode = AutoResponderStatus,
+            Body = AutoResponderBody,
+            ContentType = AutoResponderContentType,
+            Enabled = true,
+        });
+        PersistAutoResponder();
+        StatusText = $"AutoResponder rule added ({AutoResponder.Rules.Count} total)";
+        return Task.CompletedTask;
+    }
+
+    private Task DeleteAutoResponderRuleAsync()
+    {
+        if (AutoResponder.SelectedRule is null)
+        {
+            StatusText = "Select an AutoResponder rule to delete";
+            return Task.CompletedTask;
+        }
+
+        AutoResponder.Rules.Remove(AutoResponder.SelectedRule);
+        AutoResponder.SelectedRule = null;
+        PersistAutoResponder();
+        StatusText = "AutoResponder rule deleted";
+        return Task.CompletedTask;
+    }
+
+    private Task UpdateAutoResponderRuleAsync()
+    {
+        if (AutoResponder.SelectedRule is null)
+        {
+            StatusText = "Select an AutoResponder rule to update";
+            return Task.CompletedTask;
+        }
+
+        var rule = AutoResponder.SelectedRule;
+        rule.MatchUrl = AutoResponderMatch;
+        rule.StatusCode = AutoResponderStatus;
+        rule.Body = AutoResponderBody;
+        rule.ContentType = AutoResponderContentType;
+        PersistAutoResponder();
+        StatusText = "AutoResponder rule updated";
+        return Task.CompletedTask;
+    }
+
+    private Task ApplyEditBodyAsync()
+    {
+        Breakpoints.EditBody(BreakpointEditBody);
+        StatusText = "Breakpoint body edit applied (Continue to send)";
+        return Task.CompletedTask;
     }
 
     public ObservableCollection<SessionSnapshot> Sessions { get; }
@@ -627,7 +662,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         StatusText = "Replaying…";
-        var result = await ReplayService.ReplayAsync(SelectedSession);
+        var result = await ReplayService.ReplayAsync(
+            SelectedSession,
+            ignoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors);
         StatusText = result.Ok
             ? $"Replay → HTTP {result.StatusCode}: {Truncate(result.Message, 120)}"
             : "Replay failed: " + result.Message;
@@ -656,7 +693,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             editedUrl: ComposerUrl,
             editedMethod: ComposerMethod,
             editedBody: ComposerBody,
-            editedHeaders: ComposerHeaders);
+            editedHeaders: ComposerHeaders,
+            ignoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors);
 
         if (!result.Ok)
         {

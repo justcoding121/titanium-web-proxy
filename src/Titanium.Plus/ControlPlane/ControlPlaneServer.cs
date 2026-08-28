@@ -62,20 +62,22 @@ public sealed class ControlPlaneServer : IDisposable
     public string Host => _host;
     public int Port => _port;
     public string SharedSecret => _sharedSecret;
+
+    // Loopback-oriented control plane over HttpListener; TLS is not used by design (shared-secret auth).
+#pragma warning disable S5332
     public string Prefix => $"http://{_host}:{_port}/";
+#pragma warning restore S5332
 
     public static void ValidateSecret(string host, string sharedSecret, bool allowInsecureDevSecret = false)
     {
         var isLoopback = host is "127.0.0.1" or "localhost" or "::1";
-        if (string.IsNullOrWhiteSpace(sharedSecret) ||
-            sharedSecret.Equals("changeme", StringComparison.OrdinalIgnoreCase))
+        if ((string.IsNullOrWhiteSpace(sharedSecret) ||
+             sharedSecret.Equals("changeme", StringComparison.OrdinalIgnoreCase)) &&
+            !(isLoopback && allowInsecureDevSecret))
         {
-            if (!(isLoopback && allowInsecureDevSecret))
-            {
-                throw new InvalidOperationException(
-                    "Plus control plane requires a non-default shared secret " +
-                    "(set controlPlane.sharedSecret). For loopback-only dev, set TITANIUM_PLUS_ALLOW_DEV_SECRET=1.");
-            }
+            throw new InvalidOperationException(
+                "Plus control plane requires a non-default shared secret " +
+                "(set controlPlane.sharedSecret). For loopback-only dev, set TITANIUM_PLUS_ALLOW_DEV_SECRET=1.");
         }
     }
 
@@ -85,14 +87,24 @@ public sealed class ControlPlaneServer : IDisposable
         _listener = new HttpListener();
         _listener.Prefixes.Add(Prefix);
         _listener.Start();
-        _ = Task.Run(() => AcceptLoopAsync(_cts.Token));
+        _ = Task.Run(() => AcceptLoopAsync(_cts.Token), _cts.Token);
     }
 
     public void Dispose()
     {
-        _cts?.Cancel();
+        try
+        {
+            _cts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // already disposed
+        }
+
         _listener?.Stop();
         _listener?.Close();
+        _cts?.Dispose();
+        _cts = null;
     }
 
     private async Task AcceptLoopAsync(CancellationToken cancellationToken)
@@ -113,46 +125,46 @@ public sealed class ControlPlaneServer : IDisposable
                 continue;
             }
 
-            _ = Task.Run(() => HandleAsync(ctx), cancellationToken);
+            _ = Task.Run(() => HandleAsync(ctx, cancellationToken), cancellationToken);
         }
     }
 
-    private async Task HandleAsync(HttpListenerContext ctx)
+    private async Task HandleAsync(HttpListenerContext ctx, CancellationToken cancellationToken)
     {
         try
         {
             if (!Authorize(ctx.Request))
             {
                 ctx.Response.StatusCode = 401;
-                await WriteAsync(ctx.Response, "unauthorized");
+                await WriteAsync(ctx.Response, "unauthorized", cancellationToken);
                 return;
             }
 
             var path = ctx.Request.Url?.AbsolutePath.TrimEnd('/') ?? "";
-            if (path.Equals("/v1/snapshot", StringComparison.OrdinalIgnoreCase))
+            var method = ctx.Request.HttpMethod;
+            if (path.Equals("/v1/snapshot", StringComparison.OrdinalIgnoreCase) &&
+                method.Equals("GET", StringComparison.OrdinalIgnoreCase))
             {
-                if (ctx.Request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase))
-                {
-                    await HandleGetSnapshotAsync(ctx);
-                    return;
-                }
+                await HandleGetSnapshotAsync(ctx, cancellationToken);
+                return;
+            }
 
-                if (ctx.Request.HttpMethod.Equals("PUT", StringComparison.OrdinalIgnoreCase))
-                {
-                    await HandlePutSnapshotAsync(ctx);
-                    return;
-                }
+            if (path.Equals("/v1/snapshot", StringComparison.OrdinalIgnoreCase) &&
+                method.Equals("PUT", StringComparison.OrdinalIgnoreCase))
+            {
+                await HandlePutSnapshotAsync(ctx, cancellationToken);
+                return;
             }
 
             if (path.Equals("/v1/cache/purge", StringComparison.OrdinalIgnoreCase) &&
-                ctx.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
+                method.Equals("POST", StringComparison.OrdinalIgnoreCase))
             {
-                await HandleCachePurgeAsync(ctx);
+                await HandleCachePurgeAsync(ctx, cancellationToken);
                 return;
             }
 
             ctx.Response.StatusCode = 404;
-            await WriteAsync(ctx.Response, "not found");
+            await WriteAsync(ctx.Response, "not found", cancellationToken);
         }
         catch
         {
@@ -168,7 +180,7 @@ public sealed class ControlPlaneServer : IDisposable
         }
     }
 
-    private async Task HandleGetSnapshotAsync(HttpListenerContext ctx)
+    private async Task HandleGetSnapshotAsync(HttpListenerContext ctx, CancellationToken cancellationToken)
     {
         var snap = _clusters?.Snapshot ?? ImmutableClusterSnapshot.Empty;
         var json = JsonSerializer.Serialize(new
@@ -193,19 +205,19 @@ public sealed class ControlPlaneServer : IDisposable
             destinationStates = snap.DestinationStates,
         }, JsonOptions);
         ctx.Response.ContentType = "application/json";
-        await WriteAsync(ctx.Response, json);
+        await WriteAsync(ctx.Response, json, cancellationToken);
     }
 
-    private async Task HandlePutSnapshotAsync(HttpListenerContext ctx)
+    private async Task HandlePutSnapshotAsync(HttpListenerContext ctx, CancellationToken cancellationToken)
     {
         using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
-        var body = await reader.ReadToEndAsync();
+        var body = await reader.ReadToEndAsync(cancellationToken);
         try
         {
             if (!TryParseSnapshotBody(body, out var clusters, out var routes, out var error))
             {
                 ctx.Response.StatusCode = 400;
-                await WriteAsync(ctx.Response, JsonSerializer.Serialize(new { error }, JsonOptions));
+                await WriteAsync(ctx.Response, JsonSerializer.Serialize(new { error }, JsonOptions), cancellationToken);
                 return;
             }
 
@@ -214,11 +226,11 @@ public sealed class ControlPlaneServer : IDisposable
                 if (_clusters is null)
                 {
                     ctx.Response.StatusCode = 503;
-                    await WriteAsync(ctx.Response, "{\"error\":\"no cluster manager\"}");
+                    await WriteAsync(ctx.Response, "{\"error\":\"no cluster manager\"}", cancellationToken);
                     return;
                 }
 
-                await _clusters.ApplyAsync(clusters);
+                await _clusters.ApplyAsync(clusters, cancellationToken);
             }
 
             if (routes is not null)
@@ -226,7 +238,7 @@ public sealed class ControlPlaneServer : IDisposable
                 if (_routes is null)
                 {
                     ctx.Response.StatusCode = 503;
-                    await WriteAsync(ctx.Response, "{\"error\":\"no routes list\"}");
+                    await WriteAsync(ctx.Response, "{\"error\":\"no routes list\"}", cancellationToken);
                     return;
                 }
 
@@ -244,28 +256,28 @@ public sealed class ControlPlaneServer : IDisposable
                 status = "applied",
                 clusters = clusters?.Count,
                 routes = routes?.Count,
-            }, JsonOptions));
+            }, JsonOptions), cancellationToken);
         }
         catch (Exception ex)
         {
             ctx.Response.StatusCode = 400;
-            await WriteAsync(ctx.Response, JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions));
+            await WriteAsync(ctx.Response, JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions), cancellationToken);
         }
     }
 
-    private async Task HandleCachePurgeAsync(HttpListenerContext ctx)
+    private async Task HandleCachePurgeAsync(HttpListenerContext ctx, CancellationToken cancellationToken)
     {
         if (_responseCache is null)
         {
             ctx.Response.StatusCode = 503;
-            await WriteAsync(ctx.Response, "{\"error\":\"no response cache\"}");
+            await WriteAsync(ctx.Response, "{\"error\":\"no response cache\"}", cancellationToken);
             return;
         }
 
         var prefix = ctx.Request.QueryString["prefix"];
         var removed = _responseCache.Purge(string.IsNullOrEmpty(prefix) ? null : prefix);
         ctx.Response.StatusCode = 200;
-        await WriteAsync(ctx.Response, JsonSerializer.Serialize(new { status = "purged", removed }, JsonOptions));
+        await WriteAsync(ctx.Response, JsonSerializer.Serialize(new { status = "purged", removed }, JsonOptions), cancellationToken);
     }
 
     /// <summary>
@@ -330,11 +342,11 @@ public sealed class ControlPlaneServer : IDisposable
                string.Equals(header, _sharedSecret, StringComparison.Ordinal);
     }
 
-    private static async Task WriteAsync(HttpListenerResponse response, string text)
+    private static async Task WriteAsync(HttpListenerResponse response, string text, CancellationToken cancellationToken)
     {
         var bytes = Encoding.UTF8.GetBytes(text);
         response.ContentLength64 = bytes.Length;
-        await response.OutputStream.WriteAsync(bytes);
+        await response.OutputStream.WriteAsync(bytes, cancellationToken);
         response.Close();
     }
 }

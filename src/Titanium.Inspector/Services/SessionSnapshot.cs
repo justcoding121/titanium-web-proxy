@@ -138,8 +138,18 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         set => SetField(ref _ttfbMs, value);
     }
 
-    public string ProcessDisplay =>
-        string.IsNullOrEmpty(ProcessName) ? (ProcessId > 0 ? ProcessId.ToString() : "") : $"{ProcessName}:{ProcessId}";
+    public string ProcessDisplay
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(ProcessName))
+            {
+                return $"{ProcessName}:{ProcessId}";
+            }
+
+            return ProcessId > 0 ? ProcessId.ToString() : "";
+        }
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

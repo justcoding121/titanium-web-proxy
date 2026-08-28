@@ -1,3 +1,5 @@
+using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Configuration.Models;
 
 namespace Titanium.Web.Proxy.Configuration;
@@ -9,9 +11,16 @@ public static class TwpConfigValidator
     {
         ArgumentNullException.ThrowIfNull(config);
         var errors = new List<string>();
-        var clusterIds = new HashSet<string>(StringComparer.Ordinal);
+        var clusterIds = ValidateClusters(config.Clusters, errors);
+        ValidateRoutes(config.Routes, clusterIds, errors);
+        ValidateListeners(config.Listeners, errors);
+        return errors;
+    }
 
-        foreach (var cluster in config.Clusters)
+    private static HashSet<string> ValidateClusters(IEnumerable<ClusterConfig> clusters, List<string> errors)
+    {
+        var clusterIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var cluster in clusters)
         {
             if (string.IsNullOrWhiteSpace(cluster.Id))
             {
@@ -30,7 +39,15 @@ public static class TwpConfigValidator
             }
         }
 
-        foreach (var route in config.Routes)
+        return clusterIds;
+    }
+
+    private static void ValidateRoutes(
+        IEnumerable<RouteConfig> routes,
+        HashSet<string> clusterIds,
+        List<string> errors)
+    {
+        foreach (var route in routes)
         {
             if (string.IsNullOrWhiteSpace(route.Id))
             {
@@ -47,15 +64,16 @@ public static class TwpConfigValidator
                 errors.Add($"Route '{route.Id}' is missing Match.");
             }
         }
+    }
 
-        foreach (var listener in config.Listeners)
+    private static void ValidateListeners(IEnumerable<ListenerConfig> listeners, List<string> errors)
+    {
+        foreach (var listener in listeners)
         {
             if (listener.Port is < 1 or > 65535)
             {
                 errors.Add($"Listener port {listener.Port} is out of range.");
             }
         }
-
-        return errors;
     }
 }

@@ -6,6 +6,12 @@ namespace Titanium.Inspector.Services;
 /// <summary>Session search/filter syntax: method:, status:, host:, url:, body:, is:ws|grpc|tunnel|multipart</summary>
 public static class SessionSearch
 {
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
+    private static readonly Regex TokenRegex = new(
+        @"(\w+):(\S+)|(\S+)",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled,
+        RegexTimeout);
+
     public static IEnumerable<SessionSnapshot> Filter(IEnumerable<SessionSnapshot> sessions, string? query)
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -20,7 +26,7 @@ public static class SessionSearch
     private static List<(string Key, string Value)> Tokenize(string query)
     {
         var list = new List<(string, string)>();
-        foreach (Match m in Regex.Matches(query, @"(\w+):(\S+)|(\S+)"))
+        foreach (Match m in TokenRegex.Matches(query))
         {
             if (m.Groups[1].Success)
             {

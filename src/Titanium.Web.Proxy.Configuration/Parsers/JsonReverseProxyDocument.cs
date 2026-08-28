@@ -117,6 +117,8 @@ public static class JsonReverseProxyDocument
             _ => PathMatchKind.Prefix,
         };
 
+    // System.Text.Json populates these DTO setters via reflection; Sonar S1144 is a false positive.
+#pragma warning disable S1144
     private sealed class ReverseProxyDocument
     {
         public List<ListenerDto>? Listeners { get; set; }
@@ -169,4 +171,5 @@ public static class JsonReverseProxyDocument
         public bool? UseHttps { get; set; }
         public int? Weight { get; set; }
     }
+#pragma warning restore S1144
 }

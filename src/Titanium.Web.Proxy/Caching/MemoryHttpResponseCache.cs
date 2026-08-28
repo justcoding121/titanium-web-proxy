@@ -40,9 +40,16 @@ public sealed class MemoryHttpResponseCache : IHttpResponseCache
         ArgumentException.ThrowIfNullOrEmpty(cacheKey);
         ArgumentNullException.ThrowIfNull(response);
 
-        var expires = response.ExpiresUtc > DateTimeOffset.MinValue
-            ? response.ExpiresUtc
-            : DateTimeOffset.UtcNow + (ttl <= TimeSpan.Zero ? TimeSpan.FromMinutes(1) : ttl);
+        DateTimeOffset expires;
+        if (response.ExpiresUtc > DateTimeOffset.MinValue)
+        {
+            expires = response.ExpiresUtc;
+        }
+        else
+        {
+            var effectiveTtl = ttl <= TimeSpan.Zero ? TimeSpan.FromMinutes(1) : ttl;
+            expires = DateTimeOffset.UtcNow + effectiveTtl;
+        }
 
         _entries[cacheKey] = new CachedHttpResponse
         {

@@ -24,7 +24,7 @@ public sealed class TransformEngine : ITransformEngine
                     context.Path = context.Path[prefix.Length..];
                     if (context.Path.Length == 0 || context.Path[0] != '/')
                     {
-                        context.Path = "/" + context.Path;
+                        context.Path = string.Concat("/", context.Path); // NOSONAR S1075 -- origin-form path delimiter, not a URI.
                     }
 
                     break;

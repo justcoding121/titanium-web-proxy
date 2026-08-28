@@ -42,7 +42,12 @@ public static class ReverseProxyFastPath
             return false;
         }
 
-        var port = dest.Port == 0 ? (dest.UseHttps ? 443 : 80) : dest.Port;
+        var port = dest.Port;
+        if (port == 0)
+        {
+            port = dest.UseHttps ? 443 : 80;
+        }
+
         return string.Equals(dest.Address, forwardHost, StringComparison.OrdinalIgnoreCase) &&
                port == forwardPort;
     }

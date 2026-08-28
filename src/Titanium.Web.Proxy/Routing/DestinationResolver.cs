@@ -48,40 +48,53 @@ internal static class DestinationResolver
         return destination is not null;
     }
 
-    private static string? ExtractAffinityKey(Request request, ClusterConfig cluster)
+    private static string? ExtractAffinityKey(Request request, ClusterConfig cluster) =>
+        TryAffinityHeader(request, cluster.AffinityHeader) ??
+        TryAffinityCookie(request, cluster.AffinityCookie);
+
+    private static string? TryAffinityHeader(Request request, string? headerName)
     {
-        if (!string.IsNullOrEmpty(cluster.AffinityHeader))
+        if (string.IsNullOrEmpty(headerName))
         {
-            var headers = request.Headers.GetHeaders(cluster.AffinityHeader);
-            if (headers is { Count: > 0 } && !string.IsNullOrEmpty(headers[0].Value))
-            {
-                return headers[0].Value;
-            }
+            return null;
         }
 
-        if (!string.IsNullOrEmpty(cluster.AffinityCookie))
+        var headers = request.Headers.GetHeaders(headerName);
+        if (headers is not { Count: > 0 } || string.IsNullOrEmpty(headers[0].Value))
         {
-            var cookieHeaders = request.Headers.GetHeaders("Cookie");
-            if (cookieHeaders is null)
-            {
-                return null;
-            }
+            return null;
+        }
 
-            foreach (var header in cookieHeaders)
+        return headers[0].Value;
+    }
+
+    private static string? TryAffinityCookie(Request request, string? cookieName)
+    {
+        if (string.IsNullOrEmpty(cookieName))
+        {
+            return null;
+        }
+
+        var cookieHeaders = request.Headers.GetHeaders("Cookie");
+        if (cookieHeaders is null)
+        {
+            return null;
+        }
+
+        foreach (var header in cookieHeaders)
+        {
+            foreach (var part in header.Value.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
             {
-                foreach (var part in header.Value.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                var eq = part.IndexOf('=');
+                if (eq <= 0)
                 {
-                    var eq = part.IndexOf('=');
-                    if (eq <= 0)
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
-                    var name = part[..eq];
-                    if (name.Equals(cluster.AffinityCookie, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return part[(eq + 1)..];
-                    }
+                var name = part[..eq];
+                if (name.Equals(cookieName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return part[(eq + 1)..];
                 }
             }
         }

@@ -35,80 +35,55 @@ public sealed class RouteMatcher : IRouteMatcher
         return best;
     }
 
-    private static bool Matches(RouteMatch match, RouteMatchContext context)
+    private static bool Matches(RouteMatch match, RouteMatchContext context) =>
+        HostMatches(match.Host, context.Host) &&
+        MethodMatches(match.Method, context.Method) &&
+        PathConstraintMatches(match, context) &&
+        DictionaryMatches(match.Headers, context.Headers, ignoreCase: true) &&
+        DictionaryMatches(match.Query, context.Query, ignoreCase: false);
+
+    private static bool HostMatches(string? expected, string? actual) =>
+        string.IsNullOrEmpty(expected) ||
+        string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase);
+
+    private static bool MethodMatches(string? expected, string? actual) =>
+        string.IsNullOrEmpty(expected) ||
+        string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase);
+
+    private static bool PathConstraintMatches(RouteMatch match, RouteMatchContext context) =>
+        string.IsNullOrEmpty(match.Path) ||
+        PathMatches(match.Path, match.PathKind, context.Path ?? "/");
+
+    private static bool PathMatches(string matchPath, PathMatchKind kind, string path) =>
+        kind switch
+        {
+            PathMatchKind.Exact => string.Equals(path, matchPath, StringComparison.Ordinal),
+            PathMatchKind.Template => TemplateMatches(matchPath, path),
+            _ => path.StartsWith(matchPath, StringComparison.Ordinal),
+        };
+
+    private static bool DictionaryMatches(
+        IReadOnlyDictionary<string, string>? expected,
+        IReadOnlyDictionary<string, string>? actual,
+        bool ignoreCase)
     {
-        if (!string.IsNullOrEmpty(match.Host) &&
-            !string.Equals(match.Host, context.Host, StringComparison.OrdinalIgnoreCase))
+        if (expected is not { Count: > 0 })
+        {
+            return true;
+        }
+
+        if (actual is null)
         {
             return false;
         }
 
-        if (!string.IsNullOrEmpty(match.Method) &&
-            !string.Equals(match.Method, context.Method, StringComparison.OrdinalIgnoreCase))
+        var comparison = ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        foreach (var (key, value) in expected)
         {
-            return false;
-        }
-
-        if (!string.IsNullOrEmpty(match.Path))
-        {
-            var path = context.Path ?? "/";
-            switch (match.PathKind)
-            {
-                case PathMatchKind.Exact:
-                    if (!string.Equals(path, match.Path, StringComparison.Ordinal))
-                    {
-                        return false;
-                    }
-
-                    break;
-                case PathMatchKind.Template:
-                    if (!TemplateMatches(match.Path!, path))
-                    {
-                        return false;
-                    }
-
-                    break;
-                default:
-                    if (!path.StartsWith(match.Path!, StringComparison.Ordinal))
-                    {
-                        return false;
-                    }
-
-                    break;
-            }
-        }
-
-        if (match.Headers is { Count: > 0 })
-        {
-            if (context.Headers is null)
+            if (!actual.TryGetValue(key, out var found) ||
+                !string.Equals(found, value, comparison))
             {
                 return false;
-            }
-
-            foreach (var (key, value) in match.Headers)
-            {
-                if (!context.Headers.TryGetValue(key, out var actual) ||
-                    !string.Equals(actual, value, StringComparison.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
-            }
-        }
-
-        if (match.Query is { Count: > 0 })
-        {
-            if (context.Query is null)
-            {
-                return false;
-            }
-
-            foreach (var (key, value) in match.Query)
-            {
-                if (!context.Query.TryGetValue(key, out var actual) ||
-                    !string.Equals(actual, value, StringComparison.Ordinal))
-                {
-                    return false;
-                }
             }
         }
 

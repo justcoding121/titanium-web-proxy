@@ -12,14 +12,7 @@ public static class HttpServerConfigReader
     public static TwpConfig Parse(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var listeners = new List<ListenerConfig>();
-        var routes = new List<RouteConfig>();
-        var clusters = new List<ClusterConfig>();
-
-        string? serverName = null;
-        int? listenPort = null;
-        string? locationPath = null;
-        var order = 0;
+        var state = new ParseState();
 
         foreach (var raw in text.Split('\n'))
         {
@@ -29,80 +22,76 @@ public static class HttpServerConfigReader
                 continue;
             }
 
-            if (line.StartsWith("listen ", StringComparison.OrdinalIgnoreCase))
-            {
-                var token = line["listen ".Length..].Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
-                if (int.TryParse(token.TrimEnd('s'), out var port))
-                {
-                    listenPort = port;
-                }
-            }
-            else if (line.StartsWith("server_name ", StringComparison.OrdinalIgnoreCase))
-            {
-                serverName = line["server_name ".Length..].Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
-            }
-            else if (line.StartsWith("location ", StringComparison.OrdinalIgnoreCase))
-            {
-                locationPath = line["location ".Length..].Trim().Trim('{', '}', ' ');
-            }
-            else if (line.StartsWith("proxy_pass ", StringComparison.OrdinalIgnoreCase))
-            {
-                var pass = line["proxy_pass ".Length..].Trim().TrimEnd('/');
-                ParseProxyPass(pass, out var address, out var port, out var https);
-                var clusterId = $"http-srv-{clusters.Count + 1}";
-                clusters.Add(new ClusterConfig
-                {
-                    Id = clusterId,
-                    Destinations =
-                    [
-                        new DestinationConfig
-                        {
-                            Id = $"{clusterId}-d0",
-                            Address = address,
-                            Port = port,
-                            UseHttps = https,
-                        },
-                    ],
-                });
-
-                routes.Add(new RouteConfig
-                {
-                    Id = $"route-{routes.Count + 1}",
-                    ClusterId = clusterId,
-                    Order = order++,
-                    Match = new RouteMatch
-                    {
-                        Host = serverName,
-                        Path = string.IsNullOrEmpty(locationPath) ? "/" : locationPath,
-                        PathKind = PathMatchKind.Prefix,
-                    },
-                });
-            }
+            ApplyDirective(line, state);
         }
 
-        if (listenPort is int p)
-        {
-            listeners.Add(new ListenerConfig
-            {
-                Port = p,
-                ForwardHost = routes.Count == 1
-                    ? clusters[0].Destinations[0].Address
-                    : null,
-                ForwardPort = routes.Count == 1
-                    ? clusters[0].Destinations[0].Port
-                    : null,
-            });
-        }
-
-        return new TwpConfig
-        {
-            Listeners = listeners,
-            Routes = routes,
-            Clusters = clusters,
-        };
+        return state.ToConfig();
     }
 
     public static TwpConfig ParseFile(string path) => Parse(File.ReadAllText(path));
+
+    private static void ApplyDirective(string line, ParseState state)
+    {
+        if (line.StartsWith("listen ", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyListen(line, state);
+        }
+        else if (line.StartsWith("server_name ", StringComparison.OrdinalIgnoreCase))
+        {
+            state.ServerName = line["server_name ".Length..].Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+        }
+        else if (line.StartsWith("location ", StringComparison.OrdinalIgnoreCase))
+        {
+            state.LocationPath = line["location ".Length..].Trim().Trim('{', '}', ' ');
+        }
+        else if (line.StartsWith("proxy_pass ", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyProxyPass(line, state);
+        }
+    }
+
+    private static void ApplyListen(string line, ParseState state)
+    {
+        var token = line["listen ".Length..].Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+        if (int.TryParse(token.TrimEnd('s'), out var port))
+        {
+            state.ListenPort = port;
+        }
+    }
+
+    private static void ApplyProxyPass(string line, ParseState state)
+    {
+        var pass = line["proxy_pass ".Length..].Trim().TrimEnd('/');
+        ParseProxyPass(pass, out var address, out var port, out var https);
+        var clusterId = $"http-srv-{state.Clusters.Count + 1}";
+        state.Clusters.Add(new ClusterConfig
+        {
+            Id = clusterId,
+            Destinations =
+            [
+                new DestinationConfig
+                {
+                    Id = $"{clusterId}-d0",
+                    Address = address,
+                    Port = port,
+                    UseHttps = https,
+                },
+            ],
+        });
+
+        state.Routes.Add(new RouteConfig
+        {
+            Id = $"route-{state.Routes.Count + 1}",
+            ClusterId = clusterId,
+            Order = state.Order++,
+            Match = new RouteMatch
+            {
+                Host = state.ServerName,
+                Path = string.IsNullOrEmpty(state.LocationPath) ? "/" : state.LocationPath,
+                PathKind = PathMatchKind.Prefix,
+            },
+        });
+    }
 
     private static string StripComment(string line)
     {
@@ -139,5 +128,40 @@ public static class HttpServerConfigReader
 
         address = value;
         port = https ? 443 : 80;
+    }
+
+    private sealed class ParseState
+    {
+        public string? ServerName { get; set; }
+        public int? ListenPort { get; set; }
+        public string? LocationPath { get; set; }
+        public int Order { get; set; }
+        public List<ListenerConfig> Listeners { get; } = [];
+        public List<RouteConfig> Routes { get; } = [];
+        public List<ClusterConfig> Clusters { get; } = [];
+
+        public TwpConfig ToConfig()
+        {
+            if (ListenPort is int p)
+            {
+                Listeners.Add(new ListenerConfig
+                {
+                    Port = p,
+                    ForwardHost = Routes.Count == 1
+                        ? Clusters[0].Destinations[0].Address
+                        : null,
+                    ForwardPort = Routes.Count == 1
+                        ? Clusters[0].Destinations[0].Port
+                        : null,
+                });
+            }
+
+            return new TwpConfig
+            {
+                Listeners = Listeners,
+                Routes = Routes,
+                Clusters = Clusters,
+            };
+        }
     }
 }

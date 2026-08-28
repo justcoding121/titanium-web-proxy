@@ -12,6 +12,7 @@ public static class ReplayService
         string? editedMethod = null,
         string? editedBody = null,
         string? editedHeaders = null,
+        bool ignoreServerCertificateErrors = false,
         CancellationToken cancellationToken = default)
     {
         var url = editedUrl ?? session.Url;
@@ -23,8 +24,15 @@ public static class ReplayService
         using var handler = new HttpClientHandler
         {
             AllowAutoRedirect = false,
-            ServerCertificateCustomValidationCallback = static (_, _, _, _) => true,
         };
+        if (ignoreServerCertificateErrors)
+        {
+            // Opt-in only when Inspector setting "ignore server certificate errors" is enabled (MITM lab hosts).
+#pragma warning disable S4830
+            handler.ServerCertificateCustomValidationCallback = static (_, _, _, _) => true;
+#pragma warning restore S4830
+        }
+
         using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(60) };
         using var request = new HttpRequestMessage(new HttpMethod(editedMethod ?? session.Method), url);
 

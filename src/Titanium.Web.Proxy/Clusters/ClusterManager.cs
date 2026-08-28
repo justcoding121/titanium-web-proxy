@@ -16,7 +16,7 @@ public sealed class ClusterManager : IClusterManager
 {
     private ImmutableClusterSnapshot _snapshot = ImmutableClusterSnapshot.Empty;
 
-    public ImmutableClusterSnapshot Snapshot => Volatile.Read(ref _snapshot!);
+    public ImmutableClusterSnapshot Snapshot => Volatile.Read(ref _snapshot);
 
     public ValueTask ApplyAsync(IReadOnlyList<ClusterConfig> clusters, CancellationToken cancellationToken = default)
     {

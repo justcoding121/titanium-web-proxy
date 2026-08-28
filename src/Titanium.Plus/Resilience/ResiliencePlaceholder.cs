@@ -39,7 +39,8 @@ public sealed class ResilienceController : IDisposable
 
         var controller = new ResilienceController(TimeSpan.FromMilliseconds(Math.Max(250, timeoutMs)));
         _ = Task.Run(() => controller.LoopAsync(
-            context.ClusterManager, intervalMs, threshold, path, protocol, controller._cts.Token));
+            context.ClusterManager, intervalMs, threshold, path, protocol, controller._cts.Token),
+            controller._cts.Token);
         Console.WriteLine(
             $"Plus Resilience: active health interval={intervalMs}ms protocol={protocol} path={path} threshold={threshold}");
         return controller;

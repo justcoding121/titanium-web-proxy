@@ -260,6 +260,98 @@ public class DestinationResolverTests
     }
 
     [TestMethod]
+    public async Task TryResolve_AffinityHeader_SelectsDestination()
+    {
+        var manager = new ClusterManager();
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c1",
+                AffinityHeader = "X-Backend",
+                Destinations =
+                [
+                    new DestinationConfig { Id = "d1", Address = "10.0.0.1", Port = 80 },
+                    new DestinationConfig { Id = "d2", Address = "10.0.0.2", Port = 80 },
+                ],
+            },
+        ]);
+
+        var options = new Abstractions.ReverseProxyOptions
+        {
+            Routes =
+            [
+                new RouteConfig
+                {
+                    Id = "r1",
+                    ClusterId = "c1",
+                    Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+                },
+            ],
+            ClusterManager = manager,
+            RouteMatcher = new RouteMatcher(),
+            LoadBalancer = new LoadBalancer(),
+        };
+
+        var request = new Http.Request
+        {
+            Method = "GET",
+            RequestUriString8 = (Models.ByteString)"/",
+            Host = "app.example",
+        };
+        request.Headers.AddHeader("X-Backend", "d2");
+
+        Assert.IsTrue(DestinationResolver.TryResolve(options, request, "fallback", 80, out var dest, out _));
+        Assert.AreEqual("d2", dest?.Id);
+    }
+
+    [TestMethod]
+    public async Task TryResolve_AffinityCookie_SelectsDestination()
+    {
+        var manager = new ClusterManager();
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c1",
+                AffinityCookie = "ROUTEID",
+                Destinations =
+                [
+                    new DestinationConfig { Id = "d1", Address = "10.0.0.1", Port = 80 },
+                    new DestinationConfig { Id = "d2", Address = "10.0.0.2", Port = 80 },
+                ],
+            },
+        ]);
+
+        var options = new Abstractions.ReverseProxyOptions
+        {
+            Routes =
+            [
+                new RouteConfig
+                {
+                    Id = "r1",
+                    ClusterId = "c1",
+                    Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+                },
+            ],
+            ClusterManager = manager,
+            RouteMatcher = new RouteMatcher(),
+            LoadBalancer = new LoadBalancer(),
+        };
+
+        var request = new Http.Request
+        {
+            Method = "GET",
+            RequestUriString8 = (Models.ByteString)"/",
+            Host = "app.example",
+        };
+        request.Headers.AddHeader("Cookie", "ROUTEID=d1; other=1");
+
+        Assert.IsTrue(DestinationResolver.TryResolve(options, request, "fallback", 80, out var dest, out _));
+        Assert.AreEqual("d1", dest?.Id);
+    }
+
+    [TestMethod]
     public void StreamTrySelect_BuildsPoolKey()
     {
         var manager = new ClusterManager();
@@ -365,5 +457,87 @@ public class LoadBalancerAlgorithmTests
         };
 
         Assert.AreEqual("fast", lb.Select(cluster, ImmutableClusterSnapshot.Empty)?.Id);
+    }
+
+    [TestMethod]
+    public void AffinityKey_SelectsMatchingDestination()
+    {
+        var lb = new LoadBalancer();
+        var cluster = new ClusterConfig
+        {
+            Id = "c1",
+            AffinityCookie = "stick",
+            Destinations =
+            [
+                new DestinationConfig { Id = "d1", Address = "10.0.0.1", Port = 80 },
+                new DestinationConfig { Id = "d2", Address = "10.0.0.2", Port = 80 },
+            ],
+        };
+
+        var selected = lb.Select(cluster, ImmutableClusterSnapshot.Empty, new LoadBalanceContext("d2"));
+        Assert.AreEqual("d2", selected?.Id);
+    }
+
+    [TestMethod]
+    public void AffinityKey_UnknownFallsBackToAlgorithm()
+    {
+        var lb = new LoadBalancer();
+        var cluster = new ClusterConfig
+        {
+            Id = "c1",
+            Destinations =
+            [
+                new DestinationConfig { Id = "only", Address = "10.0.0.1", Port = 80 },
+            ],
+        };
+
+        var selected = lb.Select(cluster, ImmutableClusterSnapshot.Empty, new LoadBalanceContext("missing"));
+        Assert.AreEqual("only", selected?.Id);
+    }
+}
+
+[TestClass]
+public class DestinationHealthTrackerTests
+{
+    [TestMethod]
+    public async Task ReportFailure_MarksUnhealthy_AfterThreshold()
+    {
+        var manager = new ClusterManager();
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c1",
+                Destinations = [new DestinationConfig { Id = "d1", Address = "10.0.0.1", Port = 80 }],
+            },
+        ]);
+
+        var tracker = new DestinationHealthTracker();
+        tracker.ReportFailure("d1", manager, unhealthyThreshold: 3);
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("d1"));
+        tracker.ReportFailure("d1", manager, unhealthyThreshold: 3);
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("d1"));
+        tracker.ReportFailure("d1", manager, unhealthyThreshold: 3);
+        Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("d1"));
+    }
+
+    [TestMethod]
+    public async Task ReportSuccess_ResetsFailureCount()
+    {
+        var manager = new ClusterManager();
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c1",
+                Destinations = [new DestinationConfig { Id = "d1", Address = "10.0.0.1", Port = 80 }],
+            },
+        ]);
+
+        var tracker = new DestinationHealthTracker();
+        tracker.ReportFailure("d1", manager, unhealthyThreshold: 2);
+        tracker.ReportSuccess("d1");
+        tracker.ReportFailure("d1", manager, unhealthyThreshold: 2);
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("d1"));
     }
 }

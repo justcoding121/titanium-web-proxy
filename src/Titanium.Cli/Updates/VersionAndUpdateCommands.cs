@@ -25,7 +25,7 @@ internal static class VersionCommand
         var manifest = await client.TryGetManifestAsync();
         if (manifest is null)
         {
-            Console.Error.WriteLine("Unable to query update feed.");
+            await Console.Error.WriteLineAsync("Unable to query update feed.");
             return 1;
         }
 
@@ -148,7 +148,7 @@ internal static class UpdateCommand
         var manifest = await client.TryGetManifestAsync();
         if (manifest is null)
         {
-            Console.Error.WriteLine("Unable to query update feed.");
+            await Console.Error.WriteLineAsync("Unable to query update feed.");
             return 1;
         }
 
@@ -161,7 +161,13 @@ internal static class UpdateCommand
         {
             try
             {
-                var psi = new ProcessStartInfo("winget", "upgrade --id justcoding121.TitaniumCli -e --accept-package-agreements --accept-source-agreements")
+                var winget = ResolveWingetPath();
+                if (winget is null)
+                {
+                    throw new FileNotFoundException("winget.exe not found");
+                }
+
+                var psi = new ProcessStartInfo(winget, "upgrade --id justcoding121.TitaniumCli -e --accept-package-agreements --accept-source-agreements")
                 {
                     UseShellExecute = false,
                 };
@@ -202,7 +208,7 @@ internal static class UpdateCommand
                 var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
                 if (!hash.Equals(asset.Sha256, StringComparison.OrdinalIgnoreCase))
                 {
-                    Console.Error.WriteLine("SHA256 mismatch — aborting update.");
+                    await Console.Error.WriteLineAsync("SHA256 mismatch — aborting update.");
                     return 1;
                 }
             }
@@ -235,7 +241,7 @@ internal static class UpdateCommand
             var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
             if (!hash.Equals(asset.Sha256, StringComparison.OrdinalIgnoreCase))
             {
-                Console.Error.WriteLine("SHA256 mismatch — aborting Plus update.");
+                await Console.Error.WriteLineAsync("SHA256 mismatch — aborting Plus update.");
                 return 1;
             }
         }
@@ -264,10 +270,52 @@ internal static class UpdateCommand
 
         return "linux-x64";
     }
+
+    private static string? ResolveWingetPath()
+    {
+        var localApps = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Microsoft",
+            "WindowsApps",
+            "winget.exe");
+        if (File.Exists(localApps))
+        {
+            return localApps;
+        }
+
+        return TryFindWingetUnderProgramFiles();
+    }
+
+    private static string? TryFindWingetUnderProgramFiles()
+    {
+        var programFiles = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "WindowsApps");
+        if (!Directory.Exists(programFiles))
+        {
+            return null;
+        }
+
+        try
+        {
+            return Directory.EnumerateFiles(programFiles, "winget.exe", SearchOption.AllDirectories)
+                .FirstOrDefault();
+        }
+        catch
+        {
+            // WindowsApps may deny enumeration.
+            return null;
+        }
+    }
 }
 
 internal sealed class UpdateFeedClient
 {
+    private static readonly JsonSerializerOptions ManifestJson = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
     private readonly string _channel;
 
     public UpdateFeedClient(string channel) => _channel = channel;
@@ -288,10 +336,7 @@ internal sealed class UpdateFeedClient
             if (!string.IsNullOrEmpty(feed))
             {
                 var json = await http.GetStringAsync(feed);
-                return JsonSerializer.Deserialize<ReleaseManifest>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true,
-                });
+                return JsonSerializer.Deserialize<ReleaseManifest>(json, ManifestJson);
             }
 
             // Prefer release-manifest.json asset on latest (or first prerelease for beta).
@@ -301,59 +346,79 @@ internal sealed class UpdateFeedClient
 
             var payload = await http.GetStringAsync(api);
             using var doc = JsonDocument.Parse(payload);
-            JsonElement release = default;
-            if (_channel.Equals("beta", StringComparison.OrdinalIgnoreCase))
+            if (!TrySelectRelease(doc.RootElement, out var release))
             {
-                foreach (var el in doc.RootElement.EnumerateArray())
-                {
-                    if (el.TryGetProperty("prerelease", out var pre) && pre.GetBoolean())
-                    {
-                        release = el;
-                        break;
-                    }
-                }
-
-                if (release.ValueKind == JsonValueKind.Undefined)
-                {
-                    return null;
-                }
-            }
-            else
-            {
-                release = doc.RootElement;
+                return null;
             }
 
             var version = release.GetProperty("tag_name").GetString()?.TrimStart('v') ?? "0.0.0";
-            if (release.TryGetProperty("assets", out var assets))
-            {
-                foreach (var asset in assets.EnumerateArray())
-                {
-                    var name = asset.GetProperty("name").GetString() ?? "";
-                    if (name.Equals("release-manifest.json", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var url = asset.GetProperty("browser_download_url").GetString();
-                        if (url is not null)
-                        {
-                            var manifestJson = await http.GetStringAsync(url);
-                            var manifest = JsonSerializer.Deserialize<ReleaseManifest>(manifestJson,
-                                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                            if (manifest is not null)
-                            {
-                                manifest.Version ??= version;
-                                manifest.Channel ??= _channel;
-                                return manifest;
-                            }
-                        }
-                    }
-                }
-            }
-
-            return new ReleaseManifest { Version = version, Channel = _channel };
+            var fromAsset = await TryLoadManifestAssetAsync(http, release, version);
+            return fromAsset ?? new ReleaseManifest { Version = version, Channel = _channel };
         }
         catch
         {
             return null;
         }
+    }
+
+    private bool TrySelectRelease(JsonElement root, out JsonElement release)
+    {
+        release = default;
+        if (_channel.Equals("beta", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var el in root.EnumerateArray())
+            {
+                if (el.TryGetProperty("prerelease", out var pre) && pre.GetBoolean())
+                {
+                    release = el;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        release = root;
+        return true;
+    }
+
+    private async Task<ReleaseManifest?> TryLoadManifestAssetAsync(
+        HttpClient http,
+        JsonElement release,
+        string version)
+    {
+        if (!release.TryGetProperty("assets", out var assets))
+        {
+            return null;
+        }
+
+        foreach (var asset in assets.EnumerateArray())
+        {
+            var name = asset.GetProperty("name").GetString() ?? "";
+            if (!name.Equals("release-manifest.json", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var url = asset.GetProperty("browser_download_url").GetString();
+            if (url is null)
+            {
+                continue;
+            }
+
+            var manifestJson = await http.GetStringAsync(url);
+            var manifest = JsonSerializer.Deserialize<ReleaseManifest>(manifestJson, ManifestJson);
+            if (manifest is null)
+            {
+                continue;
+            }
+
+            manifest.Version ??= version;
+            manifest.Channel ??= _channel;
+            return manifest;
+        }
+
+        return null;
     }
 }
 
