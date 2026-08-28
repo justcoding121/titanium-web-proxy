@@ -5,9 +5,9 @@
   <head>
     <meta charset="utf-8">
       <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-      <title>Namespace Titanium.Web.Proxy.Clusters | Titanium Web Proxy </title>
+      <title>Namespace Titanium.Web.Proxy.Caching | Titanium Web Proxy </title>
       <meta name="viewport" content="width=device-width">
-      <meta name="title" content="Namespace Titanium.Web.Proxy.Clusters | Titanium Web Proxy ">
+      <meta name="title" content="Namespace Titanium.Web.Proxy.Caching | Titanium Web Proxy ">
     
     
       <link rel="shortcut icon" href="../favicon.ico">
@@ -76,24 +76,21 @@
         </div>
         <div class="article row grid-right">
           <div class="col-md-10">
-            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Clusters">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Caching">
 
-  <h1 id="Titanium_Web_Proxy_Clusters" data-uid="Titanium.Web.Proxy.Clusters" class="text-break">Namespace Titanium.Web.Proxy.Clusters</h1>
+  <h1 id="Titanium_Web_Proxy_Caching" data-uid="Titanium.Web.Proxy.Caching" class="text-break">Namespace Titanium.Web.Proxy.Caching</h1>
   <div class="markdown level0 summary"></div>
   <div class="markdown level0 conceptual"></div>
   <div class="markdown level0 remarks"></div>
     <h3 id="classes">
 Classes
 </h3>
-      <h4><a class="xref" href="Titanium.Web.Proxy.Clusters.ClusterManager.html">ClusterManager</a></h4>
-      <section><p>Thread-safe cluster manager. Snapshot is swapped with Interlocked.Exchange;
-in-flight sessions keep the previous snapshot reference.</p>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.html">HttpResponseCacheMiddleware</a></h4>
+      <section><p>GET/HEAD response cache middleware. Only allocated when placed in the middleware list;
+otherwise the hot path pays nothing.</p>
 </section>
-      <h4><a class="xref" href="Titanium.Web.Proxy.Clusters.DestinationHealthTracker.html">DestinationHealthTracker</a></h4>
-      <section><p>Passive health bookkeeping and active-request counters for destination pools.</p>
-</section>
-      <h4><a class="xref" href="Titanium.Web.Proxy.Clusters.LoadBalancer.html">LoadBalancer</a></h4>
-      <section><p>Selects destinations, skipping Draining/Maintenance/Unhealthy. Honors weight, least-requests, least-time, and affinity.</p>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html">MemoryHttpResponseCache</a></h4>
+      <section><p>In-process GET/HEAD response cache. Zero cost when unused (not registered in middleware).</p>
 </section>
 
 

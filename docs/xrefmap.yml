@@ -7,6 +7,130 @@ references:
   commentId: N:Titanium.Web.Proxy
   fullName: Titanium.Web.Proxy
   nameWithType: Titanium.Web.Proxy
+- uid: Titanium.Web.Proxy.Caching
+  name: Titanium.Web.Proxy.Caching
+  href: api/Titanium.Web.Proxy.Caching.html
+  commentId: N:Titanium.Web.Proxy.Caching
+  fullName: Titanium.Web.Proxy.Caching
+  nameWithType: Titanium.Web.Proxy.Caching
+- uid: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware
+  name: HttpResponseCacheMiddleware
+  href: api/Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.html
+  commentId: T:Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware
+  fullName: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware
+  nameWithType: HttpResponseCacheMiddleware
+- uid: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.#ctor(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache,System.Nullable{System.TimeSpan})
+  name: HttpResponseCacheMiddleware(IHttpResponseCache, TimeSpan?)
+  href: api/Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.html#Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware__ctor_Titanium_Web_Proxy_Abstractions_Plugins_IHttpResponseCache_System_Nullable_System_TimeSpan__
+  commentId: M:Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.#ctor(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache,System.Nullable{System.TimeSpan})
+  name.vb: New(IHttpResponseCache, TimeSpan?)
+  fullName: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.HttpResponseCacheMiddleware(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache, System.TimeSpan?)
+  fullName.vb: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.New(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache, System.TimeSpan?)
+  nameWithType: HttpResponseCacheMiddleware.HttpResponseCacheMiddleware(IHttpResponseCache, TimeSpan?)
+  nameWithType.vb: HttpResponseCacheMiddleware.New(IHttpResponseCache, TimeSpan?)
+- uid: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.#ctor*
+  name: HttpResponseCacheMiddleware
+  href: api/Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.html#Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.#ctor
+  isSpec: "True"
+  name.vb: New
+  fullName: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.HttpResponseCacheMiddleware
+  fullName.vb: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.New
+  nameWithType: HttpResponseCacheMiddleware.HttpResponseCacheMiddleware
+  nameWithType.vb: HttpResponseCacheMiddleware.New
+- uid: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.InvokeAsync(Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext,Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareDelegate,System.Threading.CancellationToken)
+  name: InvokeAsync(ProxyMiddlewareContext, ProxyMiddlewareDelegate, CancellationToken)
+  href: api/Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.html#Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware_InvokeAsync_Titanium_Web_Proxy_Abstractions_Middleware_ProxyMiddlewareContext_Titanium_Web_Proxy_Abstractions_Middleware_ProxyMiddlewareDelegate_System_Threading_CancellationToken_
+  commentId: M:Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.InvokeAsync(Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext,Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareDelegate,System.Threading.CancellationToken)
+  fullName: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.InvokeAsync(Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext, Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareDelegate, System.Threading.CancellationToken)
+  nameWithType: HttpResponseCacheMiddleware.InvokeAsync(ProxyMiddlewareContext, ProxyMiddlewareDelegate, CancellationToken)
+- uid: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.InvokeAsync*
+  name: InvokeAsync
+  href: api/Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.html#Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware_InvokeAsync_
+  commentId: Overload:Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.InvokeAsync
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.InvokeAsync
+  nameWithType: HttpResponseCacheMiddleware.InvokeAsync
+- uid: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.TryCacheCurrentResponse(Titanium.Web.Proxy.EventArguments.SessionEventArgs)
+  name: TryCacheCurrentResponse(SessionEventArgs)
+  href: api/Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.html#Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware_TryCacheCurrentResponse_Titanium_Web_Proxy_EventArguments_SessionEventArgs_
+  commentId: M:Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.TryCacheCurrentResponse(Titanium.Web.Proxy.EventArguments.SessionEventArgs)
+  fullName: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.TryCacheCurrentResponse(Titanium.Web.Proxy.EventArguments.SessionEventArgs)
+  nameWithType: HttpResponseCacheMiddleware.TryCacheCurrentResponse(SessionEventArgs)
+- uid: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.TryCacheCurrentResponse*
+  name: TryCacheCurrentResponse
+  href: api/Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.html#Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware_TryCacheCurrentResponse_
+  commentId: Overload:Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.TryCacheCurrentResponse
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.TryCacheCurrentResponse
+  nameWithType: HttpResponseCacheMiddleware.TryCacheCurrentResponse
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache
+  name: MemoryHttpResponseCache
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html
+  commentId: T:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache
+  nameWithType: MemoryHttpResponseCache
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Count
+  name: Count
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Count
+  commentId: P:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Count
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Count
+  nameWithType: MemoryHttpResponseCache.Count
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Count*
+  name: Count
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Count_
+  commentId: Overload:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Count
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Count
+  nameWithType: MemoryHttpResponseCache.Count
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Purge(System.String)
+  name: Purge(string?)
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Purge_System_String_
+  commentId: M:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Purge(System.String)
+  name.vb: Purge(String)
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Purge(string?)
+  fullName.vb: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Purge(String)
+  nameWithType: MemoryHttpResponseCache.Purge(string?)
+  nameWithType.vb: MemoryHttpResponseCache.Purge(String)
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Purge*
+  name: Purge
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Purge_
+  commentId: Overload:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Purge
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Purge
+  nameWithType: MemoryHttpResponseCache.Purge
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Set(System.String,Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse,System.TimeSpan)
+  name: Set(string, CachedHttpResponse, TimeSpan)
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Set_System_String_Titanium_Web_Proxy_Abstractions_Plugins_CachedHttpResponse_System_TimeSpan_
+  commentId: M:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Set(System.String,Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse,System.TimeSpan)
+  name.vb: Set(String, CachedHttpResponse, TimeSpan)
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Set(string, Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse, System.TimeSpan)
+  fullName.vb: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Set(String, Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse, System.TimeSpan)
+  nameWithType: MemoryHttpResponseCache.Set(string, CachedHttpResponse, TimeSpan)
+  nameWithType.vb: MemoryHttpResponseCache.Set(String, CachedHttpResponse, TimeSpan)
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Set*
+  name: Set
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Set_
+  commentId: Overload:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Set
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Set
+  nameWithType: MemoryHttpResponseCache.Set
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.TryGet(System.String,Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse@)
+  name: TryGet(string, out CachedHttpResponse?)
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_TryGet_System_String_Titanium_Web_Proxy_Abstractions_Plugins_CachedHttpResponse__
+  commentId: M:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.TryGet(System.String,Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse@)
+  name.vb: TryGet(String, CachedHttpResponse)
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.TryGet(string, out Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse?)
+  fullName.vb: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.TryGet(String, Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse)
+  nameWithType: MemoryHttpResponseCache.TryGet(string, out CachedHttpResponse?)
+  nameWithType.vb: MemoryHttpResponseCache.TryGet(String, CachedHttpResponse)
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.TryGet*
+  name: TryGet
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_TryGet_
+  commentId: Overload:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.TryGet
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.TryGet
+  nameWithType: MemoryHttpResponseCache.TryGet
 - uid: Titanium.Web.Proxy.Clusters
   name: Titanium.Web.Proxy.Clusters
   href: api/Titanium.Web.Proxy.Clusters.html
@@ -80,18 +204,174 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Clusters.ClusterManager.Snapshot
   nameWithType: ClusterManager.Snapshot
+- uid: Titanium.Web.Proxy.Clusters.DestinationHealthTracker
+  name: DestinationHealthTracker
+  href: api/Titanium.Web.Proxy.Clusters.DestinationHealthTracker.html
+  commentId: T:Titanium.Web.Proxy.Clusters.DestinationHealthTracker
+  fullName: Titanium.Web.Proxy.Clusters.DestinationHealthTracker
+  nameWithType: DestinationHealthTracker
+- uid: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.GetActiveRequests(System.String)
+  name: GetActiveRequests(string)
+  href: api/Titanium.Web.Proxy.Clusters.DestinationHealthTracker.html#Titanium_Web_Proxy_Clusters_DestinationHealthTracker_GetActiveRequests_System_String_
+  commentId: M:Titanium.Web.Proxy.Clusters.DestinationHealthTracker.GetActiveRequests(System.String)
+  name.vb: GetActiveRequests(String)
+  fullName: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.GetActiveRequests(string)
+  fullName.vb: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.GetActiveRequests(String)
+  nameWithType: DestinationHealthTracker.GetActiveRequests(string)
+  nameWithType.vb: DestinationHealthTracker.GetActiveRequests(String)
+- uid: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.GetActiveRequests*
+  name: GetActiveRequests
+  href: api/Titanium.Web.Proxy.Clusters.DestinationHealthTracker.html#Titanium_Web_Proxy_Clusters_DestinationHealthTracker_GetActiveRequests_
+  commentId: Overload:Titanium.Web.Proxy.Clusters.DestinationHealthTracker.GetActiveRequests
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.GetActiveRequests
+  nameWithType: DestinationHealthTracker.GetActiveRequests
+- uid: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportFailure(System.String,Titanium.Web.Proxy.Abstractions.Routing.IClusterManager,System.Int32)
+  name: ReportFailure(string, IClusterManager?, int)
+  href: api/Titanium.Web.Proxy.Clusters.DestinationHealthTracker.html#Titanium_Web_Proxy_Clusters_DestinationHealthTracker_ReportFailure_System_String_Titanium_Web_Proxy_Abstractions_Routing_IClusterManager_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportFailure(System.String,Titanium.Web.Proxy.Abstractions.Routing.IClusterManager,System.Int32)
+  name.vb: ReportFailure(String, IClusterManager, Integer)
+  fullName: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportFailure(string, Titanium.Web.Proxy.Abstractions.Routing.IClusterManager?, int)
+  fullName.vb: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportFailure(String, Titanium.Web.Proxy.Abstractions.Routing.IClusterManager, Integer)
+  nameWithType: DestinationHealthTracker.ReportFailure(string, IClusterManager?, int)
+  nameWithType.vb: DestinationHealthTracker.ReportFailure(String, IClusterManager, Integer)
+- uid: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportFailure*
+  name: ReportFailure
+  href: api/Titanium.Web.Proxy.Clusters.DestinationHealthTracker.html#Titanium_Web_Proxy_Clusters_DestinationHealthTracker_ReportFailure_
+  commentId: Overload:Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportFailure
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportFailure
+  nameWithType: DestinationHealthTracker.ReportFailure
+- uid: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportSuccess(System.String)
+  name: ReportSuccess(string)
+  href: api/Titanium.Web.Proxy.Clusters.DestinationHealthTracker.html#Titanium_Web_Proxy_Clusters_DestinationHealthTracker_ReportSuccess_System_String_
+  commentId: M:Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportSuccess(System.String)
+  name.vb: ReportSuccess(String)
+  fullName: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportSuccess(string)
+  fullName.vb: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportSuccess(String)
+  nameWithType: DestinationHealthTracker.ReportSuccess(string)
+  nameWithType.vb: DestinationHealthTracker.ReportSuccess(String)
+- uid: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportSuccess*
+  name: ReportSuccess
+  href: api/Titanium.Web.Proxy.Clusters.DestinationHealthTracker.html#Titanium_Web_Proxy_Clusters_DestinationHealthTracker_ReportSuccess_
+  commentId: Overload:Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportSuccess
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.ReportSuccess
+  nameWithType: DestinationHealthTracker.ReportSuccess
+- uid: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.TrackRequest(System.String)
+  name: TrackRequest(string)
+  href: api/Titanium.Web.Proxy.Clusters.DestinationHealthTracker.html#Titanium_Web_Proxy_Clusters_DestinationHealthTracker_TrackRequest_System_String_
+  commentId: M:Titanium.Web.Proxy.Clusters.DestinationHealthTracker.TrackRequest(System.String)
+  name.vb: TrackRequest(String)
+  fullName: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.TrackRequest(string)
+  fullName.vb: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.TrackRequest(String)
+  nameWithType: DestinationHealthTracker.TrackRequest(string)
+  nameWithType.vb: DestinationHealthTracker.TrackRequest(String)
+- uid: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.TrackRequest*
+  name: TrackRequest
+  href: api/Titanium.Web.Proxy.Clusters.DestinationHealthTracker.html#Titanium_Web_Proxy_Clusters_DestinationHealthTracker_TrackRequest_
+  commentId: Overload:Titanium.Web.Proxy.Clusters.DestinationHealthTracker.TrackRequest
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Clusters.DestinationHealthTracker.TrackRequest
+  nameWithType: DestinationHealthTracker.TrackRequest
 - uid: Titanium.Web.Proxy.Clusters.LoadBalancer
   name: LoadBalancer
   href: api/Titanium.Web.Proxy.Clusters.LoadBalancer.html
   commentId: T:Titanium.Web.Proxy.Clusters.LoadBalancer
   fullName: Titanium.Web.Proxy.Clusters.LoadBalancer
   nameWithType: LoadBalancer
+- uid: Titanium.Web.Proxy.Clusters.LoadBalancer.#ctor(Titanium.Web.Proxy.Clusters.DestinationHealthTracker)
+  name: LoadBalancer(DestinationHealthTracker?)
+  href: api/Titanium.Web.Proxy.Clusters.LoadBalancer.html#Titanium_Web_Proxy_Clusters_LoadBalancer__ctor_Titanium_Web_Proxy_Clusters_DestinationHealthTracker_
+  commentId: M:Titanium.Web.Proxy.Clusters.LoadBalancer.#ctor(Titanium.Web.Proxy.Clusters.DestinationHealthTracker)
+  name.vb: New(DestinationHealthTracker)
+  fullName: Titanium.Web.Proxy.Clusters.LoadBalancer.LoadBalancer(Titanium.Web.Proxy.Clusters.DestinationHealthTracker?)
+  fullName.vb: Titanium.Web.Proxy.Clusters.LoadBalancer.New(Titanium.Web.Proxy.Clusters.DestinationHealthTracker)
+  nameWithType: LoadBalancer.LoadBalancer(DestinationHealthTracker?)
+  nameWithType.vb: LoadBalancer.New(DestinationHealthTracker)
+- uid: Titanium.Web.Proxy.Clusters.LoadBalancer.#ctor*
+  name: LoadBalancer
+  href: api/Titanium.Web.Proxy.Clusters.LoadBalancer.html#Titanium_Web_Proxy_Clusters_LoadBalancer__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Clusters.LoadBalancer.#ctor
+  isSpec: "True"
+  name.vb: New
+  fullName: Titanium.Web.Proxy.Clusters.LoadBalancer.LoadBalancer
+  fullName.vb: Titanium.Web.Proxy.Clusters.LoadBalancer.New
+  nameWithType: LoadBalancer.LoadBalancer
+  nameWithType.vb: LoadBalancer.New
+- uid: Titanium.Web.Proxy.Clusters.LoadBalancer.GetDestinationLatency(System.String)
+  name: GetDestinationLatency(string)
+  href: api/Titanium.Web.Proxy.Clusters.LoadBalancer.html#Titanium_Web_Proxy_Clusters_LoadBalancer_GetDestinationLatency_System_String_
+  commentId: M:Titanium.Web.Proxy.Clusters.LoadBalancer.GetDestinationLatency(System.String)
+  name.vb: GetDestinationLatency(String)
+  fullName: Titanium.Web.Proxy.Clusters.LoadBalancer.GetDestinationLatency(string)
+  fullName.vb: Titanium.Web.Proxy.Clusters.LoadBalancer.GetDestinationLatency(String)
+  nameWithType: LoadBalancer.GetDestinationLatency(string)
+  nameWithType.vb: LoadBalancer.GetDestinationLatency(String)
+- uid: Titanium.Web.Proxy.Clusters.LoadBalancer.GetDestinationLatency*
+  name: GetDestinationLatency
+  href: api/Titanium.Web.Proxy.Clusters.LoadBalancer.html#Titanium_Web_Proxy_Clusters_LoadBalancer_GetDestinationLatency_
+  commentId: Overload:Titanium.Web.Proxy.Clusters.LoadBalancer.GetDestinationLatency
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Clusters.LoadBalancer.GetDestinationLatency
+  nameWithType: LoadBalancer.GetDestinationLatency
+- uid: Titanium.Web.Proxy.Clusters.LoadBalancer.Health
+  name: Health
+  href: api/Titanium.Web.Proxy.Clusters.LoadBalancer.html#Titanium_Web_Proxy_Clusters_LoadBalancer_Health
+  commentId: P:Titanium.Web.Proxy.Clusters.LoadBalancer.Health
+  fullName: Titanium.Web.Proxy.Clusters.LoadBalancer.Health
+  nameWithType: LoadBalancer.Health
+- uid: Titanium.Web.Proxy.Clusters.LoadBalancer.Health*
+  name: Health
+  href: api/Titanium.Web.Proxy.Clusters.LoadBalancer.html#Titanium_Web_Proxy_Clusters_LoadBalancer_Health_
+  commentId: Overload:Titanium.Web.Proxy.Clusters.LoadBalancer.Health
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Clusters.LoadBalancer.Health
+  nameWithType: LoadBalancer.Health
+- uid: Titanium.Web.Proxy.Clusters.LoadBalancer.Record(System.String,System.TimeSpan)
+  name: Record(string, TimeSpan)
+  href: api/Titanium.Web.Proxy.Clusters.LoadBalancer.html#Titanium_Web_Proxy_Clusters_LoadBalancer_Record_System_String_System_TimeSpan_
+  commentId: M:Titanium.Web.Proxy.Clusters.LoadBalancer.Record(System.String,System.TimeSpan)
+  name.vb: Record(String, TimeSpan)
+  fullName: Titanium.Web.Proxy.Clusters.LoadBalancer.Record(string, System.TimeSpan)
+  fullName.vb: Titanium.Web.Proxy.Clusters.LoadBalancer.Record(String, System.TimeSpan)
+  nameWithType: LoadBalancer.Record(string, TimeSpan)
+  nameWithType.vb: LoadBalancer.Record(String, TimeSpan)
+- uid: Titanium.Web.Proxy.Clusters.LoadBalancer.Record*
+  name: Record
+  href: api/Titanium.Web.Proxy.Clusters.LoadBalancer.html#Titanium_Web_Proxy_Clusters_LoadBalancer_Record_
+  commentId: Overload:Titanium.Web.Proxy.Clusters.LoadBalancer.Record
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Clusters.LoadBalancer.Record
+  nameWithType: LoadBalancer.Record
+- uid: Titanium.Web.Proxy.Clusters.LoadBalancer.RecordDestination(System.String,System.TimeSpan)
+  name: RecordDestination(string, TimeSpan)
+  href: api/Titanium.Web.Proxy.Clusters.LoadBalancer.html#Titanium_Web_Proxy_Clusters_LoadBalancer_RecordDestination_System_String_System_TimeSpan_
+  commentId: M:Titanium.Web.Proxy.Clusters.LoadBalancer.RecordDestination(System.String,System.TimeSpan)
+  name.vb: RecordDestination(String, TimeSpan)
+  fullName: Titanium.Web.Proxy.Clusters.LoadBalancer.RecordDestination(string, System.TimeSpan)
+  fullName.vb: Titanium.Web.Proxy.Clusters.LoadBalancer.RecordDestination(String, System.TimeSpan)
+  nameWithType: LoadBalancer.RecordDestination(string, TimeSpan)
+  nameWithType.vb: LoadBalancer.RecordDestination(String, TimeSpan)
+- uid: Titanium.Web.Proxy.Clusters.LoadBalancer.RecordDestination*
+  name: RecordDestination
+  href: api/Titanium.Web.Proxy.Clusters.LoadBalancer.html#Titanium_Web_Proxy_Clusters_LoadBalancer_RecordDestination_
+  commentId: Overload:Titanium.Web.Proxy.Clusters.LoadBalancer.RecordDestination
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Clusters.LoadBalancer.RecordDestination
+  nameWithType: LoadBalancer.RecordDestination
 - uid: Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig,Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot)
   name: Select(ClusterConfig, ImmutableClusterSnapshot)
   href: api/Titanium.Web.Proxy.Clusters.LoadBalancer.html#Titanium_Web_Proxy_Clusters_LoadBalancer_Select_Titanium_Web_Proxy_Abstractions_Clusters_ClusterConfig_Titanium_Web_Proxy_Abstractions_Clusters_ImmutableClusterSnapshot_
   commentId: M:Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig,Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot)
   fullName: Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig, Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot)
   nameWithType: LoadBalancer.Select(ClusterConfig, ImmutableClusterSnapshot)
+- uid: Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig,Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot,Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext)
+  name: Select(ClusterConfig, ImmutableClusterSnapshot, LoadBalanceContext)
+  href: api/Titanium.Web.Proxy.Clusters.LoadBalancer.html#Titanium_Web_Proxy_Clusters_LoadBalancer_Select_Titanium_Web_Proxy_Abstractions_Clusters_ClusterConfig_Titanium_Web_Proxy_Abstractions_Clusters_ImmutableClusterSnapshot_Titanium_Web_Proxy_Abstractions_Routing_LoadBalanceContext_
+  commentId: M:Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig,Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot,Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext)
+  fullName: Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig, Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot, Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext)
+  nameWithType: LoadBalancer.Select(ClusterConfig, ImmutableClusterSnapshot, LoadBalanceContext)
 - uid: Titanium.Web.Proxy.Clusters.LoadBalancer.Select*
   name: Select
   href: api/Titanium.Web.Proxy.Clusters.LoadBalancer.html#Titanium_Web_Proxy_Clusters_LoadBalancer_Select_

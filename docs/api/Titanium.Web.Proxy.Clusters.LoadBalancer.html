@@ -9,7 +9,7 @@
       <meta name="viewport" content="width=device-width">
       <meta name="title" content="Class LoadBalancer | Titanium Web Proxy ">
     
-    <meta name="description" content="Selects destinations, skipping Draining/Maintenance/Unhealthy.">
+    <meta name="description" content="Selects destinations, skipping Draining/Maintenance/Unhealthy. Honors weight, least-requests, least-time, and affinity.">
       <link rel="shortcut icon" href="../favicon.ico">
       <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
       <link rel="stylesheet" href="../styles/docfx.css">
@@ -81,7 +81,7 @@
 
 
   <h1 id="Titanium_Web_Proxy_Clusters_LoadBalancer" data-uid="Titanium.Web.Proxy.Clusters.LoadBalancer" class="text-break">Class LoadBalancer</h1>
-  <div class="markdown level0 summary"><p>Selects destinations, skipping Draining/Maintenance/Unhealthy.</p>
+  <div class="markdown level0 summary"><p>Selects destinations, skipping Draining/Maintenance/Unhealthy. Honors weight, least-requests, least-time, and affinity.</p>
 </div>
   <div class="markdown level0 conceptual"></div>
   <div class="inheritance">
@@ -92,6 +92,7 @@
   <div class="implements">
     <h5>Implements</h5>
     <div><span class="xref">ILoadBalancer</span></div>
+    <div><span class="xref">ILatencyRecorder</span></div>
   </div>
   <div class="inheritedMembers">
     <h5>Inherited Members</h5>
@@ -118,16 +119,205 @@
   <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
   <h5 id="Titanium_Web_Proxy_Clusters_LoadBalancer_syntax">Syntax</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public sealed class LoadBalancer : ILoadBalancer</code></pre>
+    <pre><code class="lang-csharp hljs">public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder</code></pre>
   </div>
+  <h3 id="constructors">Constructors
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_LoadBalancer__ctor_Titanium_Web_Proxy_Clusters_DestinationHealthTracker_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.LoadBalancer.%23ctor(Titanium.Web.Proxy.Clusters.DestinationHealthTracker)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/LoadBalancer.cs/#L18">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Clusters_LoadBalancer__ctor_" data-uid="Titanium.Web.Proxy.Clusters.LoadBalancer.#ctor*"></a>
+  <h4 id="Titanium_Web_Proxy_Clusters_LoadBalancer__ctor_Titanium_Web_Proxy_Clusters_DestinationHealthTracker_" data-uid="Titanium.Web.Proxy.Clusters.LoadBalancer.#ctor(Titanium.Web.Proxy.Clusters.DestinationHealthTracker)">LoadBalancer(DestinationHealthTracker?)</h4>
+  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public LoadBalancer(DestinationHealthTracker? health = null)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Clusters.DestinationHealthTracker.html">DestinationHealthTracker</a></td>
+        <td><span class="parametername">health</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="properties">Properties
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_LoadBalancer_Health.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.LoadBalancer.Health%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/LoadBalancer.cs/#L23">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Clusters_LoadBalancer_Health_" data-uid="Titanium.Web.Proxy.Clusters.LoadBalancer.Health*"></a>
+  <h4 id="Titanium_Web_Proxy_Clusters_LoadBalancer_Health" data-uid="Titanium.Web.Proxy.Clusters.LoadBalancer.Health">Health</h4>
+  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DestinationHealthTracker Health { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Clusters.DestinationHealthTracker.html">DestinationHealthTracker</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
   <h3 id="methods">Methods
 </h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_LoadBalancer_GetDestinationLatency_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.LoadBalancer.GetDestinationLatency(System.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/LoadBalancer.cs/#L85">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Clusters_LoadBalancer_GetDestinationLatency_" data-uid="Titanium.Web.Proxy.Clusters.LoadBalancer.GetDestinationLatency*"></a>
+  <h4 id="Titanium_Web_Proxy_Clusters_LoadBalancer_GetDestinationLatency_System_String_" data-uid="Titanium.Web.Proxy.Clusters.LoadBalancer.GetDestinationLatency(System.String)">GetDestinationLatency(string)</h4>
+  <div class="markdown level1 summary"><p>Last observed latency for a destination; null if unknown.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TimeSpan? GetDestinationLatency(string destinationId)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td><span class="parametername">destinationId</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_LoadBalancer_Record_System_String_System_TimeSpan_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.LoadBalancer.Record(System.String%2CSystem.TimeSpan)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/LoadBalancer.cs/#L67">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Clusters_LoadBalancer_Record_" data-uid="Titanium.Web.Proxy.Clusters.LoadBalancer.Record*"></a>
+  <h4 id="Titanium_Web_Proxy_Clusters_LoadBalancer_Record_System_String_System_TimeSpan_" data-uid="Titanium.Web.Proxy.Clusters.LoadBalancer.Record(System.String,System.TimeSpan)">Record(string, TimeSpan)</h4>
+  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void Record(string name, TimeSpan duration)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td><span class="parametername">name</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a></td>
+        <td><span class="parametername">duration</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_LoadBalancer_RecordDestination_System_String_System_TimeSpan_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.LoadBalancer.RecordDestination(System.String%2CSystem.TimeSpan)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/LoadBalancer.cs/#L69">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Clusters_LoadBalancer_RecordDestination_" data-uid="Titanium.Web.Proxy.Clusters.LoadBalancer.RecordDestination*"></a>
+  <h4 id="Titanium_Web_Proxy_Clusters_LoadBalancer_RecordDestination_System_String_System_TimeSpan_" data-uid="Titanium.Web.Proxy.Clusters.LoadBalancer.RecordDestination(System.String,System.TimeSpan)">RecordDestination(string, TimeSpan)</h4>
+  <div class="markdown level1 summary"><p>Record per-destination RTT for least-time LB. Default no-op.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void RecordDestination(string destinationId, TimeSpan duration)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td><span class="parametername">destinationId</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a></td>
+        <td><span class="parametername">duration</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_LoadBalancer_Select_Titanium_Web_Proxy_Abstractions_Clusters_ClusterConfig_Titanium_Web_Proxy_Abstractions_Clusters_ImmutableClusterSnapshot_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig%2CTitanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/LoadBalancer.cs/#L14">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/LoadBalancer.cs/#L25">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Clusters_LoadBalancer_Select_" data-uid="Titanium.Web.Proxy.Clusters.LoadBalancer.Select*"></a>
   <h4 id="Titanium_Web_Proxy_Clusters_LoadBalancer_Select_Titanium_Web_Proxy_Abstractions_Clusters_ClusterConfig_Titanium_Web_Proxy_Abstractions_Clusters_ImmutableClusterSnapshot_" data-uid="Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig,Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot)">Select(ClusterConfig, ImmutableClusterSnapshot)</h4>
@@ -174,9 +364,70 @@
       </tr>
     </tbody>
   </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_LoadBalancer_Select_Titanium_Web_Proxy_Abstractions_Clusters_ClusterConfig_Titanium_Web_Proxy_Abstractions_Clusters_ImmutableClusterSnapshot_Titanium_Web_Proxy_Abstractions_Routing_LoadBalanceContext_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig%2CTitanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot%2CTitanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/LoadBalancer.cs/#L28">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Clusters_LoadBalancer_Select_" data-uid="Titanium.Web.Proxy.Clusters.LoadBalancer.Select*"></a>
+  <h4 id="Titanium_Web_Proxy_Clusters_LoadBalancer_Select_Titanium_Web_Proxy_Abstractions_Clusters_ClusterConfig_Titanium_Web_Proxy_Abstractions_Clusters_ImmutableClusterSnapshot_Titanium_Web_Proxy_Abstractions_Routing_LoadBalanceContext_" data-uid="Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig,Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot,Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext)">Select(ClusterConfig, ImmutableClusterSnapshot, LoadBalanceContext)</h4>
+  <div class="markdown level1 summary"><p>Select with affinity / algorithm context. Default forwards to <span class="xref">Titanium.Web.Proxy.Abstractions.Routing.ILoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig, Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot)</span>.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public DestinationConfig? Select(ClusterConfig cluster, ImmutableClusterSnapshot snapshot, LoadBalanceContext context)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">ClusterConfig</span></td>
+        <td><span class="parametername">cluster</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><span class="xref">ImmutableClusterSnapshot</span></td>
+        <td><span class="parametername">snapshot</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><span class="xref">LoadBalanceContext</span></td>
+        <td><span class="parametername">context</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">DestinationConfig</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
   <h3 id="implements">Implements</h3>
   <div>
       <span class="xref">Titanium.Web.Proxy.Abstractions.Routing.ILoadBalancer</span>
+  </div>
+  <div>
+      <span class="xref">Titanium.Web.Proxy.Abstractions.Plugins.ILatencyRecorder</span>
   </div>
 
 </article>
@@ -190,7 +441,7 @@
                     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_LoadBalancer.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.LoadBalancer%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
                   </li>
                   <li>
-                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/LoadBalancer.cs/#L10" class="contribution-link">View Source</a>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/LoadBalancer.cs/#L11" class="contribution-link">View Source</a>
                   </li>
                 </ul>
               </div>
