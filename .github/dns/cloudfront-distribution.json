@@ -47,7 +47,6 @@
     },
     "Compress": true,
     "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
-    "OriginRequestPolicyId": "216adef6-5c7f-47e4-b989-5492eafa07d3",
     "FunctionAssociations": {
       "Quantity": 1,
       "Items": [
