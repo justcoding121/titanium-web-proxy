@@ -7,8 +7,7 @@ Titanium targets low-overhead MITM and reverse proxying: connection pooling, HTT
 On matched **GitHub Actions 4 vCPU / 16 GiB** runners, Titanium is typically:
 
 - **at or above YARP** for reverse-proxy workloads
-- **ahead of nginx** on H2/H3→H1 reverse
-- **near parity on H1** (nginx still edges tiny keep-alive)
+- **ahead of nginx** on H2/H3→H1 reverse; **near parity** for the rest (nginx still edges tiny keep-alive H1)
 
 MITM is Titanium-only among those peers (they cannot MITM). Absolute RPS varies by OS, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
 

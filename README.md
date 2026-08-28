@@ -142,7 +142,7 @@ Configure your client to use `127.0.0.1:8000` as its HTTP and HTTPS proxy. Trust
 
 ## Performance
 
-Typically at or above **YARP**; ahead of **nginx** on H2/H3→H1 reverse; near parity on H1 (nginx still edges tiny keep-alive). Details: [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
+Typically at or above **YARP**; ahead of **nginx** on H2/H3→H1 reverse, near parity for the rest (nginx still edges tiny keep-alive). Details: [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
 
 ## Examples and documentation
 

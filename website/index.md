@@ -26,7 +26,7 @@ features:
   - title: HTTP/1 · HTTP/2 · HTTP/3
     details: HTTP/2 on by default. HTTP/3 (QUIC) opt-in. Protocol bridges between client and origin versions.
   - title: Measured performance
-    details: Typically at or above YARP; ahead of nginx on H2/H3→H1 reverse. See the performance guide for publishable tables.
+    details: Typically at or above YARP; ahead of nginx on H2/H3→H1 reverse, near parity for the rest. See the performance guide for publishable tables.
 ---
 
 ## Editions
