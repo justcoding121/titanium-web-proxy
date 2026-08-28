@@ -35,16 +35,16 @@ A lightweight, high performing HTTP(S) proxy server for .NET. It acts as a man i
 
 ## Editions
 
-| Product | Path | License | Distribution |
-|---------|------|---------|--------------|
-| **Titanium.Web.Proxy** (engine) | `src/Titanium.Web.Proxy` | MIT | NuGet |
-| **Titanium.Web.Proxy.Abstractions** | `src/Titanium.Web.Proxy.Abstractions` | MIT | NuGet |
-| **Titanium.Web.Proxy.Configuration** | `src/Titanium.Web.Proxy.Configuration` | MIT | NuGet |
-| **Titanium.Cli** (`titanium` / `twp`) | `src/Titanium.Cli` | MIT | GitHub Releases, winget, optional `dotnet tool` |
-| **Titanium.Plus** | `src/Titanium.Plus` | [PolyForm Noncommercial](licenses/PolyForm-Noncommercial-1.0.0.txt) | GitHub Release plugin DLL (not nuget.org) |
-| **Titanium Inspector** | `src/Titanium.Inspector` | [PolyForm Noncommercial](licenses/PolyForm-Noncommercial-1.0.0.txt) | Desktop app (Windows MSI/winget; GitHub Releases) |
+| Product | What it is | License | How you get it |
+|---------|------------|---------|----------------|
+| **Titanium.Web.Proxy** | Core proxy engine — embed MITM and/or reverse proxy in your .NET app (routes, clusters, H1/H2/H3) | MIT | NuGet |
+| **Titanium.Web.Proxy.Abstractions** | Shared contracts and models (routes, clusters, middleware, Plus plugin API) with no YAML/JSON parsing | MIT | NuGet — reference from libraries that should not pull the config parser |
+| **Titanium.Web.Proxy.Configuration** | Load `twp.yaml` / JSON (and migration dialects) into Core options; used by the CLI, not required for in-process Core | MIT | NuGet |
+| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse-proxy daemon: `run` / `test` / `version` / `update`, optional Plus plugin load | MIT | GitHub Releases, winget, optional `dotnet tool` |
+| **Titanium.Plus** | Noncommercial enterprise add-on (control plane, ops, observability, dashboard) loaded by the CLI via ALC — never a store/NuGet product | [PolyForm NC](licenses/PolyForm-Noncommercial-1.0.0.txt) | GitHub Release DLL only |
+| **Titanium Inspector** | Desktop HTTP(S) debugger (session grid, inspectors, AutoResponder, breakpoints, HAR); can show Plus management views via ALC | [PolyForm NC](licenses/PolyForm-Noncommercial-1.0.0.txt) | Windows MSI / winget; GitHub Releases |
 
-External contributions are welcome on MIT trees after signing the [CLA](CLA.md). PolyForm Noncommercial paths are maintainer-only; see [CONTRIBUTING.md](CONTRIBUTING.md).
+External contributions are welcome on MIT trees after signing the [CLA](CLA.md). PolyForm Noncommercial editions are maintainer-only; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Installation
 
