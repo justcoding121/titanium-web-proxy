@@ -15,23 +15,28 @@ $ge = [char]0x2265
 $rarr = [char]0x2192
 $endash = [char]0x2013
 
-function Fix-Utf8Mojibake([string]$text) {
-    if ([string]::IsNullOrEmpty($text)) { return $text }
-    try {
-        $bytes = [System.Text.Encoding]::GetEncoding(28591).GetBytes($text)
-        return [System.Text.Encoding]::UTF8.GetString($bytes)
-    }
-    catch {
-        return $text
-    }
+function Test-Utf8Mojibake([string]$text) {
+    return $text -match ([string][char]0x00C2 + [char]0x00B7) -or
+           $text -match ([string][char]0x00C3 + [char]0x2014) -or
+           $text -match ([string][char]0x00C3 + [char]0x00B7) -or
+           $text -match ([string][char]0x00F0 + [char]0x0178 + [char]0x00A5 + [char]0x2021)
 }
 
-$raw = Fix-Utf8Mojibake ([System.IO.File]::ReadAllText((Resolve-Path $PasteFile), [System.Text.Encoding]::UTF8))
+$raw = [System.IO.File]::ReadAllText((Resolve-Path $PasteFile), [System.Text.Encoding]::UTF8)
+if (Test-Utf8Mojibake $raw) {
+    & "$PSScriptRoot/repair-wiki-mojibake.ps1" -WikiFile $PasteFile
+    $raw = [System.IO.File]::ReadAllText((Resolve-Path $PasteFile), [System.Text.Encoding]::UTF8)
+}
 
 function Get-Section([string]$name) {
-    $pattern = "(?s)---$name---\r?\n(.*?)(?=---|\z)"
-    if ($raw -notmatch $pattern) { throw "Missing section $name" }
-    return $Matches[1].TrimEnd()
+    $marker = "---$name---"
+    $start = $raw.IndexOf($marker)
+    if ($start -lt 0) { throw "Missing section $name" }
+    $start += $marker.Length
+    while ($start -lt $raw.Length -and ($raw[$start] -eq "`r" -or $raw[$start] -eq "`n")) { $start++ }
+    $next = [regex]::Match($raw.Substring($start), '\r?\n---[A-Z_]+---')
+    $end = if ($next.Success) { $start + $next.Index } else { $raw.Length }
+    return $raw.Substring($start, $end - $start).TrimEnd()
 }
 
 $winRev = Get-Section 'WIN_REVERSE'
@@ -43,7 +48,7 @@ $wiki = [System.IO.File]::ReadAllText((Resolve-Path $WikiFile), [System.Text.Enc
 
 $runUrl = "https://github.com/justcoding121/titanium-web-proxy/actions/runs/$PrimaryRunId"
 $productLine = "- Product refresh: ``compare-product`` @ ``$HeadSha`` $em [$PrimaryRunId]($runUrl). Heavier/saturation/tls:"
-$wiki = [regex]::Replace($wiki, '- Product refresh:.*', $productLine, 1)
+$wiki = [regex]::Replace($wiki, '- Product refresh:.*', [System.Text.RegularExpressions.MatchEvaluator]{ $productLine }, 1)
 
 $winRevHeader = "Median of **3 repeats** on ``windows-latest`` (4 vCPU / 16 GiB). Bare reverse 5${mul}5 @ ``$HeadSha`` $em ``compare-product`` [$PrimaryRunId]($runUrl). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP${div}peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as ``<br><sub>(MiB / CPU%)</sub>``. nginx terminate peers use ``keepalive 256`` + streaming buffers. Laptop High-perf / cool-paired numbers stay on the [local lab](Performance-Local-Lab)."
 
@@ -60,24 +65,32 @@ $linHdr = "## Linux $em Titanium vs nginx vs YARP"
 
 $wiki = [regex]::Replace($wiki,
     "(?s)($([regex]::Escape($winHdr))\r?\n\r?\n### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
-    "`${1}$winRevHeader`n`n$winRev`n",
+    [System.Text.RegularExpressions.MatchEvaluator]{
+        param($m) $m.Groups[1].Value + $winRevHeader + "`n`n" + $winRev + "`n"
+    },
     1)
 
 $wiki = [regex]::Replace($wiki,
     '(?s)(### MITM \(TWP only\)\r?\n\r?\n).*?(?=\r?\n## Linux)',
-    "`${1}$mitmNote`n`n$winMitm`n",
+    [System.Text.RegularExpressions.MatchEvaluator]{
+        param($m) $m.Groups[1].Value + $mitmNote + "`n`n" + $winMitm + "`n"
+    },
     1)
 
 $wiki = [regex]::Replace($wiki,
     "(?s)($([regex]::Escape($linHdr))\r?\n\r?\n### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
-    "`${1}$linRevHeader`n`n$linRev`n",
+    [System.Text.RegularExpressions.MatchEvaluator]{
+        param($m) $m.Groups[1].Value + $linRevHeader + "`n`n" + $linRev + "`n"
+    },
     1)
 
 $idx = $wiki.IndexOf($linHdr)
 $tail = $wiki.Substring($idx)
 $tail = [regex]::Replace($tail,
     '(?s)(### MITM \(TWP only\)\r?\n\r?\n).*?(?=\r?\n## Heavier)',
-    "`${1}$mitmNote`n`n$linMitm`n",
+    [System.Text.RegularExpressions.MatchEvaluator]{
+        param($m) $m.Groups[1].Value + $mitmNote + "`n`n" + $linMitm + "`n"
+    },
     1)
 $wiki = $wiki.Substring(0, $idx) + $tail
 
