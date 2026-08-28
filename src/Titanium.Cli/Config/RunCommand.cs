@@ -278,14 +278,17 @@ internal static class RunCommand
 
         if (!string.IsNullOrEmpty(listener.ForwardHost) && listener.DecryptSsl)
         {
+            // TLS terminate → cleartext origin (ForwardPort is the cleartext listen).
+            // Without ForwardCleartext the engine treats ForwardPort as HTTPS (default 443).
             proxy.AddEndPoint(new TransparentProxyEndPoint(ip, listener.Port, decryptSsl: true)
             {
                 ForwardHost = listener.ForwardHost,
-                ForwardPort = listener.ForwardPort ?? 443,
+                ForwardPort = listener.ForwardPort ?? 80,
+                ForwardCleartext = true,
                 EnableHttp3 = ResolveListenerHttp3(listener, decryptSsl: true),
             });
             Console.WriteLine(
-                $"Listener {host}:{listener.Port} TLS-terminate ForwardHost={listener.ForwardHost}:{listener.ForwardPort ?? 443}");
+                $"Listener {host}:{listener.Port} TLS-terminate ForwardHost={listener.ForwardHost}:{listener.ForwardPort ?? 80} (cleartext)");
             return;
         }
 

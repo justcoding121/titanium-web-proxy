@@ -102,7 +102,8 @@ internal static class ServeProxyHost
             or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareProduct or ProbeMode.CompareCeiling
             or ProbeMode.CompareBodies
             or ProbeMode.ComparePost or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost
-            or ProbeMode.CompareArch or ProbeMode.CompareSaturation or ProbeMode.ExplicitPoolSweep)
+            or ProbeMode.CompareArch or ProbeMode.CompareSaturation or ProbeMode.CompareEditions
+            or ProbeMode.CompareCrossVersion or ProbeMode.CompareSpot or ProbeMode.ExplicitPoolSweep)
         {
             ProbeLog.Error("--serve-proxy requires a single arm mode");
             return 2;
@@ -125,6 +126,29 @@ internal static class ServeProxyHost
                 proxy = twp;
                 listenUrl = twp.ListenUrl;
                 targetForClient = twp.ListenUrl;
+                break;
+            }
+            case ProbeMode.TwpCliReverseHttp1:
+            case ProbeMode.TwpCliReverseHttp1Tls:
+            case ProbeMode.TwpCliReverseHttp1Route:
+            case ProbeMode.TwpCliPlusBaseHttp1:
+            case ProbeMode.TwpCliPlusCacheHttp1:
+            case ProbeMode.TwpCliInterceptHttp1:
+            {
+                if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
+                var kind = mode switch
+                {
+                    ProbeMode.TwpCliReverseHttp1Tls => TitaniumCliHost.CliArmKind.ForwardHostTls,
+                    ProbeMode.TwpCliReverseHttp1Route => TitaniumCliHost.CliArmKind.SingleRoute,
+                    ProbeMode.TwpCliPlusBaseHttp1 => TitaniumCliHost.CliArmKind.PlusBase,
+                    ProbeMode.TwpCliPlusCacheHttp1 => TitaniumCliHost.CliArmKind.PlusCache,
+                    ProbeMode.TwpCliInterceptHttp1 => TitaniumCliHost.CliArmKind.InterceptTransform,
+                    _ => TitaniumCliHost.CliArmKind.ForwardHost
+                };
+                var cli = await TitaniumCliHost.StartAsync(originHttpPort, kind, cancellationToken);
+                proxy = cli;
+                listenUrl = cli.ListenUrl;
+                targetForClient = cli.ListenUrl;
                 break;
             }
             case ProbeMode.BareReverseHttp1:
@@ -832,6 +856,14 @@ internal static class ServeProxyHost
         ProbeMode.CompareTlsCost => "compare-tls-cost",
         ProbeMode.CompareArch => "compare-arch",
         ProbeMode.CompareSaturation => "compare-saturation",
+        ProbeMode.CompareEditions => "compare-editions",
+        ProbeMode.CompareCrossVersion => "compare-cross-version",
+        ProbeMode.TwpCliReverseHttp1 => "twp-cli-reverse-http1",
+        ProbeMode.TwpCliReverseHttp1Tls => "twp-cli-reverse-http1-tls",
+        ProbeMode.TwpCliReverseHttp1Route => "twp-cli-reverse-http1-route",
+        ProbeMode.TwpCliPlusBaseHttp1 => "twp-cli-plus-base-http1",
+        ProbeMode.TwpCliPlusCacheHttp1 => "twp-cli-plus-cache-http1",
+        ProbeMode.TwpCliInterceptHttp1 => "twp-cli-intercept-http1",
         ProbeMode.OriginDirect => "origin-direct",
         ProbeMode.ExplicitPoolSweep => "explicit-pool-sweep",
         _ => mode.ToString()

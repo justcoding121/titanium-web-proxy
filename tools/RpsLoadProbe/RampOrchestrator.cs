@@ -137,6 +137,26 @@ internal enum ProbeMode
     /// Saturation control: origin-direct (+ optional bombardier) and H1 plain reverse peers in one session.
     /// </summary>
     CompareSaturation,
+    /// <summary>
+    /// Product editions: library H1 baselines + CLI daemon / CLI+Plus / CLI+Intercept arms.
+    /// </summary>
+    CompareEditions,
+    /// <summary>
+    /// Alias for <see cref="CompareMatrix"/> used by Gate 2 cross-version validation (routes unset).
+    /// </summary>
+    CompareCrossVersion,
+    /// <summary>Shipped CLI daemon: H1 plain forwardHost (product defaults).</summary>
+    TwpCliReverseHttp1,
+    /// <summary>Shipped CLI daemon: H1 TLS terminate → cleartext origin.</summary>
+    TwpCliReverseHttp1Tls,
+    /// <summary>Shipped CLI daemon: single route table ≡ ForwardHost.</summary>
+    TwpCliReverseHttp1Route,
+    /// <summary>CLI + Plus enabled (no options) — control-plane only.</summary>
+    TwpCliPlusBaseHttp1,
+    /// <summary>CLI + Plus + cache.enable.</summary>
+    TwpCliPlusCacheHttp1,
+    /// <summary>CLI + route RequestHeaderSet transform (forces session / intercept path).</summary>
+    TwpCliInterceptHttp1,
     /// <summary>Load generator → origin child only (no proxy); calibration ceiling for reverse peers.</summary>
     OriginDirect,
     /// <summary>Managed reverse peer H2 TLS → HTTPS HTTP/2 origin.</summary>
@@ -160,6 +180,11 @@ internal sealed class RampOptions
     public int? MaxCachedConnections { get; init; }
     /// <summary>How many full arm sequences to run; peaks are median-aggregated (L1 runner noise).</summary>
     public int Repeats { get; init; } = 1;
+    /// <summary>
+    /// After the first SLO fail on an arm that previously passed, run one more concurrency step
+    /// (peak confirmation) then stop the arm. Default on — matches industry load-tool behavior.
+    /// </summary>
+    public bool StopOnSloFail { get; init; } = true;
     /// <summary>Default workload when an arm does not override (preserves tiny-GET matrix).</summary>
     public WorkloadOptions Workload { get; init; } = WorkloadOptions.TinyGet;
 }
@@ -816,6 +841,19 @@ internal static class RampOrchestrator
                 ..BuildMitmFullArms()
             ],
             ProbeMode.CompareMatrix => BuildFullMatrixArms(nginxAvailable, nginxHttp3Available),
+            ProbeMode.CompareCrossVersion => BuildFullMatrixArms(nginxAvailable, nginxHttp3Available),
+            ProbeMode.CompareEditions => BuildEditionArms(),
+            ProbeMode.TwpCliReverseHttp1 => [new("twp-cli-reverse-http1", ProbeMode.TwpCliReverseHttp1, null)],
+            ProbeMode.TwpCliReverseHttp1Tls =>
+                [new("twp-cli-reverse-http1-tls", ProbeMode.TwpCliReverseHttp1Tls, null)],
+            ProbeMode.TwpCliReverseHttp1Route =>
+                [new("twp-cli-reverse-http1-route", ProbeMode.TwpCliReverseHttp1Route, null)],
+            ProbeMode.TwpCliPlusBaseHttp1 =>
+                [new("twp-cli-plus-base-http1", ProbeMode.TwpCliPlusBaseHttp1, null)],
+            ProbeMode.TwpCliPlusCacheHttp1 =>
+                [new("twp-cli-plus-cache-http1", ProbeMode.TwpCliPlusCacheHttp1, null)],
+            ProbeMode.TwpCliInterceptHttp1 =>
+                [new("twp-cli-intercept-http1", ProbeMode.TwpCliInterceptHttp1, null)],
             ProbeMode.CompareProduct =>
             [
                 ..BuildFullMatrixArms(nginxAvailable, nginxHttp3Available),
@@ -1015,6 +1053,21 @@ internal static class RampOrchestrator
             new("yarp-reverse-http3-to-http3", ProbeMode.YarpReverseHttp3ToHttp3, null)
         ];
     }
+
+    /// <summary>
+    /// Library H1 baselines plus shipped CLI / Plus / Intercept edition arms.
+    /// </summary>
+    private static IReadOnlyList<ArmSpec> BuildEditionArms() =>
+    [
+        new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
+        new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
+        new("twp-cli-reverse-http1", ProbeMode.TwpCliReverseHttp1, null),
+        new("twp-cli-reverse-http1-tls", ProbeMode.TwpCliReverseHttp1Tls, null),
+        new("twp-cli-reverse-http1-route", ProbeMode.TwpCliReverseHttp1Route, null),
+        new("twp-cli-plus-base-http1", ProbeMode.TwpCliPlusBaseHttp1, null),
+        new("twp-cli-plus-cache-http1", ProbeMode.TwpCliPlusCacheHttp1, null),
+        new("twp-cli-intercept-http1", ProbeMode.TwpCliInterceptHttp1, null)
+    ];
 
     private static IReadOnlyList<ArmSpec> BuildFullMatrixArms(bool nginxAvailable, bool nginxHttp3Available)
     {
@@ -1235,6 +1288,8 @@ internal static class RampOrchestrator
             LoadResult? peak = null;
             ProcessResourceSample? peakResources = null;
             var lastGoodConcurrency = 0;
+            // -1 = inactive; after first SLO fail with a prior pass, set to 1 (one more step) then 0 (stop).
+            var stopOnSloFailStepsRemaining = -1;
 
             var useQuic = (stackUsesQuicGenerator || forceLossyQuicGenerator) && quicPort is > 0;
             var useBombardier = string.Equals(arm.PreferredGenerator, BombardierLoadGenerator.GeneratorName,
@@ -1371,7 +1426,21 @@ internal static class RampOrchestrator
                 else if (lastGood != null)
                 {
                     ProbeLog.Info($"    (breaking-point candidate at c={lastGoodConcurrency})");
+                    if (options.StopOnSloFail && stopOnSloFailStepsRemaining < 0)
+                    {
+                        stopOnSloFailStepsRemaining = 1;
+                        ProbeLog.Info("    (stop-on-slo-fail: one more step for peak confirmation)");
+                    }
                 }
+
+                if (stopOnSloFailStepsRemaining == 0)
+                {
+                    ProbeLog.Info("    (stop-on-slo-fail: peak confirmation done; ending arm)");
+                    break;
+                }
+
+                if (stopOnSloFailStepsRemaining > 0)
+                    stopOnSloFailStepsRemaining--;
             }
 
             ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,

@@ -26,6 +26,8 @@ on:
           - compare-mitm
           - compare-matrix
           - compare-product
+          - compare-editions
+          - compare-cross-version
           - compare-ceiling
           - compare-bodies
           - compare-post
@@ -33,6 +35,7 @@ on:
           - compare-tls-cost
           - compare-arch
           - compare-saturation
+          - compare-spot
           - origin-direct
           - compare
           - compare-tls
@@ -89,6 +92,12 @@ on:
           - nginx-reverse-http3-cleartext
           - yarp-reverse-http2
           - yarp-reverse-http2-to-https
+          - twp-cli-reverse-http1
+          - twp-cli-reverse-http1-tls
+          - twp-cli-reverse-http1-route
+          - twp-cli-plus-base-http1
+          - twp-cli-plus-cache-http1
+          - twp-cli-intercept-http1
       concurrency:
         description: 'Comma-separated concurrency steps'
         required: true
@@ -268,6 +277,32 @@ jobs:
             -Repeats ([int]$env:RPS_REPEATS) `
             -ResultsDir tools/RpsLoadProbe/results `
             -BombardierCheck
+
+      - name: Validate edition gates
+        if: inputs.mode == 'compare-editions'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for edition gate validation' }
+          pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName
+
+      - name: Validate cross-version gates
+        if: inputs.mode == 'compare-cross-version'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for cross-version gate validation' }
+          $baseline = if ($env:RUNNER_OS -eq 'Windows') {
+            'tools/RpsLoadProbe/results/baseline-6.0-win.csv'
+          } else {
+            'tools/RpsLoadProbe/results/baseline-6.0-linux.csv'
+          }
+          if (-not (Test-Path $baseline)) { throw "Missing baseline: $baseline" }
+          pwsh tools/RpsLoadProbe/validate-cross-version.ps1 `
+            -BaselineCsv $baseline `
+            -CurrentCsv $csv.FullName
 
       - name: Upload CSV artifact
         uses: actions/upload-artifact@v4

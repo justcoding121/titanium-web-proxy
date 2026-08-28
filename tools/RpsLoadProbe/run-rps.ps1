@@ -12,6 +12,7 @@ param(
         'compare', 'compare-http2', 'compare-tls', 'compare-terminate', 'compare-same', 'compare-bridges',
         'compare-http3-cleartext', 'compare-mitm', 'compare-matrix', 'compare-product', 'compare-spot', 'compare-ceiling',
         'compare-bodies', 'compare-post', 'compare-lossy', 'compare-tls-cost', 'compare-arch', 'compare-saturation',
+        'compare-editions', 'compare-cross-version',
         'origin-direct', 'explicit-pool-sweep',
         'reverse-http1', 'bare-reverse-http1', 'nginx-reverse-http1', 'yarp-reverse-http1',
         'reverse-http1-tls', 'bare-reverse-http1-tls', 'nginx-reverse-http1-tls', 'yarp-reverse-http1-tls',
@@ -33,6 +34,8 @@ param(
         'reverse-http2-to-http3', 'yarp-reverse-http2-to-http3',
         'reverse-http3-to-http2', 'yarp-reverse-http3-to-http2',
         'reverse-http3-to-h2c', 'yarp-reverse-http3-to-h2c', 'yarp-reverse-http3-to-http3',
+        'twp-cli-reverse-http1', 'twp-cli-reverse-http1-tls', 'twp-cli-reverse-http1-route',
+        'twp-cli-plus-base-http1', 'twp-cli-plus-cache-http1', 'twp-cli-intercept-http1',
         'explicit-http1-multi', 'explicit-http2-multi')]
     [string] $Mode = 'compare',
 
@@ -50,7 +53,8 @@ param(
     [int]    $DelayMs = 0,
     [double] $LossPercent = 0,
     [switch] $SkipBuild,
-    [switch] $BombardierCheck
+    [switch] $BombardierCheck,
+    [switch] $NoStopOnSloFail
 )
 
 $ErrorActionPreference = 'Stop'
@@ -72,6 +76,24 @@ if (-not $SkipBuild) {
     Write-Host 'Building Release...' -ForegroundColor Cyan
     & dotnet build -c Release $project --warnaserror
     if ($LASTEXITCODE -ne 0) { throw 'RpsLoadProbe build failed' }
+
+    $needsCli = $Mode -match '^(compare-editions|compare-cross-version|twp-cli-)'
+    if ($needsCli -or $Mode -eq 'compare-editions') {
+        $cliProj = Join-Path $repoRoot 'src/Titanium.Cli/Titanium.Cli.csproj'
+        Write-Host 'Building Titanium.Cli Release...' -ForegroundColor Cyan
+        & dotnet build -c Release $cliProj --warnaserror
+        if ($LASTEXITCODE -ne 0) { throw 'Titanium.Cli build failed' }
+    }
+
+    $needsPlus = $Mode -match '^(compare-editions|twp-cli-plus-)'
+    if ($needsPlus) {
+        $plusProj = Join-Path $repoRoot 'src/Titanium.Plus/Titanium.Plus.csproj'
+        if (Test-Path $plusProj) {
+            Write-Host 'Building Titanium.Plus Release...' -ForegroundColor Cyan
+            & dotnet build -c Release $plusProj --warnaserror
+            if ($LASTEXITCODE -ne 0) { throw 'Titanium.Plus build failed' }
+        }
+    }
 }
 
 $probeCmd = $null
@@ -115,6 +137,9 @@ if ($NoKeepAlive) {
 }
 if ($NginxPath) {
     $probeArgs += @('--nginx-path', $NginxPath)
+}
+if ($NoStopOnSloFail) {
+    $probeArgs += '--no-stop-on-slo-fail'
 }
 
 & $probeCmd @probeArgs

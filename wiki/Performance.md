@@ -11,11 +11,14 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 - [Measurement environment](#measurement-environment)
     - [Windows (GitHub-hosted `windows-latest`)](#windows-github-hosted-windows-latest)
     - [Linux (GitHub-hosted `ubuntu-latest`)](#linux-github-hosted-ubuntu-latest)
+    - [Tiered cadence](#tiered-cadence)
     - [Saturation control](#saturation-control)
 - [Windows — Titanium vs nginx vs YARP](#windows--titanium-vs-nginx-vs-yarp)
 - [Linux — Titanium vs nginx vs YARP](#linux--titanium-vs-nginx-vs-yarp)
     - [Tiny JSON reverse is nginx’s best case on Linux](#tiny-json-reverse-is-nginxs-best-case-on-linux)
     - [Why isn’t HTTP/3 > HTTP/2 > HTTP/1 in raw RPS?](#why-isnt-http3--http2--http1-in-raw-rps)
+- [Editions (CLI / Plus / Intercept)](#editions-cli--plus--intercept)
+- [Cross-version (7.0 vs 6.0)](#cross-version-70-vs-60)
 - [Heavier reverse workloads](#heavier-reverse-workloads)
     - [Windows — heavier reverse GET (64 KiB / 256 KiB)](#windows--heavier-reverse-get-64-kib--256-kib)
     - [Linux — heavier reverse GET (64 KiB / 256 KiB)](#linux--heavier-reverse-get-64-kib--256-kib)
@@ -30,9 +33,22 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 
 ## Measurement environment
 
-Both OS use the standard public-repo GitHub-hosted runner class (**4 vCPU / 16 GiB / 14 GB SSD**). Same harness knobs (`workflow_dispatch` [RPS saturation](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/rps-saturation.yml): warmup 2s / measure 8s; concurrency 8, 16, 32, 64; median of 3 repeats). Every `--ramp` arm is **three OS processes** (parent load generator + origin child + proxy child), except **origin-direct** arms (load gen + origin only). Prefer **TWP÷YARP** / **TWP÷nginx** ratios over absolute RPS.
+Both OS use the standard public-repo GitHub-hosted runner class (**4 vCPU / 16 GiB / 14 GB SSD**). Same harness knobs (`workflow_dispatch` [RPS saturation](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/rps-saturation.yml): warmup 2s / measure 8s; concurrency 8, 16, 32, 64; median of 3 repeats; `--stop-on-slo-fail` default on). Every `--ramp` arm is **three OS processes** (parent load generator + origin child + proxy child), except **origin-direct** arms (load gen + origin only). Prefer **TWP÷YARP** / **TWP÷nginx** ratios over absolute RPS.
 
 Laptop High-perf / cool-paired Windows numbers live on [Performance Local Lab](Performance-Local-Lab). Do not mix those absolutes into the tables below.
+
+### Tiered cadence
+
+| Tier | Mode | When |
+|------|------|------|
+| Daily / per-PR | `compare-spot` | minutes |
+| Milestone | `compare-terminate` / `compare-matrix` | ~1–2h |
+| Editions | `compare-editions` | ~25 min (CLI / Plus / Intercept) |
+| Cross-version (Gate 2) | `compare-cross-version` | ~1–2h vs committed 6.0 baselines |
+| Release / wiki | `compare-product` | ~3–4h |
+| Heavier tables | `compare-bodies` / `post` / `lossy` / `arch` / `bridges` / `tls-cost` | dispatch independently |
+
+See [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/PERF-GATES.md).
 
 ### Windows (GitHub-hosted `windows-latest`)
 
@@ -303,9 +319,47 @@ Same Client×Origin wires with interception on (`compare-product` [33087088466](
 | HTTP/3 · QUIC | HTTP/2 · TLS | **22250**<br><sub>(153 MiB / 53.7% CPU)</sub> | **22127**<br><sub>(159 MiB / 54.2% CPU)</sub> | **0.95×** | **0.95×** |
 | HTTP/3 · QUIC | HTTP/3 · QUIC | **17601**<br><sub>(151 MiB / 48.8% CPU)</sub> | **17265**<br><sub>(152 MiB / 48.4% CPU)</sub> | **0.88×** | **0.87×** |
 
+## Editions (CLI / Plus / Intercept)
+
+**Note:** `twp-reverse-http1` and other library rows above use Core with **probe-tuned** settings (no logging, no Via header, probe-warmed certs). Edition rows below use `titanium run -c twp.yaml` **product defaults** and are not directly comparable as absolutes — use the ÷baseline ratio column. Inspector GUI is not spawnable in the harness; its session-path overhead is represented by `twp-cli-intercept-http1` (route `RequestHeaderSet` transform).
+
+```powershell
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-editions
+pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath tools/RpsLoadProbe/results/rps-ramp-*.csv
+```
+
+| Arm | Sustain | Peak | ÷baseline | Gate |
+|---|---:|---:|---:|---:|
+| `twp-cli-reverse-http1` (CLI daemon) | *pending Gate 2 run* | *pending* | vs `twp-reverse-http1` | ≥ **0.80×** |
+| `twp-cli-reverse-http1-tls` | *pending* | *pending* | vs `twp-reverse-http1-tls` | ≥ **0.80×** |
+| `twp-cli-reverse-http1-route` (single route) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.98×** |
+| `twp-cli-plus-base-http1` (Plus, no options) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.95×** |
+| `twp-cli-plus-cache-http1` (Plus + cache) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.70×** |
+| `twp-cli-intercept-http1` (Intercept / Inspector-equivalent) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.65×** |
+
+Fill after a clean `compare-editions` GHA pass on both OS; record the run ID in [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/PERF-GATES.md).
+
+## Cross-version (7.0 vs 6.0)
+
+Gate 2 prerequisite before the `v7.0.0` tag: run `compare-cross-version` (reverse matrix, **routes unset**) on `develop` and compare against committed 6.0 baselines from GHA [33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466) (`tools/RpsLoadProbe/results/baseline-6.0-win.csv` / `baseline-6.0-linux.csv`).
+
+| Gate | Threshold |
+|------|-----------|
+| RPS | `7.0 ÷ 6.0 ≥ 0.95` per common arm @ c=64 |
+| RSS | `7.0 ÷ 6.0 ≤ 1.10` per common arm @ c=64 |
+
+```powershell
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-cross-version
+pwsh tools/RpsLoadProbe/validate-cross-version.ps1 `
+  -BaselineCsv tools/RpsLoadProbe/results/baseline-6.0-win.csv `
+  -CurrentCsv  tools/RpsLoadProbe/results/rps-ramp-*.csv
+```
+
+*Pending first clean Gate 2 run — record run ID in PERF-GATES.md.*
+
 ## Heavier reverse workloads
 
-Separate from the tiny-GET matrix. Same measurement environments. Modes: `compare-bodies`, `compare-post`, `compare-lossy`, `compare-tls-cost`, `compare-arch` in [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe). **PUT with the same body is the same proxy work as POST; DELETE with no body matches GET** — only POST is published. Bodies/POST/lossy stay **half-duplex**. `compare-arch` is the slow-consumer / early-response / duplex set. Laptop numbers are on [Performance Local Lab](Performance-Local-Lab#architecture-sensitive); CI medians go in the tables below.
+Separate from the tiny-GET matrix. Same measurement environments. Modes: `compare-bodies`, `compare-post`, `compare-lossy`, `compare-tls-cost`, `compare-arch` in [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe). Dispatch each independently via `workflow_dispatch` (no need to re-run full `compare-product`). **PUT with the same body is the same proxy work as POST; DELETE with no body matches GET** — only POST is published. Bodies/POST/lossy stay **half-duplex**. `compare-arch` is the slow-consumer / early-response / duplex set. Laptop numbers are on [Performance Local Lab](Performance-Local-Lab#architecture-sensitive); CI medians go in the tables below.
 
 Lossy link = **userspace** shim (not kernel `netem`): TCP gets per-buffer delay + occasional whole-connection stalls (honest HOL for multiplexed H2); UDP gets per-datagram delay + drops (QUIC). `compare-lossy` publishes H1/H2/H3; H3 is where the protocol design is supposed to matter.
 
