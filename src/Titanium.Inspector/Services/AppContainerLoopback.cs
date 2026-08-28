@@ -15,7 +15,7 @@ public sealed class AppContainerInfo
 /// <summary>
 /// Windows AppContainer loopback exemption (Fiddler WinConfig-style) via FirewallAPI.
 /// </summary>
-public static class AppContainerLoopback
+public static partial class AppContainerLoopback
 {
     [SupportedOSPlatformGuard("windows")]
     public static bool IsSupported =>
@@ -210,7 +210,7 @@ public static class AppContainerLoopback
         }
     }
 
-    private static class NativeMethods
+    private static partial class NativeMethods
     {
         [StructLayout(LayoutKind.Sequential)]
         public struct SID_AND_ATTRIBUTES // NOSONAR S101 -- Win32 struct name required for P/Invoke
@@ -247,29 +247,30 @@ public static class AppContainerLoopback
             public IntPtr binaries;
         }
 
-        [DllImport("FirewallAPI.dll", ExactSpelling = true)]
-        public static extern uint NetworkIsolationEnumAppContainers( // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
+        [LibraryImport("FirewallAPI.dll")]
+        public static partial uint NetworkIsolationEnumAppContainers(
             uint flags,
             out uint pdwCntPublicACs,
             out IntPtr ppACs);
 
-        [DllImport("FirewallAPI.dll", ExactSpelling = true)]
-        public static extern void NetworkIsolationFreeAppContainers(IntPtr pACs); // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
+        [LibraryImport("FirewallAPI.dll")]
+        public static partial void NetworkIsolationFreeAppContainers(IntPtr pACs);
 
-        [DllImport("FirewallAPI.dll", ExactSpelling = true)]
-        public static extern uint NetworkIsolationGetAppContainerConfig( // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
+        [LibraryImport("FirewallAPI.dll")]
+        public static partial uint NetworkIsolationGetAppContainerConfig(
             out uint pdwCntACs,
             out IntPtr appContainerSids);
 
-        [DllImport("FirewallAPI.dll", ExactSpelling = true)]
-        public static extern uint NetworkIsolationSetAppContainerConfig( // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
+        [LibraryImport("FirewallAPI.dll")]
+        public static partial uint NetworkIsolationSetAppContainerConfig(
             uint dwNumPublicAppCs,
             [In] SID_AND_ATTRIBUTES[]? appContainerSids);
 
-        [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern bool ConvertStringSidToSid(string strSid, out IntPtr pSid); // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
+        [LibraryImport("advapi32.dll", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static partial bool ConvertStringSidToSid(string strSid, out IntPtr pSid);
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern IntPtr LocalFree(IntPtr hMem); // NOSONAR SYSLIB1054 -- Windows-only P/Invoke; LibraryImport migration deferred
+        [LibraryImport("kernel32.dll", SetLastError = true)]
+        public static partial IntPtr LocalFree(IntPtr hMem);
     }
 }
