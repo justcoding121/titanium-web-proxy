@@ -234,24 +234,33 @@ For large or unbounded bodies, prefer the streaming APIs below instead of `GetRe
 
 ## Custom and redirected responses
 
-Answer the client directly, without contacting the server:
+Answer the client directly, without contacting the server. Build a response with **`ProxyResults`**, then pass it to **`e.Respond(...)`**:
 
 ```csharp
 proxyServer.BeforeRequest += (sender, e) =>
 {
     if (e.HttpClient.Request.Url.Contains("blocked.example"))
-        e.Ok("<html><body>Blocked</body></html>");
+        e.Respond(ProxyResults.Html("<html><body>Blocked</body></html>"));
 
     return Task.CompletedTask;
 };
 ```
 
-- `e.Ok(html)` / `e.Ok(bytes)` — send a `200` response.
-- `e.Respond(response)` — send an arbitrary `Response`.
-- `e.Redirect(url)` — send a redirect.
-- `e.TerminateServerConnection()` — close the upstream connection instead of reusing it.
+Common patterns:
+
+```csharp
+// JSON API denial
+e.Respond(ProxyResults.Json(new { error = "blocked" }, HttpStatusCode.Forbidden));
+
+// Redirect with explicit status
+e.Respond(ProxyResults.Redirect("https://safe.example/", HttpStatusCode.MovedPermanently));
+```
+
+Legacy shortcuts still work: `e.Ok(html)`, `e.GenericResponse(...)`, `e.Redirect(url)`, and `e.Respond(response)`.
 
 When you supply a response after the server was already contacted, the original server body is drained so the connection can be reused; see [Draining bodies](Streaming-Bodies#draining-bodies).
+
+See **[Synthetic Responses](Synthetic-Responses)** for the full guide (buffered vs streamed, all factory methods, and migration from legacy APIs).
 
 ## Streaming bodies
 
