@@ -6,7 +6,7 @@ namespace Titanium.Web.Proxy.Configuration.Models;
 /// <summary>Root Titanium Web Proxy configuration document (native twp.yaml / twp.json).</summary>
 public sealed class TwpConfig
 {
-    public string? SchemaVersion { get; set; } = "7.0";
+    public string? SchemaVersion { get; set; } = "7.1";
 
     public IList<ListenerConfig> Listeners { get; set; } = new List<ListenerConfig>();
 
@@ -22,6 +22,9 @@ public sealed class TwpConfig
 
     /// <summary>Optional diagnostic logging (maps to <c>ProxyServer.Logging</c>).</summary>
     public LoggingConfig? Logging { get; set; }
+
+    /// <summary>Optional <c>ProxyServer</c> knobs (profile, timeouts, TLS, limits, upstream, …).</summary>
+    public ServerConfig? Server { get; set; }
 }
 
 /// <summary>Built-in async console/file logging options for CLI <c>ProxyServer</c>.</summary>
@@ -43,6 +46,9 @@ public sealed class LoggingConfig
     public long? MaxFileSizeBytes { get; set; }
 
     public int? MaxRolledFiles { get; set; }
+
+    /// <summary>Bounded async log queue capacity. Null leaves the library default.</summary>
+    public int? QueueCapacity { get; set; }
 }
 
 /// <summary>Listen endpoint binding.</summary>
@@ -53,6 +59,12 @@ public sealed class ListenerConfig
     public int Port { get; set; } = 8000;
 
     public bool DecryptSsl { get; set; }
+
+    /// <summary>
+    ///     Endpoint kind: <c>explicit</c> (default when no forwardHost), <c>transparent</c>,
+    ///     <c>socks</c>, or <c>quic</c>. When null, classic ForwardHost rules choose transparent vs explicit.
+    /// </summary>
+    public string? Type { get; set; }
 
     /// <summary>When set, enables classic ForwardHost reverse without a route table.</summary>
     public string? ForwardHost { get; set; }
@@ -67,6 +79,25 @@ public sealed class ListenerConfig
     /// When false, disables HTTP/3. Null inherits host default (on when the OS supports QUIC).
     /// </summary>
     public bool? EnableHttp3 { get; set; }
+
+    public int? MaxCachedConnections { get; set; }
+
+    public int? MaxConcurrentClients { get; set; }
+
+    public bool? EnableHttpInterception { get; set; }
+
+    /// <summary>Fallback certificate hostname when SNI is absent (transparent / SOCKS / QUIC).</summary>
+    public string? GenericCertificateName { get; set; }
+
+    public int? MaxInboundBidirectionalStreams { get; set; }
+
+    public int? MaxInboundUnidirectionalStreams { get; set; }
+
+    /// <summary>QUIC handshake timeout in seconds.</summary>
+    public int? HandshakeTimeoutSeconds { get; set; }
+
+    /// <summary>QUIC idle timeout in seconds.</summary>
+    public int? IdleTimeoutSeconds { get; set; }
 }
 
 /// <summary>Static file serving options.</summary>

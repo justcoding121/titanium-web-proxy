@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -1229,6 +1229,10 @@ public sealed class CertificateManager : IDisposable
             // localMachine\Root
             InstallCertificate(StoreName.Root, StoreLocation.LocalMachine);
         }
+
+        // On macOS/Linux, also trust for SSL in Keychain / NSS so browsers accept MITM.
+        if (!RunTime.IsWindows && RootCertificate != null)
+            Helpers.UnixCertificateTrust.TrustUserSsl(RootCertificate, RootCertificateName);
     }
 
     /// <summary>
@@ -1242,14 +1246,20 @@ public sealed class CertificateManager : IDisposable
     /// <returns>True if success.</returns>
     public bool TrustRootCertificateAsAdmin(bool machineTrusted = false)
     {
-        if (!RunTime.IsWindows) return false;
-
         var certificate = RootCertificate;
         if (certificate == null) return false;
 
         // currentUser\Personal + currentUser\Root (machine elevation is only needed for LocalMachine).
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
         InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
+
+        if (!RunTime.IsWindows)
+        {
+            Helpers.UnixCertificateTrust.TrustUserSsl(certificate, RootCertificateName);
+            return machineTrusted
+                ? Helpers.UnixCertificateTrust.TrustMachineSsl(certificate, RootCertificateName)
+                : true;
+        }
 
         // certutil.exe only accepts the PFX password via a plain "-p password" command-line argument -
         // it has no file/stdin-based alternative (confirmed: no documented option to read it from a
@@ -1379,6 +1389,9 @@ public sealed class CertificateManager : IDisposable
             // localMachine\Root
             UninstallCertificate(StoreName.Root, StoreLocation.LocalMachine, RootCertificate);
         }
+
+        if (!RunTime.IsWindows && RootCertificate != null)
+            Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
     }
 
     /// <summary>
@@ -1387,11 +1400,18 @@ public sealed class CertificateManager : IDisposable
     /// <returns>Should also remove from machine store?</returns>
     public bool RemoveTrustedRootCertificateAsAdmin(bool machineTrusted = false)
     {
-        if (!RunTime.IsWindows) return false;
-
         // currentUser\Personal + currentUser\Root
         UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
         UninstallCertificate(StoreName.Root, StoreLocation.CurrentUser, RootCertificate);
+
+        if (!RunTime.IsWindows)
+        {
+            if (RootCertificate == null) return false;
+            Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
+            return machineTrusted
+                ? Helpers.UnixCertificateTrust.UntrustMachineSsl(RootCertificate, RootCertificateName)
+                : true;
+        }
 
         var infos = new List<ProcessStartInfo>();
         if (!machineTrusted)

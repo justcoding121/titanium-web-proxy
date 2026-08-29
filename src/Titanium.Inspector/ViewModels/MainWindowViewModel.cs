@@ -47,8 +47,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _breakpointEditBody = "";
     private string? _scriptOnRequest;
     private string? _scriptOnResponse;
-    private int _selectedDetailTabIndex;
+    private int _selectedOuterPaneIndex;
+    private int _selectedInspectTabIndex;
+    private int _selectedToolsTabIndex;
     private bool _showSessionDetails;
+    private bool _showWsFramesTab;
     private string _composerMethod = "GET";
     private string _composerUrl = "";
     private string _composerHeaders = "";
@@ -110,6 +113,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ApplyEditBodyCommand = new RelayCommand(ApplyEditBodyAsync);
         ToggleDebugLoggingCommand = new RelayCommand(ToggleDebugLoggingAsync);
         CloseSessionDetailsCommand = new RelayCommand(CloseSessionDetailsAsync);
+        OpenToolsComposerCommand = new RelayCommand(() => OpenToolsTabAsync(0));
+        OpenToolsBreakpointsCommand = new RelayCommand(() => OpenToolsTabAsync(1));
+        OpenToolsAutoResponderCommand = new RelayCommand(() => OpenToolsTabAsync(2));
+        OpenToolsScriptsCommand = new RelayCommand(() => OpenToolsTabAsync(3));
 
         WireEventHandlers();
         LoadPlusPanels();
@@ -315,7 +322,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         if (!_interception.SetSystemProxy(enable))
         {
             StatusText = enable
-                ? "Failed to enable system proxy (check permissions / platform support)"
+                ? "Failed to enable system proxy (permissions, cancelled admin prompt, or unsupported desktop environment)"
                 : "Failed to restore system proxy settings";
             return Task.CompletedTask;
         }
@@ -327,20 +334,32 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
-    private Task InstallCaAsync()
+    private async Task InstallCaAsync()
     {
         if (!_interception.IsRunning)
         {
             StatusText = "Start interception first";
-            return Task.CompletedTask;
+            return;
         }
 
         var ok = _interception.InstallRootCertificate(machineStore: false);
+        if (!ok)
+        {
+            var owner = TryGetMainWindow();
+            if (await _dialogs.ConfirmElevateRootCaAsync(owner))
+                ok = _interception.InstallRootCertificateAsAdmin(machineStore: false);
+            else
+            {
+                StatusText = "Root CA install cancelled elevation - try Export CA and install manually (Keychain / NSS / cert store)";
+                return;
+            }
+        }
+
         StatusText = ok
-            ? "Root CA trusted in current user store — ready to enable Decrypt HTTPS"
-            : "Root CA install failed or not present in store — try Export CA and install manually";
-        return Task.CompletedTask;
+            ? "Root CA trusted - ready to enable Decrypt HTTPS"
+            : "Root CA install failed (store / Keychain / NSS) - try Export CA, or allow the admin prompt";
     }
+
 
     private async Task UntrustCaAsync()
     {
@@ -511,6 +530,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ApplyEditBodyCommand { get; }
     public ICommand ToggleDebugLoggingCommand { get; }
     public ICommand CloseSessionDetailsCommand { get; }
+    public ICommand OpenToolsComposerCommand { get; }
+    public ICommand OpenToolsBreakpointsCommand { get; }
+    public ICommand OpenToolsAutoResponderCommand { get; }
+    public ICommand OpenToolsScriptsCommand { get; }
 
     public string BindAddress
     {
@@ -691,6 +714,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public bool ShowLoopbackExemptMenu { get; }
 
+    /// <summary>Right pane visibility (Inspect + Tools). Kept name for tests.</summary>
     public bool ShowSessionDetails
     {
         get => _showSessionDetails;
@@ -704,7 +728,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     public GridLength SessionDetailsPaneWidth =>
-        _showSessionDetails ? new GridLength(380) : new GridLength(0);
+        _showSessionDetails ? new GridLength(420) : new GridLength(0);
+
+    public bool HasSelectedSession => _selected is not null;
+
+    public bool ShowInspectEmpty => _selected is null;
+
+    public bool ShowWsFramesTab
+    {
+        get => _showWsFramesTab;
+        private set => SetField(ref _showWsFramesTab, value);
+    }
 
     public string SearchQuery
     {
@@ -728,11 +762,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 return;
             }
 
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSelectedSession)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowInspectEmpty)));
+
             if (value is not null)
             {
                 ShowSessionDetails = true;
+                SelectedOuterPaneIndex = 0;
             }
 
+            UpdateWsFramesVisibility();
             RefreshSelectedInspectors();
         }
     }
@@ -742,11 +781,68 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public string SelectedHex { get => _selectedHex; set => SetField(ref _selectedHex, value); }
     public string SelectedFrames { get => _selectedFrames; set => SetField(ref _selectedFrames, value); }
 
-    /// <summary>Bound to detail TabControl SelectedIndex for automation / tests.</summary>
+    /// <summary>0 = Inspect, 1 = Tools.</summary>
+    public int SelectedOuterPaneIndex
+    {
+        get => _selectedOuterPaneIndex;
+        set
+        {
+            if (SetField(ref _selectedOuterPaneIndex, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
+            }
+        }
+    }
+
+    /// <summary>Inspect tabs: 0 Headers, 1 Body, 2 Hex, 3 WS Frames.</summary>
+    public int SelectedInspectTabIndex
+    {
+        get => _selectedInspectTabIndex;
+        set
+        {
+            if (SetField(ref _selectedInspectTabIndex, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
+            }
+        }
+    }
+
+    /// <summary>Tools tabs: 0 Composer, 1 Breakpoints, 2 AutoResponder, 3 Scripts.</summary>
+    public int SelectedToolsTabIndex
+    {
+        get => _selectedToolsTabIndex;
+        set
+        {
+            if (SetField(ref _selectedToolsTabIndex, value))
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Compatibility index for tests: 0–3 Inspect, 4–7 Tools (Composer…Scripts).
+    /// </summary>
     public int SelectedDetailTabIndex
     {
-        get => _selectedDetailTabIndex;
-        set => SetField(ref _selectedDetailTabIndex, value);
+        get => SelectedOuterPaneIndex == 0
+            ? SelectedInspectTabIndex
+            : 4 + SelectedToolsTabIndex;
+        set
+        {
+            if (value < 4)
+            {
+                SelectedOuterPaneIndex = 0;
+                SelectedInspectTabIndex = Math.Clamp(value, 0, 3);
+            }
+            else
+            {
+                SelectedOuterPaneIndex = 1;
+                SelectedToolsTabIndex = Math.Clamp(value - 4, 0, 3);
+            }
+
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
+        }
     }
 
     public string StatusText
@@ -817,6 +913,26 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
+    private Task OpenToolsTabAsync(int toolsTabIndex)
+    {
+        ShowSessionDetails = true;
+        SelectedOuterPaneIndex = 1;
+        SelectedToolsTabIndex = Math.Clamp(toolsTabIndex, 0, 3);
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
+        return Task.CompletedTask;
+    }
+
+    private void UpdateWsFramesVisibility()
+    {
+        var show = _selected?.IsWebSocket == true;
+        ShowWsFramesTab = show;
+        if (!show && SelectedInspectTabIndex == 3)
+        {
+            SelectedInspectTabIndex = 0;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedDetailTabIndex)));
+        }
+    }
+
     private async Task EnableDecryptHttpsAsync()
     {
         _decryptHttpsBusy = true;
@@ -842,9 +958,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
                 if (!_interception.InstallRootCertificate(machineStore: false))
                 {
-                    StatusText = "Root CA install failed — Decrypt HTTPS stays off";
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
-                    return;
+                    if (!await _dialogs.ConfirmElevateRootCaAsync(owner) ||
+                        !_interception.InstallRootCertificateAsAdmin(machineStore: false))
+                    {
+                        StatusText = "Root CA install failed - Decrypt HTTPS stays off (try Export CA or allow admin prompt)";
+                        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+                        return;
+                    }
                 }
             }
 
@@ -933,12 +1053,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         SelectedHeaders = sb.ToString();
 
-        var headers = SessionInspectors.ParseHeaderBlock(_selected.ResponseHeadersText);
-        headers.TryGetValue("Content-Encoding", out var encoding);
-        var bytes = SessionInspectors.TryDecompress(_selected.ResponseBodyBytes ?? _selected.RequestBodyBytes, encoding);
-        SelectedBody = SessionInspectors.TryFormatJson(
-            _selected.ResponseBodyText ?? _selected.RequestBodyText ?? Encoding.UTF8.GetString(bytes ?? []));
-        SelectedHex = SessionInspectors.ToHex(bytes);
+        SelectedBody = SessionInspectors.FormatLabeledBody(
+            _selected.RequestHeadersText,
+            _selected.ResponseHeadersText,
+            _selected.RequestBodyText,
+            _selected.ResponseBodyText,
+            _selected.RequestBodyBytes,
+            _selected.ResponseBodyBytes);
+        SelectedHex = SessionInspectors.FormatLabeledHex(
+            _selected.RequestHeadersText,
+            _selected.ResponseHeadersText,
+            _selected.RequestBodyBytes,
+            _selected.ResponseBodyBytes);
 
         if (_selected.WebSocketFrames is { Count: > 0 } frames)
         {

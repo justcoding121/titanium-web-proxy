@@ -7,7 +7,8 @@ Process-level and service-level end-to-end coverage for CLI, CLI+Plus, and Inspe
 | Category | CI | Description |
 |----------|----|-------------|
 | `E2E` | Yes (Windows build job) | Spawn `titanium`, reverse/edge + Plus control plane; MITM happy-path smoke only |
-| `E2E-UI` | Yes (Windows + `ui-portable`) | ViewModel commands, Avalonia Headless smoke, Inspector UI actions |
+| `E2E-UI` | Yes (`ui-portable` on Windows/Linux/macOS + dedicated `inspector-ui-macos`) | ViewModel commands, feature sanity (capture/proxy/CA/tools/composer), elevate-CA UX |
+| `E2E-UI-Mac` / `E2E-UI-Linux` | Yes (macOS / Linux runners only) | System-proxy backend factory selection for that OS |
 | `E2E-UI-Window` | No (opt-in) | Windows FlaUI / real HWND smoke against `TitaniumInspector.exe` |
 | `E2E-Slow` | No | Windows WinINET system proxy + Chrome `--disable-quic` |
 

@@ -39,12 +39,29 @@ public class InspectorAvaloniaHeadlessE2ETests
             });
             vm.SelectedSession = vm.Sessions[0];
             Assert.IsNotNull(vm.SelectedSession);
+            Assert.IsFalse(vm.ShowWsFramesTab);
+            Assert.AreEqual(0, vm.SelectedOuterPaneIndex);
 
             for (var i = 0; i < 8; i++)
             {
                 vm.SelectedDetailTabIndex = i;
                 Assert.AreEqual(i, vm.SelectedDetailTabIndex);
             }
+
+            vm.OpenToolsScriptsCommand.Execute(null);
+            Assert.IsTrue(vm.ShowSessionDetails);
+            Assert.AreEqual(1, vm.SelectedOuterPaneIndex);
+            Assert.AreEqual(3, vm.SelectedToolsTabIndex);
+            Assert.AreEqual(7, vm.SelectedDetailTabIndex);
+
+            vm.SelectedSession = new SessionSnapshot
+            {
+                Id = 2,
+                Method = "GET",
+                Url = "wss://example.com/ws",
+                IsWebSocket = true,
+            };
+            Assert.IsTrue(vm.ShowWsFramesTab);
 
             // Document Docker path for Linux visual-tree runs.
             Assert.IsTrue(File.Exists(Path.Combine(

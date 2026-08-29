@@ -39,6 +39,9 @@ internal static class RunCommand
         // (Windows can block on a security prompt and hang headless CI / services).
         using var proxy = new ProxyServer(userTrustRootCertificate: false);
         ApplyLogging(proxy, loaded.Config.Logging, verbose);
+        // Fast leaf cold-start before server.certificateManager overlays (which may override engine/algo).
+        proxy.CertificateManager.ApplyFastColdStartLeafSettings();
+        ServerConfigApplier.Apply(proxy, loaded.Config.Server);
         ConfigureProxyFlags(proxy, loaded.Config, requiresSessionPath);
 
         var clusterManager = new ClusterManager();
@@ -149,25 +152,31 @@ internal static class RunCommand
 
     private static void ConfigureProxyFlags(ProxyServer proxy, TwpConfig config, bool requiresSessionPath)
     {
-        // Explicit/MITM decrypt uses generated leaves; ECDSA + disk cache avoids RSA cold-start stampede.
-        // Plus shares this ProxyServer. Library Balanced still defaults to RSA for NuGet consumers.
-        proxy.CertificateManager.ApplyFastColdStartLeafSettings();
-
+        // Session-path features force interception; server.enableHttpInterception may already be true.
         if (requiresSessionPath)
         {
             proxy.EnableHttpInterception = true;
         }
 
-        // HTTP/2: any explicit false disables. HTTP/3: on when the OS supports QUIC unless a
-        // listener sets enableHttp3: false. Plus uses this same ProxyServer.
+        // HTTP/2: server.enableHttp2 is the base; any listener false still forces off.
         if (config.Listeners.Any(l => l.EnableHttp2 == false))
         {
             proxy.EnableHttp2 = false;
         }
 
-        if (ShouldEnableHttp3(config))
+        // HTTP/3: server.enableHttp3 false wins; otherwise enable when OS supports QUIC unless a
+        // listener sets enableHttp3: false. server.enableHttp3 true already applied TryEnable in applier.
+        if (config.Server?.EnableHttp3 == false)
+        {
+            proxy.SetHttp3Enabled(false);
+        }
+        else if (ShouldEnableHttp3(config) && config.Server?.EnableHttp3 != true)
         {
             proxy.TryEnableHttp3IfSupported();
+        }
+        else if (!ShouldEnableHttp3(config))
+        {
+            proxy.SetHttp3Enabled(false);
         }
     }
 
@@ -247,6 +256,11 @@ internal static class RunCommand
             {
                 proxy.Logging.MaxRolledFiles = maxFiles;
             }
+
+            if (logging.QueueCapacity is int queueCapacity)
+            {
+                proxy.Logging.QueueCapacity = queueCapacity;
+            }
         }
 
         if (verbose)
@@ -266,38 +280,162 @@ internal static class RunCommand
             ? IPAddress.Any
             : IPAddress.Parse(host);
 
-        if (!string.IsNullOrEmpty(listener.ForwardHost) && !listener.DecryptSsl)
+        var kind = ResolveListenerKind(listener);
+        ProxyEndPoint endPoint = kind switch
         {
-            proxy.AddEndPoint(new TransparentProxyEndPoint(ip, listener.Port, decryptSsl: false)
-            {
-                ForwardHost = listener.ForwardHost,
-                ForwardPort = listener.ForwardPort ?? 80,
-                ForwardCleartext = true,
-                EnableHttp3 = ResolveListenerHttp3(listener, decryptSsl: false),
-            });
+            "socks" => CreateSocksEndPoint(ip, listener),
+            "quic" => CreateQuicEndPoint(ip, listener),
+            "transparent" => CreateTransparentEndPoint(ip, listener),
+            _ when !string.IsNullOrEmpty(listener.ForwardHost) => CreateTransparentEndPoint(ip, listener),
+            _ => new ExplicitProxyEndPoint(ip, listener.Port, listener.DecryptSsl),
+        };
+
+        ApplyListenerOverrides(endPoint, listener);
+        proxy.AddEndPoint(endPoint);
+
+        if (endPoint is TransparentProxyEndPoint { ForwardHost: not null } transparent)
+        {
+            var mode = listener.DecryptSsl ? "TLS-terminate" : "transparent";
             Console.WriteLine(
-                $"Listener {host}:{listener.Port} transparent ForwardHost={listener.ForwardHost}:{listener.ForwardPort ?? 80}");
-            return;
+                $"Listener {host}:{listener.Port} {mode} ForwardHost={transparent.ForwardHost}:{transparent.ForwardPort ?? 80}");
+        }
+        else
+        {
+            Console.WriteLine($"Listener {host}:{listener.Port} {kind} decryptSsl={listener.DecryptSsl}");
+        }
+    }
+
+    private static string ResolveListenerKind(ListenerConfig listener)
+    {
+        if (!string.IsNullOrWhiteSpace(listener.Type))
+        {
+            return listener.Type.Trim().ToLowerInvariant();
         }
 
-        if (!string.IsNullOrEmpty(listener.ForwardHost) && listener.DecryptSsl)
+        return string.IsNullOrEmpty(listener.ForwardHost) ? "explicit" : "transparent";
+    }
+
+    private static SocksProxyEndPoint CreateSocksEndPoint(IPAddress ip, ListenerConfig listener)
+    {
+        var ep = new SocksProxyEndPoint(ip, listener.Port, listener.DecryptSsl);
+        if (!string.IsNullOrWhiteSpace(listener.GenericCertificateName))
         {
-            // TLS terminate → cleartext origin (ForwardPort is the cleartext listen).
-            // Without ForwardCleartext the engine treats ForwardPort as HTTPS (default 443).
-            proxy.AddEndPoint(new TransparentProxyEndPoint(ip, listener.Port, decryptSsl: true)
-            {
-                ForwardHost = listener.ForwardHost,
-                ForwardPort = listener.ForwardPort ?? 80,
-                ForwardCleartext = true,
-                EnableHttp3 = ResolveListenerHttp3(listener, decryptSsl: true),
-            });
-            Console.WriteLine(
-                $"Listener {host}:{listener.Port} TLS-terminate ForwardHost={listener.ForwardHost}:{listener.ForwardPort ?? 80} (cleartext)");
-            return;
+            ep.GenericCertificateName = listener.GenericCertificateName;
         }
 
-        proxy.AddEndPoint(new ExplicitProxyEndPoint(ip, listener.Port, listener.DecryptSsl));
-        Console.WriteLine($"Listener {host}:{listener.Port} explicit decryptSsl={listener.DecryptSsl}");
+        if (!string.IsNullOrEmpty(listener.ForwardHost))
+        {
+            ep.ForwardHost = listener.ForwardHost;
+            ep.ForwardPort = listener.ForwardPort ?? 80;
+        }
+
+        return ep;
+    }
+
+    private static TransparentQuicProxyEndPoint CreateQuicEndPoint(IPAddress ip, ListenerConfig listener)
+    {
+        var ep = new TransparentQuicProxyEndPoint(ip, listener.Port);
+        ApplyQuicKnobs(ep, listener);
+        if (!string.IsNullOrWhiteSpace(listener.GenericCertificateName))
+        {
+            ep.GenericCertificateName = listener.GenericCertificateName;
+        }
+
+        if (!string.IsNullOrEmpty(listener.ForwardHost))
+        {
+            ep.ForwardHost = listener.ForwardHost;
+            ep.ForwardPort = listener.ForwardPort ?? 443;
+        }
+
+        return ep;
+    }
+
+    private static TransparentProxyEndPoint CreateTransparentEndPoint(IPAddress ip, ListenerConfig listener)
+    {
+        // TLS terminate → cleartext origin when ForwardHost is set (ForwardCleartext).
+        var ep = new TransparentProxyEndPoint(ip, listener.Port, listener.DecryptSsl)
+        {
+            EnableHttp3 = ResolveListenerHttp3(listener, listener.DecryptSsl),
+        };
+
+        if (!string.IsNullOrEmpty(listener.ForwardHost))
+        {
+            ep.ForwardHost = listener.ForwardHost;
+            ep.ForwardPort = listener.ForwardPort ?? 80;
+            ep.ForwardCleartext = true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(listener.GenericCertificateName))
+        {
+            ep.GenericCertificateName = listener.GenericCertificateName;
+        }
+
+        ApplyQuicKnobs(ep, listener);
+        return ep;
+    }
+
+    private static void ApplyQuicKnobs(TransparentProxyEndPoint ep, ListenerConfig listener)
+    {
+        if (listener.MaxInboundBidirectionalStreams is int bidi)
+        {
+            ep.MaxInboundBidirectionalStreams = bidi;
+        }
+
+        if (listener.MaxInboundUnidirectionalStreams is int uni)
+        {
+            ep.MaxInboundUnidirectionalStreams = uni;
+        }
+
+        if (listener.HandshakeTimeoutSeconds is int handshake)
+        {
+            ep.HandshakeTimeout = TimeSpan.FromSeconds(handshake);
+        }
+
+        if (listener.IdleTimeoutSeconds is int idle)
+        {
+            ep.IdleTimeout = TimeSpan.FromSeconds(idle);
+        }
+    }
+
+    private static void ApplyQuicKnobs(TransparentQuicProxyEndPoint ep, ListenerConfig listener)
+    {
+        if (listener.MaxInboundBidirectionalStreams is int bidi)
+        {
+            ep.MaxInboundBidirectionalStreams = bidi;
+        }
+
+        if (listener.MaxInboundUnidirectionalStreams is int uni)
+        {
+            ep.MaxInboundUnidirectionalStreams = uni;
+        }
+
+        if (listener.HandshakeTimeoutSeconds is int handshake)
+        {
+            ep.HandshakeTimeout = TimeSpan.FromSeconds(handshake);
+        }
+
+        if (listener.IdleTimeoutSeconds is int idle)
+        {
+            ep.IdleTimeout = TimeSpan.FromSeconds(idle);
+        }
+    }
+
+    private static void ApplyListenerOverrides(ProxyEndPoint endPoint, ListenerConfig listener)
+    {
+        if (listener.MaxCachedConnections is int maxCached)
+        {
+            endPoint.MaxCachedConnections = maxCached;
+        }
+
+        if (listener.MaxConcurrentClients is int maxClients)
+        {
+            endPoint.MaxConcurrentClients = maxClients;
+        }
+
+        if (listener.EnableHttpInterception is bool intercept)
+        {
+            endPoint.EnableHttpInterception = intercept;
+        }
     }
 
     internal static bool ShouldEnableHttp3(TwpConfig config) =>

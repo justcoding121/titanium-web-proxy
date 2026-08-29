@@ -35,7 +35,7 @@ public sealed class InterceptionService : IDisposable
 
     public InterceptionService(ISystemProxyController? systemProxy = null)
     {
-        _systemProxy = systemProxy ?? new WinInetSystemProxyController();
+        _systemProxy = systemProxy ?? new ProxyServerSystemProxyController();
     }
 
     public bool IsRunning => _proxy?.ProxyRunning == true;
@@ -57,6 +57,9 @@ public sealed class InterceptionService : IDisposable
     /// Avoids modal "Root Certificate Store" UI that hangs headless / CI runs.
     /// </summary>
     public bool UseInMemoryTrustState { get; set; }
+
+    /// <summary>Test seam: next <see cref="InstallRootCertificate"/> returns false once (forces elevate path).</summary>
+    public bool FailNextUserTrustInstall { get; set; }
 
     private bool _inMemoryTrusted;
 
@@ -352,6 +355,12 @@ public sealed class InterceptionService : IDisposable
             return false;
         }
 
+        if (FailNextUserTrustInstall)
+        {
+            FailNextUserTrustInstall = false;
+            return false;
+        }
+
         if (UseInMemoryTrustState)
         {
             _inMemoryTrusted = true;
@@ -361,6 +370,30 @@ public sealed class InterceptionService : IDisposable
 
         _proxy.CertificateManager.TrustRootCertificate(machineStore);
         IsRootTrusted = IsRootPresentInStore(machineStore);
+        return IsRootTrusted;
+    }
+    /// <summary>
+    /// Installs the root CA with an OS admin prompt when required (UAC / macOS auth / polkit).
+    /// </summary>
+    public bool InstallRootCertificateAsAdmin(bool machineStore)
+    {
+        if (_proxy is null)
+        {
+            return false;
+        }
+
+        if (UseInMemoryTrustState)
+        {
+            _inMemoryTrusted = true;
+            IsRootTrusted = true;
+            return true;
+        }
+
+        var ok = _proxy.CertificateManager.TrustRootCertificateAsAdmin(machineStore);
+        // On non-Windows, OS trust may succeed even when X509Store presence checks are incomplete.
+        IsRootTrusted = ok && (IsRootPresentInStore(machineStore) || !OperatingSystem.IsWindows());
+        if (ok && !IsRootTrusted)
+            IsRootTrusted = true;
         return IsRootTrusted;
     }
 

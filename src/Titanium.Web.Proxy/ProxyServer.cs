@@ -185,7 +185,7 @@ public partial class ProxyServer : IDisposable
         Http3WarmOrigins = new Http3.Http3WarmOriginRegistry();
         QuicConnectionPool = new Network.Quic.QuicConnectionPool(this);
         Http2OriginConnectionPool = new Http2.Http2OriginConnectionPool(this);
-        if (RunTime.IsWindows && !RunTime.IsUwpOnWindows) SystemProxySettingsManager = new SystemProxyManager();
+        SystemProxySettingsManager = SystemProxyBackendFactory.Create();
 
         CertificateManager = new CertificateManager(rootCertificateName, rootCertificateIssuerName,
             userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin, logger,
@@ -252,7 +252,7 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     Manage system proxy settings.
     /// </summary>
-    private SystemProxyManager? SystemProxySettingsManager { get; }
+    private ISystemProxyBackend? SystemProxySettingsManager { get; }
 
     /// <summary>
     ///     Number of times to retry upon network failures when connection pool is enabled.
@@ -1456,9 +1456,9 @@ public partial class ProxyServer : IDisposable
     public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType,
         SystemProxySettings? settings)
     {
-        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
-            throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
-                            Please manually configure you operating system to use this proxy's port and address.");
+        if (SystemProxySettingsManager == null)
+            throw new NotSupportedException(@"Setting system proxy settings are not supported on this platform.
+                            Please manually configure your operating system to use this proxy's port and address.");
 
         ValidateEndPointAsSystemProxy(endPoint);
 
@@ -1488,7 +1488,7 @@ public partial class ProxyServer : IDisposable
         string? proxyOverride = null;
         if (settings != null)
         {
-            var currentProxyOverride = SystemProxyManager.GetProxyInfoFromRegistry()?.ProxyOverride;
+            var currentProxyOverride = SystemProxySettingsManager.GetCurrentProxyOverride();
             proxyOverride = settings.BuildProxyOverride(currentProxyOverride);
         }
 
@@ -1545,8 +1545,8 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public void RestoreOriginalProxySettings()
     {
-        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
-            throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
+        if (SystemProxySettingsManager == null)
+            throw new NotSupportedException(@"Setting system proxy settings are not supported on this platform.
                             Please manually configure your operating system to use this proxy's port and address.");
 
         SystemProxySettingsManager.RestoreOriginalSettings();
@@ -1559,8 +1559,8 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public void DisableSystemProxy(ProxyProtocolType protocolType)
     {
-        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
-            throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
+        if (SystemProxySettingsManager == null)
+            throw new NotSupportedException(@"Setting system proxy settings are not supported on this platform.
                             Please manually configure your operating system to use this proxy's port and address.");
 
         SystemProxySettingsManager.RemoveProxy(protocolType);
@@ -1577,9 +1577,9 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public void DisableAllSystemProxies()
     {
-        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
-            throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
-                            Please manually confugure you operating system to use this proxy's port and address.");
+        if (SystemProxySettingsManager == null)
+            throw new NotSupportedException(@"Setting system proxy settings are not supported on this platform.
+                            Please manually configure your operating system to use this proxy's port and address.");
 
         SystemProxySettingsManager.DisableAllProxy();
 
@@ -1636,21 +1636,12 @@ public partial class ProxyServer : IDisposable
         if (ProxyEndPoints.Any(x => x.DecryptSsl && x.GenericCertificate == null))
             CertificateManager.EnsureRootCertificate();
 
-        if (changeSystemProxySettings && SystemProxySettingsManager != null && RunTime.IsWindows &&
-            !RunTime.IsUwpOnWindows)
+        if (changeSystemProxySettings && SystemProxySettingsManager != null)
         {
-            var proxyInfo = SystemProxyManager.GetProxyInfoFromRegistry();
-            if (proxyInfo?.Proxies != null)
-            {
-                var protocolToRemove = ProxyProtocolType.None;
-                foreach (var proxy in proxyInfo.Proxies.Values.Where(proxy =>
-                             NetworkHelper.IsLocalIpAddress(proxy.HostName) &&
-                             ProxyEndPoints.Any(x => x.Port == proxy.Port)))
-                    protocolToRemove |= proxy.ProtocolType;
-
-                if (protocolToRemove != ProxyProtocolType.None)
-                    SystemProxySettingsManager.RemoveProxy(protocolToRemove, false);
-            }
+            var ownedPorts = ProxyEndPoints.Select(x => x.Port).ToHashSet();
+            var protocolToRemove = SystemProxySettingsManager.GetStaleLocalProxyProtocols(ownedPorts);
+            if (protocolToRemove != ProxyProtocolType.None)
+                SystemProxySettingsManager.RemoveProxy(protocolToRemove, false);
         }
 
         var assignedSystemUpStreamResolver = false;
@@ -1861,7 +1852,7 @@ public partial class ProxyServer : IDisposable
     {
         if (!ProxyRunning) throw new InvalidOperationException("Proxy is not running.");
 
-        if (RunTime.IsWindows && SystemProxySettingsManager != null)
+        if (SystemProxySettingsManager != null)
         {
             var systemProxyEndPoints = ProxyEndPoints.OfType<ExplicitProxyEndPoint>()
                 .Where(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy)
@@ -2612,7 +2603,7 @@ public partial class ProxyServer : IDisposable
 
         // SystemProxyManager is [SupportedOSPlatform("windows")]; the platform analyzer cannot
         // prove that from a null-conditional access alone, so guard explicitly.
-        if (RunTime.IsWindows) SystemProxySettingsManager?.Dispose();
+        SystemProxySettingsManager?.Dispose();
     }
 
     private void DisposeOwnedLoggerFactory()

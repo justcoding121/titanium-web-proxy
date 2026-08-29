@@ -157,4 +157,69 @@ public static class SessionInspectors
             return body;
         }
     }
+
+    /// <summary>
+    /// Labeled request + response body text (same section style as Headers).
+    /// </summary>
+    public static string FormatLabeledBody(
+        string? requestHeadersText,
+        string? responseHeadersText,
+        string? requestBodyText,
+        string? responseBodyText,
+        byte[]? requestBodyBytes,
+        byte[]? responseBodyBytes)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("=== Request ===");
+        sb.AppendLine(ResolveBodyText(requestHeadersText, requestBodyText, requestBodyBytes));
+        sb.AppendLine();
+        sb.AppendLine("=== Response ===");
+        sb.Append(ResolveBodyText(responseHeadersText, responseBodyText, responseBodyBytes));
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Labeled request + response hex dumps (same section style as Headers).
+    /// </summary>
+    public static string FormatLabeledHex(
+        string? requestHeadersText,
+        string? responseHeadersText,
+        byte[]? requestBodyBytes,
+        byte[]? responseBodyBytes)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("=== Request ===");
+        sb.AppendLine(ResolveHex(requestHeadersText, requestBodyBytes));
+        sb.AppendLine();
+        sb.AppendLine("=== Response ===");
+        sb.Append(ResolveHex(responseHeadersText, responseBodyBytes));
+        return sb.ToString();
+    }
+
+    private static string ResolveBodyText(string? headersText, string? bodyText, byte[]? bodyBytes)
+    {
+        if (!string.IsNullOrEmpty(bodyText))
+        {
+            return TryFormatJson(bodyText);
+        }
+
+        var headers = ParseHeaderBlock(headersText);
+        headers.TryGetValue("Content-Encoding", out var encoding);
+        var bytes = TryDecompress(bodyBytes, encoding);
+        if (bytes is { Length: > 0 })
+        {
+            return TryFormatJson(Encoding.UTF8.GetString(bytes));
+        }
+
+        return "(empty)";
+    }
+
+    private static string ResolveHex(string? headersText, byte[]? bodyBytes)
+    {
+        var headers = ParseHeaderBlock(headersText);
+        headers.TryGetValue("Content-Encoding", out var encoding);
+        var bytes = TryDecompress(bodyBytes, encoding);
+        var hex = ToHex(bytes);
+        return string.IsNullOrEmpty(hex) ? "(empty)" : hex;
+    }
 }

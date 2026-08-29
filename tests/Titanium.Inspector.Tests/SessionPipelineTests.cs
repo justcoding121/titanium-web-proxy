@@ -107,6 +107,77 @@ public class SessionPipelineTests
     }
 
     [TestMethod]
+    public void WsFramesTab_OnlyForWebSocket_AndToolsMenuOpensPane()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-inspector-ws-tools-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            vm.SelectedSession = new SessionSnapshot
+            {
+                Id = 1,
+                Method = "GET",
+                Url = "https://example.com/",
+                IsWebSocket = false,
+            };
+            Assert.IsFalse(vm.ShowWsFramesTab);
+            Assert.AreEqual(0, vm.SelectedOuterPaneIndex);
+            Assert.IsTrue(vm.HasSelectedSession);
+            Assert.IsFalse(vm.ShowInspectEmpty);
+
+            vm.SelectedInspectTabIndex = 3;
+            vm.SelectedSession = new SessionSnapshot
+            {
+                Id = 2,
+                Method = "GET",
+                Url = "https://example.com/ws",
+                IsWebSocket = false,
+            };
+            Assert.AreEqual(0, vm.SelectedInspectTabIndex);
+
+            vm.SelectedSession = new SessionSnapshot
+            {
+                Id = 3,
+                Method = "GET",
+                Url = "wss://example.com/ws",
+                IsWebSocket = true,
+            };
+            Assert.IsTrue(vm.ShowWsFramesTab);
+
+            vm.CloseSessionDetailsCommand.Execute(null);
+            Assert.IsFalse(vm.ShowSessionDetails);
+            Assert.IsTrue(vm.OpenToolsAutoResponderCommand.CanExecute(null));
+            vm.OpenToolsAutoResponderCommand.Execute(null);
+            Assert.IsTrue(vm.ShowSessionDetails);
+            Assert.AreEqual(1, vm.SelectedOuterPaneIndex);
+            Assert.AreEqual(2, vm.SelectedToolsTabIndex);
+            Assert.AreEqual(6, vm.SelectedDetailTabIndex);
+
+            vm.SelectedDetailTabIndex = 5;
+            Assert.AreEqual(1, vm.SelectedOuterPaneIndex);
+            Assert.AreEqual(1, vm.SelectedToolsTabIndex);
+            vm.SelectedDetailTabIndex = 2;
+            Assert.AreEqual(0, vm.SelectedOuterPaneIndex);
+            Assert.AreEqual(2, vm.SelectedInspectTabIndex);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task Start_EnablesHttp2Http3AndFastEcdsaLeafCertificates()
     {
         using var interception = new InterceptionService(new RecordingSystemProxyController());
