@@ -472,12 +472,34 @@ public partial class ProxyServer
     ///     <see cref="SessionEventArgs"/>. Returns keep-alive when middleware handled the request;
     ///     null when the origin forward should continue.
     /// </summary>
-    private async Task<bool?> TryRunTerminateLiteMiddlewareAsync(
+    private static async Task<bool?> TryRunTerminateLiteMiddlewareAsync(
         TransparentBaseProxyEndPoint endPoint,
         HttpClientStream clientStream,
         Request request,
         IReadOnlyList<Abstractions.Middleware.IProxyMiddleware> middleware,
         CancellationToken cancellationToken)
+    {
+        var ctx = new ProxyMiddlewareContext
+        {
+            Session = H1TerminateLiteMiddlewareSession,
+            ClientRemoteEndPoint = clientStream.Connection.RemoteEndPoint as IPEndPoint,
+            Request = CreateTerminateLiteMiddlewareRequest(endPoint, request),
+        };
+
+        await Middleware.ProxyMiddlewarePipeline.Build(middleware, static (_, _) => ValueTask.CompletedTask)(
+            ctx, cancellationToken).ConfigureAwait(false);
+
+        if (!ctx.IsHandled && ctx.HandledStatusCode is null)
+            return null;
+
+        await WriteTerminateLiteMiddlewareResponseAsync(clientStream, request, ctx, cancellationToken)
+            .ConfigureAwait(false);
+        return !H1TerminateClientRequestedClose(request);
+    }
+
+    private static MiddlewareRequestView CreateTerminateLiteMiddlewareRequest(
+        TransparentBaseProxyEndPoint endPoint,
+        Request request)
     {
         var path = request.RequestUri?.PathAndQuery;
         if (string.IsNullOrEmpty(path))
@@ -489,38 +511,34 @@ public partial class ProxyServer
 
         var host = request.Host ?? request.RequestUri?.Host ?? endPoint.ForwardHost ?? "";
         var authHeaders = request.Headers.GetHeaders("Authorization");
-        var ctx = new ProxyMiddlewareContext
+        return new MiddlewareRequestView
         {
-            Session = H1TerminateLiteMiddlewareSession,
-            ClientRemoteEndPoint = clientStream.Connection.RemoteEndPoint as IPEndPoint,
-            Request = new MiddlewareRequestView
+            Method = request.Method ?? "GET",
+            Path = path,
+            Host = host,
+            ContentLength = request.ContentLength,
+            Authorization = authHeaders is { Count: > 0 } ? authHeaders[0].Value : null,
+            GetHeaderValues = name =>
             {
-                Method = request.Method ?? "GET",
-                Path = path!,
-                Host = host,
-                ContentLength = request.ContentLength,
-                Authorization = authHeaders is { Count: > 0 } ? authHeaders[0].Value : null,
-                GetHeaderValues = name =>
-                {
-                    var headers = request.Headers.GetHeaders(name);
-                    if (headers is null || headers.Count == 0)
-                        return null;
-                    if (headers.Count == 1)
-                        return new[] { headers[0].Value };
-                    var values = new string[headers.Count];
-                    for (var i = 0; i < headers.Count; i++)
-                        values[i] = headers[i].Value;
-                    return values;
-                },
+                var headers = request.Headers.GetHeaders(name);
+                if (headers is null || headers.Count == 0)
+                    return null;
+                if (headers.Count == 1)
+                    return new[] { headers[0].Value };
+                var values = new string[headers.Count];
+                for (var i = 0; i < headers.Count; i++)
+                    values[i] = headers[i].Value;
+                return values;
             },
         };
+    }
 
-        await Middleware.ProxyMiddlewarePipeline.Build(middleware, static (_, _) => ValueTask.CompletedTask)(
-            ctx, cancellationToken).ConfigureAwait(false);
-
-        if (!ctx.IsHandled && ctx.HandledStatusCode is null)
-            return null;
-
+    private static async Task WriteTerminateLiteMiddlewareResponseAsync(
+        HttpClientStream clientStream,
+        Request request,
+        ProxyMiddlewareContext ctx,
+        CancellationToken cancellationToken)
+    {
         var status = (HttpStatusCode)(ctx.HandledStatusCode ?? 403);
         var response = new GenericResponse(status)
         {
@@ -538,6 +556,5 @@ public partial class ProxyServer
                 ? KnownHeaders.ConnectionClose
                 : KnownHeaders.ConnectionKeepAlive);
         await clientStream.WriteResponseAsync(response, cancellationToken).ConfigureAwait(false);
-        return !H1TerminateClientRequestedClose(request);
     }
 }

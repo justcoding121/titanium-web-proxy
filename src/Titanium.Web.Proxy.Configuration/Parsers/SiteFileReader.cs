@@ -10,6 +10,9 @@ namespace Titanium.Web.Proxy.Configuration.Parsers;
 /// </summary>
 public static class SiteFileReader
 {
+    private const string HttpSchemePrefix = "http://";
+    private const string HttpsSchemePrefix = "https://";
+
     public static TwpConfig Parse(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -24,9 +27,7 @@ public static class SiteFileReader
         {
             var line = raw.Trim();
             if (line.Length == 0 || line[0] == '#')
-            {
                 continue;
-            }
 
             if (TryParseListen(line, out var listenHost, out var listenPort))
             {
@@ -44,73 +45,17 @@ public static class SiteFileReader
 
             if (TryParseForward(line, out var forwardHost, out var forwardPort))
             {
-                pendingForwardHost = forwardHost;
-                pendingForwardPort = forwardPort;
-                if (listeners.Count > 0)
-                {
-                    var last = listeners[^1];
-                    last.ForwardHost = forwardHost;
-                    last.ForwardPort = forwardPort;
-                }
-
+                ApplyForward(listeners, forwardHost, forwardPort, ref pendingForwardHost, ref pendingForwardPort);
                 continue;
             }
 
-            var arrow = line.IndexOf("=>", StringComparison.Ordinal);
-            if (arrow < 0)
-            {
-                throw new FormatException($"Invalid site-file line (missing =>): {line}");
-            }
-
-            var left = line[..arrow].Trim();
-            var right = line[(arrow + 2)..].Trim();
-            var leftParts = left.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (leftParts.Length < 1)
-            {
-                throw new FormatException($"Invalid site-file left-hand side: {line}");
-            }
-
-            var host = leftParts[0];
-            var path = leftParts.Length > 1 ? leftParts[1] : "/";
-            ParseUpstream(right, out var address, out var port, out var https);
-
-            var clusterId = $"site-{clusters.Count + 1}";
-            var destId = $"{clusterId}-d0";
-            clusters.Add(new ClusterConfig
-            {
-                Id = clusterId,
-                Destinations =
-                [
-                    new DestinationConfig
-                    {
-                        Id = destId,
-                        Address = address,
-                        Port = port,
-                        UseHttps = https,
-                    },
-                ],
-            });
-
-            routes.Add(new RouteConfig
-            {
-                Id = $"route-{routes.Count + 1}",
-                ClusterId = clusterId,
-                Order = order++,
-                Match = new RouteMatch
-                {
-                    Host = host,
-                    Path = path,
-                    PathKind = PathMatchKind.Prefix,
-                },
-            });
+            ParseRouteLine(line, routes, clusters, ref order);
         }
 
         // listen ... then forward ... (forward after listen) already applied above.
         // forward ... then listen ... applies pending on listen creation.
         if (listeners.Count == 0 && pendingForwardHost is not null)
-        {
             throw new FormatException("site-file forward requires a listen host:port line.");
-        }
 
         return new TwpConfig
         {
@@ -125,6 +70,74 @@ public static class SiteFileReader
                 EnableConsole = false,
             },
         };
+    }
+
+    private static void ApplyForward(
+        List<ListenerConfig> listeners,
+        string forwardHost,
+        int forwardPort,
+        ref string? pendingForwardHost,
+        ref int? pendingForwardPort)
+    {
+        pendingForwardHost = forwardHost;
+        pendingForwardPort = forwardPort;
+        if (listeners.Count == 0)
+            return;
+
+        var last = listeners[^1];
+        last.ForwardHost = forwardHost;
+        last.ForwardPort = forwardPort;
+    }
+
+    private static void ParseRouteLine(
+        string line,
+        List<RouteConfig> routes,
+        List<ClusterConfig> clusters,
+        ref int order)
+    {
+        var arrow = line.IndexOf("=>", StringComparison.Ordinal);
+        if (arrow < 0)
+            throw new FormatException($"Invalid site-file line (missing =>): {line}");
+
+        var left = line[..arrow].Trim();
+        var right = line[(arrow + 2)..].Trim();
+        var leftParts = left.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (leftParts.Length < 1)
+            throw new FormatException($"Invalid site-file left-hand side: {line}");
+
+        var host = leftParts[0];
+        var path = leftParts.Length > 1 ? leftParts[1] : "/";
+        ParseUpstream(right, out var address, out var port, out var https);
+
+        var clusterId = $"site-{clusters.Count + 1}";
+        var destId = $"{clusterId}-d0";
+        clusters.Add(new ClusterConfig
+        {
+            Id = clusterId,
+            Destinations =
+            [
+                new DestinationConfig
+                {
+                    Id = destId,
+                    Address = address,
+                    Port = port,
+                    UseHttps = https,
+                },
+            ],
+        });
+
+        routes.Add(new RouteConfig
+        {
+            Id = $"route-{routes.Count + 1}",
+            ClusterId = clusterId,
+            Order = order++,
+            Match = new RouteMatch
+            {
+                Host = host,
+                Path = path,
+                PathKind = PathMatchKind.Prefix,
+            },
+        });
     }
 
     public static TwpConfig ParseFile(string path) => Parse(File.ReadAllText(path));
@@ -152,14 +165,10 @@ public static class SiteFileReader
         }
 
         var endpoint = line["forward ".Length..].Trim();
-        if (endpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-        {
-            endpoint = endpoint["http://".Length..];
-        }
-        else if (endpoint.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        {
-            endpoint = endpoint["https://".Length..];
-        }
+        if (endpoint.StartsWith(HttpSchemePrefix, StringComparison.OrdinalIgnoreCase))
+            endpoint = endpoint[HttpSchemePrefix.Length..];
+        else if (endpoint.StartsWith(HttpsSchemePrefix, StringComparison.OrdinalIgnoreCase))
+            endpoint = endpoint[HttpsSchemePrefix.Length..];
 
         return TryParseHostPort(endpoint, out host, out port);
     }
@@ -182,14 +191,14 @@ public static class SiteFileReader
     {
         https = false;
         var value = upstream;
-        if (value.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        if (value.StartsWith(HttpsSchemePrefix, StringComparison.OrdinalIgnoreCase))
         {
             https = true;
-            value = value["https://".Length..];
+            value = value[HttpsSchemePrefix.Length..];
         }
-        else if (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        else if (value.StartsWith(HttpSchemePrefix, StringComparison.OrdinalIgnoreCase))
         {
-            value = value["http://".Length..];
+            value = value[HttpSchemePrefix.Length..];
         }
 
         var colon = value.LastIndexOf(':');

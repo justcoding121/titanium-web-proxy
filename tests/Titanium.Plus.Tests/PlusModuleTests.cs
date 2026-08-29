@@ -413,7 +413,7 @@ public class PlusModuleTests
             });
         Assert.IsNotNull(store);
         Assert.AreEqual(1, middleware.Count);
-        Assert.IsInstanceOfType(middleware[0], typeof(RateLimitMiddleware));
+        Assert.IsInstanceOfType<RateLimitMiddleware>(middleware[0]);
     }
 
     [TestMethod]

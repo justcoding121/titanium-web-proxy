@@ -218,7 +218,7 @@ public class SessionSearchAndArchiveTests
         Assert.IsTrue(SessionSearch.Matches(s, "is:grpc"));
         Assert.IsTrue(SessionSearch.Matches(s, "is:multipart"));
         Assert.IsFalse(SessionSearch.Matches(s, "is:tunnel"));
-        Assert.IsTrue(SessionSearch.Matches(s, "is:websocket") == s.IsWebSocket);
+        Assert.AreEqual(s.IsWebSocket, SessionSearch.Matches(s, "is:websocket"));
         Assert.IsTrue(SessionSearch.Matches(s, "is:unknownflag")); // unknown is: → true
         Assert.IsTrue(SessionSearch.Matches(s, "api.example")); // bare token → url
         Assert.IsTrue(SessionSearch.Matches(s, "weirdkey:api.example")); // unknown key → url contains value

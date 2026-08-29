@@ -160,65 +160,38 @@ public sealed class WafDenyMiddleware : IProxyMiddleware
     {
         if (TryGetSessionRequest(context, out var sessionRequest))
         {
-            if (_rules.MethodDeny.Contains(sessionRequest!.Method))
-            {
-                Deny(context);
-                return;
-            }
-
-            var path = sessionRequest.RequestUri?.AbsolutePath ?? sessionRequest.RequestUriString ?? "";
-            if (_rules.PathDeny.Any(regex => regex.IsMatch(path)))
-            {
-                Deny(context);
-                return;
-            }
-
-            if (HeaderDenied(sessionRequest))
-            {
-                Deny(context);
-                return;
-            }
-
-            if (sessionRequest.ContentLength > _rules.MaxBodyBytes)
+            if (IsDenied(sessionRequest!))
             {
                 Deny(context);
                 return;
             }
         }
-        else if (context.Request is { } view)
+        else if (context.Request is { } view && IsDenied(view))
         {
-            if (_rules.MethodDeny.Contains(view.Method))
-            {
-                Deny(context);
-                return;
-            }
-
-            if (_rules.PathDeny.Any(regex => regex.IsMatch(view.Path)))
-            {
-                Deny(context);
-                return;
-            }
-
-            if (HeaderDenied(view))
-            {
-                Deny(context);
-                return;
-            }
-
-            if (view.ContentLength > _rules.MaxBodyBytes)
-            {
-                Deny(context);
-                return;
-            }
-        }
-        else
-        {
-            await next(context, cancellationToken);
+            Deny(context);
             return;
         }
 
         await next(context, cancellationToken);
     }
+
+    private bool IsDenied(Request request)
+    {
+        if (_rules.MethodDeny.Contains(request.Method))
+            return true;
+
+        var path = request.RequestUri?.AbsolutePath ?? request.RequestUriString ?? "";
+        if (_rules.PathDeny.Any(regex => regex.IsMatch(path)))
+            return true;
+
+        return HeaderDenied(request) || request.ContentLength > _rules.MaxBodyBytes;
+    }
+
+    private bool IsDenied(MiddlewareRequestView request) =>
+        _rules.MethodDeny.Contains(request.Method)
+        || _rules.PathDeny.Any(regex => regex.IsMatch(request.Path))
+        || HeaderDenied(request)
+        || request.ContentLength > _rules.MaxBodyBytes;
 
     private static bool TryGetSessionRequest(ProxyMiddlewareContext context, out Request? request)
     {

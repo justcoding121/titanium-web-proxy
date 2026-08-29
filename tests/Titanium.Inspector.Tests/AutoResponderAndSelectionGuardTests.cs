@@ -85,8 +85,7 @@ public class AutoResponderAndSelectionGuardTests
             StringAssert.Contains(vm.StatusText, "Select a session");
 
             vm.ReplayCommand.Execute(null);
-            // async-void; give it a tick then assert guard message when still null
-            Thread.Sleep(50);
+            // Guard path sets StatusText before any await, so no delay is required.
             StringAssert.Contains(vm.StatusText, "Select a session");
 
             vm.DeleteAutoResponderRuleCommand.Execute(null);

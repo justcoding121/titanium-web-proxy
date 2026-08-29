@@ -10,7 +10,8 @@ internal static class PlusLog
     {
         if (context.Logger is { } logger)
         {
-            logger.LogInformation("{Message}", message);
+            if (logger.IsEnabled(LogLevel.Information))
+                logger.LogInformation("{Message}", message);
             return;
         }
 
@@ -21,7 +22,8 @@ internal static class PlusLog
     {
         if (context.Logger is { } logger)
         {
-            logger.LogWarning("{Message}", message);
+            if (logger.IsEnabled(LogLevel.Warning))
+                logger.LogWarning("{Message}", message);
             return;
         }
 
@@ -32,7 +34,8 @@ internal static class PlusLog
     {
         if (context.Logger is { } logger)
         {
-            logger.LogError("{Message}", message);
+            if (logger.IsEnabled(LogLevel.Error))
+                logger.LogError("{Message}", message);
             return;
         }
 
