@@ -22,7 +22,8 @@ internal static class TestCommand
         var needsSession = RunCommand.ConfigNeedsSessionPath(loaded.Config);
         Console.WriteLine($"Config OK: {configPath}");
         Console.WriteLine($"Routes: {loaded.Config.Routes.Count}, Clusters: {loaded.Config.Clusters.Count}, Listeners: {loaded.Config.Listeners.Count}");
-        Console.WriteLine($"EnableHttpInterception would be: {needsSession}");
+        Console.WriteLine($"EnableHttpInterception would be: {needsSession} (auto when transforms/static/ACME)");
+        Console.WriteLine($"EnableRequestTimingCapture would be: {RunCommand.ConfigNeedsRequestTimingCapture(loaded.Config)} (auto when LeastTime LB)");
         return 0;
     }
 }

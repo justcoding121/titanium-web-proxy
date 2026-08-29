@@ -1,5 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Cli.Config;
+using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Configuration.Models;
@@ -95,6 +96,73 @@ public class RunCommandTests
         {
             Listeners = [new ListenerConfig { Port = 8080, EnableHttp3 = false }],
         }));
+    }
+
+    [TestMethod]
+    public void ConfigNeedsRequestTimingCapture_True_ForLeastTimeCluster()
+    {
+        var cfg = new TwpConfig
+        {
+            Clusters =
+            [
+                new ClusterConfig
+                {
+                    Id = "c1",
+                    Algorithm = LoadBalanceAlgorithm.LeastTime,
+                    Destinations =
+                    [
+                        new DestinationConfig { Id = "d1", Address = "127.0.0.1", Port = 8080 },
+                    ],
+                },
+            ],
+        };
+        Assert.IsTrue(RunCommand.ConfigNeedsRequestTimingCapture(cfg));
+    }
+
+    [TestMethod]
+    public void ConfigNeedsRequestTimingCapture_False_ForRoundRobin()
+    {
+        var cfg = new TwpConfig
+        {
+            Clusters =
+            [
+                new ClusterConfig
+                {
+                    Id = "c1",
+                    Algorithm = LoadBalanceAlgorithm.RoundRobin,
+                    Destinations =
+                    [
+                        new DestinationConfig { Id = "d1", Address = "127.0.0.1", Port = 8080 },
+                    ],
+                },
+            ],
+        };
+        Assert.IsFalse(RunCommand.ConfigNeedsRequestTimingCapture(cfg));
+    }
+
+    [TestMethod]
+    public void ConfigureProxyFlags_EnablesTiming_ForLeastTimeCluster()
+    {
+        var cfg = new TwpConfig
+        {
+            Clusters =
+            [
+                new ClusterConfig
+                {
+                    Id = "c1",
+                    Algorithm = LoadBalanceAlgorithm.LeastTime,
+                    Destinations =
+                    [
+                        new DestinationConfig { Id = "d1", Address = "127.0.0.1", Port = 8080 },
+                    ],
+                },
+            ],
+        };
+
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        Assert.IsFalse(proxy.EnableRequestTimingCapture);
+        RunCommand.ConfigureProxyFlags(proxy, cfg, requiresSessionPath: false);
+        Assert.IsTrue(proxy.EnableRequestTimingCapture);
     }
 
     [TestMethod]

@@ -141,17 +141,12 @@ public class TwpConfigLoaderTests
               profile: LegacyCompatible
               pooling:
                 maxCachedConnections: 64
-              auth:
-                proxyAuthenticationRealm: TestRealm
-                proxyAuthenticationSchemes:
-                  - Negotiate
             """;
         var config = TwpConfigLoader.LoadYaml(yaml);
         Assert.AreEqual("socks", config.Listeners[0].Type);
         Assert.AreEqual(100, config.Listeners[0].MaxConcurrentClients);
         Assert.AreEqual("LegacyCompatible", config.Server!.Profile);
         Assert.AreEqual(64, config.Server.Pooling!.MaxCachedConnections);
-        Assert.AreEqual("TestRealm", config.Server.Auth!.ProxyAuthenticationRealm);
         Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count);
     }
 

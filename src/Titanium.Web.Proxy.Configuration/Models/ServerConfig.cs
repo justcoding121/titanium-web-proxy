@@ -25,10 +25,6 @@ public sealed class ServerConfig
 
     public bool? EnableWinAuth { get; set; }
 
-    public bool? EnableRequestTimingCapture { get; set; }
-
-    public bool? EnableHttpInterception { get; set; }
-
     /// <summary>PreserveClientVersion or NormalizeToHttp11.</summary>
     public string? OriginHttpVersionPolicy { get; set; }
 
@@ -53,8 +49,6 @@ public sealed class ServerConfig
     public TlsConfig? Tls { get; set; }
 
     public UpstreamConfig? Upstream { get; set; }
-
-    public AuthConfig? Auth { get; set; }
 
     public CertificateManagerConfig? CertificateManager { get; set; }
 }
@@ -220,14 +214,6 @@ public sealed class ExternalProxyConfig
     public bool ProxyDnsRequests { get; set; }
 
     public ExternalProxyConfig? NextHop { get; set; }
-}
-
-/// <summary>Client auth realm / advertised schemes (callbacks remain code-only).</summary>
-public sealed class AuthConfig
-{
-    public string? ProxyAuthenticationRealm { get; set; }
-
-    public IList<string>? ProxyAuthenticationSchemes { get; set; }
 }
 
 /// <summary>MITM certificate engine knobs (ACME / listener leaf paths stay under top-level <c>certificates</c>).</summary>

@@ -5,6 +5,7 @@ using Titanium.Cli.Parsers;
 using Titanium.Cli.StaticFiles;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Abstractions;
+using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
@@ -150,12 +151,18 @@ internal static class RunCommand
         });
     }
 
-    private static void ConfigureProxyFlags(ProxyServer proxy, TwpConfig config, bool requiresSessionPath)
+    internal static void ConfigureProxyFlags(ProxyServer proxy, TwpConfig config, bool requiresSessionPath)
     {
-        // Session-path features force interception; server.enableHttpInterception may already be true.
+        // Session-path features force interception (transforms / static files / ACME).
         if (requiresSessionPath)
         {
             proxy.EnableHttpInterception = true;
+        }
+
+        // LeastTime LB needs per-request timing for EWMA latency.
+        if (ConfigNeedsRequestTimingCapture(config))
+        {
+            proxy.EnableRequestTimingCapture = true;
         }
 
         // HTTP/2: server.enableHttp2 is the base; any listener false still forces off.
@@ -431,12 +438,10 @@ internal static class RunCommand
         {
             endPoint.MaxConcurrentClients = maxClients;
         }
-
-        if (listener.EnableHttpInterception is bool intercept)
-        {
-            endPoint.EnableHttpInterception = intercept;
-        }
     }
+
+    internal static bool ConfigNeedsRequestTimingCapture(TwpConfig config) =>
+        config.Clusters.Any(c => c.Algorithm == LoadBalanceAlgorithm.LeastTime);
 
     internal static bool ShouldEnableHttp3(TwpConfig config) =>
         !config.Listeners.Any(l => l.EnableHttp3 == false);

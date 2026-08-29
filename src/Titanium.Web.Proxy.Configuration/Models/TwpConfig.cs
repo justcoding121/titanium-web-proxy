@@ -84,8 +84,6 @@ public sealed class ListenerConfig
 
     public int? MaxConcurrentClients { get; set; }
 
-    public bool? EnableHttpInterception { get; set; }
-
     /// <summary>Fallback certificate hostname when SNI is absent (transparent / SOCKS / QUIC).</summary>
     public string? GenericCertificateName { get; set; }
 

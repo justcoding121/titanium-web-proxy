@@ -36,7 +36,6 @@ internal static class ServerConfigApplier
         ApplyPolicyModes(proxy, server.PolicyModes);
         ApplyTls(proxy, server.Tls);
         ApplyUpstream(proxy, server.Upstream);
-        ApplyAuth(proxy, server.Auth);
         ApplyCertificateManager(proxy, server.CertificateManager);
     }
 
@@ -87,16 +86,6 @@ internal static class ServerConfigApplier
         if (server.EnableWinAuth is bool winAuth)
         {
             proxy.EnableWinAuth = winAuth;
-        }
-
-        if (server.EnableRequestTimingCapture is bool timing)
-        {
-            proxy.EnableRequestTimingCapture = timing;
-        }
-
-        if (server.EnableHttpInterception is bool intercept)
-        {
-            proxy.EnableHttpInterception = intercept;
         }
 
         if (!string.IsNullOrWhiteSpace(server.OriginHttpVersionPolicy) &&
@@ -418,24 +407,6 @@ internal static class ServerConfigApplier
         }
 
         return proxy;
-    }
-
-    private static void ApplyAuth(ProxyServer proxy, AuthConfig? auth)
-    {
-        if (auth is null)
-        {
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(auth.ProxyAuthenticationRealm))
-        {
-            proxy.ProxyAuthenticationRealm = auth.ProxyAuthenticationRealm;
-        }
-
-        if (auth.ProxyAuthenticationSchemes is { Count: > 0 } schemes)
-        {
-            proxy.ProxyAuthenticationSchemes = schemes.ToArray();
-        }
     }
 
     private static void ApplyCertificateManager(ProxyServer proxy, CertificateManagerConfig? certs)
