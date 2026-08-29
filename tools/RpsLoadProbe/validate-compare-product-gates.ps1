@@ -1,4 +1,5 @@
-# Validate compare-product medians: MITM Lite/Full >= 0.70, reverse TWP/YARP >= 0.95 vs baseline run.
+# Validate compare-product medians: MITM Lite/Full >= 0.70, reverse TWP/YARP >= 0.95.
+# When Repeats>1, each arm contributes multiple c=64 SLO-pass rows — use the median RPS.
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
     [double] $MitmGate = 0.70,
@@ -8,11 +9,26 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $rows = Import-Csv $CsvPath
-$sustain = @{}
+$byArm = @{}
 foreach ($row in $rows) {
-    if ($row.concurrency -ne '64') { continue }
+    if ([string]$row.concurrency -ne '64') { continue }
     if ($row.meets_slo -ne '1') { continue }
-    $sustain[$row.arm] = [double]$row.rps
+    $arm = [string]$row.arm
+    if (-not $byArm.ContainsKey($arm)) {
+        $byArm[$arm] = [System.Collections.Generic.List[double]]::new()
+    }
+    $byArm[$arm].Add([double]$row.rps)
+}
+
+$sustain = @{}
+foreach ($arm in $byArm.Keys) {
+    $sorted = @($byArm[$arm] | Sort-Object)
+    $mid = [int][math]::Floor(($sorted.Count - 1) / 2)
+    $sustain[$arm] = if ($sorted.Count % 2 -eq 0 -and $sorted.Count -ge 2) {
+        ($sorted[$mid] + $sorted[$mid + 1]) / 2
+    } else {
+        $sorted[$mid]
+    }
 }
 
 $mitmPairs = @(
@@ -27,7 +43,7 @@ $mitmPairs = @(
 )
 
 $failed = $false
-Write-Host "MITM gates (Full/Lite >= $MitmGate x Reverse @ c=64)" -ForegroundColor Cyan
+Write-Host "MITM gates (Full/Lite >= $MitmGate x Reverse @ c=64 median)" -ForegroundColor Cyan
 foreach ($p in $mitmPairs) {
     foreach ($kind in @('Lite', 'Full')) {
         $num = $p.$kind
@@ -46,7 +62,7 @@ foreach ($p in $mitmPairs) {
 }
 
 Write-Host ""
-Write-Host "Reverse TWP/YARP gates (>= $ReverseYarpGate @ c=64)" -ForegroundColor Cyan
+Write-Host "Reverse TWP/YARP gates (>= $ReverseYarpGate @ c=64 median)" -ForegroundColor Cyan
 $revPairs = @(
     @{ Label = 'H3->H1'; Twp = 'twp-reverse-http3-to-https-http1'; Yarp = 'yarp-reverse-http3-to-https-http1' },
     @{ Label = 'H3->H3'; Twp = 'twp-reverse-http3'; Yarp = 'yarp-reverse-http3-to-http3' }

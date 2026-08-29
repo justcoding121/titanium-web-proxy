@@ -289,6 +289,15 @@ jobs:
           if (-not $csv) { throw 'No CSV found for edition gate validation' }
           pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName
 
+      - name: Validate compare-product gates
+        if: inputs.mode == 'compare-product'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for compare-product gate validation' }
+          pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName
+
       - name: Validate cross-version gates
         if: inputs.mode == 'compare-cross-version'
         shell: pwsh
