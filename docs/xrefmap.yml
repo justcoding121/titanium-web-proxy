@@ -6326,6 +6326,19 @@ references:
   commentId: T:Titanium.Web.Proxy.Network.CertificateManager
   fullName: Titanium.Web.Proxy.Network.CertificateManager
   nameWithType: CertificateManager
+- uid: Titanium.Web.Proxy.Network.CertificateManager.ApplyFastColdStartLeafSettings
+  name: ApplyFastColdStartLeafSettings()
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_ApplyFastColdStartLeafSettings
+  commentId: M:Titanium.Web.Proxy.Network.CertificateManager.ApplyFastColdStartLeafSettings
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.ApplyFastColdStartLeafSettings()
+  nameWithType: CertificateManager.ApplyFastColdStartLeafSettings()
+- uid: Titanium.Web.Proxy.Network.CertificateManager.ApplyFastColdStartLeafSettings*
+  name: ApplyFastColdStartLeafSettings
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_ApplyFastColdStartLeafSettings_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.ApplyFastColdStartLeafSettings
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.ApplyFastColdStartLeafSettings
+  nameWithType: CertificateManager.ApplyFastColdStartLeafSettings
 - uid: Titanium.Web.Proxy.Network.CertificateManager.CertificateCacheTimeOutMinutes
   name: CertificateCacheTimeOutMinutes
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_CertificateCacheTimeOutMinutes
