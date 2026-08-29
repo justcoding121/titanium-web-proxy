@@ -21,12 +21,59 @@ winget install justcoding121.TitaniumInspector
 
 Default bind is typically `127.0.0.1:8866`.
 
-## Features
+## Right pane: Inspect vs Tools
+
+The right pane has two outer tabs:
+
+| Outer tab | Purpose | Needs a selected session? |
+|-----------|---------|---------------------------|
+| **Inspect** | Look at one captured session | Yes (otherwise shows a hint) |
+| **Tools** | Change how **all** traffic is handled | No — open via **Tools** menu |
+
+Use **Tools → Composer / Breakpoints / AutoResponder / Scripts…** to open the pane on that tool without picking a row first. Selecting a session opens the pane on **Inspect**.
+
+### Inspect (this session)
+
+- **Headers** — request/response headers, cookies, query
+- **Body** — decoded / JSON-formatted body when possible
+- **Hex** — raw bytes
+- **WS Frames** — shown **only for WebSocket** sessions; best-effort text preview of messages (not a full opcode stream)
+
+Search for WebSocket traffic with `is:ws`.
+
+### Tools (all traffic)
+
+Pipeline order on each request:
+
+**Scripts → AutoResponder → Breakpoints → origin**
+
+#### Composer
+
+Build and send a request through the proxy. **Load from selected** copies method/URL/headers/body from the current session.
+
+#### Breakpoints
+
+Pause matching requests (URL glob; `*` = all) so you can edit the body, **Continue**, or **Abort** (403). At most one pause at a time; unmatched overflow auto-continues; pauses time out after **120 seconds**. Optional **Break on response**.
+
+#### AutoResponder
+
+If **Enabled**, the first matching rule returns a fake status/body **before** the real server (and before breakpoints). Match URLs with `*` wildcards.
+
+#### Scripts
+
+**Not JavaScript or C#.** One directive per line (comments with `#` or `//`):
+
+```text
+set-header X-Debug: 1
+set-status 404
+abort
+```
+
+Applies to every captured request/response. On request, `abort` or `set-status` short-circuits AutoResponder, breakpoints, and the origin.
+
+## Other features
 
 - Session grid: method, status, host, URL, protocol, duration, TTFB, size, process
-- Inspectors: Headers, Body, Hex, Frames
-- Composer, breakpoints (edit body / continue / abort)
-- AutoResponder and light scripts (`set-header` / `set-status` / `abort`)
 - HAR import/export, archive, replay
 - System proxy and root CA install / untrust / export / device setup
 - Search (`method:GET status:200 host:example is:ws`)
