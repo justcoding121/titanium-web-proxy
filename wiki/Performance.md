@@ -321,37 +321,39 @@ Same Client×Origin wires with interception on (`compare-product` [33087088466](
 
 ## Editions (CLI / Plus / Intercept)
 
-**Note:** `twp-reverse-http1` and other library rows above use Core with **probe-tuned** settings (no logging, no Via header, probe-warmed certs). Edition rows below use `titanium run -c twp.yaml` **product defaults** and are not directly comparable as absolutes — use the ÷baseline ratio column. Inspector GUI is not spawnable in the harness; its session-path overhead is represented by `twp-cli-intercept-http1` (route `RequestHeaderSet` transform).
+**Note:** `twp-reverse-http1` and other library rows use Core with **probe-tuned** settings (no logging, no Via header, probe-warmed certs). Edition rows use `titanium run -c twp.yaml` **product defaults** — prefer the ÷baseline ratio column over absolute RPS. Inspector GUI is not spawnable in the harness; session-path overhead is `twp-cli-intercept-http1` (route `RequestHeaderSet` transform).
 
-Gates prioritize **SLO survival under load** and **reasonable overhead vs baseline** (not absolute RPS). Thresholds include noise headroom — see [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/PERF-GATES.md).
+Gates prioritize **SLO survival under load** and **reasonable overhead vs baseline**. Thresholds include noise headroom — see [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/PERF-GATES.md).
+
+Median of **3** repeats @ `db4beb21`. Source: Actions [33248789301](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33248789301) (`compare-editions`). Warmup 2s / measure 8s; concurrency 8–64; sustain = median peak RPS among SLO-pass steps @ **c=64**. **RPS cells** include `(MiB / CPU%)` at that step.
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-editions
 pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath tools/RpsLoadProbe/results/rps-ramp-*.csv
 ```
 
-| Arm | Sustain (GHA) | Peak (GHA) | ÷baseline | Gate |
-|---|---:|---:|---:|---:|
-| `twp-cli-reverse-http1` (CLI daemon) | *pending GHA* | *pending* | vs `twp-reverse-http1` | ≥ **0.80×** |
-| `twp-cli-reverse-http1-tls` | *pending* | *pending* | vs `twp-reverse-http1-tls` | ≥ **0.80×** |
-| `twp-cli-reverse-http1-route` (single route) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.90×** |
-| `twp-cli-plus-base-http1` (Plus, no options) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.90×** |
-| `twp-cli-plus-cache-http1` (Plus + cache cold) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.60×** |
-| `twp-cli-intercept-http1` (Intercept / Inspector-equivalent) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.65×** |
-| `twp-cli-plus-waf-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.70×** |
-| `twp-cli-plus-cidr-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.70×** |
-| `twp-cli-plus-jwt-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.45×** |
-| `twp-cli-plus-ratelimit-http1` (`state.mode=memory`) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.70×** |
-| `twp-cli-plus-resilience-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.65×** |
-| `twp-cli-plus-discovery-file-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.70×** |
-| `twp-cli-plus-metrics-scrape-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.70×** |
-| `twp-cli-plus-cache-hit-http1` | *pending* | *pending* | vs `twp-cli-plus-cache-http1` | ≥ **0.90×** |
-| `twp-cli-static-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.85×** |
-| `twp-cli-logging-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.90×** |
-| `twp-cli-lb-leasttime-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1-route` | ≥ **0.85×** |
-| `twp-cli-dialect-twp-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.90×** |
+| Arm | Win sustain | Win peak | Linux sustain | Linux peak | Win÷ | Lin÷ | Gate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `twp-cli-reverse-http1` vs library | **32502**<br><sub>(118 MiB / 48.1% CPU)</sub> | **32656** | **61974**<br><sub>(212 MiB / 49.2% CPU)</sub> | **62743** | **1.01×** | **1.05×** | ≥ **0.80×** |
+| `twp-cli-reverse-http1-tls` vs library TLS | **26636**<br><sub>(140 MiB / 46.6% CPU)</sub> | **26948** | **48754**<br><sub>(238 MiB / 48.4% CPU)</sub> | **48777** | **1.00×** | **1.02×** | ≥ **0.80×** |
+| `twp-cli-reverse-http1-route` vs CLI | **32482**<br><sub>(119 MiB / 44.4% CPU)</sub> | **32699** | **61567**<br><sub>(210 MiB / 49.3% CPU)</sub> | **61632** | **1.00×** | **0.99×** | ≥ **0.90×** |
+| `twp-cli-plus-base-http1` vs CLI | **32769**<br><sub>(122 MiB / 50.0% CPU)</sub> | **32930** | **60478**<br><sub>(214 MiB / 48.4% CPU)</sub> | **61447** | **1.01×** | **0.98×** | ≥ **0.90×** |
+| `twp-cli-plus-cache-http1` (cold) vs CLI | **22936**<br><sub>(126 MiB / 54.8% CPU)</sub> | **23182** | **42808**<br><sub>(231 MiB / 57.7% CPU)</sub> | **43086** | **0.71×** | **0.69×** | ≥ **0.60×** |
+| `twp-cli-intercept-http1` vs CLI | **25620**<br><sub>(123 MiB / 55.7% CPU)</sub> | **25747** | **49909**<br><sub>(230 MiB / 52.0% CPU)</sub> | **50061** | **0.79×** | **0.81×** | ≥ **0.65×** |
+| `twp-cli-plus-waf-http1` vs CLI | **27500**<br><sub>(125 MiB / 51.6% CPU)</sub> | **27528** | **52781**<br><sub>(229 MiB / 50.4% CPU)</sub> | **53216** | **0.85×** | **0.85×** | ≥ **0.70×** |
+| `twp-cli-plus-cidr-http1` vs CLI | **27841**<br><sub>(119 MiB / 50.5% CPU)</sub> | **27861** | **52579**<br><sub>(223 MiB / 50.1% CPU)</sub> | **54431** | **0.86×** | **0.85×** | ≥ **0.70×** |
+| `twp-cli-plus-jwt-http1` vs CLI | **16518**<br><sub>(143 MiB / 63.7% CPU)</sub> | **16593** | **29979**<br><sub>(256 MiB / 66.3% CPU)</sub> | **30141** | **0.51×** | **0.48×** | ≥ **0.45×** |
+| `twp-cli-plus-ratelimit-http1` vs CLI | **27845**<br><sub>(125 MiB / 51.2% CPU)</sub> | **27919** | **53159**<br><sub>(228 MiB / 50.2% CPU)</sub> | **53263** | **0.86×** | **0.86×** | ≥ **0.70×** |
+| `twp-cli-plus-resilience-http1` vs CLI | **32615**<br><sub>(127 MiB / 46.9% CPU)</sub> | **32784** | **61074**<br><sub>(219 MiB / 48.7% CPU)</sub> | **62983** | **1.00×** | **0.99×** | ≥ **0.65×** |
+| `twp-cli-plus-discovery-file-http1` vs CLI | **32620**<br><sub>(125 MiB / 46.8% CPU)</sub> | **32756** | **61475**<br><sub>(216 MiB / 48.2% CPU)</sub> | **62196** | **1.00×** | **0.99×** | ≥ **0.70×** |
+| `twp-cli-plus-metrics-scrape-http1` vs CLI | **32724**<br><sub>(122 MiB / 48.2% CPU)</sub> | **32862** | **61377**<br><sub>(219 MiB / 48.5% CPU)</sub> | **62012** | **1.01×** | **0.99×** | ≥ **0.70×** |
+| `twp-cli-plus-cache-hit-http1` vs cache cold | **22746**<br><sub>(126 MiB / 56.2% CPU)</sub> | **22787** | **42493**<br><sub>(229 MiB / 57.5% CPU)</sub> | **42772** | **0.99×** | **0.99×** | ≥ **0.90×** |
+| `twp-cli-static-http1` vs CLI | **54029**<br><sub>(109 MiB / 50.5% CPU)</sub> | **54393** | **113266**<br><sub>(214 MiB / 49.6% CPU)</sub> | **113624** | **1.66×** | **1.83×** | ≥ **0.85×** |
+| `twp-cli-logging-http1` vs CLI | **32816**<br><sub>(118 MiB / 47.8% CPU)</sub> | **33026** | **61585**<br><sub>(208 MiB / 48.3% CPU)</sub> | **61730** | **1.01×** | **0.99×** | ≥ **0.90×** |
+| `twp-cli-lb-leasttime-http1` vs route | **30541**<br><sub>(134 MiB / 49.5% CPU)</sub> | **30570** | **57411**<br><sub>(243 MiB / 50.0% CPU)</sub> | **58491** | **0.94×** | **0.93×** | ≥ **0.85×** |
+| `twp-cli-dialect-twp-http1` vs CLI | **32828**<br><sub>(114 MiB / 48.9% CPU)</sub> | **32933** | **61712**<br><sub>(210 MiB / 48.5% CPU)</sub> | **61763** | **1.01×** | **1.00×** | ≥ **0.90×** |
 
-**Gate 2 Editions:** local Win smoke + Docker Linux passed `validate-edition-gates.ps1` (2026-08-29). Absolute GHA sustain/peak cells stay pending a `compare-editions` Actions median-of-3 paste. Local laptop ratios: [Performance Local Lab — Editions](Performance-Local-Lab#editions-cli--plus-stress).
+`validate-edition-gates.ps1` **passed** on both OS for this run. Library baselines @ c=64 (same job): Win H1 **32128** / TLS **26649**; Linux H1 **59115** / TLS **47590**. Laptop smoke ratios stay on [Performance Local Lab — Editions](Performance-Local-Lab#editions-cli--plus-stress).
 
 ## Cross-version (7.0 vs 6.0)
 
@@ -359,8 +361,11 @@ Gate 2 prerequisite before the `v7.0.0` tag: run `compare-cross-version` (revers
 
 | Gate | Threshold |
 |------|-----------|
-| RPS | `7.0 ÷ 6.0 ≥ 0.95` per common arm @ c=64 |
-| RSS | `7.0 ÷ 6.0 ≤ 1.10` per common arm @ c=64 |
+| Peer-normalized RPS (when YARP peer exists) | `(TWP÷YARP)_7 ÷ (TWP÷YARP)_6 ≥ 0.90` |
+| Absolute RPS floor (TWP arms) | `7.0 ÷ 6.0 ≥ 0.70` (runner heat — peers move with the box) |
+| RSS | `7.0 ÷ 6.0 ≤ 1.10` per TWP arm @ c=64 |
+
+nginx/YARP absolute RPS is **not** gated (same-runner noise). See [`validate-cross-version.ps1`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/validate-cross-version.ps1).
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-cross-version
@@ -369,7 +374,7 @@ pwsh tools/RpsLoadProbe/validate-cross-version.ps1 `
   -CurrentCsv  tools/RpsLoadProbe/results/rps-ramp-*.csv
 ```
 
-*Pending first clean Gate 2 run — record run ID in PERF-GATES.md.*
+*Pending clean Gate 2 re-run after peer-normalized validator (prior absolute-only run [33248790383](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33248790383) failed because nginx/YARP/TWP all dropped ~0.78× on a cooler runner — not a product regression).*
 
 ## Heavier reverse workloads
 

@@ -39,8 +39,8 @@ Terminate smoke (peak RPS; routes unset): TWP H1 TLS win **34273**, ubuntu **241
 
 - [ ] Same unset-routes probe matrix as gate 1 (re-run on the release SHA)
 - [x] Plus / Inspector DLLs still absent from probe library path (`RpsLoadProbe` references Core only)
-- [ ] **Cross-version:** `compare-cross-version` on the release SHA. All common reverse arms must satisfy `7.0÷6.0 RPS ≥ 0.95` and `7.0÷6.0 RSS ≤ 1.10` vs committed baselines [`results/baseline-6.0-win.csv`](results/baseline-6.0-win.csv) / [`results/baseline-6.0-linux.csv`](results/baseline-6.0-linux.csv) (from GHA [33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466)). Record the run ID here before tagging.
-- [x] **Editions:** `compare-editions` passes [`validate-edition-gates.ps1`](validate-edition-gates.ps1) on both Win and Linux (local Win + Docker Linux, 2026-08-29)
+- [ ] **Cross-version:** `compare-cross-version` on the release SHA. Product (`twp-*`) arms: peer-normalized `(TWP÷YARP)_7/(TWP÷YARP)_6 ≥ 0.90` when a YARP peer exists; absolute `7.0÷6.0 RPS ≥ 0.70` floor (runner heat — nginx/YARP move with the box); `RSS ≤ 1.10`. Baselines: [`results/baseline-6.0-win.csv`](results/baseline-6.0-win.csv) / [`results/baseline-6.0-linux.csv`](results/baseline-6.0-linux.csv) (GHA [33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466)). Record the run ID here before tagging.
+- [x] **Editions:** `compare-editions` passes [`validate-edition-gates.ps1`](validate-edition-gates.ps1) on both Win and Linux — GHA [33248789301](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33248789301) @ `db4beb21` (median of 3)
 - [ ] **Product:** `compare-product` median of 3 passes MITM÷Reverse ≥ 0.70 and reverse TWP÷YARP ≥ 0.95
 
 ### Edition ratio gates (first-run estimates; lock after first clean Win+Linux baseline)

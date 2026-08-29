@@ -307,6 +307,7 @@ jobs:
             -CurrentCsv $csv.FullName
 
       - name: Upload CSV artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: rps-csv-${{ matrix.os }}
