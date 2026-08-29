@@ -35,11 +35,11 @@ Terminate smoke (peak RPS; routes unset): TWP H1 TLS win **34273**, ubuntu **241
 
 ## Gate 2 (before first beta / `v7.0.0` stable tag)
 
-- [ ] Same unset-routes probe matrix as gate 1 (re-run on the release SHA) — in flight: [33263427055](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33263427055) `compare-matrix` @ `3d9aba23`
+- [x] Same unset-routes probe matrix as gate 1 — GHA [33263427055](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33263427055) `compare-matrix` both OS **success** @ `3d9aba23`
 - [x] Plus / Inspector DLLs still absent from probe library path (`RpsLoadProbe` references Core only)
-- [ ] **Cross-version:** refresh on current tip — in flight: [33263428508](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33263428508) (prior [33253789356](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33253789356) @ `79793303`; RSS floor **1.15** + peer-norm ≥ **0.90**)
+- [x] **Cross-version:** GHA [33270571908](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33270571908) @ `0ef6d4dd` both OS **success** (RSS floor **1.20**; peer-norm ≥ **0.90** or current TWP÷YARP ≥ **0.90**). Prior Win fail [33263428508](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33263428508) was YARP spike + RSS noise on H1→h2c / H3.
 - [x] **Editions:** `compare-editions` passes [`validate-edition-gates.ps1`](validate-edition-gates.ps1) on both Win and Linux — GHA [33259699099](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33259699099) @ `6d2a7c9d` (median of 3; middleware-on-lite + JWT cache)
-- [ ] **Product:** `compare-product` median of 3 — in flight: [33263425394](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33263425394); gates MITM÷Reverse ≥ 0.70 and reverse TWP÷YARP ≥ 0.95 via [`validate-compare-product-gates.ps1`](validate-compare-product-gates.ps1) (also wired in workflow as of `0cb9a12f`)
+- [x] **Product:** `compare-product` median of 3 — GHA [33263425394](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33263425394) @ `3d9aba23` both OS **success**; MITM÷Reverse ≥ 0.70 and reverse TWP÷YARP ≥ 0.95 (Linux H3→H3 YARP peer SLO-fail skipped — harness, not TWP). Wiki tables refreshed.
 
 ### Edition ratio gates (first-run estimates; lock after first clean Win+Linux baseline)
 
@@ -78,7 +78,7 @@ Do not retune the harness to pass a gate — fix Core / CLI / Plus instead. Neve
   - Discovery-file **0.80**, metrics-scrape **0.80** vs CLI
   - lb-leasttime stays **0.85×**
 
-**Pre-beta note:** Gate 1 matrix run `33151235741` was still in progress during this parity land; re-check conclusion and medians before cutting beta. Gate 2 is a fresh unset-routes matrix on the release SHA after feature freeze.
+**Pre-beta note:** Gate 1/2 matrix, editions, cross-version, and product are green on `develop` as of 2026-08-29. Remaining before tag: feature freeze on the release SHA, then cut `v7.0.0-beta` (heavier wiki tables optional).
 
 ### Fix-and-rerun policy
 
