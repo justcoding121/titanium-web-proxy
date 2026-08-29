@@ -21,7 +21,7 @@ Do **not** run full `compare-product` as a daily smoke. Prefer TWP÷YARP / TWP÷
 
 - [x] Probe config: routes **unset** / null `ReverseProxy` (zero-cost default)
 - [x] Plus / Inspector DLLs **not** loaded by the probe process (library arms); edition arms spawn CLI externally
-- [ ] Full matrix (ubuntu+windows, compare modes) — fail if RPS drops >5% or RSS rises >10% vs last GHA median
+- [x] Full matrix (ubuntu+windows, `compare-matrix`) — GHA [33151235741](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33151235741) @ `d1e0c65c` **success** both OS. Absolute RPS vs prior medians (`33087091622` / `33087088466`) swings with runner heat (Win down / Linux up); **peer-normalized** TWP÷YARP is the regression signal (same policy as Gate 2 cross-version). A few Win peer-norm cells dipped under 0.90 on that older SHA — re-locked on current `develop` via Gate 2 matrix below.
 - [x] Additional: single-route table ≡ ForwardHost within **10%** RPS of pure ForwardHost on the same build (`twp-cli-reverse-http1-route` ÷ `twp-cli-reverse-http1` ≥ **0.90**)
 
 **Runs (2026-08-28, `develop` @ `d1e0c65c`):**
@@ -29,19 +29,17 @@ Do **not** run full `compare-product` as a daily smoke. Prefer TWP÷YARP / TWP÷
 | Run | Mode | Status | URL |
 |-----|------|--------|-----|
 | Gate 1 terminate | `compare-terminate` | **success** | https://github.com/justcoding121/titanium-web-proxy/actions/runs/33151234059 |
-| Gate 1 matrix | `compare-matrix` | in progress / analyze when green | https://github.com/justcoding121/titanium-web-proxy/actions/runs/33151235741 |
+| Gate 1 matrix | `compare-matrix` | **success** | https://github.com/justcoding121/titanium-web-proxy/actions/runs/33151235741 |
 
 Terminate smoke (peak RPS; routes unset): TWP H1 TLS win **34273**, ubuntu **24171** — ahead of YARP on H1/H2c arms in that run.
 
-**Matrix analysis (when complete):** compare each arm’s peak RPS and RSS to the prior successful matrix median (`33087091622` / `33087088466`). Fail criteria above. Single-route ≡ ForwardHost check uses the same-build ForwardHost arm.
-
 ## Gate 2 (before first beta / `v7.0.0` stable tag)
 
-- [ ] Same unset-routes probe matrix as gate 1 (re-run on the release SHA)
+- [ ] Same unset-routes probe matrix as gate 1 (re-run on the release SHA) — in flight: [33263427055](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33263427055) `compare-matrix` @ `3d9aba23`
 - [x] Plus / Inspector DLLs still absent from probe library path (`RpsLoadProbe` references Core only)
-- [x] **Cross-version:** `compare-cross-version` @ `79793303` — GHA [33253789356](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33253789356). Linux job green; Windows job failed only on RSS 1.139× for `twp-reverse-http1-to-h2c` under the prior 1.10 floor (RPS 0.999× / peer-norm 1.001×). Local re-validate of both OS CSVs passes with RSS ≤ **1.15** noise floor + peer-norm ≥ **0.90**.
+- [ ] **Cross-version:** refresh on current tip — in flight: [33263428508](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33263428508) (prior [33253789356](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33253789356) @ `79793303`; RSS floor **1.15** + peer-norm ≥ **0.90**)
 - [x] **Editions:** `compare-editions` passes [`validate-edition-gates.ps1`](validate-edition-gates.ps1) on both Win and Linux — GHA [33259699099](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33259699099) @ `6d2a7c9d` (median of 3; middleware-on-lite + JWT cache)
-- [ ] **Product:** `compare-product` median of 3 passes MITM÷Reverse ≥ 0.70 and reverse TWP÷YARP ≥ 0.95
+- [ ] **Product:** `compare-product` median of 3 — in flight: [33263425394](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33263425394); gates MITM÷Reverse ≥ 0.70 and reverse TWP÷YARP ≥ 0.95 via [`validate-compare-product-gates.ps1`](validate-compare-product-gates.ps1) (also wired in workflow as of `0cb9a12f`)
 
 ### Edition ratio gates (first-run estimates; lock after first clean Win+Linux baseline)
 

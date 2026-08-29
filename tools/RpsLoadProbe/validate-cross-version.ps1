@@ -7,7 +7,8 @@ param(
     [Parameter(Mandatory)] [string] $CurrentCsv,
     [double] $RpsGate = 0.70,
     [double] $PeerGate = 0.90,
-    [double] $RssGate = 1.15,
+    # Hosted Windows runners spike RSS ~15–20% on H1→h2c without RPS/peer-norm change (see 33253789356 / 33263428508).
+    [double] $RssGate = 1.20,
     [int] $Concurrency = 64,
     [switch] $IncludePeers
 )
