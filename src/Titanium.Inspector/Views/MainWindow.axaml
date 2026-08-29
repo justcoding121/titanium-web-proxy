@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Titanium.Inspector.ViewModels"
+        xmlns:svc="using:Titanium.Inspector.Services"
         x:Class="Titanium.Inspector.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Titanium Inspector"
@@ -79,7 +80,8 @@
                 GridLinesVisibility="Horizontal"
                 AutoGenerateColumns="False">
         <DataGrid.Columns>
-          <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="60" />
+          <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="60"
+                              CustomSortComparer="{x:Static svc:SessionIdComparer.Instance}" />
           <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="70" />
           <DataGridTextColumn Header="Status" Binding="{Binding StatusCode}" Width="60" />
           <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="140" />

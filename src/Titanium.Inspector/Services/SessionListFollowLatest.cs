@@ -1,9 +1,22 @@
+using System.ComponentModel;
+
 namespace Titanium.Inspector.Services;
 
 /// <summary>
-/// Viewport rules for the session grid sticky-bottom (follow latest) behavior.
+/// Where new sessions appear when following the latest row.
+/// Unsorted / Id ascending → bottom; Id descending → top.
+/// </summary>
+public enum SessionListFollowEdge
+{
+    None,
+    Bottom,
+    Top,
+}
+
+/// <summary>
+/// Viewport rules for the session grid sticky follow-latest behavior.
 /// Avalonia DataGrid scrolls via PART_VerticalScrollbar (not a ScrollViewer).
-/// Follow newest rows while the user is at the bottom; pause when they scroll away;
+/// Follow newest rows while the user is at the follow edge; pause when they scroll away;
 /// resume when they return. Extent growth from new rows must not unpin.
 /// </summary>
 public static class SessionListFollowLatest
@@ -41,8 +54,64 @@ public static class SessionListFollowLatest
         return value >= maximum - threshold;
     }
 
-    public static bool ShouldScrollToLatest(bool followLatest, bool unsorted, bool hasItems) =>
-        followLatest && unsorted && hasItems;
+    /// <summary>
+    /// Near-top check for DataGrid's vertical ScrollBar (<c>Value = offset</c>).
+    /// </summary>
+    public static bool IsNearTopByScrollBar(
+        double value,
+        double maximum,
+        double threshold = DefaultThresholdPx)
+    {
+        if (maximum <= 0)
+        {
+            return true;
+        }
+
+        return value <= threshold;
+    }
+
+    public static bool IsNearFollowEdgeByScrollBar(
+        SessionListFollowEdge edge,
+        double value,
+        double maximum,
+        double threshold = DefaultThresholdPx) =>
+        edge switch
+        {
+            SessionListFollowEdge.Bottom => IsNearBottomByScrollBar(value, maximum, threshold),
+            SessionListFollowEdge.Top => IsNearTopByScrollBar(value, maximum, threshold),
+            _ => false,
+        };
+
+    /// <summary>
+    /// Unsorted or Id ascending → stick to bottom (new rows append / sort to end).
+    /// Id descending → stick to top (new high Ids appear first).
+    /// Any other column sort → no auto-follow.
+    /// </summary>
+    public static SessionListFollowEdge ResolveFollowEdge(
+        bool anyColumnSorted,
+        bool idColumnIsSoleSort,
+        ListSortDirection? idSortDirection)
+    {
+        if (!anyColumnSorted)
+        {
+            return SessionListFollowEdge.Bottom;
+        }
+
+        if (!idColumnIsSoleSort || idSortDirection is null)
+        {
+            return SessionListFollowEdge.None;
+        }
+
+        return idSortDirection == ListSortDirection.Descending
+            ? SessionListFollowEdge.Top
+            : SessionListFollowEdge.Bottom;
+    }
+
+    public static bool ShouldScrollToLatest(
+        bool followLatest,
+        SessionListFollowEdge edge,
+        bool hasItems) =>
+        followLatest && edge != SessionListFollowEdge.None && hasItems;
 
     /// <summary>
     /// Clear empties the grid and should resume follow. A filter rebuild also fires Reset
@@ -59,7 +128,7 @@ public static class SessionListFollowLatest
         bool currentlyFollowing,
         bool programmatic,
         bool userMovedOffset,
-        bool isNearBottom,
+        bool isNearFollowEdge,
         bool allContentVisible)
     {
         if (programmatic)
@@ -69,7 +138,7 @@ public static class SessionListFollowLatest
 
         if (userMovedOffset)
         {
-            return isNearBottom;
+            return isNearFollowEdge;
         }
 
         return allContentVisible || currentlyFollowing;

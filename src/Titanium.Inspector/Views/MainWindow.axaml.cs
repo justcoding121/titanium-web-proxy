@@ -1,6 +1,8 @@
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Reflection;
 using Avalonia;
+using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
@@ -67,7 +69,8 @@ public partial class MainWindow : Window
 
         if (DataContext is MainWindowViewModel vm)
         {
-            vm.EnsureShutdown();
+            // Off UI thread — WinINET restore from EnsureShutdown deadlocks the closing window.
+            vm.BeginBackgroundShutdown();
         }
     }
 
@@ -127,12 +130,13 @@ public partial class MainWindow : Window
         var value = _sessionsVScroll.Value;
         var maximum = _sessionsVScroll.Maximum;
         var userMovedOffset = e.Property == RangeBase.ValueProperty;
-        var isNearBottom = SessionListFollowLatest.IsNearBottomByScrollBar(
-            value, maximum, SessionListFollowLatest.DefaultThresholdPx);
+        var edge = ResolveFollowEdge();
+        var isNearFollowEdge = SessionListFollowLatest.IsNearFollowEdgeByScrollBar(
+            edge, value, maximum, SessionListFollowLatest.DefaultThresholdPx);
         var allContentVisible = maximum <= 0;
 
         _followLatest = SessionListFollowLatest.UpdateFollowAfterScroll(
-            _followLatest, _programmaticScroll, userMovedOffset, isNearBottom, allContentVisible);
+            _followLatest, _programmaticScroll, userMovedOffset, isNearFollowEdge, allContentVisible);
     }
 
     private void OnSessionsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -156,7 +160,7 @@ public partial class MainWindow : Window
         }
 
         if (SessionListFollowLatest.ShouldScrollToLatest(
-                _followLatest, IsUnsorted(), _sessionsVm is { Sessions.Count: > 0 }))
+                _followLatest, ResolveFollowEdge(), _sessionsVm is { Sessions.Count: > 0 }))
         {
             RequestScrollToLatest();
         }
@@ -179,20 +183,23 @@ public partial class MainWindow : Window
 
     private void ScrollToLatest()
     {
+        var edge = ResolveFollowEdge();
         if (_sessionsVm is null
             || !SessionListFollowLatest.ShouldScrollToLatest(
-                _followLatest, IsUnsorted(), _sessionsVm.Sessions.Count > 0))
+                _followLatest, edge, _sessionsVm.Sessions.Count > 0))
         {
             return;
         }
 
         AttachSessionsScroll();
-        // ScrollIntoView realizes the virtualized last row; pin the scrollbar to Maximum.
+        // Newest live row is always the last append; sort only changes visual position.
         _programmaticScroll = true;
         SessionsGrid.ScrollIntoView(_sessionsVm.Sessions[^1], column: null);
         if (_sessionsVScroll is not null)
         {
-            _sessionsVScroll.Value = _sessionsVScroll.Maximum;
+            _sessionsVScroll.Value = edge == SessionListFollowEdge.Top
+                ? 0
+                : _sessionsVScroll.Maximum;
         }
 
         // Layout/virtualization may raise ValueChanged after this method returns.
@@ -202,21 +209,53 @@ public partial class MainWindow : Window
         }, DispatcherPriority.Background);
     }
 
-    private bool IsUnsorted()
+    private SessionListFollowEdge ResolveFollowEdge()
     {
         if (GetSortDescriptionMethod is null)
         {
-            return true;
+            return SessionListFollowEdge.Bottom;
         }
 
         try
         {
-            return !SessionsGrid.Columns.Any(column =>
-                GetSortDescriptionMethod.Invoke(column, null) is not null);
+            DataGridColumn? sortedColumn = null;
+            DataGridSortDescription? sortedDescription = null;
+            foreach (var column in SessionsGrid.Columns)
+            {
+                if (GetSortDescriptionMethod.Invoke(column, null) is not DataGridSortDescription description)
+                {
+                    continue;
+                }
+
+                if (sortedColumn is not null)
+                {
+                    // Multi-column sort: do not auto-follow.
+                    return SessionListFollowEdge.None;
+                }
+
+                sortedColumn = column;
+                sortedDescription = description;
+            }
+
+            var anySorted = sortedColumn is not null;
+            var idIsSoleSort = sortedColumn is not null && IsIdColumn(sortedColumn);
+            ListSortDirection? idDirection = idIsSoleSort ? sortedDescription!.Direction : null;
+            return SessionListFollowLatest.ResolveFollowEdge(anySorted, idIsSoleSort, idDirection);
         }
         catch
         {
+            return SessionListFollowEdge.Bottom;
+        }
+    }
+
+    private static bool IsIdColumn(DataGridColumn column)
+    {
+        if (ReferenceEquals(column.CustomSortComparer, SessionIdComparer.Instance))
+        {
             return true;
         }
+
+        return column.Header is string header
+            && header.Equals("Id", StringComparison.Ordinal);
     }
 }
