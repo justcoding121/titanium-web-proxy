@@ -158,39 +158,78 @@ public sealed class WafDenyMiddleware : IProxyMiddleware
         ProxyMiddlewareDelegate next,
         CancellationToken cancellationToken)
     {
-        if (context.Session is not SessionEventArgsBase args)
+        if (TryGetSessionRequest(context, out var sessionRequest))
+        {
+            if (_rules.MethodDeny.Contains(sessionRequest!.Method))
+            {
+                Deny(context);
+                return;
+            }
+
+            var path = sessionRequest.RequestUri?.AbsolutePath ?? sessionRequest.RequestUriString ?? "";
+            if (_rules.PathDeny.Any(regex => regex.IsMatch(path)))
+            {
+                Deny(context);
+                return;
+            }
+
+            if (HeaderDenied(sessionRequest))
+            {
+                Deny(context);
+                return;
+            }
+
+            if (sessionRequest.ContentLength > _rules.MaxBodyBytes)
+            {
+                Deny(context);
+                return;
+            }
+        }
+        else if (context.Request is { } view)
+        {
+            if (_rules.MethodDeny.Contains(view.Method))
+            {
+                Deny(context);
+                return;
+            }
+
+            if (_rules.PathDeny.Any(regex => regex.IsMatch(view.Path)))
+            {
+                Deny(context);
+                return;
+            }
+
+            if (HeaderDenied(view))
+            {
+                Deny(context);
+                return;
+            }
+
+            if (view.ContentLength > _rules.MaxBodyBytes)
+            {
+                Deny(context);
+                return;
+            }
+        }
+        else
         {
             await next(context, cancellationToken);
             return;
         }
 
-        var request = args.HttpClient.Request;
-        if (_rules.MethodDeny.Contains(request.Method))
-        {
-            Deny(context);
-            return;
-        }
-
-        var path = request.RequestUri?.AbsolutePath ?? request.RequestUriString ?? "";
-        if (_rules.PathDeny.Any(regex => regex.IsMatch(path)))
-        {
-            Deny(context);
-            return;
-        }
-
-        if (HeaderDenied(request))
-        {
-            Deny(context);
-            return;
-        }
-
-        if (request.ContentLength > _rules.MaxBodyBytes)
-        {
-            Deny(context);
-            return;
-        }
-
         await next(context, cancellationToken);
+    }
+
+    private static bool TryGetSessionRequest(ProxyMiddlewareContext context, out Request? request)
+    {
+        if (context.Session is SessionEventArgsBase args)
+        {
+            request = args.HttpClient.Request;
+            return true;
+        }
+
+        request = null;
+        return false;
     }
 
     private bool HeaderDenied(Request request) =>
@@ -198,6 +237,13 @@ public sealed class WafDenyMiddleware : IProxyMiddleware
         {
             var values = request.Headers.GetHeaders(rule.Header);
             return values is not null && values.Any(h => rule.Value.IsMatch(h.Value));
+        });
+
+    private bool HeaderDenied(MiddlewareRequestView request) =>
+        _rules.HeaderDeny.Any(rule =>
+        {
+            var values = request.GetHeaderValues?.Invoke(rule.Header);
+            return values is not null && values.Any(v => rule.Value.IsMatch(v));
         });
 
     private void Deny(ProxyMiddlewareContext context)

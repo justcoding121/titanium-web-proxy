@@ -51,15 +51,15 @@ Terminate smoke (peak RPS; routes unset): TWP H1 TLS win **34273**, ubuntu **241
 | `twp-cli-reverse-http1-tls` | `twp-reverse-http1-tls` | ≥ **0.80×** |
 | `twp-cli-reverse-http1-route` | `twp-cli-reverse-http1` | ≥ **0.90×** |
 | `twp-cli-plus-base-http1` | `twp-cli-reverse-http1` | ≥ **0.90×** |
-| `twp-cli-plus-cache-http1` | `twp-cli-reverse-http1` | ≥ **0.60×** |
-| `twp-cli-intercept-http1` | `twp-cli-reverse-http1` | ≥ **0.65×** |
-| `twp-cli-plus-waf-http1` | `twp-cli-reverse-http1` | ≥ **0.70×** |
-| `twp-cli-plus-cidr-http1` | `twp-cli-reverse-http1` | ≥ **0.70×** |
-| `twp-cli-plus-jwt-http1` | `twp-cli-reverse-http1` | ≥ **0.45×** |
-| `twp-cli-plus-ratelimit-http1` | `twp-cli-reverse-http1` | ≥ **0.70×** |
-| `twp-cli-plus-resilience-http1` | `twp-cli-reverse-http1` | ≥ **0.65×** |
-| `twp-cli-plus-discovery-file-http1` | `twp-cli-reverse-http1` | ≥ **0.70×** |
-| `twp-cli-plus-metrics-scrape-http1` | `twp-cli-reverse-http1` | ≥ **0.70×** |
+| `twp-cli-plus-cache-http1` | `twp-cli-reverse-http1` | ≥ **0.70×** |
+| `twp-cli-intercept-http1` | `twp-cli-reverse-http1` | ≥ **0.70×** |
+| `twp-cli-plus-waf-http1` | `twp-cli-reverse-http1` | ≥ **0.80×** |
+| `twp-cli-plus-cidr-http1` | `twp-cli-reverse-http1` | ≥ **0.80×** |
+| `twp-cli-plus-jwt-http1` | `twp-cli-reverse-http1` | ≥ **0.70×** |
+| `twp-cli-plus-ratelimit-http1` | `twp-cli-reverse-http1` | ≥ **0.80×** |
+| `twp-cli-plus-resilience-http1` | `twp-cli-reverse-http1` | ≥ **0.85×** |
+| `twp-cli-plus-discovery-file-http1` | `twp-cli-reverse-http1` | ≥ **0.80×** |
+| `twp-cli-plus-metrics-scrape-http1` | `twp-cli-reverse-http1` | ≥ **0.80×** |
 | `twp-cli-plus-cache-hit-http1` | `twp-cli-plus-cache-http1` (cold) | ≥ **0.90×** |
 | `twp-cli-static-http1` | `twp-cli-reverse-http1` | ≥ **0.85×** |
 | `twp-cli-logging-http1` | `twp-cli-reverse-http1` | ≥ **0.90×** |
@@ -70,15 +70,14 @@ Do not retune the harness to pass a gate — fix Core / CLI / Plus instead. Neve
 
 **Lock notes (local Win + Docker Linux, 2026-08-29):**
 - **Route / dialect `.twp` → 0.90×:** Locked at **0.90** (within 10% of ForwardHost). Local Win/Linux measured route ≥0.969× and dialect ≥0.948×.
-- **Plus middleware arms:** `CanUseH1TerminateLite` previously ignored `ReverseProxy.Middleware` when `Routes` was empty, and the post-handler session-lite fallthrough used the same gate — so ForwardHost-only Plus middleware (CIDR/WAF/JWT/rate-limit/cache) skipped or re-entered lite. After refusing lite whenever middleware is present:
-  - CIDR/WAF/rate-limit ≈ **0.79–0.83×** → gate **0.70×**
-  - JWT (RS256 validate every request) ≈ **0.51×** → gate **0.45×**
-  - Cache cold (session + miss + AfterResponse body) ≈ **0.66×** → gate **0.60×**
-- **Noise headroom (2026-08-29 smoke):** sequential-arm heat and short 1-rep measures swung ratios ±15–25%. Widened:
-  - Plus-base **0.95→0.90**, cache-hit **0.95→0.90**
-  - Resilience **0.85→0.65** (active health probes share the box; laptop ~0.75×)
-  - Discovery-file **0.90→0.70** (mid-ramp rewrite + route table; ~0.81×)
-  - Metrics-scrape baseline switched to **CLI** (not Plus-base) at **0.70×** — Plus-base÷scrape was dominated by arm-order luck
+- **Plus middleware on terminate-lite (2026-08-29):** Pre-origin middleware no longer forces the full `SessionEventArgs` path. Lite populates `ProxyMiddlewareContext` (client IP + request view); deny uses handled status fields. JWT caches successful bearer validations until near `exp` (same token under load skips RS256). Cool paired Win:
+  - JWT ≈ **0.78×** (was ~0.51×) → gate **0.70×**
+  - CIDR/WAF/rate-limit ≈ **0.88–0.91×** → gate **0.80×**
+  - Cache (loopback; fills then hits) ≈ **0.99×** → gate **0.70×** (session + AfterResponse on miss; hits skip origin)
+- **Noise / measured floors tightened:**
+  - Plus-base **0.90**, cache-hit **0.90**, intercept **0.70**
+  - Resilience **0.85** (health probes; measured ~1.0×)
+  - Discovery-file **0.80**, metrics-scrape **0.80** vs CLI
   - lb-leasttime stays **0.85×**
 
 **Pre-beta note:** Gate 1 matrix run `33151235741` was still in progress during this parity land; re-check conclusion and medians before cutting beta. Gate 2 is a fresh unset-routes matrix on the release SHA after feature freeze.

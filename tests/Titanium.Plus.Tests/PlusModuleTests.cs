@@ -426,6 +426,81 @@ public class PlusModuleTests
     }
 
     [TestMethod]
+    public async Task Jwt_TryValidate_CachesSuccessfulToken()
+    {
+        using var rsa = RSA.Create(2048);
+        var exp = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();
+        var token = CreateSignedJwt(rsa, exp, "https://issuer.example", "api");
+        var mw = new JwtAccessMiddleware("https://issuer.example", "api");
+        mw.SetValidationParametersForTests(CreateValidationParameters(rsa, "https://issuer.example", "api"));
+        Assert.IsTrue(await mw.TryValidateJwtAsync(token));
+        Assert.IsTrue(await mw.TryValidateJwtAsync(token));
+    }
+
+    [TestMethod]
+    public async Task Jwt_Middleware_AcceptsBearerViaRequestView()
+    {
+        using var rsa = RSA.Create(2048);
+        var exp = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();
+        var token = CreateSignedJwt(rsa, exp, "https://issuer.example", "api");
+        var mw = new JwtAccessMiddleware("https://issuer.example", "api");
+        mw.SetValidationParametersForTests(CreateValidationParameters(rsa, "https://issuer.example", "api"));
+        var next = false;
+        var ctx = new ProxyMiddlewareContext
+        {
+            Session = new object(),
+            Request = new MiddlewareRequestView
+            {
+                Method = "GET",
+                Path = "/",
+                Host = "example",
+                Authorization = "Bearer " + token,
+            },
+        };
+        await mw.InvokeAsync(ctx, (_, _) =>
+        {
+            next = true;
+            return ValueTask.CompletedTask;
+        }, CancellationToken.None);
+        Assert.IsTrue(next);
+        Assert.IsFalse(ctx.IsHandled);
+    }
+
+    [TestMethod]
+    public async Task Cidr_AllowsLoopbackViaClientRemoteEndPoint()
+    {
+        var mw = new CidrAccessMiddleware("127.0.0.0/8");
+        var next = false;
+        var ctx = new ProxyMiddlewareContext
+        {
+            Session = new object(),
+            ClientRemoteEndPoint = new IPEndPoint(IPAddress.Loopback, 1234),
+        };
+        await mw.InvokeAsync(ctx, (_, _) =>
+        {
+            next = true;
+            return ValueTask.CompletedTask;
+        }, CancellationToken.None);
+        Assert.IsTrue(next);
+        Assert.IsFalse(ctx.IsHandled);
+    }
+
+    [TestMethod]
+    public async Task Cidr_DeniesWithoutSessionUsingHandledFields()
+    {
+        var mw = new CidrAccessMiddleware("10.0.0.0/8");
+        var ctx = new ProxyMiddlewareContext
+        {
+            Session = new object(),
+            ClientRemoteEndPoint = new IPEndPoint(IPAddress.Loopback, 1234),
+        };
+        await mw.InvokeAsync(ctx, (_, _) => ValueTask.CompletedTask, CancellationToken.None);
+        Assert.IsTrue(ctx.IsHandled);
+        Assert.AreEqual(403, ctx.HandledStatusCode);
+        Assert.AreEqual("forbidden", ctx.HandledBody);
+    }
+
+    [TestMethod]
     public async Task Waf_DeniesConfiguredPath()
     {
         var rules = WafRules.FromOptions(new Dictionary<string, string>
@@ -434,8 +509,31 @@ public class PlusModuleTests
             ["waf.denyPaths"] = "^/admin",
         });
         var mw = new WafDenyMiddleware(rules);
-        // Without SessionEventArgsBase, middleware passes through — cover FromOptions parsing
         Assert.AreEqual(1, rules.PathDeny.Count);
+        var ctx = new ProxyMiddlewareContext
+        {
+            Session = new object(),
+            Request = new MiddlewareRequestView
+            {
+                Method = "GET",
+                Path = "/admin/x",
+                Host = "example",
+            },
+        };
+        await mw.InvokeAsync(ctx, (_, _) => ValueTask.CompletedTask, CancellationToken.None);
+        Assert.IsTrue(ctx.IsHandled);
+        Assert.AreEqual(403, ctx.HandledStatusCode);
+    }
+
+    [TestMethod]
+    public async Task Waf_PassesThroughWithoutRequestView()
+    {
+        var rules = WafRules.FromOptions(new Dictionary<string, string>
+        {
+            ["waf.enabled"] = "true",
+            ["waf.denyPaths"] = "^/admin",
+        });
+        var mw = new WafDenyMiddleware(rules);
         var ctx = new ProxyMiddlewareContext { Session = new object() };
         var next = false;
         await mw.InvokeAsync(ctx, (_, _) =>

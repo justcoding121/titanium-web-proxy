@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -21,6 +24,7 @@ namespace Titanium.Web.Proxy;
 public partial class ProxyServer
 {
     private static readonly Lazy<int> H1TerminateLiteProcessId = new(() => 0);
+    private static readonly object H1TerminateLiteMiddlewareSession = new();
 
     /// <summary>
     ///     Interception-off transparent reverse with fixed <see cref="TransparentBaseProxyEndPoint.ForwardHost" />:
@@ -29,6 +33,9 @@ public partial class ProxyServer
     ///     GC under c=32 (cool: c=1 already leads YARP, c=32 was ~0.88–0.90×).
     ///     Callers must also refuse <see cref="UpstreamHttpProtocol.Http2"/> / <see cref="UpstreamHttpProtocol.Http3"/>
     ///     at the connection level — this path only speaks HTTP/1.1 TCP to the origin.
+    ///     Pre-origin middleware (CIDR/WAF/JWT/rate-limit) runs on this path via
+    ///     <see cref="ProxyMiddlewareContext"/> without a session bag; AfterResponse subscribers
+    ///     still force the full session path via <see cref="NeedsHttpInterception"/>.
     /// </summary>
     private bool CanUseH1TerminateLite(ProxyEndPoint endPoint, Request request, bool enable100Continue,
         bool enableWinAuth, bool hasCustomUpstreamProxyFunc)
@@ -39,13 +46,8 @@ public partial class ProxyServer
         if (endPoint is not TransparentBaseProxyEndPoint { ForwardHost.Length: > 0 } transparent)
             return false;
 
-        // Middleware needs SessionEventArgs; terminate-lite has none. Check even when
-        // Routes is empty (ForwardHost-only Plus CIDR/WAF/JWT/rate-limit).
-        var reverse = ReverseProxy;
-        if (reverse?.Middleware is { Count: > 0 })
-            return false;
-
         // Route table present but not ForwardHost-equivalent → full session / LB path.
+        var reverse = ReverseProxy;
         if (reverse?.Routes is { Count: > 0 })
         {
             var snapshot = reverse.ClusterManager?.Snapshot;
@@ -73,6 +75,14 @@ public partial class ProxyServer
         Request request,
         CancellationToken cancellationToken)
     {
+        if (ReverseProxy?.Middleware is { Count: > 0 } middleware)
+        {
+            var handled = await TryRunTerminateLiteMiddlewareAsync(
+                endPoint, clientStream, request, middleware, cancellationToken).ConfigureAwait(false);
+            if (handled is { } keepAlive)
+                return keepAlive;
+        }
+
         request.Locked = true;
         request.IsBodyReceived = true;
 
@@ -455,5 +465,79 @@ public partial class ProxyServer
         {
             IsFastPath = true
         };
+    }
+
+    /// <summary>
+    ///     Runs reverse-proxy middleware on the terminate-lite path without allocating
+    ///     <see cref="SessionEventArgs"/>. Returns keep-alive when middleware handled the request;
+    ///     null when the origin forward should continue.
+    /// </summary>
+    private async Task<bool?> TryRunTerminateLiteMiddlewareAsync(
+        TransparentBaseProxyEndPoint endPoint,
+        HttpClientStream clientStream,
+        Request request,
+        IReadOnlyList<Abstractions.Middleware.IProxyMiddleware> middleware,
+        CancellationToken cancellationToken)
+    {
+        var path = request.RequestUri?.PathAndQuery;
+        if (string.IsNullOrEmpty(path))
+        {
+            path = request.RequestUriString8.GetString();
+            if (string.IsNullOrEmpty(path))
+                path = "/";
+        }
+
+        var host = request.Host ?? request.RequestUri?.Host ?? endPoint.ForwardHost ?? "";
+        var authHeaders = request.Headers.GetHeaders("Authorization");
+        var ctx = new ProxyMiddlewareContext
+        {
+            Session = H1TerminateLiteMiddlewareSession,
+            ClientRemoteEndPoint = clientStream.Connection.RemoteEndPoint as IPEndPoint,
+            Request = new MiddlewareRequestView
+            {
+                Method = request.Method ?? "GET",
+                Path = path!,
+                Host = host,
+                ContentLength = request.ContentLength,
+                Authorization = authHeaders is { Count: > 0 } ? authHeaders[0].Value : null,
+                GetHeaderValues = name =>
+                {
+                    var headers = request.Headers.GetHeaders(name);
+                    if (headers is null || headers.Count == 0)
+                        return null;
+                    if (headers.Count == 1)
+                        return new[] { headers[0].Value };
+                    var values = new string[headers.Count];
+                    for (var i = 0; i < headers.Count; i++)
+                        values[i] = headers[i].Value;
+                    return values;
+                },
+            },
+        };
+
+        await Middleware.ProxyMiddlewarePipeline.Build(middleware, static (_, _) => ValueTask.CompletedTask)(
+            ctx, cancellationToken).ConfigureAwait(false);
+
+        if (!ctx.IsHandled && ctx.HandledStatusCode is null)
+            return null;
+
+        var status = (HttpStatusCode)(ctx.HandledStatusCode ?? 403);
+        var response = new GenericResponse(status)
+        {
+            HttpVersion = request.HttpVersion
+        };
+        if (ctx.HandledHeaders is { Count: > 0 })
+        {
+            foreach (var h in ctx.HandledHeaders)
+                response.Headers.AddHeader(h.Key, h.Value);
+        }
+
+        response.Body = response.Encoding.GetBytes(ctx.HandledBody ?? string.Empty);
+        response.Headers.AddHeader(KnownHeaders.Connection,
+            H1TerminateClientRequestedClose(request)
+                ? KnownHeaders.ConnectionClose
+                : KnownHeaders.ConnectionKeepAlive);
+        await clientStream.WriteResponseAsync(response, cancellationToken).ConfigureAwait(false);
+        return !H1TerminateClientRequestedClose(request);
     }
 }

@@ -95,7 +95,7 @@ public sealed class CidrAccessMiddleware : IProxyMiddleware
         ProxyMiddlewareDelegate next,
         CancellationToken cancellationToken)
     {
-        var ip = ResolveClientIp(context.Session);
+        var ip = ResolveClientIp(context);
         if (ip is null)
         {
             if (Interlocked.Exchange(ref _skipLogged, 1) == 0)
@@ -116,14 +116,19 @@ public sealed class CidrAccessMiddleware : IProxyMiddleware
         await next(context, cancellationToken);
     }
 
-    private IPAddress? ResolveClientIp(object session)
+    private IPAddress? ResolveClientIp(ProxyMiddlewareContext context)
     {
         if (_resolveClientIp is not null)
         {
-            return _resolveClientIp(session);
+            return _resolveClientIp(context.Session);
         }
 
-        if (session is SessionEventArgsBase args)
+        if (context.ClientRemoteEndPoint is { } ep)
+        {
+            return ep.Address;
+        }
+
+        if (context.Session is SessionEventArgsBase args)
         {
             return args.ClientRemoteEndPoint.Address;
         }
@@ -138,22 +143,30 @@ public sealed class CidrAccessMiddleware : IProxyMiddleware
             session.GenericResponse(body, status);
         }
 
+        context.HandledStatusCode = (int)status;
+        context.HandledBody = body;
         context.IsHandled = true;
     }
 }
 
 /// <summary>
 /// Validates Authorization Bearer JWT via OIDC discovery / JWKS (RS256/ES256) with iss/aud/nbf/exp.
+/// Successful validations are cached by token string until near <c>exp</c> so repeated bearers
+/// (typical of keep-alive clients) skip RS256 on every request.
 /// </summary>
 public sealed class JwtAccessMiddleware : IProxyMiddleware
 {
     private static readonly TimeSpan ClockSkew = TimeSpan.FromMinutes(2);
+    private static readonly JwtSecurityTokenHandler SharedHandler = new();
+    private const int MaxCachedTokens = 1024;
+
     private readonly string _authority;
     private readonly string? _audience;
     private readonly string? _jwksUrlOverride;
     private readonly Func<HttpClient>? _httpClientFactory;
     private readonly ILogger? _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly ConcurrentDictionary<string, long> _validUntilUnix = new(StringComparer.Ordinal);
     private TokenValidationParameters? _validation;
     private DateTimeOffset _keysLoadedAt = DateTimeOffset.MinValue;
 
@@ -178,7 +191,7 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
         ProxyMiddlewareDelegate next,
         CancellationToken cancellationToken)
     {
-        var token = TryGetBearerToken(context.Session);
+        var token = TryGetBearerToken(context);
         if (token is null || !await TryValidateJwtAsync(token, cancellationToken).ConfigureAwait(false))
         {
             CidrAccessMiddleware.Deny(context, HttpStatusCode.Unauthorized, "unauthorized");
@@ -186,6 +199,16 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
         }
 
         await next(context, cancellationToken);
+    }
+
+    internal static string? TryGetBearerToken(ProxyMiddlewareContext context)
+    {
+        if (context.Request?.Authorization is { Length: > 0 } auth)
+        {
+            return ParseBearer(auth);
+        }
+
+        return TryGetBearerToken(context.Session);
     }
 
     internal static string? TryGetBearerToken(object session)
@@ -201,7 +224,11 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
             return null;
         }
 
-        var value = headers[0].Value;
+        return ParseBearer(headers[0].Value);
+    }
+
+    private static string? ParseBearer(string value)
+    {
         const string prefix = "Bearer ";
         if (value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
         {
@@ -214,6 +241,12 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
     /// <summary>Validates JWT signature and standard claims using cached JWKS keys.</summary>
     public async Task<bool> TryValidateJwtAsync(string token, CancellationToken cancellationToken = default)
     {
+        var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        if (_validUntilUnix.TryGetValue(token, out var until) && until > nowUnix)
+        {
+            return true;
+        }
+
         try
         {
             var parameters = await EnsureValidationParametersAsync(cancellationToken).ConfigureAwait(false);
@@ -222,15 +255,37 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
                 return false;
             }
 
-            var handler = new JwtSecurityTokenHandler();
-            handler.ValidateToken(token, parameters, out _);
+            SharedHandler.ValidateToken(token, parameters, out var validated);
+            CacheValidatedToken(token, validated);
             return true;
         }
         catch (Exception ex)
         {
             _logger?.LogDebug(ex, "Plus Security: JWT validation failed");
+            _validUntilUnix.TryRemove(token, out _);
             return false;
         }
+    }
+
+    private void CacheValidatedToken(string token, SecurityToken validated)
+    {
+        var until = validated.ValidTo == DateTime.MinValue
+            ? DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds()
+            : new DateTimeOffset(DateTime.SpecifyKind(validated.ValidTo, DateTimeKind.Utc)).ToUnixTimeSeconds();
+
+        // Refresh slightly before exp so clock skew cannot admit an expired token from cache.
+        until -= (long)ClockSkew.TotalSeconds;
+        if (until <= DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+        {
+            return;
+        }
+
+        if (_validUntilUnix.Count >= MaxCachedTokens)
+        {
+            _validUntilUnix.Clear();
+        }
+
+        _validUntilUnix[token] = until;
     }
 
     /// <summary>
@@ -257,7 +312,7 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
 
         try
         {
-            var handler = new JwtSecurityTokenHandler();
+            var handler = SharedHandler;
             handler.ValidateToken(token, validationParameters, out _);
             return true;
         }

@@ -40,11 +40,35 @@ Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm.Random = 1 -> Tita
 Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm.RoundRobin = 0 -> Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm
 Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware
 Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware.InvokeAsync(Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext! context, Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareDelegate! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.Abstractions.Middleware.MiddlewareRequestView
+Titanium.Web.Proxy.Abstractions.Middleware.MiddlewareRequestView.Authorization.get -> string?
+Titanium.Web.Proxy.Abstractions.Middleware.MiddlewareRequestView.Authorization.init -> void
+Titanium.Web.Proxy.Abstractions.Middleware.MiddlewareRequestView.ContentLength.get -> long
+Titanium.Web.Proxy.Abstractions.Middleware.MiddlewareRequestView.ContentLength.init -> void
+Titanium.Web.Proxy.Abstractions.Middleware.MiddlewareRequestView.GetHeaderValues.get -> System.Func<string!, System.Collections.Generic.IReadOnlyList<string!>?>?
+Titanium.Web.Proxy.Abstractions.Middleware.MiddlewareRequestView.GetHeaderValues.init -> void
+Titanium.Web.Proxy.Abstractions.Middleware.MiddlewareRequestView.Host.get -> string!
+Titanium.Web.Proxy.Abstractions.Middleware.MiddlewareRequestView.Host.init -> void
+Titanium.Web.Proxy.Abstractions.Middleware.MiddlewareRequestView.Method.get -> string!
+Titanium.Web.Proxy.Abstractions.Middleware.MiddlewareRequestView.Method.init -> void
+Titanium.Web.Proxy.Abstractions.Middleware.MiddlewareRequestView.MiddlewareRequestView() -> void
+Titanium.Web.Proxy.Abstractions.Middleware.MiddlewareRequestView.Path.get -> string!
+Titanium.Web.Proxy.Abstractions.Middleware.MiddlewareRequestView.Path.init -> void
 Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.ClientRemoteEndPoint.get -> System.Net.IPEndPoint?
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.ClientRemoteEndPoint.set -> void
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.HandledBody.get -> string?
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.HandledBody.set -> void
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.HandledHeaders.get -> System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string!, string!>>?
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.HandledHeaders.set -> void
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.HandledStatusCode.get -> int?
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.HandledStatusCode.set -> void
 Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.IsHandled.get -> bool
 Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.IsHandled.set -> void
 Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.Items.get -> System.Collections.Generic.Dictionary<string!, object?>!
 Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.ProxyMiddlewareContext() -> void
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.Request.get -> Titanium.Web.Proxy.Abstractions.Middleware.MiddlewareRequestView?
+Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.Request.set -> void
 Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.Session.get -> object!
 Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext.Session.init -> void
 Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareDelegate

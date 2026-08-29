@@ -146,7 +146,7 @@ public sealed class RateLimitMiddleware : IProxyMiddleware
         ProxyMiddlewareDelegate next,
         CancellationToken cancellationToken)
     {
-        var key = ResolveKey(context.Session);
+        var key = ResolveKey(context);
         try
         {
             var count = await _counter.IncrementAsync(key, TimeSpan.FromMinutes(1), cancellationToken)
@@ -170,14 +170,19 @@ public sealed class RateLimitMiddleware : IProxyMiddleware
         await next(context, cancellationToken);
     }
 
-    private string ResolveKey(object session)
+    private string ResolveKey(ProxyMiddlewareContext context)
     {
         if (_keyResolver is not null)
         {
-            return _keyResolver(session);
+            return _keyResolver(context.Session);
         }
 
-        if (session is SessionEventArgsBase args)
+        if (context.ClientRemoteEndPoint is { } ep)
+        {
+            return ep.Address.ToString();
+        }
+
+        if (context.Session is SessionEventArgsBase args)
         {
             return args.ClientRemoteEndPoint.Address.ToString();
         }
