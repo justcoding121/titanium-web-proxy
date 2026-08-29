@@ -229,9 +229,9 @@ Laptop cool-ish A/B before bag/lite fix (2026-08-23, c=64, 8 s) — superseded b
 
 ## Editions (CLI / Plus stress)
 
-Local Win smoke 2026-08-29 (`rps-ramp-20260829-104306.csv`): c=64, warmup 2s / measure 5s, **1** repeat — **not publishable**. Prefer ÷CLI ratios; remasure on GHA `compare-editions` (median of 3) before filling [Performance — Editions](Performance#editions-cli--plus--intercept). All arms **SLO PASS** (0% errors); `validate-edition-gates.ps1` passed after noise-headroom lock.
+Local Win smoke 2026-08-29 (`rps-ramp-20260829-104306.csv`): c=64, warmup 2s / measure 5s, **1** repeat — **not publishable**. Prefer ÷CLI ratios. **Superseded for publishable numbers** by GHA [33259699099](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33259699099) after terminate-lite middleware + JWT validate cache — see [Performance — Editions](Performance#editions-cli--plus--intercept) (JWT ~0.93×, CIDR/WAF/rate-limit ~0.98×, cache ~1.05×). Table below is the pre-fix smoke (JWT ~0.51×).
 
-| Arm | Sustain RPS | Memory (RSS) | ÷CLI | Gate |
+| Arm | Sustain RPS | Memory (RSS) | ÷CLI | Gate (then) |
 |---|---:|---:|---:|---:|
 | `twp-cli-reverse-http1` (baseline) | **34,623** | 114 MiB | **1.00×** | — |
 | `twp-reverse-http1` (library) | **35,041** | 72 MiB | CLI÷lib **0.99×** | ≥0.80 |
