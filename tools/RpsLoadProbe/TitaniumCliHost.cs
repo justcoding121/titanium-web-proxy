@@ -186,12 +186,23 @@ internal sealed class TitaniumCliHost : IDisposable
                   "match": { "path": "/", "pathKind": "Prefix" }
                 """;
 
+        // Listener keeps ForwardHost so AddListener creates TransparentProxyEndPoint.
+        // SingleRoute (no transforms) is ForwardHost-equivalent → H1 terminate-lite fast path
+        // (Gate 1: route ÷ ForwardHost ≥ 0.98). InterceptTransform fails equivalence and forces
+        // EnableHttpInterception via ConfigNeedsSessionPath.
         return $$"""
             {
               "schemaVersion": "7.0",
               "logging": { "enabled": false, "enableConsole": false },
               "listeners": [
-                { "host": "127.0.0.1", "port": {{listenPort}}, "decryptSsl": false, "enableHttp2": false }
+                {
+                  "host": "127.0.0.1",
+                  "port": {{listenPort}},
+                  "decryptSsl": false,
+                  "enableHttp2": false,
+                  "forwardHost": "127.0.0.1",
+                  "forwardPort": {{originPort}}
+                }
               ],
               "routes": [
                 {
@@ -313,29 +324,47 @@ internal sealed class TitaniumCliHost : IDisposable
     private static void EnsurePlusDllBesideCli(string cliDir)
     {
         var dest = Path.Combine(cliDir, "Titanium.Plus.dll");
-        if (File.Exists(dest))
-            return;
+        var plusDir = LocatePlusOutputDirectory();
+        // Mirror E2E CliProcessHarness: Plus ALC resolves deps from AppContext.BaseDirectory,
+        // so StackExchange.Redis / IdentityModel / etc. must sit beside titanium.dll.
+        foreach (var file in Directory.EnumerateFiles(plusDir, "*.dll"))
+        {
+            var name = Path.GetFileName(file);
+            if (name.StartsWith("Titanium.Web.Proxy", StringComparison.OrdinalIgnoreCase) &&
+                !name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
 
-        var dirInfo = new DirectoryInfo(cliDir);
+            File.Copy(file, Path.Combine(cliDir, name), overwrite: true);
+        }
+
+        if (!File.Exists(dest))
+        {
+            throw new FileNotFoundException(
+                "Titanium.Plus.dll not found beside CLI after copy. Build src/Titanium.Plus before Plus edition arms.",
+                dest);
+        }
+    }
+
+    private static string LocatePlusOutputDirectory()
+    {
+        var dirInfo = new DirectoryInfo(AppContext.BaseDirectory);
         while (dirInfo != null)
         {
             foreach (var config in new[] { "Release", "Debug" })
             {
                 var plus = Path.Combine(dirInfo.FullName, "src", "Titanium.Plus", "bin", config, "net10.0",
                     "Titanium.Plus.dll");
-                if (!File.Exists(plus))
-                    continue;
-                foreach (var file in Directory.EnumerateFiles(Path.GetDirectoryName(plus)!, "Titanium.Plus*.dll"))
-                    File.Copy(file, Path.Combine(cliDir, Path.GetFileName(file)), overwrite: true);
-                if (File.Exists(dest))
-                    return;
+                if (File.Exists(plus))
+                    return Path.GetDirectoryName(plus)!;
             }
 
             dirInfo = dirInfo.Parent;
         }
 
         throw new FileNotFoundException(
-            "Titanium.Plus.dll not found beside CLI. Build src/Titanium.Plus before Plus edition arms.", dest);
+            "Titanium.Plus.dll not found. Build src/Titanium.Plus before Plus edition arms.");
     }
 
     private static int GetFreeTcpPort()
