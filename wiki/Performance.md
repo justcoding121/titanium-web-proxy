@@ -319,6 +319,77 @@ Same Client×Origin wires with interception on (`compare-product` [33263425394](
 | HTTP/3 · QUIC | HTTP/2 · TLS | **28611**<br><sub>(167 MiB / 50.2% CPU)</sub> | **28454**<br><sub>(169 MiB / 50.3% CPU)</sub> | **0.94×** | **0.93×** |
 | HTTP/3 · QUIC | HTTP/3 · QUIC | **21349**<br><sub>(170 MiB / 48.2% CPU)</sub> | **21559**<br><sub>(168 MiB / 48.3% CPU)</sub> | **0.88×** | **0.89×** |
 
+## Editions (CLI / Plus / Intercept)
+
+**Note:** `twp-reverse-http1` and other library rows use Core with **probe-tuned** settings (no logging, no Via header, probe-warmed certs). Edition rows use `titanium run -c twp.yaml` **product defaults** ΓÇö prefer the ├╖baseline ratio column over absolute RPS. Inspector GUI is not spawnable in the harness; session-path overhead is `twp-cli-intercept-http1` (route `RequestHeaderSet` transform).
+
+Gates prioritize **SLO survival under load** and **reasonable overhead vs baseline**. Pre-origin Plus middleware (CIDR/WAF/JWT/rate-limit) runs on H1 terminate-lite without `SessionEventArgs`; JWT caches successful bearer validations. Thresholds ΓÇö see [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/PERF-GATES.md).
+
+Median of **3** repeats @ `6d2a7c9d`. Source: Actions [33259699099](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33259699099) (`compare-editions`). Warmup 2s / measure 8s; concurrency 8ΓÇô64; sustain = median peak RPS among SLO-pass steps @ **c=64**. **RPS cells** include `(MiB / CPU%)` at that step.
+
+```powershell
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-editions
+pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath tools/RpsLoadProbe/results/rps-ramp-*.csv
+```
+
+| Arm | Win sustain | Win peak | Linux sustain | Linux peak | Win├╖ | Lin├╖ | Gate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `twp-cli-reverse-http1` vs library | **32214**<br><sub>(118 MiB / 43.4% CPU)</sub> | **32219** | **47734**<br><sub>(151 MiB / 49.0% CPU)</sub> | **47844** | **1.02├ù** | **1.04├ù** | ΓëÑ **0.80├ù** |
+| `twp-cli-reverse-http1-tls` vs library TLS | **26495**<br><sub>(138 MiB / 48.3% CPU)</sub> | **26651** | **36932**<br><sub>(174 MiB / 48.5% CPU)</sub> | **37200** | **1.01├ù** | **1.00├ù** | ΓëÑ **0.80├ù** |
+| `twp-cli-reverse-http1-route` vs CLI | **32394**<br><sub>(120 MiB / 47.7% CPU)</sub> | **32428** | **47369**<br><sub>(149 MiB / 49.2% CPU)</sub> | **47398** | **1.01├ù** | **0.99├ù** | ΓëÑ **0.90├ù** |
+| `twp-cli-plus-base-http1` vs CLI | **32475**<br><sub>(123 MiB / 46.0% CPU)</sub> | **32695** | **47322**<br><sub>(154 MiB / 49.8% CPU)</sub> | **47744** | **1.01├ù** | **0.99├ù** | ΓëÑ **0.90├ù** |
+| `twp-cli-plus-cache-http1` (cold) vs CLI | **34029**<br><sub>(118 MiB / 64.5% CPU)</sub> | **34460** | **49409**<br><sub>(148 MiB / 62.3% CPU)</sub> | **50104** | **1.06├ù** | **1.04├ù** | ΓëÑ **0.70├ù** |
+| `twp-cli-intercept-http1` vs CLI | **25219**<br><sub>(124 MiB / 54.0% CPU)</sub> | **25377** | **35969**<br><sub>(155 MiB / 51.2% CPU)</sub> | **35977** | **0.78├ù** | **0.75├ù** | ΓëÑ **0.70├ù** |
+| `twp-cli-plus-waf-http1` vs CLI | **31653**<br><sub>(124 MiB / 46.8% CPU)</sub> | **31837** | **46367**<br><sub>(151 MiB / 49.6% CPU)</sub> | **46685** | **0.98├ù** | **0.97├ù** | ΓëÑ **0.80├ù** |
+| `twp-cli-plus-cidr-http1` vs CLI | **31730**<br><sub>(123 MiB / 51.1% CPU)</sub> | **31757** | **46828**<br><sub>(150 MiB / 50.2% CPU)</sub> | **47093** | **0.98├ù** | **0.98├ù** | ΓëÑ **0.80├ù** |
+| `twp-cli-plus-jwt-http1` vs CLI | **30326**<br><sub>(138 MiB / 46.6% CPU)</sub> | **30386** | **43906**<br><sub>(179 MiB / 49.5% CPU)</sub> | **44433** | **0.94├ù** | **0.92├ù** | ΓëÑ **0.70├ù** |
+| `twp-cli-plus-ratelimit-http1` vs CLI | **31713**<br><sub>(123 MiB / 48.8% CPU)</sub> | **31944** | **46435**<br><sub>(151 MiB / 49.4% CPU)</sub> | **46860** | **0.98├ù** | **0.97├ù** | ΓëÑ **0.80├ù** |
+| `twp-cli-plus-resilience-http1` vs CLI | **32373**<br><sub>(128 MiB / 50.5% CPU)</sub> | **32416** | **47302**<br><sub>(155 MiB / 49.5% CPU)</sub> | **47654** | **1.00├ù** | **0.99├ù** | ΓëÑ **0.85├ù** |
+| `twp-cli-plus-discovery-file-http1` vs CLI | **32209**<br><sub>(121 MiB / 46.5% CPU)</sub> | **32332** | **47485**<br><sub>(151 MiB / 49.1% CPU)</sub> | **47770** | **1.00├ù** | **0.99├ù** | ΓëÑ **0.80├ù** |
+| `twp-cli-plus-metrics-scrape-http1` vs CLI | **32192**<br><sub>(126 MiB / 44.8% CPU)</sub> | **32427** | **47348**<br><sub>(159 MiB / 49.5% CPU)</sub> | **48665** | **1.00├ù** | **0.99├ù** | ΓëÑ **0.80├ù** |
+| `twp-cli-plus-cache-hit-http1` vs cache cold | **34015**<br><sub>(117 MiB / 66.0% CPU)</sub> | **34022** | **49153**<br><sub>(149 MiB / 63.1% CPU)</sub> | **49358** | **1.00├ù** | **0.99├ù** | ΓëÑ **0.90├ù** |
+| `twp-cli-static-http1` vs CLI | **53078**<br><sub>(109 MiB / 52.1% CPU)</sub> | **53980** | **78333**<br><sub>(150 MiB / 48.4% CPU)</sub> | **82955** | **1.65├ù** | **1.64├ù** | ΓëÑ **0.85├ù** |
+| `twp-cli-logging-http1` vs CLI | **32440**<br><sub>(119 MiB / 47.4% CPU)</sub> | **32581** | **47624**<br><sub>(150 MiB / 49.3% CPU)</sub> | **48604** | **1.01├ù** | **1.00├ù** | ΓëÑ **0.90├ù** |
+| `twp-cli-lb-leasttime-http1` vs route | **29649**<br><sub>(134 MiB / 54.7% CPU)</sub> | **30386** | **44790**<br><sub>(180 MiB / 50.6% CPU)</sub> | **44825** | **0.92├ù** | **0.95├ù** | ΓëÑ **0.85├ù** |
+| `twp-cli-dialect-twp-http1` vs CLI | **32461**<br><sub>(114 MiB / 49.7% CPU)</sub> | **32780** | **47898**<br><sub>(145 MiB / 49.3% CPU)</sub> | **48154** | **1.01├ù** | **1.00├ù** | ΓëÑ **0.90├ù** |
+
+`validate-edition-gates.ps1` **passed** on both OS for this run. Library baselines @ c=64 (same job): Win H1 **31561** / TLS **26128**; Linux H1 **45818** / TLS **36869**. Laptop smoke ratios stay on [Performance Local Lab ΓÇö Editions](Performance-Local-Lab#editions-cli--plus-stress).
+
+## Cross-version (7.0 vs 6.0)
+
+Gate 2 prerequisite before the `v7.0.0` tag: run `compare-cross-version` (reverse matrix, **routes unset**) on `develop` and compare against committed 6.0 baselines from GHA [33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466) (`tools/RpsLoadProbe/results/baseline-6.0-win.csv` / `baseline-6.0-linux.csv`).
+
+| Gate | Threshold |
+|------|-----------|
+| Peer-normalized RPS (when YARP peer exists) | `(TWP├╖YARP)_7 ├╖ (TWP├╖YARP)_6 ΓëÑ 0.90` |
+| Absolute RPS floor (TWP arms) | `7.0 ├╖ 6.0 ΓëÑ 0.70` (runner heat ΓÇö peers move with the box) |
+| RSS | `7.0 ├╖ 6.0 Γëñ 1.15` per TWP arm @ c=64 |
+
+nginx/YARP absolute RPS is **not** gated. See [`validate-cross-version.ps1`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/validate-cross-version.ps1).
+
+```powershell
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-cross-version
+pwsh tools/RpsLoadProbe/validate-cross-version.ps1 `
+  -BaselineCsv tools/RpsLoadProbe/results/baseline-6.0-win.csv `
+  -CurrentCsv  tools/RpsLoadProbe/results/rps-ramp-*.csv
+```
+
+Median of **3** @ `0ef6d4dd`. Source: Actions [33270571908](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33270571908). Sustain RPS @ **c=64** (SLO-pass median). Absolute 7.0├╖6.0 Γëê **0.96ΓÇô1.00├ù** on same-protocol arms; peer-norm Γëê **0.90ΓÇô1.03├ù**.
+
+| Arm | Win 6.0 | Win 7.0 | Win├╖ | Linux 6.0 | Linux 7.0 | Lin├╖ |
+|---|---:|---:|---:|---:|---:|---:|
+| `twp-reverse-http1` | **32525** | **32213** | **0.99├ù** | **32755** | **31932** | **0.97├ù** |
+| `twp-reverse-http1-tls` | **26461** | **26570** | **1.00├ù** | **22784** | **22351** | **0.98├ù** |
+| `twp-reverse-http2` | **76038** | **75316** | **0.99├ù** | **47690** | **46678** | **0.98├ù** |
+| `twp-reverse-http2-cleartext` | **40347** | **40236** | **1.00├ù** | **34556** | **33316** | **0.96├ù** |
+| `twp-reverse-http3` | **17529** | **17380** | **0.99├ù** | **19468** | **19423** | **1.00├ù** |
+| `twp-reverse-http3-cleartext` | **19956** | **19529** | **0.98├ù** | **20395** | **20070** | **0.98├ù** |
+| `yarp-reverse-http1` (peer) | **27504** | **27254** | **0.99├ù** | **27713** | **27102** | **0.98├ù** |
+| `yarp-reverse-http2` (peer) | **35553** | **35189** | **0.99├ù** | **29111** | **28733** | **0.99├ù** |
+
+`validate-cross-version.ps1` **passed** on both OS CSVs (RSS floor 1.15 for one Win H1ΓåÆh2c arm at 1.139├ù with peer-norm 1.001├ù). MITM arms live in `compare-product` / `compare-mitm`, not this reverse-only matrix.
+
+
 ## Heavier reverse workloads
 
 Separate from the tiny-GET matrix. Same measurement environments. Modes: `compare-bodies`, `compare-post`, `compare-lossy`, `compare-tls-cost`, `compare-arch` in [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe). Dispatch each independently via `workflow_dispatch` (no need to re-run full `compare-product`). **PUT with the same body is the same proxy work as POST; DELETE with no body matches GET** — only POST is published. Bodies/POST/lossy stay **half-duplex**. `compare-arch` is the slow-consumer / early-response / duplex set. Laptop numbers are on [Performance Local Lab](Performance-Local-Lab#architecture-sensitive); CI medians go in the tables below.
