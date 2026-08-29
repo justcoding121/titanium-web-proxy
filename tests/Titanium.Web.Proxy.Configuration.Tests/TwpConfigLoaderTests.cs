@@ -1,5 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Configuration;
+using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Configuration.Parsers;
 
 namespace Titanium.Web.Proxy.Configuration.Tests;
@@ -85,5 +86,97 @@ public class TwpConfigLoaderTests
         var config = JsonReverseProxyDocument.Parse(json);
         Assert.AreEqual("backend", config.Routes[0].ClusterId);
         Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count);
+    }
+
+    [TestMethod]
+    public void LoadJson_ParsesServerProfileAndTimeouts()
+    {
+        var json = """
+            {
+              "schemaVersion": "7.1",
+              "listeners": [{ "host": "127.0.0.1", "port": 8080 }],
+              "server": {
+                "profile": "PublicFacing",
+                "enableHttp2": true,
+                "timeouts": {
+                  "clientHeaderTimeoutSeconds": 15,
+                  "requestTimeoutSeconds": 120
+                },
+                "tls": {
+                  "supportedSslProtocols": ["Tls12", "Tls13"]
+                },
+                "limits": {
+                  "maxHeaderCount": 128
+                }
+              },
+              "logging": {
+                "enabled": true,
+                "queueCapacity": 2048
+              }
+            }
+            """;
+        var config = TwpConfigLoader.LoadJson(json);
+        Assert.AreEqual("7.1", config.SchemaVersion);
+        Assert.IsNotNull(config.Server);
+        Assert.AreEqual("PublicFacing", config.Server.Profile);
+        Assert.AreEqual(15, config.Server.Timeouts!.ClientHeaderTimeoutSeconds);
+        Assert.AreEqual(120, config.Server.Timeouts.RequestTimeoutSeconds);
+        Assert.AreEqual(128, config.Server.Limits!.MaxHeaderCount);
+        CollectionAssert.AreEqual(new[] { "Tls12", "Tls13" }, config.Server.Tls!.SupportedSslProtocols!.ToList());
+        Assert.AreEqual(2048, config.Logging!.QueueCapacity);
+        Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count);
+    }
+
+    [TestMethod]
+    public void LoadYaml_ParsesServerSection()
+    {
+        var yaml = """
+            schemaVersion: "7.1"
+            listeners:
+              - host: 127.0.0.1
+                port: 9000
+                type: socks
+                maxConcurrentClients: 100
+            server:
+              profile: LegacyCompatible
+              pooling:
+                maxCachedConnections: 64
+              auth:
+                proxyAuthenticationRealm: TestRealm
+                proxyAuthenticationSchemes:
+                  - Negotiate
+            """;
+        var config = TwpConfigLoader.LoadYaml(yaml);
+        Assert.AreEqual("socks", config.Listeners[0].Type);
+        Assert.AreEqual(100, config.Listeners[0].MaxConcurrentClients);
+        Assert.AreEqual("LegacyCompatible", config.Server!.Profile);
+        Assert.AreEqual(64, config.Server.Pooling!.MaxCachedConnections);
+        Assert.AreEqual("TestRealm", config.Server.Auth!.ProxyAuthenticationRealm);
+        Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count);
+    }
+
+    [TestMethod]
+    public void Validate_RejectsUnknownProfile()
+    {
+        var config = new TwpConfig
+        {
+            Server = new ServerConfig { Profile = "NotAProfile" },
+        };
+        var errors = TwpConfigValidator.Validate(config);
+        Assert.IsTrue(errors.Any(e => e.Contains("profile", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [TestMethod]
+    public void Validate_RejectsNegativeTimeout()
+    {
+        var config = new TwpConfig
+        {
+            Server = new ServerConfig
+            {
+                Timeouts = new TimeoutsConfig { ConnectTimeOutSeconds = -1 },
+            },
+        };
+        var errors = TwpConfigValidator.Validate(config);
+        Assert.IsTrue(errors.Any(e => e.Contains("connectTimeOutSeconds", StringComparison.OrdinalIgnoreCase)));
     }
 }

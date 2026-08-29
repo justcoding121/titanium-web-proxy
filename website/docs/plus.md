@@ -26,6 +26,8 @@ plus:
 
 Use a strong secret in production. Dev-only default secrets require an explicit environment opt-in on loopback.
 
+**`ProxyServer` knobs** (profiles, timeouts, TLS, limits, upstream, …) are configured under `server:` in twp.yaml — not `plus.options`. See [Configuration](/docs/configuration).
+
 ## What you get
 
 | Area | Capability |
