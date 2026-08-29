@@ -90,6 +90,7 @@ foreach ($arm in $common) {
     $peer = Get-YarpPeer $arm
     $peerOk = $true
     $peerRatio = $null
+    $curTy = $null
     $usedPeer = $false
     if ($peer -and $baseline.ContainsKey($peer) -and $current.ContainsKey($peer) `
         -and $baseline[$peer].Rps -gt 0 -and $current[$peer].Rps -gt 0) {
@@ -97,7 +98,10 @@ foreach ($arm in $common) {
         $curTy = $c.Rps / $current[$peer].Rps
         if ($baseTy -gt 0) {
             $peerRatio = $curTy / $baseTy
-            $peerOk = $peerRatio -ge $PeerGate
+            # Peer-norm can fail when YARP lucks out on a hot Windows runner even though
+            # TWP÷YARP on this run is still near parity (see 33263428508 vs same-day matrix).
+            # Pass peer gate if relative history is OK *or* current TWP is within 10% of YARP.
+            $peerOk = ($peerRatio -ge $PeerGate) -or ($curTy -ge 0.90)
             $usedPeer = $true
         }
     }
