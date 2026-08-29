@@ -34,9 +34,9 @@ Use **Tools → Composer / Breakpoints / AutoResponder / Scripts…** to open th
 
 ### Inspect (this session)
 
-- **Headers** — request/response headers, cookies, query
-- **Body** — decoded / JSON-formatted body when possible
-- **Hex** — raw bytes
+- **Headers** — request/response headers, cookies, query (labeled sections)
+- **Body** — request and response bodies as `=== Request ===` / `=== Response ===` (decoded / JSON when possible; `(empty)` if missing)
+- **Hex** — same labeled sections for raw bytes
 - **WS Frames** — shown **only for WebSocket** sessions; best-effort text preview of messages (not a full opcode stream)
 
 Search for WebSocket traffic with `is:ws`.

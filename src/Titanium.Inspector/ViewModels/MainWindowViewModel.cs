@@ -1037,12 +1037,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         SelectedHeaders = sb.ToString();
 
-        var headers = SessionInspectors.ParseHeaderBlock(_selected.ResponseHeadersText);
-        headers.TryGetValue("Content-Encoding", out var encoding);
-        var bytes = SessionInspectors.TryDecompress(_selected.ResponseBodyBytes ?? _selected.RequestBodyBytes, encoding);
-        SelectedBody = SessionInspectors.TryFormatJson(
-            _selected.ResponseBodyText ?? _selected.RequestBodyText ?? Encoding.UTF8.GetString(bytes ?? []));
-        SelectedHex = SessionInspectors.ToHex(bytes);
+        SelectedBody = SessionInspectors.FormatLabeledBody(
+            _selected.RequestHeadersText,
+            _selected.ResponseHeadersText,
+            _selected.RequestBodyText,
+            _selected.ResponseBodyText,
+            _selected.RequestBodyBytes,
+            _selected.ResponseBodyBytes);
+        SelectedHex = SessionInspectors.FormatLabeledHex(
+            _selected.RequestHeadersText,
+            _selected.ResponseHeadersText,
+            _selected.RequestBodyBytes,
+            _selected.ResponseBodyBytes);
 
         if (_selected.WebSocketFrames is { Count: > 0 } frames)
         {

@@ -94,6 +94,35 @@ public class SessionInspectorsTests
         CollectionAssert.AreEqual(corrupt, SessionInspectors.TryDecompress(corrupt, "gzip")!);
     }
 
+    [TestMethod]
+    public void FormatLabeledBody_AndHex_ShowRequestAndResponseSections()
+    {
+        var body = SessionInspectors.FormatLabeledBody(
+            requestHeadersText: null,
+            responseHeadersText: null,
+            requestBodyText: """{"q":1}""",
+            responseBodyText: "ok",
+            requestBodyBytes: null,
+            responseBodyBytes: "ok"u8.ToArray());
+        StringAssert.Contains(body, "=== Request ===");
+        StringAssert.Contains(body, "=== Response ===");
+        StringAssert.Contains(body, "\"q\"");
+        StringAssert.Contains(body, "ok");
+
+        var empty = SessionInspectors.FormatLabeledBody(null, null, null, null, null, null);
+        StringAssert.Contains(empty, "(empty)");
+
+        var hex = SessionInspectors.FormatLabeledHex(
+            null,
+            null,
+            "AB"u8.ToArray(),
+            "CD"u8.ToArray());
+        StringAssert.Contains(hex, "=== Request ===");
+        StringAssert.Contains(hex, "=== Response ===");
+        StringAssert.Contains(hex, "41 42");
+        StringAssert.Contains(hex, "43 44");
+    }
+
     private static byte[] Compress(byte[] input, Func<MemoryStream, CompressionMode, Stream> factory)
     {
         using var ms = new MemoryStream();
