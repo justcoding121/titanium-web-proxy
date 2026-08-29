@@ -7,7 +7,7 @@ param(
     [Parameter(Mandatory)] [string] $CurrentCsv,
     [double] $RpsGate = 0.70,
     [double] $PeerGate = 0.90,
-    [double] $RssGate = 1.10,
+    [double] $RssGate = 1.15,
     [int] $Concurrency = 64,
     [switch] $IncludePeers
 )

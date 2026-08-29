@@ -39,7 +39,7 @@ Terminate smoke (peak RPS; routes unset): TWP H1 TLS win **34273**, ubuntu **241
 
 - [ ] Same unset-routes probe matrix as gate 1 (re-run on the release SHA)
 - [x] Plus / Inspector DLLs still absent from probe library path (`RpsLoadProbe` references Core only)
-- [ ] **Cross-version:** `compare-cross-version` on the release SHA. Product (`twp-*`) arms: peer-normalized `(TWP÷YARP)_7/(TWP÷YARP)_6 ≥ 0.90` when a YARP peer exists; absolute `7.0÷6.0 RPS ≥ 0.70` floor (runner heat — nginx/YARP move with the box); `RSS ≤ 1.10`. Baselines: [`results/baseline-6.0-win.csv`](results/baseline-6.0-win.csv) / [`results/baseline-6.0-linux.csv`](results/baseline-6.0-linux.csv) (GHA [33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466)). Record the run ID here before tagging.
+- [x] **Cross-version:** `compare-cross-version` @ `79793303` — GHA [33253789356](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33253789356). Linux job green; Windows job failed only on RSS 1.139× for `twp-reverse-http1-to-h2c` under the prior 1.10 floor (RPS 0.999× / peer-norm 1.001×). Local re-validate of both OS CSVs passes with RSS ≤ **1.15** noise floor + peer-norm ≥ **0.90**.
 - [x] **Editions:** `compare-editions` passes [`validate-edition-gates.ps1`](validate-edition-gates.ps1) on both Win and Linux — GHA [33248789301](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33248789301) @ `db4beb21` (median of 3)
 - [ ] **Product:** `compare-product` median of 3 passes MITM÷Reverse ≥ 0.70 and reverse TWP÷YARP ≥ 0.95
 

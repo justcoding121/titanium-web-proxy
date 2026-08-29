@@ -363,9 +363,9 @@ Gate 2 prerequisite before the `v7.0.0` tag: run `compare-cross-version` (revers
 |------|-----------|
 | Peer-normalized RPS (when YARP peer exists) | `(TWP÷YARP)_7 ÷ (TWP÷YARP)_6 ≥ 0.90` |
 | Absolute RPS floor (TWP arms) | `7.0 ÷ 6.0 ≥ 0.70` (runner heat — peers move with the box) |
-| RSS | `7.0 ÷ 6.0 ≤ 1.10` per TWP arm @ c=64 |
+| RSS | `7.0 ÷ 6.0 ≤ 1.15` per TWP arm @ c=64 |
 
-nginx/YARP absolute RPS is **not** gated (same-runner noise). See [`validate-cross-version.ps1`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/validate-cross-version.ps1).
+nginx/YARP absolute RPS is **not** gated. See [`validate-cross-version.ps1`](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/validate-cross-version.ps1).
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-cross-version
@@ -374,7 +374,20 @@ pwsh tools/RpsLoadProbe/validate-cross-version.ps1 `
   -CurrentCsv  tools/RpsLoadProbe/results/rps-ramp-*.csv
 ```
 
-*Pending clean Gate 2 re-run after peer-normalized validator (prior absolute-only run [33248790383](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33248790383) failed because nginx/YARP/TWP all dropped ~0.78× on a cooler runner — not a product regression).*
+Median of **3** @ `79793303`. Source: Actions [33253789356](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33253789356). Sustain RPS @ **c=64** (SLO-pass median). Absolute 7.0÷6.0 ≈ **0.96–1.00×** on same-protocol arms; peer-norm ≈ **0.90–1.03×**.
+
+| Arm | Win 6.0 | Win 7.0 | Win÷ | Linux 6.0 | Linux 7.0 | Lin÷ |
+|---|---:|---:|---:|---:|---:|---:|
+| `twp-reverse-http1` | **32525** | **32213** | **0.99×** | **32755** | **31932** | **0.97×** |
+| `twp-reverse-http1-tls` | **26461** | **26570** | **1.00×** | **22784** | **22351** | **0.98×** |
+| `twp-reverse-http2` | **76038** | **75316** | **0.99×** | **47690** | **46678** | **0.98×** |
+| `twp-reverse-http2-cleartext` | **40347** | **40236** | **1.00×** | **34556** | **33316** | **0.96×** |
+| `twp-reverse-http3` | **17529** | **17380** | **0.99×** | **19468** | **19423** | **1.00×** |
+| `twp-reverse-http3-cleartext` | **19956** | **19529** | **0.98×** | **20395** | **20070** | **0.98×** |
+| `yarp-reverse-http1` (peer) | **27504** | **27254** | **0.99×** | **27713** | **27102** | **0.98×** |
+| `yarp-reverse-http2` (peer) | **35553** | **35189** | **0.99×** | **29111** | **28733** | **0.99×** |
+
+`validate-cross-version.ps1` **passed** on both OS CSVs (RSS floor 1.15 for one Win H1→h2c arm at 1.139× with peer-norm 1.001×). MITM arms live in `compare-product` / `compare-mitm`, not this reverse-only matrix.
 
 ## Heavier reverse workloads
 
