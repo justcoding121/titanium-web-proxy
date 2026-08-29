@@ -163,10 +163,49 @@ jobs:
       run: |
         dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore
         dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI"
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "FullyQualifiedName~UnixProxyBypassMapperTests|FullyQualifiedName~MacOsSystemProxyBackendTests|FullyQualifiedName~LinuxSystemProxyBackendTests|FullyQualifiedName~ElevationPromptCancelTests|FullyQualifiedName~SystemProxyBackendFactoryPlatformTests"
+    - name: Inspector E2E-UI Linux platform
+      if: runner.os == 'Linux'
+      run: |
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Linux"
+    - name: Inspector E2E-UI macOS platform
+      if: runner.os == 'macOS'
+      run: |
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Mac"
+
+  # Dedicated macOS Inspector UI job: full E2E-UI + macOS system-proxy backend sanity.
+  inspector-ui-macos:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+    - uses: actions/checkout@v6
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: |
+          10.0.x
+    - name: Restore
+      run: dotnet restore src/Titanium.Web.Proxy.sln
+    - name: Build
+      run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore
+    - name: Inspector unit tests
+      run: dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore
+    - name: Inspector E2E-UI feature sanity
+      run: |
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI"
+    - name: macOS system-proxy backend
+      run: |
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Mac|FullyQualifiedName~MacOsSystemProxyBackendTests|FullyQualifiedName~UnixProxyBypassMapperTests"
+    - name: Publish Inspector osx smoke
+      run: |
+        rid=$(dotnet --info | awk '/RID:/ {print $2; exit}')
+        if [ -z "$rid" ]; then rid=osx-arm64; fi
+        dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r "$rid" --self-contained true -o "./artifacts/inspector-$rid"
+        test -f "./artifacts/inspector-$rid/TitaniumInspector" || test -f "./artifacts/inspector-$rid/Titanium.Inspector"
 
   publish:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
-    needs: [build, ui-portable]
+    needs: [build, ui-portable, inspector-ui-macos]
     runs-on: windows-latest
     environment: nuget-publish
     permissions:

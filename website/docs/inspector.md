@@ -71,6 +71,22 @@ abort
 
 Applies to every captured request/response. On request, `abort` or `set-status` short-circuits AutoResponder, breakpoints, and the origin.
 
+
+## Platform matrix (system proxy and root CA)
+
+| Feature | Windows | macOS | Linux |
+|---------|---------|-------|-------|
+| System proxy | WinINET (automatic) | `networksetup` (admin prompt if required) | GNOME `gsettings` + KDE + process `http(s)_proxy` |
+| Root CA user trust | Current-user Root store | Login keychain (`security`) + .NET store | .NET store + user NSS (`certutil`, Chromium) |
+| Root CA machine / admin | UAC + `certutil` | System keychain (macOS auth dialog) | `pkexec` + `update-ca-certificates` |
+| Cancel elevation | Leaves settings unchanged | Leaves settings unchanged | Leaves settings unchanged |
+
+Notes:
+
+- Headless Linux without polkit/GUI cannot show an admin dialog; use Export CA and install manually.
+- Firefox may require trusting the CA in its own certificate store.
+- KDE proxy reload is best-effort; a session restart may be needed if apps do not pick up changes.
+- If user-level CA install fails, Inspector offers an elevated retry (OS admin prompt).
 ## Other features
 
 - Session grid: method, status, host, URL, protocol, duration, TTFB, size, process

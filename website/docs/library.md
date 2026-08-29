@@ -51,3 +51,10 @@ Use `ForwardHost` on a transparent endpoint for a zero-cost terminate-lite path,
 - `examples/Titanium.Web.Proxy.Examples.Basic`
 - `examples/Titanium.Web.Proxy.Examples.Wpf`
 - `examples/Titanium.Web.Proxy.Examples.WindowsService`
+
+
+## System proxy and root CA (Windows / macOS / Linux)
+
+`ProxyServer.SetAsSystemProxy` / `RestoreOriginalProxySettings` work on Windows (WinINET), macOS (`networksetup`), and Linux (GNOME + KDE + process environment). Unsupported platforms throw `NotSupportedException`.
+
+`CertificateManager.TrustRootCertificate` installs into the current-user store on all platforms and additionally trusts for SSL on macOS (login keychain) and Linux (user NSS db). `TrustRootCertificateAsAdmin` shows an OS admin prompt (UAC / macOS authentication / polkit) for machine-wide trust.

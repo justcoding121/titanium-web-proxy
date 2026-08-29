@@ -322,7 +322,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         if (!_interception.SetSystemProxy(enable))
         {
             StatusText = enable
-                ? "Failed to enable system proxy (check permissions / platform support)"
+                ? "Failed to enable system proxy (permissions, cancelled admin prompt, or unsupported desktop environment)"
                 : "Failed to restore system proxy settings";
             return Task.CompletedTask;
         }
@@ -334,20 +334,32 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
-    private Task InstallCaAsync()
+    private async Task InstallCaAsync()
     {
         if (!_interception.IsRunning)
         {
             StatusText = "Start interception first";
-            return Task.CompletedTask;
+            return;
         }
 
         var ok = _interception.InstallRootCertificate(machineStore: false);
+        if (!ok)
+        {
+            var owner = TryGetMainWindow();
+            if (await _dialogs.ConfirmElevateRootCaAsync(owner))
+                ok = _interception.InstallRootCertificateAsAdmin(machineStore: false);
+            else
+            {
+                StatusText = "Root CA install cancelled elevation - try Export CA and install manually (Keychain / NSS / cert store)";
+                return;
+            }
+        }
+
         StatusText = ok
-            ? "Root CA trusted in current user store — ready to enable Decrypt HTTPS"
-            : "Root CA install failed or not present in store — try Export CA and install manually";
-        return Task.CompletedTask;
+            ? "Root CA trusted - ready to enable Decrypt HTTPS"
+            : "Root CA install failed (store / Keychain / NSS) - try Export CA, or allow the admin prompt";
     }
+
 
     private async Task UntrustCaAsync()
     {
@@ -946,9 +958,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
                 if (!_interception.InstallRootCertificate(machineStore: false))
                 {
-                    StatusText = "Root CA install failed — Decrypt HTTPS stays off";
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
-                    return;
+                    if (!await _dialogs.ConfirmElevateRootCaAsync(owner) ||
+                        !_interception.InstallRootCertificateAsAdmin(machineStore: false))
+                    {
+                        StatusText = "Root CA install failed - Decrypt HTTPS stays off (try Export CA or allow admin prompt)";
+                        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+                        return;
+                    }
                 }
             }
 

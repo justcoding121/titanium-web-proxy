@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -44,7 +45,7 @@ internal class HttpSystemProxyValue
 [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1402:FileMayOnlyContainASingleType",
     Justification = "Reviewed.")]
 [SupportedOSPlatform("windows")]
-internal class SystemProxyManager : IDisposable
+internal class SystemProxyManager : ISystemProxyBackend
 {
     private const string RegKeyInternetSettings = "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
     private const string RegAutoConfigUrl = "AutoConfigURL";
@@ -125,7 +126,7 @@ internal class SystemProxyManager : IDisposable
     /// <param name="hostname"></param>
     /// <param name="port"></param>
     /// <param name="protocolType"></param>
-    internal void SetProxy(string hostname, int port, ProxyProtocolType protocolType)
+    public void SetProxy(string hostname, int port, ProxyProtocolType protocolType)
     {
         SetProxy(hostname, port, protocolType, null);
     }
@@ -139,7 +140,7 @@ internal class SystemProxyManager : IDisposable
     /// <param name="proxyOverride">
     ///     The proxy bypass list to set, or <see langword="null"/> to preserve the current list.
     /// </param>
-    internal void SetProxy(string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
+    public void SetProxy(string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
     {
         using (var reg = OpenInternetSettingsKey())
         {
@@ -170,7 +171,7 @@ internal class SystemProxyManager : IDisposable
     /// <summary>
     ///     Remove the HTTP and/or HTTPS proxy setting from current machine
     /// </summary>
-    internal void RemoveProxy(ProxyProtocolType protocolType, bool saveOriginalConfig = true)
+    public void RemoveProxy(ProxyProtocolType protocolType, bool saveOriginalConfig = true)
     {
         using (var reg = OpenInternetSettingsKey())
         {
@@ -205,7 +206,7 @@ internal class SystemProxyManager : IDisposable
     /// <summary>
     ///     Removes all types of proxy settings (both http and https)
     /// </summary>
-    internal void DisableAllProxy()
+    public void DisableAllProxy()
     {
         using (var reg = OpenInternetSettingsKey())
         {
@@ -244,7 +245,25 @@ internal class SystemProxyManager : IDisposable
         }
     }
 
-    internal void RestoreOriginalSettings()
+
+    public string? GetCurrentProxyOverride() => GetProxyInfoFromRegistry()?.ProxyOverride;
+
+    public ProxyProtocolType GetStaleLocalProxyProtocols(IReadOnlyCollection<int> ownedPorts)
+    {
+        var stale = ProxyProtocolType.None;
+        var proxyInfo = GetProxyInfoFromRegistry();
+        if (proxyInfo?.Proxies == null) return stale;
+
+        foreach (var proxy in proxyInfo.Proxies.Values)
+        {
+            if (!NetworkHelper.IsLocalIpAddress(proxy.HostName) || !ownedPorts.Contains(proxy.Port))
+                continue;
+            stale |= proxy.ProtocolType;
+        }
+
+        return stale;
+    }
+    public void RestoreOriginalSettings()
     {
         var ov = originalValues;
         if (ov == null) return;
