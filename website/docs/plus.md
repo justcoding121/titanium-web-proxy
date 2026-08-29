@@ -37,7 +37,7 @@ Use a strong secret in production. Dev-only default secrets require an explicit 
 | Discovery | File watch, DNS poll; Consul / Kubernetes best-effort |
 | Security | CIDR allow-list, JWT/OIDC (JWKS) |
 | WAF | Thin deny-list (paths, methods, headers, body size) — not a full WAF suite |
-| State | Redis fixed-window per-IP rate limit |
+| State | Fixed-window per-IP rate limit (`state.mode=memory` or `state.redis`) |
 | Resilience | Active HTTP/TCP health probes |
 | Cache | In-memory HTTP response cache (`cache.enable`) |
 

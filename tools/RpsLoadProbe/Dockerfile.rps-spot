@@ -1,10 +1,19 @@
-# Linux spot-check image: .NET 10 SDK + libmsquic + nginx.org mainline (HTTP/3).
+# Linux RPS image: .NET 10 SDK + pwsh + libmsquic + nginx.org mainline (HTTP/3).
 # Build: docker build -f tools/RpsLoadProbe/Dockerfile.rps-spot -t twp-rps-linux tools/RpsLoadProbe
 FROM mcr.microsoft.com/dotnet/sdk:10.0
 
 USER root
+ARG PWSH_VERSION=7.5.4
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates gnupg pwsh \
+    && apt-get install -y --no-install-recommends curl ca-certificates gnupg libicu74 \
+    && curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+         "https://github.com/PowerShell/PowerShell/releases/download/v${PWSH_VERSION}/powershell-${PWSH_VERSION}-linux-x64.tar.gz" \
+         -o /tmp/powershell.tar.gz \
+    && mkdir -p /opt/microsoft/powershell/7 \
+    && tar zxf /tmp/powershell.tar.gz -C /opt/microsoft/powershell/7 \
+    && chmod +x /opt/microsoft/powershell/7/pwsh \
+    && ln -sf /opt/microsoft/powershell/7/pwsh /usr/bin/pwsh \
+    && rm -f /tmp/powershell.tar.gz \
     && . /etc/os-release \
     && curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
          "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb" \
@@ -12,7 +21,7 @@ RUN apt-get update \
     && dpkg -i /tmp/packages-microsoft-prod.deb \
     && rm -f /tmp/packages-microsoft-prod.deb \
     && apt-get update \
-    && apt-get install -y --no-install-recommends libmsquic \
+    && apt-get install -y --no-install-recommends libmsquic libnuma1 \
     && curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
          https://nginx.org/keys/nginx_signing.key \
          | gpg --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg \

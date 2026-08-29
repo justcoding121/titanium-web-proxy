@@ -392,6 +392,40 @@ public class PlusModuleTests
     }
 
     [TestMethod]
+    public void SharedStateStore_ModeMemory_RegistersRateLimitWithoutRedis()
+    {
+        var middleware = new List<IProxyMiddleware>();
+        var store = SharedStateStore.TryStart(
+            new PlusActivationContext
+            {
+                ProxyServer = new object(),
+                Middleware = middleware,
+                Options = new Dictionary<string, string>
+                {
+                    ["state.mode"] = "memory",
+                    ["state.rateLimitPerMinute"] = "1000000",
+                },
+            },
+            new Dictionary<string, string>
+            {
+                ["state.mode"] = "memory",
+                ["state.rateLimitPerMinute"] = "1000000",
+            });
+        Assert.IsNotNull(store);
+        Assert.AreEqual(1, middleware.Count);
+        Assert.IsInstanceOfType(middleware[0], typeof(RateLimitMiddleware));
+    }
+
+    [TestMethod]
+    public void SharedStateStore_NoOptions_ReturnsNull()
+    {
+        var store = SharedStateStore.TryStart(
+            new PlusActivationContext { ProxyServer = new object(), Middleware = [] },
+            new Dictionary<string, string>());
+        Assert.IsNull(store);
+    }
+
+    [TestMethod]
     public async Task Waf_DeniesConfiguredPath()
     {
         var rules = WafRules.FromOptions(new Dictionary<string, string>

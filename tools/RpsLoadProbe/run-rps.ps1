@@ -36,6 +36,11 @@ param(
         'reverse-http3-to-h2c', 'yarp-reverse-http3-to-h2c', 'yarp-reverse-http3-to-http3',
         'twp-cli-reverse-http1', 'twp-cli-reverse-http1-tls', 'twp-cli-reverse-http1-route',
         'twp-cli-plus-base-http1', 'twp-cli-plus-cache-http1', 'twp-cli-intercept-http1',
+        'twp-cli-plus-waf-http1', 'twp-cli-plus-cidr-http1', 'twp-cli-plus-jwt-http1',
+        'twp-cli-plus-ratelimit-http1', 'twp-cli-plus-resilience-http1',
+        'twp-cli-plus-discovery-file-http1', 'twp-cli-plus-metrics-scrape-http1',
+        'twp-cli-plus-cache-hit-http1', 'twp-cli-static-http1', 'twp-cli-logging-http1',
+        'twp-cli-lb-leasttime-http1', 'twp-cli-dialect-twp-http1',
         'explicit-http1-multi', 'explicit-http2-multi')]
     [string] $Mode = 'compare',
 
@@ -98,10 +103,14 @@ if (-not $SkipBuild) {
 
 $probeCmd = $null
 $probePrefix = @()
-if (Test-Path $exeWin) {
+# Prefer the host-native apphost. A Windows bind-mount can leave RpsLoadProbe.exe
+# beside a Linux apphost; running the .exe under Docker/Linux fails immediately.
+$onWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+    [System.Runtime.InteropServices.OSPlatform]::Windows)
+if ($onWindows -and (Test-Path $exeWin)) {
     $probeCmd = $exeWin
 }
-elseif (Test-Path $exeUnix) {
+elseif (-not $onWindows -and (Test-Path $exeUnix)) {
     $probeCmd = $exeUnix
 }
 else {

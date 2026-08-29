@@ -10,12 +10,15 @@ using Titanium.Web.Proxy.EventArguments;
 
 namespace Titanium.Plus.State;
 
-/// <summary>Opt-in Redis-backed fixed-window rate limits.</summary>
+/// <summary>Opt-in fixed-window rate limits (in-memory or Redis-backed).</summary>
 public sealed class SharedStateStore
 {
     public static SharedStateStore? TryStart(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
     {
-        if (!options.TryGetValue("state.redis", out var redis) || string.IsNullOrWhiteSpace(redis))
+        var mode = options.GetValueOrDefault("state.mode")?.Trim().ToLowerInvariant();
+        var hasRedis = options.TryGetValue("state.redis", out var redis) && !string.IsNullOrWhiteSpace(redis);
+        var useMemory = string.Equals(mode, "memory", StringComparison.Ordinal);
+        if (!useMemory && !hasRedis)
         {
             return null;
         }
@@ -25,28 +28,36 @@ public sealed class SharedStateStore
             : 120;
 
         IDistributedCounter counter;
-        try
+        if (useMemory && !hasRedis)
         {
-            var config = ConfigurationOptions.Parse(redis);
-            config.AbortOnConnectFail = false;
-            config.ConnectTimeout = 500;
-            config.SyncTimeout = 500;
-            var mux = ConnectionMultiplexer.Connect(config);
-            if (!mux.IsConnected)
+            counter = new InMemoryDistributedCounter();
+            PlusLog.Info(context, $"Plus State: mode=memory rateLimitPerMinute={limit}");
+        }
+        else
+        {
+            try
+            {
+                var config = ConfigurationOptions.Parse(redis!);
+                config.AbortOnConnectFail = false;
+                config.ConnectTimeout = 500;
+                config.SyncTimeout = 500;
+                var mux = ConnectionMultiplexer.Connect(config);
+                if (!mux.IsConnected)
+                {
+                    PlusLog.Warn(context,
+                        $"Plus State: redis={redis} not connected — rate limit fail-open (allow).");
+                    return new SharedStateStore();
+                }
+
+                counter = new RedisDistributedCounter(mux);
+                PlusLog.Info(context, $"Plus State: redis={redis} rateLimitPerMinute={limit}");
+            }
+            catch (Exception ex)
             {
                 PlusLog.Warn(context,
-                    $"Plus State: redis={redis} not connected — rate limit fail-open (allow).");
+                    $"Plus State: redis={redis} unreachable ({ex.Message}) — rate limit fail-open (allow).");
                 return new SharedStateStore();
             }
-
-            counter = new RedisDistributedCounter(mux);
-            PlusLog.Info(context, $"Plus State: redis={redis} rateLimitPerMinute={limit}");
-        }
-        catch (Exception ex)
-        {
-            PlusLog.Warn(context,
-                $"Plus State: redis={redis} unreachable ({ex.Message}) — rate limit fail-open (allow).");
-            return new SharedStateStore();
         }
 
         if (context.Middleware is null)

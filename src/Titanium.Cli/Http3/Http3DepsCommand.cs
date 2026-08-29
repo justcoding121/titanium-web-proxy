@@ -32,10 +32,11 @@ internal static class Http3DepsCommand
             titanium http3-deps status|install
 
               status   Print QuicListener.IsSupported and packaging hints.
-              install  Install system MsQuic via apt / dnf / zypper / apk / brew (needs network + sudo/admin).
+              install  Install system MsQuic (+ host deps) via apt / dnf / zypper / apk / brew.
 
             Prefer the matching CLI RID zip (linux-x64, linux-musl-x64, osx-arm64, …) which already
-            bundles HTTP/3 natives. Use install only for edge OS / old glibc hosts.
+            bundles MsQuic + OpenSSL (MIT/Apache). Zips do NOT ship libnuma / lttng-ust (LGPL/GPL);
+            those stay host packages. Use install for empty/distroless images or when Quic is false.
             """);
         return 0;
     }
@@ -65,6 +66,9 @@ internal static class Http3DepsCommand
         Console.WriteLine("Fixes:");
         Console.WriteLine("  1) Download the matching RID zip for your OS/arch (see /docs/http3).");
         Console.WriteLine("     Alpine/K8s musl images need linux-musl-x64 or linux-musl-arm64, not linux-x64.");
+        Console.WriteLine("     RID zips ship MsQuic+OpenSSL only; install host deps if the loader still fails:");
+        Console.WriteLine("       Ubuntu/Debian: libnuma1");
+        Console.WriteLine("       Alpine:        numactl lttng-ust");
         Console.WriteLine($"  2) Or run: titanium http3-deps {InstallSubcommand}");
         if (OperatingSystem.IsWindows())
         {
@@ -99,10 +103,11 @@ internal static class Http3DepsCommand
 
         if (File.Exists("/etc/alpine-release") || LooksLikeMusl())
         {
+            // libmsquic needs numactl + lttng-ust at runtime; RID zips no longer bundle them.
             return await RunPackageInstallAsync(
                 "apk",
-                ["add", "--no-cache", LibMsQuicPackage],
-                $"Enable the Alpine community repo, then: apk add {LibMsQuicPackage}");
+                ["add", "--no-cache", LibMsQuicPackage, "numactl", "lttng-ust"],
+                $"Enable the Alpine community repo, then: apk add {LibMsQuicPackage} numactl lttng-ust");
         }
 
         if (File.Exists("/etc/debian_version") || HasCommand("apt-get"))
@@ -165,7 +170,7 @@ internal static class Http3DepsCommand
             return update;
         }
 
-        return await RunAsync("sudo", ["apt-get", InstallSubcommand, "-y", LibMsQuicPackage]);
+        return await RunAsync("sudo", ["apt-get", InstallSubcommand, "-y", LibMsQuicPackage, "libnuma1"]);
     }
 
     private static async Task<int> RunPackageInstallAsync(string fileName, string[] args, string hint)

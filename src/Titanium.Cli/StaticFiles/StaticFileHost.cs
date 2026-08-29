@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IO.Compression;
 using System.Net;
 using Titanium.Web.Proxy;
@@ -10,6 +11,8 @@ namespace Titanium.Cli.StaticFiles;
 /// <summary>Serves files from a root directory with ETag/Range and optional gzip/brotli (prefix-gated).</summary>
 internal static class StaticFileHost
 {
+    private static readonly ConcurrentDictionary<string, CachedStaticFile> ContentCache = new(StringComparer.OrdinalIgnoreCase);
+
     public static void RegisterIfNeeded(ProxyServer proxy, StaticFilesConfig? config, bool sessionPathEnabled)
     {
         if (config is null || string.IsNullOrEmpty(config.Root))
@@ -43,41 +46,43 @@ internal static class StaticFileHost
             return;
         }
 
-        var resolved = TryResolveFile(requestPath, root);
+        var resolved = await TryResolveCachedAsync(requestPath, root).ConfigureAwait(false);
         if (resolved is null)
         {
             return;
         }
 
-        var (full, info) = resolved.Value;
-        var etag = $"W/\"{info.Length:x}-{info.LastWriteTimeUtc.Ticks:x}\"";
+        var (full, bytes, length, lastWrite) = resolved.Value;
+        var etag = $"W/\"{length:x}-{lastWrite.Ticks:x}\"";
         if (TryNotModified(e, etag))
         {
             return;
         }
 
-        var bytes = await File.ReadAllBytesAsync(full);
+        // Range/compression may replace the array; never mutate the cache entry.
+        var responseBytes = bytes;
         var status = HttpStatusCode.OK;
         var headers = CreateBaseHeaders(full, etag);
 
-        if (TryApplyRange(e, ref bytes, info.Length, headers, out var partial))
+        if (TryApplyRange(e, ref responseBytes, length, headers, out var partial))
         {
             status = partial;
         }
 
-        ApplyCompression(config, e, ref bytes, headers);
+        ApplyCompression(config, e, ref responseBytes, headers);
 
         if (status == HttpStatusCode.OK)
         {
-            e.Ok(bytes, (IEnumerable<HttpHeader>)headers);
+            e.Ok(responseBytes, (IEnumerable<HttpHeader>)headers);
         }
         else
         {
-            e.GenericResponse(bytes, status, headers);
+            e.GenericResponse(responseBytes, status, headers);
         }
     }
 
-    private static (string Full, FileInfo Info)? TryResolveFile(string requestPath, string root)
+    private static async Task<(string Full, byte[] Bytes, long Length, DateTime LastWriteUtc)?> TryResolveCachedAsync(
+        string requestPath, string root)
     {
         var relative = requestPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
         if (string.IsNullOrEmpty(relative))
@@ -86,13 +91,28 @@ internal static class StaticFileHost
         }
 
         var candidate = Path.GetFullPath(Path.Combine(root, relative));
-        if (!candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase) || !File.Exists(candidate))
+        if (!candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
 
-        return (candidate, new FileInfo(candidate));
+        if (ContentCache.TryGetValue(candidate, out var cached))
+        {
+            return (candidate, cached.Bytes, cached.Length, cached.LastWriteTimeUtc);
+        }
+
+        if (!File.Exists(candidate))
+        {
+            return null;
+        }
+
+        var info = new FileInfo(candidate);
+        var bytes = await File.ReadAllBytesAsync(candidate).ConfigureAwait(false);
+        ContentCache[candidate] = new CachedStaticFile(bytes, info.Length, info.LastWriteTimeUtc);
+        return (candidate, bytes, info.Length, info.LastWriteTimeUtc);
     }
+
+    private sealed record CachedStaticFile(byte[] Bytes, long Length, DateTime LastWriteTimeUtc);
 
     private static bool TryNotModified(SessionEventArgs e, string etag)
     {

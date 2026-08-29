@@ -59,12 +59,14 @@ The [RPS saturation](https://github.com/justcoding121/titanium-web-proxy/actions
 
 Publish wiring lives in `tools/packaging/` (`http3-native.lock.json`, `bundle-http3-native.ps1`, `THIRD-PARTY-HTTP3.txt`) and `.github/workflows/release.yml`.
 
-| RID family | What is in the zip |
-| --- | --- |
-| Windows | No `msquic.dll` — OS component |
-| glibc Linux | `libmsquic.so*`, `libssl.so.3`, `libcrypto.so.3`, `libnuma.so.1*` with `patchelf` RPATH `$ORIGIN` |
-| musl Linux (Alpine) | Same idea from Alpine `.apk` packages (musl-linked OpenSSL — never mix with glibc `.so`) |
-| macOS | `libmsquic.dylib`, `libssl.3.dylib`, `libcrypto.3.dylib` with `@loader_path` via `install_name_tool` |
+| RID family | What is in the zip | Host packages (not in zip) |
+| --- | --- | --- |
+| Windows | No `msquic.dll` — OS component | — |
+| glibc Linux | `libmsquic.so*`, `libssl.so.3`, `libcrypto.so.3` with `patchelf` RPATH `$ORIGIN` | `libnuma1` via `http3-deps` / apt |
+| musl Linux (Alpine) | Same idea from Alpine `.apk` (musl-linked OpenSSL — never mix with glibc `.so`) | `numactl`, `lttng-ust` via `http3-deps` / apk |
+| macOS | `libmsquic.dylib`, `libssl.3.dylib`, `libcrypto.3.dylib` with `@loader_path` via `install_name_tool` | — |
+
+LGPL/GPL natives (`libnuma`, `lttng-ust`, `liblttng-ust-ctl`, `libmsquic.lttng`) are **not** redistributed.
 
 ## Alpine / Kubernetes
 

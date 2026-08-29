@@ -157,6 +157,30 @@ internal enum ProbeMode
     TwpCliPlusCacheHttp1,
     /// <summary>CLI + route RequestHeaderSet transform (forces session / intercept path).</summary>
     TwpCliInterceptHttp1,
+    /// <summary>CLI + Plus WAF denyPaths that do not match probe traffic.</summary>
+    TwpCliPlusWafHttp1,
+    /// <summary>CLI + Plus CIDR allow 127.0.0.0/8.</summary>
+    TwpCliPlusCidrHttp1,
+    /// <summary>CLI + Plus JWT (RS256 JWKS) with Authorization Bearer on every request.</summary>
+    TwpCliPlusJwtHttp1,
+    /// <summary>CLI + Plus in-memory rate limit with a very high ceiling.</summary>
+    TwpCliPlusRateLimitHttp1,
+    /// <summary>CLI + Plus active health against ForwardHost+cluster destinations.</summary>
+    TwpCliPlusResilienceHttp1,
+    /// <summary>CLI + Plus file discovery with mid-ramp rewrite.</summary>
+    TwpCliPlusDiscoveryFileHttp1,
+    /// <summary>CLI + Plus-base with background control-plane /metrics + /v1/snapshot scrape.</summary>
+    TwpCliPlusMetricsScrapeHttp1,
+    /// <summary>CLI + Plus cache.enable with Cache-Control origin; warm then measure.</summary>
+    TwpCliPlusCacheHitHttp1,
+    /// <summary>CLI staticFiles.root tiny file.</summary>
+    TwpCliStaticHttp1,
+    /// <summary>CLI logging.enabled + Info file sink.</summary>
+    TwpCliLoggingHttp1,
+    /// <summary>CLI LeastTime LB across two healthy origins.</summary>
+    TwpCliLbLeastTimeHttp1,
+    /// <summary>CLI .twp site-file listen/forward dialect.</summary>
+    TwpCliDialectTwpHttp1,
     /// <summary>Load generator → origin child only (no proxy); calibration ceiling for reverse peers.</summary>
     OriginDirect,
     /// <summary>Managed reverse peer H2 TLS → HTTPS HTTP/2 origin.</summary>
@@ -519,7 +543,9 @@ internal static class RampOrchestrator
 
     private sealed record ArmSpec(string Name, ProbeMode Mode, int? MaxCachedConnections,
         WorkloadOptions? Workload = null, string? PreferredGenerator = null,
-        bool EnableHttpInterception = false, bool MutateHttpInterception = false);
+        bool EnableHttpInterception = false, bool MutateHttpInterception = false,
+        bool BackgroundControlPlaneScrape = false, bool RewriteDiscoveryMidRamp = false,
+        bool WarmCacheFirst = false);
 
     private static IReadOnlyList<ArmSpec> HeavierReverseArms(bool nginxAvailable, bool nginxHttp3Available,
         WorkloadOptions workload, string nameSuffix, bool includeHttp3 = true)
@@ -854,6 +880,33 @@ internal static class RampOrchestrator
                 [new("twp-cli-plus-cache-http1", ProbeMode.TwpCliPlusCacheHttp1, null)],
             ProbeMode.TwpCliInterceptHttp1 =>
                 [new("twp-cli-intercept-http1", ProbeMode.TwpCliInterceptHttp1, null)],
+            ProbeMode.TwpCliPlusWafHttp1 =>
+                [new("twp-cli-plus-waf-http1", ProbeMode.TwpCliPlusWafHttp1, null)],
+            ProbeMode.TwpCliPlusCidrHttp1 =>
+                [new("twp-cli-plus-cidr-http1", ProbeMode.TwpCliPlusCidrHttp1, null)],
+            ProbeMode.TwpCliPlusJwtHttp1 =>
+                [new("twp-cli-plus-jwt-http1", ProbeMode.TwpCliPlusJwtHttp1, null)],
+            ProbeMode.TwpCliPlusRateLimitHttp1 =>
+                [new("twp-cli-plus-ratelimit-http1", ProbeMode.TwpCliPlusRateLimitHttp1, null)],
+            ProbeMode.TwpCliPlusResilienceHttp1 =>
+                [new("twp-cli-plus-resilience-http1", ProbeMode.TwpCliPlusResilienceHttp1, null)],
+            ProbeMode.TwpCliPlusDiscoveryFileHttp1 =>
+                [new("twp-cli-plus-discovery-file-http1", ProbeMode.TwpCliPlusDiscoveryFileHttp1, null,
+                    RewriteDiscoveryMidRamp: true)],
+            ProbeMode.TwpCliPlusMetricsScrapeHttp1 =>
+                [new("twp-cli-plus-metrics-scrape-http1", ProbeMode.TwpCliPlusMetricsScrapeHttp1, null,
+                    BackgroundControlPlaneScrape: true)],
+            ProbeMode.TwpCliPlusCacheHitHttp1 =>
+                [new("twp-cli-plus-cache-hit-http1", ProbeMode.TwpCliPlusCacheHitHttp1, null,
+                    WarmCacheFirst: true)],
+            ProbeMode.TwpCliStaticHttp1 =>
+                [new("twp-cli-static-http1", ProbeMode.TwpCliStaticHttp1, null)],
+            ProbeMode.TwpCliLoggingHttp1 =>
+                [new("twp-cli-logging-http1", ProbeMode.TwpCliLoggingHttp1, null)],
+            ProbeMode.TwpCliLbLeastTimeHttp1 =>
+                [new("twp-cli-lb-leasttime-http1", ProbeMode.TwpCliLbLeastTimeHttp1, null)],
+            ProbeMode.TwpCliDialectTwpHttp1 =>
+                [new("twp-cli-dialect-twp-http1", ProbeMode.TwpCliDialectTwpHttp1, null)],
             ProbeMode.CompareProduct =>
             [
                 ..BuildFullMatrixArms(nginxAvailable, nginxHttp3Available),
@@ -1066,7 +1119,21 @@ internal static class RampOrchestrator
         new("twp-cli-reverse-http1-route", ProbeMode.TwpCliReverseHttp1Route, null),
         new("twp-cli-plus-base-http1", ProbeMode.TwpCliPlusBaseHttp1, null),
         new("twp-cli-plus-cache-http1", ProbeMode.TwpCliPlusCacheHttp1, null),
-        new("twp-cli-intercept-http1", ProbeMode.TwpCliInterceptHttp1, null)
+        new("twp-cli-intercept-http1", ProbeMode.TwpCliInterceptHttp1, null),
+        new("twp-cli-plus-waf-http1", ProbeMode.TwpCliPlusWafHttp1, null),
+        new("twp-cli-plus-cidr-http1", ProbeMode.TwpCliPlusCidrHttp1, null),
+        new("twp-cli-plus-jwt-http1", ProbeMode.TwpCliPlusJwtHttp1, null),
+        new("twp-cli-plus-ratelimit-http1", ProbeMode.TwpCliPlusRateLimitHttp1, null),
+        new("twp-cli-plus-resilience-http1", ProbeMode.TwpCliPlusResilienceHttp1, null),
+        new("twp-cli-plus-discovery-file-http1", ProbeMode.TwpCliPlusDiscoveryFileHttp1, null,
+            RewriteDiscoveryMidRamp: true),
+        new("twp-cli-plus-metrics-scrape-http1", ProbeMode.TwpCliPlusMetricsScrapeHttp1, null,
+            BackgroundControlPlaneScrape: true),
+        new("twp-cli-plus-cache-hit-http1", ProbeMode.TwpCliPlusCacheHitHttp1, null, WarmCacheFirst: true),
+        new("twp-cli-static-http1", ProbeMode.TwpCliStaticHttp1, null),
+        new("twp-cli-logging-http1", ProbeMode.TwpCliLoggingHttp1, null),
+        new("twp-cli-lb-leasttime-http1", ProbeMode.TwpCliLbLeastTimeHttp1, null),
+        new("twp-cli-dialect-twp-http1", ProbeMode.TwpCliDialectTwpHttp1, null)
     ];
 
     private static IReadOnlyList<ArmSpec> BuildFullMatrixArms(bool nginxAvailable, bool nginxHttp3Available)
@@ -1242,6 +1309,37 @@ internal static class RampOrchestrator
             cancellationToken, workload, arm.EnableHttpInterception, arm.MutateHttpInterception);
         var nginxVersion = stack.NginxVersion ?? nginxVersionHint;
 
+        if (!string.IsNullOrWhiteSpace(stack.AuthorizationBearer))
+        {
+            workload = workload.WithExtraHeaders(new Dictionary<string, string>
+            {
+                ["Authorization"] = "Bearer " + stack.AuthorizationBearer
+            });
+        }
+
+        using var scrapeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Task? scrapeTask = null;
+        if (arm.BackgroundControlPlaneScrape && !string.IsNullOrWhiteSpace(stack.ControlPlaneUrl))
+        {
+            scrapeTask = RunControlPlaneScrapeLoopAsync(stack.ControlPlaneUrl!,
+                stack.ControlPlaneSecret ?? TitaniumCliHost.ControlPlaneSharedSecret, scrapeCts.Token);
+            ProbeLog.Info("  background control-plane scrape every 10s (/v1/snapshot)");
+        }
+
+        if (arm.WarmCacheFirst)
+        {
+            ProbeLog.Info("  warming response cache before ramp...");
+            var warmOpts = new LoadRequestOptions
+            {
+                Target = stack.TargetUri,
+                HttpVersion = stack.RequestHttpVersion,
+                VersionPolicy = stack.VersionPolicy,
+                Workload = workload
+            };
+            await EmbeddedLoadGenerator.WarmupAsync(warmOpts, concurrency: 4, TimeSpan.FromSeconds(3),
+                cancellationToken);
+        }
+
         var p99Slo = workload.ResolveP99SloMs(options.Http1P99MsSlo, options.Http2P99MsSlo,
             options.Http3P99MsSlo, options.HttpsMitmP99MsSlo, arm.Mode);
 
@@ -1290,6 +1388,7 @@ internal static class RampOrchestrator
             var lastGoodConcurrency = 0;
             // -1 = inactive; after first SLO fail with a prior pass, set to 1 (one more step) then 0 (stop).
             var stopOnSloFailStepsRemaining = -1;
+            var discoveryRewritten = false;
 
             var useQuic = (stackUsesQuicGenerator || forceLossyQuicGenerator) && quicPort is > 0;
             var useBombardier = string.Equals(arm.PreferredGenerator, BombardierLoadGenerator.GeneratorName,
@@ -1331,6 +1430,18 @@ internal static class RampOrchestrator
 
             foreach (var concurrency in options.ConcurrencySteps)
             {
+                if (arm.RewriteDiscoveryMidRamp && !discoveryRewritten &&
+                    options.ConcurrencySteps.Length > 0 &&
+                    concurrency == options.ConcurrencySteps[options.ConcurrencySteps.Length / 2] &&
+                    !string.IsNullOrWhiteSpace(stack.DiscoveryFilePath) &&
+                    stack.OriginHttpPort is int originPort)
+                {
+                    TitaniumCliHost.RewriteDiscoveryFile(stack.DiscoveryFilePath!, originPort);
+                    discoveryRewritten = true;
+                    ProbeLog.Info($"  mid-ramp discovery rewrite → {stack.DiscoveryFilePath}");
+                    await Task.Delay(300, cancellationToken);
+                }
+
                 ProbeLog.Info($"  warmup c={concurrency} for {options.Warmup.TotalSeconds:F0}s...");
                 LoadResult result;
                 ProcessResourceSample? resources = null;
@@ -1450,10 +1561,55 @@ internal static class RampOrchestrator
         }
         finally
         {
+            scrapeCts.Cancel();
+            if (scrapeTask != null)
+            {
+                try { await scrapeTask; }
+                catch (OperationCanceledException) { /* expected */ }
+            }
+
             if (tcpLink != null)
                 await tcpLink.DisposeAsync();
             if (udpLink != null)
                 await udpLink.DisposeAsync();
+        }
+    }
+
+    private static async Task RunControlPlaneScrapeLoopAsync(string controlPlaneUrl, string sharedSecret,
+        CancellationToken cancellationToken)
+    {
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+        http.DefaultRequestHeaders.TryAddWithoutValidation(
+            "X-Titanium-Control-Secret", sharedSecret);
+
+        var baseUri = new Uri(controlPlaneUrl);
+        var snapshotUrl = new Uri(baseUri, "/v1/snapshot").AbsoluteUri;
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                _ = await http.GetAsync(snapshotUrl, cancellationToken);
+                // Snapshot alone measures control-plane contention; pairing /metrics roughly
+                // doubles scrape tax under c=64 and was failing the 0.95× Plus-base gate.
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch
+            {
+                // best-effort scrape; do not fail the arm
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
         }
     }
 

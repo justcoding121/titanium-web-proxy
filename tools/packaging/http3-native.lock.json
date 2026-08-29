@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "notes": "Pinned HTTP/3 native packages for CLI/Inspector publish. Bump quarterly for CVE patching. Do not commit downloaded binaries under .cache/.",
+  "version": 2,
+  "notes": "Pinned HTTP/3 native packages for CLI/Inspector publish. MIT-clean zips ship MsQuic + OpenSSL only; libnuma / lttng-ust are host packages (http3-deps), not redistributed. Bump quarterly for CVE patching. Do not commit downloaded binaries under .cache/.",
   "glibcBaseline": "ubuntu-22.04",
   "alpineBranch": "v3.24",
   "rids": {
@@ -21,14 +21,10 @@
           "name": "libssl3",
           "url": "http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl3_3.0.2-0ubuntu1.29_amd64.deb",
           "sha256": "c12bbf0074c44019bdf4b035b058c24eb904fc772c94707b1df801a4d130e146"
-        },
-        {
-          "name": "libnuma1",
-          "url": "http://archive.ubuntu.com/ubuntu/pool/main/n/numactl/libnuma1_2.0.14-3ubuntu2_amd64.deb",
-          "sha256": "0721c89001fbbd1ada23e89da5d60e762763c1a7b3dc814a2e9a518480a8043d"
         }
       ],
-      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3", "libnuma.so.1*"]
+      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],
+      "hostPackages": ["libnuma1"]
     },
     "linux-arm64": {
       "mode": "deb",
@@ -42,14 +38,10 @@
           "name": "libssl3",
           "url": "http://ports.ubuntu.com/ubuntu-ports/pool/main/o/openssl/libssl3_3.0.2-0ubuntu1.29_arm64.deb",
           "sha256": "3b25897180b0a84a7c7ad19ba310d6bdb45d5ce89742b478e12f606bed38fafa"
-        },
-        {
-          "name": "libnuma1",
-          "url": "http://ports.ubuntu.com/ubuntu-ports/pool/main/n/numactl/libnuma1_2.0.14-3ubuntu2_arm64.deb",
-          "sha256": "ca67a774b20ed639361715ef0981d236f294ff2987579b3d18faede67c3a9152"
         }
       ],
-      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3", "libnuma.so.1*"]
+      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],
+      "hostPackages": ["libnuma1"]
     },
     "linux-musl-x64": {
       "mode": "apk",
@@ -68,19 +60,10 @@
           "name": "libcrypto3",
           "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.8-r0.apk",
           "sha256": "161223a16f042b8e469e9441291e071464fd91d4f4bbe6f496ee8d0abd4e0701"
-        },
-        {
-          "name": "numactl",
-          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/numactl-2.0.19-r0.apk",
-          "sha256": "4a78670a16d9ae7377906e2084be7430197d4b4c24877d65712dd1d4597b59db"
-        },
-        {
-          "name": "lttng-ust",
-          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/lttng-ust-2.14.2-r0.apk",
-          "sha256": "040367c8527cc794c63b902427941a16c2734ab3cd826705c600598ab1b153df"
         }
       ],
-      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3", "libnuma.so.1*", "liblttng-ust.so.1*"]
+      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],
+      "hostPackages": ["numactl", "lttng-ust"]
     },
     "linux-musl-arm64": {
       "mode": "apk",
@@ -99,19 +82,10 @@
           "name": "libcrypto3",
           "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libcrypto3-3.5.8-r0.apk",
           "sha256": "35b892813c23664a3592e4fc8c12a03538a22c579057655361c7043305272a9a"
-        },
-        {
-          "name": "numactl",
-          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/numactl-2.0.19-r0.apk",
-          "sha256": "911046ec22d596820cc37427b470f80bb095bf415c0debcc2774b7c0c43be9d8"
-        },
-        {
-          "name": "lttng-ust",
-          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/lttng-ust-2.14.2-r0.apk",
-          "sha256": "21d7534e580c8729b5388f847e9f6d96abee15c6b7bf4589dd2ad452c4a623a1"
         }
       ],
-      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3", "libnuma.so.1*", "liblttng-ust.so.1*"]
+      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],
+      "hostPackages": ["numactl", "lttng-ust"]
     },
     "osx-x64": {
       "mode": "homebrew",

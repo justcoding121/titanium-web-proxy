@@ -8,6 +8,7 @@ Playbook (harness, dumps, stage timing, Memory techniques) stays on [Performance
 
 - [Local Windows lab (developer laptop)](#local-windows-lab-developer-laptop)
 - [Local saturation control (laptop)](#local-saturation-control-laptop)
+- [Editions (CLI / Plus stress)](#editions-cli--plus-stress)
 
 ## Local Windows lab (developer laptop)
 
@@ -225,3 +226,29 @@ Laptop cool-ish A/B before bag/lite fix (2026-08-23, c=64, 8 s) — superseded b
 | TWP H2→H1 (`EnableMultipleHttp2Connections=true`, default) | **425 MiB** | 41k |
 | TWP H2→H1 (`TWP_RPS_SINGLE_HTTP2_CONNECTION=1`) | **367 MiB** | 32k |
 | YARP H2→H1 (multi) | **104 MiB** | 41k |
+
+## Editions (CLI / Plus stress)
+
+Local Win smoke 2026-08-29 (`rps-ramp-20260829-104306.csv`): c=64, warmup 2s / measure 5s, **1** repeat — **not publishable**. Prefer ÷CLI ratios; remasure on GHA `compare-editions` (median of 3) before filling [Performance — Editions](Performance#editions-cli--plus--intercept). All arms **SLO PASS** (0% errors); `validate-edition-gates.ps1` passed after noise-headroom lock.
+
+| Arm | Sustain RPS | Memory (RSS) | ÷CLI | Gate |
+|---|---:|---:|---:|---:|
+| `twp-cli-reverse-http1` (baseline) | **34,623** | 114 MiB | **1.00×** | — |
+| `twp-reverse-http1` (library) | **35,041** | 72 MiB | CLI÷lib **0.99×** | ≥0.80 |
+| `twp-cli-reverse-http1-tls` | **24,059** | 140 MiB | TLS÷libTLS **0.80×** | ≥0.80 |
+| `twp-cli-reverse-http1-route` | **36,092** | 118 MiB | **1.04×** | ≥0.90 |
+| `twp-cli-plus-base-http1` | **36,596** | 120 MiB | **1.06×** | ≥0.90 |
+| `twp-cli-plus-cache-http1` | **23,177** | 125 MiB | **0.67×** | ≥0.60 |
+| `twp-cli-intercept-http1` | **25,603** | 124 MiB | **0.74×** | ≥0.65 |
+| `twp-cli-plus-waf-http1` | **26,820** | 127 MiB | **0.78×** | ≥0.70 |
+| `twp-cli-plus-cidr-http1` | **25,338** | 125 MiB | **0.73×** | ≥0.70 |
+| `twp-cli-plus-jwt-http1` | **17,545** | 154 MiB | **0.51×** | ≥0.45 |
+| `twp-cli-plus-ratelimit-http1` | **27,033** | 130 MiB | **0.78×** | ≥0.70 |
+| `twp-cli-plus-resilience-http1` | **25,782** | 128 MiB | **0.75×** | ≥0.65 |
+| `twp-cli-plus-discovery-file-http1` | **28,016** | 125 MiB | **0.81×** | ≥0.70 |
+| `twp-cli-plus-metrics-scrape-http1` | **27,228** | 129 MiB | **0.79×** | ≥0.70 |
+| `twp-cli-plus-cache-hit-http1` | **23,178** | 122 MiB | hit÷cold **1.00×** | ≥0.90 |
+| `twp-cli-static-http1` | **53,068** | 117 MiB | **1.53×** | ≥0.85 |
+| `twp-cli-logging-http1` | **33,218** | 120 MiB | **0.96×** | ≥0.90 |
+| `twp-cli-lb-leasttime-http1` | **31,995** | 131 MiB | ÷route **0.89×** | ≥0.85 |
+| `twp-cli-dialect-twp-http1` | **36,532** | 116 MiB | **1.06×** | ≥0.90 |

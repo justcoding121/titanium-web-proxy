@@ -47,16 +47,16 @@ Manifest stubs live in `tools/packaging/winget/`.
 - **Lock:** [`http3-native.lock.json`](http3-native.lock.json) — pinned URLs + SHA256 per RID.
 - **Script:** [`bundle-http3-native.ps1`](bundle-http3-native.ps1) — download/verify → extract → copy beside binary → `patchelf --set-rpath '$ORIGIN'` (Linux) or `install_name_tool` `@loader_path` (macOS).
 - **Cache:** `tools/packaging/.cache/http3-natives/` (gitignored). CI caches this with `actions/cache` keyed on the lock file.
-- **License:** [`THIRD-PARTY-HTTP3.txt`](THIRD-PARTY-HTTP3.txt) is copied into every publish folder.
+- **License:** [`THIRD-PARTY-HTTP3.txt`](THIRD-PARTY-HTTP3.txt) is copied into every publish folder (MsQuic MIT + OpenSSL Apache-2.0). Inspector also ships [`THIRD-PARTY-INSPECTOR.txt`](THIRD-PARTY-INSPECTOR.txt) (Inter SIL OFL-1.1).
 
 | RID | Source |
 | --- | --- |
 | `win-x64` | OS component (no DLL shipped) |
-| `linux-x64` / `linux-arm64` | Ubuntu 22.04-class `.deb` (Microsoft `libmsquic` + Ubuntu `libssl3` + `libnuma1`) |
-| `linux-musl-x64` / `linux-musl-arm64` | Alpine v3.24 `.apk` (`libmsquic` + Alpine OpenSSL + numa + lttng-ust) |
+| `linux-x64` / `linux-arm64` | Ubuntu 22.04-class `.deb` (Microsoft `libmsquic` + Ubuntu `libssl3`). Host package: `libnuma1` via `http3-deps` / apt |
+| `linux-musl-x64` / `linux-musl-arm64` | Alpine v3.24 `.apk` (`libmsquic` + Alpine OpenSSL). Host packages: `numactl` + `lttng-ust` via `http3-deps` / apk |
 | `osx-x64` / `osx-arm64` | Homebrew `libmsquic` + `openssl@3` on `macos-latest` |
 
-Do **not** mix glibc `.so` into musl zips (or the reverse).
+Do **not** mix glibc `.so` into musl zips (or the reverse). Do **not** redistribute LGPL/GPL natives (`libnuma`, `lttng-ust`) in the zip — install them on the host.
 
 ## CI
 

@@ -34,6 +34,21 @@ public class TwpConfigLoaderTests
     }
 
     [TestMethod]
+    public void SiteFileReader_ParsesListenAndForward()
+    {
+        var config = SiteFileReader.Parse("""
+            listen 127.0.0.1:8080
+            forward 127.0.0.1:9000
+            """);
+        Assert.AreEqual(1, config.Listeners.Count);
+        Assert.AreEqual("127.0.0.1", config.Listeners[0].Host);
+        Assert.AreEqual(8080, config.Listeners[0].Port);
+        Assert.AreEqual("127.0.0.1", config.Listeners[0].ForwardHost);
+        Assert.AreEqual(9000, config.Listeners[0].ForwardPort);
+        Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count);
+    }
+
+    [TestMethod]
     public void HttpServerConfigReader_ParsesProxyPass()
     {
         var text = """

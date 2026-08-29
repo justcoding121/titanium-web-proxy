@@ -39,16 +39,18 @@ public partial class ProxyServer
         if (endPoint is not TransparentBaseProxyEndPoint { ForwardHost.Length: > 0 } transparent)
             return false;
 
-        // Route table present but not ForwardHost-equivalent → full session / LB path.
+        // Middleware needs SessionEventArgs; terminate-lite has none. Check even when
+        // Routes is empty (ForwardHost-only Plus CIDR/WAF/JWT/rate-limit).
         var reverse = ReverseProxy;
+        if (reverse?.Middleware is { Count: > 0 })
+            return false;
+
+        // Route table present but not ForwardHost-equivalent → full session / LB path.
         if (reverse?.Routes is { Count: > 0 })
         {
             var snapshot = reverse.ClusterManager?.Snapshot;
             if (!Routing.ReverseProxyFastPath.IsForwardHostEquivalent(
                     reverse.Routes, snapshot, transparent.ForwardHost, transparent.ForwardPort ?? 80))
-                return false;
-
-            if (reverse.Middleware is { Count: > 0 })
                 return false;
         }
 

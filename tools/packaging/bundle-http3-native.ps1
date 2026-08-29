@@ -195,12 +195,16 @@ function Expand-Apk([string] $apkPath, [string] $outDir) {
 }
 
 function Copy-SharedLibs([string] $extractRoot, [string] $dest) {
-    $patterns = @("libmsquic*.so*", "libssl.so*", "libcrypto.so*", "libnuma.so*", "liblttng-ust*.so*", "liblttng-ust-common*.so*", "liblttng-ust-ctl*.so*", "liblttng-ust-tracepoint*.so*")
+    # MIT-clean zip: MsQuic + OpenSSL only. Never ship LGPL/GPL natives
+    # (libnuma, liblttng-ust*, libmsquic.lttng) — those stay host packages via http3-deps.
+    $patterns = @("libmsquic*.so*", "libssl.so*", "libcrypto.so*")
     $copied = @()
     foreach ($pat in $patterns) {
         Get-ChildItem -Path $extractRoot -Recurse -File -Filter $pat -ErrorAction SilentlyContinue | ForEach-Object {
             # Skip OpenSSL engines/modules; only ship the main shared libs.
             if ($_.DirectoryName -match "engines|ossl-modules") { return }
+            # Skip MsQuic LTTng plugin (GPL) even if present in the deb/apk.
+            if ($_.Name -match "lttng") { return }
             Copy-Item -Force $_.FullName (Join-Path $dest $_.Name)
             $copied += $_.Name
         }
@@ -227,34 +231,6 @@ function Ensure-SonameLinks([string] $dir) {
             try { Invoke-Native "ln" @("-sfn", "libmsquic.so.2", "libmsquic.so") }
             finally { Pop-Location }
         }
-    }
-
-    $numa = Get-ChildItem -Path $dir -File -Filter "libnuma.so.*" | Sort-Object Name -Descending | Select-Object -First 1
-    if ($numa -and -not (Test-Path (Join-Path $dir "libnuma.so.1"))) {
-        Push-Location $dir
-        try { Invoke-Native "ln" @("-sfn", $numa.Name, "libnuma.so.1") }
-        finally { Pop-Location }
-    }
-
-    $ust = Get-ChildItem -Path $dir -File -Filter "liblttng-ust.so.*" | Sort-Object Name -Descending | Select-Object -First 1
-    if ($ust -and -not (Test-Path (Join-Path $dir "liblttng-ust.so.1"))) {
-        Push-Location $dir
-        try { Invoke-Native "ln" @("-sfn", $ust.Name, "liblttng-ust.so.1") }
-        finally { Pop-Location }
-    }
-
-    $ustCommon = Get-ChildItem -Path $dir -File -Filter "liblttng-ust-common.so.*" | Sort-Object Name -Descending | Select-Object -First 1
-    if ($ustCommon -and -not (Test-Path (Join-Path $dir "liblttng-ust-common.so.1"))) {
-        Push-Location $dir
-        try { Invoke-Native "ln" @("-sfn", $ustCommon.Name, "liblttng-ust-common.so.1") }
-        finally { Pop-Location }
-    }
-
-    $ustTp = Get-ChildItem -Path $dir -File -Filter "liblttng-ust-tracepoint.so.*" | Sort-Object Name -Descending | Select-Object -First 1
-    if ($ustTp -and -not (Test-Path (Join-Path $dir "liblttng-ust-tracepoint.so.1"))) {
-        Push-Location $dir
-        try { Invoke-Native "ln" @("-sfn", $ustTp.Name, "liblttng-ust-tracepoint.so.1") }
-        finally { Pop-Location }
     }
 }
 
@@ -299,7 +275,7 @@ function Bundle-Deb {
     Write-Info "copied: $($copied -join ', ')"
     Ensure-SonameLinks $PublishDir
     Set-LinuxRpath $PublishDir
-    Assert-RequiredFiles @("libmsquic.so*", "libssl.so.3", "libcrypto.so.3", "libnuma.so.1*")
+    Assert-RequiredFiles @("libmsquic.so*", "libssl.so.3", "libcrypto.so.3")
 }
 
 function Bundle-Apk {
@@ -320,7 +296,7 @@ function Bundle-Apk {
     Write-Info "copied: $($copied -join ', ')"
     Ensure-SonameLinks $PublishDir
     Set-LinuxRpath $PublishDir
-    Assert-RequiredFiles @("libmsquic.so*", "libssl.so.3", "libcrypto.so.3", "libnuma.so.1*", "liblttng-ust.so.1*")
+    Assert-RequiredFiles @("libmsquic.so*", "libssl.so.3", "libcrypto.so.3")
 }
 
 function Resolve-BrewPrefix {

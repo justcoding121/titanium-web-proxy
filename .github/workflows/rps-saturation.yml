@@ -124,7 +124,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
     # compare-product with MITM Lite+Full can exceed 3.5h per OS on hosted runners.
-    timeout-minutes: 420
+    # compare-editions (expanded Plus/CLI stress arms) needs ~60m; other modes keep the long ceiling.
+    timeout-minutes: ${{ inputs.mode == 'compare-editions' && 90 || 420 }}
     steps:
       - uses: actions/checkout@v6
 
@@ -261,6 +262,7 @@ jobs:
       # Pass workflow_dispatch inputs via env (not ${{ }} in the script) to avoid
       # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
+        timeout-minutes: ${{ inputs.mode == 'compare-editions' && 60 || 400 }}
         shell: pwsh
         env:
           RPS_MODE: ${{ inputs.mode }}

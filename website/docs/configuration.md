@@ -105,7 +105,7 @@ plus:
     cache.enable: "true"
 ```
 
-Common `plus.options` keys (string values): discovery, security, WAF, Redis rate-limit state, resilience probes, and cache. See [Plus](/docs/plus).
+Common `plus.options` keys (string values): discovery, security, WAF, rate-limit state (`state.mode=memory` or `state.redis`), resilience probes, and cache. See [Plus](/docs/plus).
 
 ## Validate
 

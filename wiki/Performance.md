@@ -43,7 +43,7 @@ Laptop High-perf / cool-paired Windows numbers live on [Performance Local Lab](P
 |------|------|------|
 | Daily / per-PR | `compare-spot` | minutes |
 | Milestone | `compare-terminate` / `compare-matrix` | ~1–2h |
-| Editions | `compare-editions` | ~25 min (CLI / Plus / Intercept) |
+| Editions | `compare-editions` | ~60 min (CLI / Plus / Intercept stress arms) |
 | Cross-version (Gate 2) | `compare-cross-version` | ~1–2h vs committed 6.0 baselines |
 | Release / wiki | `compare-product` | ~3–4h |
 | Heavier tables | `compare-bodies` / `post` / `lossy` / `arch` / `bridges` / `tls-cost` | dispatch independently |
@@ -323,21 +323,35 @@ Same Client×Origin wires with interception on (`compare-product` [33087088466](
 
 **Note:** `twp-reverse-http1` and other library rows above use Core with **probe-tuned** settings (no logging, no Via header, probe-warmed certs). Edition rows below use `titanium run -c twp.yaml` **product defaults** and are not directly comparable as absolutes — use the ÷baseline ratio column. Inspector GUI is not spawnable in the harness; its session-path overhead is represented by `twp-cli-intercept-http1` (route `RequestHeaderSet` transform).
 
+Gates prioritize **SLO survival under load** and **reasonable overhead vs baseline** (not absolute RPS). Thresholds include noise headroom — see [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/PERF-GATES.md).
+
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-editions
 pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath tools/RpsLoadProbe/results/rps-ramp-*.csv
 ```
 
-| Arm | Sustain | Peak | ÷baseline | Gate |
+| Arm | Sustain (GHA) | Peak (GHA) | ÷baseline | Gate |
 |---|---:|---:|---:|---:|
-| `twp-cli-reverse-http1` (CLI daemon) | *pending Gate 2 run* | *pending* | vs `twp-reverse-http1` | ≥ **0.80×** |
+| `twp-cli-reverse-http1` (CLI daemon) | *pending GHA* | *pending* | vs `twp-reverse-http1` | ≥ **0.80×** |
 | `twp-cli-reverse-http1-tls` | *pending* | *pending* | vs `twp-reverse-http1-tls` | ≥ **0.80×** |
-| `twp-cli-reverse-http1-route` (single route) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.98×** |
-| `twp-cli-plus-base-http1` (Plus, no options) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.95×** |
-| `twp-cli-plus-cache-http1` (Plus + cache) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.70×** |
+| `twp-cli-reverse-http1-route` (single route) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.90×** |
+| `twp-cli-plus-base-http1` (Plus, no options) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.90×** |
+| `twp-cli-plus-cache-http1` (Plus + cache cold) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.60×** |
 | `twp-cli-intercept-http1` (Intercept / Inspector-equivalent) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.65×** |
+| `twp-cli-plus-waf-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.70×** |
+| `twp-cli-plus-cidr-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.70×** |
+| `twp-cli-plus-jwt-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.45×** |
+| `twp-cli-plus-ratelimit-http1` (`state.mode=memory`) | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.70×** |
+| `twp-cli-plus-resilience-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.65×** |
+| `twp-cli-plus-discovery-file-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.70×** |
+| `twp-cli-plus-metrics-scrape-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.70×** |
+| `twp-cli-plus-cache-hit-http1` | *pending* | *pending* | vs `twp-cli-plus-cache-http1` | ≥ **0.90×** |
+| `twp-cli-static-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.85×** |
+| `twp-cli-logging-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.90×** |
+| `twp-cli-lb-leasttime-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1-route` | ≥ **0.85×** |
+| `twp-cli-dialect-twp-http1` | *pending* | *pending* | vs `twp-cli-reverse-http1` | ≥ **0.90×** |
 
-Fill after a clean `compare-editions` GHA pass on both OS; record the run ID in [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/tools/RpsLoadProbe/PERF-GATES.md).
+**Gate 2 Editions:** local Win smoke + Docker Linux passed `validate-edition-gates.ps1` (2026-08-29). Absolute GHA sustain/peak cells stay pending a `compare-editions` Actions median-of-3 paste. Local laptop ratios: [Performance Local Lab — Editions](Performance-Local-Lab#editions-cli--plus-stress).
 
 ## Cross-version (7.0 vs 6.0)
 

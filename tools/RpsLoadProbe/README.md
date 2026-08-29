@@ -12,7 +12,7 @@ Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workfl
 |------|------|------|
 | Daily / per-PR | `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | minutes; Full÷Reverse + TWP÷YARP @ c=64 |
 | Milestone | `compare-terminate` / `compare-matrix` | ~1–2h investigation |
-| Editions | `compare-editions` | CLI / CLI+Plus / CLI+Intercept vs baselines (~25 min) |
+| Editions | `compare-editions` | CLI / Plus / Intercept / stress arms vs baselines (~60 min) |
 | Cross-version | `compare-cross-version` | 7.0 vs committed 6.0 baselines (Gate 2) |
 | Release / wiki | `compare-product` | median of 3; full reverse + MITM (~3–4h with early-stop) |
 | Heavier tables | `compare-bodies` / `post` / `lossy` / `arch` / `bridges` / `tls-cost` | dispatch independently from the workflow |
@@ -136,7 +136,7 @@ Two TWP-only MITM shapes on the same Client×Origin wires (+ CONNECT). nginx/YAR
 
 ## Editions (`titanium run` daemon)
 
-Library arms (`twp-reverse-*`) embed Core with probe-tuned settings. Edition arms spawn the shipped CLI (`titanium run -c twp.yaml`) as an external process — same shape as nginx — for product-defaults comparison.
+Library arms (`twp-reverse-*`) embed Core with probe-tuned settings. Edition arms spawn the shipped CLI (`titanium run -c twp.yaml`) as an external process — same shape as nginx — for product-defaults comparison. Full matrix is ~60 min (expanded Plus/CLI stress arms).
 
 ```powershell
 pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-editions
@@ -148,10 +148,22 @@ pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath tools/RpsLoadProbe/r
 | `twp-cli-reverse-http1` / `-tls` | CLI daemon, product defaults vs library |
 | `twp-cli-reverse-http1-route` | Single route table ≡ ForwardHost |
 | `twp-cli-plus-base-http1` | Plus ALC + control plane (no options) |
-| `twp-cli-plus-cache-http1` | Plus + `cache.enable` |
-| `twp-cli-intercept-http1` | Route `RequestHeaderSet` transform → session path (Inspector-equivalent) |
+| `twp-cli-plus-cache-http1` | Plus + `cache.enable` (cold) |
+| `twp-cli-intercept-http1` | Route `RequestHeaderSet` transform → session path |
+| `twp-cli-plus-waf-http1` | WAF denyPaths that do not match `/` |
+| `twp-cli-plus-cidr-http1` | `security.allowCidrs=127.0.0.0/8` |
+| `twp-cli-plus-jwt-http1` | RS256 JWT + JWKS mini-server; Bearer on every request |
+| `twp-cli-plus-ratelimit-http1` | `state.mode=memory` + very high rate limit |
+| `twp-cli-plus-resilience-http1` | Active health vs ForwardHost+cluster destinations |
+| `twp-cli-plus-discovery-file-http1` | File discovery + mid-ramp rewrite |
+| `twp-cli-plus-metrics-scrape-http1` | Background `/metrics` + `/v1/snapshot` every 5s |
+| `twp-cli-plus-cache-hit-http1` | Cache warm then measure (vs plus-cache cold) |
+| `twp-cli-static-http1` | `staticFiles.root` tiny file |
+| `twp-cli-logging-http1` | Logging enabled + Info file sink |
+| `twp-cli-lb-leasttime-http1` | LeastTime across two healthy origins |
+| `twp-cli-dialect-twp-http1` | `.twp` `listen`/`forward` site-file |
 
-Gates: see [PERF-GATES.md](PERF-GATES.md). Build/publish `Titanium.Cli` (and Plus DLL beside it for Plus arms) before ramping.
+Gates: see [PERF-GATES.md](PERF-GATES.md). Thresholds lock after a clean Win+Linux pass. Build/publish `Titanium.Cli` (and Plus DLL beside it for Plus arms) before ramping.
 
 ## Cross-version (7.0 vs 6.0)
 

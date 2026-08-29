@@ -552,6 +552,42 @@ internal static class Cli
             case "twp-cli-intercept-http1":
                 mode = ProbeMode.TwpCliInterceptHttp1;
                 return true;
+            case "twp-cli-plus-waf-http1":
+                mode = ProbeMode.TwpCliPlusWafHttp1;
+                return true;
+            case "twp-cli-plus-cidr-http1":
+                mode = ProbeMode.TwpCliPlusCidrHttp1;
+                return true;
+            case "twp-cli-plus-jwt-http1":
+                mode = ProbeMode.TwpCliPlusJwtHttp1;
+                return true;
+            case "twp-cli-plus-ratelimit-http1":
+                mode = ProbeMode.TwpCliPlusRateLimitHttp1;
+                return true;
+            case "twp-cli-plus-resilience-http1":
+                mode = ProbeMode.TwpCliPlusResilienceHttp1;
+                return true;
+            case "twp-cli-plus-discovery-file-http1":
+                mode = ProbeMode.TwpCliPlusDiscoveryFileHttp1;
+                return true;
+            case "twp-cli-plus-metrics-scrape-http1":
+                mode = ProbeMode.TwpCliPlusMetricsScrapeHttp1;
+                return true;
+            case "twp-cli-plus-cache-hit-http1":
+                mode = ProbeMode.TwpCliPlusCacheHitHttp1;
+                return true;
+            case "twp-cli-static-http1":
+                mode = ProbeMode.TwpCliStaticHttp1;
+                return true;
+            case "twp-cli-logging-http1":
+                mode = ProbeMode.TwpCliLoggingHttp1;
+                return true;
+            case "twp-cli-lb-leasttime-http1":
+                mode = ProbeMode.TwpCliLbLeastTimeHttp1;
+                return true;
+            case "twp-cli-dialect-twp-http1":
+                mode = ProbeMode.TwpCliDialectTwpHttp1;
+                return true;
             case "origin-direct":
                 mode = ProbeMode.OriginDirect;
                 return true;

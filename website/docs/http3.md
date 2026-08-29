@@ -24,17 +24,24 @@ Self-contained GitHub Release zips **ship MsQuic natives** for common RIDs. Pick
 | macOS Intel | `osx-x64` |
 | macOS Apple Silicon | `osx-arm64` |
 
+RID zips ship **MsQuic + OpenSSL only** (MIT / Apache-2.0). They do **not** redistribute LGPL/GPL host libs (`libnuma`, `lttng-ust`). On empty/distroless images install those with `http3-deps` (or your package manager) so the loader can resolve them:
+
+| Host | Host packages |
+| --- | --- |
+| Ubuntu/Debian | `libnuma1` (pulled with `libmsquic` via `http3-deps install`) |
+| Alpine/musl | `numactl`, `lttng-ust` |
+
 Check at runtime:
 
 ```bash
 titanium http3-deps status
 ```
 
-Edge OS / old glibc: `titanium http3-deps install` (apt / dnf / apk / brew; needs network + sudo).
+Edge OS / old glibc / missing host deps: `titanium http3-deps install` (apt / dnf / apk / brew; needs network + sudo).
 
 ### Alpine / Kubernetes
 
-Use the **`linux-musl-*`** zip inside Alpine images. A `linux-x64` (glibc) zip will not load MsQuic on musl.
+Use the **`linux-musl-*`** zip inside Alpine images. A `linux-x64` (glibc) zip will not load MsQuic on musl. Also install `numactl` + `lttng-ust` (or run `titanium http3-deps install`).
 
 ### NuGet library hosts
 

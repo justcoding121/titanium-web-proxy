@@ -45,16 +45,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 
-numactl / libnuma (Linux packages only)
----------------------------------------
-Project: https://github.com/numactl/numactl
-License: LGPL-2.1-only
+Host packages (NOT redistributed in this zip)
+---------------------------------------------
+Some Linux hosts also need system packages so MsQuic can load:
 
+  Ubuntu/Debian: libnuma1 (and libmsquic when not using this RID zip)
+  Alpine/musl:   numactl, lttng-ust (and libmsquic when not using this RID zip)
 
-LTTng-UST (Alpine / musl packages only)
----------------------------------------
-Project: https://lttng.org/
-License: LGPL-2.1-only AND GPL-2.0-only AND MIT
+Install via `titanium http3-deps install` or your distro package manager.
+Those libraries are LGPL/GPL and are intentionally not bundled here.
 
-Pinned package versions and download URLs are recorded in
+Pinned MsQuic / OpenSSL download URLs are recorded in
 tools/packaging/http3-native.lock.json.

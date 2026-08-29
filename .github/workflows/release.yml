@@ -152,6 +152,7 @@ jobs:
           $out = "artifacts/inspector/$rid"
           dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r $rid --self-contained true -o $out
           ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
+          Copy-Item -Force tools/packaging/THIRD-PARTY-INSPECTOR.txt (Join-Path $out "THIRD-PARTY-INSPECTOR.txt")
           if ($IsWindows) {
             Compress-Archive -Path "$out/*" -DestinationPath "TitaniumInspector-$rid.zip"
           } else {
