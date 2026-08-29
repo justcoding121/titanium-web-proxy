@@ -90,16 +90,15 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // Prefetch overlaps origin connect with client TLS on cache hits / HTTP/1.1 clients.
             proxyServer.EnableTcpServerConnectionPrefetch = ReadEnvBool("TWP_PREFETCH", defaultValue: true);
             proxyServer.EnableHttp2 = ReadEnvBool("TWP_ENABLE_HTTP2", defaultValue: true);
-            // Library default is false; probes that need a warm disk cache set TWP_SAVE_FAKE_CERTS=1.
+            // Library Balanced defaults stay RSA for NuGet consumers; this example (and Inspector/CLI)
+            // uses fast cold-start leaves for modern browsers. Probe overrides:
+            //   TWP_LEAF_KEY=rsa | TWP_SAVE_FAKE_CERTS=0
+            proxyServer.CertificateManager.ApplyFastColdStartLeafSettings();
+            if (Environment.GetEnvironmentVariable("TWP_LEAF_KEY") is "rsa" or "RSA" or "Rsa2048")
+                proxyServer.CertificateManager.LeafCertificateKeyAlgorithm =
+                    Network.CertificateKeyAlgorithm.Rsa2048;
             proxyServer.CertificateManager.SaveFakeCertificates =
-                ReadEnvBool("TWP_SAVE_FAKE_CERTS", defaultValue: false);
-
-            // Balanced default is RSA-2048 (widest client compatibility). Opt in to P-256 for modern
-            // browsers via TWP_LEAF_KEY=ec — see wiki Home.md "First-visit latency".
-            proxyServer.CertificateManager.LeafCertificateKeyAlgorithm =
-                Environment.GetEnvironmentVariable("TWP_LEAF_KEY") is "ec" or "EC" or "ecdsa" or "ECDSA" or "EcdsaP256"
-                    ? Network.CertificateKeyAlgorithm.EcdsaP256
-                    : Network.CertificateKeyAlgorithm.Rsa2048;
+                ReadEnvBool("TWP_SAVE_FAKE_CERTS", defaultValue: true);
         }
 
         public void Dispose()

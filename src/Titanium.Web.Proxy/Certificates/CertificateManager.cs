@@ -506,6 +506,24 @@ public sealed class CertificateManager : IDisposable
     public bool SaveFakeCertificates { get; set; } = false;
 
     /// <summary>
+    ///     Fast first-visit MITM for modern TLS clients (browsers, current HttpClient):
+    ///     <see cref="CertificateEngine.BouncyCastleFast" />, ECDSA P-256 leaves, and
+    ///     <see cref="SaveFakeCertificates" /> enabled. The root CA stays RSA.
+    ///     <para>
+    ///         Library <see cref="Options.ProxyProfile.Balanced" /> still defaults to RSA-2048 leaves for
+    ///         widest compatibility. Call this from Inspector, CLI, and desktop MITM hosts where clients
+    ///         are known to accept ECDSA server certificates — RSA leaf generation is the dominant
+    ///         cold-start cost when a page hits many not-yet-seen hosts (often ~1 s per host).
+    ///     </para>
+    /// </summary>
+    public void ApplyFastColdStartLeafSettings()
+    {
+        CertificateEngine = CertificateEngine.BouncyCastleFast;
+        LeafCertificateKeyAlgorithm = CertificateKeyAlgorithm.EcdsaP256;
+        SaveFakeCertificates = true;
+    }
+
+    /// <summary>
     ///     The fake certificate cache storage.
     ///     The default implementation stores leaf certificates in a <c>crts</c> subdirectory of the
     ///     per-user Titanium.Web.Proxy directory (%LocalAppData% on Windows, ApplicationData on

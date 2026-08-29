@@ -122,6 +122,8 @@ public sealed class InterceptionService : IDisposable
 
         EnsureRootPfxPath();
         _proxy.CertificateManager.PfxFilePath = _rootPfxPath!;
+        // Browser MITM: ECDSA leaves + disk cache (RSA first-visit stampede is the cold google.com tax).
+        _proxy.CertificateManager.ApplyFastColdStartLeafSettings();
 
         _endPoint = new ExplicitProxyEndPoint(address, port, decryptSsl: true);
         _endPoint.BeforeTunnelConnectRequest += OnBeforeTunnelConnect;

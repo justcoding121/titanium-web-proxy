@@ -149,6 +149,10 @@ internal static class RunCommand
 
     private static void ConfigureProxyFlags(ProxyServer proxy, TwpConfig config, bool requiresSessionPath)
     {
+        // Explicit/MITM decrypt uses generated leaves; ECDSA + disk cache avoids RSA cold-start stampede.
+        // Plus shares this ProxyServer. Library Balanced still defaults to RSA for NuGet consumers.
+        proxy.CertificateManager.ApplyFastColdStartLeafSettings();
+
         if (requiresSessionPath)
         {
             proxy.EnableHttpInterception = true;

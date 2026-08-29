@@ -107,16 +107,32 @@ public class SessionPipelineTests
     }
 
     [TestMethod]
-    public async Task Start_EnablesHttp2AndHttp3WhenSupported()
+    public async Task Start_EnablesHttp2Http3AndFastEcdsaLeafCertificates()
     {
         using var interception = new InterceptionService(new RecordingSystemProxyController());
         var port = GetFreeTcpPort();
         await interception.StartAsync(System.Net.IPAddress.Loopback, port);
-        Assert.IsTrue(interception.IsRunning);
-        Assert.IsTrue(interception.Http2Enabled);
-        Assert.AreEqual(InterceptionService.IsHttp3Supported, interception.Http3Enabled);
+        try
+        {
+            Assert.IsTrue(interception.IsRunning);
+            Assert.IsTrue(interception.Http2Enabled);
+            Assert.AreEqual(InterceptionService.IsHttp3Supported, interception.Http3Enabled);
 
-        interception.Stop();
+            var field = typeof(InterceptionService).GetField("_proxy",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.IsNotNull(field);
+            var proxy = (Titanium.Web.Proxy.ProxyServer?)field!.GetValue(interception);
+            Assert.IsNotNull(proxy);
+            Assert.AreEqual(Titanium.Web.Proxy.Network.CertificateEngine.BouncyCastleFast,
+                proxy!.CertificateManager.CertificateEngine);
+            Assert.AreEqual(Titanium.Web.Proxy.Network.CertificateKeyAlgorithm.EcdsaP256,
+                proxy.CertificateManager.LeafCertificateKeyAlgorithm);
+            Assert.IsTrue(proxy.CertificateManager.SaveFakeCertificates);
+        }
+        finally
+        {
+            interception.Stop();
+        }
     }
 
     private static int GetFreeTcpPort()

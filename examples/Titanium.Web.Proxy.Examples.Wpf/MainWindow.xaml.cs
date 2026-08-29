@@ -17,6 +17,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Examples.Shared;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Examples.Wpf
@@ -70,6 +71,8 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                 "Titanium.Web.Proxy");
             Directory.CreateDirectory(certificateDirectory);
             proxyServer.CertificateManager.PfxFilePath = Path.Combine(certificateDirectory, "rootCert.pfx");
+            // Browser MITM: ECDSA P-256 leaves + persist (see CertificateManager.ApplyFastColdStartLeafSettings).
+            proxyServer.CertificateManager.ApplyFastColdStartLeafSettings();
 
             // Opt-in MITM root trust (same as Basic):
             //   TWP_TRUST_ROOT=1           → Current User Personal + Trusted Root
@@ -84,8 +87,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             }
 
             // Match ProxyProfile.Balanced / library defaults (same as the Basic example).
-            // Speed opt-ins for modern browsers: LeafCertificateKeyAlgorithm = EcdsaP256,
-            // SaveFakeCertificates = true — see wiki Home.md Performance.
             proxyServer.Profile = ProxyProfile.Balanced;
             proxyServer.ForwardToUpstreamGateway = true;
 
