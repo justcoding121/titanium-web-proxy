@@ -277,12 +277,29 @@ public class AutomationIdCoverageHeadlessTests
             Assert.IsTrue(File.Exists(zip));
             StringAssert.Contains(fx.ViewModel.StatusText, "Exported 1 sessions");
         });
+
+        // macOS runners can briefly keep the zip handle; wait until a shared read succeeds.
         fx.PathPicker.OpenPath = zip;
+        var readableDeadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < readableDeadline)
+        {
+            try
+            {
+                await using var probe = new FileStream(zip, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                break;
+            }
+            catch (IOException)
+            {
+                await Task.Delay(50);
+            }
+        }
+
         await fx.DispatchAsync(() => fx.Robot.Click("MenuImportArchive"));
 
-        var importDeadline = DateTime.UtcNow.AddSeconds(5);
+        var importDeadline = DateTime.UtcNow.AddSeconds(15);
         while (DateTime.UtcNow < importDeadline &&
-               !fx.ViewModel.StatusText.Contains("Appended", StringComparison.Ordinal))
+               !fx.ViewModel.StatusText.Contains("Appended", StringComparison.Ordinal) &&
+               !fx.ViewModel.StatusText.Contains("Import archive failed", StringComparison.Ordinal))
         {
             await Task.Delay(50);
         }

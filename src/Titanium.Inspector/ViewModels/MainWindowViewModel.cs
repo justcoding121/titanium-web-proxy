@@ -1932,16 +1932,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        var imported = await SessionArchive.ImportNativeArchiveAsync(path);
-        foreach (var snap in imported)
+        try
         {
-            _registry.Add(snap);
-            _all.Add(snap);
-        }
+            var imported = await SessionArchive.ImportNativeArchiveAsync(path);
+            foreach (var snap in imported)
+            {
+                _registry.Add(snap);
+                _all.Add(snap);
+            }
 
-        ApplyFilter();
-        RefreshSessionCountText();
-        StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
+            ApplyFilter();
+            RefreshSessionCountText();
+            StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = "Import archive failed: " + Truncate(ex.Message, 160);
+        }
     }
 
     private IReadOnlyList<SessionSnapshot> ResolveExportSelection()
