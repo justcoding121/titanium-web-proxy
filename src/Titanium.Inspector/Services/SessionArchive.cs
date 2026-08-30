@@ -52,24 +52,40 @@ public static class SessionArchive
 
     public static async Task ExportNativeArchiveAsync(IEnumerable<SessionSnapshot> sessions, string zipPath, CancellationToken ct = default)
     {
-        await using var fs = File.Create(zipPath);
-        using var zip = new ZipArchive(fs, ZipArchiveMode.Create);
-        var index = 0;
-        foreach (var session in sessions)
+        await using var fs = new FileStream(
+            zipPath,
+            FileMode.Create,
+            FileAccess.ReadWrite,
+            FileShare.None,
+            bufferSize: 4096,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        using (var zip = new ZipArchive(fs, ZipArchiveMode.Create, leaveOpen: true))
         {
-            ct.ThrowIfCancellationRequested();
-            var entry = zip.CreateEntry($"session-{index:D5}.json");
-            await using var stream = await entry.OpenAsync(ct);
-            await JsonSerializer.SerializeAsync(stream, session, cancellationToken: ct);
-            index++;
+            var index = 0;
+            foreach (var session in sessions)
+            {
+                ct.ThrowIfCancellationRequested();
+                var entry = zip.CreateEntry($"session-{index:D5}.json");
+                await using var stream = entry.Open();
+                await JsonSerializer.SerializeAsync(stream, session, cancellationToken: ct);
+                index++;
+            }
         }
+
+        await fs.FlushAsync(ct);
     }
 
     public static async Task<List<SessionSnapshot>> ImportNativeArchiveAsync(string zipPath, CancellationToken ct = default)
     {
         var list = new List<SessionSnapshot>();
-        await using var fs = File.OpenRead(zipPath);
-        using var zip = new ZipArchive(fs, ZipArchiveMode.Read);
+        await using var fs = new FileStream(
+            zipPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 4096,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        using var zip = new ZipArchive(fs, ZipArchiveMode.Read, leaveOpen: true);
         foreach (var entry in zip.Entries.OrderBy(e => e.FullName))
         {
             ct.ThrowIfCancellationRequested();
@@ -78,7 +94,7 @@ public static class SessionArchive
                 continue;
             }
 
-            await using var stream = await entry.OpenAsync(ct);
+            await using var stream = entry.Open();
             var snap = await JsonSerializer.DeserializeAsync<SessionSnapshot>(stream, cancellationToken: ct);
             if (snap is not null)
             {

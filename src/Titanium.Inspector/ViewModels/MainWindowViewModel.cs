@@ -1932,16 +1932,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        var imported = await SessionArchive.ImportNativeArchiveAsync(path);
-        foreach (var snap in imported)
+        try
         {
-            _registry.Add(snap);
-            _all.Add(snap);
-        }
+            var imported = await SessionArchive.ImportNativeArchiveAsync(path);
+            foreach (var snap in imported)
+            {
+                _registry.Add(snap);
+                _all.Add(snap);
+            }
 
-        ApplyFilter();
-        RefreshSessionCountText();
-        StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
+            ApplyFilter();
+            RefreshSessionCountText();
+            StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = "Import archive failed: " + Truncate(ex.Message, 160);
+        }
     }
 
     private IReadOnlyList<SessionSnapshot> ResolveExportSelection()
@@ -1996,7 +2003,10 @@ internal sealed class RelayCommand(Func<Task> execute) : ICommand
     {
         try
         {
-            await execute().ConfigureAwait(false);
+            // Preserve Avalonia UI sync context so StatusText / collection updates after
+            // awaits are applied on the UI thread (ConfigureAwait(false) caused macOS
+            // headless flakes where export wrote the file but StatusText stayed "Ready").
+            await execute();
         }
         catch
         {
