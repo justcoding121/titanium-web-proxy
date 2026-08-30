@@ -1,5 +1,22 @@
 /// <reference types="vitepress/client" />
 import { defineLoader } from 'vitepress'
+import MarkdownIt from 'markdown-it'
+
+const md = new MarkdownIt({
+  html: false,
+  linkify: true,
+  typographer: false,
+})
+
+// Open release-note links in a new tab.
+const defaultLinkOpen =
+  md.renderer.rules.link_open ??
+  ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
+md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+  tokens[idx].attrSet('target', '_blank')
+  tokens[idx].attrSet('rel', 'noreferrer')
+  return defaultLinkOpen(tokens, idx, options, env, self)
+}
 
 export interface ReleaseAsset {
   id: number
@@ -58,8 +75,7 @@ export default defineLoader({
         published_at: r.published_at,
         prerelease: r.prerelease,
         body: r.body,
-        // Keep raw markdown as plain text; avoid pulling a markdown dependency for v1.
-        body_html: null,
+        body_html: r.body ? md.render(r.body) : null,
         assets: (r.assets ?? []).map((a) => ({
           id: a.id,
           name: a.name,

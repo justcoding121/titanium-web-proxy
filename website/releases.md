@@ -16,7 +16,7 @@ Latest product releases from [GitHub Releases](https://github.com/justcoding121/
     <span v-if="r.prerelease" class="badge-pre">prerelease</span>
   </h2>
   <p v-if="r.published_at"><em>{{ new Date(r.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) }}</em></p>
-  <div v-if="r.body_html" v-html="r.body_html"></div>
+  <div v-if="r.body_html" class="release-body" v-html="r.body_html"></div>
   <p v-else-if="r.body"><pre style="white-space: pre-wrap;">{{ r.body }}</pre></p>
   <p v-if="r.assets?.length">
     <strong>Assets:</strong>
@@ -25,3 +25,8 @@ Latest product releases from [GitHub Releases](https://github.com/justcoding121/
     </template>
   </p>
 </div>
+
+<p v-if="releases?.length" class="download-row">
+  Older release notes are on
+  <a href="https://github.com/justcoding121/titanium-web-proxy/releases" target="_blank" rel="noreferrer">GitHub Releases</a>.
+</p>

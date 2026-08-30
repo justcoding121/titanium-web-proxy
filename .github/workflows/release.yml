@@ -358,3 +358,35 @@ jobs:
             --generate-notes \
             --target "$GITHUB_SHA" \
             $PRE
+          # When GitHub finds no PR merges, --generate-notes is only a compare link.
+          # Fall back to commit-subject bullets from the previous different-SHA release tag.
+          BODY="$(gh release view "$TAG" --json body -q .body 2>/dev/null || true)"
+          if [[ "$BODY" != *"What's Changed"* ]]; then
+            CUR_SHA="$(git rev-parse "${TAG}^{commit}" 2>/dev/null || echo "$GITHUB_SHA")"
+            RANGE_PREV=""
+            while read -r cand; do
+              [[ -z "$cand" || "$cand" == "$TAG" ]] && continue
+              cs="$(git rev-parse "${cand}^{commit}" 2>/dev/null || true)"
+              [[ -n "$cs" && "$cs" != "$CUR_SHA" ]] || continue
+              if git merge-base --is-ancestor "$cs" "$CUR_SHA" 2>/dev/null; then
+                RANGE_PREV="$cand"
+                break
+              fi
+            done < <(gh release list --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName')
+            NOTES_FILE="$(mktemp)"
+            {
+              echo "## What's Changed"
+              if [[ -n "$RANGE_PREV" ]]; then
+                git log --no-merges --pretty=format:'* %s' "${RANGE_PREV}..${TAG}"
+                echo ""
+                echo ""
+                echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${RANGE_PREV}...${TAG}"
+              else
+                echo "* See repository history for this tag."
+              fi
+            } > "$NOTES_FILE"
+            if grep -q '^\* ' "$NOTES_FILE"; then
+              gh release edit "$TAG" --notes-file "$NOTES_FILE"
+            fi
+            rm -f "$NOTES_FILE"
+          fi
