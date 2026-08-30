@@ -8,6 +8,8 @@ namespace Titanium.Web.Proxy.Configuration.Tests;
 [TestClass]
 public class TwpConfigLoaderTests
 {
+    private static readonly string[] ExpectedTlsProtocols = ["Tls12", "Tls13"];
+
     [TestMethod]
     public void LoadJson_ParsesListenersAndRoutes()
     {
@@ -122,7 +124,7 @@ public class TwpConfigLoaderTests
         Assert.AreEqual(15, config.Server.Timeouts!.ClientHeaderTimeoutSeconds);
         Assert.AreEqual(120, config.Server.Timeouts.RequestTimeoutSeconds);
         Assert.AreEqual(128, config.Server.Limits!.MaxHeaderCount);
-        CollectionAssert.AreEqual(new[] { "Tls12", "Tls13" }, config.Server.Tls!.SupportedSslProtocols!.ToList());
+        CollectionAssert.AreEqual(ExpectedTlsProtocols, config.Server.Tls!.SupportedSslProtocols!.ToList());
         Assert.AreEqual(2048, config.Logging!.QueueCapacity);
         Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count);
     }

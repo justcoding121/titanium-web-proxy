@@ -69,7 +69,7 @@ public sealed class InspectorUiRobot(Control root)
         Assert.Fail($"Checkable control '{automationId}' (CheckBox/MenuItem) not found.");
     }
 
-    public async Task WaitForAsync(Func<bool> predicate, TimeSpan? timeout = null)
+    public static async Task WaitForAsync(Func<bool> predicate, TimeSpan? timeout = null)
     {
         var limit = timeout ?? TimeSpan.FromSeconds(8);
         var start = DateTime.UtcNow;

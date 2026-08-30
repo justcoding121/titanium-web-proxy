@@ -218,7 +218,7 @@ public class SystemProxyBackendFactoryPlatformTests
 
         using var backend = SystemProxyBackendFactory.Create();
         Assert.IsNotNull(backend);
-        Assert.IsInstanceOfType(backend, typeof(MacOsSystemProxyBackend));
+        Assert.IsInstanceOfType<MacOsSystemProxyBackend>(backend);
     }
 
     [TestMethod]
@@ -233,7 +233,7 @@ public class SystemProxyBackendFactoryPlatformTests
 
         using var backend = SystemProxyBackendFactory.Create();
         Assert.IsNotNull(backend);
-        Assert.IsInstanceOfType(backend, typeof(LinuxSystemProxyBackend));
+        Assert.IsInstanceOfType<LinuxSystemProxyBackend>(backend);
     }
 
     [TestMethod]

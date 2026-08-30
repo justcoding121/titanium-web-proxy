@@ -45,7 +45,7 @@ public class ShellMenuToolbarHeadlessTests
         await fx.DispatchAsync(async () =>
         {
             fx.Robot.Click("MenuStartCapture");
-            await fx.Robot.WaitForAsync(() => fx.Interception.IsRunning, TimeSpan.FromSeconds(10));
+            await InspectorUiRobot.WaitForAsync(() => fx.Interception.IsRunning, TimeSpan.FromSeconds(10));
 
             fx.ViewModel.Sessions.Add(new SessionSnapshot
             {
@@ -62,7 +62,7 @@ public class ShellMenuToolbarHeadlessTests
             Assert.AreEqual(0, fx.ViewModel.Sessions.Count);
 
             fx.Robot.Click("MenuStopCapture");
-            await fx.Robot.WaitForAsync(() => !fx.Interception.IsRunning, TimeSpan.FromSeconds(10));
+            await InspectorUiRobot.WaitForAsync(() => !fx.Interception.IsRunning, TimeSpan.FromSeconds(10));
         });
     }
 }

@@ -41,10 +41,7 @@ internal static class ServerConfigApplier
 
     private static void ApplyProtocolFlags(ProxyServer proxy, ServerConfig server)
     {
-        if (server.EnableHttp2 is bool http2)
-        {
-            proxy.EnableHttp2 = http2;
-        }
+        ApplyBool(server.EnableHttp2, v => proxy.EnableHttp2 = v);
 
         if (server.EnableHttp3 is bool http3)
         {
@@ -58,35 +55,12 @@ internal static class ServerConfigApplier
             }
         }
 
-        if (server.EnableRfc8441 is bool rfc8441)
-        {
-            proxy.EnableRfc8441 = rfc8441;
-        }
-
-        if (server.EnableQpackDynamicTable is bool qpack)
-        {
-            proxy.EnableQpackDynamicTable = qpack;
-        }
-
-        if (server.EnableHttpsSvcbDnsDiscovery is bool svcb)
-        {
-            proxy.EnableHttpsSvcbDnsDiscovery = svcb;
-        }
-
-        if (server.Enable100ContinueBehaviour is bool expect100)
-        {
-            proxy.Enable100ContinueBehaviour = expect100;
-        }
-
-        if (server.CompatibilityMode100Continue is bool compat100)
-        {
-            proxy.CompatibilityMode100Continue = compat100;
-        }
-
-        if (server.EnableWinAuth is bool winAuth)
-        {
-            proxy.EnableWinAuth = winAuth;
-        }
+        ApplyBool(server.EnableRfc8441, v => proxy.EnableRfc8441 = v);
+        ApplyBool(server.EnableQpackDynamicTable, v => proxy.EnableQpackDynamicTable = v);
+        ApplyBool(server.EnableHttpsSvcbDnsDiscovery, v => proxy.EnableHttpsSvcbDnsDiscovery = v);
+        ApplyBool(server.Enable100ContinueBehaviour, v => proxy.Enable100ContinueBehaviour = v);
+        ApplyBool(server.CompatibilityMode100Continue, v => proxy.CompatibilityMode100Continue = v);
+        ApplyBool(server.EnableWinAuth, v => proxy.EnableWinAuth = v);
 
         if (!string.IsNullOrWhiteSpace(server.OriginHttpVersionPolicy) &&
             Enum.TryParse<OriginHttpVersionPolicy>(server.OriginHttpVersionPolicy, ignoreCase: true, out var originPolicy))
@@ -99,10 +73,7 @@ internal static class ServerConfigApplier
             proxy.ViaHeaderPseudonym = server.ViaHeaderPseudonym;
         }
 
-        if (server.BlockPrivateNetworkDestinations is bool blockPrivate)
-        {
-            proxy.BlockPrivateNetworkDestinations = blockPrivate;
-        }
+        ApplyBool(server.BlockPrivateNetworkDestinations, v => proxy.BlockPrivateNetworkDestinations = v);
 
         if (!string.IsNullOrWhiteSpace(server.CheckCertificateRevocation) &&
             Enum.TryParse<X509RevocationMode>(server.CheckCertificateRevocation, ignoreCase: true, out var revocation))
@@ -114,6 +85,14 @@ internal static class ServerConfigApplier
             TryParseEndPoint(server.DnsServerEndPoint, out var dns))
         {
             proxy.DnsServerEndPoint = dns;
+        }
+    }
+
+    private static void ApplyBool(bool? value, Action<bool> apply)
+    {
+        if (value is bool b)
+        {
+            apply(b);
         }
     }
 

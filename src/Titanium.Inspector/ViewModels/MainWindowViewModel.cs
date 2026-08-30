@@ -962,15 +962,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                     return;
                 }
 
-                if (!_interception.InstallRootCertificate(machineStore: false))
+                if (!_interception.InstallRootCertificate(machineStore: false) &&
+                    !await TryElevateRootCaInstallAsync(owner))
                 {
-                    if (!await _dialogs.ConfirmElevateRootCaAsync(owner) ||
-                        !_interception.InstallRootCertificateAsAdmin(machineStore: false))
-                    {
-                        StatusText = "Root CA install failed - Decrypt HTTPS stays off (try Export CA or allow admin prompt)";
-                        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
-                        return;
-                    }
+                    StatusText = "Root CA install failed - Decrypt HTTPS stays off (try Export CA or allow admin prompt)";
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+                    return;
                 }
             }
 
@@ -982,6 +979,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _decryptHttpsBusy = false;
         }
     }
+
+    private async Task<bool> TryElevateRootCaInstallAsync(Window? owner) =>
+        await _dialogs.ConfirmElevateRootCaAsync(owner) &&
+        _interception.InstallRootCertificateAsAdmin(machineStore: false);
 
     private void SetDecryptHttpsCore(bool enabled)
     {
