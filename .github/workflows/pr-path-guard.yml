@@ -7,6 +7,10 @@ on:
       - beta
       - stable
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   guard-nc-paths:
     runs-on: ubuntu-latest
