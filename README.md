@@ -7,7 +7,6 @@ A lightweight, high-performance HTTP(S) proxy — reverse / edge CLI, desktop In
 [![Build](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml/badge.svg?branch=develop)](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml)
 [![NuGet](https://img.shields.io/nuget/v/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)
 [![NuGet downloads](https://img.shields.io/nuget/dt/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)
-[![License](https://img.shields.io/github/license/justcoding121/Titanium-Web-Proxy.svg)](LICENSE)
 
 ## Code Quality
 
@@ -84,11 +83,6 @@ Optional Plus: run `titanium update --plus`, then enable Plus in config (`plus.e
 ### Titanium Inspector
 
 On Windows, winget id `justcoding121.TitaniumInspector`, or MSI / portable zip from [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when those assets are published. Start interception from the Capture menu, install the root CA, then toggle system proxy.
-
-> **Breaking change:** `ProxyServer.ExceptionFunc` and `SessionEventArgsBase.TimeLine` were removed in
-> favor of the unified `ProxyServer.Logging`/`EnableRequestTimingCapture` APIs described in
-> [Logging and diagnostics](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#logging-and-diagnostics)
-> and [Breaking changes: unified logging and timing](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#breaking-changes-unified-logging-and-timing).
 
 ## Quick start
 
