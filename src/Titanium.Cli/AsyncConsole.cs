@@ -31,17 +31,7 @@ internal static class AsyncConsole
             {
                 try
                 {
-                    if (entry.Flush is { } flush)
-                    {
-                        flush.TrySetResult();
-                        continue;
-                    }
-
-                    var writer = entry.IsError ? Console.Error : Console.Out;
-                    if (entry.NewLine)
-                        await writer.WriteLineAsync(entry.Text).ConfigureAwait(false);
-                    else
-                        await writer.WriteAsync(entry.Text).ConfigureAwait(false);
+                    await WriteEntryAsync(entry).ConfigureAwait(false);
                 }
                 catch
                 {
@@ -49,6 +39,21 @@ internal static class AsyncConsole
                 }
             }
         });
+    }
+
+    private static async Task WriteEntryAsync(Entry entry)
+    {
+        if (entry.Flush is { } flush)
+        {
+            flush.TrySetResult();
+            return;
+        }
+
+        var writer = entry.IsError ? Console.Error : Console.Out;
+        if (entry.NewLine)
+            await writer.WriteLineAsync(entry.Text).ConfigureAwait(false);
+        else
+            await writer.WriteAsync(entry.Text).ConfigureAwait(false);
     }
 
     public static void WriteLine(string message)

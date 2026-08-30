@@ -9,14 +9,26 @@ namespace Titanium.Web.Proxy.UnitTests;
 /// Guards the product logging invariant: diagnostic helpers must not sync-write to Console.
 /// </summary>
 [TestClass]
-public class AsyncLoggingInvariantTests
+public partial class AsyncLoggingInvariantTests
 {
+    [GeneratedRegex(@"Console\.(Write|WriteLine|Error\.Write)")]
+    private static partial Regex PlusLogConsoleRegex();
+
+    [GeneratedRegex(@"Console\.(Out|Error)\.Write(Line)?\(")]
+    private static partial Regex AsyncConsoleOutErrorRegex();
+
+    [GeneratedRegex(@"\bConsole\.Write(Line)?\(")]
+    private static partial Regex AsyncConsoleWriteRegex();
+
+    [GeneratedRegex(@"Console\.")]
+    private static partial Regex ConsoleRegex();
+
     [TestMethod]
     public void PlusLog_Source_Has_No_Sync_Console_Writes()
     {
         var path = FindRepoFile(Path.Combine("src", "Titanium.Plus", "PlusLog.cs"));
         var text = File.ReadAllText(path);
-        StringAssert.DoesNotMatch(text, new Regex(@"Console\.(Write|WriteLine|Error\.Write)"));
+        StringAssert.DoesNotMatch(text, PlusLogConsoleRegex());
     }
 
     [TestMethod]
@@ -26,12 +38,8 @@ public class AsyncLoggingInvariantTests
         var text = File.ReadAllText(path);
         Assert.IsTrue(text.Contains("TryWrite", StringComparison.Ordinal));
         Assert.IsTrue(text.Contains("WriteLineAsync", StringComparison.Ordinal));
-        StringAssert.DoesNotMatch(
-            text,
-            new Regex(@"Console\.(Out|Error)\.Write(Line)?\("));
-        StringAssert.DoesNotMatch(
-            text,
-            new Regex(@"\bConsole\.Write(Line)?\("));
+        StringAssert.DoesNotMatch(text, AsyncConsoleOutErrorRegex());
+        StringAssert.DoesNotMatch(text, AsyncConsoleWriteRegex());
     }
 
     [TestMethod]
@@ -42,7 +50,7 @@ public class AsyncLoggingInvariantTests
         var idx = text.IndexOf("protected virtual void OnSinkDisposalLeaked()", StringComparison.Ordinal);
         Assert.IsTrue(idx >= 0);
         var body = text.Substring(idx, Math.Min(400, text.Length - idx));
-        StringAssert.DoesNotMatch(body, new Regex(@"Console\."));
+        StringAssert.DoesNotMatch(body, ConsoleRegex());
     }
 
     private static string FindRepoFile(string relativeUnderRepo)

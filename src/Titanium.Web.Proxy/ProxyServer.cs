@@ -92,6 +92,10 @@ public partial class ProxyServer : IDisposable
     private readonly ConcurrentBag<CancellationTokenSource> sessionCtsPool = new();
     private const int SessionCtsPoolCap = 256;
 
+    private const string SystemProxyNotSupportedMessage =
+        @"Setting system proxy settings are not supported on this platform.
+                            Please manually configure your operating system to use this proxy's port and address.";
+
     /// <summary>
     ///     Backing field for exposed public property.
     /// </summary>
@@ -1457,8 +1461,7 @@ public partial class ProxyServer : IDisposable
         SystemProxySettings? settings)
     {
         if (SystemProxySettingsManager == null)
-            throw new NotSupportedException(@"Setting system proxy settings are not supported on this platform.
-                            Please manually configure your operating system to use this proxy's port and address.");
+            throw new NotSupportedException(SystemProxyNotSupportedMessage);
 
         ValidateEndPointAsSystemProxy(endPoint);
 
@@ -1546,8 +1549,7 @@ public partial class ProxyServer : IDisposable
     public void RestoreOriginalProxySettings()
     {
         if (SystemProxySettingsManager == null)
-            throw new NotSupportedException(@"Setting system proxy settings are not supported on this platform.
-                            Please manually configure your operating system to use this proxy's port and address.");
+            throw new NotSupportedException(SystemProxyNotSupportedMessage);
 
         SystemProxySettingsManager.RestoreOriginalSettings();
 
@@ -1560,8 +1562,7 @@ public partial class ProxyServer : IDisposable
     public void DisableSystemProxy(ProxyProtocolType protocolType)
     {
         if (SystemProxySettingsManager == null)
-            throw new NotSupportedException(@"Setting system proxy settings are not supported on this platform.
-                            Please manually configure your operating system to use this proxy's port and address.");
+            throw new NotSupportedException(SystemProxyNotSupportedMessage);
 
         SystemProxySettingsManager.RemoveProxy(protocolType);
 
@@ -1578,8 +1579,7 @@ public partial class ProxyServer : IDisposable
     public void DisableAllSystemProxies()
     {
         if (SystemProxySettingsManager == null)
-            throw new NotSupportedException(@"Setting system proxy settings are not supported on this platform.
-                            Please manually configure your operating system to use this proxy's port and address.");
+            throw new NotSupportedException(SystemProxyNotSupportedMessage);
 
         SystemProxySettingsManager.DisableAllProxy();
 

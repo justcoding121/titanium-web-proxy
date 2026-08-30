@@ -24,10 +24,10 @@ internal static class SystemProxyBackendFactory
 
     [SupportedOSPlatform("macos")]
     [SupportedOSPlatform("osx")]
-    private static ISystemProxyBackend CreateMac(IProcessRunner? runner, IElevationPrompt? elevation) =>
+    private static MacOsSystemProxyBackend CreateMac(IProcessRunner? runner, IElevationPrompt? elevation) =>
         new MacOsSystemProxyBackend(runner, elevation);
 
     [SupportedOSPlatform("linux")]
-    private static ISystemProxyBackend CreateLinux(IProcessRunner? runner) =>
+    private static LinuxSystemProxyBackend CreateLinux(IProcessRunner? runner) =>
         new LinuxSystemProxyBackend(runner);
 }

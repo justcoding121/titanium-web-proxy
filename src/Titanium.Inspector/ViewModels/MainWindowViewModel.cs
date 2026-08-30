@@ -16,6 +16,8 @@ namespace Titanium.Inspector.ViewModels;
 
 public sealed class MainWindowViewModel : INotifyPropertyChanged
 {
+    private const string ZipFileFilter = "*.zip";
+
     private readonly SessionStreamBuffer _buffer;
     private readonly SessionRegistry _registry;
     private readonly UpdateService _updates;
@@ -797,25 +799,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCopyUrl)));
     }
 
-    private IReadOnlyList<string> ResolveCopyUrls()
-    {
-        var urls = new List<string>();
-        foreach (var snap in ResolveFilterSelection())
-        {
-            if (!string.IsNullOrEmpty(snap.Url))
-            {
-                urls.Add(snap.Url);
-            }
-        }
-
-        return urls;
-    }
-
-    private string? ResolveCopyUrl()
-    {
-        var urls = ResolveCopyUrls();
-        return urls.Count > 0 ? urls[0] : null;
-    }
+    private List<string> ResolveCopyUrls() =>
+        ResolveFilterSelection()
+            .Where(snap => !string.IsNullOrEmpty(snap.Url))
+            .Select(snap => snap.Url)
+            .ToList();
 
     private Task AddAutoResponderRuleAsync()
     {
@@ -1868,7 +1856,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private async Task ImportHarAsync()
     {
-        var path = await _pathPicker.PickOpenPathAsync("Import HAR", "HAR", "*.har", "*.zip");
+        var path = await _pathPicker.PickOpenPathAsync("Import HAR", "HAR", "*.har", ZipFileFilter);
         if (path is null)
         {
             StatusText = "No .har or archive to import";
@@ -1904,7 +1892,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        var path = await _pathPicker.PickSavePathAsync("Export all archive", "titanium-inspector.zip", "ZIP", "*.zip");
+        var path = await _pathPicker.PickSavePathAsync("Export all archive", "titanium-inspector.zip", "ZIP", ZipFileFilter);
         if (path is null)
         {
             StatusText = "Export archive cancelled";
@@ -1924,7 +1912,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        var path = await _pathPicker.PickSavePathAsync("Export selected archive", "titanium-inspector.zip", "ZIP", "*.zip");
+        var path = await _pathPicker.PickSavePathAsync("Export selected archive", "titanium-inspector.zip", "ZIP", ZipFileFilter);
         if (path is null)
         {
             StatusText = "Export archive cancelled";
@@ -1937,7 +1925,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private async Task ImportArchiveAsync()
     {
-        var path = await _pathPicker.PickOpenPathAsync("Import archive", "ZIP", "*.zip");
+        var path = await _pathPicker.PickOpenPathAsync("Import archive", "ZIP", ZipFileFilter);
         if (path is null)
         {
             StatusText = "No titanium-inspector archive to import";

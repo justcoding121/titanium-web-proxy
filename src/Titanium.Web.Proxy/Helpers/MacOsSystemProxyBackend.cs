@@ -14,6 +14,9 @@ namespace Titanium.Web.Proxy.Helpers;
 [SupportedOSPlatform("osx")]
 internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
 {
+    private const string NetworkSetupCommand = "networksetup";
+    private const string EmptyBypass = "Empty";
+
     private readonly IProcessRunner _runner;
     private readonly IElevationPrompt _elevation;
     private readonly List<ServiceSnapshot> _original = new();
@@ -113,7 +116,7 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
     {
         var service = ListNetworkServices().FirstOrDefault();
         if (service is null) return null;
-        var result = _runner.Run("networksetup", $"-getproxybypassdomains \"{Escape(service)}\"");
+        var result = _runner.Run(NetworkSetupCommand, $"-getproxybypassdomains \"{Escape(service)}\"");
         if (result is null || !result.Succeeded) return null;
         var domains = result.StandardOutput
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
@@ -127,11 +130,11 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
         var stale = ProxyProtocolType.None;
         foreach (var service in ListNetworkServices())
         {
-            var http = ParseProxyState(_runner.Run("networksetup", $"-getwebproxy \"{Escape(service)}\""));
+            var http = ParseProxyState(_runner.Run(NetworkSetupCommand, $"-getwebproxy \"{Escape(service)}\""));
             if (http.Enabled && UnixProxyBypassMapper.IsLocalHost(http.Host) && ownedPorts.Contains(http.Port))
                 stale |= ProxyProtocolType.Http;
 
-            var https = ParseProxyState(_runner.Run("networksetup", $"-getsecurewebproxy \"{Escape(service)}\""));
+            var https = ParseProxyState(_runner.Run(NetworkSetupCommand, $"-getsecurewebproxy \"{Escape(service)}\""));
             if (https.Enabled && UnixProxyBypassMapper.IsLocalHost(https.Host) && ownedPorts.Contains(https.Port))
                 stale |= ProxyProtocolType.Https;
         }
@@ -153,12 +156,12 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
         _original.Clear();
         foreach (var service in ListNetworkServices())
         {
-            var http = ParseProxyState(_runner.Run("networksetup", $"-getwebproxy \"{Escape(service)}\""));
-            var https = ParseProxyState(_runner.Run("networksetup", $"-getsecurewebproxy \"{Escape(service)}\""));
-            var bypassResult = _runner.Run("networksetup", $"-getproxybypassdomains \"{Escape(service)}\"");
+            var http = ParseProxyState(_runner.Run(NetworkSetupCommand, $"-getwebproxy \"{Escape(service)}\""));
+            var https = ParseProxyState(_runner.Run(NetworkSetupCommand, $"-getsecurewebproxy \"{Escape(service)}\""));
+            var bypassResult = _runner.Run(NetworkSetupCommand, $"-getproxybypassdomains \"{Escape(service)}\"");
             var bypass = bypassResult?.StandardOutput ?? string.Empty;
             if (bypass.Contains("There aren't any", StringComparison.OrdinalIgnoreCase))
-                bypass = "Empty";
+                bypass = EmptyBypass;
 
             _original.Add(new ServiceSnapshot(
                 service,
@@ -174,20 +177,20 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
 
     private List<string> ListNetworkServices()
     {
-        var result = _runner.Run("networksetup", "-listallnetworkservices");
+        var result = _runner.Run(NetworkSetupCommand, "-listallnetworkservices");
         if (result is null || !result.Succeeded) return new List<string>();
 
         return result.StandardOutput
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
             .Select(l => l.Trim())
             .Where(l => l.Length > 0 && !l.StartsWith("An asterisk", StringComparison.OrdinalIgnoreCase))
-            .Where(l => !l.StartsWith("*", StringComparison.Ordinal))
+            .Where(l => !l.StartsWith('*'))
             .ToList();
     }
 
     private void RunNetworkSetup(string arguments, bool elevateOnAuthFailure)
     {
-        var result = _runner.Run("networksetup", arguments);
+        var result = _runner.Run(NetworkSetupCommand, arguments);
         if (result is { Succeeded: true }) return;
         if (!elevateOnAuthFailure) return;
 
@@ -230,8 +233,8 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
     private static string FormatBypassArgs(string bypassCsv)
     {
         if (string.IsNullOrWhiteSpace(bypassCsv) ||
-            bypassCsv.Equals("Empty", StringComparison.OrdinalIgnoreCase))
-            return "Empty";
+            bypassCsv.Equals(EmptyBypass, StringComparison.OrdinalIgnoreCase))
+            return EmptyBypass;
 
         var sb = new StringBuilder();
         foreach (var part in bypassCsv.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries))
@@ -240,7 +243,7 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
             sb.Append('"').Append(Escape(part.Trim())).Append('"');
         }
 
-        return sb.Length == 0 ? "Empty" : sb.ToString();
+        return sb.Length == 0 ? EmptyBypass : sb.ToString();
     }
 
     private static string Escape(string value) => value.Replace("\"", "\\\"");

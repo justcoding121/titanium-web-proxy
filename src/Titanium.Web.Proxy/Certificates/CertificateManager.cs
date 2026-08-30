@@ -1256,9 +1256,8 @@ public sealed class CertificateManager : IDisposable
         if (!RunTime.IsWindows)
         {
             Helpers.UnixCertificateTrust.TrustUserSsl(certificate, RootCertificateName);
-            return machineTrusted
-                ? Helpers.UnixCertificateTrust.TrustMachineSsl(certificate, RootCertificateName)
-                : true;
+            return !machineTrusted ||
+                   Helpers.UnixCertificateTrust.TrustMachineSsl(certificate, RootCertificateName);
         }
 
         // certutil.exe only accepts the PFX password via a plain "-p password" command-line argument -
@@ -1408,9 +1407,8 @@ public sealed class CertificateManager : IDisposable
         {
             if (RootCertificate == null) return false;
             Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
-            return machineTrusted
-                ? Helpers.UnixCertificateTrust.UntrustMachineSsl(RootCertificate, RootCertificateName)
-                : true;
+            return !machineTrusted ||
+                   Helpers.UnixCertificateTrust.UntrustMachineSsl(RootCertificate, RootCertificateName);
         }
 
         var infos = new List<ProcessStartInfo>();
