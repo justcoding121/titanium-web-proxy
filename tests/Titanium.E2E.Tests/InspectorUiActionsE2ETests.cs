@@ -237,6 +237,8 @@ public class InspectorUiActionsE2ETests
 
         _vm.ClearSessionsCommand.Execute(null);
         Assert.AreEqual(0, _vm.Sessions.Count);
+        _vm.ClearFiltersCommand.Execute(null);
+        Assert.AreEqual("", _vm.SearchQuery);
         Assert.AreEqual("Sessions: 0", _vm.SessionCountText);
     }
 
