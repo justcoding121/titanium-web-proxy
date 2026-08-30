@@ -1915,12 +1915,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            await SessionArchive.ExportNativeArchiveAsync(_all, path).ConfigureAwait(false);
-            await MarshalToUiAsync(() => StatusText = $"Exported {_all.Count} sessions to {path}");
+            // SessionArchive runs zip IO on the thread pool; resume here on the UI sync context.
+            await SessionArchive.ExportNativeArchiveAsync(_all, path);
+            StatusText = $"Exported {_all.Count} sessions to {path}";
         }
         catch (Exception ex)
         {
-            await MarshalToUiAsync(() => StatusText = "Export archive failed: " + Truncate(ex.Message, 160));
+            StatusText = "Export archive failed: " + Truncate(ex.Message, 160);
         }
     }
 
@@ -1942,12 +1943,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            await SessionArchive.ExportNativeArchiveAsync(sessions, path).ConfigureAwait(false);
-            await MarshalToUiAsync(() => StatusText = $"Exported {sessions.Count} sessions to {path}");
+            await SessionArchive.ExportNativeArchiveAsync(sessions, path);
+            StatusText = $"Exported {sessions.Count} sessions to {path}";
         }
         catch (Exception ex)
         {
-            await MarshalToUiAsync(() => StatusText = "Export archive failed: " + Truncate(ex.Message, 160));
+            StatusText = "Export archive failed: " + Truncate(ex.Message, 160);
         }
     }
 
@@ -1960,8 +1961,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
+        StatusText = "Importing archive…";
         try
         {
+            // Off the UI sync context for zip IO so headless WaitUntil pumps cannot deadlock the import.
             var imported = await SessionArchive.ImportNativeArchiveAsync(path).ConfigureAwait(false);
             await MarshalToUiAsync(() =>
             {
