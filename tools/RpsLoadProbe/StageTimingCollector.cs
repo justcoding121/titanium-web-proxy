@@ -68,18 +68,21 @@ internal static class StageTimingCollector
 
         if (OutputFile != null)
         {
-            try
+            _ = Task.Run(async () =>
             {
-                File.AppendAllText(OutputFile, line + Environment.NewLine);
-            }
-            catch (IOException)
-            {
-                // Diagnostic best-effort; never disturb the run.
-            }
+                try
+                {
+                    await File.AppendAllTextAsync(OutputFile, line + Environment.NewLine).ConfigureAwait(false);
+                }
+                catch (IOException)
+                {
+                    // Diagnostic best-effort; never disturb the run.
+                }
+            });
         }
         else
         {
-            Console.Error.WriteLine(line);
+            ProbeLog.Error(line);
         }
     }
 

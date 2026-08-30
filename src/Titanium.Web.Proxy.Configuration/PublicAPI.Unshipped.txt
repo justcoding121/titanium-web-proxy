@@ -10,12 +10,6 @@ static Titanium.Web.Proxy.Configuration.TwpConfigLoader.LoadJson(string! json) -
 static Titanium.Web.Proxy.Configuration.TwpConfigLoader.LoadYaml(string! yaml) -> Titanium.Web.Proxy.Configuration.Models.TwpConfig!
 static Titanium.Web.Proxy.Configuration.TwpConfigLoader.ToJson(Titanium.Web.Proxy.Configuration.Models.TwpConfig! config) -> string!
 static Titanium.Web.Proxy.Configuration.TwpConfigValidator.Validate(Titanium.Web.Proxy.Configuration.Models.TwpConfig! config) -> System.Collections.Generic.IReadOnlyList<string!>!
-Titanium.Web.Proxy.Configuration.Models.AuthConfig
-Titanium.Web.Proxy.Configuration.Models.AuthConfig.AuthConfig() -> void
-Titanium.Web.Proxy.Configuration.Models.AuthConfig.ProxyAuthenticationRealm.get -> string?
-Titanium.Web.Proxy.Configuration.Models.AuthConfig.ProxyAuthenticationRealm.set -> void
-Titanium.Web.Proxy.Configuration.Models.AuthConfig.ProxyAuthenticationSchemes.get -> System.Collections.Generic.IList<string!>?
-Titanium.Web.Proxy.Configuration.Models.AuthConfig.ProxyAuthenticationSchemes.set -> void
 Titanium.Web.Proxy.Configuration.Models.CertificateManagerConfig
 Titanium.Web.Proxy.Configuration.Models.CertificateManagerConfig.CertificateCacheTimeOutMinutes.get -> int?
 Titanium.Web.Proxy.Configuration.Models.CertificateManagerConfig.CertificateCacheTimeOutMinutes.set -> void
@@ -134,8 +128,6 @@ Titanium.Web.Proxy.Configuration.Models.ListenerConfig.EnableHttp2.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.EnableHttp2.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.EnableHttp3.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.EnableHttp3.set -> void
-Titanium.Web.Proxy.Configuration.Models.ListenerConfig.EnableHttpInterception.get -> bool?
-Titanium.Web.Proxy.Configuration.Models.ListenerConfig.EnableHttpInterception.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ForwardHost.get -> string
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ForwardHost.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ForwardHost.set -> void
@@ -234,8 +226,6 @@ Titanium.Web.Proxy.Configuration.Models.PoolingConfig.TcpTimeWaitSeconds.set -> 
 Titanium.Web.Proxy.Configuration.Models.PoolingConfig.ThreadPoolWorkerThread.get -> int?
 Titanium.Web.Proxy.Configuration.Models.PoolingConfig.ThreadPoolWorkerThread.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig
-Titanium.Web.Proxy.Configuration.Models.ServerConfig.Auth.get -> Titanium.Web.Proxy.Configuration.Models.AuthConfig?
-Titanium.Web.Proxy.Configuration.Models.ServerConfig.Auth.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.BlockPrivateNetworkDestinations.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.BlockPrivateNetworkDestinations.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.CertificateManager.get -> Titanium.Web.Proxy.Configuration.Models.CertificateManagerConfig?
@@ -252,14 +242,10 @@ Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttp2.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttp2.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttp3.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttp3.set -> void
-Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttpInterception.get -> bool?
-Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttpInterception.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttpsSvcbDnsDiscovery.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttpsSvcbDnsDiscovery.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableQpackDynamicTable.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableQpackDynamicTable.set -> void
-Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableRequestTimingCapture.get -> bool?
-Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableRequestTimingCapture.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableRfc8441.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableRfc8441.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableWinAuth.get -> bool?

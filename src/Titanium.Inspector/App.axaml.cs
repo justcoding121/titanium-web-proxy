@@ -21,6 +21,16 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // Headless / E2E fixtures build MainWindow via InspectorAppFactory.
+            if (string.Equals(
+                    Environment.GetEnvironmentVariable("TITANIUM_INSPECTOR_SKIP_AUTO_MAINWINDOW"),
+                    "1",
+                    StringComparison.Ordinal))
+            {
+                base.OnFrameworkInitializationCompleted();
+                return;
+            }
+
             var vm = new MainWindowViewModel(buffer, sessions, updates, settings);
             desktop.MainWindow = new MainWindow
             {

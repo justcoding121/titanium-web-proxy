@@ -22,8 +22,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly SettingsService _settings;
     private readonly InterceptionService _interception;
     private readonly IInspectorDialogs _dialogs;
+    private readonly IInspectorPathPicker _pathPicker;
     private readonly ObservableCollection<SessionSnapshot> _all = new();
+    private readonly List<SessionSnapshot> _selectedSessions = new();
     private string _statusText = "Ready";
+    private string _sessionCountText = "Sessions: 0 / 0";
     private string _searchQuery = "";
     private SessionSnapshot? _selected;
     private string _selectedHeaders = "";
@@ -34,6 +37,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private bool _systemProxy;
     private bool _autoStartCapture = true;
     private bool _autoSystemProxyOnStart = true;
+    private bool _debugFileLogging;
+    /// <summary>Prefs as loaded from disk — used for auto-start so MenuItem binding cannot clobber before Opened.</summary>
+    private bool _launchAutoStartCapture = true;
+    private bool _launchAutoSystemProxyOnStart = true;
     private bool _decryptHttps;
     private bool _decryptHttpsBusy;
     private string _autoResponderMatch = "*";
@@ -43,6 +50,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _plusPanelsSummary = "";
     private string _bindAddress = "127.0.0.1";
     private int _bindPort = 8866;
+    private string _endpointStatusText = "Not listening";
+    private string _interceptToggleText = "Start interception";
+    /// <summary>Sticky intent: re-enable system proxy on the next Start after a Stop that had it on.</summary>
+    private bool _reenableSystemProxyOnStart;
+    private bool _stopBusy;
     private bool _breakpointOnResponse;
     private string _breakpointEditBody = "";
     private string? _scriptOnRequest;
@@ -63,7 +75,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         UpdateService updates,
         SettingsService settings,
         InterceptionService? interception = null,
-        IInspectorDialogs? dialogs = null)
+        IInspectorDialogs? dialogs = null,
+        IInspectorPathPicker? pathPicker = null)
     {
         _buffer = buffer;
         _registry = registry;
@@ -71,6 +84,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _settings = settings;
         _interception = interception ?? new InterceptionService();
         _dialogs = dialogs ?? new AvaloniaInspectorDialogs();
+        _pathPicker = pathPicker ?? new AvaloniaInspectorPathPicker();
         Sessions = new ObservableCollection<SessionSnapshot>();
         Breakpoints = new BreakpointViewModel();
         AutoResponder = new AutoResponderViewModel();
@@ -81,12 +95,30 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         CheckForUpdatesCommand = new RelayCommand(async () => await CheckUpdatesAsync());
         ExportHarCommand = new RelayCommand(async () => await ExportHarAsync());
+        ExportSelectedHarCommand = new RelayCommand(async () => await ExportSelectedHarAsync());
         ImportHarCommand = new RelayCommand(async () => await ImportHarAsync());
         ExportArchiveCommand = new RelayCommand(async () => await ExportArchiveAsync());
+        ExportSelectedArchiveCommand = new RelayCommand(async () => await ExportSelectedArchiveAsync());
         ImportArchiveCommand = new RelayCommand(async () => await ImportArchiveAsync());
         StartCaptureCommand = new RelayCommand(async () => await StartCaptureAsync());
         StopCaptureCommand = new RelayCommand(StopCaptureAsync);
+        ToggleInterceptCommand = new RelayCommand(ToggleInterceptAsync);
         ToggleCapturingCommand = new RelayCommand(ToggleCapturingAsync);
+        ToggleAutoStartCaptureCommand = new RelayCommand(() =>
+        {
+            AutoStartCapture = !AutoStartCapture;
+            return Task.CompletedTask;
+        });
+        ToggleAutoSystemProxyOnStartCommand = new RelayCommand(() =>
+        {
+            AutoSystemProxyOnStart = !AutoSystemProxyOnStart;
+            return Task.CompletedTask;
+        });
+        ToggleDecryptHttpsCommand = new RelayCommand(() =>
+        {
+            DecryptHttps = !DecryptHttps;
+            return Task.CompletedTask;
+        });
         ClearSessionsCommand = new RelayCommand(ClearSessionsAsync);
         ToggleSystemProxyCommand = new RelayCommand(ToggleSystemProxyAsync);
         InstallCaCommand = new RelayCommand(InstallCaAsync);
@@ -96,6 +128,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OpenLoopbackExemptCommand = new RelayCommand(OpenLoopbackExemptAsync);
         ReplayCommand = new RelayCommand(async () => await ReplaySelectedAsync());
         LoadFromSelectedCommand = new RelayCommand(LoadFromSelectedAsync);
+        LoadIntoComposerCommand = new RelayCommand(LoadIntoComposerAsync);
+        CopyUrlCommand = new RelayCommand(CopyUrlAsync);
         SendComposerCommand = new RelayCommand(async () => await SendComposerAsync());
         AddAutoResponderRuleCommand = new RelayCommand(AddAutoResponderRuleAsync);
         DeleteAutoResponderRuleCommand = new RelayCommand(DeleteAutoResponderRuleAsync);
@@ -117,6 +151,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OpenToolsBreakpointsCommand = new RelayCommand(() => OpenToolsTabAsync(1));
         OpenToolsAutoResponderCommand = new RelayCommand(() => OpenToolsTabAsync(2));
         OpenToolsScriptsCommand = new RelayCommand(() => OpenToolsTabAsync(3));
+        ClearFiltersCommand = new RelayCommand(() =>
+        {
+            SearchQuery = SessionSearch.ClearFilters(SearchQuery);
+            return Task.CompletedTask;
+        });
 
         WireEventHandlers();
         LoadPlusPanels();
@@ -132,13 +171,34 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>Exposed for E2E / headless tests.</summary>
     public IInspectorDialogs Dialogs => _dialogs;
 
+    /// <summary>Exposed for E2E / headless tests.</summary>
+    public IInspectorPathPicker PathPicker => _pathPicker;
+
+    /// <summary>Exposed for E2E / headless tests — seeds the in-memory capture list.</summary>
+    public void SeedSession(SessionSnapshot snapshot)
+    {
+        _registry.Add(snapshot);
+        OnSessionAdded(snapshot);
+    }
+
+    /// <summary>Called from the session grid when Extended multi-select changes.</summary>
+    public void SetSelectedSessions(IReadOnlyList<SessionSnapshot> selected)
+    {
+        _selectedSessions.Clear();
+        _selectedSessions.AddRange(selected);
+    }
+
     /// <summary>
     /// After the main window is shown: optionally start capture and system proxy.
     /// Idempotent if already running.
     /// </summary>
     public async Task TryAutoStartAsync()
     {
-        if (!AutoStartCapture)
+        // MenuItem CheckBox TwoWay bindings can write false during init and PersistSettings.
+        // Prefer the disk snapshot from LoadFromSettings for this first-start decision.
+        RestoreLaunchPreferencesIfClobbered();
+
+        if (!_launchAutoStartCapture)
         {
             return;
         }
@@ -148,14 +208,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             await StartCaptureAsync();
         }
 
-        if (!AutoSystemProxyOnStart || !_interception.IsRunning || SystemProxy)
+        if (!_launchAutoSystemProxyOnStart || !_interception.IsRunning || SystemProxy)
         {
             return;
         }
 
-        if (_interception.SetSystemProxy(true))
+        SystemProxy = true;
+        if (SystemProxy)
         {
-            SystemProxy = true;
             StatusText =
                 $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shows as CONNECT until Decrypt HTTPS is enabled." +
                 " Chrome/Edge: --disable-quic or HTTP/3 may bypass the proxy.";
@@ -163,7 +223,34 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         else
         {
             StatusText =
-                $"Listening on {FormatBindDisplay()}:{BindPort}, but system proxy failed to enable — use Capture → Toggle system proxy.";
+                $"Listening on {FormatBindDisplay()}:{BindPort}, but system proxy failed to enable — use the System proxy checkbox.";
+        }
+    }
+
+    /// <summary>
+    /// If Avalonia menu bindings flipped prefs before Opened, put launch-time values back
+    /// (and rewrite settings) so auto-start and the menu checkboxes stay honest.
+    /// </summary>
+    private void RestoreLaunchPreferencesIfClobbered()
+    {
+        var changed = false;
+        if (_autoStartCapture != _launchAutoStartCapture)
+        {
+            _autoStartCapture = _launchAutoStartCapture;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoStartCapture)));
+            changed = true;
+        }
+
+        if (_autoSystemProxyOnStart != _launchAutoSystemProxyOnStart)
+        {
+            _autoSystemProxyOnStart = _launchAutoSystemProxyOnStart;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoSystemProxyOnStart)));
+            changed = true;
+        }
+
+        if (changed)
+        {
+            PersistSettings();
         }
     }
 
@@ -180,7 +267,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         _interception.EnsureShutdown();
-        SystemProxy = false;
+        SetSystemProxyCore(false);
+        RefreshEndpointAndBindUi();
     }
 
     /// <summary>
@@ -198,7 +286,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             // ignore
         }
 
-        SystemProxy = false;
+        // UI flag only — do not call SetSystemProxy on the UI thread (WinINET deadlock risk).
+        SetSystemProxyCore(false);
         _interception.BeginBackgroundShutdown();
     }
 
@@ -272,6 +361,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
+    private static Task MarshalToUiAsync(Action action)
+    {
+        if (Application.Current is null || Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return Task.CompletedTask;
+        }
+
+        return Dispatcher.UIThread.InvokeAsync(action).GetTask();
+    }
+
     private void LoadPlusPanels()
     {
         var panels = PlusInspectorLoader.TryLoadPanels(out var plusWarning);
@@ -286,13 +386,52 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private Task StopCaptureAsync()
+    private async Task ToggleInterceptAsync()
     {
-        _interception.Stop();
-        SystemProxy = false;
-        PersistSettings();
-        StatusText = "Stopped (system proxy restored if it was on)";
-        return Task.CompletedTask;
+        if (_interception.IsRunning)
+        {
+            await StopCaptureAsync();
+        }
+        else
+        {
+            await StartCaptureAsync();
+        }
+    }
+
+    private async Task StopCaptureAsync() =>
+        await StopCaptureCoreAsync("Stopped (system proxy restored if it was on)");
+
+    /// <summary>
+    /// Tear down the proxy off the UI thread — WinINET restore + listener stop can hang Avalonia
+    /// for several seconds if run on the dispatcher (same rationale as <see cref="BeginBackgroundShutdown"/>).
+    /// </summary>
+    private async Task StopCaptureCoreAsync(string statusAfterStop)
+    {
+        if (_stopBusy || !_interception.IsRunning)
+        {
+            return;
+        }
+
+        _stopBusy = true;
+        _reenableSystemProxyOnStart = SystemProxy;
+        StatusText = "Stopping…";
+
+        try
+        {
+            await Task.Run(() => _interception.Stop()).ConfigureAwait(false);
+
+            await MarshalToUiAsync(() =>
+            {
+                SetSystemProxyCore(false);
+                PersistSettings();
+                RefreshEndpointAndBindUi();
+                StatusText = statusAfterStop;
+            }).ConfigureAwait(false);
+        }
+        finally
+        {
+            _stopBusy = false;
+        }
     }
 
     private Task ToggleCapturingAsync()
@@ -305,32 +444,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         _all.Clear();
         Sessions.Clear();
+        _selectedSessions.Clear();
         SelectedSession = null;
+        RefreshSessionCountText();
         StatusText = "Sessions cleared";
         return Task.CompletedTask;
     }
 
     private Task ToggleSystemProxyAsync()
     {
-        if (!_interception.IsRunning)
-        {
-            StatusText = "Start interception before toggling system proxy";
-            return Task.CompletedTask;
-        }
-
-        var enable = !SystemProxy;
-        if (!_interception.SetSystemProxy(enable))
-        {
-            StatusText = enable
-                ? "Failed to enable system proxy (permissions, cancelled admin prompt, or unsupported desktop environment)"
-                : "Failed to restore system proxy settings";
-            return Task.CompletedTask;
-        }
-
-        SystemProxy = enable;
-        StatusText = enable
-            ? "System proxy enabled (identity bypass). For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy."
-            : "System proxy restored";
+        SystemProxy = !SystemProxy;
         return Task.CompletedTask;
     }
 
@@ -421,13 +544,21 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         StatusText = "Loopback exemption dialog closed";
     }
 
-    private Task DeviceCaSetupAsync()
+    private async Task DeviceCaSetupAsync()
     {
-        StatusText =
-            $"Device CA setup: 1) Export root CA from Capture menu. 2) Install the .cer on the device as a trusted CA. " +
-            $"3) Set the device HTTP proxy to this PC's LAN IP on port {BindPort} (bind is {BindAddress}:{BindPort}). " +
-            "Use BindAddress 0.0.0.0 so other devices can reach the proxy.";
-        return Task.CompletedTask;
+        var message =
+            "To decrypt HTTPS from a phone or other device:\n\n" +
+            "1. Export the root CA (use Export CA below, or Capture → Export root CA…).\n" +
+            "2. Install the .cer on the device as a trusted CA.\n" +
+            $"3. Set the device HTTP proxy to this PC's LAN IP on port {BindPort} " +
+            $"(current bind is {BindAddress}:{BindPort}).\n\n" +
+            "Use Bind address 0.0.0.0 so other devices can reach the proxy.";
+
+        var owner = TryGetMainWindow();
+        if (await _dialogs.ShowDeviceCaSetupAsync(owner, message))
+        {
+            await ExportCaAsync();
+        }
     }
 
     private Task LoadFromSelectedAsync()
@@ -444,6 +575,58 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ComposerBody = SelectedSession.RequestBodyText ?? "";
         StatusText = "Composer loaded from selected session";
         return Task.CompletedTask;
+    }
+
+    private Task LoadIntoComposerAsync()
+    {
+        if (SelectedSession is null)
+        {
+            StatusText = "Select a session to load into Composer";
+            return Task.CompletedTask;
+        }
+
+        ComposerMethod = SelectedSession.Method;
+        ComposerUrl = SelectedSession.Url;
+        ComposerHeaders = SelectedSession.RequestHeadersText ?? "";
+        ComposerBody = SelectedSession.RequestBodyText ?? "";
+        StatusText = "Composer loaded from selected session";
+        return OpenToolsTabAsync(0);
+    }
+
+    private async Task CopyUrlAsync()
+    {
+        var url = ResolveCopyUrl();
+        if (string.IsNullOrEmpty(url))
+        {
+            StatusText = "Select a session to copy URL";
+            return;
+        }
+
+        var window = TryGetMainWindow();
+        if (window?.Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(url);
+        }
+
+        StatusText = "Copied URL";
+    }
+
+    private string? ResolveCopyUrl()
+    {
+        if (!string.IsNullOrEmpty(SelectedSession?.Url))
+        {
+            return SelectedSession!.Url;
+        }
+
+        foreach (var snap in _selectedSessions)
+        {
+            if (!string.IsNullOrEmpty(snap.Url))
+            {
+                return snap.Url;
+            }
+        }
+
+        return null;
     }
 
     private Task AddAutoResponderRuleAsync()
@@ -506,12 +689,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public AutoResponderViewModel AutoResponder { get; }
     public ICommand CheckForUpdatesCommand { get; }
     public ICommand ExportHarCommand { get; }
+    public ICommand ExportSelectedHarCommand { get; }
     public ICommand ImportHarCommand { get; }
     public ICommand ExportArchiveCommand { get; }
+    public ICommand ExportSelectedArchiveCommand { get; }
     public ICommand ImportArchiveCommand { get; }
     public ICommand StartCaptureCommand { get; }
     public ICommand StopCaptureCommand { get; }
+    public ICommand ToggleInterceptCommand { get; }
     public ICommand ToggleCapturingCommand { get; }
+    public ICommand ToggleAutoStartCaptureCommand { get; }
+    public ICommand ToggleAutoSystemProxyOnStartCommand { get; }
+    public ICommand ToggleDecryptHttpsCommand { get; }
     public ICommand ClearSessionsCommand { get; }
     public ICommand ToggleSystemProxyCommand { get; }
     public ICommand InstallCaCommand { get; }
@@ -521,6 +710,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand OpenLoopbackExemptCommand { get; }
     public ICommand ReplayCommand { get; }
     public ICommand LoadFromSelectedCommand { get; }
+    public ICommand LoadIntoComposerCommand { get; }
+    public ICommand CopyUrlCommand { get; }
     public ICommand SendComposerCommand { get; }
     public ICommand AddAutoResponderRuleCommand { get; }
     public ICommand DeleteAutoResponderRuleCommand { get; }
@@ -534,6 +725,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand OpenToolsBreakpointsCommand { get; }
     public ICommand OpenToolsAutoResponderCommand { get; }
     public ICommand OpenToolsScriptsCommand { get; }
+    public ICommand ClearFiltersCommand { get; }
 
     public string BindAddress
     {
@@ -545,6 +737,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         get => _bindPort;
         set => SetField(ref _bindPort, value);
+    }
+
+    /// <summary>Bind address/port are start-time config; editable only while the proxy is stopped.</summary>
+    public bool BindFieldsEnabled => !_interception.IsRunning;
+
+    /// <summary>Toolbar button label: Start or Stop interception.</summary>
+    public string InterceptToggleText
+    {
+        get => _interceptToggleText;
+        private set => SetField(ref _interceptToggleText, value);
+    }
+
+    /// <summary>Compact live endpoint label (toolbar / status); distinct from transient <see cref="StatusText"/>.</summary>
+    public string EndpointStatusText
+    {
+        get => _endpointStatusText;
+        private set => SetField(ref _endpointStatusText, value);
     }
 
     public bool BreakpointOnResponse
@@ -662,7 +871,58 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public bool SystemProxy
     {
         get => _systemProxy;
-        set => SetField(ref _systemProxy, value);
+        set // NOSONAR S4275 -- fail paths leave _systemProxy unchanged and re-raise PropertyChanged to snap the checkbox back
+        {
+            if (_systemProxy == value)
+            {
+                return;
+            }
+
+            if (value)
+            {
+                if (!_interception.IsRunning)
+                {
+                    StatusText = "Start interception before enabling system proxy";
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
+                    return;
+                }
+
+                if (!_interception.SetSystemProxy(true))
+                {
+                    StatusText =
+                        "Failed to enable system proxy (permissions, cancelled admin prompt, or unsupported desktop environment)";
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
+                    return;
+                }
+
+                SetSystemProxyCore(true);
+                StatusText =
+                    "System proxy enabled (identity bypass). For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy.";
+                return;
+            }
+
+            if (_interception.IsRunning && _interception.SystemProxyEnabled &&
+                !_interception.SetSystemProxy(false))
+            {
+                StatusText = "Failed to restore system proxy settings";
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
+                return;
+            }
+
+            SetSystemProxyCore(false);
+            StatusText = "System proxy restored";
+        }
+    }
+
+    private void SetSystemProxyCore(bool enabled)
+    {
+        if (_systemProxy == enabled)
+        {
+            return;
+        }
+
+        _systemProxy = enabled;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
     }
 
     public bool AutoStartCapture
@@ -687,6 +947,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 PersistSettings();
             }
         }
+    }
+
+    /// <summary>When true, file logging is on at Debug level.</summary>
+    public bool DebugFileLogging
+    {
+        get => _debugFileLogging;
+        private set => SetField(ref _debugFileLogging, value);
     }
 
     /// <summary>When true, MITM decrypts HTTPS; when false, tunnels stay CONNECT.</summary>
@@ -748,7 +1015,54 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             if (SetField(ref _searchQuery, value))
             {
                 ApplyFilter();
+                RefreshSessionCountText();
+                NotifyQuickFilterProperties();
             }
+        }
+    }
+
+    /// <summary>Quick filter: exclude CONNECT/tunnel rows (<c>hide:tunnel</c>).</summary>
+    public bool HideTunnelsFilter
+    {
+        get => SessionSearch.ContainsToken(_searchQuery, "hide", "tunnel");
+        set
+        {
+            if (value == HideTunnelsFilter)
+            {
+                return;
+            }
+
+            SearchQuery = SessionSearch.ToggleToken(_searchQuery, "hide", "tunnel");
+        }
+    }
+
+    /// <summary>Quick filter: exclude image/static rows (<c>hide:image</c>).</summary>
+    public bool HideImagesFilter
+    {
+        get => SessionSearch.ContainsToken(_searchQuery, "hide", "image");
+        set
+        {
+            if (value == HideImagesFilter)
+            {
+                return;
+            }
+
+            SearchQuery = SessionSearch.ToggleToken(_searchQuery, "hide", "image");
+        }
+    }
+
+    /// <summary>Quick filter: only 4xx/5xx responses (<c>is:error</c>).</summary>
+    public bool ErrorsOnlyFilter
+    {
+        get => SessionSearch.ContainsToken(_searchQuery, "is", "error");
+        set
+        {
+            if (value == ErrorsOnlyFilter)
+            {
+                return;
+            }
+
+            SearchQuery = SessionSearch.ToggleToken(_searchQuery, "is", "error");
         }
     }
 
@@ -851,15 +1165,30 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         set => SetField(ref _statusText, value);
     }
 
+    /// <summary>Live session total; kept separate so capture traffic does not wipe command feedback.</summary>
+    public string SessionCountText
+    {
+        get => _sessionCountText;
+        private set => SetField(ref _sessionCountText, value);
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public SessionGridLayoutDto? GetSessionGridLayout() => _settings.Current.SessionGridLayout;
+
+    public void PersistSessionGridLayout(SessionGridLayoutDto layout)
+    {
+        _settings.Current.SessionGridLayout = layout;
+        _settings.Save();
+    }
 
     private void LoadFromSettings()
     {
         var s = _settings.Current;
         BindAddress = s.BindAddress;
         BindPort = s.BindPort is > 0 and < 65536 ? s.BindPort : 8866;
-        _autoStartCapture = s.AutoStartCapture;
-        _autoSystemProxyOnStart = s.AutoSystemProxyOnStart;
+        _launchAutoStartCapture = _autoStartCapture = s.AutoStartCapture;
+        _launchAutoSystemProxyOnStart = _autoSystemProxyOnStart = s.AutoSystemProxyOnStart;
         _decryptHttps = s.DecryptHttps;
         AutoResponder.Enabled = s.AutoResponderEnabled;
         AutoResponder.LoadFromDtos(s.AutoResponderRules);
@@ -873,8 +1202,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.ScriptOnResponse = _scriptOnResponse;
         _interception.IgnoreServerCertificateErrors = s.IgnoreServerCertificateErrors;
         _interception.DecryptHttps = _decryptHttps;
+        _debugFileLogging = IsDebugFileLoggingEnabled(s);
         _interception.ConfigureLogging(s);
     }
+
+    private static bool IsDebugFileLoggingEnabled(InspectorSettings s) =>
+        s.LoggingEnableFile &&
+        string.Equals(s.LoggingMinimumLevel, "Debug", StringComparison.OrdinalIgnoreCase);
 
     private void PersistAutoResponder()
     {
@@ -956,15 +1290,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                     return;
                 }
 
-                if (!_interception.InstallRootCertificate(machineStore: false))
+                if (!_interception.InstallRootCertificate(machineStore: false) &&
+                    !await TryElevateRootCaInstallAsync(owner))
                 {
-                    if (!await _dialogs.ConfirmElevateRootCaAsync(owner) ||
-                        !_interception.InstallRootCertificateAsAdmin(machineStore: false))
-                    {
-                        StatusText = "Root CA install failed - Decrypt HTTPS stays off (try Export CA or allow admin prompt)";
-                        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
-                        return;
-                    }
+                    StatusText = "Root CA install failed - Decrypt HTTPS stays off (try Export CA or allow admin prompt)";
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+                    return;
                 }
             }
 
@@ -976,6 +1307,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _decryptHttpsBusy = false;
         }
     }
+
+    private async Task<bool> TryElevateRootCaInstallAsync(Window? owner) =>
+        await _dialogs.ConfirmElevateRootCaAsync(owner) &&
+        _interception.InstallRootCertificateAsAdmin(machineStore: false);
 
     private void SetDecryptHttpsCore(bool enabled)
     {
@@ -994,8 +1329,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private Task ToggleDebugLoggingAsync()
     {
         var s = _settings.Current;
-        var enable = !s.LoggingEnableFile ||
-                     !string.Equals(s.LoggingMinimumLevel, "Debug", StringComparison.OrdinalIgnoreCase);
+        var enable = !IsDebugFileLoggingEnabled(s);
         s.LoggingEnabled = true;
         s.LoggingEnableFile = enable;
         s.LoggingMinimumLevel = enable ? "Debug" : "Error";
@@ -1008,6 +1342,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         _interception.ConfigureLogging(s);
         _settings.Save();
+        DebugFileLogging = enable;
         StatusText = enable
             ? $"Debug file logging on: {s.LoggingFilePath}"
             : "Debug file logging off (Error level, file sink disabled)";
@@ -1093,7 +1428,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             Sessions.Add(snapshot);
         }
 
-        StatusText = $"Sessions: {_all.Count}";
+        RefreshSessionCountText();
+    }
+
+    private void RefreshSessionCountText() =>
+        SessionCountText = $"Sessions: {Sessions.Count} / {_all.Count}";
+
+    private void NotifyQuickFilterProperties()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HideTunnelsFilter)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HideImagesFilter)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ErrorsOnlyFilter)));
     }
 
     private void ApplyFilter()
@@ -1135,19 +1480,46 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.ConfigureLogging(_settings.Current);
         await _interception.StartAsync(address, BindPort);
         Capturing = true;
+        RefreshEndpointAndBindUi();
+
+        var wantSystemProxy = _reenableSystemProxyOnStart || AutoSystemProxyOnStart;
+        _reenableSystemProxyOnStart = false;
+        if (wantSystemProxy && !SystemProxy)
+        {
+            SystemProxy = true;
+        }
 
         // If settings asked for decrypt but CA is gone, fall back to CONNECT (no silent re-trust).
         if (_decryptHttps && !_interception.RefreshTrustState())
         {
             SetDecryptHttpsCore(false);
-            StatusText =
-                $"Listening on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.";
+            StatusText = SystemProxy
+                ? $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
+                : $"Listening on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.";
+            return;
+        }
+
+        if (SystemProxy)
+        {
+            StatusText = _decryptHttps
+                ? $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on. Decrypt HTTPS on. Chrome: --disable-quic or H3 may bypass."
+                : $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shows as CONNECT until Decrypt HTTPS is enabled." +
+                  " Chrome/Edge: --disable-quic or HTTP/3 may bypass the proxy.";
             return;
         }
 
         StatusText = _decryptHttps
-            ? $"Listening on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS on. Enable system proxy from Capture menu. Chrome: --disable-quic or H3 may bypass."
-            : $"Listening on {FormatBindDisplay()}:{BindPort} — HTTPS as CONNECT until Decrypt HTTPS is enabled. Enable system proxy from Capture menu.";
+            ? $"Listening on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS on. Enable System proxy if needed. Chrome: --disable-quic or H3 may bypass."
+            : $"Listening on {FormatBindDisplay()}:{BindPort} — HTTPS as CONNECT until Decrypt HTTPS is enabled. Enable System proxy if needed.";
+    }
+
+    private void RefreshEndpointAndBindUi()
+    {
+        EndpointStatusText = _interception.IsRunning
+            ? $"Listening {FormatBindDisplay()}:{BindPort}"
+            : "Not listening";
+        InterceptToggleText = _interception.IsRunning ? "Stop interception" : "Start interception";
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindFieldsEnabled)));
     }
 
     private static IPAddress ParseBindAddress(string bindAddress)
@@ -1234,6 +1606,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _registry.Add(snap);
         _all.Add(snap);
         ApplyFilter();
+        RefreshSessionCountText();
         SelectedSession = snap;
         StatusText = $"Composer → HTTP {result.StatusCode} (session #{snap.Id})";
     }
@@ -1258,25 +1631,49 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private async Task ExportHarAsync()
     {
-        var path = await PickSavePathAsync("Export HAR", "titanium-inspector.har", "HAR", "*.har")
-                   ?? Path.Combine(
-                       Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-                       $"titanium-inspector-{DateTime.Now:yyyyMMddHHmmss}.har");
+        if (_all.Count == 0)
+        {
+            StatusText = "No sessions to export";
+            return;
+        }
+
+        var path = await _pathPicker.PickSavePathAsync("Export all HAR", "titanium-inspector.har", "HAR", "*.har");
+        if (path is null)
+        {
+            StatusText = "Export HAR cancelled";
+            return;
+        }
+
         await SessionArchive.ExportHarAsync(_all, path);
-        StatusText = "Exported HAR: " + path;
+        StatusText = $"Exported {_all.Count} sessions to {path}";
+    }
+
+    private async Task ExportSelectedHarAsync()
+    {
+        var sessions = ResolveExportSelection();
+        if (sessions.Count == 0)
+        {
+            StatusText = "Select a session to export";
+            return;
+        }
+
+        var path = await _pathPicker.PickSavePathAsync("Export selected HAR", "titanium-inspector.har", "HAR", "*.har");
+        if (path is null)
+        {
+            StatusText = "Export HAR cancelled";
+            return;
+        }
+
+        await SessionArchive.ExportHarAsync(sessions, path);
+        StatusText = $"Exported {sessions.Count} sessions to {path}";
     }
 
     private async Task ImportHarAsync()
     {
-        var path = await PickOpenPathAsync("Import HAR", "HAR", "*.har", "*.zip");
+        var path = await _pathPicker.PickOpenPathAsync("Import HAR", "HAR", "*.har", "*.zip");
         if (path is null)
         {
-            path = FindLatestDesktop("*.har") ?? FindLatestDesktop("titanium-inspector-*.zip");
-        }
-
-        if (path is null)
-        {
-            StatusText = "No .har or archive on Desktop to import";
+            StatusText = "No .har or archive to import";
             return;
         }
 
@@ -1297,26 +1694,55 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         ApplyFilter();
-        StatusText = $"Imported {imported.Count} sessions from {Path.GetFileName(path)}";
+        RefreshSessionCountText();
+        StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
     }
 
     private async Task ExportArchiveAsync()
     {
-        var path = await PickSavePathAsync("Export archive", "titanium-inspector.zip", "ZIP", "*.zip")
-                   ?? Path.Combine(
-                       Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-                       $"titanium-inspector-{DateTime.Now:yyyyMMddHHmmss}.zip");
+        if (_all.Count == 0)
+        {
+            StatusText = "No sessions to export";
+            return;
+        }
+
+        var path = await _pathPicker.PickSavePathAsync("Export all archive", "titanium-inspector.zip", "ZIP", "*.zip");
+        if (path is null)
+        {
+            StatusText = "Export archive cancelled";
+            return;
+        }
+
         await SessionArchive.ExportNativeArchiveAsync(_all, path);
-        StatusText = "Exported archive: " + path;
+        StatusText = $"Exported {_all.Count} sessions to {path}";
+    }
+
+    private async Task ExportSelectedArchiveAsync()
+    {
+        var sessions = ResolveExportSelection();
+        if (sessions.Count == 0)
+        {
+            StatusText = "Select a session to export";
+            return;
+        }
+
+        var path = await _pathPicker.PickSavePathAsync("Export selected archive", "titanium-inspector.zip", "ZIP", "*.zip");
+        if (path is null)
+        {
+            StatusText = "Export archive cancelled";
+            return;
+        }
+
+        await SessionArchive.ExportNativeArchiveAsync(sessions, path);
+        StatusText = $"Exported {sessions.Count} sessions to {path}";
     }
 
     private async Task ImportArchiveAsync()
     {
-        var path = await PickOpenPathAsync("Import archive", "ZIP", "*.zip")
-                   ?? FindLatestDesktop("titanium-inspector-*.zip");
+        var path = await _pathPicker.PickOpenPathAsync("Import archive", "ZIP", "*.zip");
         if (path is null)
         {
-            StatusText = "No titanium-inspector-*.zip on Desktop to import";
+            StatusText = "No titanium-inspector archive to import";
             return;
         }
 
@@ -1328,65 +1754,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         ApplyFilter();
-        StatusText = $"Imported {imported.Count} sessions from {Path.GetFileName(path)}";
+        RefreshSessionCountText();
+        StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
     }
 
-    private static string? FindLatestDesktop(string pattern)
+    private IReadOnlyList<SessionSnapshot> ResolveExportSelection()
     {
-        var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-        return Directory.EnumerateFiles(desktop, pattern)
-            .OrderByDescending(f => f)
-            .FirstOrDefault();
-    }
-
-    private static Window? TryGetMainWindow()
-    {
-        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        if (_selectedSessions.Count > 0)
         {
-            return desktop.MainWindow;
+            return _selectedSessions.ToList();
         }
 
-        return null;
-    }
-
-    private static async Task<string?> PickSavePathAsync(string title, string suggested, string name, string pattern)
-    {
-        var top = TryGetMainWindow();
-        if (top?.StorageProvider is not { CanSave: true } sp)
-        {
-            return null;
-        }
-
-        var file = await sp.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = title,
-            SuggestedFileName = suggested,
-            FileTypeChoices =
-            [
-                new FilePickerFileType(name) { Patterns = [pattern] },
-            ],
-        });
-        return file?.TryGetLocalPath();
-    }
-
-    private static async Task<string?> PickOpenPathAsync(string title, string name, params string[] patterns)
-    {
-        var top = TryGetMainWindow();
-        if (top?.StorageProvider is not { CanOpen: true } sp)
-        {
-            return null;
-        }
-
-        var files = await sp.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = title,
-            AllowMultiple = false,
-            FileTypeFilter =
-            [
-                new FilePickerFileType(name) { Patterns = patterns.ToList() },
-            ],
-        });
-        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+        return SelectedSession is null ? Array.Empty<SessionSnapshot>() : [SelectedSession];
     }
 
     private static string DescribePanel(object panel)
@@ -1410,6 +1789,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         field = value;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         return true;
+    }
+
+    private static Window? TryGetMainWindow()
+    {
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            return desktop.MainWindow;
+        }
+
+        return null;
     }
 }
 

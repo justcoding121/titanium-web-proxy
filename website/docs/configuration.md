@@ -31,7 +31,6 @@ Engine knobs live under `server:` (this document). Plus feature options stay und
 | `enableHttp3` | bool? | Per-listener; any `false` disables global H3 |
 | `maxCachedConnections` | int? | Per-endpoint pool depth |
 | `maxConcurrentClients` | int? | Per-endpoint admission cap |
-| `enableHttpInterception` | bool? | Override server intercept gate |
 | `genericCertificateName` | string? | Fallback hostname when SNI is absent |
 | `maxInboundBidirectionalStreams` / `maxInboundUnidirectionalStreams` | int? | QUIC stream caps |
 | `handshakeTimeoutSeconds` / `idleTimeoutSeconds` | int? | QUIC timeouts |
@@ -64,7 +63,7 @@ Engine knobs live under `server:` (this document). Plus feature options stay und
 }
 ```
 
-Match fields typically include host, path (`Exact` / `Prefix` / `Template`), method, headers, and query. Cluster algorithms include RoundRobin, Random, LeastRequests, and LeastTime; destinations support weight and sticky cookie/header.
+Match fields typically include host, path (`Exact` / `Prefix` / `Template`), method, headers, and query. Cluster algorithms include RoundRobin, Random, LeastRequests, and LeastTime; destinations support weight and sticky cookie/header. When any cluster uses `LeastTime`, the CLI automatically enables request timing capture so latency EWMA can drive selection.
 
 ## Server (`ProxyServer` knobs)
 
@@ -81,8 +80,6 @@ server:
   enable100ContinueBehaviour: false
   compatibilityMode100Continue: false
   enableWinAuth: false
-  enableRequestTimingCapture: false
-  enableHttpInterception: false
   originHttpVersionPolicy: PreserveClientVersion  # or NormalizeToHttp11
   viaHeaderPseudonym: "titanium-web-proxy"
   blockPrivateNetworkDestinations: false
@@ -151,9 +148,6 @@ server:
     upStreamEndPoint: null
     upStreamEndPointIPv4: null
     upStreamEndPointIPv6: null
-  auth:
-    proxyAuthenticationRealm: TitaniumProxy
-    proxyAuthenticationSchemes: []
   certificateManager:
     certificateEngine: BouncyCastleFast
     leafCertificateKeyAlgorithm: EcdsaP256
@@ -171,11 +165,13 @@ server:
 
 Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3.
 
+HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, or ACME). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime`.
+
 ### Code-only callbacks
 
 These cannot be set from YAML; wire them in library / embedder code:
 
-- `ProxyBasicAuthenticateFunc`, `ProxySchemeAuthenticateFunc`
+- `ProxyBasicAuthenticateFunc`, `ProxySchemeAuthenticateFunc` (and related realm/schemes on `ProxyServer`)
 - `WinAuthCredentialsProvider`
 - `GetCustomUpStreamProxyFunc`, `CustomUpStreamProxyFailureFunc`
 - `ShouldInterceptHttp`

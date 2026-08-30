@@ -75,7 +75,8 @@ public sealed class ServiceDiscovery : IDisposable
 
         var full = Path.GetFullPath(path);
         PlusLog.Info(context, $"Plus Discovery: watching file {full}");
-        _ = Task.Run(() => ApplyFileInitialBestEffortAsync(context, full), _cts.Token);
+        // Apply once synchronously so unit tests / cold start do not race the background task.
+        ApplyFileInitialBestEffortAsync(context, full).GetAwaiter().GetResult();
 
         var dir = Path.GetDirectoryName(full);
         var name = Path.GetFileName(full);

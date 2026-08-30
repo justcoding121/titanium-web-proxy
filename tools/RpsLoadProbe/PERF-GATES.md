@@ -4,11 +4,30 @@ Run on the release SHA via [`.github/workflows/rps-saturation.yml`](../../.githu
 
 Product version stays **`7.0.0.0`** until the first beta cut; gates block beta/stable tags, not feature commits.
 
+## Branch policy + CI gates (beta / stable)
+
+**PR-only merges into `beta` / `stable`** (no direct pushes). Required status checks before merge:
+
+| Check | Role |
+|-------|------|
+| `.NET / build` | Unit + E2E + Windows Headless/Visual/Plus Playwright |
+| `.NET / ui-portable` (Win/Linux/macOS) | Portable E2E-UI + Headless + Visual + Plus Playwright |
+| `RPS saturation / rps` | **`compare-spot`** on PRs into beta/stable |
+
+**Publish / release SHA gates** (after merge):
+
+| Event | RPS mode | Blocks |
+|-------|----------|--------|
+| Push to `beta` / `stable` (NuGet `publish`) | `compare-editions` via `.NET / rps-publish-gate` | NuGet publish |
+| Tag `v*` product release | `compare-product` (manual / release workflow) | GitHub Release product assets |
+
+Do **not** run full `compare-product` on every develop PR. Thresholds change only with written rationale here + commit — never loosen gates silently to go green.
+
 ## Tiered cadence (when to run which mode)
 
 | Tier | When | Mode | Wall-clock |
 |------|------|------|------------|
-| Daily / per-PR | feature commits | `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | minutes |
+| Daily / develop PR | feature commits (advisory) | `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | minutes |
 | Milestone / investigation | before merge to main | `compare-terminate` or `compare-matrix` | ~1–2h |
 | Editions | after CLI/Plus changes | `compare-editions` + [`validate-edition-gates.ps1`](validate-edition-gates.ps1) | ~60 min |
 | Cross-version (Gate 2) | before `v7.0.0` tag | `compare-cross-version` + [`validate-cross-version.ps1`](validate-cross-version.ps1) | ~1–2h |

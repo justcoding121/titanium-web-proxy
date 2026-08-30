@@ -3,6 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 using Certes;
 using Certes.Acme;
 using Certes.Acme.Resource;
+using Titanium.Cli;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Models;
@@ -40,28 +41,28 @@ internal static class CertificateBootstrap
             return;
         }
 
-        Console.WriteLine($"Certificate path configured: {certificates.CertificatePath}");
+        AsyncConsole.WriteLine($"Certificate path configured: {certificates.CertificatePath}");
         if (TryLoadLeaf(certificates.CertificatePath, certificates.PrivateKeyPath, out var leaf) && leaf is not null)
         {
             AssignGenericCertificate(proxy, leaf);
-            Console.WriteLine("Loaded leaf certificate onto DecryptSsl endpoints.");
+            AsyncConsole.WriteLine("Loaded leaf certificate onto DecryptSsl endpoints.");
         }
         else if (File.Exists(certificates.CertificatePath))
         {
-            Console.WriteLine(
+            AsyncConsole.WriteLine(
                 "Certificate file present but could not load (need PEM+PrivateKeyPath or PFX).");
         }
     }
 
     private static void RegisterAcmeChallengeHandling(ProxyServer proxy, CertificatesConfig certificates)
     {
-        Console.WriteLine($"ACME domain configured: {certificates.AcmeDomain} (email={certificates.AcmeEmail ?? "(none)"})");
-        Console.WriteLine("HTTP-01: place challenge tokens via env TITANIUM_ACME_TOKEN=token:keyAuth or file under .well-known.");
+        AsyncConsole.WriteLine($"ACME domain configured: {certificates.AcmeDomain} (email={certificates.AcmeEmail ?? "(none)"})");
+        AsyncConsole.WriteLine("HTTP-01: place challenge tokens via env TITANIUM_ACME_TOKEN=token:keyAuth or file under .well-known.");
 
         if (!string.IsNullOrEmpty(certificates.CertificatePath) &&
             !File.Exists(certificates.CertificatePath))
         {
-            Console.WriteLine(
+            AsyncConsole.WriteLine(
                 "Note: ACME domain set but certificate files are missing. " +
                 "Serve HTTP-01, place PEM/PFX at CertificatePath (+ PrivateKeyPath), then call ReplaceCertificate " +
                 "or IssueOrRenewAsync (also honors TITANIUM_ACME_CERT_PATH).");
@@ -127,7 +128,7 @@ internal static class CertificateBootstrap
         }
 
         AssignGenericCertificate(proxy, leaf);
-        Console.WriteLine($"Replaced GenericCertificate from {certPath}.");
+        AsyncConsole.WriteLine($"Replaced GenericCertificate from {certPath}.");
     }
 
     /// <summary>
@@ -157,14 +158,14 @@ internal static class CertificateBootstrap
                         ?? Environment.GetEnvironmentVariable("TITANIUM_ACME_DIRECTORY");
         if (string.IsNullOrWhiteSpace(directory))
         {
-            Console.WriteLine(
+            AsyncConsole.WriteLine(
                 $"ACME: no AcmeDirectory for {certificates.AcmeDomain} — " +
                 "set certificates.acmeDirectory or TITANIUM_ACME_DIRECTORY for automated issue, " +
                 "or place PEM/PFX and call ReplaceCertificate / IssueOrRenewAsync.");
             return;
         }
 
-        Console.WriteLine($"ACME: issuing for {certificates.AcmeDomain} via {directory}");
+        AsyncConsole.WriteLine($"ACME: issuing for {certificates.AcmeDomain} via {directory}");
         await IssueWithCertesAsync(proxy, certificates, directory, cancellationToken).ConfigureAwait(false);
     }
 
@@ -217,7 +218,7 @@ internal static class CertificateBootstrap
         await File.WriteAllTextAsync(certPath, certPem, cancellationToken).ConfigureAwait(false);
         await File.WriteAllTextAsync(keyPath, keyPem, cancellationToken).ConfigureAwait(false);
         ReplaceCertificate(proxy, certPath, keyPath);
-        Console.WriteLine($"ACME: certificate written to {certPath}");
+        AsyncConsole.WriteLine($"ACME: certificate written to {certPath}");
     }
 
     /// <summary>
@@ -259,7 +260,7 @@ internal static class CertificateBootstrap
             await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
         }
 
-        Console.WriteLine(
+        AsyncConsole.WriteLine(
             "IssueOrRenewAsync timed out waiting for certificate files. " +
             "Place certs and call ReplaceCertificate when ready.");
     }
@@ -310,7 +311,7 @@ internal static class CertificateBootstrap
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Certificate load failed: {ex.Message}");
+            AsyncConsole.WriteError($"Certificate load failed: {ex.Message}");
             return false;
         }
     }

@@ -58,6 +58,63 @@ public class SessionPipelineTests
     }
 
     [TestMethod]
+    public async Task SessionAdded_UpdatesSessionCount_WithoutOverwritingStatusText()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-inspector-status-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var buffer = new SessionStreamBuffer(registry);
+            var dialogs = new ScriptedInspectorDialogs { DeviceCaSetupResult = false };
+            var vm = new MainWindowViewModel(
+                buffer,
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()),
+                dialogs);
+
+            vm.StatusText = "Pinned tip";
+            Assert.AreEqual("Sessions: 0 / 0", vm.SessionCountText);
+
+            var tcs = new TaskCompletionSource();
+            buffer.SessionAdded += _ => tcs.TrySetResult();
+            var snap = buffer.CreatePlaceholder("GET", "https://example.com/");
+            buffer.Publish(snap);
+            await tcs.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+            Assert.AreEqual("Pinned tip", vm.StatusText);
+            Assert.AreEqual("Sessions: 1 / 1", vm.SessionCountText);
+
+            vm.HideTunnelsFilter = true;
+            Assert.IsTrue(vm.SearchQuery.Contains("hide:tunnel", StringComparison.Ordinal));
+            Assert.IsTrue(vm.HideTunnelsFilter);
+            vm.ErrorsOnlyFilter = true;
+            Assert.IsTrue(vm.SearchQuery.Contains("is:error", StringComparison.Ordinal));
+            Assert.AreEqual("Sessions: 0 / 1", vm.SessionCountText);
+
+            vm.ClearFiltersCommand.Execute(null);
+            await Task.Delay(50);
+            Assert.AreEqual("", vm.SearchQuery);
+            Assert.IsFalse(vm.HideTunnelsFilter);
+            Assert.AreEqual("Sessions: 1 / 1", vm.SessionCountText);
+
+            vm.DeviceCaSetupCommand.Execute(null);
+            await Task.Delay(50);
+            Assert.AreEqual(1, dialogs.DeviceCaSetupCalls);
+            Assert.AreEqual("Pinned tip", vm.StatusText);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
     public void SelectingSession_OpensDetails_CloseHidesPane()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-inspector-details-" + Guid.NewGuid().ToString("N") + ".json");

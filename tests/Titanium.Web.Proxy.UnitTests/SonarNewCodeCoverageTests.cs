@@ -578,7 +578,10 @@ public class SonarNewCodeCoverageTests
 
             var summary = Http2OriginConnectionPool.DiagPickStats.FormatSummary();
             Assert.IsTrue(summary.Contains("tryPick="));
-            Assert.IsTrue(File.Exists(outPath));
+            // Emit writes via fire-and-forget Task.Run — wait briefly for the file.
+            Assert.IsTrue(SpinWait.SpinUntil(
+                () => File.Exists(outPath) && new FileInfo(outPath).Length > 0,
+                TimeSpan.FromSeconds(3)));
         }
         finally
         {
@@ -1064,7 +1067,9 @@ public class SonarNewCodeCoverageTests
 
                 Assert.IsTrue(Http2OriginConnectionPool.DiagPickStats.IsEnabled);
                 Assert.IsFalse(string.IsNullOrEmpty(Http2OriginConnectionPool.DiagPickStats.FormatSummary()));
-                Assert.IsTrue(File.Exists(outPath));
+                Assert.IsTrue(SpinWait.SpinUntil(
+                    () => File.Exists(outPath) && new FileInfo(outPath).Length > 0,
+                    TimeSpan.FromSeconds(3)));
             }
             finally
             {

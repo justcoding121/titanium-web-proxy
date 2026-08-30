@@ -55,17 +55,21 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             // false,false: do not auto-trust on Start/SetAsSystemProxy — trust is opt-in via TWP_TRUST_ROOT.
             proxyServer = new ProxyServer(false, false, false);
 
-            // Session traffic is shown in the UI. Library diagnostics go to a rolling file (not the
-            // console — WinExe usually has none). Debug builds capture full protocol diagnostics.
+            // Session traffic is shown in the UI. Library diagnostics go to a rolling file only when
+            // diagnosing (Debug builds, or TWP_ENABLE_FILE_LOG=1). Console stays off for WinExe.
             proxyServer.Logging.EnableConsole = false;
-            proxyServer.Logging.EnableFile = true;
-            proxyServer.Logging.FilePath = Path.Combine(AppContext.BaseDirectory, "logs", "wpf-proxy.log");
 #if DEBUG
+            proxyServer.Logging.EnableFile = true;
             proxyServer.Logging.MinimumLevel = LogLevel.Trace;
 #else
-            proxyServer.Logging.MinimumLevel = LogLevel.Warning;
+            var enableFileLog = Environment.GetEnvironmentVariable("TWP_ENABLE_FILE_LOG") is "1" or "true" or "TRUE";
+            proxyServer.Logging.EnableFile = enableFileLog;
+            proxyServer.Logging.MinimumLevel = enableFileLog ? LogLevel.Warning : LogLevel.Error;
 #endif
-
+            if (proxyServer.Logging.EnableFile)
+            {
+                proxyServer.Logging.FilePath = Path.Combine(AppContext.BaseDirectory, "logs", "wpf-proxy.log");
+            }
             var certificateDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Titanium.Web.Proxy");

@@ -1,9 +1,36 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="using:Titanium.Inspector.Converters"
              x:Class="Titanium.Inspector.App"
              RequestedThemeVariant="Default">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="SessionStatusSuccessBrush" Color="#0F7B0F" />
+          <SolidColorBrush x:Key="SessionStatusRedirectBrush" Color="#0078D4" />
+          <SolidColorBrush x:Key="SessionStatusClientErrorBrush" Color="#9A6700" />
+          <SolidColorBrush x:Key="SessionStatusServerErrorBrush" Color="#C42B1C" />
+          <SolidColorBrush x:Key="SessionStatusMutedBrush" Color="#6B6B6B" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="SessionStatusSuccessBrush" Color="#6CCB5F" />
+          <SolidColorBrush x:Key="SessionStatusRedirectBrush" Color="#4CC2FF" />
+          <SolidColorBrush x:Key="SessionStatusClientErrorBrush" Color="#FCE100" />
+          <SolidColorBrush x:Key="SessionStatusServerErrorBrush" Color="#FF99A4" />
+          <SolidColorBrush x:Key="SessionStatusMutedBrush" Color="#A0A0A0" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+      <conv:StatusCodeBrushConverter x:Key="StatusCodeBrushConverter" />
+      <conv:StatusCodeFontWeightConverter x:Key="StatusCodeFontWeightConverter" />
+    </ResourceDictionary>
+  </Application.Resources>
   <Application.Styles>
     <FluentTheme />
     <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
+    <Style Selector="Button">
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
   </Application.Styles>
 </Application>

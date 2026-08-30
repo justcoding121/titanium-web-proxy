@@ -14,6 +14,11 @@ public interface IInspectorDialogs
 
     /// <summary>Ask to retry CA install with an OS admin prompt. Returns true if confirmed.</summary>
     Task<bool> ConfirmElevateRootCaAsync(Window? owner);
+
+    /// <summary>
+    /// Show device CA setup steps. Returns true if the user chose Export CA; false on Close / no owner.
+    /// </summary>
+    Task<bool> ShowDeviceCaSetupAsync(Window? owner, string message);
 }
 
 /// <summary>Avalonia modal dialogs.</summary>
@@ -42,6 +47,15 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
             "User-level trust failed or was insufficient. Continue to show the OS admin prompt (UAC / macOS authentication / polkit)? Cancel leaves certificate settings unchanged.",
             accept: "Continue",
             cancel: "Cancel");
+
+    public Task<bool> ShowDeviceCaSetupAsync(Window? owner, string message) =>
+        SimpleConfirmDialog.ShowAsync(
+            owner,
+            "Device CA setup",
+            message,
+            accept: "Export CA",
+            cancel: "Close",
+            height: 320);
 }
 
 /// <summary>Scripted answers for unit / E2E-UI tests (no real windows).</summary>
@@ -50,9 +64,12 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     public bool InstallRootCaResult { get; set; } = true;
     public bool RemoveRootCaResult { get; set; } = true;
     public bool ElevateRootCaResult { get; set; } = true;
+    public bool DeviceCaSetupResult { get; set; }
     public int InstallRootCaCalls { get; private set; }
     public int RemoveRootCaCalls { get; private set; }
     public int ElevateRootCaCalls { get; private set; }
+    public int DeviceCaSetupCalls { get; private set; }
+    public string? LastDeviceCaSetupMessage { get; private set; }
 
     public Task<bool> ConfirmInstallRootCaAsync(Window? owner)
     {
@@ -70,5 +87,12 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     {
         ElevateRootCaCalls++;
         return Task.FromResult(ElevateRootCaResult);
+    }
+
+    public Task<bool> ShowDeviceCaSetupAsync(Window? owner, string message)
+    {
+        DeviceCaSetupCalls++;
+        LastDeviceCaSetupMessage = message;
+        return Task.FromResult(DeviceCaSetupResult);
     }
 }

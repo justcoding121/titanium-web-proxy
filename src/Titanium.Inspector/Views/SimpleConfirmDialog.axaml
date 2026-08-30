@@ -5,12 +5,16 @@
         Width="440" Height="200"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
-        ShowInTaskbar="False">
+        ShowInTaskbar="False"
+        AutomationProperties.AutomationId="ConfirmDialog">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
-      <Button x:Name="AcceptButton" MinWidth="88" IsDefault="True" />
-      <Button x:Name="CancelButton" MinWidth="88" IsCancel="True" />
+      <Button x:Name="AcceptButton" MinWidth="88" IsDefault="True"
+              AutomationProperties.AutomationId="ConfirmAccept" />
+      <Button x:Name="CancelButton" MinWidth="88" IsCancel="True"
+              AutomationProperties.AutomationId="ConfirmCancel" />
     </StackPanel>
-    <TextBlock x:Name="MessageText" TextWrapping="Wrap" VerticalAlignment="Center" />
+    <TextBlock x:Name="MessageText" TextWrapping="Wrap" VerticalAlignment="Center"
+               AutomationProperties.AutomationId="ConfirmMessage" />
   </DockPanel>
 </Window>

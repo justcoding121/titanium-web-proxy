@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Titanium.Cli;
 using Titanium.Cli.Config;
 using Titanium.Cli.Http3;
 
@@ -26,23 +27,23 @@ internal static class VersionCommand
         var manifest = await client.TryGetManifestAsync();
         if (manifest is null)
         {
-            await Console.Error.WriteLineAsync("Unable to query update feed.");
+            AsyncConsole.WriteError("Unable to query update feed.");
             return 1;
         }
 
         var local = typeof(Program).Assembly.GetName().Version ?? new Version(0, 0);
         var remote = Version.TryParse(StripPrerelease(manifest.Version), out var v) ? v : new Version(0, 0);
-        Console.WriteLine($"Remote Cli ({channel}): {manifest.Version}");
+        AsyncConsole.WriteLine($"Remote Cli ({channel}): {manifest.Version}");
 
         var exit = 0;
         if (remote > local)
         {
-            Console.WriteLine("A newer Cli build is available. Run: titanium update");
+            AsyncConsole.WriteLine("A newer Cli build is available. Run: titanium update");
             exit = 2;
         }
         else
         {
-            Console.WriteLine("Cli is up to date.");
+            AsyncConsole.WriteLine("Cli is up to date.");
         }
 
         if (plus)
@@ -53,12 +54,12 @@ internal static class VersionCommand
                 Version.TryParse(StripPrerelease(plusRemote), out var pr) &&
                 (plusLocal is null || pr > plusLocal))
             {
-                Console.WriteLine($"A newer Plus build is available ({plusRemote}). Run: titanium update --plus");
+                AsyncConsole.WriteLine($"A newer Plus build is available ({plusRemote}). Run: titanium update --plus");
                 exit = 2;
             }
             else if (plusLocal is not null)
             {
-                Console.WriteLine($"Plus is up to date ({plusLocal}).");
+                AsyncConsole.WriteLine($"Plus is up to date ({plusLocal}).");
             }
         }
 
@@ -88,7 +89,7 @@ internal static class VersionCommand
         void Print(string name, Assembly? asm)
         {
             var ver = asm?.GetName().Version?.ToString() ?? "(not loaded)";
-            Console.WriteLine($"{name}: {ver}");
+            AsyncConsole.WriteLine($"{name}: {ver}");
         }
 
         Print("Cli", typeof(Program).Assembly);
@@ -101,15 +102,15 @@ internal static class VersionCommand
             var module = PlusLoader.TryLoad(out var warning);
             if (warning is not null)
             {
-                Console.WriteLine($"Plus: {warning}");
+                AsyncConsole.WriteLine($"Plus: {warning}");
             }
             else if (module is not null)
             {
-                Console.WriteLine($"Plus: {module.GetType().Assembly.GetName().Version} (RequiredAbstractions={module.RequiredAbstractionsVersion})");
+                AsyncConsole.WriteLine($"Plus: {module.GetType().Assembly.GetName().Version} (RequiredAbstractions={module.RequiredAbstractionsVersion})");
             }
             else
             {
-                Console.WriteLine("Plus: not present");
+                AsyncConsole.WriteLine("Plus: not present");
             }
         }
     }
@@ -149,7 +150,7 @@ internal static class UpdateCommand
         var manifest = await client.TryGetManifestAsync();
         if (manifest is null)
         {
-            await Console.Error.WriteLineAsync("Unable to query update feed.");
+            AsyncConsole.WriteError("Unable to query update feed.");
             return 1;
         }
 
@@ -167,13 +168,13 @@ internal static class UpdateCommand
         var asset = manifest.Products?.Cli?.Assets?.GetValueOrDefault(rid);
         if (asset?.Url is null)
         {
-            Console.WriteLine($"Cli update ({channel}): re-download Titanium.Cli-{rid}.zip from GitHub Releases.");
-            Console.WriteLine($"Remote version: {manifest.Version}");
+            AsyncConsole.WriteLine($"Cli update ({channel}): re-download Titanium.Cli-{rid}.zip from GitHub Releases.");
+            AsyncConsole.WriteLine($"Remote version: {manifest.Version}");
             return 0;
         }
 
         var destZip = Path.Combine(Path.GetTempPath(), $"Titanium.Cli-{rid}-{manifest.Version}.zip");
-        Console.WriteLine($"Downloading {asset.Url}");
+        AsyncConsole.WriteLine($"Downloading {asset.Url}");
         using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) })
         {
             http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
@@ -183,7 +184,7 @@ internal static class UpdateCommand
                 var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
                 if (!hash.Equals(asset.Sha256, StringComparison.OrdinalIgnoreCase))
                 {
-                    await Console.Error.WriteLineAsync("SHA256 mismatch — aborting update.");
+                    AsyncConsole.WriteError("SHA256 mismatch — aborting update.");
                     return 1;
                 }
             }
@@ -191,8 +192,8 @@ internal static class UpdateCommand
             await File.WriteAllBytesAsync(destZip, bytes);
         }
 
-        Console.WriteLine($"Downloaded to {destZip}. Extract over the install directory and restart.");
-        Console.WriteLine("If this process is locked, stop titanium and unzip manually.");
+        AsyncConsole.WriteLine($"Downloaded to {destZip}. Extract over the install directory and restart.");
+        AsyncConsole.WriteLine("If this process is locked, stop titanium and unzip manually.");
         return 0;
     }
 
@@ -216,7 +217,7 @@ internal static class UpdateCommand
                 await proc.WaitForExitAsync();
                 if (proc.ExitCode == 0)
                 {
-                    Console.WriteLine("Updated via winget.");
+                    AsyncConsole.WriteLine("Updated via winget.");
                     return true;
                 }
             }
@@ -234,13 +235,13 @@ internal static class UpdateCommand
         var asset = manifest.Products?.Plus?.Asset;
         if (asset?.Url is null)
         {
-            Console.WriteLine("Plus update: download Titanium.Plus.dll from GitHub Releases and place beside this executable, then restart.");
+            AsyncConsole.WriteLine("Plus update: download Titanium.Plus.dll from GitHub Releases and place beside this executable, then restart.");
             return 0;
         }
 
         var dest = Path.Combine(AppContext.BaseDirectory, "Titanium.Plus.dll");
         var backup = dest + ".bak";
-        Console.WriteLine($"Downloading {asset.Url}");
+        AsyncConsole.WriteLine($"Downloading {asset.Url}");
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
         var bytes = await http.GetByteArrayAsync(asset.Url);
@@ -249,7 +250,7 @@ internal static class UpdateCommand
             var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
             if (!hash.Equals(asset.Sha256, StringComparison.OrdinalIgnoreCase))
             {
-                await Console.Error.WriteLineAsync("SHA256 mismatch — aborting Plus update.");
+                AsyncConsole.WriteError("SHA256 mismatch — aborting Plus update.");
                 return 1;
             }
         }
@@ -260,7 +261,7 @@ internal static class UpdateCommand
         }
 
         await File.WriteAllBytesAsync(dest + ".new", bytes);
-        Console.WriteLine($"Wrote {dest}.new — stop `titanium run` then rename to Titanium.Plus.dll (backup at .bak).");
+        AsyncConsole.WriteLine($"Wrote {dest}.new — stop `titanium run` then rename to Titanium.Plus.dll (backup at .bak).");
         return 0;
     }
 

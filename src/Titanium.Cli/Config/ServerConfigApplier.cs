@@ -36,16 +36,12 @@ internal static class ServerConfigApplier
         ApplyPolicyModes(proxy, server.PolicyModes);
         ApplyTls(proxy, server.Tls);
         ApplyUpstream(proxy, server.Upstream);
-        ApplyAuth(proxy, server.Auth);
         ApplyCertificateManager(proxy, server.CertificateManager);
     }
 
     private static void ApplyProtocolFlags(ProxyServer proxy, ServerConfig server)
     {
-        if (server.EnableHttp2 is bool http2)
-        {
-            proxy.EnableHttp2 = http2;
-        }
+        ApplyBool(server.EnableHttp2, v => proxy.EnableHttp2 = v);
 
         if (server.EnableHttp3 is bool http3)
         {
@@ -59,45 +55,12 @@ internal static class ServerConfigApplier
             }
         }
 
-        if (server.EnableRfc8441 is bool rfc8441)
-        {
-            proxy.EnableRfc8441 = rfc8441;
-        }
-
-        if (server.EnableQpackDynamicTable is bool qpack)
-        {
-            proxy.EnableQpackDynamicTable = qpack;
-        }
-
-        if (server.EnableHttpsSvcbDnsDiscovery is bool svcb)
-        {
-            proxy.EnableHttpsSvcbDnsDiscovery = svcb;
-        }
-
-        if (server.Enable100ContinueBehaviour is bool expect100)
-        {
-            proxy.Enable100ContinueBehaviour = expect100;
-        }
-
-        if (server.CompatibilityMode100Continue is bool compat100)
-        {
-            proxy.CompatibilityMode100Continue = compat100;
-        }
-
-        if (server.EnableWinAuth is bool winAuth)
-        {
-            proxy.EnableWinAuth = winAuth;
-        }
-
-        if (server.EnableRequestTimingCapture is bool timing)
-        {
-            proxy.EnableRequestTimingCapture = timing;
-        }
-
-        if (server.EnableHttpInterception is bool intercept)
-        {
-            proxy.EnableHttpInterception = intercept;
-        }
+        ApplyBool(server.EnableRfc8441, v => proxy.EnableRfc8441 = v);
+        ApplyBool(server.EnableQpackDynamicTable, v => proxy.EnableQpackDynamicTable = v);
+        ApplyBool(server.EnableHttpsSvcbDnsDiscovery, v => proxy.EnableHttpsSvcbDnsDiscovery = v);
+        ApplyBool(server.Enable100ContinueBehaviour, v => proxy.Enable100ContinueBehaviour = v);
+        ApplyBool(server.CompatibilityMode100Continue, v => proxy.CompatibilityMode100Continue = v);
+        ApplyBool(server.EnableWinAuth, v => proxy.EnableWinAuth = v);
 
         if (!string.IsNullOrWhiteSpace(server.OriginHttpVersionPolicy) &&
             Enum.TryParse<OriginHttpVersionPolicy>(server.OriginHttpVersionPolicy, ignoreCase: true, out var originPolicy))
@@ -110,10 +73,7 @@ internal static class ServerConfigApplier
             proxy.ViaHeaderPseudonym = server.ViaHeaderPseudonym;
         }
 
-        if (server.BlockPrivateNetworkDestinations is bool blockPrivate)
-        {
-            proxy.BlockPrivateNetworkDestinations = blockPrivate;
-        }
+        ApplyBool(server.BlockPrivateNetworkDestinations, v => proxy.BlockPrivateNetworkDestinations = v);
 
         if (!string.IsNullOrWhiteSpace(server.CheckCertificateRevocation) &&
             Enum.TryParse<X509RevocationMode>(server.CheckCertificateRevocation, ignoreCase: true, out var revocation))
@@ -125,6 +85,14 @@ internal static class ServerConfigApplier
             TryParseEndPoint(server.DnsServerEndPoint, out var dns))
         {
             proxy.DnsServerEndPoint = dns;
+        }
+    }
+
+    private static void ApplyBool(bool? value, Action<bool> apply)
+    {
+        if (value is bool b)
+        {
+            apply(b);
         }
     }
 
@@ -418,24 +386,6 @@ internal static class ServerConfigApplier
         }
 
         return proxy;
-    }
-
-    private static void ApplyAuth(ProxyServer proxy, AuthConfig? auth)
-    {
-        if (auth is null)
-        {
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(auth.ProxyAuthenticationRealm))
-        {
-            proxy.ProxyAuthenticationRealm = auth.ProxyAuthenticationRealm;
-        }
-
-        if (auth.ProxyAuthenticationSchemes is { Count: > 0 } schemes)
-        {
-            proxy.ProxyAuthenticationSchemes = schemes.ToArray();
-        }
     }
 
     private static void ApplyCertificateManager(ProxyServer proxy, CertificateManagerConfig? certs)

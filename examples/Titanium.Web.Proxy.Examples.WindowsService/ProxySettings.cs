@@ -120,11 +120,12 @@ internal sealed class ProxySettings
     ///     Master switch for proxy-library diagnostic logging (bridged into the host <c>ILoggerFactory</c>).
     ///     When false, the proxy uses a no-op logger regardless of host log levels.
     /// </summary>
-    public bool EnableProxyLogging { get; set; } = true;
+    public bool EnableProxyLogging { get; set; }
 
     /// <summary>
     ///     When true, each completed response is logged at Information (files only — Event Log is Warning+).
-    ///     Disable under high traffic if you only need errors and lifecycle messages.
+    ///     Disable under high traffic if you only need errors and lifecycle messages. Defaults off;
+    ///     enable via configuration when diagnosing.
     /// </summary>
-    public bool LogRequests { get; set; } = true;
+    public bool LogRequests { get; set; }
 }

@@ -1,5 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Cli.Config;
+using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Configuration.Models;
@@ -98,6 +99,73 @@ public class RunCommandTests
     }
 
     [TestMethod]
+    public void ConfigNeedsRequestTimingCapture_True_ForLeastTimeCluster()
+    {
+        var cfg = new TwpConfig
+        {
+            Clusters =
+            [
+                new ClusterConfig
+                {
+                    Id = "c1",
+                    Algorithm = LoadBalanceAlgorithm.LeastTime,
+                    Destinations =
+                    [
+                        new DestinationConfig { Id = "d1", Address = "127.0.0.1", Port = 8080 },
+                    ],
+                },
+            ],
+        };
+        Assert.IsTrue(RunCommand.ConfigNeedsRequestTimingCapture(cfg));
+    }
+
+    [TestMethod]
+    public void ConfigNeedsRequestTimingCapture_False_ForRoundRobin()
+    {
+        var cfg = new TwpConfig
+        {
+            Clusters =
+            [
+                new ClusterConfig
+                {
+                    Id = "c1",
+                    Algorithm = LoadBalanceAlgorithm.RoundRobin,
+                    Destinations =
+                    [
+                        new DestinationConfig { Id = "d1", Address = "127.0.0.1", Port = 8080 },
+                    ],
+                },
+            ],
+        };
+        Assert.IsFalse(RunCommand.ConfigNeedsRequestTimingCapture(cfg));
+    }
+
+    [TestMethod]
+    public void ConfigureProxyFlags_EnablesTiming_ForLeastTimeCluster()
+    {
+        var cfg = new TwpConfig
+        {
+            Clusters =
+            [
+                new ClusterConfig
+                {
+                    Id = "c1",
+                    Algorithm = LoadBalanceAlgorithm.LeastTime,
+                    Destinations =
+                    [
+                        new DestinationConfig { Id = "d1", Address = "127.0.0.1", Port = 8080 },
+                    ],
+                },
+            ],
+        };
+
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        Assert.IsFalse(proxy.EnableRequestTimingCapture);
+        RunCommand.ConfigureProxyFlags(proxy, cfg, requiresSessionPath: false);
+        Assert.IsTrue(proxy.EnableRequestTimingCapture);
+    }
+
+    [TestMethod]
     public void BuildPlusOptions_MergesControlPlane()
     {
         var plus = new PlusConfig
@@ -117,5 +185,48 @@ public class RunCommandTests
         Assert.AreEqual("9099", opts["controlPlane.port"]);
         Assert.AreEqual("s3cret", opts["controlPlane.sharedSecret"]);
         Assert.AreEqual("1", opts["extra"]);
+    }
+
+    [TestMethod]
+    public void ApplyLogging_NoConfig_NotVerbose_UsesDebugOrReleasePosture()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        RunCommand.ApplyLogging(proxy, logging: null, verbose: false);
+#if DEBUG
+        Assert.IsTrue(proxy.Logging.Enabled);
+        Assert.AreEqual(Microsoft.Extensions.Logging.LogLevel.Error, proxy.Logging.MinimumLevel);
+        Assert.IsTrue(proxy.Logging.EnableConsole);
+#else
+        Assert.IsFalse(proxy.Logging.Enabled);
+#endif
+    }
+
+    [TestMethod]
+    public void ApplyLogging_Verbose_ForcesDebugConsole()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        RunCommand.ApplyLogging(proxy, logging: null, verbose: true);
+        Assert.IsTrue(proxy.Logging.Enabled);
+        Assert.AreEqual(Microsoft.Extensions.Logging.LogLevel.Debug, proxy.Logging.MinimumLevel);
+        Assert.IsTrue(proxy.Logging.EnableConsole);
+    }
+
+    [TestMethod]
+    public void ApplyLogging_YamlConfig_IsHonored()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        RunCommand.ApplyLogging(proxy, new LoggingConfig
+        {
+            Enabled = true,
+            MinimumLevel = "Warning",
+            EnableConsole = false,
+            EnableFile = true,
+            FilePath = "logs/cli-test.log",
+        }, verbose: false);
+        Assert.IsTrue(proxy.Logging.Enabled);
+        Assert.AreEqual(Microsoft.Extensions.Logging.LogLevel.Warning, proxy.Logging.MinimumLevel);
+        Assert.IsFalse(proxy.Logging.EnableConsole);
+        Assert.IsTrue(proxy.Logging.EnableFile);
+        Assert.AreEqual("logs/cli-test.log", proxy.Logging.FilePath);
     }
 }

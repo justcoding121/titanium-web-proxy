@@ -210,25 +210,13 @@ internal abstract class ChannelLoggerProviderBase : ILoggerProvider
 
     /// <summary>
     ///     Called when the writer task did not finish draining within the shutdown grace period, so
-    ///     <see cref="DisposeSink" /> was deliberately skipped to avoid racing an in-progress write. The
-    ///     default implementation reports to <see cref="Console.Error" /> as a last resort: the sink this
-    ///     provider owns cannot be trusted to still be usable, and nothing else is guaranteed to be
-    ///     listening for it. Exposed as protected so tests (and derived sinks) can observe the condition
-    ///     directly instead of scraping stderr.
+    ///     <see cref="DisposeSink" /> was deliberately skipped to avoid racing an in-progress write.
+    ///     Default is a no-op (must not sync-write to console). Tests override to observe the condition.
     /// </summary>
     protected virtual void OnSinkDisposalLeaked()
     {
-        try
-        {
-            Console.Error.WriteLine(
-                $"{GetType().Name}: sink writer did not complete within the shutdown grace period; " +
-                "the underlying handle was intentionally left open (leaked) rather than disposed " +
-                "underneath an in-progress write.");
-        }
-        catch
-        {
-            // Best-effort only; stderr itself may be unavailable during shutdown.
-        }
+        // Intentionally silent: must not sync-write during a timed-out drain (sink untrusted).
+        // Tests override this hook to observe the condition without scraping stderr.
     }
 
     /// <summary>

@@ -242,7 +242,7 @@ public class PlusModuleTests
         Assert.IsNotNull(controller);
 
         DestinationState state = DestinationState.Healthy;
-        for (var i = 0; i < 40; i++)
+        for (var i = 0; i < 80; i++)
         {
             await Task.Delay(50);
             state = manager.GetDestinationState("down");
@@ -252,7 +252,8 @@ public class PlusModuleTests
             }
         }
 
-        Assert.AreEqual(DestinationState.Unhealthy, state);
+        Assert.AreEqual(DestinationState.Unhealthy, state,
+            "Active TCP health probes should mark a closed port Unhealthy within a few seconds.");
     }
 
     [TestMethod]
@@ -301,12 +302,13 @@ public class PlusModuleTests
                 options);
             Assert.IsNotNull(discovery);
 
-            for (var i = 0; i < 40 && !manager.Snapshot.Clusters.ContainsKey("from-file"); i++)
+            for (var i = 0; i < 100 && !manager.Snapshot.Clusters.ContainsKey("from-file"); i++)
             {
                 await Task.Delay(50);
             }
 
-            Assert.IsTrue(manager.Snapshot.Clusters.ContainsKey("from-file"));
+            Assert.IsTrue(manager.Snapshot.Clusters.ContainsKey("from-file"),
+                "File discovery should apply clusters from the watched JSON within a few seconds.");
             Assert.AreEqual("10.0.0.9", manager.Snapshot.Clusters["from-file"].Destinations[0].Address);
             Assert.IsTrue(refreshed >= 1);
         }

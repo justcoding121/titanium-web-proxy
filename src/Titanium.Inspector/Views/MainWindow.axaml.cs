@@ -5,6 +5,8 @@ using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -25,6 +27,7 @@ public partial class MainWindow : Window
     private bool _followLatest = true;
     private bool _programmaticScroll;
     private bool _scrollQueued;
+    private bool _sessionGridLayoutApplied;
     private ScrollBar? _sessionsVScroll;
     private MainWindowViewModel? _sessionsVm;
 
@@ -34,13 +37,73 @@ public partial class MainWindow : Window
         Closing += OnClosing;
         Opened += OnOpened;
         DataContextChanged += OnDataContextChanged;
-        SessionsGrid.Loaded += (_, _) => AttachSessionsScroll();
+        SessionsGrid.Loaded += OnSessionsGridLoaded;
+        SessionsGrid.SelectionChanged += OnSessionsGridSelectionChanged;
+        SessionsGrid.AddHandler(
+            InputElement.PointerPressedEvent,
+            OnSessionsGridPointerPressed,
+            RoutingStrategies.Tunnel);
         HookSessionsCollection(DataContext as MainWindowViewModel);
+    }
+
+    private void OnSessionsGridLoaded(object? sender, RoutedEventArgs e)
+    {
+        AttachSessionsScroll();
+        ApplySessionGridLayoutIfNeeded();
+    }
+
+    private void OnSessionsGridPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(SessionsGrid).Properties.IsRightButtonPressed)
+        {
+            return;
+        }
+
+        var source = e.Source as Control;
+        var row = source?.FindAncestorOfType<DataGridRow>()
+            ?? (source as DataGridRow);
+        if (row?.DataContext is not SessionSnapshot snap)
+        {
+            return;
+        }
+
+        if (SessionsGrid.SelectedItems.Contains(snap))
+        {
+            return;
+        }
+
+        SessionsGrid.SelectedItems.Clear();
+        SessionsGrid.SelectedItem = snap;
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.SelectedSession = snap;
+            vm.SetSelectedSessions([snap]);
+        }
+    }
+
+    private void OnSessionsGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        var selected = new List<SessionSnapshot>();
+        foreach (var item in SessionsGrid.SelectedItems)
+        {
+            if (item is SessionSnapshot snap)
+            {
+                selected.Add(snap);
+            }
+        }
+
+        vm.SetSelectedSessions(selected);
     }
 
     private async void OnOpened(object? sender, EventArgs e)
     {
         AttachSessionsScroll();
+        ApplySessionGridLayoutIfNeeded();
 
         if (_autoStartStarted || DataContext is not MainWindowViewModel vm)
         {
@@ -60,6 +123,7 @@ public partial class MainWindow : Window
 
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
+        CaptureAndPersistSessionGridLayout();
         HookSessionsCollection(null);
         if (_sessionsVScroll is not null)
         {
@@ -74,8 +138,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnDataContextChanged(object? sender, EventArgs e) =>
+    private void OnDataContextChanged(object? sender, EventArgs e)
+    {
         HookSessionsCollection(DataContext as MainWindowViewModel);
+        ApplySessionGridLayoutIfNeeded();
+    }
 
     private void HookSessionsCollection(MainWindowViewModel? vm)
     {
@@ -246,6 +313,149 @@ public partial class MainWindow : Window
         {
             return SessionListFollowEdge.Bottom;
         }
+    }
+
+    private void ApplySessionGridLayoutIfNeeded()
+    {
+        if (_sessionGridLayoutApplied
+            || SessionsGrid.Columns.Count == 0
+            || DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        _sessionGridLayoutApplied = true;
+        var layout = vm.GetSessionGridLayout();
+        var byKey = SessionGridLayout.IndexByKey(layout?.Columns);
+
+        foreach (var column in SessionsGrid.Columns)
+        {
+            var key = SessionGridLayout.GetColumnKey(column.Header);
+            if (key is null || !byKey.TryGetValue(key, out var state) || state.Width <= 0)
+            {
+                continue;
+            }
+
+            column.Width = new DataGridLength(state.Width);
+        }
+
+        foreach (var (column, state) in SessionsGrid.Columns
+                     .Select(c => (Column: c, Key: SessionGridLayout.GetColumnKey(c.Header)))
+                     .Where(x => x.Key is not null && byKey.ContainsKey(x.Key))
+                     .Select(x => (x.Column, State: byKey[x.Key!]))
+                     .OrderBy(x => x.State.DisplayIndex))
+        {
+            if (state.DisplayIndex < 0 || state.DisplayIndex >= SessionsGrid.Columns.Count)
+            {
+                continue;
+            }
+
+            try
+            {
+                if (column.DisplayIndex != state.DisplayIndex)
+                {
+                    column.DisplayIndex = state.DisplayIndex;
+                }
+            }
+            catch
+            {
+                // DisplayIndex can throw while the grid is still wiring columns.
+            }
+        }
+
+        SessionGridLayout.ResolveSort(layout, out var sortKey, out var sortDirection);
+        var sortColumn = SessionsGrid.Columns.FirstOrDefault(c =>
+            string.Equals(SessionGridLayout.GetColumnKey(c.Header), sortKey, StringComparison.Ordinal));
+        sortColumn?.Sort(sortDirection);
+    }
+
+    private void CaptureAndPersistSessionGridLayout()
+    {
+        if (DataContext is not MainWindowViewModel vm || SessionsGrid.Columns.Count == 0)
+        {
+            return;
+        }
+
+        var layout = new SessionGridLayoutDto();
+        foreach (var column in SessionsGrid.Columns)
+        {
+            var key = SessionGridLayout.GetColumnKey(column.Header);
+            if (key is null)
+            {
+                continue;
+            }
+
+            var width = SessionGridLayout.ResolvePersistableWidth(
+                column.ActualWidth,
+                column.Width.IsAbsolute,
+                column.Width.Value);
+            if (width <= 0)
+            {
+                continue;
+            }
+
+            layout.Columns.Add(new SessionGridColumnStateDto
+            {
+                Key = key,
+                Width = width,
+                DisplayIndex = column.DisplayIndex,
+            });
+        }
+
+        CaptureActiveSort(layout);
+        vm.PersistSessionGridLayout(layout);
+    }
+
+    private void CaptureActiveSort(SessionGridLayoutDto layout)
+    {
+        if (GetSortDescriptionMethod is null)
+        {
+            SessionGridLayout.ResolveSort(null, out var defaultKey, out var defaultDirection);
+            layout.SortColumnKey = defaultKey;
+            layout.SortDirection = defaultDirection;
+            return;
+        }
+
+        try
+        {
+            DataGridColumn? sortedColumn = null;
+            DataGridSortDescription? sortedDescription = null;
+            foreach (var column in SessionsGrid.Columns)
+            {
+                if (GetSortDescriptionMethod.Invoke(column, null) is not DataGridSortDescription description)
+                {
+                    continue;
+                }
+
+                if (sortedColumn is not null)
+                {
+                    // Multi-column sort: persist nothing special; factory sort on next launch.
+                    SessionGridLayout.ResolveSort(null, out var defaultKey, out var defaultDirection);
+                    layout.SortColumnKey = defaultKey;
+                    layout.SortDirection = defaultDirection;
+                    return;
+                }
+
+                sortedColumn = column;
+                sortedDescription = description;
+            }
+
+            if (sortedColumn is not null
+                && SessionGridLayout.GetColumnKey(sortedColumn.Header) is { } key)
+            {
+                layout.SortColumnKey = key;
+                layout.SortDirection = sortedDescription!.Direction;
+                return;
+            }
+        }
+        catch
+        {
+            // fall through to factory default
+        }
+
+        SessionGridLayout.ResolveSort(null, out var fallbackKey, out var fallbackDirection);
+        layout.SortColumnKey = fallbackKey;
+        layout.SortDirection = fallbackDirection;
     }
 
     private static bool IsIdColumn(DataGridColumn column)

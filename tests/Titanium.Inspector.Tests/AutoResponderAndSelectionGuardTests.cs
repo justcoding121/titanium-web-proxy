@@ -84,6 +84,12 @@ public class AutoResponderAndSelectionGuardTests
             vm.LoadFromSelectedCommand.Execute(null);
             StringAssert.Contains(vm.StatusText, "Select a session");
 
+            vm.LoadIntoComposerCommand.Execute(null);
+            StringAssert.Contains(vm.StatusText, "Select a session");
+
+            vm.CopyUrlCommand.Execute(null);
+            StringAssert.Contains(vm.StatusText, "Select a session to copy URL");
+
             vm.ReplayCommand.Execute(null);
             // Guard path sets StatusText before any await, so no delay is required.
             StringAssert.Contains(vm.StatusText, "Select a session");
@@ -93,6 +99,90 @@ public class AutoResponderAndSelectionGuardTests
 
             vm.UpdateAutoResponderRuleCommand.Execute(null);
             StringAssert.Contains(vm.StatusText, "Select an AutoResponder rule");
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task LoadIntoComposer_PopulatesFieldsAndOpensToolsTab()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-insp-composer-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            vm.SeedSession(new SessionSnapshot
+            {
+                Id = 42,
+                Method = "POST",
+                Url = "https://api.example/v1",
+                RequestHeadersText = "Content-Type: application/json\r\n",
+                RequestBodyText = "{\"x\":1}",
+                StatusCode = 200,
+            });
+            vm.SelectedSession = vm.Sessions[0];
+
+            vm.LoadIntoComposerCommand.Execute(null);
+            await Task.Delay(50);
+
+            Assert.AreEqual("POST", vm.ComposerMethod);
+            Assert.AreEqual("https://api.example/v1", vm.ComposerUrl);
+            Assert.AreEqual("{\"x\":1}", vm.ComposerBody);
+            Assert.IsTrue(vm.ShowSessionDetails);
+            Assert.AreEqual(1, vm.SelectedOuterPaneIndex);
+            Assert.AreEqual(0, vm.SelectedToolsTabIndex);
+            StringAssert.Contains(vm.StatusText, "Composer loaded");
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task CopyUrl_WithSelection_SetsCopiedStatus()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-insp-copyurl-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()));
+
+            vm.SeedSession(new SessionSnapshot
+            {
+                Id = 7,
+                Method = "GET",
+                Url = "https://keep.example/",
+                StatusCode = 200,
+            });
+            vm.SelectedSession = vm.Sessions[0];
+
+            vm.CopyUrlCommand.Execute(null);
+            await Task.Delay(50);
+
+            StringAssert.Contains(vm.StatusText, "Copied URL");
         }
         finally
         {

@@ -84,8 +84,22 @@ public class InspectorFiddlerFlowE2ETests
     [TestCategory("E2E-UI")]
     public async Task TryAutoStart_EnablesSystemProxy_ViaRecordingController()
     {
-        _vm.AutoStartCapture = true;
-        _vm.AutoSystemProxyOnStart = true;
+        // TryAutoStartAsync uses the launch snapshot from settings (not later UI toggles),
+        // so recreate the VM with the desired prefs already persisted.
+        // Shut down the Init VM first so it cannot PersistSettings(false) over our prefs.
+        _vm.EnsureShutdown();
+        _settings.Current.AutoStartCapture = true;
+        _settings.Current.AutoSystemProxyOnStart = true;
+        _settings.Save();
+        var registry = new SessionRegistry();
+        var buffer = new SessionStreamBuffer(registry);
+        _recorder = new RecordingSystemProxyController();
+        _interception = new InterceptionService(_recorder) { UseInMemoryTrustState = true };
+        _dialogs = new ScriptedInspectorDialogs();
+        _vm = new MainWindowViewModel(buffer, registry, new UpdateService(_settings), _settings, _interception, _dialogs);
+        _vm.BindPort = CliProcessHarness.GetFreePort();
+        _vm.BindAddress = "127.0.0.1";
+
         await _vm.TryAutoStartAsync();
 
         Assert.IsTrue(_interception.IsRunning, _vm.StatusText);
@@ -240,6 +254,32 @@ public class InspectorFiddlerFlowE2ETests
 
         Assert.IsTrue(AppContainerLoopback.IsSupported);
         Assert.IsTrue(AppContainerLoopback.TryProbeApis(out var message), message);
+        StringAssert.Contains(message, "ConvertStringSidToSidW ok");
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI")]
+    public void AppContainerLoopback_SetExemptions_SidConversion_OnWindows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("Windows-only");
+            return;
+        }
+
+        var current = AppContainerLoopback.ListContainers()
+            .Where(c => c.IsExempt)
+            .Select(c => c.AppContainerSid)
+            .ToList();
+
+        try
+        {
+            _ = AppContainerLoopback.SetExemptions(current);
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            Assert.Fail("P/Invoke entry point missing: " + ex.Message);
+        }
     }
 
     private async Task StartAsync()

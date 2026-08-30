@@ -6,9 +6,9 @@ using Titanium.Inspector.ViewModels;
 namespace Titanium.E2E.Tests;
 
 /// <summary>
-/// Avalonia Headless smoke without Desktop/UsePlatformDetect (those hang CI).
-/// Full visual-tree headless is exercised locally via <c>tools/InspectorUiDocker</c>;
-/// this portable test validates tab-index / session selection wiring used by MainWindow bindings.
+/// ViewModel binding smoke under <c>E2E-UI</c> (not Avalonia Headless tree interaction).
+/// Real Headless click/type + Skia frames live in <c>UiHeadless/</c> and <c>UiVisual/</c>
+/// (<c>E2E-UI-Headless</c>, <c>E2E-UI-Visual</c>). Desktop/UsePlatformDetect hangs CI - never use here.
 /// </summary>
 [TestClass]
 public class InspectorAvaloniaHeadlessE2ETests

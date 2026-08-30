@@ -1,4 +1,4 @@
-name: .NET
+﻿name: .NET
 
 on:
   push:
@@ -77,7 +77,7 @@ jobs:
         /d:sonar.token="$env:SONAR_TOKEN"
         /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml"
         /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**,**/*.axaml,**/website/**,**/.github/**"
-        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/Http3/Http3OriginBridge.cs,**/Http3/Http3OriginClientSession.cs,**/Titanium.Plus/Dashboard/**,**/Titanium.Inspector/Views/**,**/Titanium.Inspector/Services/AppContainerLoopback.cs,**/Titanium.Inspector/App.axaml.cs,**/Titanium.Cli/Http3/Http3DepsCommand.cs,**/Titanium.Cli/Updates/VersionAndUpdateCommands.cs,**/Titanium.Inspector/Services/UpdateService.cs"
+        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/Http3/Http3OriginBridge.cs,**/Http3/Http3OriginClientSession.cs,**/Titanium.Plus/Dashboard/**,**/Titanium.Inspector/Views/**,**/Titanium.Inspector/Services/AppContainerLoopback.cs,**/Titanium.Inspector/App.axaml.cs,**/Titanium.Inspector/Program.cs,**/Titanium.Inspector/InspectorAppFactory.cs,**/Titanium.Inspector/Services/UpdateService.cs,**/Titanium.Cli/Program.cs,**/Titanium.Cli/AsyncConsole.cs,**/Titanium.Cli/Http3/Http3DepsCommand.cs,**/Titanium.Cli/Updates/VersionAndUpdateCommands.cs,**/Titanium.Cli/Certificates/CertificateBootstrap.cs,**/Titanium.Plus/PlusLog.cs"
 
     - name: Build for SonarCloud analysis
       if: env.SONAR_TOKEN != ''
@@ -136,14 +136,16 @@ jobs:
         message: Update documentation
         committer_name: GitHub Actions
         committer_email: actions@github.com
-        # Only commit DocFX output — never Sonar/coverage/tool install artifacts
+        # Only commit DocFX output â€” never Sonar/coverage/tool install artifacts
         add: 'docs'
         # DocFX often races another develop push; rebase instead of failing the job.
         pull: '--rebase --autostash'
 
+  # Cross-OS Inspector + Plus dashboard UI gates (Headless / Visual / Playwright).
+  # Inspector unit suite stays on Windows `build` only — do not re-run it here.
   ui-portable:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -155,28 +157,62 @@ jobs:
       with:
         dotnet-version: |
           10.0.x
+    - name: Linux UI fonts + Playwright OS deps
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y fonts-liberation libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libasound2t64 || sudo apt-get install -y fonts-liberation libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libasound2
     - name: Restore
       run: dotnet restore src/Titanium.Web.Proxy.sln
     - name: Build
       run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore
-    - name: Inspector unit + E2E-UI
+    - name: Install Playwright Chromium
+      shell: pwsh
       run: |
-        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore
+        $pw = Join-Path (Resolve-Path "tests/Titanium.E2E.Tests/bin/Release/net10.0") "playwright.ps1"
+        if (-not (Test-Path $pw)) {
+          # Ensure test project is built so playwright.ps1 is in output
+          dotnet build tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj -c Release --no-restore
+          $pw = Join-Path (Resolve-Path "tests/Titanium.E2E.Tests/bin/Release/net10.0") "playwright.ps1"
+        }
+        & $pw install chromium
+    - name: E2E-UI ViewModel smoke
+      run: |
         dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI"
+    - name: Inspector Headless + Visual + Plus Playwright
+      run: |
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Headless|TestCategory=E2E-UI-Visual|TestCategory=E2E-UI-Plus-Dashboard"
+    - name: OS proxy-backend filters
+      run: |
         dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "FullyQualifiedName~UnixProxyBypassMapperTests|FullyQualifiedName~MacOsSystemProxyBackendTests|FullyQualifiedName~LinuxSystemProxyBackendTests|FullyQualifiedName~ElevationPromptCancelTests|FullyQualifiedName~SystemProxyBackendFactoryPlatformTests"
     - name: Inspector E2E-UI Linux platform
       if: runner.os == 'Linux'
       run: |
         dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Linux"
-    - name: Inspector E2E-UI macOS platform
+    - name: Inspector E2E-UI macOS platform + publish smoke
       if: runner.os == 'macOS'
       run: |
-        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Mac"
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Mac|FullyQualifiedName~MacOsSystemProxyBackendTests|FullyQualifiedName~UnixProxyBypassMapperTests"
+        rid=$(dotnet --info | awk '/RID:/ {print $2; exit}')
+        if [ -z "$rid" ]; then rid=osx-arm64; fi
+        dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r "$rid" --self-contained true -o "./artifacts/inspector-$rid"
+        test -f "./artifacts/inspector-$rid/TitaniumInspector" || test -f "./artifacts/inspector-$rid/Titanium.Inspector"
+    - name: Upload UI failure artifacts
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ui-portable-${{ matrix.os }}
+        path: |
+          tests/Titanium.E2E.Tests/TestResults/**
+          **/test-results/**
+          **/playwright-report/**
+        if-no-files-found: ignore
 
-  # Dedicated macOS Inspector UI job: full E2E-UI + macOS system-proxy backend sanity.
-  inspector-ui-macos:
-    runs-on: macos-latest
-    timeout-minutes: 25
+  # Tiered RPS gate for beta/stable publish (editions). Spot runs on PRs via rps-saturation.yml.
+  rps-publish-gate:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
     - uses: actions/checkout@v6
     - name: Setup .NET
@@ -184,28 +220,26 @@ jobs:
       with:
         dotnet-version: |
           10.0.x
-    - name: Restore
-      run: dotnet restore src/Titanium.Web.Proxy.sln
-    - name: Build
-      run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore
-    - name: Inspector unit tests
-      run: dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore
-    - name: Inspector E2E-UI feature sanity
+    - name: compare-editions (publish gate)
+      shell: pwsh
       run: |
-        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI"
-    - name: macOS system-proxy backend
-      run: |
-        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Mac|FullyQualifiedName~MacOsSystemProxyBackendTests|FullyQualifiedName~UnixProxyBypassMapperTests"
-    - name: Publish Inspector osx smoke
-      run: |
-        rid=$(dotnet --info | awk '/RID:/ {print $2; exit}')
-        if [ -z "$rid" ]; then rid=osx-arm64; fi
-        dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r "$rid" --self-contained true -o "./artifacts/inspector-$rid"
-        test -f "./artifacts/inspector-$rid/TitaniumInspector" || test -f "./artifacts/inspector-$rid/Titanium.Inspector"
+        # Stable tags additionally require compare-product PASS via release.yml on that SHA.
+        pwsh tools/RpsLoadProbe/run-rps.ps1 `
+          -Mode compare-editions `
+          -Concurrency '8,16,32,64' `
+          -WarmupSec 2 `
+          -DurationSec 8 `
+          -Repeats 1 `
+          -ResultsDir tools/RpsLoadProbe/results `
+          -BombardierCheck
+        $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+          Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if (-not $csv) { throw 'No CSV found for edition gate validation' }
+        pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName
 
   publish:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
-    needs: [build, ui-portable, inspector-ui-macos]
+    needs: [build, ui-portable, rps-publish-gate]
     runs-on: windows-latest
     environment: nuget-publish
     permissions:
@@ -243,38 +277,9 @@ jobs:
         user: ${{ secrets.NUGET_USER }}
 
     - name: Publish Package
-      # MIT packages only — never push Titanium.Plus or Titanium.Inspector
+      # MIT packages only â€” never push Titanium.Plus or Titanium.Inspector
       run: |
         Get-ChildItem -Recurse -Filter *.nupkg |
           Where-Object { $_.Name -notlike '*Plus*' -and $_.Name -notlike '*Inspector*' -and $_.Name -notlike '*.symbols.nupkg' } |
           ForEach-Object { dotnet nuget push $_.FullName --source https://api.nuget.org/v3/index.json --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" }
 
-    - name: Create GitHub Release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      shell: pwsh
-      run: |
-        $nupkg = Get-ChildItem -Recurse -Filter *.nupkg |
-          Where-Object { $_.Name -notlike '*.symbols.nupkg' } |
-          Select-Object -First 1
-        if (-not $nupkg) { throw "No nupkg found to attach to the GitHub release." }
-
-        # Titanium.Web.Proxy.3.2.3-beta.nupkg -> 3.2.3-beta
-        $version = $nupkg.BaseName -replace '^Titanium\.Web\.Proxy\.', ''
-        $isPrerelease = $version -match '-'
-
-        gh release view $version 2>$null
-        if ($LASTEXITCODE -eq 0) {
-          Write-Output "Release $version already exists; uploading package."
-          gh release upload $version $nupkg.FullName --clobber
-        }
-        else {
-          $createArgs = @(
-            'release', 'create', $version, $nupkg.FullName,
-            '--title', $version,
-            '--generate-notes',
-            '--target', $env:GITHUB_SHA
-          )
-          if ($isPrerelease) { $createArgs += '--prerelease' }
-          gh @createArgs
-        }
