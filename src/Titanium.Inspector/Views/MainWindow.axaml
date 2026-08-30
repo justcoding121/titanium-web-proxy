@@ -27,6 +27,8 @@
                   AutomationProperties.AutomationId="MenuToggleCapturing" />
         <MenuItem Header="Clear sessions" Command="{Binding ClearSessionsCommand}" AutomationProperties.AutomationId="MenuClearSessions" />
         <MenuItem Header="Remove selected" Command="{Binding RemoveSelectedSessionsCommand}" AutomationProperties.AutomationId="MenuRemoveSelected" />
+        <MenuItem Header="Session retention…" Command="{Binding OpenSessionRetentionCommand}"
+                  AutomationProperties.AutomationId="MenuSessionRetention" />
         <Separator />
         <MenuItem Header="Auto-start capture" ToggleType="CheckBox"
                   IsChecked="{Binding AutoStartCapture, Mode=OneWay}"
@@ -40,6 +42,12 @@
                   IsChecked="{Binding DecryptHttps, Mode=OneWay}"
                   Command="{Binding ToggleDecryptHttpsCommand}"
                   AutomationProperties.AutomationId="MenuDecryptHttps" />
+        <MenuItem Header="HTTPS decrypt hosts…" Command="{Binding OpenHttpsDecryptHostsCommand}"
+                  AutomationProperties.AutomationId="MenuHttpsDecryptHosts" />
+        <MenuItem Header="Ignore server certificate errors" ToggleType="CheckBox"
+                  IsChecked="{Binding IgnoreServerCertificateErrors, Mode=OneWay}"
+                  Command="{Binding ToggleIgnoreServerCertificateErrorsCommand}"
+                  AutomationProperties.AutomationId="MenuIgnoreServerCertErrors" />
         <Separator />
         <MenuItem Header="System proxy" ToggleType="CheckBox"
                   IsChecked="{Binding SystemProxy, Mode=OneWay}"
@@ -52,13 +60,8 @@
         <MenuItem Header="Loopback for sandboxed apps…" Command="{Binding OpenLoopbackExemptCommand}"
                   IsVisible="{Binding ShowLoopbackExemptMenu}"
                   AutomationProperties.AutomationId="MenuLoopbackExempt" />
-        <MenuItem Header="Debug file logging" ToggleType="CheckBox"
-                  IsChecked="{Binding DebugFileLogging, Mode=OneWay}"
-                  Command="{Binding ToggleDebugLoggingCommand}"
-                  AutomationProperties.AutomationId="MenuDebugLog" />
-      </MenuItem>
-      <MenuItem Header="_Session" AutomationProperties.AutomationId="MenuSession">
-        <MenuItem Header="Replay selected" Command="{Binding ReplayCommand}" AutomationProperties.AutomationId="MenuReplay" />
+        <MenuItem Header="Logging…" Command="{Binding OpenLoggingSettingsCommand}"
+                  AutomationProperties.AutomationId="MenuLogging" />
       </MenuItem>
       <MenuItem Header="_Tools" AutomationProperties.AutomationId="MenuTools">
         <MenuItem Header="Composer…" Command="{Binding OpenToolsComposerCommand}" AutomationProperties.AutomationId="MenuToolsComposer" />

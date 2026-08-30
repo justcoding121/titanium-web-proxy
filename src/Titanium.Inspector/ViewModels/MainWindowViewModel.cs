@@ -124,6 +124,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             DecryptHttps = !DecryptHttps;
             return Task.CompletedTask;
         });
+        ToggleIgnoreServerCertificateErrorsCommand = new RelayCommand(() =>
+        {
+            IgnoreServerCertificateErrors = !IgnoreServerCertificateErrors;
+            return Task.CompletedTask;
+        });
         ClearSessionsCommand = new RelayCommand(ClearSessionsAsync);
         RemoveSelectedSessionsCommand = new RelayCommand(RemoveSelectedSessionsAsync);
         ToggleSystemProxyCommand = new RelayCommand(ToggleSystemProxyAsync);
@@ -132,6 +137,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ExportCaCommand = new RelayCommand(ExportCaAsync);
         DeviceCaSetupCommand = new RelayCommand(DeviceCaSetupAsync);
         OpenLoopbackExemptCommand = new RelayCommand(OpenLoopbackExemptAsync);
+        OpenSessionRetentionCommand = new RelayCommand(OpenSessionRetentionAsync);
+        OpenLoggingSettingsCommand = new RelayCommand(OpenLoggingSettingsAsync);
+        OpenHttpsDecryptHostsCommand = new RelayCommand(OpenHttpsDecryptHostsAsync);
         ReplayCommand = new RelayCommand(async () => await ReplaySelectedAsync());
         LoadFromSelectedCommand = new RelayCommand(LoadFromSelectedAsync);
         LoadIntoComposerCommand = new RelayCommand(LoadIntoComposerAsync);
@@ -170,6 +178,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.ConfigureLogging(_settings.Current);
         _interception.IgnoreServerCertificateErrors = _settings.Current.IgnoreServerCertificateErrors;
         _interception.DecryptHttps = _decryptHttps;
+        ApplyDecryptHostListsFromSettings();
         ShowLoopbackExemptMenu = AppContainerLoopback.IsSupported;
     }
 
@@ -587,6 +596,77 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         StatusText = "Loopback exemption dialog closed";
     }
 
+    private async Task OpenSessionRetentionAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = "Session retention requires the main window";
+            return;
+        }
+
+        var saved = await SessionRetentionWindow.ShowAsync(owner, _settings);
+        StatusText = saved
+            ? "Session retention saved — restart Inspector to apply"
+            : "Session retention cancelled";
+    }
+
+    private async Task OpenLoggingSettingsAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            // Headless / unit tests: apply defaults path without UI.
+            StatusText = "Logging settings require the main window";
+            return;
+        }
+
+        var saved = await LoggingSettingsWindow.ShowAsync(
+            owner,
+            _settings,
+            s =>
+            {
+                _interception.ConfigureLogging(s);
+                DebugFileLogging = IsDebugFileLoggingEnabled(s);
+            });
+        if (saved)
+        {
+            var path = _settings.Current.LoggingFilePath ?? LoggingSettingsWindow.DefaultLogPath();
+            StatusText = _settings.Current.LoggingEnableFile
+                ? $"Logging saved: {path}"
+                : "Logging saved (file sink off)";
+        }
+        else
+        {
+            StatusText = "Logging settings cancelled";
+        }
+    }
+
+    private async Task OpenHttpsDecryptHostsAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = "HTTPS decrypt hosts requires the main window";
+            return;
+        }
+
+        var saved = await HttpsDecryptHostsWindow.ShowAsync(
+            owner,
+            _settings,
+            ApplyDecryptHostListsFromSettings);
+        StatusText = saved
+            ? "HTTPS decrypt hosts saved (applies to new connections)"
+            : "HTTPS decrypt hosts cancelled";
+    }
+
+    private void ApplyDecryptHostListsFromSettings()
+    {
+        var s = _settings.Current;
+        _interception.DecryptSkipHosts = s.DecryptSkipHosts?.ToList() ?? [];
+        _interception.DecryptOnlyHosts = s.DecryptOnlyHosts?.ToList() ?? [];
+    }
+
     private async Task DeviceCaSetupAsync()
     {
         var message =
@@ -886,6 +966,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ToggleAutoStartCaptureCommand { get; }
     public ICommand ToggleAutoSystemProxyOnStartCommand { get; }
     public ICommand ToggleDecryptHttpsCommand { get; }
+    public ICommand ToggleIgnoreServerCertificateErrorsCommand { get; }
     public ICommand ClearSessionsCommand { get; }
     public ICommand RemoveSelectedSessionsCommand { get; }
     public ICommand ToggleSystemProxyCommand { get; }
@@ -894,6 +975,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ExportCaCommand { get; }
     public ICommand DeviceCaSetupCommand { get; }
     public ICommand OpenLoopbackExemptCommand { get; }
+    public ICommand OpenSessionRetentionCommand { get; }
+    public ICommand OpenLoggingSettingsCommand { get; }
+    public ICommand OpenHttpsDecryptHostsCommand { get; }
     public ICommand ReplayCommand { get; }
     public ICommand LoadFromSelectedCommand { get; }
     public ICommand LoadIntoComposerCommand { get; }
@@ -1170,6 +1254,26 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>When true, accept upstream TLS certs that would otherwise fail validation.</summary>
+    public bool IgnoreServerCertificateErrors
+    {
+        get => _interception.IgnoreServerCertificateErrors;
+        set
+        {
+            if (_interception.IgnoreServerCertificateErrors == value)
+            {
+                return;
+            }
+
+            _interception.IgnoreServerCertificateErrors = value;
+            PersistSettings();
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IgnoreServerCertificateErrors)));
+            StatusText = value
+                ? "Ignoring server certificate errors"
+                : "Validating server certificates";
+        }
+    }
+
     public bool ShowLoopbackExemptMenu { get; }
 
     /// <summary>Right pane visibility (Inspect + Tools). Kept name for tests.</summary>
@@ -1403,6 +1507,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.ScriptOnResponse = _scriptOnResponse;
         _interception.IgnoreServerCertificateErrors = s.IgnoreServerCertificateErrors;
         _interception.DecryptHttps = _decryptHttps;
+        ApplyDecryptHostListsFromSettings();
         _debugFileLogging = IsDebugFileLoggingEnabled(s);
         _interception.ConfigureLogging(s);
     }
@@ -1427,6 +1532,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         s.AutoStartCapture = AutoStartCapture;
         s.AutoSystemProxyOnStart = AutoSystemProxyOnStart;
         s.DecryptHttps = DecryptHttps;
+        s.IgnoreServerCertificateErrors = _interception.IgnoreServerCertificateErrors;
         s.AutoResponderEnabled = AutoResponder.Enabled;
         s.AutoResponderRules = AutoResponder.ToDtos();
         s.BreakpointEnabled = Breakpoints.Enabled;
@@ -1434,7 +1540,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         s.BreakpointOnResponse = BreakpointOnResponse;
         s.ScriptOnRequest = ScriptOnRequest;
         s.ScriptOnResponse = ScriptOnResponse;
-        s.IgnoreServerCertificateErrors = _interception.IgnoreServerCertificateErrors;
         s.LoggingEnabled = _settings.Current.LoggingEnabled;
         s.LoggingMinimumLevel = _settings.Current.LoggingMinimumLevel;
         s.LoggingEnableFile = _settings.Current.LoggingEnableFile;
@@ -1529,6 +1634,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private Task ToggleDebugLoggingAsync()
     {
+        // Kept for tests that invoke ToggleDebugLoggingCommand; opens Logging… when UI is available,
+        // otherwise toggles the previous Debug-file latch in settings.
+        if (TryGetMainWindow() is not null)
+        {
+            return OpenLoggingSettingsAsync();
+        }
+
         var s = _settings.Current;
         var enable = !IsDebugFileLoggingEnabled(s);
         s.LoggingEnabled = true;
@@ -1536,9 +1648,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         s.LoggingMinimumLevel = enable ? "Debug" : "Error";
         if (string.IsNullOrWhiteSpace(s.LoggingFilePath))
         {
-            s.LoggingFilePath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "TitaniumInspector", "logs", "titanium-inspector.log");
+            s.LoggingFilePath = LoggingSettingsWindow.DefaultLogPath();
         }
 
         _interception.ConfigureLogging(s);

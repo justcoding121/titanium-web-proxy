@@ -49,6 +49,12 @@ public sealed class InterceptionService : IDisposable
     /// </summary>
     public bool DecryptHttps { get; set; }
 
+    /// <summary>Extra host patterns that skip HTTPS decryption (in addition to built-in bypasses).</summary>
+    public List<string> DecryptSkipHosts { get; set; } = [];
+
+    /// <summary>When non-empty, only these hosts are decrypted (built-in bypasses still never decrypt).</summary>
+    public List<string> DecryptOnlyHosts { get; set; } = [];
+
     /// <summary>True when the OS can host QUIC (MsQuic / <c>QuicListener.IsSupported</c>).</summary>
     public static bool IsHttp3Supported => System.Net.Quic.QuicListener.IsSupported;
 
@@ -486,7 +492,10 @@ public sealed class InterceptionService : IDisposable
     {
         var host = e.HttpClient.Request.RequestUri?.Host
                    ?? TryHost(e.HttpClient.Request);
-        e.DecryptSsl = DecryptHttps && !MitmBypass.ShouldDisableSslDecrypt(host);
+        e.DecryptSsl = DecryptHttps && !MitmBypass.ShouldDisableSslDecrypt(
+            host,
+            DecryptSkipHosts,
+            DecryptOnlyHosts);
 
         if (!Capturing)
         {

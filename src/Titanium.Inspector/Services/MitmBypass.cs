@@ -34,13 +34,67 @@ public static class MitmBypass
         return settings;
     }
 
-    public static bool ShouldDisableSslDecrypt(string? hostname)
+    public static bool ShouldDisableSslDecrypt(string? hostname) =>
+        ShouldDisableSslDecrypt(hostname, userSkipHosts: null, userOnlyHosts: null);
+
+    /// <summary>
+    /// Returns true when TLS should stay opaque (no MITM decrypt).
+    /// Built-in SSO/pinning hosts always skip. User skip patterns add more.
+    /// When <paramref name="userOnlyHosts"/> is non-empty, only matching hosts decrypt
+    /// (built-in bypass hosts still never decrypt).
+    /// </summary>
+    public static bool ShouldDisableSslDecrypt(
+        string? hostname,
+        IEnumerable<string>? userSkipHosts,
+        IEnumerable<string>? userOnlyHosts)
     {
         if (string.IsNullOrEmpty(hostname))
         {
             return false;
         }
 
+        if (IsBuiltInSslBypass(hostname))
+        {
+            return true;
+        }
+
+        if (MatchesAny(hostname, userSkipHosts))
+        {
+            return true;
+        }
+
+        var only = userOnlyHosts?
+            .Where(h => !string.IsNullOrWhiteSpace(h))
+            .ToList();
+        if (only is { Count: > 0 } && !MatchesAny(hostname, only))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    public static bool HostnameMatches(string hostname, string pattern)
+    {
+        if (string.IsNullOrWhiteSpace(pattern))
+        {
+            return false;
+        }
+
+        pattern = pattern.Trim();
+        if (pattern.StartsWith("*.", StringComparison.Ordinal))
+        {
+            var suffix = pattern[1..];
+            return hostname.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                   || hostname.Equals(pattern[2..], StringComparison.OrdinalIgnoreCase);
+        }
+
+        return hostname.Equals(pattern, StringComparison.OrdinalIgnoreCase)
+               || hostname.EndsWith("." + pattern, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsBuiltInSslBypass(string hostname)
+    {
         if (SystemProxyBypassRules.Any(rule => HostnameMatches(hostname, rule)))
         {
             return true;
@@ -50,15 +104,21 @@ public static class MitmBypass
                || hostname.Contains("webex.com", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool HostnameMatches(string hostname, string pattern)
+    private static bool MatchesAny(string hostname, IEnumerable<string>? patterns)
     {
-        if (pattern.StartsWith("*.", StringComparison.Ordinal))
+        if (patterns is null)
         {
-            var suffix = pattern[1..];
-            return hostname.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
-                   || hostname.Equals(pattern[2..], StringComparison.OrdinalIgnoreCase);
+            return false;
         }
 
-        return hostname.Equals(pattern, StringComparison.OrdinalIgnoreCase);
+        foreach (var pattern in patterns)
+        {
+            if (HostnameMatches(hostname, pattern))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Titanium.Inspector.Views.LoggingSettingsWindow"
+        AutomationProperties.AutomationId="LoggingSettingsWindow"
+        Title="Logging"
+        Width="520" Height="360"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+  <DockPanel Margin="16">
+    <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,12" Opacity="0.85"
+               Text="Configure Inspector proxy logging. Changes apply immediately." />
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+      <Button x:Name="SaveButton" Content="Save" MinWidth="88" AutomationProperties.AutomationId="LoggingSave" />
+      <Button x:Name="CancelButton" Content="Cancel" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="LoggingCancel" />
+    </StackPanel>
+    <StackPanel Spacing="10">
+      <CheckBox x:Name="EnableLoggingCheck" Content="Enable logging"
+                AutomationProperties.AutomationId="LoggingEnabled" />
+      <CheckBox x:Name="WriteFileCheck" Content="Write log file"
+                AutomationProperties.AutomationId="LoggingWriteFile" />
+      <Grid ColumnDefinitions="140,*">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock Grid.Row="0" Margin="0,0,12,8" VerticalAlignment="Center" Text="Minimum level" />
+        <ComboBox x:Name="LevelCombo" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"
+                  AutomationProperties.AutomationId="LoggingLevel" />
+        <TextBlock Grid.Row="1" Margin="0,0,12,0" VerticalAlignment="Center" Text="Log file path" />
+        <DockPanel Grid.Row="1" Grid.Column="1">
+          <Button x:Name="BrowseButton" DockPanel.Dock="Right" Content="Browse…" MinWidth="88" Margin="8,0,0,0"
+                  AutomationProperties.AutomationId="LoggingBrowse" />
+          <TextBox x:Name="PathBox" AutomationProperties.AutomationId="LoggingPath" />
+        </DockPanel>
+      </Grid>
+    </StackPanel>
+  </DockPanel>
+</Window>

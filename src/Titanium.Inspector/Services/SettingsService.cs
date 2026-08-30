@@ -72,6 +72,14 @@ public sealed class InspectorSettings
 
     /// <summary>Delete spill files older than this many days on startup.</summary>
     public int DiskCacheMaxAgeDays { get; set; } = 7;
+
+    /// <summary>Extra host patterns that skip HTTPS decryption (one pattern per entry; supports *.example.com).</summary>
+    public List<string> DecryptSkipHosts { get; set; } = new();
+
+    /// <summary>
+    /// When non-empty, only these host patterns are decrypted (built-in bypass hosts still never decrypt).
+    /// </summary>
+    public List<string> DecryptOnlyHosts { get; set; } = new();
 }
 
 public sealed class SettingsService

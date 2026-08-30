@@ -58,6 +58,7 @@ public sealed class SessionBodyDiskCache : IDisposable
 
         File.Move(tmp, path);
         AdjustTracked(new FileInfo(path).Length);
+        PruneExpiredFiles();
         EnforceDiskBudget();
     }
 
@@ -149,6 +150,35 @@ public sealed class SessionBodyDiskCache : IDisposable
         _disposed = true;
     }
 
+    private void PruneExpiredFiles()
+    {
+        if (_maxAge <= TimeSpan.Zero || !Directory.Exists(_directory))
+        {
+            return;
+        }
+
+        var cutoff = DateTime.UtcNow - _maxAge;
+        foreach (var path in Directory.EnumerateFiles(_directory, "*.bin"))
+        {
+            try
+            {
+                var info = new FileInfo(path);
+                if (info.LastWriteTimeUtc >= cutoff)
+                {
+                    continue;
+                }
+
+                var len = info.Length;
+                info.Delete();
+                AdjustTracked(-len);
+            }
+            catch
+            {
+                // Best-effort.
+            }
+        }
+    }
+
     private void PruneOnStartup()
     {
         if (!Directory.Exists(_directory))
@@ -156,7 +186,8 @@ public sealed class SessionBodyDiskCache : IDisposable
             return;
         }
 
-        var cutoff = DateTime.UtcNow - _maxAge;
+        PruneExpiredFiles();
+
         long total = 0;
         var files = new List<FileInfo>();
         foreach (var path in Directory.EnumerateFiles(_directory, "*.bin"))
@@ -164,12 +195,6 @@ public sealed class SessionBodyDiskCache : IDisposable
             try
             {
                 var info = new FileInfo(path);
-                if (info.LastWriteTimeUtc < cutoff)
-                {
-                    info.Delete();
-                    continue;
-                }
-
                 files.Add(info);
                 total += info.Length;
             }
