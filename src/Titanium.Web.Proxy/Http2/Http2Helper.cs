@@ -2719,9 +2719,13 @@ namespace Titanium.Web.Proxy.Http2
 
                             if (bodyBudgetBreached && bodyBudgetMode == PolicyMode.Enforce)
                             {
-                                ReportException(logger, new ProxyHttpException(
+                                // Intentional policy enforcement, not a proxy defect — Debug only.
+                                ProxyDiagnostics.ReportBenign(logger,
                                     $"HTTP/2 {(isClient ? "request" : "response")} body exceeded the configured " +
-                                    $"buffering limit of {maxBufferedBodyBytes:N0} bytes.", null, args));
+                                    $"buffering limit of {maxBufferedBodyBytes:N0} bytes.",
+                                    new ProxyHttpException(
+                                        $"HTTP/2 {(isClient ? "request" : "response")} body exceeded the configured " +
+                                        $"buffering limit of {maxBufferedBodyBytes:N0} bytes.", null, args));
 
                                 var sizeLimitException = new BodySizeLimitExceededException(
                                     $"HTTP/2 body byte count {data.Length + length:N0} exceeds the limit of {maxBufferedBodyBytes:N0}.");
@@ -3354,18 +3358,34 @@ namespace Titanium.Web.Proxy.Http2
 
                     // NO_ERROR (0) from the origin is a normal post-response cleanup; CANCEL is the usual
                     // client abort. REFUSED_STREAM is also expected under origin load-shedding / GOAWAY
-                    // races (observed live from github.com/Fastly both direct and via this proxy) - the
-                    // RST is still forwarded to the peer so browsers/HttpClient can retry, but it must
-                    // not flood server logs as a proxy defect.
+                    // races (observed live from github.com/Fastly both direct and via this proxy).
+                    // STREAM_CLOSED is the peer saying the stream is already done (half-close races).
+                    // PROTOCOL_ERROR on a received RST is the peer's assessment — our own framing
+                    // defects are already ReportException'd at the detection site before we send RST.
+                    // Forward the RST either way; do not flood Error logs for peer-initiated codes.
                     if (errorCode != (int)Http2ErrorCode.NoError &&
                         errorCode != (int)Http2ErrorCode.Cancel &&
-                        errorCode != (int)Http2ErrorCode.RefusedStream)
+                        errorCode != (int)Http2ErrorCode.RefusedStream &&
+                        errorCode != (int)Http2ErrorCode.StreamClosed &&
+                        errorCode != (int)Http2ErrorCode.ProtocolError)
                     {
                         var direction = isClient ? "client→proxy" : "origin→proxy";
                         var requestUrl = args?.HttpClient.Request.Url ?? "(unknown)";
                         ReportException(logger, new ProxyHttpException(
                             $"HTTP/2 stream error. Error code: {errorCode}; direction: {direction}; " +
                             $"stream: {streamId}; request: {requestUrl}", null, args));
+                    }
+                    else if (logger.IsEnabled(LogLevel.Debug) &&
+                             errorCode != (int)Http2ErrorCode.NoError &&
+                             errorCode != (int)Http2ErrorCode.Cancel)
+                    {
+                        var direction = isClient ? "client→proxy" : "origin→proxy";
+                        var requestUrl = args?.HttpClient.Request.Url ?? "(unknown)";
+                        ProxyDiagnostics.ReportBenign(logger,
+                            $"HTTP/2 peer RST_STREAM. Error code: {errorCode}; direction: {direction}; " +
+                            $"stream: {streamId}; request: {requestUrl}",
+                            new ProxyHttpException(
+                                $"HTTP/2 peer stream reset code {errorCode}", null, args));
                     }
                 }
 

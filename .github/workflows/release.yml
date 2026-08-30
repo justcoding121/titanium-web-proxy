@@ -1,4 +1,4 @@
-﻿name: release
+name: release
 
 on:
   push:
@@ -209,7 +209,7 @@ jobs:
           RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
         run: |
           $ver = $env:RELEASE_VERSION
-          if ($ver -notmatch '^\d+\.\d+\.\d+') { $ver = "7.0.0" }
+          if ($ver -notmatch '^\d+\.\d+\.\d+') { $ver = "7.0.1" }
           $ver = ($ver -split "-")[0]
           ./tools/packaging/build-inspector-msi.ps1 `
             -PayloadDir artifacts/inspector/win-x64 `
@@ -318,7 +318,7 @@ jobs:
             "abstractionsVersion": version.split("-")[0],
             "products": {
               "cli": {"assets": {}},
-              "plus": {"requiredAbstractions": "7.0.0", "asset": None},
+              "plus": {"requiredAbstractions": "7.0.1", "asset": None},
               "inspector": {"assets": {}},
             },
             "nuget": {

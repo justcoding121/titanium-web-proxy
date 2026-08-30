@@ -5,7 +5,7 @@ namespace Titanium.Plus;
 /// <summary>Plus Inspector panels — view provider only (Inspector never calls Apply).</summary>
 public sealed class PlusInspectorViewProvider : IPlusInspectorViewProvider
 {
-    public Version RequiredAbstractionsVersion { get; } = new(7, 0, 0);
+    public Version RequiredAbstractionsVersion { get; } = new(7, 0, 1);
 
     public IReadOnlyList<object> CreatePanels(InspectorPanelContext context)
     {

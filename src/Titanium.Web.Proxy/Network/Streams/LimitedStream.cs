@@ -71,7 +71,9 @@ internal class LimitedStream : Stream
         readChunkTrail = true;
 
         var chunkHead = await baseReader.ReadLineAsync();
-        if (chunkHead == null)
+        // null = EOF; empty = blank line (half-closed / framing glitch). Either way there is no
+        // more chunk payload — treat as end rather than PROTOCOL_ERROR via Invalid chunk length: ''.
+        if (string.IsNullOrEmpty(chunkHead))
         {
             bytesRemaining = -1;
             return;

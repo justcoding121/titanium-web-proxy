@@ -249,8 +249,27 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     private void EvictCertificate(string certificateName)
     {
-        if (cachedCertificates.TryRemove(certificateName, out var removed))
-            pendingDisposals.Enqueue(new PendingCertificateDisposal(removed.Certificate, DateTime.UtcNow));
+        if (!cachedCertificates.TryRemove(certificateName, out var removed))
+            return;
+
+        // Drop any SslStreamCertificateContext keyed by this leaf before the deferred dispose.
+        // With SaveFakeCertificates, the next visit reloads the same PKCS#12 (same thumbprint);
+        // leaving the context cached would hand SslStream a disposed SafeCertContext
+        // ("m_safeCertContext is an invalid handle") and permanently break MITM for that host.
+        InvalidateSslCertificateContext(removed.Certificate);
+        pendingDisposals.Enqueue(new PendingCertificateDisposal(removed.Certificate, DateTime.UtcNow));
+    }
+
+    /// <summary>
+    ///     Removes a cached <see cref="System.Net.Security.SslStreamCertificateContext" /> for
+    ///     <paramref name="leaf" /> so a later handshake cannot reuse a context whose underlying
+    ///     <see cref="X509Certificate2" /> has been (or is about to be) disposed.
+    /// </summary>
+    private void InvalidateSslCertificateContext(X509Certificate2 leaf)
+    {
+        var thumbprint = leaf.Thumbprint;
+        if (thumbprint != null)
+            sslCertificateContexts.TryRemove(thumbprint, out _);
     }
 
     /// <summary>
@@ -265,8 +284,13 @@ public sealed class CertificateManager : IDisposable
         var cutoff = DateTime.UtcNow.AddMinutes(-1);
         while (pendingDisposals.TryPeek(out var pending) && pending.EvictedAtUtc <= cutoff)
         {
-            if (pendingDisposals.TryDequeue(out pending))
-                try { pending.Certificate.Dispose(); } catch { /* best effort */ }
+            if (!pendingDisposals.TryDequeue(out pending))
+                continue;
+
+            // Belt-and-suspenders: eviction already invalidated, but expired-cache and other
+            // paths may enqueue without going through EvictCertificate.
+            InvalidateSslCertificateContext(pending.Certificate);
+            try { pending.Certificate.Dispose(); } catch { /* best effort */ }
         }
     }
 
@@ -787,7 +811,12 @@ public sealed class CertificateManager : IDisposable
         var now = DateTime.Now;
         if (cached.Certificate.NotAfter <= now || cached.Certificate.NotBefore > now)
         {
-            if (cachedCertificates.TryRemove(certificateName, out var removed)) removed.Certificate.Dispose();
+            if (cachedCertificates.TryRemove(certificateName, out var removed))
+            {
+                InvalidateSslCertificateContext(removed.Certificate);
+                removed.Certificate.Dispose();
+            }
+
             return false;
         }
 
@@ -998,14 +1027,23 @@ public sealed class CertificateManager : IDisposable
     {
         var key = leaf.Thumbprint;
         if (key != null && sslCertificateContexts.TryGetValue(key, out var cached))
-            return cached;
+        {
+            // Same thumbprint can be a freshly loaded PKCS#12 after the previous X509Certificate2
+            // was disposed (idle/bound eviction + SaveFakeCertificates). SslStreamCertificateContext
+            // pins the original SafeCertContext — never reuse a context built for a different instance.
+            if (ReferenceEquals(cached.TargetCertificate, leaf))
+                return cached;
+
+            sslCertificateContexts.TryRemove(key, out _);
+        }
 
         var created = BuildSslCertificateContext(leaf);
 
         if (key == null)
             return created;
 
-        return sslCertificateContexts.GetOrAdd(key, created);
+        return sslCertificateContexts.AddOrUpdate(key, created, (_, existing) =>
+            ReferenceEquals(existing.TargetCertificate, leaf) ? existing : created);
     }
 
     private System.Net.Security.SslStreamCertificateContext BuildSslCertificateContext(X509Certificate2 leaf)

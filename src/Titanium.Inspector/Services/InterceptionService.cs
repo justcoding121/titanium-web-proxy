@@ -108,6 +108,10 @@ public sealed class InterceptionService : IDisposable
         ApplyLoggingOptions(_loggingSettings);
         _proxy.EnableHttpInterception = true;
         _proxy.EnableRequestTimingCapture = true;
+        // Inspector eagerly buffers bodies for the session grid; 4 MiB trips too often on
+        // normal browsing (images, JS bundles) and RST'd the H2 stream. 32 MiB still bounds
+        // memory while covering typical inspected payloads.
+        _proxy.MaxBufferedBodyBytes = 32 * 1024 * 1024;
         ApplyHttpProtocols();
         _proxy.BeforeRequest += OnBeforeRequest;
         _proxy.BeforeResponse += OnBeforeResponse;
@@ -571,7 +575,7 @@ public sealed class InterceptionService : IDisposable
     {
         try
         {
-            if (e.HttpClient.Request.HasBody)
+            if (e.HttpClient.Request.HasBody && ShouldBufferBody(e.HttpClient.Request, e))
             {
                 e.HttpClient.Request.KeepBody = true;
                 await e.GetRequestBody();
@@ -629,7 +633,7 @@ public sealed class InterceptionService : IDisposable
     {
         try
         {
-            if (e.HttpClient.Response.HasBody)
+            if (e.HttpClient.Response.HasBody && ShouldBufferBody(e.HttpClient.Response, e))
             {
                 e.HttpClient.Response.KeepBody = true;
                 await e.GetResponseBody();
@@ -839,6 +843,24 @@ public sealed class InterceptionService : IDisposable
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    ///     Whole-body buffering for the session grid must not run when Content-Length already
+    ///     exceeds <see cref="ProxyServer.MaxBufferedBodyBytes" /> — that path RSTs HTTP/2 streams
+    ///     with ENHANCE_YOUR_CALM and breaks the browser download. Unknown length still buffers
+    ///     up to the limit (UI truncation via <see cref="MaxBodyBytes" /> applies afterward).
+    /// </summary>
+    private bool ShouldBufferBody(RequestResponseBase message, SessionEventArgs session)
+    {
+        var limit = session.MaxBufferedBodyBytes ?? _proxy?.MaxBufferedBodyBytes ?? (4 * 1024 * 1024);
+        if (limit <= 0)
+        {
+            return true;
+        }
+
+        var contentLength = message.ContentLength;
+        return contentLength < 0 || contentLength <= limit;
     }
 
     private static byte[]? TruncateBytes(byte[]? body)
