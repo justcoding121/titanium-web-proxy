@@ -59,13 +59,12 @@ public sealed class ResilienceController : IDisposable
         {
             try
             {
-                await Task.Delay(intervalMs, cancellationToken);
-                if (manager is null)
+                if (manager is not null)
                 {
-                    continue;
+                    await ProbeAllAsync(manager, unhealthyThreshold, path, protocol, cancellationToken);
                 }
 
-                await ProbeAllAsync(manager, unhealthyThreshold, path, protocol, cancellationToken);
+                await Task.Delay(intervalMs, cancellationToken);
             }
             catch (OperationCanceledException)
             {
