@@ -73,40 +73,55 @@
         <ColumnDefinition Width="Auto" />
         <ColumnDefinition Width="{Binding SessionDetailsPaneWidth}" MinWidth="0" />
       </Grid.ColumnDefinitions>
-      <StackPanel Grid.Row="0" Grid.ColumnSpan="3" Margin="8" Spacing="6">
-        <StackPanel Orientation="Horizontal" Spacing="12">
-          <TextBox MinWidth="200" Width="360"
+      <StackPanel Grid.Row="0" Grid.ColumnSpan="3" Margin="8" Spacing="4"
+                  AutomationProperties.AutomationId="ToolbarPanel">
+        <!-- Search + filters: WrapPanel so chips stay visible when the window narrows. -->
+        <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarSearchFilters">
+          <TextBox MinWidth="160" Width="320" MaxWidth="420" Margin="0,0,12,6"
                    Watermark="Search: method:GET status:2xx host:example process:chrome is:ws hide:tunnel"
                    Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
-          <CheckBox Content="Hide tunnels" IsChecked="{Binding HideTunnelsFilter}" VerticalAlignment="Center"
+          <CheckBox Content="Hide tunnels" IsChecked="{Binding HideTunnelsFilter}"
+                    VerticalAlignment="Center" Margin="0,0,12,6"
                     AutomationProperties.AutomationId="HideTunnelsFilterCheck" />
-          <CheckBox Content="Hide images" IsChecked="{Binding HideImagesFilter}" VerticalAlignment="Center"
+          <CheckBox Content="Hide images" IsChecked="{Binding HideImagesFilter}"
+                    VerticalAlignment="Center" Margin="0,0,12,6"
                     AutomationProperties.AutomationId="HideImagesFilterCheck" />
-          <CheckBox Content="Errors only" IsChecked="{Binding ErrorsOnlyFilter}" VerticalAlignment="Center"
+          <CheckBox Content="Errors only" IsChecked="{Binding ErrorsOnlyFilter}"
+                    VerticalAlignment="Center" Margin="0,0,12,6"
                     AutomationProperties.AutomationId="ErrorsOnlyFilterCheck" />
-          <Button Content="Clear filters" Command="{Binding ClearFiltersCommand}" VerticalAlignment="Center"
+          <Button Content="Clear filters" Command="{Binding ClearFiltersCommand}"
+                  VerticalAlignment="Center" Margin="0,0,12,6"
                   AutomationProperties.AutomationId="ClearFiltersButton" />
-          <CheckBox Content="Capturing" IsChecked="{Binding Capturing}" VerticalAlignment="Center"
+        </WrapPanel>
+        <!-- Capture toggles on their own wrapping row (separate from filters). -->
+        <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarCaptureToggles">
+          <CheckBox Content="Capturing" IsChecked="{Binding Capturing}"
+                    VerticalAlignment="Center" Margin="0,0,12,6"
                     AutomationProperties.AutomationId="CapturingCheck" />
-          <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}" VerticalAlignment="Center"
+          <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}"
+                    VerticalAlignment="Center" Margin="0,0,12,6"
                     AutomationProperties.AutomationId="DecryptHttpsCheck" />
-          <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}" VerticalAlignment="Center"
+          <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}"
+                    VerticalAlignment="Center" Margin="0,0,12,6"
                     AutomationProperties.AutomationId="SystemProxyCheck" />
-        </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="12">
+        </WrapPanel>
+        <!-- Bind / intercept controls wrap independently of the rows above. -->
+        <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarEndpoint">
           <TextBox Width="120" Watermark="Bind address" Text="{Binding BindAddress}"
                    IsEnabled="{Binding BindFieldsEnabled}"
+                   VerticalAlignment="Center" Margin="0,0,12,6"
                    AutomationProperties.AutomationId="ToolbarBindAddress" />
           <TextBox Width="70" Watermark="Port" Text="{Binding BindPort}"
                    IsEnabled="{Binding BindFieldsEnabled}"
+                   VerticalAlignment="Center" Margin="0,0,12,6"
                    AutomationProperties.AutomationId="ToolbarBindPort" />
           <Button Content="{Binding InterceptToggleText}" Command="{Binding ToggleInterceptCommand}"
-                  VerticalAlignment="Center"
+                  VerticalAlignment="Center" Margin="0,0,12,6"
                   AutomationProperties.AutomationId="ToggleInterceptButton" />
           <TextBlock Text="{Binding EndpointStatusText}" VerticalAlignment="Center" Opacity="0.85"
-                     TextWrapping="NoWrap"
+                     TextWrapping="Wrap" MaxWidth="420" Margin="0,0,12,6"
                      AutomationProperties.AutomationId="EndpointStatusText" />
-        </StackPanel>
+        </WrapPanel>
       </StackPanel>
       <DataGrid Grid.Row="1" Grid.Column="0" Margin="8,8,4,8"
                 x:Name="SessionsGrid"
