@@ -27,6 +27,21 @@ public class SessionDisplayFormatTests
     }
 
     [TestMethod]
+    public void FormatByteSize_UsesBKbMb()
+    {
+        Assert.AreEqual("", SessionDisplayFormat.FormatByteSize(null));
+        Assert.AreEqual("", SessionDisplayFormat.FormatByteSize(-1));
+        Assert.AreEqual("0 B", SessionDisplayFormat.FormatByteSize(0));
+        Assert.AreEqual("512 B", SessionDisplayFormat.FormatByteSize(512));
+        Assert.AreEqual("1023 B", SessionDisplayFormat.FormatByteSize(1023));
+        Assert.AreEqual("1.0 KB", SessionDisplayFormat.FormatByteSize(1024));
+        Assert.AreEqual("1.5 KB", SessionDisplayFormat.FormatByteSize(1536));
+        Assert.AreEqual("10 KB", SessionDisplayFormat.FormatByteSize(10 * 1024));
+        Assert.AreEqual("1.0 MB", SessionDisplayFormat.FormatByteSize(1024 * 1024));
+        Assert.AreEqual("2.5 MB", SessionDisplayFormat.FormatByteSize((long)(2.5 * 1024 * 1024)));
+    }
+
+    [TestMethod]
     [DataRow(null, HttpStatusClass.Pending)]
     [DataRow(100, HttpStatusClass.Informational)]
     [DataRow(199, HttpStatusClass.Informational)]

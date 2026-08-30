@@ -31,6 +31,7 @@ public class BindEndpointUxTests
             vm.BindPort = GetFreePort();
 
             Assert.IsTrue(vm.BindFieldsEnabled);
+            Assert.IsFalse(vm.IsIntercepting);
             Assert.AreEqual("Not listening", vm.EndpointStatusText);
             Assert.AreEqual("Start interception", vm.InterceptToggleText);
 
@@ -38,6 +39,7 @@ public class BindEndpointUxTests
             await WaitUntil(() => interception.IsRunning && !vm.BindFieldsEnabled);
 
             Assert.IsFalse(vm.BindFieldsEnabled);
+            Assert.IsTrue(vm.IsIntercepting);
             Assert.AreEqual($"Listening {vm.BindAddress}:{vm.BindPort}", vm.EndpointStatusText);
             Assert.AreEqual("Stop interception", vm.InterceptToggleText);
 
@@ -45,6 +47,7 @@ public class BindEndpointUxTests
             await WaitUntil(() => !interception.IsRunning && vm.EndpointStatusText == "Not listening");
 
             Assert.IsTrue(vm.BindFieldsEnabled);
+            Assert.IsFalse(vm.IsIntercepting);
             Assert.AreEqual("Not listening", vm.EndpointStatusText);
             Assert.AreEqual("Start interception", vm.InterceptToggleText);
 

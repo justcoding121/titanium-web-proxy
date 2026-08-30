@@ -226,7 +226,8 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private void ApplyKde(string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
     {
         KdeWrite("ProxyType", "1");
-        var url = $"http://{hostname}:{port}";
+        // Local forward proxies are plain HTTP endpoints; https:// is not valid for these settings.
+        var url = $"http://{hostname}:{port}"; // NOSONAR S5332
         if ((protocolType & ProxyProtocolType.Http) != 0)
             KdeWrite("httpProxy", url);
         if ((protocolType & ProxyProtocolType.Https) != 0)
@@ -239,7 +240,8 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private void ApplyProcessEnvironment(string hostname, int port, ProxyProtocolType protocolType,
         string? proxyOverride)
     {
-        var url = $"http://{hostname}:{port}";
+        // Process proxy env vars for a local listener always use the http scheme.
+        var url = $"http://{hostname}:{port}"; // NOSONAR S5332
         if ((protocolType & ProxyProtocolType.Http) != 0)
         {
             Environment.SetEnvironmentVariable("http_proxy", url);

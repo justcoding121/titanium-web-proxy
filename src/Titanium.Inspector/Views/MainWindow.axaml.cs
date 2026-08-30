@@ -39,6 +39,7 @@ public partial class MainWindow : Window
         DataContextChanged += OnDataContextChanged;
         SessionsGrid.Loaded += OnSessionsGridLoaded;
         SessionsGrid.SelectionChanged += OnSessionsGridSelectionChanged;
+        SessionsGrid.KeyDown += OnSessionsGridKeyDown;
         SessionsGrid.AddHandler(
             InputElement.PointerPressedEvent,
             OnSessionsGridPointerPressed,
@@ -50,6 +51,21 @@ public partial class MainWindow : Window
     {
         AttachSessionsScroll();
         ApplySessionGridLayoutIfNeeded();
+        ApplySessionColumnHeaderTips();
+    }
+
+    private void OnSessionsGridKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Delete || DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        if (vm.RemoveSelectedSessionsCommand.CanExecute(null))
+        {
+            vm.RemoveSelectedSessionsCommand.Execute(null);
+            e.Handled = true;
+        }
     }
 
     private void OnSessionsGridPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -336,7 +352,14 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            column.Width = new DataGridLength(state.Width);
+            // Don't restore a width narrower than MinWidth — that clips headers like "Duration (ms)".
+            var width = state.Width;
+            if (column.MinWidth > 0 && width < column.MinWidth)
+            {
+                width = column.MinWidth;
+            }
+
+            column.Width = new DataGridLength(width);
         }
 
         foreach (var (column, state) in SessionsGrid.Columns
@@ -367,6 +390,26 @@ public partial class MainWindow : Window
         var sortColumn = SessionsGrid.Columns.FirstOrDefault(c =>
             string.Equals(SessionGridLayout.GetColumnKey(c.Header), sortKey, StringComparison.Ordinal));
         sortColumn?.Sort(sortDirection);
+        ApplySessionColumnHeaderTips();
+    }
+
+    private void ApplySessionColumnHeaderTips()
+    {
+        foreach (var header in SessionsGrid.GetVisualDescendants().OfType<DataGridColumnHeader>())
+        {
+            var tip = SessionGridLayout.GetColumnKey(header.Content) switch
+            {
+                "Duration" => "Total request time from session start to complete (milliseconds).",
+                "TTFB" => "Time to first byte — wait from request sent until response headers arrive (milliseconds).",
+                "Size" => "Response body size (B below 1 KB, otherwise KB / MB).",
+                _ => null,
+            };
+
+            if (tip is not null)
+            {
+                ToolTip.SetTip(header, tip);
+            }
+        }
     }
 
     private void CaptureAndPersistSessionGridLayout()

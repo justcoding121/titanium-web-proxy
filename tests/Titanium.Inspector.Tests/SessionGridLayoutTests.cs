@@ -8,6 +8,21 @@ namespace Titanium.Inspector.Tests;
 public class SessionGridLayoutTests
 {
     [TestMethod]
+    public void GetColumnKey_UsesStringOrTextBlockTag()
+    {
+        Assert.AreEqual("Id", SessionGridLayout.GetColumnKey("Id"));
+        Assert.AreEqual("Duration", SessionGridLayout.GetColumnKey("Duration (ms)"));
+        Assert.AreEqual("TTFB", SessionGridLayout.GetColumnKey("TTFB (ms)"));
+        Assert.AreEqual(
+            "Duration",
+            SessionGridLayout.GetColumnKey(new Avalonia.Controls.TextBlock { Text = "Duration (ms)", Tag = "Duration" }));
+        Assert.AreEqual(
+            "TTFB",
+            SessionGridLayout.GetColumnKey(new Avalonia.Controls.TextBlock { Text = "TTFB (ms)" }));
+        Assert.IsNull(SessionGridLayout.GetColumnKey(42));
+    }
+
+    [TestMethod]
     public void ResolveSort_WhenNoLayout_UsesIdAscending()
     {
         SessionGridLayout.ResolveSort(null, out var key, out var direction);

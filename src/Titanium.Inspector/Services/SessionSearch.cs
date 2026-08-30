@@ -107,6 +107,61 @@ public static class SessionSearch
         return string.Join(" ", parts);
     }
 
+    /// <summary>Remove every <c>key:*</c> token from the query.</summary>
+    public static string RemoveKeyedTokens(string? query, string key)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return "";
+        }
+
+        var keyLower = key.ToLowerInvariant();
+        var parts = new List<string>();
+        foreach (Match m in TokenRegex.Matches(query))
+        {
+            if (m.Groups[1].Success)
+            {
+                var k = m.Groups[1].Value;
+                if (k.Equals(keyLower, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                parts.Add($"{k}:{m.Groups[2].Value}");
+            }
+            else
+            {
+                parts.Add(m.Groups[3].Value);
+            }
+        }
+
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>
+    /// Set <c>key:value</c>, replacing any existing tokens with the same key.
+    /// Values must be a single search token (no whitespace).
+    /// </summary>
+    public static string SetKeyedToken(string? query, string key, string value)
+    {
+        if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(value))
+        {
+            return query?.Trim() ?? "";
+        }
+
+        var trimmed = value.Trim();
+        if (trimmed.Contains(' ', StringComparison.Ordinal) ||
+            trimmed.Contains('\t', StringComparison.Ordinal))
+        {
+            // Search tokenizer is \S+ — refuse values that would split into bare words.
+            trimmed = trimmed.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)[0];
+        }
+
+        var without = RemoveKeyedTokens(query, key);
+        var token = $"{key.Trim().ToLowerInvariant()}:{trimmed}";
+        return string.IsNullOrEmpty(without) ? token : without + " " + token;
+    }
+
     /// <summary>Clear the entire search/filter query.</summary>
     public static string ClearFilters(string? _) => "";
 

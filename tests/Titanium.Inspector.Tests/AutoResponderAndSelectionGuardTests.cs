@@ -88,7 +88,7 @@ public class AutoResponderAndSelectionGuardTests
             StringAssert.Contains(vm.StatusText, "Select a session");
 
             vm.CopyUrlCommand.Execute(null);
-            StringAssert.Contains(vm.StatusText, "Select a session to copy URL");
+            StringAssert.Contains(vm.StatusText, "Select a session with a URL to copy");
 
             vm.ReplayCommand.Execute(null);
             // Guard path sets StatusText before any await, so no delay is required.

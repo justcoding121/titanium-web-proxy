@@ -26,7 +26,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly ObservableCollection<SessionSnapshot> _all = new();
     private readonly List<SessionSnapshot> _selectedSessions = new();
     private string _statusText = "Ready";
-    private string _sessionCountText = "Sessions: 0 / 0";
+    private string _sessionCountText = "Sessions: 0";
     private string _searchQuery = "";
     private SessionSnapshot? _selected;
     private string _selectedHeaders = "";
@@ -120,6 +120,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return Task.CompletedTask;
         });
         ClearSessionsCommand = new RelayCommand(ClearSessionsAsync);
+        RemoveSelectedSessionsCommand = new RelayCommand(RemoveSelectedSessionsAsync);
         ToggleSystemProxyCommand = new RelayCommand(ToggleSystemProxyAsync);
         InstallCaCommand = new RelayCommand(InstallCaAsync);
         UntrustCaCommand = new RelayCommand(UntrustCaAsync);
@@ -130,6 +131,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         LoadFromSelectedCommand = new RelayCommand(LoadFromSelectedAsync);
         LoadIntoComposerCommand = new RelayCommand(LoadIntoComposerAsync);
         CopyUrlCommand = new RelayCommand(CopyUrlAsync);
+        FilterByHostCommand = new RelayCommand(FilterByHostAsync);
+        FilterByProcessCommand = new RelayCommand(FilterByProcessAsync);
         SendComposerCommand = new RelayCommand(async () => await SendComposerAsync());
         AddAutoResponderRuleCommand = new RelayCommand(AddAutoResponderRuleAsync);
         DeleteAutoResponderRuleCommand = new RelayCommand(DeleteAutoResponderRuleAsync);
@@ -186,6 +189,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         _selectedSessions.Clear();
         _selectedSessions.AddRange(selected);
+        NotifyFilterSelectionProperties();
     }
 
     /// <summary>
@@ -451,6 +455,43 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
+    private Task RemoveSelectedSessionsAsync()
+    {
+        var selected = ResolveExportSelection();
+        if (selected.Count == 0)
+        {
+            StatusText = "Select one or more sessions to remove";
+            return Task.CompletedTask;
+        }
+
+        var ids = selected.Select(s => s.Id).ToHashSet();
+        for (var i = _all.Count - 1; i >= 0; i--)
+        {
+            if (ids.Contains(_all[i].Id))
+            {
+                _all.RemoveAt(i);
+            }
+        }
+
+        for (var i = Sessions.Count - 1; i >= 0; i--)
+        {
+            if (ids.Contains(Sessions[i].Id))
+            {
+                Sessions.RemoveAt(i);
+            }
+        }
+
+        _selectedSessions.Clear();
+        if (SelectedSession is not null && ids.Contains(SelectedSession.Id))
+        {
+            SelectedSession = null;
+        }
+
+        RefreshSessionCountText();
+        StatusText = selected.Count == 1 ? "Removed 1 session" : $"Removed {selected.Count} sessions";
+        return Task.CompletedTask;
+    }
+
     private Task ToggleSystemProxyAsync()
     {
         SystemProxy = !SystemProxy;
@@ -595,38 +636,185 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private async Task CopyUrlAsync()
     {
-        var url = ResolveCopyUrl();
-        if (string.IsNullOrEmpty(url))
+        var urls = ResolveCopyUrls();
+        if (urls.Count == 0)
         {
-            StatusText = "Select a session to copy URL";
+            StatusText = "Select a session with a URL to copy";
             return;
         }
 
+        var text = string.Join(Environment.NewLine, urls);
         var window = TryGetMainWindow();
         if (window?.Clipboard is { } clipboard)
         {
-            await clipboard.SetTextAsync(url);
+            await clipboard.SetTextAsync(text);
         }
 
-        StatusText = "Copied URL";
+        StatusText = urls.Count == 1 ? "Copied URL" : $"Copied {urls.Count} URLs";
+    }
+
+    private Task FilterByHostAsync()
+    {
+        var host = ResolveUnanimousFilterHost();
+        if (string.IsNullOrEmpty(host))
+        {
+            StatusText = "Filter by host needs one shared host in the selection";
+            return Task.CompletedTask;
+        }
+
+        SearchQuery = SessionSearch.SetKeyedToken(SearchQuery, "host", host);
+        StatusText = $"Filtered by host:{host}";
+        return Task.CompletedTask;
+    }
+
+    private Task FilterByProcessAsync()
+    {
+        var process = ResolveUnanimousFilterProcess();
+        if (string.IsNullOrEmpty(process))
+        {
+            StatusText = "Filter by process needs one shared process in the selection";
+            return Task.CompletedTask;
+        }
+
+        SearchQuery = SessionSearch.SetKeyedToken(SearchQuery, "process", process);
+        StatusText = $"Filtered by process:{process}";
+        return Task.CompletedTask;
+    }
+
+    /// <summary>True when selection shares one non-empty host (single or multi-select).</summary>
+    public bool CanFilterByHost => ResolveUnanimousFilterHost() is not null;
+
+    /// <summary>True when selection shares one non-empty process (single or multi-select).</summary>
+    public bool CanFilterByProcess => ResolveUnanimousFilterProcess() is not null;
+
+    /// <summary>True when at least one session is selected.</summary>
+    public bool HasSelectedSessions => ResolveFilterSelection().Count > 0;
+
+    /// <summary>True when exactly one session is selected (Replay / Composer).</summary>
+    public bool HasSingleSelectedSession => ResolveFilterSelection().Count == 1;
+
+    /// <summary>True when at least one selected session has a URL to copy.</summary>
+    public bool CanCopyUrl => ResolveCopyUrls().Count > 0;
+
+    private string? ResolveUnanimousFilterHost()
+    {
+        var selection = ResolveFilterSelection();
+        if (selection.Count == 0)
+        {
+            return null;
+        }
+
+        string? host = null;
+        foreach (var session in selection)
+        {
+            var value = ResolveSessionHost(session);
+            if (string.IsNullOrEmpty(value))
+            {
+                return null;
+            }
+
+            if (host is null)
+            {
+                host = value;
+            }
+            else if (!host.Equals(value, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+        }
+
+        return host;
+    }
+
+    private string? ResolveUnanimousFilterProcess()
+    {
+        var selection = ResolveFilterSelection();
+        if (selection.Count == 0)
+        {
+            return null;
+        }
+
+        string? process = null;
+        foreach (var session in selection)
+        {
+            var value = ResolveSessionProcess(session);
+            if (string.IsNullOrEmpty(value))
+            {
+                return null;
+            }
+
+            if (process is null)
+            {
+                process = value;
+            }
+            else if (!process.Equals(value, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+        }
+
+        return process;
+    }
+
+    private IReadOnlyList<SessionSnapshot> ResolveFilterSelection()
+    {
+        if (_selectedSessions.Count > 0)
+        {
+            return _selectedSessions;
+        }
+
+        return SelectedSession is null ? Array.Empty<SessionSnapshot>() : [SelectedSession];
+    }
+
+    private static string? ResolveSessionHost(SessionSnapshot session)
+    {
+        if (!string.IsNullOrWhiteSpace(session.Host))
+        {
+            return session.Host.Trim();
+        }
+
+        return Uri.TryCreate(session.Url, UriKind.Absolute, out var uri) && !string.IsNullOrEmpty(uri.Host)
+            ? uri.Host
+            : null;
+    }
+
+    private static string? ResolveSessionProcess(SessionSnapshot session)
+    {
+        if (!string.IsNullOrWhiteSpace(session.ProcessName))
+        {
+            return session.ProcessName.Trim();
+        }
+
+        return session.ProcessId > 0 ? session.ProcessId.ToString() : null;
+    }
+
+    private void NotifyFilterSelectionProperties()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanFilterByHost)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanFilterByProcess)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSelectedSessions)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSingleSelectedSession)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCopyUrl)));
+    }
+
+    private IReadOnlyList<string> ResolveCopyUrls()
+    {
+        var urls = new List<string>();
+        foreach (var snap in ResolveFilterSelection())
+        {
+            if (!string.IsNullOrEmpty(snap.Url))
+            {
+                urls.Add(snap.Url);
+            }
+        }
+
+        return urls;
     }
 
     private string? ResolveCopyUrl()
     {
-        if (!string.IsNullOrEmpty(SelectedSession?.Url))
-        {
-            return SelectedSession!.Url;
-        }
-
-        foreach (var snap in _selectedSessions)
-        {
-            if (!string.IsNullOrEmpty(snap.Url))
-            {
-                return snap.Url;
-            }
-        }
-
-        return null;
+        var urls = ResolveCopyUrls();
+        return urls.Count > 0 ? urls[0] : null;
     }
 
     private Task AddAutoResponderRuleAsync()
@@ -702,6 +890,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ToggleAutoSystemProxyOnStartCommand { get; }
     public ICommand ToggleDecryptHttpsCommand { get; }
     public ICommand ClearSessionsCommand { get; }
+    public ICommand RemoveSelectedSessionsCommand { get; }
     public ICommand ToggleSystemProxyCommand { get; }
     public ICommand InstallCaCommand { get; }
     public ICommand UntrustCaCommand { get; }
@@ -712,6 +901,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand LoadFromSelectedCommand { get; }
     public ICommand LoadIntoComposerCommand { get; }
     public ICommand CopyUrlCommand { get; }
+    public ICommand FilterByHostCommand { get; }
+    public ICommand FilterByProcessCommand { get; }
     public ICommand SendComposerCommand { get; }
     public ICommand AddAutoResponderRuleCommand { get; }
     public ICommand DeleteAutoResponderRuleCommand { get; }
@@ -741,6 +932,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     /// <summary>Bind address/port are start-time config; editable only while the proxy is stopped.</summary>
     public bool BindFieldsEnabled => !_interception.IsRunning;
+
+    /// <summary>True while the proxy endpoint is listening (drives toolbar accent / live indicator).</summary>
+    public bool IsIntercepting => _interception.IsRunning;
 
     /// <summary>Toolbar button label: Start or Stop interception.</summary>
     public string InterceptToggleText
@@ -1078,6 +1272,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSelectedSession)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowInspectEmpty)));
+            NotifyFilterSelectionProperties();
 
             if (value is not null)
             {
@@ -1432,7 +1627,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     private void RefreshSessionCountText() =>
-        SessionCountText = $"Sessions: {Sessions.Count} / {_all.Count}";
+        SessionCountText = string.IsNullOrWhiteSpace(SearchQuery)
+            ? $"Sessions: {_all.Count}"
+            : $"Sessions: {Sessions.Count} / {_all.Count}";
 
     private void NotifyQuickFilterProperties()
     {
@@ -1520,6 +1717,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             : "Not listening";
         InterceptToggleText = _interception.IsRunning ? "Stop interception" : "Start interception";
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindFieldsEnabled)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsIntercepting)));
     }
 
     private static IPAddress ParseBindAddress(string bindAddress)

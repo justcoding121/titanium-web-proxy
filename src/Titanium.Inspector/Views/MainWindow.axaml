@@ -26,6 +26,7 @@
                   Command="{Binding ToggleCapturingCommand}"
                   AutomationProperties.AutomationId="MenuToggleCapturing" />
         <MenuItem Header="Clear sessions" Command="{Binding ClearSessionsCommand}" AutomationProperties.AutomationId="MenuClearSessions" />
+        <MenuItem Header="Remove selected" Command="{Binding RemoveSelectedSessionsCommand}" AutomationProperties.AutomationId="MenuRemoveSelected" />
         <Separator />
         <MenuItem Header="Auto-start capture" ToggleType="CheckBox"
                   IsChecked="{Binding AutoStartCapture, Mode=OneWay}"
@@ -115,9 +116,17 @@
                    IsEnabled="{Binding BindFieldsEnabled}"
                    VerticalAlignment="Center" Margin="0,0,12,6"
                    AutomationProperties.AutomationId="ToolbarBindPort" />
+          <!-- Accent while idle (Start); quieter default while listening (Stop). Live pip shows running state. -->
           <Button Content="{Binding InterceptToggleText}" Command="{Binding ToggleInterceptCommand}"
+                  Classes.accent="{Binding BindFieldsEnabled}"
                   VerticalAlignment="Center" Margin="0,0,12,6"
                   AutomationProperties.AutomationId="ToggleInterceptButton" />
+          <Ellipse Width="8" Height="8" Margin="0,0,6,6"
+                   VerticalAlignment="Center"
+                   Fill="{DynamicResource SessionStatusSuccessBrush}"
+                   IsVisible="{Binding IsIntercepting}"
+                   ToolTip.Tip="Proxy is listening"
+                   AutomationProperties.AutomationId="ListeningIndicator" />
           <TextBlock Text="{Binding EndpointStatusText}" VerticalAlignment="Center" Opacity="0.85"
                      TextWrapping="Wrap" MaxWidth="420" Margin="0,0,12,6"
                      AutomationProperties.AutomationId="EndpointStatusText" />
@@ -137,20 +146,40 @@
                 AutoGenerateColumns="False">
         <DataGrid.ContextMenu>
           <ContextMenu AutomationProperties.AutomationId="SessionsContextMenu">
-            <MenuItem Header="Replay" Command="{Binding ReplayCommand}" AutomationProperties.AutomationId="CtxReplay" />
-            <MenuItem Header="Load into Composer" Command="{Binding LoadIntoComposerCommand}" AutomationProperties.AutomationId="CtxLoadComposer" />
-            <Separator />
-            <MenuItem Header="Export selected HAR…" Command="{Binding ExportSelectedHarCommand}" AutomationProperties.AutomationId="CtxExportSelectedHar" />
-            <MenuItem Header="Export selected archive…" Command="{Binding ExportSelectedArchiveCommand}" AutomationProperties.AutomationId="CtxExportSelectedArchive" />
-            <Separator />
-            <MenuItem Header="Copy URL" Command="{Binding CopyUrlCommand}" AutomationProperties.AutomationId="CtxCopyUrl" />
+            <MenuItem Header="Replay" Command="{Binding ReplayCommand}"
+                      IsVisible="{Binding HasSingleSelectedSession}"
+                      AutomationProperties.AutomationId="CtxReplay" />
+            <MenuItem Header="Load into Composer" Command="{Binding LoadIntoComposerCommand}"
+                      IsVisible="{Binding HasSingleSelectedSession}"
+                      AutomationProperties.AutomationId="CtxLoadComposer" />
+            <Separator IsVisible="{Binding HasSingleSelectedSession}" />
+            <MenuItem Header="Export selected HAR…" Command="{Binding ExportSelectedHarCommand}"
+                      IsVisible="{Binding HasSelectedSessions}"
+                      AutomationProperties.AutomationId="CtxExportSelectedHar" />
+            <MenuItem Header="Export selected archive…" Command="{Binding ExportSelectedArchiveCommand}"
+                      IsVisible="{Binding HasSelectedSessions}"
+                      AutomationProperties.AutomationId="CtxExportSelectedArchive" />
+            <Separator IsVisible="{Binding HasSelectedSessions}" />
+            <MenuItem Header="Copy URL" Command="{Binding CopyUrlCommand}"
+                      IsVisible="{Binding CanCopyUrl}"
+                      AutomationProperties.AutomationId="CtxCopyUrl" />
+            <MenuItem Header="Filter by host" Command="{Binding FilterByHostCommand}"
+                      IsVisible="{Binding CanFilterByHost}"
+                      AutomationProperties.AutomationId="CtxFilterByHost" />
+            <MenuItem Header="Filter by process" Command="{Binding FilterByProcessCommand}"
+                      IsVisible="{Binding CanFilterByProcess}"
+                      AutomationProperties.AutomationId="CtxFilterByProcess" />
+            <Separator IsVisible="{Binding HasSelectedSessions}" />
+            <MenuItem Header="Remove selected" Command="{Binding RemoveSelectedSessionsCommand}"
+                      IsVisible="{Binding HasSelectedSessions}"
+                      AutomationProperties.AutomationId="CtxRemoveSelected" />
           </ContextMenu>
         </DataGrid.ContextMenu>
         <DataGrid.Columns>
-          <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="60"
+          <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="55" MinWidth="50"
                               CustomSortComparer="{x:Static svc:SessionIdComparer.Instance}" />
-          <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="70" />
-          <DataGridTemplateColumn Header="Status" Width="60" SortMemberPath="StatusCode">
+          <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="75" MinWidth="60" />
+          <DataGridTemplateColumn Header="Status" Width="65" MinWidth="55" SortMemberPath="StatusCode">
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate x:DataType="svc:SessionSnapshot">
                 <TextBlock Text="{Binding StatusCode}"
@@ -160,13 +189,16 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
-          <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="140" />
-          <DataGridTextColumn Header="URL" Binding="{Binding Url}" Width="280" />
-          <DataGridTextColumn Header="Client→Server" Binding="{Binding Protocol}" Width="110" />
-          <DataGridTextColumn Header="Duration" Binding="{Binding DurationMs, StringFormat={}{0:0}}" Width="80" />
-          <DataGridTextColumn Header="TTFB" Binding="{Binding TtfbMs, StringFormat={}{0:0}}" Width="70" />
-          <DataGridTextColumn Header="Size" Binding="{Binding BodySize}" Width="70" />
-          <DataGridTextColumn Header="Process" Binding="{Binding ProcessDisplay}" Width="120" />
+          <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="180" MinWidth="120" />
+          <DataGridTextColumn Header="URL" Binding="{Binding Url}" Width="320" MinWidth="160" />
+          <DataGridTextColumn Header="Client→Server" Binding="{Binding Protocol}" Width="130" MinWidth="120" />
+          <DataGridTextColumn Header="Duration (ms)" Binding="{Binding DurationMs, StringFormat={}{0:0}}"
+                              Width="120" MinWidth="120" SortMemberPath="DurationMs" />
+          <DataGridTextColumn Header="TTFB (ms)" Binding="{Binding TtfbMs, StringFormat={}{0:0}}"
+                              Width="100" MinWidth="100" SortMemberPath="TtfbMs" />
+          <DataGridTextColumn Header="Size" Binding="{Binding BodySizeDisplay}"
+                              Width="80" MinWidth="70" SortMemberPath="BodySize" />
+          <DataGridTextColumn Header="Process" Binding="{Binding ProcessDisplay}" Width="140" MinWidth="100" />
         </DataGrid.Columns>
       </DataGrid>
       <GridSplitter Grid.Row="1" Grid.Column="1" Width="4" ResizeDirection="Columns"

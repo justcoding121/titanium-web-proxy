@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Titanium.Inspector.Services;
 
 /// <summary>HTTP status class for session-grid status coloring.</summary>
@@ -37,6 +39,35 @@ public static class SessionDisplayFormat
     }
 
     public static double RoundMs(double milliseconds) => Math.Round(milliseconds, 1);
+
+    /// <summary>Compact body-size label: B below 1 KB, else KB / MB (1024-based).</summary>
+    public static string FormatByteSize(long? bytes)
+    {
+        if (bytes is null or < 0)
+        {
+            return "";
+        }
+
+        if (bytes < 1024)
+        {
+            return bytes + " B";
+        }
+
+        var kb = bytes.Value / 1024.0;
+        if (kb < 1024)
+        {
+            var kbText = kb < 10
+                ? kb.ToString("0.0", CultureInfo.InvariantCulture)
+                : kb.ToString("0", CultureInfo.InvariantCulture);
+            return kbText + " KB";
+        }
+
+        var mb = kb / 1024.0;
+        var mbText = mb < 10
+            ? mb.ToString("0.0", CultureInfo.InvariantCulture)
+            : mb.ToString("0", CultureInfo.InvariantCulture);
+        return mbText + " MB";
+    }
 
     public static HttpStatusClass GetStatusClass(int? statusCode)
     {
