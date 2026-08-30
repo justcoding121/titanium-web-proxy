@@ -47,7 +47,7 @@ Use **Tools → Composer / Breakpoints / AutoResponder / Scripts…** to open th
 - **Hex** — same labeled sections for raw bytes
 - **WS Frames** — shown **only for WebSocket** sessions; best-effort text preview of messages (not a full opcode stream)
 
-Search for WebSocket traffic with `is:ws`.
+Search for WebSocket traffic with `is:ws`. Quick filters on the toolbar toggle `hide:tunnel`, `hide:image`, and `is:error` into the same search box. Status classes (`status:2xx` … `status:5xx`), `process:`, and `content-type:` are also supported. The status strip shows **visible / total** session counts when a filter is active.
 
 ### Tools (all traffic)
 
@@ -100,7 +100,7 @@ Notes:
 - Session grid: method, status, host, URL, protocol, duration, TTFB, size, process. Right-click menu: Replay, Load into Composer, Export selected HAR/archive, Copy URL.
 - HAR / archive: Export all writes every captured session; Export selected writes the grid multi-selection. Import appends sessions from the file. Replay selected session.
 - System proxy and root CA install / untrust / export; Device CA setup dialog for external devices
-- Search (`method:GET status:200 host:example is:ws`)
+- Search (`method:GET status:2xx host:example process:chrome is:ws hide:tunnel`); quick filters: Hide tunnels, Hide images, Errors only
 - Optional Plus panels when `Titanium.Plus.dll` is present
 
 ## See also

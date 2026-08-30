@@ -75,8 +75,17 @@
       </Grid.ColumnDefinitions>
       <StackPanel Grid.Row="0" Grid.ColumnSpan="3" Margin="8" Spacing="6">
         <StackPanel Orientation="Horizontal" Spacing="12">
-          <TextBox MinWidth="200" Width="360" Watermark="Search: method:GET status:200 host:example is:ws"
+          <TextBox MinWidth="200" Width="360"
+                   Watermark="Search: method:GET status:2xx host:example process:chrome is:ws hide:tunnel"
                    Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
+          <CheckBox Content="Hide tunnels" IsChecked="{Binding HideTunnelsFilter}" VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="HideTunnelsFilterCheck" />
+          <CheckBox Content="Hide images" IsChecked="{Binding HideImagesFilter}" VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="HideImagesFilterCheck" />
+          <CheckBox Content="Errors only" IsChecked="{Binding ErrorsOnlyFilter}" VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="ErrorsOnlyFilterCheck" />
+          <Button Content="Clear filters" Command="{Binding ClearFiltersCommand}" VerticalAlignment="Center"
+                  AutomationProperties.AutomationId="ClearFiltersButton" />
           <CheckBox Content="Capturing" IsChecked="{Binding Capturing}" VerticalAlignment="Center"
                     AutomationProperties.AutomationId="CapturingCheck" />
           <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}" VerticalAlignment="Center"

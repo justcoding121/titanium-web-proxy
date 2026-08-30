@@ -76,7 +76,7 @@ public class SessionPipelineTests
                 dialogs);
 
             vm.StatusText = "Pinned tip";
-            Assert.AreEqual("Sessions: 0", vm.SessionCountText);
+            Assert.AreEqual("Sessions: 0 / 0", vm.SessionCountText);
 
             var tcs = new TaskCompletionSource();
             buffer.SessionAdded += _ => tcs.TrySetResult();
@@ -85,7 +85,20 @@ public class SessionPipelineTests
             await tcs.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
             Assert.AreEqual("Pinned tip", vm.StatusText);
-            Assert.AreEqual("Sessions: 1", vm.SessionCountText);
+            Assert.AreEqual("Sessions: 1 / 1", vm.SessionCountText);
+
+            vm.HideTunnelsFilter = true;
+            Assert.IsTrue(vm.SearchQuery.Contains("hide:tunnel", StringComparison.Ordinal));
+            Assert.IsTrue(vm.HideTunnelsFilter);
+            vm.ErrorsOnlyFilter = true;
+            Assert.IsTrue(vm.SearchQuery.Contains("is:error", StringComparison.Ordinal));
+            Assert.AreEqual("Sessions: 0 / 1", vm.SessionCountText);
+
+            vm.ClearFiltersCommand.Execute(null);
+            await Task.Delay(50);
+            Assert.AreEqual("", vm.SearchQuery);
+            Assert.IsFalse(vm.HideTunnelsFilter);
+            Assert.AreEqual("Sessions: 1 / 1", vm.SessionCountText);
 
             vm.DeviceCaSetupCommand.Execute(null);
             await Task.Delay(50);

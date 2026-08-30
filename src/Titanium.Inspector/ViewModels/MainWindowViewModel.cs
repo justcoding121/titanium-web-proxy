@@ -26,7 +26,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly ObservableCollection<SessionSnapshot> _all = new();
     private readonly List<SessionSnapshot> _selectedSessions = new();
     private string _statusText = "Ready";
-    private string _sessionCountText = "Sessions: 0";
+    private string _sessionCountText = "Sessions: 0 / 0";
     private string _searchQuery = "";
     private SessionSnapshot? _selected;
     private string _selectedHeaders = "";
@@ -151,6 +151,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OpenToolsBreakpointsCommand = new RelayCommand(() => OpenToolsTabAsync(1));
         OpenToolsAutoResponderCommand = new RelayCommand(() => OpenToolsTabAsync(2));
         OpenToolsScriptsCommand = new RelayCommand(() => OpenToolsTabAsync(3));
+        ClearFiltersCommand = new RelayCommand(() =>
+        {
+            SearchQuery = SessionSearch.ClearFilters(SearchQuery);
+            return Task.CompletedTask;
+        });
 
         WireEventHandlers();
         LoadPlusPanels();
@@ -720,6 +725,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand OpenToolsBreakpointsCommand { get; }
     public ICommand OpenToolsAutoResponderCommand { get; }
     public ICommand OpenToolsScriptsCommand { get; }
+    public ICommand ClearFiltersCommand { get; }
 
     public string BindAddress
     {
@@ -1009,7 +1015,54 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             if (SetField(ref _searchQuery, value))
             {
                 ApplyFilter();
+                RefreshSessionCountText();
+                NotifyQuickFilterProperties();
             }
+        }
+    }
+
+    /// <summary>Quick filter: exclude CONNECT/tunnel rows (<c>hide:tunnel</c>).</summary>
+    public bool HideTunnelsFilter
+    {
+        get => SessionSearch.ContainsToken(_searchQuery, "hide", "tunnel");
+        set
+        {
+            if (value == HideTunnelsFilter)
+            {
+                return;
+            }
+
+            SearchQuery = SessionSearch.ToggleToken(_searchQuery, "hide", "tunnel");
+        }
+    }
+
+    /// <summary>Quick filter: exclude image/static rows (<c>hide:image</c>).</summary>
+    public bool HideImagesFilter
+    {
+        get => SessionSearch.ContainsToken(_searchQuery, "hide", "image");
+        set
+        {
+            if (value == HideImagesFilter)
+            {
+                return;
+            }
+
+            SearchQuery = SessionSearch.ToggleToken(_searchQuery, "hide", "image");
+        }
+    }
+
+    /// <summary>Quick filter: only 4xx/5xx responses (<c>is:error</c>).</summary>
+    public bool ErrorsOnlyFilter
+    {
+        get => SessionSearch.ContainsToken(_searchQuery, "is", "error");
+        set
+        {
+            if (value == ErrorsOnlyFilter)
+            {
+                return;
+            }
+
+            SearchQuery = SessionSearch.ToggleToken(_searchQuery, "is", "error");
         }
     }
 
@@ -1378,7 +1431,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         RefreshSessionCountText();
     }
 
-    private void RefreshSessionCountText() => SessionCountText = $"Sessions: {_all.Count}";
+    private void RefreshSessionCountText() =>
+        SessionCountText = $"Sessions: {Sessions.Count} / {_all.Count}";
+
+    private void NotifyQuickFilterProperties()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HideTunnelsFilter)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HideImagesFilter)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ErrorsOnlyFilter)));
+    }
 
     private void ApplyFilter()
     {

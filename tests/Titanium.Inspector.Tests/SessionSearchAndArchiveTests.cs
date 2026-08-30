@@ -25,6 +25,101 @@ public class SessionSearchAndArchiveTests
     }
 
     [TestMethod]
+    public void Filter_HostMatchesHostFieldNotUrlPath()
+    {
+        var sessions = new[]
+        {
+            new SessionSnapshot { Id = 1, Host = "api.example.com", Url = "https://cdn.other/api.example.com/x" },
+            new SessionSnapshot { Id = 2, Host = "cdn.other", Url = "https://cdn.other/api.example.com/x" },
+            new SessionSnapshot { Id = 3, Host = null, Url = "https://fallback.host/path" },
+        };
+
+        var byHost = SessionSearch.Filter(sessions, "host:api.example").ToList();
+        Assert.AreEqual(1, byHost.Count);
+        Assert.AreEqual(1, byHost[0].Id);
+
+        var byUrlHost = SessionSearch.Filter(sessions, "host:fallback").ToList();
+        Assert.AreEqual(1, byUrlHost.Count);
+        Assert.AreEqual(3, byUrlHost[0].Id);
+    }
+
+    [TestMethod]
+    public void Filter_StatusClassAndExact()
+    {
+        var sessions = new[]
+        {
+            new SessionSnapshot { Id = 1, StatusCode = 200, Url = "https://a/" },
+            new SessionSnapshot { Id = 2, StatusCode = 404, Url = "https://a/" },
+            new SessionSnapshot { Id = 3, StatusCode = 500, Url = "https://a/" },
+            new SessionSnapshot { Id = 4, StatusCode = null, Url = "https://a/" },
+        };
+
+        Assert.AreEqual(1, SessionSearch.Filter(sessions, "status:2xx").Count());
+        Assert.AreEqual(1, SessionSearch.Filter(sessions, "status:4xx").Count());
+        Assert.AreEqual(1, SessionSearch.Filter(sessions, "status:404").Count());
+        Assert.AreEqual(2, SessionSearch.Filter(sessions, "is:error").Count());
+        Assert.IsFalse(SessionSearch.Matches(sessions[3], "status:2xx"));
+    }
+
+    [TestMethod]
+    public void Filter_ProcessAndContentType()
+    {
+        var sessions = new[]
+        {
+            new SessionSnapshot
+            {
+                Id = 1, Url = "https://a/", ProcessName = "chrome", ProcessId = 42,
+                ContentType = "application/json",
+            },
+            new SessionSnapshot
+            {
+                Id = 2, Url = "https://a/", ProcessName = "firefox", ProcessId = 99,
+                ContentType = "text/html",
+            },
+        };
+
+        Assert.AreEqual(1, SessionSearch.Filter(sessions, "process:chrome").Count());
+        Assert.AreEqual(1, SessionSearch.Filter(sessions, "process:42").Count());
+        Assert.AreEqual(1, SessionSearch.Filter(sessions, "content-type:json").Count());
+    }
+
+    [TestMethod]
+    public void Filter_HideTunnelAndImage()
+    {
+        var sessions = new[]
+        {
+            new SessionSnapshot { Id = 1, Url = "https://a/page", IsTunnel = false, ContentType = "text/html" },
+            new SessionSnapshot { Id = 2, Url = "https://a:443", IsTunnel = true },
+            new SessionSnapshot { Id = 3, Url = "https://a/logo.png", ContentType = "image/png" },
+            new SessionSnapshot { Id = 4, Url = "https://a/app.js", ContentType = "application/javascript" },
+        };
+
+        var noTunnels = SessionSearch.Filter(sessions, "hide:tunnel").ToList();
+        Assert.AreEqual(3, noTunnels.Count);
+        Assert.IsFalse(noTunnels.Any(s => s.IsTunnel));
+
+        var noImages = SessionSearch.Filter(sessions, "hide:image").Select(s => s.Id).ToList();
+        CollectionAssert.AreEquivalent(new long[] { 1, 2 }, noImages);
+    }
+
+    [TestMethod]
+    public void ToggleToken_AddRemoveAndClear()
+    {
+        Assert.IsFalse(SessionSearch.ContainsToken("", "hide", "tunnel"));
+
+        var withTunnel = SessionSearch.ToggleToken("method:GET", "hide", "tunnel");
+        Assert.AreEqual("method:GET hide:tunnel", withTunnel);
+        Assert.IsTrue(SessionSearch.ContainsToken(withTunnel, "hide", "tunnel"));
+
+        var removed = SessionSearch.ToggleToken(withTunnel, "hide", "tunnel");
+        Assert.AreEqual("method:GET", removed);
+
+        var withError = SessionSearch.ToggleToken("host:x", "is", "error");
+        Assert.IsTrue(SessionSearch.ContainsToken(withError, "is", "error"));
+        Assert.AreEqual("", SessionSearch.ClearFilters(withError));
+    }
+
+    [TestMethod]
     public async Task NativeArchive_RoundTrip()
     {
         var path = Path.Combine(Path.GetTempPath(), $"twp-insp-{Guid.NewGuid():N}.zip");
