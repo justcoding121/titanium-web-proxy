@@ -43,7 +43,7 @@ public static partial class AppContainerLoopback
 
     public static bool ClearExemptions() => SetExemptions([]);
 
-    /// <summary>Smoke: P/Invoke entry points resolve on Windows.</summary>
+    /// <summary>Smoke: P/Invoke entry points resolve on Windows (read + SID conversion).</summary>
     public static bool TryProbeApis(out string message)
     {
         if (!IsSupported)
@@ -60,9 +60,18 @@ public static partial class AppContainerLoopback
                 NativeMethods.LocalFree(ptr);
             }
 
+            // LibraryImport uses ExactSpelling — GetConfig alone does not load ConvertStringSidToSidW.
+            if (!NativeMethods.ConvertStringSidToSid("S-1-1-0", out var everyoneSid) || everyoneSid == IntPtr.Zero)
+            {
+                message = "ConvertStringSidToSidW failed for well-known SID S-1-1-0";
+                return false;
+            }
+
+            NativeMethods.LocalFree(everyoneSid);
+
             message = hr == 0
-                ? $"FirewallAPI bound (current exemptions: {count})"
-                : $"FirewallAPI bound (GetAppContainerConfig HRESULT/DWORD={hr})";
+                ? $"FirewallAPI bound (current exemptions: {count}; ConvertStringSidToSidW ok)"
+                : $"FirewallAPI bound (GetAppContainerConfig HRESULT/DWORD={hr}; ConvertStringSidToSidW ok)";
             return true;
         }
         catch (Exception ex)
@@ -266,7 +275,8 @@ public static partial class AppContainerLoopback
             uint dwNumPublicAppCs,
             [In] SID_AND_ATTRIBUTES[]? appContainerSids);
 
-        [LibraryImport("advapi32.dll", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+        // LibraryImport uses ExactSpelling — must use the W export, not the A/W-less alias.
+        [LibraryImport("advapi32.dll", EntryPoint = "ConvertStringSidToSidW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static partial bool ConvertStringSidToSid(string strSid, out IntPtr pSid);
 

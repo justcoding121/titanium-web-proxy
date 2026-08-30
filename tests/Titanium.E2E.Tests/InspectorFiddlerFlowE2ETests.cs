@@ -240,6 +240,32 @@ public class InspectorFiddlerFlowE2ETests
 
         Assert.IsTrue(AppContainerLoopback.IsSupported);
         Assert.IsTrue(AppContainerLoopback.TryProbeApis(out var message), message);
+        StringAssert.Contains(message, "ConvertStringSidToSidW ok");
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI")]
+    public void AppContainerLoopback_SetExemptions_SidConversion_OnWindows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("Windows-only");
+            return;
+        }
+
+        var current = AppContainerLoopback.ListContainers()
+            .Where(c => c.IsExempt)
+            .Select(c => c.AppContainerSid)
+            .ToList();
+
+        try
+        {
+            _ = AppContainerLoopback.SetExemptions(current);
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            Assert.Fail("P/Invoke entry point missing: " + ex.Message);
+        }
     }
 
     private async Task StartAsync()

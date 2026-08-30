@@ -7,31 +7,39 @@
         WindowStartupLocation="CenterOwner">
   <DockPanel Margin="12">
     <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,8"
-               Text="Allow selected AppContainer / Store apps to reach the local proxy (Windows loopback exemption)." />
+               Text="Check AppContainer / Store apps that should reach the local proxy, then apply. Clearing removes all loopback exemptions." />
     <TextBox x:Name="FilterBox"
              DockPanel.Dock="Top"
              Margin="0,0,0,8"
              Watermark="Filter by app name…"
              AutomationProperties.AutomationId="LoopbackFilter" />
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
-      <Button x:Name="ExemptButton" AutomationProperties.AutomationId="LoopbackExempt" Content="Exempt selected" MinWidth="120" />
+      <Button x:Name="ExemptButton" AutomationProperties.AutomationId="LoopbackExempt" Content="Apply exemptions" MinWidth="120" />
       <Button x:Name="ClearButton" AutomationProperties.AutomationId="LoopbackClear" Content="Clear exemptions" MinWidth="120" />
       <Button x:Name="CloseButton" AutomationProperties.AutomationId="LoopbackClose" Content="Close" MinWidth="88" IsCancel="True" />
     </StackPanel>
     <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="LoopbackStatus" DockPanel.Dock="Bottom" Margin="0,8,0,0" TextWrapping="Wrap" Opacity="0.8" />
     <DataGrid x:Name="PackageGrid"
               AutomationProperties.AutomationId="LoopbackPackages"
-              SelectionMode="Extended"
-              IsReadOnly="True"
+              SelectionMode="Single"
+              IsReadOnly="False"
               CanUserResizeColumns="True"
               CanUserReorderColumns="False"
               CanUserSortColumns="True"
               GridLinesVisibility="Horizontal"
               AutoGenerateColumns="False">
       <DataGrid.Columns>
-        <DataGridCheckBoxColumn Header="Exempt" Binding="{Binding IsExempt}" Width="70" IsReadOnly="True" />
-        <DataGridTextColumn Header="App name" Binding="{Binding DisplayName}" Width="*" MinWidth="120" />
-        <DataGridTemplateColumn Header="Package ID" Width="2*" MinWidth="140" SortMemberPath="PackageFamilyName">
+        <DataGridTemplateColumn Header="Exempt" Width="70" SortMemberPath="IsExempt" CanUserSort="True">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="svc:AppContainerInfo">
+              <CheckBox IsChecked="{Binding IsExempt, Mode=TwoWay}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="App name" Binding="{Binding DisplayName}" Width="*" MinWidth="120" IsReadOnly="True" />
+        <DataGridTemplateColumn Header="Package ID" Width="2*" MinWidth="140" SortMemberPath="PackageFamilyName" IsReadOnly="True">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="svc:AppContainerInfo">
               <TextBlock Text="{Binding PackageFamilyName}"

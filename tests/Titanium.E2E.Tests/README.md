@@ -17,7 +17,7 @@ Process-level and service-level end-to-end coverage for CLI, CLI+Plus, and Inspe
 
 **Happy path (all three products):** `HappyPathSanityE2ETests` — Inspector sessions in the UI collection, CLI explicit MITM + debug log file, CLI+Plus control-plane auth + MITM + debug log.
 
-Inspector Fiddler-like flow: auto-start + system proxy (settings), Decrypt HTTPS off by default (CONNECT), CA install prompt on enable, Remove/Install root CA, Windows AppContainer loopback exemption (`AppContainerLoopback`; elevation may be required — not mutated in default CI beyond API probe).
+Inspector Fiddler-like flow: auto-start + system proxy (settings), Decrypt HTTPS off by default (CONNECT), CA install prompt on enable, Remove/Install root CA, Windows AppContainer loopback exemption (`AppContainerLoopback`; `TryProbeApis` covers FirewallAPI get + `ConvertStringSidToSidW`; identity `SetExemptions` re-apply is asserted not to throw — elevation may still make mutation return false).
 
 ```powershell
 # PR / local fast suite (same filter as Windows CI build job)

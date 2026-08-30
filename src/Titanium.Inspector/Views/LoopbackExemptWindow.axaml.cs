@@ -7,6 +7,7 @@ namespace Titanium.Inspector.Views;
 public partial class LoopbackExemptWindow : Window
 {
     private List<AppContainerInfo> _items = [];
+    private string? _pendingStatus;
 
     public LoopbackExemptWindow()
     {
@@ -29,7 +30,7 @@ public partial class LoopbackExemptWindow : Window
         if (!AppContainerLoopback.IsSupported)
         {
             _items = [];
-            PackageGrid.ItemsSource = Array.Empty<AppContainerInfo>();
+            SetGridItems([]);
             StatusText.Text = "Loopback exemptions require Windows 8 or later.";
             return;
         }
@@ -42,7 +43,7 @@ public partial class LoopbackExemptWindow : Window
         catch (Exception ex)
         {
             _items = [];
-            PackageGrid.ItemsSource = Array.Empty<AppContainerInfo>();
+            SetGridItems([]);
             StatusText.Text = "Failed to enumerate AppContainers: " + ex.Message;
         }
     }
@@ -59,7 +60,14 @@ public partial class LoopbackExemptWindow : Window
         }
 
         var filtered = view.ToList();
-        PackageGrid.ItemsSource = filtered;
+        SetGridItems(filtered);
+
+        if (_pendingStatus is not null)
+        {
+            StatusText.Text = _pendingStatus;
+            _pendingStatus = null;
+            return;
+        }
 
         var exemptCount = _items.Count(i => i.IsExempt);
         if (string.IsNullOrEmpty(query))
@@ -68,31 +76,52 @@ public partial class LoopbackExemptWindow : Window
             StatusText.Text = $"Showing {filtered.Count} of {_items.Count}; {exemptCount} currently exempt.";
     }
 
+    private void SetGridItems(IReadOnlyList<AppContainerInfo> items)
+    {
+        // Clearing selection before replacing ItemsSource avoids Avalonia DataGrid crashes.
+        PackageGrid.SelectedItem = null;
+        PackageGrid.ItemsSource = items;
+    }
+
     private void OnExempt(object? sender, RoutedEventArgs e)
     {
-        var selected = PackageGrid.SelectedItems
-            .OfType<AppContainerInfo>()
-            .Select(i => i.AppContainerSid)
-            .ToList();
-        if (selected.Count == 0)
+        try
         {
-            StatusText.Text = "Select one or more packages to exempt.";
-            return;
-        }
+            var checkedSids = _items
+                .Where(i => i.IsExempt)
+                .Select(i => i.AppContainerSid)
+                .ToList();
+            if (checkedSids.Count == 0)
+            {
+                StatusText.Text = "Check one or more apps to exempt, then apply.";
+                return;
+            }
 
-        // Merge with existing exemptions.
-        var merged = _items.Where(i => i.IsExempt).Select(i => i.AppContainerSid)
-            .Concat(selected)
-            .Distinct(StringComparer.OrdinalIgnoreCase);
-        var ok = AppContainerLoopback.SetExemptions(merged);
-        StatusText.Text = ok ? "Exemptions updated." : "Failed to set exemptions (try elevated).";
-        Reload();
+            var ok = AppContainerLoopback.SetExemptions(checkedSids);
+            _pendingStatus = ok
+                ? $"Exemptions updated ({checkedSids.Count} app(s))."
+                : "Failed to set exemptions (try running Inspector elevated).";
+            Reload();
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "Failed to set exemptions: " + ex.Message;
+        }
     }
 
     private void OnClear(object? sender, RoutedEventArgs e)
     {
-        var ok = AppContainerLoopback.ClearExemptions();
-        StatusText.Text = ok ? "All loopback exemptions cleared." : "Failed to clear exemptions.";
-        Reload();
+        try
+        {
+            var ok = AppContainerLoopback.ClearExemptions();
+            _pendingStatus = ok
+                ? "All loopback exemptions cleared."
+                : "Failed to clear exemptions (try running Inspector elevated).";
+            Reload();
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "Failed to clear exemptions: " + ex.Message;
+        }
     }
 }
