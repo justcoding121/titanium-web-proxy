@@ -65,7 +65,7 @@ public class StatusCodeConverterTests
 
     private static SolidColorBrush AssertSolid(object? value)
     {
-        Assert.IsInstanceOfType(value, typeof(SolidColorBrush));
+        Assert.IsInstanceOfType<SolidColorBrush>(value);
         return (SolidColorBrush)value!;
     }
 }

@@ -100,6 +100,15 @@ public class SessionSearchAndArchiveTests
 
         var noImages = SessionSearch.Filter(sessions, "hide:image").Select(s => s.Id).ToList();
         CollectionAssert.AreEquivalent(new long[] { 1, 2 }, noImages);
+
+        // Extension match must ignore query string (IsImageOrStatic path trim).
+        var withQuery = new List<SessionSnapshot>
+        {
+            new() { Id = 10, Url = "https://cdn.example/a/logo.png?cache=1", ContentType = "text/plain" },
+            new() { Id = 11, Url = "https://cdn.example/a/page", ContentType = "font/woff2" },
+        };
+        var filtered = SessionSearch.Filter(withQuery, "hide:image").Select(s => s.Id).ToList();
+        CollectionAssert.AreEquivalent(new long[] { }, filtered);
     }
 
     [TestMethod]

@@ -1458,7 +1458,7 @@ public partial class ProxyServer : IDisposable
     {
         if (SystemProxySettingsManager == null)
             throw new NotSupportedException(@"Setting system proxy settings are not supported on this platform.
-                            Please manually configure your operating system to use this proxy's port and address.");
+                            Please manually configure your operating system to use this proxy's port and address."); // NOSONAR S1192
 
         ValidateEndPointAsSystemProxy(endPoint);
 
@@ -1547,7 +1547,7 @@ public partial class ProxyServer : IDisposable
     {
         if (SystemProxySettingsManager == null)
             throw new NotSupportedException(@"Setting system proxy settings are not supported on this platform.
-                            Please manually configure your operating system to use this proxy's port and address.");
+                            Please manually configure your operating system to use this proxy's port and address."); // NOSONAR S1192
 
         SystemProxySettingsManager.RestoreOriginalSettings();
 
@@ -1561,7 +1561,7 @@ public partial class ProxyServer : IDisposable
     {
         if (SystemProxySettingsManager == null)
             throw new NotSupportedException(@"Setting system proxy settings are not supported on this platform.
-                            Please manually configure your operating system to use this proxy's port and address.");
+                            Please manually configure your operating system to use this proxy's port and address."); // NOSONAR S1192
 
         SystemProxySettingsManager.RemoveProxy(protocolType);
 
@@ -1579,7 +1579,7 @@ public partial class ProxyServer : IDisposable
     {
         if (SystemProxySettingsManager == null)
             throw new NotSupportedException(@"Setting system proxy settings are not supported on this platform.
-                            Please manually configure your operating system to use this proxy's port and address.");
+                            Please manually configure your operating system to use this proxy's port and address."); // NOSONAR S1192
 
         SystemProxySettingsManager.DisableAllProxy();
 

@@ -12,6 +12,12 @@ namespace Titanium.Web.Proxy.Helpers;
 [SupportedOSPlatform("linux")]
 internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
 {
+    private const string GnomeSystemProxySchema = "org.gnome.system.proxy";
+    private const string GnomeSystemProxyHttpSchema = "org.gnome.system.proxy.http";
+    private const string GnomeSystemProxyHttpsSchema = "org.gnome.system.proxy.https";
+    private const string KdeProxyTypeKey = "ProxyType";
+    private const string GsettingsCommand = "gsettings";
+
     private static readonly string[] EnvKeys =
     [
         "http_proxy", "https_proxy", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"
@@ -55,12 +61,12 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         // Full disable is the practical Linux equivalent of removing http/https entries.
         if (HasGnome())
         {
-            GsettingsSet("org.gnome.system.proxy", "mode", "'none'");
+            GsettingsSet(GnomeSystemProxySchema, "mode", "'none'");
         }
 
         if (HasKde())
         {
-            KdeWrite("ProxyType", "0");
+            KdeWrite(KdeProxyTypeKey, "0");
             KdeReload();
         }
 
@@ -79,17 +85,17 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
 
         if (_gnome is not null && HasGnome())
         {
-            GsettingsSet("org.gnome.system.proxy", "mode", QuoteGsettings(_gnome.Mode));
-            GsettingsSet("org.gnome.system.proxy.http", "host", QuoteGsettings(_gnome.HttpHost));
-            GsettingsSet("org.gnome.system.proxy.http", "port", _gnome.HttpPort.ToString());
-            GsettingsSet("org.gnome.system.proxy.https", "host", QuoteGsettings(_gnome.HttpsHost));
-            GsettingsSet("org.gnome.system.proxy.https", "port", _gnome.HttpsPort.ToString());
-            GsettingsSet("org.gnome.system.proxy", "ignore-hosts", _gnome.IgnoreHosts);
+            GsettingsSet(GnomeSystemProxySchema, "mode", QuoteGsettings(_gnome.Mode));
+            GsettingsSet(GnomeSystemProxyHttpSchema, "host", QuoteGsettings(_gnome.HttpHost));
+            GsettingsSet(GnomeSystemProxyHttpSchema, "port", _gnome.HttpPort.ToString());
+            GsettingsSet(GnomeSystemProxyHttpsSchema, "host", QuoteGsettings(_gnome.HttpsHost));
+            GsettingsSet(GnomeSystemProxyHttpsSchema, "port", _gnome.HttpsPort.ToString());
+            GsettingsSet(GnomeSystemProxySchema, "ignore-hosts", _gnome.IgnoreHosts);
         }
 
         if (_kde is not null && HasKde())
         {
-            KdeWrite("ProxyType", _kde.ProxyType);
+            KdeWrite(KdeProxyTypeKey, _kde.ProxyType);
             KdeWrite("httpProxy", _kde.HttpProxy);
             KdeWrite("httpsProxy", _kde.HttpsProxy);
             KdeWrite("NoProxyFor", _kde.NoProxyFor);
@@ -117,7 +123,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     {
         if (HasGnome())
         {
-            var result = _runner.Run("gsettings", "get org.gnome.system.proxy ignore-hosts");
+            var result = _runner.Run(GsettingsCommand, $"get {GnomeSystemProxySchema} ignore-hosts");
             if (result is { Succeeded: true })
                 return ParseGsettingsArray(result.StandardOutput);
         }
@@ -132,35 +138,10 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         var stale = ProxyProtocolType.None;
 
         if (HasGnome())
-        {
-            var mode = GsettingsGet("org.gnome.system.proxy", "mode")?.Trim('\'', '"') ?? "none";
-            if (mode.Equals("manual", StringComparison.OrdinalIgnoreCase))
-            {
-                var httpHost = GsettingsGet("org.gnome.system.proxy.http", "host")?.Trim('\'', '"') ?? "";
-                var httpPort = ParseInt(GsettingsGet("org.gnome.system.proxy.http", "port"));
-                if (UnixProxyBypassMapper.IsLocalHost(httpHost) && ownedPorts.Contains(httpPort))
-                    stale |= ProxyProtocolType.Http;
+            stale |= GetGnomeStaleLocalProxyProtocols(ownedPorts);
 
-                var httpsHost = GsettingsGet("org.gnome.system.proxy.https", "host")?.Trim('\'', '"') ?? "";
-                var httpsPort = ParseInt(GsettingsGet("org.gnome.system.proxy.https", "port"));
-                if (UnixProxyBypassMapper.IsLocalHost(httpsHost) && ownedPorts.Contains(httpsPort))
-                    stale |= ProxyProtocolType.Https;
-            }
-        }
-
-        foreach (var key in new[] { "http_proxy", "HTTP_PROXY" })
-        {
-            if (TryParseProxyUri(Environment.GetEnvironmentVariable(key), out var host, out var port) &&
-                UnixProxyBypassMapper.IsLocalHost(host) && ownedPorts.Contains(port))
-                stale |= ProxyProtocolType.Http;
-        }
-
-        foreach (var key in new[] { "https_proxy", "HTTPS_PROXY" })
-        {
-            if (TryParseProxyUri(Environment.GetEnvironmentVariable(key), out var host, out var port) &&
-                UnixProxyBypassMapper.IsLocalHost(host) && ownedPorts.Contains(port))
-                stale |= ProxyProtocolType.Https;
-        }
+        stale |= GetEnvStaleLocalProxyProtocols(ownedPorts, ["http_proxy", "HTTP_PROXY"], ProxyProtocolType.Http);
+        stale |= GetEnvStaleLocalProxyProtocols(ownedPorts, ["https_proxy", "HTTPS_PROXY"], ProxyProtocolType.Https);
 
         return stale;
     }
@@ -183,18 +164,18 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         if (HasGnome())
         {
             _gnome = new GnomeSnapshot(
-                GsettingsGet("org.gnome.system.proxy", "mode")?.Trim('\'', '"') ?? "none",
-                GsettingsGet("org.gnome.system.proxy.http", "host")?.Trim('\'', '"') ?? string.Empty,
-                ParseInt(GsettingsGet("org.gnome.system.proxy.http", "port")),
-                GsettingsGet("org.gnome.system.proxy.https", "host")?.Trim('\'', '"') ?? string.Empty,
-                ParseInt(GsettingsGet("org.gnome.system.proxy.https", "port")),
-                GsettingsGet("org.gnome.system.proxy", "ignore-hosts") ?? "[]");
+                GsettingsGet(GnomeSystemProxySchema, "mode")?.Trim('\'', '"') ?? "none",
+                GsettingsGet(GnomeSystemProxyHttpSchema, "host")?.Trim('\'', '"') ?? string.Empty,
+                ParseInt(GsettingsGet(GnomeSystemProxyHttpSchema, "port")),
+                GsettingsGet(GnomeSystemProxyHttpsSchema, "host")?.Trim('\'', '"') ?? string.Empty,
+                ParseInt(GsettingsGet(GnomeSystemProxyHttpsSchema, "port")),
+                GsettingsGet(GnomeSystemProxySchema, "ignore-hosts") ?? "[]");
         }
 
         if (HasKde())
         {
             _kde = new KdeSnapshot(
-                KdeRead("ProxyType") ?? "0",
+                KdeRead(KdeProxyTypeKey) ?? "0",
                 KdeRead("httpProxy") ?? string.Empty,
                 KdeRead("httpsProxy") ?? string.Empty,
                 KdeRead("NoProxyFor") ?? string.Empty);
@@ -205,27 +186,27 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
 
     private void ApplyGnome(string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
     {
-        GsettingsSet("org.gnome.system.proxy", "mode", "'manual'");
+        GsettingsSet(GnomeSystemProxySchema, "mode", "'manual'");
         if ((protocolType & ProxyProtocolType.Http) != 0)
         {
-            GsettingsSet("org.gnome.system.proxy.http", "host", QuoteGsettings(hostname));
-            GsettingsSet("org.gnome.system.proxy.http", "port", port.ToString());
+            GsettingsSet(GnomeSystemProxyHttpSchema, "host", QuoteGsettings(hostname));
+            GsettingsSet(GnomeSystemProxyHttpSchema, "port", port.ToString());
         }
 
         if ((protocolType & ProxyProtocolType.Https) != 0)
         {
-            GsettingsSet("org.gnome.system.proxy.https", "host", QuoteGsettings(hostname));
-            GsettingsSet("org.gnome.system.proxy.https", "port", port.ToString());
+            GsettingsSet(GnomeSystemProxyHttpsSchema, "host", QuoteGsettings(hostname));
+            GsettingsSet(GnomeSystemProxyHttpsSchema, "port", port.ToString());
         }
 
         if (proxyOverride != null)
-            GsettingsSet("org.gnome.system.proxy", "ignore-hosts",
+            GsettingsSet(GnomeSystemProxySchema, "ignore-hosts",
                 UnixProxyBypassMapper.ToGsettingsArray(proxyOverride));
     }
 
     private void ApplyKde(string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
     {
-        KdeWrite("ProxyType", "1");
+        KdeWrite(KdeProxyTypeKey, "1");
         // Local forward proxies are plain HTTP endpoints; https:// is not valid for these settings.
         var url = $"http://{hostname}:{port}"; // NOSONAR S5332
         if ((protocolType & ProxyProtocolType.Http) != 0)
@@ -237,7 +218,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         KdeReload();
     }
 
-    private void ApplyProcessEnvironment(string hostname, int port, ProxyProtocolType protocolType,
+    private static void ApplyProcessEnvironment(string hostname, int port, ProxyProtocolType protocolType,
         string? proxyOverride)
     {
         // Process proxy env vars for a local listener always use the http scheme.
@@ -259,7 +240,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         Environment.SetEnvironmentVariable("NO_PROXY", noProxy);
     }
 
-    private void ClearProcessProxyEnv()
+    private static void ClearProcessProxyEnv()
     {
         foreach (var key in EnvKeys)
             Environment.SetEnvironmentVariable(key, null);
@@ -271,9 +252,9 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         if (which is not { Succeeded: true } || string.IsNullOrWhiteSpace(which.StandardOutput))
             return false;
 
-        var schema = _runner.Run("gsettings", "list-schemas");
+        var schema = _runner.Run(GsettingsCommand, "list-schemas");
         return schema is { Succeeded: true } &&
-               schema.StandardOutput.Contains("org.gnome.system.proxy", StringComparison.Ordinal);
+               schema.StandardOutput.Contains(GnomeSystemProxySchema, StringComparison.Ordinal);
     }
 
     private bool HasKde()
@@ -314,12 +295,12 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
 
     private string? GsettingsGet(string schema, string key)
     {
-        var result = _runner.Run("gsettings", $"get {schema} {key}");
+        var result = _runner.Run(GsettingsCommand, $"get {schema} {key}");
         return result is { Succeeded: true } ? result.StandardOutput.Trim() : null;
     }
 
     private void GsettingsSet(string schema, string key, string value) =>
-        _runner.Run("gsettings", $"set {schema} {key} {value}");
+        _runner.Run(GsettingsCommand, $"set {schema} {key} {value}");
 
     private static string QuoteGsettings(string value) => $"'{value.Replace("'", @"'\''")}'";
 
@@ -338,6 +319,40 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             .Select(p => p.Trim().Trim('\'', '"'))
             .Where(p => p.Length > 0);
         return string.Join(";", parts);
+    }
+
+    private ProxyProtocolType GetGnomeStaleLocalProxyProtocols(IReadOnlyCollection<int> ownedPorts)
+    {
+        var stale = ProxyProtocolType.None;
+        var mode = GsettingsGet(GnomeSystemProxySchema, "mode")?.Trim('\'', '"') ?? "none";
+        if (!mode.Equals("manual", StringComparison.OrdinalIgnoreCase))
+            return stale;
+
+        var httpHost = GsettingsGet(GnomeSystemProxyHttpSchema, "host")?.Trim('\'', '"') ?? "";
+        var httpPort = ParseInt(GsettingsGet(GnomeSystemProxyHttpSchema, "port"));
+        if (UnixProxyBypassMapper.IsLocalHost(httpHost) && ownedPorts.Contains(httpPort))
+            stale |= ProxyProtocolType.Http;
+
+        var httpsHost = GsettingsGet(GnomeSystemProxyHttpsSchema, "host")?.Trim('\'', '"') ?? "";
+        var httpsPort = ParseInt(GsettingsGet(GnomeSystemProxyHttpsSchema, "port"));
+        if (UnixProxyBypassMapper.IsLocalHost(httpsHost) && ownedPorts.Contains(httpsPort))
+            stale |= ProxyProtocolType.Https;
+
+        return stale;
+    }
+
+    private static ProxyProtocolType GetEnvStaleLocalProxyProtocols(
+        IReadOnlyCollection<int> ownedPorts, string[] keys, ProxyProtocolType protocol)
+    {
+        var stale = ProxyProtocolType.None;
+        foreach (var key in keys)
+        {
+            if (TryParseProxyUri(Environment.GetEnvironmentVariable(key), out var host, out var port) &&
+                UnixProxyBypassMapper.IsLocalHost(host) && ownedPorts.Contains(port))
+                stale |= protocol;
+        }
+
+        return stale;
     }
 
     private static bool TryParseProxyUri(string? value, out string host, out int port)

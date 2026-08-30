@@ -84,12 +84,12 @@ public static class SessionSearch
 
         var keyLower = key.ToLowerInvariant();
         var parts = new List<string>();
-        foreach (Match m in TokenRegex.Matches(query))
+        foreach (var groups in TokenRegex.Matches(query).Cast<Match>().Select(m => m.Groups))
         {
-            if (m.Groups[1].Success)
+            if (groups[1].Success)
             {
-                var k = m.Groups[1].Value;
-                var v = m.Groups[2].Value;
+                var k = groups[1].Value;
+                var v = groups[2].Value;
                 if (k.Equals(keyLower, StringComparison.OrdinalIgnoreCase) &&
                     v.Equals(value, StringComparison.OrdinalIgnoreCase))
                 {
@@ -100,7 +100,7 @@ public static class SessionSearch
             }
             else
             {
-                parts.Add(m.Groups[3].Value);
+                parts.Add(groups[3].Value);
             }
         }
 
@@ -117,21 +117,21 @@ public static class SessionSearch
 
         var keyLower = key.ToLowerInvariant();
         var parts = new List<string>();
-        foreach (Match m in TokenRegex.Matches(query))
+        foreach (var groups in TokenRegex.Matches(query).Cast<Match>().Select(m => m.Groups))
         {
-            if (m.Groups[1].Success)
+            if (groups[1].Success)
             {
-                var k = m.Groups[1].Value;
+                var k = groups[1].Value;
                 if (k.Equals(keyLower, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
 
-                parts.Add($"{k}:{m.Groups[2].Value}");
+                parts.Add($"{k}:{groups[2].Value}");
             }
             else
             {
-                parts.Add(m.Groups[3].Value);
+                parts.Add(groups[3].Value);
             }
         }
 
@@ -266,16 +266,14 @@ public static class SessionSearch
     internal static bool IsImageOrStatic(SessionSnapshot s)
     {
         var ct = s.ContentType;
-        if (!string.IsNullOrEmpty(ct))
+        if (!string.IsNullOrEmpty(ct) &&
+            (ct.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+             ct.StartsWith("font/", StringComparison.OrdinalIgnoreCase) ||
+             ct.Contains("javascript", StringComparison.OrdinalIgnoreCase) ||
+             ct.Contains("ecmascript", StringComparison.OrdinalIgnoreCase) ||
+             ct.Contains("css", StringComparison.OrdinalIgnoreCase)))
         {
-            if (ct.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
-                ct.StartsWith("font/", StringComparison.OrdinalIgnoreCase) ||
-                ct.Contains("javascript", StringComparison.OrdinalIgnoreCase) ||
-                ct.Contains("ecmascript", StringComparison.OrdinalIgnoreCase) ||
-                ct.Contains("css", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
+            return true;
         }
 
         var path = s.Url;
@@ -285,14 +283,7 @@ public static class SessionSearch
             path = path[..q];
         }
 
-        foreach (var ext in ImageOrStaticExtensions)
-        {
-            if (path.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return ImageOrStaticExtensions.Any(ext =>
+            path.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
     }
 }
