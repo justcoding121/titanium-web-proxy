@@ -263,6 +263,14 @@ public class AutomationIdCoverageHeadlessTests
             });
             fx.Robot.Click("MenuExportArchive");
         });
+
+        var exportDeadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < exportDeadline &&
+               !fx.ViewModel.StatusText.Contains("Exported 1 sessions", StringComparison.Ordinal))
+        {
+            await Task.Delay(50);
+        }
+
         await fx.DispatchAsync(() =>
         {
             Assert.IsTrue(fx.PathPicker.SaveCalls >= 1);
@@ -271,6 +279,14 @@ public class AutomationIdCoverageHeadlessTests
         });
         fx.PathPicker.OpenPath = zip;
         await fx.DispatchAsync(() => fx.Robot.Click("MenuImportArchive"));
+
+        var importDeadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < importDeadline &&
+               !fx.ViewModel.StatusText.Contains("Appended", StringComparison.Ordinal))
+        {
+            await Task.Delay(50);
+        }
+
         await fx.DispatchAsync(() =>
         {
             Assert.IsTrue(fx.PathPicker.OpenCalls >= 1);
