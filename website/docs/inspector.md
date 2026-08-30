@@ -24,11 +24,11 @@ winget install justcoding121.TitaniumInspector
 2. Check **Decrypt HTTPS** when you want MITM (installs the root CA if needed; may prompt for admin).
 3. Use the toolbar **System proxy** / **Capturing** checkboxes to pause either without quitting.
 
-Default bind is typically `127.0.0.1:8866`. Bind address/port are **start-time** settings on the toolbar: editable when interception is stopped; disabled while listening. Use **Start interception** / **Stop interception** (toolbar button or Capture menu) to switch. After Stop → Start, system proxy is turned back on if it was on before Stop, or if **Auto system proxy on start** is checked.
+Default bind is typically `127.0.0.1:8866`. Bind address/port are **start-time** settings on the toolbar: editable when the proxy is stopped; disabled while running. Use **Start proxy** / **Stop proxy** (toolbar button or Capture menu) to switch. After Stop → Start, system proxy is turned back on if it was on before Stop, or if **Auto system proxy on start** is checked.
 
-HTTPS stays opaque CONNECT tunnels until **Decrypt HTTPS** is enabled.
+HTTPS stays encrypted (opaque tunnels) until **Decrypt HTTPS** is enabled.
 
-Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs, **Debug file logging**) show a check when on. Turning on debug file logging also writes the log path to the status bar.
+Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs) show a check when on. Preferences such as **Session retention…**, **HTTPS sites to decrypt…**, **Ignore insecure server certificates** (on by default), and **Logging…** live under **Options**.
 
 The status strip keeps command feedback on the left and a live **Sessions: N** count on the right, so capture traffic does not wipe tips or export paths.
 
@@ -102,10 +102,10 @@ Notes:
 - If user-level CA install fails, Inspector offers an elevated retry (OS admin prompt).
 ## Other features
 
-- Session grid: method, status, host, URL, protocol, duration, TTFB, size, process. Right-click menu: Replay, Load into Composer, Export selected HAR/archive, Copy URL.
+- Session grid: method, status, host, URL, Protocol, duration, Wait (TTFB), size, process. Right-click menu: Replay, Load into Composer, Export selected HAR/archive, Copy URL.
 - HAR / archive: Export all writes every captured session; Export selected writes the grid multi-selection. Import appends sessions from the file. Replay selected session.
-- System proxy and root CA install / untrust / export; Device CA setup dialog for external devices
-- Search (`method:GET status:2xx host:example process:chrome is:ws hide:tunnel`); quick filters: Hide tunnels, Hide images, Errors only
+- System proxy and root CA install / untrust / export; Device CA setup dialog for external devices; **Allow Store apps…** on Windows
+- Search (`method:GET status:2xx host:example process:chrome is:ws hide:tunnel`); quick filters: Hide CONNECT, Hide images, Errors only
 - Optional Plus panels when `Titanium.Plus.dll` is present
 
 ## See also

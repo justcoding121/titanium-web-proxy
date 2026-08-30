@@ -32,24 +32,24 @@ public class BindEndpointUxTests
 
             Assert.IsTrue(vm.BindFieldsEnabled);
             Assert.IsFalse(vm.IsIntercepting);
-            Assert.AreEqual("Not listening", vm.EndpointStatusText);
-            Assert.AreEqual("Start interception", vm.InterceptToggleText);
+            Assert.AreEqual("Proxy stopped", vm.EndpointStatusText);
+            Assert.AreEqual("Start proxy", vm.InterceptToggleText);
 
             vm.StartCaptureCommand.Execute(null);
             await WaitUntil(() => interception.IsRunning && !vm.BindFieldsEnabled);
 
             Assert.IsFalse(vm.BindFieldsEnabled);
             Assert.IsTrue(vm.IsIntercepting);
-            Assert.AreEqual($"Listening {vm.BindAddress}:{vm.BindPort}", vm.EndpointStatusText);
-            Assert.AreEqual("Stop interception", vm.InterceptToggleText);
+            Assert.AreEqual($"Proxy running on {vm.BindAddress}:{vm.BindPort}", vm.EndpointStatusText);
+            Assert.AreEqual("Stop proxy", vm.InterceptToggleText);
 
             vm.StopCaptureCommand.Execute(null);
-            await WaitUntil(() => !interception.IsRunning && vm.EndpointStatusText == "Not listening");
+            await WaitUntil(() => !interception.IsRunning && vm.EndpointStatusText == "Proxy stopped");
 
             Assert.IsTrue(vm.BindFieldsEnabled);
             Assert.IsFalse(vm.IsIntercepting);
-            Assert.AreEqual("Not listening", vm.EndpointStatusText);
-            Assert.AreEqual("Start interception", vm.InterceptToggleText);
+            Assert.AreEqual("Proxy stopped", vm.EndpointStatusText);
+            Assert.AreEqual("Start proxy", vm.InterceptToggleText);
 
             vm.EnsureShutdown();
         }
@@ -83,14 +83,14 @@ public class BindEndpointUxTests
             vm.BindPort = GetFreePort();
 
             vm.ToggleInterceptCommand.Execute(null);
-            await WaitUntil(() => interception.IsRunning && vm.InterceptToggleText == "Stop interception");
+            await WaitUntil(() => interception.IsRunning && vm.InterceptToggleText == "Stop proxy");
             Assert.IsFalse(vm.BindFieldsEnabled);
 
             vm.ToggleInterceptCommand.Execute(null);
             await WaitUntil(() =>
                 !interception.IsRunning &&
-                vm.EndpointStatusText == "Not listening" &&
-                vm.InterceptToggleText == "Start interception");
+                vm.EndpointStatusText == "Proxy stopped" &&
+                vm.InterceptToggleText == "Start proxy");
 
             Assert.IsTrue(vm.BindFieldsEnabled);
 
@@ -133,7 +133,7 @@ public class BindEndpointUxTests
             Assert.AreEqual(1, recorder.SetCount);
 
             vm.StopCaptureCommand.Execute(null);
-            await WaitUntil(() => !interception.IsRunning && vm.EndpointStatusText == "Not listening");
+            await WaitUntil(() => !interception.IsRunning && vm.EndpointStatusText == "Proxy stopped");
             Assert.IsFalse(vm.SystemProxy);
             Assert.IsTrue(recorder.RestoreCount >= 1);
 

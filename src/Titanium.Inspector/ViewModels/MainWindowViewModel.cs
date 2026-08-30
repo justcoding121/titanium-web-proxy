@@ -53,8 +53,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _plusPanelsSummary = "";
     private string _bindAddress = "127.0.0.1";
     private int _bindPort = 8866;
-    private string _endpointStatusText = "Not listening";
-    private string _interceptToggleText = "Start interception";
+    private string _endpointStatusText = "Proxy stopped";
+    private string _interceptToggleText = "Start proxy";
     /// <summary>Sticky intent: re-enable system proxy on the next Start after a Stop that had it on.</summary>
     private bool _reenableSystemProxyOnStart;
     private bool _stopBusy;
@@ -235,13 +235,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         if (SystemProxy)
         {
             StatusText =
-                $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shows as CONNECT until Decrypt HTTPS is enabled." +
+                $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shown as encrypted tunnels until Decrypt HTTPS is enabled." +
                 " Chrome/Edge: --disable-quic or HTTP/3 may bypass the proxy.";
         }
         else
         {
             StatusText =
-                $"Listening on {FormatBindDisplay()}:{BindPort}, but system proxy failed to enable — use the System proxy checkbox.";
+                $"Proxy running on {FormatBindDisplay()}:{BindPort}, but system proxy failed to enable — use the System proxy checkbox.";
         }
     }
 
@@ -513,7 +513,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (!_interception.IsRunning)
         {
-            StatusText = "Start interception first";
+            StatusText = "Start the proxy first";
             return;
         }
 
@@ -540,7 +540,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (!_interception.IsRunning)
         {
-            StatusText = "Start interception first";
+            StatusText = "Start the proxy first";
             return;
         }
 
@@ -565,7 +565,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private Task ExportCaAsync()
     {
         var path = _interception.ExportRootCertificate();
-        StatusText = path is null ? "No root certificate yet — start interception first" : "Exported CA: " + path;
+        StatusText = path is null ? "No root certificate yet — Start the proxy first" : "Exported CA: " + path;
         return Task.CompletedTask;
     }
 
@@ -573,7 +573,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (!AppContainerLoopback.IsSupported)
         {
-            StatusText = "Loopback exemptions require Windows 8 or later";
+            StatusText = "Allowing Store apps requires Windows 8 or later";
             return;
         }
 
@@ -582,7 +582,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             if (AppContainerLoopback.TryProbeApis(out var msg))
             {
-                StatusText = "Loopback APIs OK (no UI owner): " + msg;
+                StatusText = "Store app allow-list OK (no UI owner): " + msg;
             }
             else
             {
@@ -593,7 +593,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         await LoopbackExemptWindow.ShowAsync(owner);
-        StatusText = "Loopback exemption dialog closed";
+        StatusText = "Allow Store apps dialog closed";
     }
 
     private async Task OpenSessionRetentionAsync()
@@ -634,7 +634,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             var path = _settings.Current.LoggingFilePath ?? LoggingSettingsWindow.DefaultLogPath();
             StatusText = _settings.Current.LoggingEnableFile
                 ? $"Logging saved: {path}"
-                : "Logging saved (file sink off)";
+                : "Logging saved (file logging off)";
         }
         else
         {
@@ -647,7 +647,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var owner = TryGetMainWindow();
         if (owner is null)
         {
-            StatusText = "HTTPS decrypt hosts requires the main window";
+            StatusText = "HTTPS sites to decrypt requires the main window";
             return;
         }
 
@@ -656,8 +656,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _settings,
             ApplyDecryptHostListsFromSettings);
         StatusText = saved
-            ? "HTTPS decrypt hosts saved (applies to new connections)"
-            : "HTTPS decrypt hosts cancelled";
+            ? "HTTPS sites to decrypt saved (applies to new connections)"
+            : "HTTPS sites to decrypt cancelled";
     }
 
     private void ApplyDecryptHostListsFromSettings()
@@ -1014,10 +1014,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>Bind address/port are start-time config; editable only while the proxy is stopped.</summary>
     public bool BindFieldsEnabled => !_interception.IsRunning;
 
-    /// <summary>True while the proxy endpoint is listening (drives toolbar accent / live indicator).</summary>
+    /// <summary>True while the proxy endpoint is Proxy running on (drives toolbar accent / live indicator).</summary>
     public bool IsIntercepting => _interception.IsRunning;
 
-    /// <summary>Toolbar button label: Start or Stop interception.</summary>
+    /// <summary>Toolbar button label: Start or Stop proxy.</summary>
     public string InterceptToggleText
     {
         get => _interceptToggleText;
@@ -1157,7 +1157,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             {
                 if (!_interception.IsRunning)
                 {
-                    StatusText = "Start interception before enabling system proxy";
+                    StatusText = "Start the proxy before enabling system proxy";
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
                     return;
                 }
@@ -1172,7 +1172,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
                 SetSystemProxyCore(true);
                 StatusText =
-                    "System proxy enabled (identity bypass). For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy.";
+                    "System proxy enabled. For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy.";
                 return;
             }
 
@@ -1249,7 +1249,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             else
             {
                 SetDecryptHttpsCore(false);
-                StatusText = "Decrypt HTTPS off — HTTPS shown as CONNECT tunnels";
+                StatusText = "Decrypt HTTPS off — HTTPS shown as encrypted tunnels (not decrypted)";
             }
         }
     }
@@ -1269,7 +1269,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             PersistSettings();
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IgnoreServerCertificateErrors)));
             StatusText = value
-                ? "Ignoring server certificate errors"
+                ? "Ignoring insecure server certificates"
                 : "Validating server certificates";
         }
     }
@@ -1580,7 +1580,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             if (!_interception.IsRunning)
             {
-                StatusText = "Start interception before enabling Decrypt HTTPS";
+                StatusText = "Start the proxy before enabling Decrypt HTTPS";
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
                 return;
             }
@@ -1606,7 +1606,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             }
 
             SetDecryptHttpsCore(true);
-            StatusText = "Decrypt HTTPS on — MITM decrypting TLS";
+            StatusText = "Decrypting HTTPS";
         }
         finally
         {
@@ -1656,7 +1656,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         DebugFileLogging = enable;
         StatusText = enable
             ? $"Debug file logging on: {s.LoggingFilePath}"
-            : "Debug file logging off (Error level, file sink disabled)";
+            : "Debug file logging off (Error level, file logging off)";
         return Task.CompletedTask;
     }
 
@@ -1765,11 +1765,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         RefreshSessionCountText();
         if (removed.Count == 1)
         {
-            StatusText = "Evicted 1 old session (retention limit)";
+            StatusText = "Removed 1 oldest session to stay under limits";
         }
         else
         {
-            StatusText = $"Evicted {removed.Count} old sessions (retention limit)";
+            StatusText = $"Removed {removed.Count} oldest sessions to stay under limits";
         }
     }
 
@@ -1801,7 +1801,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private void RefreshSessionCountText()
     {
         var spilled = _store.SpilledCount;
-        var spilledSuffix = spilled > 0 ? $" ({spilled} on disk)" : "";
+        var spilledSuffix = spilled > 0 ? $" ({spilled} bodies on disk)" : "";
         SessionCountText = string.IsNullOrWhiteSpace(SearchQuery)
             ? $"Sessions: {_all.Count}{spilledSuffix}"
             : $"Sessions: {Sessions.Count} / {_all.Count}{spilledSuffix}";
@@ -1867,31 +1867,31 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             SetDecryptHttpsCore(false);
             StatusText = SystemProxy
-                ? $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
-                : $"Listening on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.";
+                ? $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
+                : $"Proxy running on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.";
             return;
         }
 
         if (SystemProxy)
         {
             StatusText = _decryptHttps
-                ? $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on. Decrypt HTTPS on. Chrome: --disable-quic or H3 may bypass."
-                : $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shows as CONNECT until Decrypt HTTPS is enabled." +
+                ? $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on. Decrypt HTTPS on. Chrome: --disable-quic or H3 may bypass."
+                : $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shown as encrypted tunnels until Decrypt HTTPS is enabled." +
                   " Chrome/Edge: --disable-quic or HTTP/3 may bypass the proxy.";
             return;
         }
 
         StatusText = _decryptHttps
-            ? $"Listening on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS on. Enable System proxy if needed. Chrome: --disable-quic or H3 may bypass."
-            : $"Listening on {FormatBindDisplay()}:{BindPort} — HTTPS as CONNECT until Decrypt HTTPS is enabled. Enable System proxy if needed.";
+            ? $"Proxy running on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS on. Enable System proxy if needed. Chrome: --disable-quic or H3 may bypass."
+            : $"Proxy running on {FormatBindDisplay()}:{BindPort} — HTTPS shown as encrypted tunnels until Decrypt HTTPS is enabled. Enable System proxy if needed.";
     }
 
     private void RefreshEndpointAndBindUi()
     {
         EndpointStatusText = _interception.IsRunning
-            ? $"Listening {FormatBindDisplay()}:{BindPort}"
-            : "Not listening";
-        InterceptToggleText = _interception.IsRunning ? "Stop interception" : "Start interception";
+            ? $"Proxy running on {FormatBindDisplay()}:{BindPort}"
+            : "Proxy stopped";
+        InterceptToggleText = _interception.IsRunning ? "Stop proxy" : "Start proxy";
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindFieldsEnabled)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsIntercepting)));
     }

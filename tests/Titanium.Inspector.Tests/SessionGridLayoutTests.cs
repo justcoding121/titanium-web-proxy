@@ -13,12 +13,14 @@ public class SessionGridLayoutTests
         Assert.AreEqual("Id", SessionGridLayout.GetColumnKey("Id"));
         Assert.AreEqual("Duration", SessionGridLayout.GetColumnKey("Duration (ms)"));
         Assert.AreEqual("TTFB", SessionGridLayout.GetColumnKey("TTFB (ms)"));
+        Assert.AreEqual("TTFB", SessionGridLayout.GetColumnKey("Wait (ms)"));
+        Assert.AreEqual("Protocol", SessionGridLayout.GetColumnKey("Client→Server"));
         Assert.AreEqual(
             "Duration",
             SessionGridLayout.GetColumnKey(new Avalonia.Controls.TextBlock { Text = "Duration (ms)", Tag = "Duration" }));
         Assert.AreEqual(
             "TTFB",
-            SessionGridLayout.GetColumnKey(new Avalonia.Controls.TextBlock { Text = "TTFB (ms)" }));
+            SessionGridLayout.GetColumnKey(new Avalonia.Controls.TextBlock { Text = "Wait (ms)" }));
         Assert.IsNull(SessionGridLayout.GetColumnKey(42));
     }
 

@@ -41,7 +41,8 @@ public sealed class InspectorSettings
 #endif
     public string? LoggingFilePath { get; set; }
 
-    public bool IgnoreServerCertificateErrors { get; set; }
+    /// <summary>Accept upstream TLS that fails normal validation (lab / self-signed hosts). On by default.</summary>
+    public bool IgnoreServerCertificateErrors { get; set; } = true;
 
     /// <summary>Start listener when the main window opens.</summary>
     public bool AutoStartCapture { get; set; } = true;

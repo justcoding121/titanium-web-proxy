@@ -18,6 +18,8 @@ public partial class SessionRetentionWindow : Window
         _settings = settings;
         InitializeComponent();
         LoadFromSettings();
+        SpillBodiesCheck.IsCheckedChanged += (_, _) => SyncDiskFieldsEnabled();
+        SyncDiskFieldsEnabled();
         SaveButton.Click += OnSave;
         CancelButton.Click += (_, _) => Close();
     }
@@ -40,6 +42,13 @@ public partial class SessionRetentionWindow : Window
         MaxSessionsBox.Text = s.MaxSessionsInMemory.ToString();
         HotBodySessionsBox.Text = s.HotBodySessions.ToString();
         MaxBodyRamMbBox.Text = BytesToMb(s.MaxCaptureBytesInMemory).ToString();
+    }
+
+    private void SyncDiskFieldsEnabled()
+    {
+        var on = SpillBodiesCheck.IsChecked == true;
+        DiskFieldsPanel.IsEnabled = on;
+        DiskFieldsPanel.Opacity = on ? 1 : 0.5;
     }
 
     private void OnSave(object? sender, RoutedEventArgs e)

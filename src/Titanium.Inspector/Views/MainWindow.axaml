@@ -18,8 +18,8 @@
         <MenuItem Header="Import archive…" Command="{Binding ImportArchiveCommand}" AutomationProperties.AutomationId="MenuImportArchive" />
       </MenuItem>
       <MenuItem Header="_Capture" AutomationProperties.AutomationId="MenuCapture">
-        <MenuItem Header="Start interception" Command="{Binding StartCaptureCommand}" AutomationProperties.AutomationId="MenuStartCapture" />
-        <MenuItem Header="Stop interception" Command="{Binding StopCaptureCommand}" AutomationProperties.AutomationId="MenuStopCapture" />
+        <MenuItem Header="Start proxy" Command="{Binding StartCaptureCommand}" AutomationProperties.AutomationId="MenuStartCapture" />
+        <MenuItem Header="Stop proxy" Command="{Binding StopCaptureCommand}" AutomationProperties.AutomationId="MenuStopCapture" />
         <!-- Mode=OneWay + Command: Avalonia MenuItem CheckBox TwoWay can write false during init and persist it. -->
         <MenuItem Header="Capturing" ToggleType="CheckBox"
                   IsChecked="{Binding Capturing, Mode=OneWay}"
@@ -27,8 +27,6 @@
                   AutomationProperties.AutomationId="MenuToggleCapturing" />
         <MenuItem Header="Clear sessions" Command="{Binding ClearSessionsCommand}" AutomationProperties.AutomationId="MenuClearSessions" />
         <MenuItem Header="Remove selected" Command="{Binding RemoveSelectedSessionsCommand}" AutomationProperties.AutomationId="MenuRemoveSelected" />
-        <MenuItem Header="Session retention…" Command="{Binding OpenSessionRetentionCommand}"
-                  AutomationProperties.AutomationId="MenuSessionRetention" />
         <Separator />
         <MenuItem Header="Auto-start capture" ToggleType="CheckBox"
                   IsChecked="{Binding AutoStartCapture, Mode=OneWay}"
@@ -42,12 +40,6 @@
                   IsChecked="{Binding DecryptHttps, Mode=OneWay}"
                   Command="{Binding ToggleDecryptHttpsCommand}"
                   AutomationProperties.AutomationId="MenuDecryptHttps" />
-        <MenuItem Header="HTTPS decrypt hosts…" Command="{Binding OpenHttpsDecryptHostsCommand}"
-                  AutomationProperties.AutomationId="MenuHttpsDecryptHosts" />
-        <MenuItem Header="Ignore server certificate errors" ToggleType="CheckBox"
-                  IsChecked="{Binding IgnoreServerCertificateErrors, Mode=OneWay}"
-                  Command="{Binding ToggleIgnoreServerCertificateErrorsCommand}"
-                  AutomationProperties.AutomationId="MenuIgnoreServerCertErrors" />
         <Separator />
         <MenuItem Header="System proxy" ToggleType="CheckBox"
                   IsChecked="{Binding SystemProxy, Mode=OneWay}"
@@ -57,17 +49,28 @@
         <MenuItem Header="Remove root CA (current user)" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />
         <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" AutomationProperties.AutomationId="MenuExportCa" />
         <MenuItem Header="Device CA setup…" Command="{Binding DeviceCaSetupCommand}" AutomationProperties.AutomationId="MenuDeviceCa" />
-        <MenuItem Header="Loopback for sandboxed apps…" Command="{Binding OpenLoopbackExemptCommand}"
+        <MenuItem Header="Allow Store apps…" Command="{Binding OpenLoopbackExemptCommand}"
                   IsVisible="{Binding ShowLoopbackExemptMenu}"
                   AutomationProperties.AutomationId="MenuLoopbackExempt" />
-        <MenuItem Header="Logging…" Command="{Binding OpenLoggingSettingsCommand}"
-                  AutomationProperties.AutomationId="MenuLogging" />
       </MenuItem>
       <MenuItem Header="_Tools" AutomationProperties.AutomationId="MenuTools">
         <MenuItem Header="Composer…" Command="{Binding OpenToolsComposerCommand}" AutomationProperties.AutomationId="MenuToolsComposer" />
         <MenuItem Header="Breakpoints…" Command="{Binding OpenToolsBreakpointsCommand}" AutomationProperties.AutomationId="MenuToolsBreakpoints" />
         <MenuItem Header="AutoResponder…" Command="{Binding OpenToolsAutoResponderCommand}" AutomationProperties.AutomationId="MenuToolsAutoResponder" />
         <MenuItem Header="Scripts…" Command="{Binding OpenToolsScriptsCommand}" AutomationProperties.AutomationId="MenuToolsScripts" />
+      </MenuItem>
+      <MenuItem Header="_Options" AutomationProperties.AutomationId="MenuOptions">
+        <MenuItem Header="Session retention…" Command="{Binding OpenSessionRetentionCommand}"
+                  AutomationProperties.AutomationId="MenuSessionRetention" />
+        <MenuItem Header="HTTPS sites to decrypt…" Command="{Binding OpenHttpsDecryptHostsCommand}"
+                  AutomationProperties.AutomationId="MenuHttpsDecryptHosts" />
+        <MenuItem Header="Ignore insecure server certificates" ToggleType="CheckBox"
+                  IsChecked="{Binding IgnoreServerCertificateErrors, Mode=OneWay}"
+                  Command="{Binding ToggleIgnoreServerCertificateErrorsCommand}"
+                  AutomationProperties.AutomationId="MenuIgnoreServerCertErrors" />
+        <Separator />
+        <MenuItem Header="Logging…" Command="{Binding OpenLoggingSettingsCommand}"
+                  AutomationProperties.AutomationId="MenuLogging" />
       </MenuItem>
       <MenuItem Header="_Help" AutomationProperties.AutomationId="MenuHelp"><MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}" AutomationProperties.AutomationId="MenuCheckForUpdates" /></MenuItem>
     </Menu>
@@ -82,10 +85,12 @@
         <!-- Search + filters: WrapPanel so chips stay visible when the window narrows. -->
         <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarSearchFilters">
           <TextBox MinWidth="160" Width="320" MaxWidth="420" Margin="0,0,12,6"
-                   Watermark="Search: method:GET status:2xx host:example process:chrome is:ws hide:tunnel"
+                   Watermark="Search sessions… (e.g. method:GET host:api)"
+                   ToolTip.Tip="Advanced tokens: method: status: host: url: body: process: content-type: is:ws|grpc|tunnel|error hide:tunnel|image"
                    Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
-          <CheckBox Content="Hide tunnels" IsChecked="{Binding HideTunnelsFilter}"
+          <CheckBox Content="Hide CONNECT" IsChecked="{Binding HideTunnelsFilter}"
                     VerticalAlignment="Center" Margin="0,0,12,6"
+                    ToolTip.Tip="Hide opaque HTTPS tunnels when Decrypt HTTPS is off"
                     AutomationProperties.AutomationId="HideTunnelsFilterCheck" />
           <CheckBox Content="Hide images" IsChecked="{Binding HideImagesFilter}"
                     VerticalAlignment="Center" Margin="0,0,12,6"
@@ -194,10 +199,10 @@
           </DataGridTemplateColumn>
           <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="180" MinWidth="120" />
           <DataGridTextColumn Header="URL" Binding="{Binding Url}" Width="320" MinWidth="160" />
-          <DataGridTextColumn Header="Client→Server" Binding="{Binding Protocol}" Width="130" MinWidth="120" />
+          <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="130" MinWidth="120" />
           <DataGridTextColumn Header="Duration (ms)" Binding="{Binding DurationMs, StringFormat={}{0:0}}"
                               Width="120" MinWidth="120" SortMemberPath="DurationMs" />
-          <DataGridTextColumn Header="TTFB (ms)" Binding="{Binding TtfbMs, StringFormat={}{0:0}}"
+          <DataGridTextColumn Header="Wait (ms)" Binding="{Binding TtfbMs, StringFormat={}{0:0}}"
                               Width="100" MinWidth="100" SortMemberPath="TtfbMs" />
           <DataGridTextColumn Header="Size" Binding="{Binding BodySizeDisplay}"
                               Width="80" MinWidth="70" SortMemberPath="BodySize" />

@@ -31,7 +31,7 @@ public partial class LoopbackExemptWindow : Window
         {
             _items = [];
             SetGridItems([]);
-            StatusText.Text = "Loopback exemptions require Windows 8 or later.";
+            StatusText.Text = "Allowing Store apps requires Windows 8 or later.";
             return;
         }
 
@@ -44,7 +44,7 @@ public partial class LoopbackExemptWindow : Window
         {
             _items = [];
             SetGridItems([]);
-            StatusText.Text = "Failed to enumerate AppContainers: " + ex.Message;
+            StatusText.Text = "Failed to list Store apps: " + ex.Message;
         }
     }
 
@@ -71,9 +71,9 @@ public partial class LoopbackExemptWindow : Window
 
         var exemptCount = _items.Count(i => i.IsExempt);
         if (string.IsNullOrEmpty(query))
-            StatusText.Text = $"{_items.Count} AppContainers; {exemptCount} currently exempt.";
+            StatusText.Text = $"{_items.Count} apps; {exemptCount} currently allowed.";
         else
-            StatusText.Text = $"Showing {filtered.Count} of {_items.Count}; {exemptCount} currently exempt.";
+            StatusText.Text = $"Showing {filtered.Count} of {_items.Count}; {exemptCount} currently allowed.";
     }
 
     private void SetGridItems(IReadOnlyList<AppContainerInfo> items)

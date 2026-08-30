@@ -170,7 +170,7 @@ public class ExportAndSystemProxyCoverageTests
 
             vm.SystemProxy = true;
             Assert.IsFalse(vm.SystemProxy);
-            StringAssert.Contains(vm.StatusText, "Start interception");
+            StringAssert.Contains(vm.StatusText, "Start the proxy");
 
             await ExecuteAsync(vm.StartCaptureCommand);
             Assert.IsTrue(interception.IsRunning, vm.StatusText);
@@ -215,13 +215,13 @@ public class ExportAndSystemProxyCoverageTests
                 dialogs);
 
             await ExecuteAsync(vm.InstallCaCommand);
-            StringAssert.Contains(vm.StatusText, "Start interception");
+            StringAssert.Contains(vm.StatusText, "Start the proxy");
 
             await ExecuteAsync(vm.UntrustCaCommand);
-            StringAssert.Contains(vm.StatusText, "Start interception");
+            StringAssert.Contains(vm.StatusText, "Start the proxy");
 
             await ExecuteAsync(vm.ExportCaCommand);
-            StringAssert.Contains(vm.StatusText, "start interception");
+            StringAssert.Contains(vm.StatusText, "Start the proxy");
 
             await ExecuteAsync(vm.LoadIntoComposerCommand);
             StringAssert.Contains(vm.StatusText, "Select a session");

@@ -155,12 +155,12 @@ public class CaptureSettingsParityTests
                 settings,
                 new InterceptionService(new RecordingSystemProxyController()));
 
-            Assert.IsFalse(vm.IgnoreServerCertificateErrors);
-            vm.IgnoreServerCertificateErrors = true;
-            Assert.IsTrue(settings.Current.IgnoreServerCertificateErrors);
+            Assert.IsTrue(vm.IgnoreServerCertificateErrors);
+            vm.IgnoreServerCertificateErrors = false;
+            Assert.IsFalse(settings.Current.IgnoreServerCertificateErrors);
 
             var loaded = new SettingsService(path);
-            Assert.IsTrue(loaded.Current.IgnoreServerCertificateErrors);
+            Assert.IsFalse(loaded.Current.IgnoreServerCertificateErrors);
         }
         finally
         {
