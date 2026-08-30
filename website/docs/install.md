@@ -11,37 +11,39 @@ dotnet add package Titanium.Web.Proxy --prerelease
 
 ## CLI
 
-On Windows:
+On Windows, **winget is stable-only**:
 
 ```shell
 winget install justcoding121.TitaniumCli
 ```
 
-Or take a self-contained zip from [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) / the [Download](/download) page when `Titanium.Cli-*.zip` assets are published.
+For **beta** (or any OS), take a self-contained zip from the [Download](/download) page or [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when `Titanium.Cli-*.zip` assets are published (e.g. `v7.0.0-beta`).
 
 Pick the **matching RID** (e.g. Alpine/K8s → `linux-musl-x64` or `linux-musl-arm64`, not `linux-x64`). HTTP/3 natives ship inside those zips — see [HTTP/3](/docs/http3).
 
 ```shell
-titanium update
-titanium version --check
+titanium update --channel beta
+titanium version --check --channel beta
 titanium http3-deps status
 ```
 
 ## Plus
 
 ```shell
-titanium update --plus
+titanium update --plus --channel beta
 ```
 
 See [Plus](/docs/plus). There is no separate Plus download link.
 
 ## Inspector
 
+Prefer [Download](/download). **winget is stable-only**:
+
 ```shell
 winget install justcoding121.TitaniumInspector
 ```
 
-Or MSI / portable zip from [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) / [Download](/download) when those assets are published. Linux and macOS Inspector builds are zip-only; Windows also ships an MSI. HTTP/3 natives are bundled the same way as the CLI ([HTTP/3](/docs/http3)).
+Or MSI / portable zip from [Download](/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when those assets are published (beta example: `v7.0.0-beta`). Linux and macOS Inspector builds are zip-only; Windows also ships an MSI. HTTP/3 natives are bundled the same way as the CLI ([HTTP/3](/docs/http3)).
 
 ## See also
 

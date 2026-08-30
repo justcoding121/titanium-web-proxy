@@ -12,7 +12,41 @@ on:
         default: 'stable'
 
 jobs:
+  resolve-version:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.v.outputs.tag }}
+      version: ${{ steps.v.outputs.version }}
+      channel: ${{ steps.v.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: v
+        name: Resolve release tag / channel
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+            CHANNEL=stable
+            if [[ "$VERSION" == *beta* || "$VERSION" == *-* ]]; then CHANNEL=beta; fi
+          else
+            CHANNEL="${{ github.event.inputs.channel || 'stable' }}"
+            PREFIX=$(grep -oP '(?<=<VersionPrefix>)[^<]+' src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj | head -n1)
+            if [[ -z "$PREFIX" ]]; then echo "VersionPrefix not found"; exit 1; fi
+            if [[ "$CHANNEL" == "beta" ]]; then
+              VERSION="${PREFIX}-beta"
+            else
+              VERSION="$PREFIX"
+            fi
+            TAG="v${VERSION}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag=$TAG version=$VERSION channel=$CHANNEL"
+
   test:
+    needs: resolve-version
     runs-on: windows-latest
     permissions:
       contents: read
@@ -32,7 +66,7 @@ jobs:
 
 
   build-cli:
-    needs: test
+    needs: [resolve-version, test]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -90,7 +124,7 @@ jobs:
           path: Titanium.Cli-${{ matrix.rid }}.zip
 
   build-plus:
-    needs: test
+    needs: [resolve-version, test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -101,16 +135,18 @@ jobs:
           dotnet-version: '10.0.x'
           cache: true
       - name: Build Plus
+        env:
+          RELEASE_TAG: ${{ needs.resolve-version.outputs.release_tag }}
         run: |
           dotnet build src/Titanium.Plus/Titanium.Plus.csproj -c Release -o artifacts/plus
-          cp artifacts/plus/Titanium.Plus.dll Titanium.Plus-${{ github.ref_name }}.dll
+          cp artifacts/plus/Titanium.Plus.dll "Titanium.Plus-${RELEASE_TAG}.dll"
       - uses: actions/upload-artifact@v4
         with:
           name: plus
           path: Titanium.Plus-*.dll
 
   build-inspector:
-    needs: test
+    needs: [resolve-version, test]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -168,9 +204,10 @@ jobs:
       - name: Build MSI (WiX)
         if: matrix.msi
         shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
         run: |
-          $ver = "${{ github.ref_name }}"
-          if ($ver.StartsWith("v")) { $ver = $ver.Substring(1) }
+          $ver = $env:RELEASE_VERSION
           if ($ver -notmatch '^\d+\.\d+\.\d+') { $ver = "7.0.0" }
           $ver = ($ver -split "-")[0]
           ./tools/packaging/build-inspector-msi.ps1 `
@@ -234,29 +271,36 @@ jobs:
             test -e /cli/libmsquic.so -o -e /cli/libmsquic.so.2 -o -e /cli/libmsquic.so.2.5.7
 
   publish-release:
-    needs: [build-cli, build-plus, build-inspector, smoke-http3]
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [resolve-version, build-cli, build-plus, build-inspector, smoke-http3]
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
       - name: Build release-manifest and create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.resolve-version.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
+          RELEASE_CHANNEL: ${{ needs.resolve-version.outputs.channel }}
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          CHANNEL=stable
-          if [[ "$VERSION" == *beta* || "$VERSION" == *-* ]]; then CHANNEL=beta; fi
+          TAG="$RELEASE_TAG"
+          VERSION="$RELEASE_VERSION"
+          CHANNEL="$RELEASE_CHANNEL"
+          export RELEASE_TAG VERSION
           mkdir -p dist
           find artifacts -type f \( -name '*.zip' -o -name '*.dll' -o -name '*.msi' \) -exec cp {} dist/ \;
           python3 - <<'PY'
           import hashlib, json, os, pathlib, datetime
-          version = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          tag = os.environ["RELEASE_TAG"]
+          version = os.environ["VERSION"]
           channel = "beta" if ("-" in version or "beta" in version.lower()) else "stable"
           dist = pathlib.Path("dist")
           def sha(p):
@@ -283,7 +327,7 @@ jobs:
             },
           }
           for name, meta in assets.items():
-            url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{os.environ['GITHUB_REF_NAME']}/{name}"
+            url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{tag}/{name}"
             entry = {"url": url, "sha256": meta["sha256"]}
             if name.startswith("Titanium.Cli-"):
               rid = name.removeprefix("Titanium.Cli-").removesuffix(".zip")
@@ -298,10 +342,19 @@ jobs:
           pathlib.Path("dist/release-manifest.json").write_text(json.dumps(manifest, indent=2))
           print(json.dumps(manifest, indent=2))
           PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG" --force
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release delete "$TAG" --yes --cleanup-tag || true
+            git tag -f -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+            git push origin "refs/tags/$TAG" --force
+          fi
           PRE=""
           if [[ "$CHANNEL" == "beta" ]]; then PRE="--prerelease"; fi
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --title "$GITHUB_REF_NAME" \
+          gh release create "$TAG" dist/* \
+            --title "$TAG" \
             --generate-notes \
             --target "$GITHUB_SHA" \
             $PRE

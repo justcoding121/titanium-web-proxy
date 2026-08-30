@@ -9,6 +9,9 @@ Plus is distributed as a sidecar DLL next to the CLI. There is **no** public Plu
 ```shell
 titanium update --plus
 titanium version --check --plus
+# Prerelease / beta channel:
+titanium update --plus --channel beta
+titanium version --check --plus --channel beta
 ```
 
 ## Enable

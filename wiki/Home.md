@@ -33,10 +33,14 @@ A lightweight, high-performance HTTP(S) proxy — reverse / edge CLI, Inspector,
 
 ## Getting started
 
+Canonical downloads: **[https://titaniumproxy.com/download](https://titaniumproxy.com/download)** · install guide: **[https://titaniumproxy.com/docs/install](https://titaniumproxy.com/docs/install)**.
+
 Install from [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy):
 
 ```shell
 dotnet add package Titanium.Web.Proxy
+# Beta / prerelease:
+dotnet add package Titanium.Web.Proxy --prerelease
 ```
 
 Start an explicit proxy that logs every requested URL:
