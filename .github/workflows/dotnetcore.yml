@@ -136,16 +136,18 @@ jobs:
         message: Update documentation
         committer_name: GitHub Actions
         committer_email: actions@github.com
-        # Only commit DocFX output ó never Sonar/coverage/tool install artifacts
+        # Only commit DocFX output -- never Sonar/coverage/tool install artifacts
         add: 'docs'
         # DocFX often races another develop push; rebase instead of failing the job.
         pull: '--rebase --autostash'
 
   # Cross-OS Inspector + Plus dashboard UI gates (Headless / Visual / Playwright).
-  # Inspector unit suite stays on Windows `build` only ù do not re-run it here.
+  # Inspector unit suite stays on Windows `build` only - do not re-run it here.
   ui-portable:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -213,6 +215,8 @@ jobs:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    permissions:
+      contents: read
     steps:
     - uses: actions/checkout@v6
     - name: Setup .NET
@@ -277,7 +281,7 @@ jobs:
         user: ${{ secrets.NUGET_USER }}
 
     - name: Publish Package
-      # MIT packages only ó never push Titanium.Plus or Titanium.Inspector
+      # MIT packages only -- never push Titanium.Plus or Titanium.Inspector
       run: |
         Get-ChildItem -Recurse -Filter *.nupkg |
           Where-Object { $_.Name -notlike '*Plus*' -and $_.Name -notlike '*Inspector*' -and $_.Name -notlike '*.symbols.nupkg' } |
