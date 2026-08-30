@@ -1913,8 +1913,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        await SessionArchive.ExportNativeArchiveAsync(_all, path);
-        StatusText = $"Exported {_all.Count} sessions to {path}";
+        try
+        {
+            // SessionArchive runs zip IO on the thread pool; resume here on the UI sync context.
+            await SessionArchive.ExportNativeArchiveAsync(_all, path);
+            StatusText = $"Exported {_all.Count} sessions to {path}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = "Export archive failed: " + Truncate(ex.Message, 160);
+        }
     }
 
     private async Task ExportSelectedArchiveAsync()
@@ -1933,8 +1941,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        await SessionArchive.ExportNativeArchiveAsync(sessions, path);
-        StatusText = $"Exported {sessions.Count} sessions to {path}";
+        try
+        {
+            await SessionArchive.ExportNativeArchiveAsync(sessions, path);
+            StatusText = $"Exported {sessions.Count} sessions to {path}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = "Export archive failed: " + Truncate(ex.Message, 160);
+        }
     }
 
     private async Task ImportArchiveAsync()
@@ -1946,22 +1961,27 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
+        StatusText = "Importing archive…";
         try
         {
-            var imported = await SessionArchive.ImportNativeArchiveAsync(path);
-            foreach (var snap in imported)
+            // Off the UI sync context for zip IO so headless WaitUntil pumps cannot deadlock the import.
+            var imported = await SessionArchive.ImportNativeArchiveAsync(path).ConfigureAwait(false);
+            await MarshalToUiAsync(() =>
             {
-                _registry.Add(snap);
-                _all.Add(snap);
-            }
+                foreach (var snap in imported)
+                {
+                    _registry.Add(snap);
+                    _all.Add(snap);
+                }
 
-            ApplyFilter();
-            RefreshSessionCountText();
-            StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
+                ApplyFilter();
+                RefreshSessionCountText();
+                StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
+            });
         }
         catch (Exception ex)
         {
-            StatusText = "Import archive failed: " + Truncate(ex.Message, 160);
+            await MarshalToUiAsync(() => StatusText = "Import archive failed: " + Truncate(ex.Message, 160));
         }
     }
 

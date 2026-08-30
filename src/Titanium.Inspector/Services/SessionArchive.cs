@@ -66,7 +66,7 @@ public static class SessionArchive
             {
                 ct.ThrowIfCancellationRequested();
                 var entry = zip.CreateEntry($"session-{index:D5}.json");
-                await using var stream = await entry.OpenAsync(ct);
+                await using var stream = entry.Open();
                 await JsonSerializer.SerializeAsync(stream, session, cancellationToken: ct);
                 index++;
             }
@@ -82,7 +82,7 @@ public static class SessionArchive
             zipPath,
             FileMode.Open,
             FileAccess.Read,
-            FileShare.Read,
+            FileShare.ReadWrite | FileShare.Delete,
             bufferSize: 4096,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
         using var zip = new ZipArchive(fs, ZipArchiveMode.Read, leaveOpen: true);
@@ -94,7 +94,7 @@ public static class SessionArchive
                 continue;
             }
 
-            await using var stream = await entry.OpenAsync(ct);
+            await using var stream = entry.Open();
             var snap = await JsonSerializer.DeserializeAsync<SessionSnapshot>(stream, cancellationToken: ct);
             if (snap is not null)
             {
