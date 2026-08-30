@@ -71,6 +71,9 @@
         <Separator />
         <MenuItem Header="Logging…" Command="{Binding OpenLoggingSettingsCommand}"
                   AutomationProperties.AutomationId="MenuLogging" />
+        <Separator />
+        <MenuItem Header="Reset Inspector settings…" Command="{Binding ResetSettingsCommand}"
+                  AutomationProperties.AutomationId="MenuResetSettings" />
       </MenuItem>
       <MenuItem Header="_Help" AutomationProperties.AutomationId="MenuHelp"><MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}" AutomationProperties.AutomationId="MenuCheckForUpdates" /></MenuItem>
     </Menu>

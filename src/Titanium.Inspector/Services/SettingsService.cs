@@ -41,8 +41,8 @@ public sealed class InspectorSettings
 #endif
     public string? LoggingFilePath { get; set; }
 
-    /// <summary>Accept upstream TLS that fails normal validation (lab / self-signed hosts). On by default.</summary>
-    public bool IgnoreServerCertificateErrors { get; set; } = true;
+    /// <summary>Accept upstream TLS that fails normal validation (lab / self-signed hosts). Off by default.</summary>
+    public bool IgnoreServerCertificateErrors { get; set; }
 
     /// <summary>Start listener when the main window opens.</summary>
     public bool AutoStartCapture { get; set; } = true;
@@ -111,6 +111,16 @@ public sealed class SettingsService
     public void Save()
     {
         File.WriteAllText(_path, JsonSerializer.Serialize(Current, JsonOptions));
+    }
+
+    /// <summary>
+    /// Replace preferences with factory defaults and write settings.json.
+    /// Does not touch the root CA, OS trust stores, or captured sessions / disk body cache.
+    /// </summary>
+    public void ResetToFactoryDefaults()
+    {
+        Current = new InspectorSettings();
+        Save();
     }
 
     private InspectorSettings LoadFromDisk()

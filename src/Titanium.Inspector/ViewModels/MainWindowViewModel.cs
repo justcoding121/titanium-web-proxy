@@ -140,6 +140,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OpenSessionRetentionCommand = new RelayCommand(OpenSessionRetentionAsync);
         OpenLoggingSettingsCommand = new RelayCommand(OpenLoggingSettingsAsync);
         OpenHttpsDecryptHostsCommand = new RelayCommand(OpenHttpsDecryptHostsAsync);
+        ResetSettingsCommand = new RelayCommand(ResetSettingsAsync);
         ReplayCommand = new RelayCommand(async () => await ReplaySelectedAsync());
         LoadFromSelectedCommand = new RelayCommand(LoadFromSelectedAsync);
         LoadIntoComposerCommand = new RelayCommand(LoadIntoComposerAsync);
@@ -660,6 +661,22 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             : "HTTPS sites to decrypt cancelled";
     }
 
+    private async Task ResetSettingsAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (!await _dialogs.ConfirmResetSettingsAsync(owner))
+        {
+            StatusText = "Reset settings cancelled";
+            return;
+        }
+
+        _settings.ResetToFactoryDefaults();
+        LoadFromSettings();
+        NotifySettingsUiChanged();
+        StatusText =
+            "Settings restored to defaults — restart Inspector so retention limits fully apply. Root CA and sessions were not changed.";
+    }
+
     private void ApplyDecryptHostListsFromSettings()
     {
         var s = _settings.Current;
@@ -978,6 +995,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand OpenSessionRetentionCommand { get; }
     public ICommand OpenLoggingSettingsCommand { get; }
     public ICommand OpenHttpsDecryptHostsCommand { get; }
+    public ICommand ResetSettingsCommand { get; }
     public ICommand ReplayCommand { get; }
     public ICommand LoadFromSelectedCommand { get; }
     public ICommand LoadIntoComposerCommand { get; }
@@ -1495,13 +1513,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _launchAutoStartCapture = _autoStartCapture = s.AutoStartCapture;
         _launchAutoSystemProxyOnStart = _autoSystemProxyOnStart = s.AutoSystemProxyOnStart;
         _decryptHttps = s.DecryptHttps;
-        AutoResponder.Enabled = s.AutoResponderEnabled;
-        AutoResponder.LoadFromDtos(s.AutoResponderRules);
-        Breakpoints.Enabled = s.BreakpointEnabled;
-        Breakpoints.UrlFilter = string.IsNullOrEmpty(s.BreakpointUrlFilter) ? "*" : s.BreakpointUrlFilter;
         _breakpointOnResponse = s.BreakpointOnResponse;
         _scriptOnRequest = s.ScriptOnRequest;
         _scriptOnResponse = s.ScriptOnResponse;
+        // Apply interception flags before AutoResponder/Breakpoints mutations — those can PersistSettings.
         _interception.BreakpointOnResponse = _breakpointOnResponse;
         _interception.ScriptOnRequest = _scriptOnRequest;
         _interception.ScriptOnResponse = _scriptOnResponse;
@@ -1510,6 +1525,25 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ApplyDecryptHostListsFromSettings();
         _debugFileLogging = IsDebugFileLoggingEnabled(s);
         _interception.ConfigureLogging(s);
+
+        AutoResponder.Enabled = s.AutoResponderEnabled;
+        AutoResponder.LoadFromDtos(s.AutoResponderRules);
+        Breakpoints.Enabled = s.BreakpointEnabled;
+        Breakpoints.UrlFilter = string.IsNullOrEmpty(s.BreakpointUrlFilter) ? "*" : s.BreakpointUrlFilter;
+    }
+
+    private void NotifySettingsUiChanged()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindAddress)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindPort)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoStartCapture)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoSystemProxyOnStart)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IgnoreServerCertificateErrors)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BreakpointOnResponse)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ScriptOnRequest)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ScriptOnResponse)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DebugFileLogging)));
     }
 
     private static bool IsDebugFileLoggingEnabled(InspectorSettings s) =>

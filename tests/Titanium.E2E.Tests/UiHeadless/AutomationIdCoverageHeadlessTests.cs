@@ -43,6 +43,7 @@ public class AutomationIdCoverageHeadlessTests
         "MenuHttpsDecryptHosts",
         "MenuIgnoreServerCertErrors",
         "MenuLogging",
+        "MenuResetSettings",
         "MenuHelp",
         "MenuCheckForUpdates",
         "SearchBox",

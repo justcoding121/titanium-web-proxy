@@ -19,6 +19,11 @@ public interface IInspectorDialogs
     /// Show device CA setup steps. Returns true if the user chose Export CA; false on Close / no owner.
     /// </summary>
     Task<bool> ShowDeviceCaSetupAsync(Window? owner, string message);
+
+    /// <summary>
+    /// Confirm resetting Inspector preferences to factory defaults (not the root CA or sessions).
+    /// </summary>
+    Task<bool> ConfirmResetSettingsAsync(Window? owner);
 }
 
 /// <summary>Avalonia modal dialogs.</summary>
@@ -56,6 +61,16 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
             accept: "Export CA",
             cancel: "Close",
             height: 320);
+
+    public Task<bool> ConfirmResetSettingsAsync(Window? owner) =>
+        SimpleConfirmDialog.ShowAsync(
+            owner,
+            "Reset Inspector settings",
+            "Restore bind address, menus, Tools (Composer/Breakpoints/AutoResponder/Scripts), retention, logging, HTTPS host lists, and layout to factory defaults?\n\n" +
+            "This does not remove the root CA, change OS trust, clear captured sessions, or delete the on-disk body cache. Restart Inspector afterward so retention limits fully apply.",
+            accept: "Reset settings",
+            cancel: "Cancel",
+            height: 300);
 }
 
 /// <summary>Scripted answers for unit / E2E-UI tests (no real windows).</summary>
@@ -65,10 +80,12 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     public bool RemoveRootCaResult { get; set; } = true;
     public bool ElevateRootCaResult { get; set; } = true;
     public bool DeviceCaSetupResult { get; set; }
+    public bool ResetSettingsResult { get; set; } = true;
     public int InstallRootCaCalls { get; private set; }
     public int RemoveRootCaCalls { get; private set; }
     public int ElevateRootCaCalls { get; private set; }
     public int DeviceCaSetupCalls { get; private set; }
+    public int ResetSettingsCalls { get; private set; }
     public string? LastDeviceCaSetupMessage { get; private set; }
 
     public Task<bool> ConfirmInstallRootCaAsync(Window? owner)
@@ -94,5 +111,11 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
         DeviceCaSetupCalls++;
         LastDeviceCaSetupMessage = message;
         return Task.FromResult(DeviceCaSetupResult);
+    }
+
+    public Task<bool> ConfirmResetSettingsAsync(Window? owner)
+    {
+        ResetSettingsCalls++;
+        return Task.FromResult(ResetSettingsResult);
     }
 }

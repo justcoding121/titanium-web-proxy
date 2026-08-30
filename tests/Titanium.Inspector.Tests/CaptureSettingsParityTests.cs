@@ -155,12 +155,109 @@ public class CaptureSettingsParityTests
                 settings,
                 new InterceptionService(new RecordingSystemProxyController()));
 
-            Assert.IsTrue(vm.IgnoreServerCertificateErrors);
-            vm.IgnoreServerCertificateErrors = false;
-            Assert.IsFalse(settings.Current.IgnoreServerCertificateErrors);
+            Assert.IsFalse(vm.IgnoreServerCertificateErrors);
+            vm.IgnoreServerCertificateErrors = true;
+            Assert.IsTrue(settings.Current.IgnoreServerCertificateErrors);
 
             var loaded = new SettingsService(path);
-            Assert.IsFalse(loaded.Current.IgnoreServerCertificateErrors);
+            Assert.IsTrue(loaded.Current.IgnoreServerCertificateErrors);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task ResetSettings_RestoresFactoryDefaults_WithoutClearingSessions()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-reset-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            settings.Current.BindPort = 9999;
+            settings.Current.IgnoreServerCertificateErrors = true;
+            settings.Current.DecryptHttps = true;
+            settings.Current.DecryptSkipHosts = ["*.corp.example.com"];
+            settings.Current.MaxSessionsInMemory = 42;
+            settings.Save();
+
+            var dialogs = new ScriptedInspectorDialogs { ResetSettingsResult = true };
+            var registry = new SessionRegistry();
+            registry.Add(new SessionSnapshot
+            {
+                Id = 1,
+                Method = "GET",
+                Url = "https://example.com/",
+                Host = "example.com",
+            });
+            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            var vm = new ViewModels.MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                dialogs);
+
+            Assert.AreEqual(9999, vm.BindPort);
+            Assert.IsTrue(vm.IgnoreServerCertificateErrors);
+            Assert.AreEqual(1, registry.VisibleSessions.Count);
+
+            vm.ResetSettingsCommand.Execute(null);
+            await Task.Delay(150);
+
+            Assert.AreEqual(1, dialogs.ResetSettingsCalls);
+            Assert.AreEqual(8866, vm.BindPort);
+            Assert.IsFalse(vm.IgnoreServerCertificateErrors);
+            Assert.IsFalse(vm.DecryptHttps);
+            Assert.AreEqual(0, settings.Current.DecryptSkipHosts.Count);
+            Assert.AreEqual(10_000, settings.Current.MaxSessionsInMemory);
+            Assert.AreEqual(1, registry.VisibleSessions.Count);
+            StringAssert.Contains(vm.StatusText, "Root CA and sessions were not changed");
+
+            var reloaded = new SettingsService(path).Current;
+            Assert.AreEqual(8866, reloaded.BindPort);
+            Assert.IsFalse(reloaded.IgnoreServerCertificateErrors);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task ResetSettings_Cancelled_LeavesSettingsUnchanged()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-reset-cancel-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(path);
+            settings.Current.BindPort = 7777;
+            settings.Save();
+
+            var dialogs = new ScriptedInspectorDialogs { ResetSettingsResult = false };
+            var registry = new SessionRegistry();
+            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            var vm = new ViewModels.MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                dialogs);
+
+            vm.ResetSettingsCommand.Execute(null);
+            await Task.Delay(150);
+
+            Assert.AreEqual(7777, vm.BindPort);
+            StringAssert.Contains(vm.StatusText, "Reset settings cancelled");
         }
         finally
         {

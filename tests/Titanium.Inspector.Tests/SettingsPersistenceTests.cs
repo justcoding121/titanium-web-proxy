@@ -94,7 +94,7 @@ public class SettingsPersistenceTests
     {
         var settings = new InspectorSettings();
         Assert.IsTrue(settings.LoggingEnabled);
-        Assert.IsTrue(settings.IgnoreServerCertificateErrors);
+        Assert.IsFalse(settings.IgnoreServerCertificateErrors);
 #if DEBUG
         Assert.IsTrue(settings.LoggingEnableFile);
         Assert.AreEqual("Debug", settings.LoggingMinimumLevel);
