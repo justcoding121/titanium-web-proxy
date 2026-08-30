@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.IO.Compression;
 using System.Net;
+using Titanium.Cli;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.EventArguments;
@@ -31,7 +32,7 @@ internal static class StaticFileHost
             throw new DirectoryNotFoundException($"Static files root not found: {root}");
         }
 
-        Console.WriteLine($"Static files root: {root} (gzip={config.EnableGzip}, brotli={config.EnableBrotli})");
+        AsyncConsole.WriteLine($"Static files root: {root} (gzip={config.EnableGzip}, brotli={config.EnableBrotli})");
 
         proxy.BeforeRequest += (_, e) => HandleStaticRequestAsync(e, root, config);
     }

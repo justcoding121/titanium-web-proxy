@@ -186,4 +186,47 @@ public class RunCommandTests
         Assert.AreEqual("s3cret", opts["controlPlane.sharedSecret"]);
         Assert.AreEqual("1", opts["extra"]);
     }
+
+    [TestMethod]
+    public void ApplyLogging_NoConfig_NotVerbose_UsesDebugOrReleasePosture()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        RunCommand.ApplyLogging(proxy, logging: null, verbose: false);
+#if DEBUG
+        Assert.IsTrue(proxy.Logging.Enabled);
+        Assert.AreEqual(Microsoft.Extensions.Logging.LogLevel.Error, proxy.Logging.MinimumLevel);
+        Assert.IsTrue(proxy.Logging.EnableConsole);
+#else
+        Assert.IsFalse(proxy.Logging.Enabled);
+#endif
+    }
+
+    [TestMethod]
+    public void ApplyLogging_Verbose_ForcesDebugConsole()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        RunCommand.ApplyLogging(proxy, logging: null, verbose: true);
+        Assert.IsTrue(proxy.Logging.Enabled);
+        Assert.AreEqual(Microsoft.Extensions.Logging.LogLevel.Debug, proxy.Logging.MinimumLevel);
+        Assert.IsTrue(proxy.Logging.EnableConsole);
+    }
+
+    [TestMethod]
+    public void ApplyLogging_YamlConfig_IsHonored()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        RunCommand.ApplyLogging(proxy, new LoggingConfig
+        {
+            Enabled = true,
+            MinimumLevel = "Warning",
+            EnableConsole = false,
+            EnableFile = true,
+            FilePath = "logs/cli-test.log",
+        }, verbose: false);
+        Assert.IsTrue(proxy.Logging.Enabled);
+        Assert.AreEqual(Microsoft.Extensions.Logging.LogLevel.Warning, proxy.Logging.MinimumLevel);
+        Assert.IsFalse(proxy.Logging.EnableConsole);
+        Assert.IsTrue(proxy.Logging.EnableFile);
+        Assert.AreEqual("logs/cli-test.log", proxy.Logging.FilePath);
+    }
 }

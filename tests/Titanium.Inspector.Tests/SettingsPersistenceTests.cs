@@ -90,6 +90,20 @@ public class SettingsPersistenceTests
     }
 
     [TestMethod]
+    public void InspectorSettings_DefaultLogging_MatchesBuildPosture()
+    {
+        var settings = new InspectorSettings();
+        Assert.IsTrue(settings.LoggingEnabled);
+#if DEBUG
+        Assert.IsTrue(settings.LoggingEnableFile);
+        Assert.AreEqual("Debug", settings.LoggingMinimumLevel);
+#else
+        Assert.IsFalse(settings.LoggingEnableFile);
+        Assert.AreEqual("Error", settings.LoggingMinimumLevel);
+#endif
+    }
+
+    [TestMethod]
     public void ViewModel_ImmediateSetters_PersistWithoutShutdown()
     {
         var path = TempSettingsPath();

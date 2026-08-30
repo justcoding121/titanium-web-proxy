@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net.Quic;
 using System.Runtime.InteropServices;
+using Titanium.Cli;
 
 namespace Titanium.Cli.Http3;
 
@@ -28,7 +29,7 @@ internal static class Http3DepsCommand
 
     private static int PrintHelp()
     {
-        Console.WriteLine("""
+        AsyncConsole.WriteLine("""
             titanium http3-deps status|install
 
               status   Print QuicListener.IsSupported and packaging hints.
@@ -43,7 +44,7 @@ internal static class Http3DepsCommand
 
     private static async Task<int> UnknownAsync(string sub)
     {
-        await Console.Error.WriteLineAsync($"Unknown http3-deps subcommand: {sub}");
+        AsyncConsole.WriteError($"Unknown http3-deps subcommand: {sub}");
         PrintHelp();
         return 1;
     }
@@ -51,28 +52,28 @@ internal static class Http3DepsCommand
     private static int Status()
     {
         var supported = QuicListener.IsSupported;
-        Console.WriteLine($"QuicListener.IsSupported: {supported}");
-        Console.WriteLine($"OS: {RuntimeInformation.OSDescription}");
-        Console.WriteLine($"Arch: {RuntimeInformation.OSArchitecture}");
-        Console.WriteLine($"Suggested RID: {SuggestRid()}");
+        AsyncConsole.WriteLine($"QuicListener.IsSupported: {supported}");
+        AsyncConsole.WriteLine($"OS: {RuntimeInformation.OSDescription}");
+        AsyncConsole.WriteLine($"Arch: {RuntimeInformation.OSArchitecture}");
+        AsyncConsole.WriteLine($"Suggested RID: {SuggestRid()}");
 
         if (supported)
         {
-            Console.WriteLine("HTTP/3 natives appear available (bundled zip or system MsQuic).");
+            AsyncConsole.WriteLine("HTTP/3 natives appear available (bundled zip or system MsQuic).");
             return 0;
         }
 
-        Console.WriteLine("HTTP/3 is not available on this machine.");
-        Console.WriteLine("Fixes:");
-        Console.WriteLine("  1) Download the matching RID zip for your OS/arch (see /docs/http3).");
-        Console.WriteLine("     Alpine/K8s musl images need linux-musl-x64 or linux-musl-arm64, not linux-x64.");
-        Console.WriteLine("     RID zips ship MsQuic+OpenSSL only; install host deps if the loader still fails:");
-        Console.WriteLine("       Ubuntu/Debian: libnuma1");
-        Console.WriteLine("       Alpine:        numactl lttng-ust");
-        Console.WriteLine($"  2) Or run: titanium http3-deps {InstallSubcommand}");
+        AsyncConsole.WriteLine("HTTP/3 is not available on this machine.");
+        AsyncConsole.WriteLine("Fixes:");
+        AsyncConsole.WriteLine("  1) Download the matching RID zip for your OS/arch (see /docs/http3).");
+        AsyncConsole.WriteLine("     Alpine/K8s musl images need linux-musl-x64 or linux-musl-arm64, not linux-x64.");
+        AsyncConsole.WriteLine("     RID zips ship MsQuic+OpenSSL only; install host deps if the loader still fails:");
+        AsyncConsole.WriteLine("       Ubuntu/Debian: libnuma1");
+        AsyncConsole.WriteLine("       Alpine:        numactl lttng-ust");
+        AsyncConsole.WriteLine($"  2) Or run: titanium http3-deps {InstallSubcommand}");
         if (OperatingSystem.IsWindows())
         {
-            Console.WriteLine("  Windows requires Windows 11 or Windows Server 2022+ (OS MsQuic).");
+            AsyncConsole.WriteLine("  Windows requires Windows 11 or Windows Server 2022+ (OS MsQuic).");
         }
 
         return 0;
@@ -82,13 +83,13 @@ internal static class Http3DepsCommand
     {
         if (QuicListener.IsSupported)
         {
-            Console.WriteLine("QuicListener.IsSupported is already true; nothing to install.");
+            AsyncConsole.WriteLine("QuicListener.IsSupported is already true; nothing to install.");
             return 0;
         }
 
         if (OperatingSystem.IsWindows())
         {
-            await Console.Error.WriteLineAsync(
+            AsyncConsole.WriteError(
                 "Windows HTTP/3 uses OS MsQuic. Upgrade to Windows 11 or Windows Server 2022+.");
             return 1;
         }
@@ -131,7 +132,7 @@ internal static class Http3DepsCommand
                 $"Configure packages.microsoft.com for your distro, then: zypper {InstallSubcommand} {LibMsQuicPackage}");
         }
 
-        await Console.Error.WriteLineAsync(
+        AsyncConsole.WriteError(
             $"No supported package manager detected. Install {LibMsQuicPackage} manually or use a bundled RID zip.");
         return 1;
     }
@@ -143,7 +144,7 @@ internal static class Http3DepsCommand
         var versionId = ReadOsRelease("VERSION_ID") ?? "22.04";
         var prodDeb = $"https://packages.microsoft.com/config/{id}/{versionId}/packages-microsoft-prod.deb";
 
-        Console.WriteLine($"Configuring Microsoft package repo ({id} {versionId})…");
+        AsyncConsole.WriteLine($"Configuring Microsoft package repo ({id} {versionId})…");
         var tmp = Path.Combine(Path.GetTempPath(), "packages-microsoft-prod.deb");
         try
         {
@@ -155,7 +156,7 @@ internal static class Http3DepsCommand
         }
         catch (Exception ex)
         {
-            await Console.Error.WriteLineAsync(
+            AsyncConsole.WriteError(
                 $"Failed to download {prodDeb}: {ex.Message}. Install {LibMsQuicPackage} manually from packages.microsoft.com.");
             return 1;
         }
@@ -177,13 +178,13 @@ internal static class Http3DepsCommand
     {
         if (!HasCommand(fileName) && fileName != "brew")
         {
-            await Console.Error.WriteLineAsync(hint);
+            AsyncConsole.WriteError(hint);
             return 1;
         }
 
         if (fileName == "brew" && !HasCommand("brew"))
         {
-            await Console.Error.WriteLineAsync(hint);
+            AsyncConsole.WriteError(hint);
             return 1;
         }
 
@@ -198,7 +199,7 @@ internal static class Http3DepsCommand
 
     private static async Task<int> RunAsync(string fileName, IReadOnlyList<string> args)
     {
-        Console.WriteLine($"> {fileName} {string.Join(' ', args)}");
+        AsyncConsole.WriteLine($"> {fileName} {string.Join(' ', args)}");
         var psi = new ProcessStartInfo
         {
             FileName = fileName,
@@ -216,7 +217,7 @@ internal static class Http3DepsCommand
             using var p = Process.Start(psi);
             if (p is null)
             {
-                await Console.Error.WriteLineAsync($"Failed to start {fileName}.");
+                AsyncConsole.WriteError($"Failed to start {fileName}.");
                 return 1;
             }
 
@@ -227,25 +228,25 @@ internal static class Http3DepsCommand
             var errText = await stderr;
             if (!string.IsNullOrWhiteSpace(outText))
             {
-                Console.Write(outText);
+                AsyncConsole.Write(outText);
             }
 
             if (!string.IsNullOrWhiteSpace(errText))
             {
-                await Console.Error.WriteAsync(errText);
+                AsyncConsole.WriteErrorRaw(errText);
             }
 
             if (p.ExitCode == 0)
             {
-                Console.WriteLine($"QuicListener.IsSupported (this process): {QuicListener.IsSupported}");
-                Console.WriteLine("If still false, restart the CLI so the loader picks up new libraries.");
+                AsyncConsole.WriteLine($"QuicListener.IsSupported (this process): {QuicListener.IsSupported}");
+                AsyncConsole.WriteLine("If still false, restart the CLI so the loader picks up new libraries.");
             }
 
             return p.ExitCode;
         }
         catch (Exception ex)
         {
-            await Console.Error.WriteLineAsync(ex.Message);
+            AsyncConsole.WriteError(ex.Message);
             return 1;
         }
     }

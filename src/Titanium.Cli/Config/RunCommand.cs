@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.Extensions.Logging;
+using Titanium.Cli;
 using Titanium.Cli.Certificates;
 using Titanium.Cli.Parsers;
 using Titanium.Cli.StaticFiles;
@@ -29,7 +30,7 @@ internal static class RunCommand
         {
             foreach (var e in errors)
             {
-                await Console.Error.WriteLineAsync(e);
+                AsyncConsole.WriteError(e);
             }
 
             return 1;
@@ -106,8 +107,8 @@ internal static class RunCommand
         proxy.Start();
         StartAcmeIfConfigured(proxy, loaded.Config);
 
-        Console.WriteLine("Titanium proxy running. Press Ctrl+C to stop.");
-        await Console.Out.FlushAsync();
+        AsyncConsole.WriteLine("Titanium proxy running. Press Ctrl+C to stop.");
+        await AsyncConsole.FlushAsync();
         await WaitForCtrlCAsync();
         await proxy.StopAsync();
         return 0;
@@ -146,7 +147,7 @@ internal static class RunCommand
             }
             catch (Exception ex)
             {
-                await Console.Error.WriteLineAsync($"ACME IssueOrRenew failed: {ex.Message}");
+                AsyncConsole.WriteError($"ACME IssueOrRenew failed: {ex.Message}");
             }
         });
     }
@@ -230,13 +231,13 @@ internal static class RunCommand
         var plus = PlusLoader.TryLoad(out var warning);
         if (warning is not null)
         {
-            await Console.Error.WriteLineAsync(warning);
+            AsyncConsole.WriteError(warning);
         }
 
         plus?.Apply(context);
     }
 
-    private static void ApplyLogging(ProxyServer proxy, LoggingConfig? logging, bool verbose)
+    internal static void ApplyLogging(ProxyServer proxy, LoggingConfig? logging, bool verbose)
     {
         if (logging is not null)
         {
@@ -268,6 +269,18 @@ internal static class RunCommand
             {
                 proxy.Logging.QueueCapacity = queueCapacity;
             }
+        }
+        else
+        {
+#if DEBUG
+            // Debug builds: quiet Error+console so misconfig is visible while developing.
+            proxy.Logging.Enabled = true;
+            proxy.Logging.MinimumLevel = LogLevel.Error;
+            proxy.Logging.EnableConsole = true;
+#else
+            // Release/published: zero overhead unless YAML logging: or --verbose opts in.
+            proxy.Logging.Enabled = false;
+#endif
         }
 
         if (verbose)
@@ -303,12 +316,12 @@ internal static class RunCommand
         if (endPoint is TransparentProxyEndPoint { ForwardHost: not null } transparent)
         {
             var mode = listener.DecryptSsl ? "TLS-terminate" : "transparent";
-            Console.WriteLine(
+            AsyncConsole.WriteLine(
                 $"Listener {host}:{listener.Port} {mode} ForwardHost={transparent.ForwardHost}:{transparent.ForwardPort ?? 80}");
         }
         else
         {
-            Console.WriteLine($"Listener {host}:{listener.Port} {kind} decryptSsl={listener.DecryptSsl}");
+            AsyncConsole.WriteLine($"Listener {host}:{listener.Port} {kind} decryptSsl={listener.DecryptSsl}");
         }
     }
 

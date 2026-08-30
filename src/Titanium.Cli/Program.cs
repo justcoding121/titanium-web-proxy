@@ -8,30 +8,37 @@ internal static class Program
 {
     public static async Task<int> Main(string[] args)
     {
-        if (args.Length == 0)
-        {
-            PrintHelp();
-            return 1;
-        }
-
-        var command = args[0].ToLowerInvariant();
         try
         {
-            return command switch
+            if (args.Length == 0)
             {
-                "run" => await RunCommand.ExecuteAsync(ParseConfigPath(args), ParseVerbose(args)),
-                "test" => TestCommand.Execute(ParseConfigPath(args)),
-                "version" => await VersionCommand.ExecuteAsync(args),
-                "update" => await UpdateCommand.ExecuteAsync(args),
-                "http3-deps" => await Http3DepsCommand.ExecuteAsync(args),
-                "help" or "-h" or "--help" => PrintHelp(),
-                _ => await UnknownAsync(command),
-            };
+                PrintHelp();
+                return 1;
+            }
+
+            var command = args[0].ToLowerInvariant();
+            try
+            {
+                return command switch
+                {
+                    "run" => await RunCommand.ExecuteAsync(ParseConfigPath(args), ParseVerbose(args)),
+                    "test" => await TestCommand.ExecuteAsync(ParseConfigPath(args)),
+                    "version" => await VersionCommand.ExecuteAsync(args),
+                    "update" => await UpdateCommand.ExecuteAsync(args),
+                    "http3-deps" => await Http3DepsCommand.ExecuteAsync(args),
+                    "help" or "-h" or "--help" => PrintHelp(),
+                    _ => await UnknownAsync(command),
+                };
+            }
+            catch (Exception ex)
+            {
+                AsyncConsole.WriteError(ex.Message);
+                return 1;
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            await Console.Error.WriteLineAsync(ex.Message);
-            return 1;
+            await AsyncConsole.FlushAsync();
         }
     }
 
@@ -63,7 +70,7 @@ internal static class Program
 
     private static int PrintHelp()
     {
-        Console.WriteLine("""
+        AsyncConsole.WriteLine("""
             Titanium Web Proxy CLI
 
             Usage:
@@ -76,10 +83,10 @@ internal static class Program
         return 0;
     }
 
-    private static async Task<int> UnknownAsync(string command)
+    private static Task<int> UnknownAsync(string command)
     {
-        await Console.Error.WriteLineAsync($"Unknown command: {command}");
+        AsyncConsole.WriteError($"Unknown command: {command}");
         PrintHelp();
-        return 1;
+        return Task.FromResult(1);
     }
 }

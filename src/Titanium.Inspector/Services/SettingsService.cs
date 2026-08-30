@@ -32,8 +32,13 @@ public sealed class InspectorSettings
     public string? ScriptOnResponse { get; set; }
 
     public bool LoggingEnabled { get; set; } = true;
+#if DEBUG
+    public string LoggingMinimumLevel { get; set; } = "Debug";
+    public bool LoggingEnableFile { get; set; } = true;
+#else
     public string LoggingMinimumLevel { get; set; } = "Error";
     public bool LoggingEnableFile { get; set; }
+#endif
     public string? LoggingFilePath { get; set; }
 
     public bool IgnoreServerCertificateErrors { get; set; }
