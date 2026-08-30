@@ -51,6 +51,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _bindAddress = "127.0.0.1";
     private int _bindPort = 8866;
     private string _endpointStatusText = "Not listening";
+    private string _interceptToggleText = "Start interception";
     /// <summary>Sticky intent: re-enable system proxy on the next Start after a Stop that had it on.</summary>
     private bool _reenableSystemProxyOnStart;
     private bool _stopBusy;
@@ -101,7 +102,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ImportArchiveCommand = new RelayCommand(async () => await ImportArchiveAsync());
         StartCaptureCommand = new RelayCommand(async () => await StartCaptureAsync());
         StopCaptureCommand = new RelayCommand(StopCaptureAsync);
-        ChangeBindCommand = new RelayCommand(ChangeBindAsync);
+        ToggleInterceptCommand = new RelayCommand(ToggleInterceptAsync);
         ToggleCapturingCommand = new RelayCommand(ToggleCapturingAsync);
         ToggleAutoStartCaptureCommand = new RelayCommand(() =>
         {
@@ -378,11 +379,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
+    private async Task ToggleInterceptAsync()
+    {
+        if (_interception.IsRunning)
+        {
+            await StopCaptureAsync();
+        }
+        else
+        {
+            await StartCaptureAsync();
+        }
+    }
+
     private async Task StopCaptureAsync() =>
         await StopCaptureCoreAsync("Stopped (system proxy restored if it was on)");
-
-    private async Task ChangeBindAsync() =>
-        await StopCaptureCoreAsync("Stopped — edit bind address/port, then Start interception");
 
     /// <summary>
     /// Tear down the proxy off the UI thread — WinINET restore + listener stop can hang Avalonia
@@ -627,7 +637,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ImportArchiveCommand { get; }
     public ICommand StartCaptureCommand { get; }
     public ICommand StopCaptureCommand { get; }
-    public ICommand ChangeBindCommand { get; }
+    public ICommand ToggleInterceptCommand { get; }
     public ICommand ToggleCapturingCommand { get; }
     public ICommand ToggleAutoStartCaptureCommand { get; }
     public ICommand ToggleAutoSystemProxyOnStartCommand { get; }
@@ -670,8 +680,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>Bind address/port are start-time config; editable only while the proxy is stopped.</summary>
     public bool BindFieldsEnabled => !_interception.IsRunning;
 
-    /// <summary>Toolbar hint + Change bind button while the listener is up.</summary>
-    public bool ShowBindChangeUi => _interception.IsRunning;
+    /// <summary>Toolbar button label: Start or Stop interception.</summary>
+    public string InterceptToggleText
+    {
+        get => _interceptToggleText;
+        private set => SetField(ref _interceptToggleText, value);
+    }
 
     /// <summary>Compact live endpoint label (toolbar / status); distinct from transient <see cref="StatusText"/>.</summary>
     public string EndpointStatusText
@@ -1385,10 +1399,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private void RefreshEndpointAndBindUi()
     {
         EndpointStatusText = _interception.IsRunning
-            ? $"Listening {FormatBindDisplay()}:{BindPort} · stop to change"
+            ? $"Listening {FormatBindDisplay()}:{BindPort}"
             : "Not listening";
+        InterceptToggleText = _interception.IsRunning ? "Stop interception" : "Start interception";
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindFieldsEnabled)));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowBindChangeUi)));
     }
 
     private static IPAddress ParseBindAddress(string bindAddress)

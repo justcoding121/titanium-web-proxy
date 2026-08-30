@@ -40,9 +40,6 @@
                   Command="{Binding ToggleDecryptHttpsCommand}"
                   AutomationProperties.AutomationId="MenuDecryptHttps" />
         <Separator />
-        <MenuItem Header="Bind address" AutomationProperties.AutomationId="MenuBindAddress"><TextBox Width="160" Text="{Binding BindAddress}" Watermark="127.0.0.1 or 0.0.0.0" IsEnabled="{Binding BindFieldsEnabled}" ToolTip.Tip="Stop interception to change bind address/port" AutomationProperties.AutomationId="MenuBindAddressBox" /></MenuItem>
-        <MenuItem Header="Bind port" AutomationProperties.AutomationId="MenuBindPort"><TextBox Width="80" Text="{Binding BindPort}" IsEnabled="{Binding BindFieldsEnabled}" ToolTip.Tip="Stop interception to change bind address/port" AutomationProperties.AutomationId="MenuBindPortBox" /></MenuItem>
-        <Separator />
         <MenuItem Header="System proxy" ToggleType="CheckBox"
                   IsChecked="{Binding SystemProxy, Mode=OneWay}"
                   Command="{Binding ToggleSystemProxyCommand}"
@@ -90,19 +87,13 @@
         <StackPanel Orientation="Horizontal" Spacing="12">
           <TextBox Width="120" Watermark="Bind address" Text="{Binding BindAddress}"
                    IsEnabled="{Binding BindFieldsEnabled}"
-                   ToolTip.Tip="Stop interception to change bind address/port"
                    AutomationProperties.AutomationId="ToolbarBindAddress" />
           <TextBox Width="70" Watermark="Port" Text="{Binding BindPort}"
                    IsEnabled="{Binding BindFieldsEnabled}"
-                   ToolTip.Tip="Stop interception to change bind address/port"
                    AutomationProperties.AutomationId="ToolbarBindPort" />
-          <TextBlock Text="Stop interception to edit" VerticalAlignment="Center" Opacity="0.75"
-                     IsVisible="{Binding ShowBindChangeUi}"
-                     AutomationProperties.AutomationId="BindEditHint" />
-          <Button Content="Change bind…" Command="{Binding ChangeBindCommand}"
-                  IsVisible="{Binding ShowBindChangeUi}"
+          <Button Content="{Binding InterceptToggleText}" Command="{Binding ToggleInterceptCommand}"
                   VerticalAlignment="Center"
-                  AutomationProperties.AutomationId="ChangeBindButton" />
+                  AutomationProperties.AutomationId="ToggleInterceptButton" />
           <TextBlock Text="{Binding EndpointStatusText}" VerticalAlignment="Center" Opacity="0.85"
                      TextWrapping="NoWrap"
                      AutomationProperties.AutomationId="EndpointStatusText" />

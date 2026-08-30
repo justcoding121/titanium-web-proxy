@@ -32,20 +32,21 @@ public class BindEndpointUxTests
 
             Assert.IsTrue(vm.BindFieldsEnabled);
             Assert.AreEqual("Not listening", vm.EndpointStatusText);
+            Assert.AreEqual("Start interception", vm.InterceptToggleText);
 
             vm.StartCaptureCommand.Execute(null);
             await WaitUntil(() => interception.IsRunning && !vm.BindFieldsEnabled);
 
             Assert.IsFalse(vm.BindFieldsEnabled);
-            Assert.IsTrue(vm.ShowBindChangeUi);
-            Assert.AreEqual($"Listening {vm.BindAddress}:{vm.BindPort} · stop to change", vm.EndpointStatusText);
+            Assert.AreEqual($"Listening {vm.BindAddress}:{vm.BindPort}", vm.EndpointStatusText);
+            Assert.AreEqual("Stop interception", vm.InterceptToggleText);
 
             vm.StopCaptureCommand.Execute(null);
             await WaitUntil(() => !interception.IsRunning && vm.EndpointStatusText == "Not listening");
 
             Assert.IsTrue(vm.BindFieldsEnabled);
-            Assert.IsFalse(vm.ShowBindChangeUi);
             Assert.AreEqual("Not listening", vm.EndpointStatusText);
+            Assert.AreEqual("Start interception", vm.InterceptToggleText);
 
             vm.EnsureShutdown();
         }
@@ -56,7 +57,7 @@ public class BindEndpointUxTests
     }
 
     [TestMethod]
-    public async Task ChangeBindCommand_StopsAndLeavesFieldsEditable()
+    public async Task ToggleInterceptCommand_StartsAndStops()
     {
         var path = TempSettingsPath();
         try
@@ -77,19 +78,18 @@ public class BindEndpointUxTests
                 interception);
 
             vm.BindPort = GetFreePort();
-            vm.StartCaptureCommand.Execute(null);
-            await WaitUntil(() => interception.IsRunning && vm.ShowBindChangeUi);
 
-            vm.ChangeBindCommand.Execute(null);
+            vm.ToggleInterceptCommand.Execute(null);
+            await WaitUntil(() => interception.IsRunning && vm.InterceptToggleText == "Stop interception");
+            Assert.IsFalse(vm.BindFieldsEnabled);
+
+            vm.ToggleInterceptCommand.Execute(null);
             await WaitUntil(() =>
                 !interception.IsRunning &&
                 vm.EndpointStatusText == "Not listening" &&
-                vm.StatusText.Contains("edit bind", StringComparison.OrdinalIgnoreCase));
+                vm.InterceptToggleText == "Start interception");
 
             Assert.IsTrue(vm.BindFieldsEnabled);
-            Assert.IsFalse(vm.ShowBindChangeUi);
-            Assert.AreEqual("Not listening", vm.EndpointStatusText);
-            StringAssert.Contains(vm.StatusText, "edit bind");
 
             vm.EnsureShutdown();
         }
