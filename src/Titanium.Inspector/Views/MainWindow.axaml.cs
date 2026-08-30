@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Threading;
@@ -38,6 +39,10 @@ public partial class MainWindow : Window
         DataContextChanged += OnDataContextChanged;
         SessionsGrid.Loaded += OnSessionsGridLoaded;
         SessionsGrid.SelectionChanged += OnSessionsGridSelectionChanged;
+        SessionsGrid.AddHandler(
+            InputElement.PointerPressedEvent,
+            OnSessionsGridPointerPressed,
+            RoutingStrategies.Tunnel);
         HookSessionsCollection(DataContext as MainWindowViewModel);
     }
 
@@ -45,6 +50,35 @@ public partial class MainWindow : Window
     {
         AttachSessionsScroll();
         ApplySessionGridLayoutIfNeeded();
+    }
+
+    private void OnSessionsGridPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(SessionsGrid).Properties.IsRightButtonPressed)
+        {
+            return;
+        }
+
+        var source = e.Source as Control;
+        var row = source?.FindAncestorOfType<DataGridRow>()
+            ?? (source as DataGridRow);
+        if (row?.DataContext is not SessionSnapshot snap)
+        {
+            return;
+        }
+
+        if (SessionsGrid.SelectedItems.Contains(snap))
+        {
+            return;
+        }
+
+        SessionsGrid.SelectedItems.Clear();
+        SessionsGrid.SelectedItem = snap;
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.SelectedSession = snap;
+            vm.SetSelectedSessions([snap]);
+        }
     }
 
     private void OnSessionsGridSelectionChanged(object? sender, SelectionChangedEventArgs e)

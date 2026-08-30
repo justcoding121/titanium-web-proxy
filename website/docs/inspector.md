@@ -97,7 +97,7 @@ Notes:
 - If user-level CA install fails, Inspector offers an elevated retry (OS admin prompt).
 ## Other features
 
-- Session grid: method, status, host, URL, protocol, duration, TTFB, size, process
+- Session grid: method, status, host, URL, protocol, duration, TTFB, size, process. Right-click menu: Replay, Load into Composer, Export selected HAR/archive, Copy URL.
 - HAR / archive: Export all writes every captured session; Export selected writes the grid multi-selection. Import appends sessions from the file. Replay selected session.
 - System proxy and root CA install / untrust / export; Device CA setup dialog for external devices
 - Search (`method:GET status:200 host:example is:ws`)

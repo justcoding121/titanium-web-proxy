@@ -111,6 +111,17 @@
                 CanUserSortColumns="True"
                 GridLinesVisibility="Horizontal"
                 AutoGenerateColumns="False">
+        <DataGrid.ContextMenu>
+          <ContextMenu AutomationProperties.AutomationId="SessionsContextMenu">
+            <MenuItem Header="Replay" Command="{Binding ReplayCommand}" AutomationProperties.AutomationId="CtxReplay" />
+            <MenuItem Header="Load into Composer" Command="{Binding LoadIntoComposerCommand}" AutomationProperties.AutomationId="CtxLoadComposer" />
+            <Separator />
+            <MenuItem Header="Export selected HAR…" Command="{Binding ExportSelectedHarCommand}" AutomationProperties.AutomationId="CtxExportSelectedHar" />
+            <MenuItem Header="Export selected archive…" Command="{Binding ExportSelectedArchiveCommand}" AutomationProperties.AutomationId="CtxExportSelectedArchive" />
+            <Separator />
+            <MenuItem Header="Copy URL" Command="{Binding CopyUrlCommand}" AutomationProperties.AutomationId="CtxCopyUrl" />
+          </ContextMenu>
+        </DataGrid.ContextMenu>
         <DataGrid.Columns>
           <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="60"
                               CustomSortComparer="{x:Static svc:SessionIdComparer.Instance}" />

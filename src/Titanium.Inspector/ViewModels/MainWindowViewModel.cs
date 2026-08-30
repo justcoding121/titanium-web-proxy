@@ -128,6 +128,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OpenLoopbackExemptCommand = new RelayCommand(OpenLoopbackExemptAsync);
         ReplayCommand = new RelayCommand(async () => await ReplaySelectedAsync());
         LoadFromSelectedCommand = new RelayCommand(LoadFromSelectedAsync);
+        LoadIntoComposerCommand = new RelayCommand(LoadIntoComposerAsync);
+        CopyUrlCommand = new RelayCommand(CopyUrlAsync);
         SendComposerCommand = new RelayCommand(async () => await SendComposerAsync());
         AddAutoResponderRuleCommand = new RelayCommand(AddAutoResponderRuleAsync);
         DeleteAutoResponderRuleCommand = new RelayCommand(DeleteAutoResponderRuleAsync);
@@ -570,6 +572,58 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
+    private Task LoadIntoComposerAsync()
+    {
+        if (SelectedSession is null)
+        {
+            StatusText = "Select a session to load into Composer";
+            return Task.CompletedTask;
+        }
+
+        ComposerMethod = SelectedSession.Method;
+        ComposerUrl = SelectedSession.Url;
+        ComposerHeaders = SelectedSession.RequestHeadersText ?? "";
+        ComposerBody = SelectedSession.RequestBodyText ?? "";
+        StatusText = "Composer loaded from selected session";
+        return OpenToolsTabAsync(0);
+    }
+
+    private async Task CopyUrlAsync()
+    {
+        var url = ResolveCopyUrl();
+        if (string.IsNullOrEmpty(url))
+        {
+            StatusText = "Select a session to copy URL";
+            return;
+        }
+
+        var window = TryGetMainWindow();
+        if (window?.Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(url);
+        }
+
+        StatusText = "Copied URL";
+    }
+
+    private string? ResolveCopyUrl()
+    {
+        if (!string.IsNullOrEmpty(SelectedSession?.Url))
+        {
+            return SelectedSession!.Url;
+        }
+
+        foreach (var snap in _selectedSessions)
+        {
+            if (!string.IsNullOrEmpty(snap.Url))
+            {
+                return snap.Url;
+            }
+        }
+
+        return null;
+    }
+
     private Task AddAutoResponderRuleAsync()
     {
         AutoResponder.Rules.Add(new AutoResponderRule
@@ -651,6 +705,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand OpenLoopbackExemptCommand { get; }
     public ICommand ReplayCommand { get; }
     public ICommand LoadFromSelectedCommand { get; }
+    public ICommand LoadIntoComposerCommand { get; }
+    public ICommand CopyUrlCommand { get; }
     public ICommand SendComposerCommand { get; }
     public ICommand AddAutoResponderRuleCommand { get; }
     public ICommand DeleteAutoResponderRuleCommand { get; }

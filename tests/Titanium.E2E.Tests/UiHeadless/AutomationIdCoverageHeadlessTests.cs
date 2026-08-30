@@ -51,6 +51,12 @@ public class AutomationIdCoverageHeadlessTests
         "DecryptHttpsCheck",
         "SystemProxyCheck",
         "SessionsGrid",
+        "SessionsContextMenu",
+        "CtxReplay",
+        "CtxLoadComposer",
+        "CtxExportSelectedHar",
+        "CtxExportSelectedArchive",
+        "CtxCopyUrl",
         "CloseDetailsButton",
         "OuterPaneTabs",
         "TabOuterInspect",
@@ -118,6 +124,11 @@ public class AutomationIdCoverageHeadlessTests
             });
             fx.ViewModel.SelectedSession = fx.ViewModel.Sessions[0];
             fx.Robot.Click("MenuToolsComposer");
+
+            // ContextMenu items are not in the visual tree until opened.
+            Assert.IsTrue(fx.Robot.TryFind<Avalonia.Controls.DataGrid>("SessionsGrid", out var grid) && grid is not null);
+            Assert.IsNotNull(grid.ContextMenu);
+            grid.ContextMenu.Open(grid);
 
             var missing = MainWindowIds
                 .Where(id => !fx.Robot.TryFind<Avalonia.Controls.Control>(id, out _))
