@@ -14,8 +14,8 @@ public partial class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         var settings = SettingsService.Load();
-        var sessions = new SessionRegistry();
-        var buffer = new SessionStreamBuffer(sessions);
+        var sessions = new SessionRegistry(SessionStoreOptions.FromSettings(settings.Current));
+        var buffer = new SessionStreamBuffer();
         var updates = new UpdateService(settings);
         PlusInspectorLoader.TryLoadPanels(out _);
 

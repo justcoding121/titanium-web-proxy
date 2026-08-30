@@ -2,62 +2,38 @@ using System.Collections.ObjectModel;
 
 namespace Titanium.Inspector.Services;
 
-/// <summary>Session registry with LRU eviction at 50k.</summary>
-public sealed class SessionRegistry
+/// <summary>
+/// Thin facade over <see cref="SessionStore"/> kept for existing wiring and tests.
+/// Retention / eviction live in the store (not a separate 50k LRU).
+/// </summary>
+public sealed class SessionRegistry : IDisposable
 {
-    private const int LruLimit = 50_000;
-    private readonly object _gate = new();
-    private readonly LinkedList<long> _lru = new();
-    private readonly Dictionary<long, LinkedListNode<long>> _nodes = new();
-    private readonly Dictionary<long, WeakReference<SessionSnapshot>> _weak = new();
-
-    public ObservableCollection<SessionSnapshot> VisibleSessions { get; } = new();
-
-    public void Add(SessionSnapshot snapshot)
+    /// <summary>
+    /// Test / headless default: no disk spill (avoids LocalAppData writers).
+    /// Desktop App constructs with <see cref="SessionStoreOptions.FromSettings"/>.
+    /// </summary>
+    public SessionRegistry()
+        : this(new SessionStoreOptions { SpillBodiesToDisk = false })
     {
-        lock (_gate)
-        {
-            if (_nodes.TryGetValue(snapshot.Id, out var existing))
-            {
-                _lru.Remove(existing);
-                _lru.AddFirst(existing);
-            }
-            else
-            {
-                var node = _lru.AddFirst(snapshot.Id);
-                _nodes[snapshot.Id] = node;
-                _weak[snapshot.Id] = new WeakReference<SessionSnapshot>(snapshot);
-                VisibleSessions.Add(snapshot);
-            }
-
-            while (_lru.Count > LruLimit)
-            {
-                var last = _lru.Last!;
-                _lru.RemoveLast();
-                _nodes.Remove(last.Value);
-                _weak.Remove(last.Value);
-                for (var i = VisibleSessions.Count - 1; i >= 0; i--)
-                {
-                    if (VisibleSessions[i].Id == last.Value)
-                    {
-                        VisibleSessions.RemoveAt(i);
-                        break;
-                    }
-                }
-            }
-        }
     }
 
-    public SessionSnapshot? TryGet(long id)
+    public SessionRegistry(SessionStoreOptions? options, string? cacheDirectory = null)
+        : this(new SessionStore(options, cacheDirectory))
     {
-        lock (_gate)
-        {
-            if (_weak.TryGetValue(id, out var wr) && wr.TryGetTarget(out var snap))
-            {
-                return snap;
-            }
-
-            return null;
-        }
     }
+
+    public SessionRegistry(SessionStore store)
+    {
+        Store = store;
+    }
+
+    public SessionStore Store { get; }
+
+    public ObservableCollection<SessionSnapshot> VisibleSessions => Store.Sessions;
+
+    public void Add(SessionSnapshot snapshot) => Store.Add(snapshot);
+
+    public SessionSnapshot? TryGet(long id) => Store.TryGet(id);
+
+    public void Dispose() => Store.Dispose();
 }

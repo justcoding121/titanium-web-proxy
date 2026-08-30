@@ -20,12 +20,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private readonly SessionStreamBuffer _buffer;
     private readonly SessionRegistry _registry;
+    private readonly SessionStore _store;
     private readonly UpdateService _updates;
     private readonly SettingsService _settings;
     private readonly InterceptionService _interception;
     private readonly IInspectorDialogs _dialogs;
     private readonly IInspectorPathPicker _pathPicker;
-    private readonly ObservableCollection<SessionSnapshot> _all = new();
+    private readonly ObservableCollection<SessionSnapshot> _all;
     private readonly List<SessionSnapshot> _selectedSessions = new();
     private string _statusText = "Ready";
     private string _sessionCountText = "Sessions: 0";
@@ -82,6 +83,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         _buffer = buffer;
         _registry = registry;
+        _store = registry.Store;
+        _all = _store.Sessions;
         _updates = updates;
         _settings = settings;
         _interception = interception ?? new InterceptionService();
@@ -182,8 +185,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>Exposed for E2E / headless tests — seeds the in-memory capture list.</summary>
     public void SeedSession(SessionSnapshot snapshot)
     {
-        _registry.Add(snapshot);
-        OnSessionAdded(snapshot);
+        _store.Add(snapshot);
+        OnSessionAddedToFilter(snapshot);
     }
 
     /// <summary>Called from the session grid when Extended multi-select changes.</summary>
@@ -275,6 +278,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.EnsureShutdown();
         SetSystemProxyCore(false);
         RefreshEndpointAndBindUi();
+        _registry.Dispose();
     }
 
     /// <summary>
@@ -334,15 +338,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private void WireSessionPipelineHandlers()
     {
-        _buffer.SessionAdded += snapshot => MarshalToUi(() => OnSessionAdded(snapshot));
-        _interception.SessionCaptured += (_, snap) =>
+        _buffer.SessionAdded += snapshot => MarshalToUi(() =>
         {
-            _registry.Add(snap);
-            _buffer.Publish(snap);
-        };
+            _store.Add(snapshot);
+            OnSessionAddedToFilter(snapshot);
+        });
+        _store.SessionsRemoved += removed => MarshalToUi(() => OnSessionsRemoved(removed));
+        _interception.SessionCaptured += (_, snap) => _buffer.Publish(snap);
         _interception.SessionUpdated += (_, snap) =>
             MarshalToUi(() =>
             {
+                _store.NotifyUpdated(snap);
                 if (ReferenceEquals(SelectedSession, snap))
                 {
                     RefreshSelectedInspectors();
@@ -448,7 +454,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private Task ClearSessionsAsync()
     {
-        _all.Clear();
+        _store.Clear();
         Sessions.Clear();
         _selectedSessions.Clear();
         SelectedSession = null;
@@ -467,13 +473,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         var ids = selected.Select(s => s.Id).ToHashSet();
-        for (var i = _all.Count - 1; i >= 0; i--)
-        {
-            if (ids.Contains(_all[i].Id))
-            {
-                _all.RemoveAt(i);
-            }
-        }
+        _store.Remove(ids);
 
         for (var i = Sessions.Count - 1; i >= 0; i--)
         {
@@ -604,36 +604,45 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private Task LoadFromSelectedAsync()
+    private async Task LoadFromSelectedAsync()
     {
-        if (SelectedSession is null)
+        var selected = SelectedSession;
+        if (selected is null)
         {
             StatusText = "Select a session to load into Composer";
-            return Task.CompletedTask;
+            return;
         }
 
-        ComposerMethod = SelectedSession.Method;
-        ComposerUrl = SelectedSession.Url;
-        ComposerHeaders = SelectedSession.RequestHeadersText ?? "";
-        ComposerBody = SelectedSession.RequestBodyText ?? "";
-        StatusText = "Composer loaded from selected session";
-        return Task.CompletedTask;
+        await _store.EnsureBodiesLoadedAsync(selected).ConfigureAwait(false);
+        await MarshalToUiAsync(() =>
+        {
+            ComposerMethod = selected.Method;
+            ComposerUrl = selected.Url;
+            ComposerHeaders = selected.RequestHeadersText ?? "";
+            ComposerBody = selected.RequestBodyText ?? "";
+            StatusText = "Composer loaded from selected session";
+        }).ConfigureAwait(false);
     }
 
-    private Task LoadIntoComposerAsync()
+    private async Task LoadIntoComposerAsync()
     {
-        if (SelectedSession is null)
+        var selected = SelectedSession;
+        if (selected is null)
         {
             StatusText = "Select a session to load into Composer";
-            return Task.CompletedTask;
+            return;
         }
 
-        ComposerMethod = SelectedSession.Method;
-        ComposerUrl = SelectedSession.Url;
-        ComposerHeaders = SelectedSession.RequestHeadersText ?? "";
-        ComposerBody = SelectedSession.RequestBodyText ?? "";
-        StatusText = "Composer loaded from selected session";
-        return OpenToolsTabAsync(0);
+        await _store.EnsureBodiesLoadedAsync(selected).ConfigureAwait(false);
+        await MarshalToUiAsync(() =>
+        {
+            ComposerMethod = selected.Method;
+            ComposerUrl = selected.Url;
+            ComposerHeaders = selected.RequestHeadersText ?? "";
+            ComposerBody = selected.RequestBodyText ?? "";
+            StatusText = "Composer loaded from selected session";
+        }).ConfigureAwait(false);
+        await OpenToolsTabAsync(0).ConfigureAwait(false);
     }
 
     private async Task CopyUrlAsync()
@@ -1258,6 +1267,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 return;
             }
 
+            _store.PinnedSessionId = value?.Id;
+
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSelectedSession)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowInspectEmpty)));
             NotifyFilterSelectionProperties();
@@ -1269,7 +1280,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             }
 
             UpdateWsFramesVisibility();
-            RefreshSelectedInspectors();
+            if (value is { BodiesOnDisk: true })
+            {
+                _ = LoadSelectedBodiesAsync(value);
+            }
+            else
+            {
+                RefreshSelectedInspectors();
+            }
         }
     }
 
@@ -1601,11 +1619,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private void OnSessionAdded(SessionSnapshot snapshot)
+    private void OnSessionAddedToFilter(SessionSnapshot snapshot)
     {
-        _all.Add(snapshot);
-        // Append in place — never Clear/rebuild here or DataGrid multi-select (Ctrl+A) is wiped
-        // every time a new session arrives.
+        // Store already holds the row — append to the filtered grid in place.
         if (SessionSearch.Matches(snapshot, SearchQuery))
         {
             Sessions.Add(snapshot);
@@ -1614,10 +1630,72 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         RefreshSessionCountText();
     }
 
-    private void RefreshSessionCountText() =>
+    private void OnSessionsRemoved(IReadOnlyList<SessionSnapshot> removed)
+    {
+        if (removed.Count == 0)
+        {
+            return;
+        }
+
+        var ids = removed.Select(s => s.Id).ToHashSet();
+        for (var i = Sessions.Count - 1; i >= 0; i--)
+        {
+            if (ids.Contains(Sessions[i].Id))
+            {
+                Sessions.RemoveAt(i);
+            }
+        }
+
+        _selectedSessions.RemoveAll(s => ids.Contains(s.Id));
+        if (SelectedSession is not null && ids.Contains(SelectedSession.Id))
+        {
+            SelectedSession = null;
+        }
+
+        RefreshSessionCountText();
+        if (removed.Count == 1)
+        {
+            StatusText = "Evicted 1 old session (retention limit)";
+        }
+        else
+        {
+            StatusText = $"Evicted {removed.Count} old sessions (retention limit)";
+        }
+    }
+
+    private async Task LoadSelectedBodiesAsync(SessionSnapshot snap)
+    {
+        try
+        {
+            await _store.EnsureBodiesLoadedAsync(snap).ConfigureAwait(false);
+            await MarshalToUiAsync(() =>
+            {
+                if (ReferenceEquals(_selected, snap))
+                {
+                    RefreshSelectedInspectors();
+                }
+            }).ConfigureAwait(false);
+        }
+        catch
+        {
+            await MarshalToUiAsync(() =>
+            {
+                if (ReferenceEquals(_selected, snap))
+                {
+                    RefreshSelectedInspectors();
+                }
+            }).ConfigureAwait(false);
+        }
+    }
+
+    private void RefreshSessionCountText()
+    {
+        var spilled = _store.SpilledCount;
+        var spilledSuffix = spilled > 0 ? $" ({spilled} on disk)" : "";
         SessionCountText = string.IsNullOrWhiteSpace(SearchQuery)
-            ? $"Sessions: {_all.Count}"
-            : $"Sessions: {Sessions.Count} / {_all.Count}";
+            ? $"Sessions: {_all.Count}{spilledSuffix}"
+            : $"Sessions: {Sessions.Count} / {_all.Count}{spilledSuffix}";
+    }
 
     private void NotifyQuickFilterProperties()
     {
@@ -1732,12 +1810,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         StatusText = "Replaying…";
+        await _store.EnsureBodiesLoadedAsync(SelectedSession).ConfigureAwait(false);
         var result = await ReplayService.ReplayAsync(
             SelectedSession,
-            ignoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors);
-        StatusText = result.Ok
-            ? $"Replay → HTTP {result.StatusCode}: {Truncate(result.Message, 120)}"
-            : "Replay failed: " + result.Message;
+            ignoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors).ConfigureAwait(false);
+        await MarshalToUiAsync(() =>
+        {
+            StatusText = result.Ok
+                ? $"Replay → HTTP {result.StatusCode}: {Truncate(result.Message, 120)}"
+                : "Replay failed: " + result.Message;
+        }).ConfigureAwait(false);
     }
 
     private async Task SendComposerAsync()
@@ -1789,8 +1871,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             Protocol = "Composer",
         };
 
-        _registry.Add(snap);
-        _all.Add(snap);
+        _store.Add(snap);
         ApplyFilter();
         RefreshSessionCountText();
         SelectedSession = snap;
@@ -1832,8 +1913,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            await SessionArchive.ExportHarAsync(_all, path);
-            await MarshalToUiAsync(() => StatusText = $"Exported {_all.Count} sessions to {path}");
+            var sessions = _all.ToList();
+            await _store.EnsureBodiesLoadedAsync(sessions).ConfigureAwait(false);
+            await SessionArchive.ExportHarAsync(sessions, path).ConfigureAwait(false);
+            await MarshalToUiAsync(() => StatusText = $"Exported {sessions.Count} sessions to {path}");
         }
         catch (Exception ex)
         {
@@ -1859,7 +1942,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            await SessionArchive.ExportHarAsync(sessions, path);
+            await _store.EnsureBodiesLoadedAsync(sessions).ConfigureAwait(false);
+            await SessionArchive.ExportHarAsync(sessions, path).ConfigureAwait(false);
             await MarshalToUiAsync(() => StatusText = $"Exported {sessions.Count} sessions to {path}");
         }
         catch (Exception ex)
@@ -1889,8 +1973,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         foreach (var snap in imported)
         {
-            _registry.Add(snap);
-            _all.Add(snap);
+            _store.Add(snap);
         }
 
         ApplyFilter();
@@ -1915,9 +1998,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            // SessionArchive runs zip IO on the thread pool; resume here on the UI sync context.
-            await SessionArchive.ExportNativeArchiveAsync(_all, path);
-            StatusText = $"Exported {_all.Count} sessions to {path}";
+            var sessions = _all.ToList();
+            await _store.EnsureBodiesLoadedAsync(sessions).ConfigureAwait(false);
+            await SessionArchive.ExportNativeArchiveAsync(sessions, path).ConfigureAwait(false);
+            StatusText = $"Exported {sessions.Count} sessions to {path}";
         }
         catch (Exception ex)
         {
@@ -1943,7 +2027,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            await SessionArchive.ExportNativeArchiveAsync(sessions, path);
+            await _store.EnsureBodiesLoadedAsync(sessions).ConfigureAwait(false);
+            await SessionArchive.ExportNativeArchiveAsync(sessions, path).ConfigureAwait(false);
             StatusText = $"Exported {sessions.Count} sessions to {path}";
         }
         catch (Exception ex)
@@ -1970,8 +2055,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             {
                 foreach (var snap in imported)
                 {
-                    _registry.Add(snap);
-                    _all.Add(snap);
+                    _store.Add(snap);
                 }
 
                 ApplyFilter();
