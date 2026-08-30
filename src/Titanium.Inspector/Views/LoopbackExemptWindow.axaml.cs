@@ -14,6 +14,7 @@ public partial class LoopbackExemptWindow : Window
         ExemptButton.Click += OnExempt;
         ClearButton.Click += OnClear;
         CloseButton.Click += (_, _) => Close();
+        FilterBox.TextChanged += (_, _) => ApplyFilter();
         Opened += (_, _) => Reload();
     }
 
@@ -27,29 +28,52 @@ public partial class LoopbackExemptWindow : Window
     {
         if (!AppContainerLoopback.IsSupported)
         {
+            _items = [];
+            PackageGrid.ItemsSource = Array.Empty<AppContainerInfo>();
             StatusText.Text = "Loopback exemptions require Windows 8 or later.";
-            PackageList.ItemsSource = Array.Empty<AppContainerInfo>();
             return;
         }
 
         try
         {
             _items = AppContainerLoopback.ListContainers().ToList();
-            PackageList.ItemsSource = _items;
-            StatusText.Text = $"{_items.Count} AppContainers; {_items.Count(i => i.IsExempt)} currently exempt.";
+            ApplyFilter();
         }
         catch (Exception ex)
         {
+            _items = [];
+            PackageGrid.ItemsSource = Array.Empty<AppContainerInfo>();
             StatusText.Text = "Failed to enumerate AppContainers: " + ex.Message;
         }
     }
 
+    private void ApplyFilter()
+    {
+        var query = FilterBox.Text?.Trim() ?? "";
+        IEnumerable<AppContainerInfo> view = _items;
+        if (!string.IsNullOrEmpty(query))
+        {
+            view = _items.Where(i =>
+                i.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                i.PackageFamilyName.Contains(query, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var filtered = view.ToList();
+        PackageGrid.ItemsSource = filtered;
+
+        var exemptCount = _items.Count(i => i.IsExempt);
+        if (string.IsNullOrEmpty(query))
+            StatusText.Text = $"{_items.Count} AppContainers; {exemptCount} currently exempt.";
+        else
+            StatusText.Text = $"Showing {filtered.Count} of {_items.Count}; {exemptCount} currently exempt.";
+    }
+
     private void OnExempt(object? sender, RoutedEventArgs e)
     {
-        var selected = PackageList.SelectedItems?
+        var selected = PackageGrid.SelectedItems
             .OfType<AppContainerInfo>()
             .Select(i => i.AppContainerSid)
-            .ToList() ?? [];
+            .ToList();
         if (selected.Count == 0)
         {
             StatusText.Text = "Select one or more packages to exempt.";
