@@ -213,8 +213,10 @@ public class InspectorUiActionsE2ETests
 
         _vm.InstallCaCommand.Execute(null);
         await Task.Delay(50);
+        var debugWasOn = _vm.DebugFileLogging;
         _vm.ToggleDebugLoggingCommand.Execute(null);
         await Task.Delay(50);
+        Assert.AreEqual(!debugWasOn, _vm.DebugFileLogging);
         _vm.DeviceCaSetupCommand.Execute(null);
         await Task.Delay(50);
         Assert.IsFalse(string.IsNullOrWhiteSpace(_vm.StatusText));
