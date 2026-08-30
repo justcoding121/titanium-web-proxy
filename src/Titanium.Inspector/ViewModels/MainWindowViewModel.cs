@@ -26,6 +26,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly ObservableCollection<SessionSnapshot> _all = new();
     private readonly List<SessionSnapshot> _selectedSessions = new();
     private string _statusText = "Ready";
+    private string _sessionCountText = "Sessions: 0";
     private string _searchQuery = "";
     private SessionSnapshot? _selected;
     private string _selectedHeaders = "";
@@ -381,6 +382,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         Sessions.Clear();
         _selectedSessions.Clear();
         SelectedSession = null;
+        RefreshSessionCountText();
         StatusText = "Sessions cleared";
         return Task.CompletedTask;
     }
@@ -478,13 +480,21 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         StatusText = "Loopback exemption dialog closed";
     }
 
-    private Task DeviceCaSetupAsync()
+    private async Task DeviceCaSetupAsync()
     {
-        StatusText =
-            $"Device CA setup: 1) Export root CA from Capture menu. 2) Install the .cer on the device as a trusted CA. " +
-            $"3) Set the device HTTP proxy to this PC's LAN IP on port {BindPort} (bind is {BindAddress}:{BindPort}). " +
-            "Use BindAddress 0.0.0.0 so other devices can reach the proxy.";
-        return Task.CompletedTask;
+        var message =
+            "To decrypt HTTPS from a phone or other device:\n\n" +
+            "1. Export the root CA (use Export CA below, or Capture → Export root CA…).\n" +
+            "2. Install the .cer on the device as a trusted CA.\n" +
+            $"3. Set the device HTTP proxy to this PC's LAN IP on port {BindPort} " +
+            $"(current bind is {BindAddress}:{BindPort}).\n\n" +
+            "Use Bind address 0.0.0.0 so other devices can reach the proxy.";
+
+        var owner = TryGetMainWindow();
+        if (await _dialogs.ShowDeviceCaSetupAsync(owner, message))
+        {
+            await ExportCaAsync();
+        }
     }
 
     private Task LoadFromSelectedAsync()
@@ -971,6 +981,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         set => SetField(ref _statusText, value);
     }
 
+    /// <summary>Live session total; kept separate so capture traffic does not wipe command feedback.</summary>
+    public string SessionCountText
+    {
+        get => _sessionCountText;
+        private set => SetField(ref _sessionCountText, value);
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public SessionGridLayoutDto? GetSessionGridLayout() => _settings.Current.SessionGridLayout;
@@ -1227,8 +1244,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             Sessions.Add(snapshot);
         }
 
-        StatusText = $"Sessions: {_all.Count}";
+        RefreshSessionCountText();
     }
+
+    private void RefreshSessionCountText() => SessionCountText = $"Sessions: {_all.Count}";
 
     private void ApplyFilter()
     {
@@ -1368,6 +1387,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _registry.Add(snap);
         _all.Add(snap);
         ApplyFilter();
+        RefreshSessionCountText();
         SelectedSession = snap;
         StatusText = $"Composer → HTTP {result.StatusCode} (session #{snap.Id})";
     }
@@ -1455,6 +1475,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         ApplyFilter();
+        RefreshSessionCountText();
         StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
     }
 
@@ -1514,6 +1535,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         ApplyFilter();
+        RefreshSessionCountText();
         StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
     }
 

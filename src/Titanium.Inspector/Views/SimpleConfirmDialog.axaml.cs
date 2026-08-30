@@ -14,16 +14,26 @@ public partial class SimpleConfirmDialog : Window
         CancelButton.Click += OnCancel;
     }
 
+    public static Task<bool> ShowAsync(
+        Window? owner,
+        string title,
+        string message,
+        string accept,
+        string cancel) =>
+        ShowAsync(owner, title, message, accept, cancel, height: 200);
+
     public static async Task<bool> ShowAsync(
         Window? owner,
         string title,
         string message,
         string accept,
-        string cancel)
+        string cancel,
+        double height)
     {
         var dialog = new SimpleConfirmDialog
         {
             Title = title,
+            Height = height,
         };
         dialog.MessageText.Text = message;
         dialog.AcceptButton.Content = accept;

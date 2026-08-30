@@ -14,6 +14,7 @@ public class InspectorUiActionsE2ETests
     private MainWindowViewModel _vm = null!;
     private InterceptionService _interception = null!;
     private RecordingSystemProxyController _recorder = null!;
+    private ScriptedInspectorDialogs _dialogs = null!;
     private EchoOrigin _origin = null!;
 
     [TestInitialize]
@@ -27,8 +28,9 @@ public class InspectorUiActionsE2ETests
         var buffer = new SessionStreamBuffer(registry);
         var updates = new UpdateService(settings);
         _recorder = new RecordingSystemProxyController();
+        _dialogs = new ScriptedInspectorDialogs();
         _interception = new InterceptionService(_recorder) { UseInMemoryTrustState = true };
-        _vm = new MainWindowViewModel(buffer, registry, updates, settings, _interception);
+        _vm = new MainWindowViewModel(buffer, registry, updates, settings, _interception, _dialogs);
         _origin = new EchoOrigin();
         _vm.BindPort = CliProcessHarness.GetFreePort();
         _vm.BindAddress = "127.0.0.1";
@@ -217,12 +219,24 @@ public class InspectorUiActionsE2ETests
         _vm.ToggleDebugLoggingCommand.Execute(null);
         await Task.Delay(50);
         Assert.AreEqual(!debugWasOn, _vm.DebugFileLogging);
+
+        var statusBeforeDeviceCa = _vm.StatusText;
+        _dialogs.DeviceCaSetupResult = false;
         _vm.DeviceCaSetupCommand.Execute(null);
         await Task.Delay(50);
-        Assert.IsFalse(string.IsNullOrWhiteSpace(_vm.StatusText));
+        Assert.AreEqual(1, _dialogs.DeviceCaSetupCalls);
+        StringAssert.Contains(_dialogs.LastDeviceCaSetupMessage ?? "", "trusted CA");
+        Assert.AreEqual(statusBeforeDeviceCa, _vm.StatusText);
+
+        _dialogs.DeviceCaSetupResult = true;
+        _vm.DeviceCaSetupCommand.Execute(null);
+        await Task.Delay(50);
+        Assert.AreEqual(2, _dialogs.DeviceCaSetupCalls);
+        StringAssert.Contains(_vm.StatusText, "Exported CA:");
 
         _vm.ClearSessionsCommand.Execute(null);
         Assert.AreEqual(0, _vm.Sessions.Count);
+        Assert.AreEqual("Sessions: 0", _vm.SessionCountText);
     }
 
     private async Task CaptureOneAsync(string path)

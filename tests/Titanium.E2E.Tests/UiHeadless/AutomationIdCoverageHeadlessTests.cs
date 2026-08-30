@@ -96,7 +96,8 @@ public class AutomationIdCoverageHeadlessTests
         "TabScripts",
         "ScriptOnRequest",
         "ScriptOnResponse",
-        "StatusText"
+        "StatusText",
+        "SessionCountText"
     ];
 
     [TestMethod]

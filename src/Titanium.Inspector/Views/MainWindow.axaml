@@ -280,8 +280,12 @@
           </TabItem>
         </TabControl>
       </DockPanel>
-      <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Margin="8" Text="{Binding StatusText}" TextWrapping="Wrap"
-                 AutomationProperties.AutomationId="StatusText" />
+      <Grid Grid.Row="2" Grid.ColumnSpan="3" Margin="8" ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0" Text="{Binding StatusText}" TextWrapping="Wrap" VerticalAlignment="Center"
+                   AutomationProperties.AutomationId="StatusText" />
+        <TextBlock Grid.Column="1" Text="{Binding SessionCountText}" Margin="16,0,0,0" VerticalAlignment="Center"
+                   Opacity="0.8" AutomationProperties.AutomationId="SessionCountText" />
+      </Grid>
     </Grid>
   </DockPanel>
 </Window>

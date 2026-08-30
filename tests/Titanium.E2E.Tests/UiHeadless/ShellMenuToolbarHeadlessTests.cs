@@ -33,6 +33,7 @@ public class ShellMenuToolbarHeadlessTests
             Assert.AreEqual(3, fx.ViewModel.SelectedToolsTabIndex);
 
             Assert.IsTrue(fx.Robot.TryFind<Avalonia.Controls.TextBlock>("StatusText", out _));
+            Assert.IsTrue(fx.Robot.TryFind<Avalonia.Controls.TextBlock>("SessionCountText", out _));
         });
     }
 

@@ -23,6 +23,10 @@ Default bind is typically `127.0.0.1:8866`. HTTPS stays opaque CONNECT tunnels u
 
 Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs, **Debug file logging**) show a check when on. Turning on debug file logging also writes the log path to the status bar.
 
+The status strip keeps command feedback on the left and a live **Sessions: N** count on the right, so capture traffic does not wipe tips or export paths.
+
+**Install root CA (current user)** trusts the MITM CA on this PC. **Device CA setup…** opens a dialog with steps for phones/other devices and can **Export CA** from there (or use **Export root CA…** on the Capture menu).
+
 ## Right pane: Inspect vs Tools
 
 The right pane has two outer tabs:
@@ -93,7 +97,7 @@ Notes:
 
 - Session grid: method, status, host, URL, protocol, duration, TTFB, size, process
 - HAR / archive: Export all writes every captured session; Export selected writes the grid multi-selection. Import appends sessions from the file. Replay selected session.
-- System proxy and root CA install / untrust / export / device setup
+- System proxy and root CA install / untrust / export; Device CA setup dialog for external devices
 - Search (`method:GET status:200 host:example is:ws`)
 - Optional Plus panels when `Titanium.Plus.dll` is present
 

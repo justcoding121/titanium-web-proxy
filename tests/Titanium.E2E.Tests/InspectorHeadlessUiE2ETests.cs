@@ -151,7 +151,7 @@ public class InspectorHeadlessUiE2ETests
         Assert.IsTrue(
             vm.Sessions.Any(s => s.Url.Contains("ui-session-grid", StringComparison.OrdinalIgnoreCase)),
             string.Join(", ", vm.Sessions.Select(s => s.Url)));
-        Assert.IsTrue(vm.StatusText.Contains("Sessions:", StringComparison.OrdinalIgnoreCase), vm.StatusText);
+        Assert.IsTrue(vm.SessionCountText.Contains("Sessions:", StringComparison.OrdinalIgnoreCase), vm.SessionCountText);
 
         vm.EnsureShutdown();
         try { File.Delete(settingsPath); } catch { /* ignore */ }
