@@ -4,7 +4,9 @@
 import { data as links } from './download.data.ts'
 </script>
 
-Get CLI and Inspector builds from GitHub Releases, or install with winget on Windows.
+Get CLI and Inspector builds from GitHub Releases. Product binaries on this page resolve the newest release that has zip/MSI assets (**including prereleases** such as `v7.0.0-beta`).
+
+**winget** installs the last published **stable** community package only — use the buttons below or GitHub for beta.
 
 HTTP/3 natives ship inside each RID zip (except Windows, which uses OS MsQuic on Win11 / Server 2022+). Alpine/K8s: use **`linux-musl-*`**, not `linux-x64`. Details: [HTTP/3](/docs/http3).
 
@@ -57,7 +59,7 @@ Self-contained zip. Extract and run. Each zip includes both `titanium` and `twp`
   </div>
 </div>
 
-**winget** (Windows):
+**winget** (Windows, **stable** channel only):
 
 ```shell
 winget install justcoding121.TitaniumCli
@@ -119,7 +121,7 @@ Desktop MITM debugger. Windows: MSI + zip. Linux / macOS: zip only (same RID set
   </div>
 </div>
 
-**winget:**
+**winget** (Windows, **stable** channel only):
 
 ```shell
 winget install justcoding121.TitaniumInspector
@@ -130,9 +132,11 @@ winget install justcoding121.TitaniumInspector
 Plus is **not** a separate download on this page. After the CLI is installed:
 
 ```shell
-titanium update --plus
-titanium version --check --plus
+titanium update --plus --channel beta
+titanium version --check --plus --channel beta
 ```
+
+For stable Plus updates, omit `--channel beta` (default channel is `stable`).
 
 Place the DLL beside the CLI (the updater does this), then enable Plus in config:
 
@@ -164,7 +168,7 @@ dotnet add package Titanium.Web.Proxy --prerelease
 See [Releases](/releases) or [all assets on GitHub](https://github.com/justcoding121/titanium-web-proxy/releases).
 
 ::: tip Product zips vs NuGet tags
-Recent tags such as `6.0.2` may publish only the NuGet package. CLI / Inspector / Plus zip assets are attached when a full product release is cut with the release workflow. Until then, prefer **winget** or the GitHub Releases page for available binaries.
+Some tags publish **NuGet only**. CLI / Inspector / Plus zip assets are attached when a full product release is cut (`v*` tag via the release workflow). After `v7.0.0-beta`, the buttons above should resolve that prerelease’s assets. Prefer this page or GitHub Releases for beta binaries; **winget** remains stable-only.
 :::
 
 ## See also

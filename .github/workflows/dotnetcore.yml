@@ -136,13 +136,13 @@ jobs:
         message: Update documentation
         committer_name: GitHub Actions
         committer_email: actions@github.com
-        # Only commit DocFX output ‚Äî never Sonar/coverage/tool install artifacts
+        # Only commit DocFX output ó never Sonar/coverage/tool install artifacts
         add: 'docs'
         # DocFX often races another develop push; rebase instead of failing the job.
         pull: '--rebase --autostash'
 
   # Cross-OS Inspector + Plus dashboard UI gates (Headless / Visual / Playwright).
-  # Inspector unit suite stays on Windows `build` only ó do not re-run it here.
+  # Inspector unit suite stays on Windows `build` only ù do not re-run it here.
   ui-portable:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
@@ -277,9 +277,48 @@ jobs:
         user: ${{ secrets.NUGET_USER }}
 
     - name: Publish Package
-      # MIT packages only ‚Äî never push Titanium.Plus or Titanium.Inspector
+      # MIT packages only ó never push Titanium.Plus or Titanium.Inspector
       run: |
         Get-ChildItem -Recurse -Filter *.nupkg |
           Where-Object { $_.Name -notlike '*Plus*' -and $_.Name -notlike '*Inspector*' -and $_.Name -notlike '*.symbols.nupkg' } |
-          ForEach-Object { dotnet nuget push $_.FullName --source https://api.nuget.org/v3/index.json --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" }
+          ForEach-Object {
+            dotnet nuget push $_.FullName `
+              --source https://api.nuget.org/v3/index.json `
+              --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" `
+              --skip-duplicate
+          }
+
+  # Product zips stay on release.yml (v* tags). After beta/stable merge, create/move the
+  # version tag and dispatch release.yml (GITHUB_TOKEN tag pushes do not re-trigger workflows).
+  cut-product-tag:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
+    needs: [build, ui-portable, rps-publish-gate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Create/move product tag and dispatch release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        PREFIX=$(grep -oP '(?<=<VersionPrefix>)[^<]+' src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj | head -n1)
+        if [[ -z "$PREFIX" ]]; then echo "VersionPrefix not found"; exit 1; fi
+        CHANNEL=stable
+        VERSION="$PREFIX"
+        if [[ "${{ github.ref }}" == "refs/heads/beta" ]]; then
+          CHANNEL=beta
+          VERSION="${PREFIX}-beta"
+        fi
+        TAG="v${VERSION}"
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git tag -f -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+        git push origin "refs/tags/$TAG" --force
+        echo "Dispatching product release for $TAG (channel=$CHANNEL) at $GITHUB_SHA"
+        gh workflow run release.yml --ref "$GITHUB_REF_NAME" -f channel="$CHANNEL"
 

@@ -61,13 +61,13 @@ dotnet add package Titanium.Web.Proxy --prerelease
 
 ### CLI (`titanium` / `twp`)
 
-On Windows, install with winget:
+On Windows, **winget is stable-only**:
 
 ```shell
 winget install justcoding121.TitaniumCli
 ```
 
-Or download self-contained zips from [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when a product release includes `Titanium.Cli-*.zip` assets (NuGet-only tags may not). Extract and run:
+For **beta**, download self-contained zips from [Download](https://titaniumproxy.com/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when a product release includes `Titanium.Cli-*.zip` assets (e.g. `v7.0.0-beta`). Extract and run:
 
 ```shell
 titanium run -c twp.yaml
@@ -78,11 +78,11 @@ titanium update
 
 Each CLI zip also includes a `twp` alias binary.
 
-Optional Plus: run `titanium update --plus`, then enable Plus in config (`plus.enabled: true` with `plus.controlPlane.sharedSecret`). Check with `titanium version --check --plus`.
+Optional Plus: run `titanium update --plus` (add `--channel beta` for prereleases), then enable Plus in config (`plus.enabled: true` with `plus.controlPlane.sharedSecret`). Check with `titanium version --check --plus`.
 
 ### Titanium Inspector
 
-On Windows, winget id `justcoding121.TitaniumInspector`, or MSI / portable zip from [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when those assets are published. Start interception from the Capture menu, install the root CA, then toggle system proxy.
+Prefer [Download](https://titaniumproxy.com/download). On Windows, winget id `justcoding121.TitaniumInspector` is **stable-only**; MSI / portable zip for beta come from the product `v*` release (e.g. `v7.0.0-beta`). Start interception from the Capture menu, install the root CA, then toggle system proxy.
 
 ## Quick start
 
