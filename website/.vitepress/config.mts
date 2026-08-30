@@ -12,6 +12,14 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   ignoreDeadLinks: true,
+  // Shared screenshots live under wiki/images (README + wiki + site); allow Vite to resolve them.
+  vite: {
+    server: {
+      fs: {
+        allow: ['..'],
+      },
+    },
+  },
   head: [
     ['link', { rel: 'icon', href: '/logo.svg', type: 'image/svg+xml' }],
     ['meta', { name: 'theme-color', content: '#2B3A4A' }],

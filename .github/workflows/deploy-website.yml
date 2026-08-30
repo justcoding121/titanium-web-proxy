@@ -6,6 +6,7 @@ on:
       - develop
     paths:
       - 'website/**'
+      - 'wiki/images/**'
       - 'docs/api/**'
       - 'docs/styles/**'
       - 'docs/fonts/**'
@@ -15,6 +16,7 @@ on:
       - develop
     paths:
       - 'website/**'
+      - 'wiki/images/**'
       - 'docs/api/**'
       - 'docs/styles/**'
       - 'docs/fonts/**'

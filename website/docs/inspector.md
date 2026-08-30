@@ -2,6 +2,8 @@
 
 Desktop MITM debugger (Avalonia). Licensed under [PolyForm Noncommercial](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt).
 
+![Titanium Inspector screenshot](../../wiki/images/inspector-screenshot.jpg)
+
 ## Install
 
 Prefer the [Download](/download) page (resolves the newest release that has Inspector assets, including prereleases).
