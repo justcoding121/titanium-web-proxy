@@ -46,6 +46,9 @@ public sealed class InspectorSettings
 
     /// <summary>When false, HTTPS stays opaque CONNECT tunnels (Fiddler-like default).</summary>
     public bool DecryptHttps { get; set; }
+
+    /// <summary>Session grid column widths, order, and sort across launches.</summary>
+    public SessionGridLayoutDto? SessionGridLayout { get; set; }
 }
 
 public sealed class SettingsService

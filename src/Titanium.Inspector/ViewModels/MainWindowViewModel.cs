@@ -945,6 +945,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    public SessionGridLayoutDto? GetSessionGridLayout() => _settings.Current.SessionGridLayout;
+
+    public void PersistSessionGridLayout(SessionGridLayoutDto layout)
+    {
+        _settings.Current.SessionGridLayout = layout;
+        _settings.Save();
+    }
+
     private void LoadFromSettings()
     {
         var s = _settings.Current;

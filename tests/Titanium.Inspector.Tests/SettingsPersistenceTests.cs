@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.ViewModels;
@@ -45,6 +46,16 @@ public class SettingsPersistenceTests
             svc.Current.LoggingEnableFile = true;
             svc.Current.LoggingMinimumLevel = "Debug";
             svc.Current.LoggingFilePath = @"C:\logs\inspector.log";
+            svc.Current.SessionGridLayout = new SessionGridLayoutDto
+            {
+                SortColumnKey = "Host",
+                SortDirection = ListSortDirection.Ascending,
+                Columns =
+                [
+                    new SessionGridColumnStateDto { Key = "Host", Width = 200, DisplayIndex = 0 },
+                    new SessionGridColumnStateDto { Key = "URL", Width = 360, DisplayIndex = 1 },
+                ],
+            };
             svc.Save();
 
             var loaded = new SettingsService(path).Current;
@@ -66,6 +77,11 @@ public class SettingsPersistenceTests
             Assert.IsTrue(loaded.LoggingEnableFile);
             Assert.AreEqual("Debug", loaded.LoggingMinimumLevel);
             Assert.AreEqual(@"C:\logs\inspector.log", loaded.LoggingFilePath);
+            Assert.IsNotNull(loaded.SessionGridLayout);
+            Assert.AreEqual("Host", loaded.SessionGridLayout!.SortColumnKey);
+            Assert.AreEqual(ListSortDirection.Ascending, loaded.SessionGridLayout.SortDirection);
+            Assert.AreEqual(2, loaded.SessionGridLayout.Columns.Count);
+            Assert.AreEqual(360, loaded.SessionGridLayout.Columns[1].Width);
         }
         finally
         {
