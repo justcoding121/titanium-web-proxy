@@ -19,7 +19,9 @@ winget install justcoding121.TitaniumInspector
 2. Check **Decrypt HTTPS** when you want MITM (installs the root CA if needed; may prompt for admin).
 3. Use the toolbar **System proxy** / **Capturing** checkboxes to pause either without quitting.
 
-Default bind is typically `127.0.0.1:8866`. HTTPS stays opaque CONNECT tunnels until **Decrypt HTTPS** is enabled.
+Default bind is typically `127.0.0.1:8866`. Bind address/port are **start-time** settings: while listening the fields are disabled, the toolbar shows **Stop interception to edit** and **Change bind…** (stops interception so you can edit), and the endpoint label reads **Listening … · stop to change**. After Stop → Start, system proxy is turned back on if it was on before Stop, or if **Auto system proxy on start** is checked.
+
+HTTPS stays opaque CONNECT tunnels until **Decrypt HTTPS** is enabled.
 
 Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs, **Debug file logging**) show a check when on. Turning on debug file logging also writes the log path to the status bar.
 

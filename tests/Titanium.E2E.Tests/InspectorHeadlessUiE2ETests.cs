@@ -19,6 +19,8 @@ public class InspectorHeadlessUiE2ETests
     {
         var settingsPath = Path.Combine(Path.GetTempPath(), "twp-insp-e2e-" + Guid.NewGuid().ToString("N") + ".json");
         var settings = new SettingsService(settingsPath);
+        settings.Current.AutoSystemProxyOnStart = false;
+        settings.Save();
         var registry = new SessionRegistry();
         var buffer = new SessionStreamBuffer(registry);
         var updates = new UpdateService(settings);

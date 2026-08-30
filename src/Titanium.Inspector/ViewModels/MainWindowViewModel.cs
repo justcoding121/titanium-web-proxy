@@ -50,6 +50,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _plusPanelsSummary = "";
     private string _bindAddress = "127.0.0.1";
     private int _bindPort = 8866;
+    private string _endpointStatusText = "Not listening";
+    /// <summary>Sticky intent: re-enable system proxy on the next Start after a Stop that had it on.</summary>
+    private bool _reenableSystemProxyOnStart;
+    private bool _stopBusy;
     private bool _breakpointOnResponse;
     private string _breakpointEditBody = "";
     private string? _scriptOnRequest;
@@ -97,6 +101,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ImportArchiveCommand = new RelayCommand(async () => await ImportArchiveAsync());
         StartCaptureCommand = new RelayCommand(async () => await StartCaptureAsync());
         StopCaptureCommand = new RelayCommand(StopCaptureAsync);
+        ChangeBindCommand = new RelayCommand(ChangeBindAsync);
         ToggleCapturingCommand = new RelayCommand(ToggleCapturingAsync);
         ToggleAutoStartCaptureCommand = new RelayCommand(() =>
         {
@@ -255,6 +260,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         _interception.EnsureShutdown();
         SetSystemProxyCore(false);
+        RefreshEndpointAndBindUi();
     }
 
     /// <summary>
@@ -347,6 +353,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
+    private static Task MarshalToUiAsync(Action action)
+    {
+        if (Application.Current is null || Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return Task.CompletedTask;
+        }
+
+        return Dispatcher.UIThread.InvokeAsync(action).GetTask();
+    }
+
     private void LoadPlusPanels()
     {
         var panels = PlusInspectorLoader.TryLoadPanels(out var plusWarning);
@@ -361,13 +378,43 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private Task StopCaptureAsync()
+    private async Task StopCaptureAsync() =>
+        await StopCaptureCoreAsync("Stopped (system proxy restored if it was on)");
+
+    private async Task ChangeBindAsync() =>
+        await StopCaptureCoreAsync("Stopped — edit bind address/port, then Start interception");
+
+    /// <summary>
+    /// Tear down the proxy off the UI thread — WinINET restore + listener stop can hang Avalonia
+    /// for several seconds if run on the dispatcher (same rationale as <see cref="BeginBackgroundShutdown"/>).
+    /// </summary>
+    private async Task StopCaptureCoreAsync(string statusAfterStop)
     {
-        _interception.Stop();
-        SetSystemProxyCore(false);
-        PersistSettings();
-        StatusText = "Stopped (system proxy restored if it was on)";
-        return Task.CompletedTask;
+        if (_stopBusy || !_interception.IsRunning)
+        {
+            return;
+        }
+
+        _stopBusy = true;
+        _reenableSystemProxyOnStart = SystemProxy;
+        StatusText = "Stopping…";
+
+        try
+        {
+            await Task.Run(() => _interception.Stop()).ConfigureAwait(false);
+
+            await MarshalToUiAsync(() =>
+            {
+                SetSystemProxyCore(false);
+                PersistSettings();
+                RefreshEndpointAndBindUi();
+                StatusText = statusAfterStop;
+            }).ConfigureAwait(false);
+        }
+        finally
+        {
+            _stopBusy = false;
+        }
     }
 
     private Task ToggleCapturingAsync()
@@ -580,6 +627,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ImportArchiveCommand { get; }
     public ICommand StartCaptureCommand { get; }
     public ICommand StopCaptureCommand { get; }
+    public ICommand ChangeBindCommand { get; }
     public ICommand ToggleCapturingCommand { get; }
     public ICommand ToggleAutoStartCaptureCommand { get; }
     public ICommand ToggleAutoSystemProxyOnStartCommand { get; }
@@ -617,6 +665,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         get => _bindPort;
         set => SetField(ref _bindPort, value);
+    }
+
+    /// <summary>Bind address/port are start-time config; editable only while the proxy is stopped.</summary>
+    public bool BindFieldsEnabled => !_interception.IsRunning;
+
+    /// <summary>Toolbar hint + Change bind button while the listener is up.</summary>
+    public bool ShowBindChangeUi => _interception.IsRunning;
+
+    /// <summary>Compact live endpoint label (toolbar / status); distinct from transient <see cref="StatusText"/>.</summary>
+    public string EndpointStatusText
+    {
+        get => _endpointStatusText;
+        private set => SetField(ref _endpointStatusText, value);
     }
 
     public bool BreakpointOnResponse
@@ -1288,19 +1349,46 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.ConfigureLogging(_settings.Current);
         await _interception.StartAsync(address, BindPort);
         Capturing = true;
+        RefreshEndpointAndBindUi();
+
+        var wantSystemProxy = _reenableSystemProxyOnStart || AutoSystemProxyOnStart;
+        _reenableSystemProxyOnStart = false;
+        if (wantSystemProxy && !SystemProxy)
+        {
+            SystemProxy = true;
+        }
 
         // If settings asked for decrypt but CA is gone, fall back to CONNECT (no silent re-trust).
         if (_decryptHttps && !_interception.RefreshTrustState())
         {
             SetDecryptHttpsCore(false);
-            StatusText =
-                $"Listening on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.";
+            StatusText = SystemProxy
+                ? $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
+                : $"Listening on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.";
+            return;
+        }
+
+        if (SystemProxy)
+        {
+            StatusText = _decryptHttps
+                ? $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on. Decrypt HTTPS on. Chrome: --disable-quic or H3 may bypass."
+                : $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shows as CONNECT until Decrypt HTTPS is enabled." +
+                  " Chrome/Edge: --disable-quic or HTTP/3 may bypass the proxy.";
             return;
         }
 
         StatusText = _decryptHttps
             ? $"Listening on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS on. Enable System proxy if needed. Chrome: --disable-quic or H3 may bypass."
             : $"Listening on {FormatBindDisplay()}:{BindPort} — HTTPS as CONNECT until Decrypt HTTPS is enabled. Enable System proxy if needed.";
+    }
+
+    private void RefreshEndpointAndBindUi()
+    {
+        EndpointStatusText = _interception.IsRunning
+            ? $"Listening {FormatBindDisplay()}:{BindPort} · stop to change"
+            : "Not listening";
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindFieldsEnabled)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowBindChangeUi)));
     }
 
     private static IPAddress ParseBindAddress(string bindAddress)

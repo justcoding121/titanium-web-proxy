@@ -23,6 +23,7 @@ public class InspectorUiActionsE2ETests
         _settingsPath = Path.Combine(Path.GetTempPath(), "twp-ui-actions-" + Guid.NewGuid().ToString("N") + ".json");
         var settings = new SettingsService(_settingsPath);
         settings.Current.IgnoreServerCertificateErrors = true;
+        settings.Current.AutoSystemProxyOnStart = false;
         settings.Save();
         var registry = new SessionRegistry();
         var buffer = new SessionStreamBuffer(registry);

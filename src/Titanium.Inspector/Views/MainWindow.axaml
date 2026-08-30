@@ -40,8 +40,8 @@
                   Command="{Binding ToggleDecryptHttpsCommand}"
                   AutomationProperties.AutomationId="MenuDecryptHttps" />
         <Separator />
-        <MenuItem Header="Bind address" AutomationProperties.AutomationId="MenuBindAddress"><TextBox Width="160" Text="{Binding BindAddress}" Watermark="127.0.0.1 or 0.0.0.0" AutomationProperties.AutomationId="MenuBindAddressBox" /></MenuItem>
-        <MenuItem Header="Bind port" AutomationProperties.AutomationId="MenuBindPort"><TextBox Width="80" Text="{Binding BindPort}" AutomationProperties.AutomationId="MenuBindPortBox" /></MenuItem>
+        <MenuItem Header="Bind address" AutomationProperties.AutomationId="MenuBindAddress"><TextBox Width="160" Text="{Binding BindAddress}" Watermark="127.0.0.1 or 0.0.0.0" IsEnabled="{Binding BindFieldsEnabled}" ToolTip.Tip="Stop interception to change bind address/port" AutomationProperties.AutomationId="MenuBindAddressBox" /></MenuItem>
+        <MenuItem Header="Bind port" AutomationProperties.AutomationId="MenuBindPort"><TextBox Width="80" Text="{Binding BindPort}" IsEnabled="{Binding BindFieldsEnabled}" ToolTip.Tip="Stop interception to change bind address/port" AutomationProperties.AutomationId="MenuBindPortBox" /></MenuItem>
         <Separator />
         <MenuItem Header="System proxy" ToggleType="CheckBox"
                   IsChecked="{Binding SystemProxy, Mode=OneWay}"
@@ -76,13 +76,37 @@
         <ColumnDefinition Width="Auto" />
         <ColumnDefinition Width="{Binding SessionDetailsPaneWidth}" MinWidth="0" />
       </Grid.ColumnDefinitions>
-      <StackPanel Grid.Row="0" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="8" Spacing="12">
-        <TextBox Width="360" Watermark="Search: method:GET status:200 host:example is:ws"
-                 Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
-        <TextBox Width="120" Watermark="Bind address" Text="{Binding BindAddress}" AutomationProperties.AutomationId="ToolbarBindAddress" /><TextBox Width="70" Watermark="Port" Text="{Binding BindPort}" AutomationProperties.AutomationId="ToolbarBindPort" />
-        <CheckBox Content="Capturing" IsChecked="{Binding Capturing}" AutomationProperties.AutomationId="CapturingCheck" />
-        <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}" AutomationProperties.AutomationId="DecryptHttpsCheck" />
-        <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}" AutomationProperties.AutomationId="SystemProxyCheck" />
+      <StackPanel Grid.Row="0" Grid.ColumnSpan="3" Margin="8" Spacing="6">
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <TextBox MinWidth="200" Width="360" Watermark="Search: method:GET status:200 host:example is:ws"
+                   Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
+          <CheckBox Content="Capturing" IsChecked="{Binding Capturing}" VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="CapturingCheck" />
+          <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}" VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="DecryptHttpsCheck" />
+          <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}" VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="SystemProxyCheck" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <TextBox Width="120" Watermark="Bind address" Text="{Binding BindAddress}"
+                   IsEnabled="{Binding BindFieldsEnabled}"
+                   ToolTip.Tip="Stop interception to change bind address/port"
+                   AutomationProperties.AutomationId="ToolbarBindAddress" />
+          <TextBox Width="70" Watermark="Port" Text="{Binding BindPort}"
+                   IsEnabled="{Binding BindFieldsEnabled}"
+                   ToolTip.Tip="Stop interception to change bind address/port"
+                   AutomationProperties.AutomationId="ToolbarBindPort" />
+          <TextBlock Text="Stop interception to edit" VerticalAlignment="Center" Opacity="0.75"
+                     IsVisible="{Binding ShowBindChangeUi}"
+                     AutomationProperties.AutomationId="BindEditHint" />
+          <Button Content="Change bind…" Command="{Binding ChangeBindCommand}"
+                  IsVisible="{Binding ShowBindChangeUi}"
+                  VerticalAlignment="Center"
+                  AutomationProperties.AutomationId="ChangeBindButton" />
+          <TextBlock Text="{Binding EndpointStatusText}" VerticalAlignment="Center" Opacity="0.85"
+                     TextWrapping="NoWrap"
+                     AutomationProperties.AutomationId="EndpointStatusText" />
+        </StackPanel>
       </StackPanel>
       <DataGrid Grid.Row="1" Grid.Column="0" Margin="8,8,4,8"
                 x:Name="SessionsGrid"
