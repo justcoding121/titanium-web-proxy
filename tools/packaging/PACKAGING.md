@@ -30,7 +30,7 @@ pwsh ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir artifacts/i
 ./tools/packaging/build-inspector-msi.ps1 `
   -PayloadDir artifacts/inspector/win-x64 `
   -OutputMsi TitaniumInspector-win-x64.msi `
-  -Version 7.0.1
+  -Version 7.0.0
 ```
 
 Uses WiX 5 (`dotnet tool` manifest under `tools/packaging/wix/`). Authenticode signing is stretch; unsigned MSI is fine for GitHub Releases / early winget.
