@@ -26,7 +26,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly ObservableCollection<SessionSnapshot> _all = new();
     private readonly List<SessionSnapshot> _selectedSessions = new();
     private string _statusText = "Ready";
-    private string _sessionCountText = "Sessions: 0 / 0";
+    private string _sessionCountText = "Sessions: 0";
     private string _searchQuery = "";
     private SessionSnapshot? _selected;
     private string _selectedHeaders = "";
@@ -1627,7 +1627,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     private void RefreshSessionCountText() =>
-        SessionCountText = $"Sessions: {Sessions.Count} / {_all.Count}";
+        SessionCountText = string.IsNullOrWhiteSpace(SearchQuery)
+            ? $"Sessions: {_all.Count}"
+            : $"Sessions: {Sessions.Count} / {_all.Count}";
 
     private void NotifyQuickFilterProperties()
     {

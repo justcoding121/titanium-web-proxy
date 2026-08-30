@@ -47,7 +47,7 @@ Use **Tools → Composer / Breakpoints / AutoResponder / Scripts…** to open th
 - **Hex** — same labeled sections for raw bytes
 - **WS Frames** — shown **only for WebSocket** sessions; best-effort text preview of messages (not a full opcode stream)
 
-Search for WebSocket traffic with `is:ws`. Quick filters on the toolbar toggle `hide:tunnel`, `hide:image`, and `is:error` into the same search box. Status classes (`status:2xx` … `status:5xx`), `process:`, and `content-type:` are also supported. The status strip shows **visible / total** session counts when a filter is active.
+Search for WebSocket traffic with `is:ws`. Quick filters on the toolbar toggle `hide:tunnel`, `hide:image`, and `is:error` into the same search box. Status classes (`status:2xx` … `status:5xx`), `process:`, and `content-type:` are also supported. The status strip shows **Sessions: N** with no filter, and **visible / total** when a search or quick filter is active.
 
 ### Tools (all traffic)
 

@@ -237,7 +237,7 @@ public class InspectorUiActionsE2ETests
 
         _vm.ClearSessionsCommand.Execute(null);
         Assert.AreEqual(0, _vm.Sessions.Count);
-        Assert.AreEqual("Sessions: 0 / 0", _vm.SessionCountText);
+        Assert.AreEqual("Sessions: 0", _vm.SessionCountText);
     }
 
     private async Task CaptureOneAsync(string path)
