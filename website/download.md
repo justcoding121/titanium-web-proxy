@@ -10,7 +10,7 @@ Get CLI and Inspector builds from GitHub Releases. Product binaries on this page
 
 HTTP/3 natives ship inside each RID zip (except Windows, which uses OS MsQuic on Win11 / Server 2022+). Alpine/K8s: use **`linux-musl-*`**, not `linux-x64`. Details: [HTTP/3](/docs/http3).
 
-## CLI (`titanium` / `twp`)
+## CLI (`titanium` / `twp`) {#cli}
 
 Self-contained zip. Extract and run. Each zip includes both `titanium` and `twp` binaries.
 
@@ -72,7 +72,7 @@ titanium update
 titanium http3-deps status
 ```
 
-## Titanium Inspector
+## Titanium Inspector {#inspector}
 
 Desktop MITM debugger. Windows: MSI + zip. Linux / macOS: zip only (same RID set as CLI).
 

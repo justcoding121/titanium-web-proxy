@@ -38,9 +38,9 @@ A lightweight, high-performance HTTP(S) proxy — reverse / edge CLI, desktop In
 
 | Product | What it is | How you get it |
 |---------|------------|----------------|
-| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge proxy for any stack: `run`, `test`, `version`, `update` | [Windows](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.0-beta/Titanium.Cli-win-x64.zip), [Linux](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.0-beta/Titanium.Cli-linux-x64.zip), [macOS](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.0-beta/Titanium.Cli-osx-arm64.zip) ([all downloads](https://titaniumproxy.com/download); winget = stable-only) |
-| **Titanium Inspector** | Desktop MITM debugger (session grid, inspectors, AutoResponder, breakpoints, HAR) | [Windows MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.0-beta/TitaniumInspector-win-x64.msi), [Windows zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.0-beta/TitaniumInspector-win-x64.zip) ([Download](https://titaniumproxy.com/download); winget = stable-only) |
-| **Titanium.Plus** | Optional advanced features: control plane, ops, observability, and dashboard | [`titanium update --plus --channel beta`](https://titaniumproxy.com/download) or [Plus DLL](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.0-beta/Titanium.Plus-v7.0.0-beta.dll) |
+| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge proxy for any stack: `run`, `test`, `version`, `update` | [Download (Windows, Linux & Mac)](https://titaniumproxy.com/download#cli) |
+| **Titanium Inspector** | Desktop MITM debugger (session grid, inspectors, AutoResponder, breakpoints, HAR) | [Download (Windows, Linux & Mac)](https://titaniumproxy.com/download#inspector) |
+| **Titanium.Plus** | Optional advanced features: control plane, ops, observability, and dashboard | After installing CLI, run `titanium update --plus` |
 | **Titanium.Web.Proxy** | Core library. Embed a MITM and/or reverse proxy in a .NET app | [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy/7.0.0-beta) (`dotnet add package Titanium.Web.Proxy --prerelease`) |
 
 CLI and Plus target reverse-proxy / edge workloads (routing, load balancing, health, discovery) on Windows, Linux, and macOS. Inspector is the MITM debugging product. The Core library is the embed path for .NET. Requires .NET 10 or later.
