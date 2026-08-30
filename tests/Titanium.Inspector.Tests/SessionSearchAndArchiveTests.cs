@@ -6,6 +6,9 @@ namespace Titanium.Inspector.Tests;
 [TestClass]
 public class SessionSearchAndArchiveTests
 {
+    private static readonly long[] SessionIdsOneAndTwo = [1, 2];
+    private static readonly long[] EmptySessionIds = Array.Empty<long>();
+
     [TestMethod]
     public void Filter_ByMethodAndIsWs()
     {
@@ -99,7 +102,7 @@ public class SessionSearchAndArchiveTests
         Assert.IsFalse(noTunnels.Any(s => s.IsTunnel));
 
         var noImages = SessionSearch.Filter(sessions, "hide:image").Select(s => s.Id).ToList();
-        CollectionAssert.AreEquivalent(new long[] { 1, 2 }, noImages);
+        CollectionAssert.AreEquivalent(SessionIdsOneAndTwo, noImages);
 
         // Extension match must ignore query string (IsImageOrStatic path trim).
         var withQuery = new List<SessionSnapshot>
@@ -108,7 +111,7 @@ public class SessionSearchAndArchiveTests
             new() { Id = 11, Url = "https://cdn.example/a/page", ContentType = "font/woff2" },
         };
         var filtered = SessionSearch.Filter(withQuery, "hide:image").Select(s => s.Id).ToList();
-        CollectionAssert.AreEquivalent(new long[] { }, filtered);
+        CollectionAssert.AreEquivalent(EmptySessionIds, filtered);
     }
 
     [TestMethod]
