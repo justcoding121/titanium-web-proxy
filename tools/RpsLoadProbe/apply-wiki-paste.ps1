@@ -57,16 +57,21 @@ $linRevHeader = "Median of **3 repeats** on ``ubuntu-latest`` (4 vCPU / 16 GiB).
 $mitmNote = @(
     "Same Client${mul}Origin wires with interception on (``compare-product`` [$PrimaryRunId]($runUrl)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via ``MitmCompressedRelayHelper``). nginx/YARP cannot MITM. **Lite${div}Reverse** / **Full${div}Reverse** vs bare reverse (same job). Completion gate: Lite and Full ${ge} **0.70${mul}** reverse sustain @ c=64 (median of 3 GHA runs)."
     ""
-    "**v1 append-only relay (2026-08-27):** Pre-fix H2${rarr}H2 Full${div}Reverse was **0.13${endash}0.16${mul}** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ ``$HeadSha``: H2 plain${rarr}H2 plain Full **0.77${endash}0.79${mul}**, H3${rarr}H1 Full **0.91${endash}0.93${mul}**, all MITM arms ${ge} **0.70${mul}** on median of [$PrimaryRunId]($runUrl), [33055267086](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055267086), [33055272140](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055272140)."
+    "**v1 append-only relay (2026-08-27):** Pre-fix H2${rarr}H2 Full${div}Reverse was **0.13${endash}0.16${mul}** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ ``df172718``: H2 plain${rarr}H2 plain Full **0.77${endash}0.79${mul}**, H3${rarr}H1 Full **0.91${endash}0.93${mul}**, all MITM arms ${ge} **0.70${mul}** on median of [33041445371](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33041445371), [33055267086](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055267086), [33055272140](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055272140)."
+    ""
+    "**v2 drop-only + non-unique append (2026-08-27):** ``MitmStaticRebuildHelper`` rebuilds static HPACK/QPACK after 1${endash}4 unique header drops; trailing non-unique appends stay on compressed relay. @ ``$HeadSha``: all MITM arms ${ge} **0.70${mul}** on GHA median ([33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622), [33105885748](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33105885748) Linux; [33087085235](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087085235), [33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622) Windows). H2 plain${rarr}H2 plain Full **0.77${endash}0.79${mul}** (Win) / **0.78${mul}** (Lin)."
 ) -join "`n"
 
 $winHdr = "## Windows $em Titanium vs nginx vs YARP"
 $linHdr = "## Linux $em Titanium vs nginx vs YARP"
 
+# Allow optional intro lines between section heading and ### Reverse (Windows has a Client/Origin blurb).
 $wiki = [regex]::Replace($wiki,
-    "(?s)($([regex]::Escape($winHdr))\r?\n\r?\n### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
+    "(?s)($([regex]::Escape($winHdr))\r?\n(?:.*?\r?\n)?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
     [System.Text.RegularExpressions.MatchEvaluator]{
-        param($m) $m.Groups[1].Value + $winRevHeader + "`n`n" + $winRev + "`n"
+        param($m)
+        $loadGen = "**Load generators:** Reverse inbound H3 arms use **``dotnet-httpclient``** (``http_version=3.0``, ``RequestVersionExact``). nginx/Windows is same-OS only (no QUIC)."
+        $m.Groups[1].Value + $winRevHeader + "`n`n" + $loadGen + "`n`n" + $winRev + "`n"
     },
     1)
 
@@ -78,7 +83,7 @@ $wiki = [regex]::Replace($wiki,
     1)
 
 $wiki = [regex]::Replace($wiki,
-    "(?s)($([regex]::Escape($linHdr))\r?\n\r?\n### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
+    "(?s)($([regex]::Escape($linHdr))\r?\n(?:.*?\r?\n)?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
     [System.Text.RegularExpressions.MatchEvaluator]{
         param($m) $m.Groups[1].Value + $linRevHeader + "`n`n" + $linRev + "`n"
     },

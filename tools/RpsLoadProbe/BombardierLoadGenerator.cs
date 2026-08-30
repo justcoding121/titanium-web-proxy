@@ -72,6 +72,14 @@ internal static class BombardierLoadGenerator
         psi.ArgumentList.Add("-o");
         psi.ArgumentList.Add("json");
         psi.ArgumentList.Add("--http1");
+        if (workload.ExtraHeaders is { Count: > 0 } headers)
+        {
+            foreach (var (name, value) in headers)
+            {
+                psi.ArgumentList.Add("-H");
+                psi.ArgumentList.Add($"{name}: {value}");
+            }
+        }
         psi.ArgumentList.Add(target.AbsoluteUri);
 
         using var process = Process.Start(psi)

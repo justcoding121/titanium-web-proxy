@@ -166,6 +166,20 @@ namespace Titanium.Web.Proxy.UnitTests
             }
         }
 
+        [TestMethod]
+        public void ApplyFastColdStartLeafSettings_Sets_Ecdsa_FastEngine_And_DiskCache()
+        {
+            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance);
+            Assert.AreEqual(CertificateKeyAlgorithm.Rsa2048, mgr.LeafCertificateKeyAlgorithm);
+            Assert.IsFalse(mgr.SaveFakeCertificates);
+
+            mgr.ApplyFastColdStartLeafSettings();
+
+            Assert.AreEqual(CertificateEngine.BouncyCastleFast, mgr.CertificateEngine);
+            Assert.AreEqual(CertificateKeyAlgorithm.EcdsaP256, mgr.LeafCertificateKeyAlgorithm);
+            Assert.IsTrue(mgr.SaveFakeCertificates);
+        }
+
         /// <summary>
         /// Regression test for issue #765: setting RootCertificate to the same certificate instance
         /// (same thumbprint) must NOT clear the in-memory leaf cache, so cached leaves survive a

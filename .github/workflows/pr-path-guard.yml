@@ -1,0 +1,58 @@
+name: PR path guard
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - beta
+      - stable
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  guard-nc-paths:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Block external changes to PolyForm NC paths
+        env:
+          TWP_NC_MAINTAINERS: ${{ vars.TWP_NC_MAINTAINERS }}
+          ACTOR: ${{ github.actor }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ALLOW="${TWP_NC_MAINTAINERS:-justcoding121}"
+          IFS=',' read -ra MAINTAINERS <<< "$ALLOW"
+          is_maintainer=false
+          for m in "${MAINTAINERS[@]}"; do
+            m="$(echo "$m" | xargs)"
+            if [[ "$ACTOR" == "$m" ]]; then
+              is_maintainer=true
+              break
+            fi
+          done
+
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          CHANGED="$(git diff --name-only "$BASE"..."$HEAD" || true)"
+          NC_HIT=false
+          while IFS= read -r path; do
+            [[ -z "$path" ]] && continue
+            case "$path" in
+              src/Titanium.Plus/*|tests/Titanium.Plus.Tests/*|src/Titanium.Inspector/*|tests/Titanium.Inspector.Tests/*)
+                NC_HIT=true
+                echo "NC path touched: $path"
+                ;;
+            esac
+          done <<< "$CHANGED"
+
+          if [[ "$NC_HIT" == "true" && "$is_maintainer" != "true" ]]; then
+            echo "::error::Changes to Titanium.Plus or Titanium.Inspector require a maintainer listed in TWP_NC_MAINTAINERS (actor=$ACTOR)."
+            exit 1
+          fi
+          echo "Path guard passed (actor=$ACTOR, nc_hit=$NC_HIT)."

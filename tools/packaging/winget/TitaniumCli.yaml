@@ -1,0 +1,21 @@
+# justcoding121.TitaniumCli
+PackageIdentifier: justcoding121.TitaniumCli
+PackageVersion: 7.0.0
+PackageLocale: en-US
+Publisher: justcoding121
+PackageName: Titanium CLI
+License: MIT
+ShortDescription: Titanium Web Proxy command-line daemon (titanium / twp).
+Installers:
+  - Architecture: x64
+    InstallerType: zip
+    NestedInstallerType: portable
+    NestedInstallerFiles:
+      - RelativeFilePath: titanium.exe
+        PortableCommandAlias: titanium
+      - RelativeFilePath: titanium.exe
+        PortableCommandAlias: twp
+    InstallerUrl: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.0/Titanium.Cli-win-x64.zip
+    InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
+ManifestType: singleton
+ManifestVersion: 1.6.0

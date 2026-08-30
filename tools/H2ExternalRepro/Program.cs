@@ -17,7 +17,7 @@ proxy.AddEndPoint(endPoint);
 proxy.Start();
 
 var port = proxy.ProxyEndPoints[0].Port;
-Console.WriteLine($"proxy on {port}, fetching {url}");
+await Console.Out.WriteLineAsync($"proxy on {port}, fetching {url}");
 
 var handler = new SocketsHttpHandler
 {
@@ -34,7 +34,7 @@ var handler = new SocketsHttpHandler
 if (Environment.GetEnvironmentVariable("TWP_REPRO_WINDOW") == "big")
 {
     handler.InitialHttp2StreamWindowSize = 1024 * 1024;
-    Console.WriteLine("client stream window: 1 MiB");
+    await Console.Out.WriteLineAsync("client stream window: 1 MiB");
 }
 
 using var client = new HttpClient(handler)
@@ -48,15 +48,15 @@ try
 {
     var sw = System.Diagnostics.Stopwatch.StartNew();
     using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
-    Console.WriteLine($"headers: {(int)response.StatusCode} after {sw.ElapsedMilliseconds} ms " +
+    await Console.Out.WriteLineAsync($"headers: {(int)response.StatusCode} after {sw.ElapsedMilliseconds} ms " +
                       $"(content-length: {response.Content.Headers.ContentLength?.ToString() ?? "unknown"})");
     var body = await response.Content.ReadAsByteArrayAsync();
-    Console.WriteLine($"body: {body.Length} bytes after {sw.ElapsedMilliseconds} ms");
-    Console.WriteLine("SUCCESS");
+    await Console.Out.WriteLineAsync($"body: {body.Length} bytes after {sw.ElapsedMilliseconds} ms");
+    await Console.Out.WriteLineAsync("SUCCESS");
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"FAILED: {ex.GetBaseException().Message}");
+    await Console.Out.WriteLineAsync($"FAILED: {ex.GetBaseException().Message}");
     Environment.ExitCode = 1;
 }
 finally

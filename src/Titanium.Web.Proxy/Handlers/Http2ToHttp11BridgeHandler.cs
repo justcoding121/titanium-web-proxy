@@ -123,6 +123,14 @@ public partial class ProxyServer
         if (!sessionArgs.IsFastPath)
             await OnBeforeRequest(sessionArgs);
 
+        // Per-stream destination when ReverseProxy routes are set (overrides connection ForwardHost).
+        if (Routing.ReverseProxySessionDispatch.TryApply(this, sessionArgs) &&
+            sessionArgs.UpstreamConnectHost is { Length: > 0 } routedHost)
+        {
+            connectHost = routedHost;
+            connectPort = sessionArgs.UpstreamConnectPort;
+        }
+
         if (sessionArgs.HttpClient.Request.CancelRequest)
         {
             // answered synthetically (Ok/GenericResponse/Redirect/RespondStreaming) during BeforeRequest -

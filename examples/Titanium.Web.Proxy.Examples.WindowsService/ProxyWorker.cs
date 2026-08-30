@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Examples.Shared;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Examples.WindowsService;
@@ -53,6 +54,7 @@ internal sealed class ProxyWorker : BackgroundService
             EnableHttp2 = settings.EnableHttp2,
             NoDelay = settings.NoDelay
         };
+        proxyServer.CertificateManager.CertificateEngine = Network.CertificateEngine.BouncyCastleFast;
         proxyServer.CertificateManager.SaveFakeCertificates = settings.SaveFakeCertificates;
         proxyServer.CertificateManager.LeafCertificateKeyAlgorithm = settings.LeafCertificateKeyAlgorithm;
 

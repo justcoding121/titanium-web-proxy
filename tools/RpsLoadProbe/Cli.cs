@@ -41,6 +41,7 @@ internal static class Cli
         var enableWebSocket = false;
         var clientReadChunkBytes = 0;
         var clientReadSleepMs = 0;
+        var stopOnSloFail = true;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -161,6 +162,12 @@ internal static class Cli
                     clientReadSleepMs = int.Parse(RequireValue(args, ref i, "--client-read-sleep-ms"),
                         CultureInfo.InvariantCulture);
                     break;
+                case "--stop-on-slo-fail":
+                    stopOnSloFail = true;
+                    break;
+                case "--no-stop-on-slo-fail":
+                    stopOnSloFail = false;
+                    break;
                 default:
                     ProbeLog.Error($"Unknown argument: {args[i]}");
                     PrintHelp();
@@ -206,7 +213,7 @@ internal static class Cli
                     originHttpsExtraPorts, nginxPath, maxCachedConnections, cts.Token, workload),
                 "serve" => RunServe(modeText, nginxPath, maxCachedConnections, cts.Token, workload),
                 "ramp" => RunRamp(modeText, nginxPath, resultsDir, concurrency, warmupSec, durationSec,
-                    maxCachedConnections, repeats, workload, cts.Token),
+                    maxCachedConnections, repeats, workload, stopOnSloFail, cts.Token),
                 _ => Fail("Required: --serve | --serve-origin | --serve-proxy | --ramp")
             };
         }
@@ -250,11 +257,12 @@ internal static class Cli
         or ProbeMode.ComparePost
         or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost or ProbeMode.CompareArch
         or ProbeMode.CompareSaturation
+        or ProbeMode.CompareEditions or ProbeMode.CompareCrossVersion
         or ProbeMode.ExplicitPoolSweep;
 
     private static int RunRamp(string? modeText, string? nginxPath, string? resultsDir, List<int> concurrency,
         int warmupSec, int durationSec, int? maxCachedConnections, int repeats, WorkloadOptions workload,
-        CancellationToken ct)
+        bool stopOnSloFail, CancellationToken ct)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode))
             return Fail("Required: --ramp --mode <see --help>");
@@ -268,6 +276,7 @@ internal static class Cli
             StepDuration = TimeSpan.FromSeconds(durationSec),
             MaxCachedConnections = maxCachedConnections,
             Repeats = Math.Max(1, repeats),
+            StopOnSloFail = stopOnSloFail,
             ConcurrencySteps = concurrency.Count > 0
                 ? concurrency.ToArray()
                 : [8, 16, 24, 32, 48, 64, 128, 256, 512],
@@ -518,6 +527,66 @@ internal static class Cli
                 return true;
             case "compare-saturation":
                 mode = ProbeMode.CompareSaturation;
+                return true;
+            case "compare-editions":
+                mode = ProbeMode.CompareEditions;
+                return true;
+            case "compare-cross-version":
+                mode = ProbeMode.CompareCrossVersion;
+                return true;
+            case "twp-cli-reverse-http1":
+                mode = ProbeMode.TwpCliReverseHttp1;
+                return true;
+            case "twp-cli-reverse-http1-tls":
+                mode = ProbeMode.TwpCliReverseHttp1Tls;
+                return true;
+            case "twp-cli-reverse-http1-route":
+                mode = ProbeMode.TwpCliReverseHttp1Route;
+                return true;
+            case "twp-cli-plus-base-http1":
+                mode = ProbeMode.TwpCliPlusBaseHttp1;
+                return true;
+            case "twp-cli-plus-cache-http1":
+                mode = ProbeMode.TwpCliPlusCacheHttp1;
+                return true;
+            case "twp-cli-intercept-http1":
+                mode = ProbeMode.TwpCliInterceptHttp1;
+                return true;
+            case "twp-cli-plus-waf-http1":
+                mode = ProbeMode.TwpCliPlusWafHttp1;
+                return true;
+            case "twp-cli-plus-cidr-http1":
+                mode = ProbeMode.TwpCliPlusCidrHttp1;
+                return true;
+            case "twp-cli-plus-jwt-http1":
+                mode = ProbeMode.TwpCliPlusJwtHttp1;
+                return true;
+            case "twp-cli-plus-ratelimit-http1":
+                mode = ProbeMode.TwpCliPlusRateLimitHttp1;
+                return true;
+            case "twp-cli-plus-resilience-http1":
+                mode = ProbeMode.TwpCliPlusResilienceHttp1;
+                return true;
+            case "twp-cli-plus-discovery-file-http1":
+                mode = ProbeMode.TwpCliPlusDiscoveryFileHttp1;
+                return true;
+            case "twp-cli-plus-metrics-scrape-http1":
+                mode = ProbeMode.TwpCliPlusMetricsScrapeHttp1;
+                return true;
+            case "twp-cli-plus-cache-hit-http1":
+                mode = ProbeMode.TwpCliPlusCacheHitHttp1;
+                return true;
+            case "twp-cli-static-http1":
+                mode = ProbeMode.TwpCliStaticHttp1;
+                return true;
+            case "twp-cli-logging-http1":
+                mode = ProbeMode.TwpCliLoggingHttp1;
+                return true;
+            case "twp-cli-lb-leasttime-http1":
+                mode = ProbeMode.TwpCliLbLeastTimeHttp1;
+                return true;
+            case "twp-cli-dialect-twp-http1":
+                mode = ProbeMode.TwpCliDialectTwpHttp1;
                 return true;
             case "origin-direct":
                 mode = ProbeMode.OriginDirect;

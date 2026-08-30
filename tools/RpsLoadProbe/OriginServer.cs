@@ -65,7 +65,8 @@ internal sealed class OriginServer : IAsyncDisposable
             HttpsProtocols = options.HttpsProtocols,
             ResponseBytes = workload.ResponseBytes,
             EarlyResponseAfterBytes = workload.EarlyResponseAfterBytes,
-            EnableWebSockets = workload.IsWebSocket
+            EnableWebSockets = workload.IsWebSocket,
+            CacheControl = options.CacheControl
         };
     }
 
@@ -86,6 +87,8 @@ internal sealed class OriginServer : IAsyncDisposable
         var responseBody = BuildResponseBody(options.ResponseBytes);
         var earlyAfter = Math.Max(0, options.EarlyResponseAfterBytes);
         var enableWebSockets = options.EnableWebSockets;
+        var cacheControl = options.CacheControl
+                           ?? Environment.GetEnvironmentVariable("TWP_RPS_ORIGIN_CACHE_CONTROL");
         var protocols = options.HttpsProtocols;
         var builder = Host.CreateDefaultBuilder()
             .ConfigureLogging(logging => logging.ClearProviders())
@@ -155,6 +158,8 @@ internal sealed class OriginServer : IAsyncDisposable
                                 await context.Request.Body.CopyToAsync(Stream.Null);
 
                             context.Response.ContentType = "application/octet-stream";
+                            if (!string.IsNullOrWhiteSpace(cacheControl))
+                                context.Response.Headers["Cache-Control"] = cacheControl;
                             // Fixed Content-Length avoids Transfer-Encoding: chunked, which stressed the
                             // H2→H1 bridge keep-alive path under multiplexed load.
                             context.Response.ContentLength = responseBody.Length;
@@ -255,4 +260,6 @@ internal sealed class OriginListenOptions
     public int ResponseBytes { get; init; } = WorkloadOptions.TinyJsonBytes;
     public int EarlyResponseAfterBytes { get; init; }
     public bool EnableWebSockets { get; init; }
+    /// <summary>Optional Cache-Control response header (edition cache-hit arm).</summary>
+    public string? CacheControl { get; init; }
 }

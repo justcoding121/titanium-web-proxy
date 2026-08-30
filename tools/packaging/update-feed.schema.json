@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/justcoding121/titanium-web-proxy/tools/release/update-feed.schema.json",
+  "title": "Titanium release-manifest",
+  "type": "object",
+  "required": ["version", "channel", "products"],
+  "properties": {
+    "version": { "type": "string" },
+    "channel": { "type": "string", "enum": ["stable", "beta"] },
+    "releasedUtc": { "type": "string", "format": "date-time" },
+    "abstractionsVersion": { "type": "string" },
+    "products": {
+      "type": "object",
+      "properties": {
+        "cli": { "$ref": "#/$defs/productAssets" },
+        "plus": {
+          "type": "object",
+          "properties": {
+            "requiredAbstractions": { "type": "string" },
+            "asset": { "$ref": "#/$defs/asset" }
+          }
+        },
+        "inspector": { "$ref": "#/$defs/productAssets" }
+      }
+    },
+    "nuget": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "asset": {
+      "type": "object",
+      "required": ["url", "sha256"],
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "sha256": { "type": "string", "minLength": 64, "maxLength": 64 }
+      }
+    },
+    "productAssets": {
+      "type": "object",
+      "properties": {
+        "assets": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/asset" }
+        }
+      }
+    }
+  }
+}

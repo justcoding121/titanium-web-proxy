@@ -11,6 +11,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.WinAuth.Security;
+using Titanium.Web.Proxy.Routing;
 
 namespace Titanium.Web.Proxy;
 
@@ -333,6 +334,10 @@ public partial class ProxyServer
     /// <returns></returns>
     private Task OnAfterResponse(SessionEventArgs args)
     {
+        var success = args.Exception is null &&
+                      args.HttpClient.Response.StatusCode is >= 200 and < 500;
+        ReverseProxySessionDispatch.ReportUpstreamResult(this, args, success);
+
         if (!args.IsFastPath && AfterResponse != null)
             return OnAfterResponseWithHandlerAsync(args);
 

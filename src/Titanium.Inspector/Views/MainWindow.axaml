@@ -1,0 +1,373 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Titanium.Inspector.ViewModels"
+        xmlns:svc="using:Titanium.Inspector.Services"
+        x:Class="Titanium.Inspector.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Titanium Inspector"
+        Icon="/Assets/app.ico"
+        Width="1280" Height="800">
+  <DockPanel>
+    <Menu DockPanel.Dock="Top" x:Name="MainMenu" AutomationProperties.AutomationId="MainMenu">
+      <MenuItem Header="_File" AutomationProperties.AutomationId="MenuFile">
+        <MenuItem Header="Export all HAR…" Command="{Binding ExportHarCommand}" AutomationProperties.AutomationId="MenuExportHar" />
+        <MenuItem Header="Export selected HAR…" Command="{Binding ExportSelectedHarCommand}" AutomationProperties.AutomationId="MenuExportSelectedHar" />
+        <MenuItem Header="Import HAR…" Command="{Binding ImportHarCommand}" AutomationProperties.AutomationId="MenuImportHar" />
+        <MenuItem Header="Export all archive…" Command="{Binding ExportArchiveCommand}" AutomationProperties.AutomationId="MenuExportArchive" />
+        <MenuItem Header="Export selected archive…" Command="{Binding ExportSelectedArchiveCommand}" AutomationProperties.AutomationId="MenuExportSelectedArchive" />
+        <MenuItem Header="Import archive…" Command="{Binding ImportArchiveCommand}" AutomationProperties.AutomationId="MenuImportArchive" />
+      </MenuItem>
+      <MenuItem Header="_Capture" AutomationProperties.AutomationId="MenuCapture">
+        <MenuItem Header="Start interception" Command="{Binding StartCaptureCommand}" AutomationProperties.AutomationId="MenuStartCapture" />
+        <MenuItem Header="Stop interception" Command="{Binding StopCaptureCommand}" AutomationProperties.AutomationId="MenuStopCapture" />
+        <!-- Mode=OneWay + Command: Avalonia MenuItem CheckBox TwoWay can write false during init and persist it. -->
+        <MenuItem Header="Capturing" ToggleType="CheckBox"
+                  IsChecked="{Binding Capturing, Mode=OneWay}"
+                  Command="{Binding ToggleCapturingCommand}"
+                  AutomationProperties.AutomationId="MenuToggleCapturing" />
+        <MenuItem Header="Clear sessions" Command="{Binding ClearSessionsCommand}" AutomationProperties.AutomationId="MenuClearSessions" />
+        <MenuItem Header="Remove selected" Command="{Binding RemoveSelectedSessionsCommand}" AutomationProperties.AutomationId="MenuRemoveSelected" />
+        <Separator />
+        <MenuItem Header="Auto-start capture" ToggleType="CheckBox"
+                  IsChecked="{Binding AutoStartCapture, Mode=OneWay}"
+                  Command="{Binding ToggleAutoStartCaptureCommand}"
+                  AutomationProperties.AutomationId="AutoStartCaptureCheck" />
+        <MenuItem Header="Auto system proxy on start" ToggleType="CheckBox"
+                  IsChecked="{Binding AutoSystemProxyOnStart, Mode=OneWay}"
+                  Command="{Binding ToggleAutoSystemProxyOnStartCommand}"
+                  AutomationProperties.AutomationId="AutoSystemProxyCheck" />
+        <MenuItem Header="Decrypt HTTPS" ToggleType="CheckBox"
+                  IsChecked="{Binding DecryptHttps, Mode=OneWay}"
+                  Command="{Binding ToggleDecryptHttpsCommand}"
+                  AutomationProperties.AutomationId="MenuDecryptHttps" />
+        <Separator />
+        <MenuItem Header="System proxy" ToggleType="CheckBox"
+                  IsChecked="{Binding SystemProxy, Mode=OneWay}"
+                  Command="{Binding ToggleSystemProxyCommand}"
+                  AutomationProperties.AutomationId="MenuToggleSystemProxy" />
+        <MenuItem Header="Install root CA (current user)" Command="{Binding InstallCaCommand}" AutomationProperties.AutomationId="MenuInstallCa" />
+        <MenuItem Header="Remove root CA (current user)" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />
+        <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" AutomationProperties.AutomationId="MenuExportCa" />
+        <MenuItem Header="Device CA setup…" Command="{Binding DeviceCaSetupCommand}" AutomationProperties.AutomationId="MenuDeviceCa" />
+        <MenuItem Header="Loopback for sandboxed apps…" Command="{Binding OpenLoopbackExemptCommand}"
+                  IsVisible="{Binding ShowLoopbackExemptMenu}"
+                  AutomationProperties.AutomationId="MenuLoopbackExempt" />
+        <MenuItem Header="Debug file logging" ToggleType="CheckBox"
+                  IsChecked="{Binding DebugFileLogging, Mode=OneWay}"
+                  Command="{Binding ToggleDebugLoggingCommand}"
+                  AutomationProperties.AutomationId="MenuDebugLog" />
+      </MenuItem>
+      <MenuItem Header="_Session" AutomationProperties.AutomationId="MenuSession">
+        <MenuItem Header="Replay selected" Command="{Binding ReplayCommand}" AutomationProperties.AutomationId="MenuReplay" />
+      </MenuItem>
+      <MenuItem Header="_Tools" AutomationProperties.AutomationId="MenuTools">
+        <MenuItem Header="Composer…" Command="{Binding OpenToolsComposerCommand}" AutomationProperties.AutomationId="MenuToolsComposer" />
+        <MenuItem Header="Breakpoints…" Command="{Binding OpenToolsBreakpointsCommand}" AutomationProperties.AutomationId="MenuToolsBreakpoints" />
+        <MenuItem Header="AutoResponder…" Command="{Binding OpenToolsAutoResponderCommand}" AutomationProperties.AutomationId="MenuToolsAutoResponder" />
+        <MenuItem Header="Scripts…" Command="{Binding OpenToolsScriptsCommand}" AutomationProperties.AutomationId="MenuToolsScripts" />
+      </MenuItem>
+      <MenuItem Header="_Help" AutomationProperties.AutomationId="MenuHelp"><MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}" AutomationProperties.AutomationId="MenuCheckForUpdates" /></MenuItem>
+    </Menu>
+    <Grid RowDefinitions="Auto,*,Auto">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" MinWidth="200" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="{Binding SessionDetailsPaneWidth}" MinWidth="0" />
+      </Grid.ColumnDefinitions>
+      <StackPanel Grid.Row="0" Grid.ColumnSpan="3" Margin="8" Spacing="4"
+                  AutomationProperties.AutomationId="ToolbarPanel">
+        <!-- Search + filters: WrapPanel so chips stay visible when the window narrows. -->
+        <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarSearchFilters">
+          <TextBox MinWidth="160" Width="320" MaxWidth="420" Margin="0,0,12,6"
+                   Watermark="Search: method:GET status:2xx host:example process:chrome is:ws hide:tunnel"
+                   Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
+          <CheckBox Content="Hide tunnels" IsChecked="{Binding HideTunnelsFilter}"
+                    VerticalAlignment="Center" Margin="0,0,12,6"
+                    AutomationProperties.AutomationId="HideTunnelsFilterCheck" />
+          <CheckBox Content="Hide images" IsChecked="{Binding HideImagesFilter}"
+                    VerticalAlignment="Center" Margin="0,0,12,6"
+                    AutomationProperties.AutomationId="HideImagesFilterCheck" />
+          <CheckBox Content="Errors only" IsChecked="{Binding ErrorsOnlyFilter}"
+                    VerticalAlignment="Center" Margin="0,0,12,6"
+                    AutomationProperties.AutomationId="ErrorsOnlyFilterCheck" />
+          <Button Content="Clear filters" Command="{Binding ClearFiltersCommand}"
+                  VerticalAlignment="Center" Margin="0,0,12,6"
+                  AutomationProperties.AutomationId="ClearFiltersButton" />
+        </WrapPanel>
+        <!-- Capture toggles on their own wrapping row (separate from filters). -->
+        <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarCaptureToggles">
+          <CheckBox Content="Capturing" IsChecked="{Binding Capturing}"
+                    VerticalAlignment="Center" Margin="0,0,12,6"
+                    AutomationProperties.AutomationId="CapturingCheck" />
+          <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}"
+                    VerticalAlignment="Center" Margin="0,0,12,6"
+                    AutomationProperties.AutomationId="DecryptHttpsCheck" />
+          <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}"
+                    VerticalAlignment="Center" Margin="0,0,12,6"
+                    AutomationProperties.AutomationId="SystemProxyCheck" />
+        </WrapPanel>
+        <!-- Bind / intercept controls wrap independently of the rows above. -->
+        <WrapPanel Orientation="Horizontal" AutomationProperties.AutomationId="ToolbarEndpoint">
+          <TextBox Width="120" Watermark="Bind address" Text="{Binding BindAddress}"
+                   IsEnabled="{Binding BindFieldsEnabled}"
+                   VerticalAlignment="Center" Margin="0,0,12,6"
+                   AutomationProperties.AutomationId="ToolbarBindAddress" />
+          <TextBox Width="70" Watermark="Port" Text="{Binding BindPort}"
+                   IsEnabled="{Binding BindFieldsEnabled}"
+                   VerticalAlignment="Center" Margin="0,0,12,6"
+                   AutomationProperties.AutomationId="ToolbarBindPort" />
+          <!-- Accent while idle (Start); quieter default while listening (Stop). Live pip shows running state. -->
+          <Button Content="{Binding InterceptToggleText}" Command="{Binding ToggleInterceptCommand}"
+                  Classes.accent="{Binding BindFieldsEnabled}"
+                  VerticalAlignment="Center" Margin="0,0,12,6"
+                  AutomationProperties.AutomationId="ToggleInterceptButton" />
+          <Ellipse Width="8" Height="8" Margin="0,0,6,6"
+                   VerticalAlignment="Center"
+                   Fill="{DynamicResource SessionStatusSuccessBrush}"
+                   IsVisible="{Binding IsIntercepting}"
+                   ToolTip.Tip="Proxy is listening"
+                   AutomationProperties.AutomationId="ListeningIndicator" />
+          <TextBlock Text="{Binding EndpointStatusText}" VerticalAlignment="Center" Opacity="0.85"
+                     TextWrapping="Wrap" MaxWidth="420" Margin="0,0,12,6"
+                     AutomationProperties.AutomationId="EndpointStatusText" />
+        </WrapPanel>
+      </StackPanel>
+      <DataGrid Grid.Row="1" Grid.Column="0" Margin="8,8,4,8"
+                x:Name="SessionsGrid"
+                AutomationProperties.AutomationId="SessionsGrid"
+                ItemsSource="{Binding Sessions}"
+                SelectedItem="{Binding SelectedSession}"
+                SelectionMode="Extended"
+                IsReadOnly="True"
+                CanUserResizeColumns="True"
+                CanUserReorderColumns="True"
+                CanUserSortColumns="True"
+                GridLinesVisibility="Horizontal"
+                AutoGenerateColumns="False">
+        <DataGrid.ContextMenu>
+          <ContextMenu AutomationProperties.AutomationId="SessionsContextMenu">
+            <MenuItem Header="Replay" Command="{Binding ReplayCommand}"
+                      IsVisible="{Binding HasSingleSelectedSession}"
+                      AutomationProperties.AutomationId="CtxReplay" />
+            <MenuItem Header="Load into Composer" Command="{Binding LoadIntoComposerCommand}"
+                      IsVisible="{Binding HasSingleSelectedSession}"
+                      AutomationProperties.AutomationId="CtxLoadComposer" />
+            <Separator IsVisible="{Binding HasSingleSelectedSession}" />
+            <MenuItem Header="Export selected HAR…" Command="{Binding ExportSelectedHarCommand}"
+                      IsVisible="{Binding HasSelectedSessions}"
+                      AutomationProperties.AutomationId="CtxExportSelectedHar" />
+            <MenuItem Header="Export selected archive…" Command="{Binding ExportSelectedArchiveCommand}"
+                      IsVisible="{Binding HasSelectedSessions}"
+                      AutomationProperties.AutomationId="CtxExportSelectedArchive" />
+            <Separator IsVisible="{Binding HasSelectedSessions}" />
+            <MenuItem Header="Copy URL" Command="{Binding CopyUrlCommand}"
+                      IsVisible="{Binding CanCopyUrl}"
+                      AutomationProperties.AutomationId="CtxCopyUrl" />
+            <MenuItem Header="Filter by host" Command="{Binding FilterByHostCommand}"
+                      IsVisible="{Binding CanFilterByHost}"
+                      AutomationProperties.AutomationId="CtxFilterByHost" />
+            <MenuItem Header="Filter by process" Command="{Binding FilterByProcessCommand}"
+                      IsVisible="{Binding CanFilterByProcess}"
+                      AutomationProperties.AutomationId="CtxFilterByProcess" />
+            <Separator IsVisible="{Binding HasSelectedSessions}" />
+            <MenuItem Header="Remove selected" Command="{Binding RemoveSelectedSessionsCommand}"
+                      IsVisible="{Binding HasSelectedSessions}"
+                      AutomationProperties.AutomationId="CtxRemoveSelected" />
+          </ContextMenu>
+        </DataGrid.ContextMenu>
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="55" MinWidth="50"
+                              CustomSortComparer="{x:Static svc:SessionIdComparer.Instance}" />
+          <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="75" MinWidth="60" />
+          <DataGridTemplateColumn Header="Status" Width="65" MinWidth="55" SortMemberPath="StatusCode">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="svc:SessionSnapshot">
+                <TextBlock Text="{Binding StatusCode}"
+                           Foreground="{Binding StatusCode, Converter={StaticResource StatusCodeBrushConverter}}"
+                           FontWeight="{Binding StatusCode, Converter={StaticResource StatusCodeFontWeightConverter}}"
+                           VerticalAlignment="Center" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+          <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="180" MinWidth="120" />
+          <DataGridTextColumn Header="URL" Binding="{Binding Url}" Width="320" MinWidth="160" />
+          <DataGridTextColumn Header="Client→Server" Binding="{Binding Protocol}" Width="130" MinWidth="120" />
+          <DataGridTextColumn Header="Duration (ms)" Binding="{Binding DurationMs, StringFormat={}{0:0}}"
+                              Width="120" MinWidth="120" SortMemberPath="DurationMs" />
+          <DataGridTextColumn Header="TTFB (ms)" Binding="{Binding TtfbMs, StringFormat={}{0:0}}"
+                              Width="100" MinWidth="100" SortMemberPath="TtfbMs" />
+          <DataGridTextColumn Header="Size" Binding="{Binding BodySizeDisplay}"
+                              Width="80" MinWidth="70" SortMemberPath="BodySize" />
+          <DataGridTextColumn Header="Process" Binding="{Binding ProcessDisplay}" Width="140" MinWidth="100" />
+        </DataGrid.Columns>
+      </DataGrid>
+      <GridSplitter Grid.Row="1" Grid.Column="1" Width="4" ResizeDirection="Columns"
+                    IsVisible="{Binding ShowSessionDetails}" />
+      <DockPanel Grid.Row="1" Grid.Column="2" Margin="4,8,8,8"
+                 IsVisible="{Binding ShowSessionDetails}">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4" LastChildFill="True">
+          <Button DockPanel.Dock="Right"
+                  Content="✕"
+                  Padding="8,2"
+                  ToolTip.Tip="Close pane"
+                  Command="{Binding CloseSessionDetailsCommand}"
+                  AutomationProperties.AutomationId="CloseDetailsButton" />
+          <TextBlock Text="Session &amp; tools" VerticalAlignment="Center" FontWeight="SemiBold" />
+        </DockPanel>
+        <TabControl x:Name="OuterPaneTabs"
+                    AutomationProperties.AutomationId="OuterPaneTabs"
+                    SelectedIndex="{Binding SelectedOuterPaneIndex}">
+          <TabItem Header="Inspect" AutomationProperties.AutomationId="TabOuterInspect">
+            <Grid>
+              <TextBlock Text="Select a session in the grid to inspect Headers, Body, Hex, and WebSocket frames."
+                         Margin="12" TextWrapping="Wrap" Opacity="0.75"
+                         IsVisible="{Binding ShowInspectEmpty}"
+                         AutomationProperties.AutomationId="InspectEmptyHint" />
+              <TabControl x:Name="InspectTabs"
+                          AutomationProperties.AutomationId="InspectTabs"
+                          IsVisible="{Binding HasSelectedSession}"
+                          SelectedIndex="{Binding SelectedInspectTabIndex}">
+                <TabItem Header="Headers" AutomationProperties.AutomationId="TabHeaders">
+                  <TextBox IsReadOnly="True" Text="{Binding SelectedHeaders}" AcceptsReturn="True" TextWrapping="Wrap"
+                           FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="HeadersText" />
+                </TabItem>
+                <TabItem Header="Body" AutomationProperties.AutomationId="TabBody">
+                  <TextBox IsReadOnly="True" Text="{Binding SelectedBody}" AcceptsReturn="True" TextWrapping="Wrap"
+                           FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="BodyText" />
+                </TabItem>
+                <TabItem Header="Hex" AutomationProperties.AutomationId="TabHex">
+                  <TextBox IsReadOnly="True" Text="{Binding SelectedHex}" AcceptsReturn="True" TextWrapping="Wrap"
+                           FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="HexText" />
+                </TabItem>
+                <TabItem Header="WS Frames" AutomationProperties.AutomationId="TabFrames"
+                         IsVisible="{Binding ShowWsFramesTab}">
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Margin="8,8,8,0" Opacity="0.75" TextWrapping="Wrap"
+                               Text="WebSocket message preview for this session (best-effort text)." />
+                    <TextBox IsReadOnly="True" Text="{Binding SelectedFrames}" AcceptsReturn="True" TextWrapping="Wrap"
+                             Margin="0,4,0,0"
+                             FontFamily="Consolas,Courier New,monospace" AutomationProperties.AutomationId="FramesText" />
+                  </DockPanel>
+                </TabItem>
+              </TabControl>
+            </Grid>
+          </TabItem>
+          <TabItem Header="Tools" AutomationProperties.AutomationId="TabOuterTools">
+            <TabControl x:Name="ToolsTabs"
+                        AutomationProperties.AutomationId="ToolsTabs"
+                        SelectedIndex="{Binding SelectedToolsTabIndex}">
+              <TabItem Header="Composer" AutomationProperties.AutomationId="TabComposer">
+                <ScrollViewer>
+                  <StackPanel Margin="8" Spacing="8">
+                    <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                               Text="Build and send a request through the proxy. Load from selected copies the current session." />
+                    <Grid ColumnDefinitions="Auto,*" Margin="0">
+                      <TextBox Grid.Column="0" Width="80" Watermark="Method" Text="{Binding ComposerMethod}" Margin="0,0,8,0"
+                               AutomationProperties.AutomationId="ComposerMethod" />
+                      <TextBox Grid.Column="1" Watermark="URL" Text="{Binding ComposerUrl}"
+                               AutomationProperties.AutomationId="ComposerUrl" />
+                    </Grid>
+                    <TextBox Watermark="Headers (Name: Value per line)" Text="{Binding ComposerHeaders}"
+                             AcceptsReturn="True" Height="100" FontFamily="Consolas,Courier New,monospace"
+                             AutomationProperties.AutomationId="ComposerHeaders" />
+                    <TextBox Watermark="Body" Text="{Binding ComposerBody}"
+                             AcceptsReturn="True" Height="120" FontFamily="Consolas,Courier New,monospace"
+                             AutomationProperties.AutomationId="ComposerBody" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Button Content="Load from selected" Command="{Binding LoadFromSelectedCommand}"
+                              AutomationProperties.AutomationId="ComposerLoad" />
+                      <Button Content="Send" Command="{Binding SendComposerCommand}"
+                              AutomationProperties.AutomationId="ComposerSend" />
+                    </StackPanel>
+                  </StackPanel>
+                </ScrollViewer>
+              </TabItem>
+              <TabItem Header="Breakpoints" AutomationProperties.AutomationId="TabBreakpoints">
+                <StackPanel Margin="8" Spacing="8">
+                  <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                             Text="Pause matching traffic to edit the body, continue, or abort. One pause at a time; auto-continues after 120s." />
+                  <CheckBox Content="Enabled" IsChecked="{Binding Breakpoints.Enabled}"
+                            AutomationProperties.AutomationId="BreakpointEnabled" />
+                  <CheckBox Content="Break on response" IsChecked="{Binding BreakpointOnResponse}"
+                            AutomationProperties.AutomationId="BreakpointOnResponse" />
+                  <TextBox Watermark="URL filter (* = all, e.g. *api*/users*)" Text="{Binding Breakpoints.UrlFilter}"
+                           AutomationProperties.AutomationId="BreakpointUrlFilter" />
+                  <TextBox Watermark="Edit body (Apply edit body, then Continue)" Text="{Binding BreakpointEditBody}"
+                           AcceptsReturn="True" Height="80" FontFamily="Consolas,Courier New,monospace"
+                           AutomationProperties.AutomationId="BreakpointEditBody" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Apply edit body" Command="{Binding ApplyEditBodyCommand}"
+                            AutomationProperties.AutomationId="BreakpointApply" />
+                    <Button Content="Continue" Command="{Binding ContinueBreakpointCommand}"
+                            AutomationProperties.AutomationId="BreakpointContinue" />
+                    <Button Content="Abort" Command="{Binding AbortBreakpointCommand}"
+                            AutomationProperties.AutomationId="BreakpointAbort" />
+                  </StackPanel>
+                </StackPanel>
+              </TabItem>
+              <TabItem Header="AutoResponder" AutomationProperties.AutomationId="TabAutoResponder">
+                <StackPanel Margin="8" Spacing="8">
+                  <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                             Text="Return a fake response for matching URLs before the real server (and before breakpoints)." />
+                  <CheckBox Content="Enabled (before breakpoints)" IsChecked="{Binding AutoResponder.Enabled}"
+                            AutomationProperties.AutomationId="AutoResponderEnabled" />
+                  <ListBox ItemsSource="{Binding AutoResponder.Rules}"
+                           SelectedItem="{Binding AutoResponder.SelectedRule}"
+                           Height="120"
+                           MinHeight="80"
+                           AutomationProperties.AutomationId="AutoResponderRules">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding Display}" />
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                  <TextBox Watermark="Match URL (* wildcards)" Text="{Binding AutoResponderMatch}"
+                           AutomationProperties.AutomationId="AutoResponderMatch" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBox Watermark="Status" Text="{Binding AutoResponderStatus}" Width="80"
+                             AutomationProperties.AutomationId="AutoResponderStatus" />
+                    <TextBox Watermark="Content-Type" Text="{Binding AutoResponderContentType}" Width="160" AutomationProperties.AutomationId="AutoResponderContentType" />
+                  </StackPanel>
+                  <TextBox Watermark="Response body" Text="{Binding AutoResponderBody}" AcceptsReturn="True" Height="80"
+                           AutomationProperties.AutomationId="AutoResponderBody" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Add rule" Command="{Binding AddAutoResponderRuleCommand}"
+                            AutomationProperties.AutomationId="AutoResponderAdd" />
+                    <Button Content="Update rule" Command="{Binding UpdateAutoResponderRuleCommand}"
+                            AutomationProperties.AutomationId="AutoResponderUpdate" />
+                    <Button Content="Delete rule" Command="{Binding DeleteAutoResponderRuleCommand}"
+                            AutomationProperties.AutomationId="AutoResponderDelete" />
+                  </StackPanel>
+                  <TextBlock Text="{Binding PlusPanelsSummary}" TextWrapping="Wrap" Opacity="0.7" />
+                </StackPanel>
+              </TabItem>
+              <TabItem Header="Scripts" AutomationProperties.AutomationId="TabScripts">
+                <StackPanel Margin="8" Spacing="8">
+                  <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                             Text="Not JavaScript or C# — one directive per line. Applies to all traffic. Request abort/set-status skips AutoResponder and the origin." />
+                  <TextBlock Text="On request" />
+                  <TextBox Text="{Binding ScriptOnRequest}" AcceptsReturn="True" Height="100"
+                           FontFamily="Consolas,Courier New,monospace"
+                           Watermark="set-header Name: Value  |  set-status 404  |  abort"
+                           AutomationProperties.AutomationId="ScriptOnRequest" />
+                  <TextBlock Text="On response" />
+                  <TextBox Text="{Binding ScriptOnResponse}" AcceptsReturn="True" Height="100"
+                           FontFamily="Consolas,Courier New,monospace"
+                           Watermark="set-header Name: Value  |  set-status 404  |  abort"
+                           AutomationProperties.AutomationId="ScriptOnResponse" />
+                </StackPanel>
+              </TabItem>
+            </TabControl>
+          </TabItem>
+        </TabControl>
+      </DockPanel>
+      <Grid Grid.Row="2" Grid.ColumnSpan="3" Margin="8" ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0" Text="{Binding StatusText}" TextWrapping="Wrap" VerticalAlignment="Center"
+                   AutomationProperties.AutomationId="StatusText" />
+        <TextBlock Grid.Column="1" Text="{Binding SessionCountText}" Margin="16,0,0,0" VerticalAlignment="Center"
+                   Opacity="0.8" AutomationProperties.AutomationId="SessionCountText" />
+      </Grid>
+    </Grid>
+  </DockPanel>
+</Window>

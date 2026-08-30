@@ -1,4 +1,4 @@
-# Manual saturation RPS lab on GitHub-hosted VMs (not a job container).
+﻿# Manual saturation RPS lab on GitHub-hosted VMs (not a job container).
 # Maintainers run this, then paste median numbers into wiki/Performance.md.
 # Not a per-PR gate; not comparable to dedicated-server blog posts.
 #
@@ -11,6 +11,10 @@
 name: RPS saturation
 
 on:
+  pull_request:
+    branches: [beta, stable]
+  push:
+    branches: [beta, stable]
   workflow_dispatch:
     inputs:
       mode:
@@ -26,6 +30,8 @@ on:
           - compare-mitm
           - compare-matrix
           - compare-product
+          - compare-editions
+          - compare-cross-version
           - compare-ceiling
           - compare-bodies
           - compare-post
@@ -33,6 +39,7 @@ on:
           - compare-tls-cost
           - compare-arch
           - compare-saturation
+          - compare-spot
           - origin-direct
           - compare
           - compare-tls
@@ -89,6 +96,12 @@ on:
           - nginx-reverse-http3-cleartext
           - yarp-reverse-http2
           - yarp-reverse-http2-to-https
+          - twp-cli-reverse-http1
+          - twp-cli-reverse-http1-tls
+          - twp-cli-reverse-http1-route
+          - twp-cli-plus-base-http1
+          - twp-cli-plus-cache-http1
+          - twp-cli-intercept-http1
       concurrency:
         description: 'Comma-separated concurrency steps'
         required: true
@@ -106,16 +119,29 @@ on:
         required: true
         default: '3'
 
+permissions:
+  contents: read
+
 jobs:
   rps:
+    # PR → beta/stable: compare-spot; push → beta/stable: compare-editions; dispatch: inputs.mode
+    permissions:
+      contents: read
+    env:
+      RPS_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || (github.event_name == 'pull_request' && 'compare-spot' || 'compare-editions') }}
+      RPS_CONCURRENCY: ${{ github.event_name == 'workflow_dispatch' && inputs.concurrency || '8,16,32,64' }}
+      RPS_WARMUP_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.warmup_sec || 2 }}
+      RPS_DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || 8 }}
+      RPS_REPEATS: ${{ github.event_name == 'workflow_dispatch' && inputs.repeats || 1 }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
+    # Intentionally no jobs.*.container â€” saturation RPS on a container network measures the wrong thing.
     # compare-product with MITM Lite+Full can exceed 3.5h per OS on hosted runners.
-    timeout-minutes: 420
+    # compare-editions (expanded Plus/CLI stress arms) needs ~60m; other modes keep the long ceiling.
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || 420)) }}
     steps:
       - uses: actions/checkout@v6
 
@@ -252,13 +278,14 @@ jobs:
       # Pass workflow_dispatch inputs via env (not ${{ }} in the script) to avoid
       # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
+        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || 400)) }}
         shell: pwsh
         env:
-          RPS_MODE: ${{ inputs.mode }}
-          RPS_CONCURRENCY: ${{ inputs.concurrency }}
-          RPS_WARMUP_SEC: ${{ inputs.warmup_sec }}
-          RPS_DURATION_SEC: ${{ inputs.duration_sec }}
-          RPS_REPEATS: ${{ inputs.repeats }}
+          RPS_MODE: ${{ env.RPS_MODE }}
+          RPS_CONCURRENCY: ${{ env.RPS_CONCURRENCY }}
+          RPS_WARMUP_SEC: ${{ env.RPS_WARMUP_SEC }}
+          RPS_DURATION_SEC: ${{ env.RPS_DURATION_SEC }}
+          RPS_REPEATS: ${{ env.RPS_REPEATS }}
         run: |
           pwsh tools/RpsLoadProbe/run-rps.ps1 `
             -Mode $env:RPS_MODE `
@@ -269,7 +296,43 @@ jobs:
             -ResultsDir tools/RpsLoadProbe/results `
             -BombardierCheck
 
+      - name: Validate edition gates
+        if: env.RPS_MODE == 'compare-editions'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for edition gate validation' }
+          pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName
+
+      - name: Validate compare-product gates
+        if: env.RPS_MODE == 'compare-product'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for compare-product gate validation' }
+          pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName
+
+      - name: Validate cross-version gates
+        if: env.RPS_MODE == 'compare-cross-version'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for cross-version gate validation' }
+          $baseline = if ($env:RUNNER_OS -eq 'Windows') {
+            'tools/RpsLoadProbe/results/baseline-6.0-win.csv'
+          } else {
+            'tools/RpsLoadProbe/results/baseline-6.0-linux.csv'
+          }
+          if (-not (Test-Path $baseline)) { throw "Missing baseline: $baseline" }
+          pwsh tools/RpsLoadProbe/validate-cross-version.ps1 `
+            -BaselineCsv $baseline `
+            -CurrentCsv $csv.FullName
+
       - name: Upload CSV artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: rps-csv-${{ matrix.os }}

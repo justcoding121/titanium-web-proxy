@@ -1,0 +1,99 @@
+name: Deploy website
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'website/**'
+      - 'wiki/images/**'
+      - 'docs/api/**'
+      - 'docs/styles/**'
+      - 'docs/fonts/**'
+      - '.github/workflows/deploy-website.yml'
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'website/**'
+      - 'wiki/images/**'
+      - 'docs/api/**'
+      - 'docs/styles/**'
+      - 'docs/fonts/**'
+      - '.github/workflows/deploy-website.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # NuGet-only GitHub Releases must not redeploy Pages; only v* product tags.
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install and build
+        working-directory: website
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm ci --ignore-scripts
+          npm run docs:build
+
+      - name: Copy DocFX API into site
+        shell: bash
+        run: |
+          mkdir -p website/.vitepress/dist/api
+          if [ -d docs/api ]; then
+            cp -a docs/api/. website/.vitepress/dist/api/
+            # DocFX HTML references ../styles and ../fonts from /api/*.html
+            if [ -d docs/styles ]; then
+              cp -a docs/styles website/.vitepress/dist/styles
+            fi
+            if [ -d docs/fonts ]; then
+              cp -a docs/fonts website/.vitepress/dist/fonts
+            fi
+            # Prefer DocFX logo only if VitePress did not already emit one
+            if [ -f docs/logo.svg ] && [ ! -f website/.vitepress/dist/logo.svg ]; then
+              cp docs/logo.svg website/.vitepress/dist/logo.svg
+            fi
+            if [ -f docs/favicon.ico ]; then
+              cp docs/favicon.ico website/.vitepress/dist/favicon.ico
+            fi
+          else
+            echo "Warning: docs/api missing; API pages will not be published"
+          fi
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/.vitepress/dist
+
+  deploy:
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/develop' || github.event_name == 'release' || github.event_name == 'workflow_dispatch')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

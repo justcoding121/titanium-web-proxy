@@ -56,16 +56,16 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 proxyServer.CertificateManager.TrustRootCertificate(machineTrusted: trustRootCertificateMachine);
             }
 
-            // Traffic tape uses LogInformation so the built-in console sink (bounded channel,
-            // dedicated writer) never blocks a session thread on Console.WriteLine.
-            // DEBUG also keeps Trace + a rolling file for deep diagnosis.
+            // Traffic tape uses LogDebug so Release (Warning+) stays limited to failures;
+            // the built-in console sink (bounded channel, dedicated writer) never blocks a
+            // session thread on Console.WriteLine. DEBUG also keeps Trace + a rolling file.
 #if DEBUG
             proxyServer.Logging.MinimumLevel = LogLevel.Trace;
             proxyServer.Logging.EnableFile = true;
             proxyServer.Logging.FilePath = Path.Combine(
                 AppContext.BaseDirectory, "logs", "basic-proxy.log");
 #else
-            proxyServer.Logging.MinimumLevel = LogLevel.Information;
+            proxyServer.Logging.MinimumLevel = LogLevel.Warning;
 #endif
             proxyServer.ApplyLoggingConfiguration();
 
@@ -90,16 +90,15 @@ namespace Titanium.Web.Proxy.Examples.Basic
             // Prefetch overlaps origin connect with client TLS on cache hits / HTTP/1.1 clients.
             proxyServer.EnableTcpServerConnectionPrefetch = ReadEnvBool("TWP_PREFETCH", defaultValue: true);
             proxyServer.EnableHttp2 = ReadEnvBool("TWP_ENABLE_HTTP2", defaultValue: true);
-            // Library default is false; probes that need a warm disk cache set TWP_SAVE_FAKE_CERTS=1.
+            // Library Balanced defaults stay RSA for NuGet consumers; this example (and Inspector/CLI)
+            // uses fast cold-start leaves for modern browsers. Probe overrides:
+            //   TWP_LEAF_KEY=rsa | TWP_SAVE_FAKE_CERTS=0
+            proxyServer.CertificateManager.ApplyFastColdStartLeafSettings();
+            if (Environment.GetEnvironmentVariable("TWP_LEAF_KEY") is "rsa" or "RSA" or "Rsa2048")
+                proxyServer.CertificateManager.LeafCertificateKeyAlgorithm =
+                    Network.CertificateKeyAlgorithm.Rsa2048;
             proxyServer.CertificateManager.SaveFakeCertificates =
-                ReadEnvBool("TWP_SAVE_FAKE_CERTS", defaultValue: false);
-
-            // Balanced default is RSA-2048 (widest client compatibility). Opt in to P-256 for modern
-            // browsers via TWP_LEAF_KEY=ec — see wiki Home.md "First-visit latency".
-            proxyServer.CertificateManager.LeafCertificateKeyAlgorithm =
-                Environment.GetEnvironmentVariable("TWP_LEAF_KEY") is "ec" or "EC" or "ecdsa" or "ECDSA" or "EcdsaP256"
-                    ? Network.CertificateKeyAlgorithm.EcdsaP256
-                    : Network.CertificateKeyAlgorithm.Rsa2048;
+                ReadEnvBool("TWP_SAVE_FAKE_CERTS", defaultValue: true);
         }
 
         public void Dispose()
@@ -169,24 +168,24 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 };
                 quicEndPoint.BeforeQuicAuthenticate += OnBeforeQuicAuthenticate;
                 proxyServer.AddEndPoint(quicEndPoint);
-                Logger.LogInformation(
+                Logger.LogWarning(
                     "HTTP/3 QUIC endpoint started on UDP 443 (SVCB discovery={Discovery}).",
                     proxyServer.EnableHttpsSvcbDnsDiscovery ? "on" : "off");
             }
             else
             {
-                Logger.LogInformation(
+                Logger.LogWarning(
                     "[HTTP/3] Skipped: QuicListener.IsSupported is false on this platform, or TWP_ENABLE_HTTP3 disabled it.");
-                Logger.LogInformation("  Windows: requires Windows 11 / Server 2022+.");
-                Logger.LogInformation("  Linux:   apt install libmsquic");
-                Logger.LogInformation("  macOS:   bundle libmsquic + libssl + libcrypto with @loader_path RPATH.");
+                Logger.LogWarning("  Windows: requires Windows 11 / Server 2022+.");
+                Logger.LogWarning("  Linux:   apt install libmsquic");
+                Logger.LogWarning("  macOS:   bundle libmsquic + libssl + libcrypto with @loader_path RPATH.");
             }
 #pragma warning restore TWP001
 
             proxyServer.Start();
 
             foreach (var endPoint in proxyServer.ProxyEndPoints)
-                Logger.LogInformation("Listening on '{EndPointType}' endpoint at Ip {IpAddress} and port: {Port}",
+                Logger.LogWarning("Listening on '{EndPointType}' endpoint at Ip {IpAddress} and port: {Port}",
                     endPoint.GetType().Name, endPoint.IpAddress, endPoint.Port);
 
             // tools/ColdStartProbe connects to the endpoint directly and sets TWP_SET_SYSTEM_PROXY=0,
@@ -198,7 +197,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
                     KnownMitmExclusions.CreateSystemProxySettings());
             }
 
-            Logger.LogInformation(
+            Logger.LogWarning(
                 "Knobs: profile={Profile} pool={Pool} prefetch={Prefetch} h2={Http2} h3={Http3} " +
                 "forwardUpstream={ForwardUpstream} saveCerts={SaveCerts} leafKey={LeafKey} timing={Timing}",
                 proxyServer.Profile,
@@ -224,7 +223,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 
         public void Stop()
         {
-            Logger.LogInformation("Stopping proxy...");
+            Logger.LogWarning("Stopping proxy...");
 
             explicitEndPoint.BeforeTunnelConnectRequest -= OnBeforeTunnelConnectRequest;
             explicitEndPoint.BeforeTunnelConnectResponse -= OnBeforeTunnelConnectResponse;
@@ -293,10 +292,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 // Opaque tunnel for pinned apps (Dropbox/Webex) and identity hosts that still CONNECT.
                 e.DecryptSsl = false;
 
-            // Opaque tunnels (no decrypt) get a single line; decrypted hosts show up as request lines later.
-            // DEBUG also logs every CONNECT for diagnosis.
+            // Opaque tunnels (no decrypt) get a single Debug line; decrypted hosts show up as request lines later.
             if (!e.DecryptSsl)
-                Logger.LogInformation("TUNNEL {Hostname} (ssl passthrough)", hostname);
+                Logger.LogDebug("TUNNEL {Hostname} (ssl passthrough)", hostname);
 #if DEBUG
             else
                 Logger.LogDebug("Tunnel to: {Hostname}", hostname);
@@ -324,12 +322,12 @@ namespace Titanium.Web.Proxy.Examples.Basic
             {
                 if (frame.OpCode == WebsocketOpCode.Binary)
                 {
-                    Logger.LogInformation("WS {Arrow} binary {Length}B", arrow, frame.Data.Length);
+                    Logger.LogDebug("WS {Arrow} binary {Length}B", arrow, frame.Data.Length);
                     continue;
                 }
 
                 if (frame.OpCode == WebsocketOpCode.Text)
-                    Logger.LogInformation("WS {Arrow} {Text}", arrow,
+                    Logger.LogDebug("WS {Arrow} {Text}", arrow,
                         Truncate(frame.GetText(), MaxWebSocketTextLength));
             }
         }
@@ -345,7 +343,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
 #pragma warning disable TWP001
         private Task OnBeforeQuicAuthenticate(object sender, BeforeQuicAuthenticateEventArgs e)
         {
-            Logger.LogInformation("[QUIC] Connection from {RemoteEndPoint} (SNI: {SniHostName})",
+            Logger.LogDebug("[QUIC] Connection from {RemoteEndPoint} (SNI: {SniHostName})",
                 e.RemoteEndPoint, e.SniHostName);
             return Task.CompletedTask;
         }
@@ -381,9 +379,9 @@ namespace Titanium.Web.Proxy.Examples.Basic
         {
             e.GetState().AppendPipeline(nameof(MultipartRequestPartSent));
 
-            Logger.LogInformation("Multipart form data headers:");
+            Logger.LogDebug("Multipart form data headers:");
             foreach (var header in e.Headers)
-                Logger.LogInformation("{Header}", header.ToString());
+                Logger.LogDebug("{Header}", header.ToString());
         }
 
         private static Task OnResponse(object sender, SessionEventArgs e)
@@ -397,7 +395,7 @@ namespace Titanium.Web.Proxy.Examples.Basic
         private Task OnResponseBodyWrite(object sender, BeforeBodyWriteEventArgs e)
         {
             _ = sender; // Required by the event-handler signature.
-            Logger.LogInformation("Response body chunk: {Length} bytes (last: {IsLastChunk})",
+            Logger.LogDebug("Response body chunk: {Length} bytes (last: {IsLastChunk})",
                 e.BodyBytes.Length, e.IsLastChunk);
             return Task.CompletedTask;
         }
@@ -425,14 +423,14 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 case IncompleteSessionKind.ClientCancelled:
                     line =
                         $"{request.Method,-7} {FormatUrlForConsole(request.Url)} ⇢ cancelled by client  {elapsedMs}ms";
-                    level = LogLevel.Information;
+                    level = LogLevel.Debug;
                     break;
                 case IncompleteSessionKind.OriginReset:
                     // Origin RST_STREAM (REFUSED_STREAM / early reset) before any response headers —
                     // common under CDN load-shedding (e.g. GitHub/Fastly). Not a client abort.
                     line =
                         $"{request.Method,-7} {FormatUrlForConsole(request.Url)} ⇢ reset by origin  {elapsedMs}ms";
-                    level = LogLevel.Information;
+                    level = LogLevel.Debug;
                     break;
                 case IncompleteSessionKind.ConnectFailed:
                     line =

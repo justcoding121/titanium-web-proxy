@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -504,6 +504,24 @@ public sealed class CertificateManager : IDisposable
     ///     subsequent runs can reload them instead of regenerating.
     /// </summary>
     public bool SaveFakeCertificates { get; set; } = false;
+
+    /// <summary>
+    ///     Fast first-visit MITM for modern TLS clients (browsers, current HttpClient):
+    ///     <see cref="CertificateEngine.BouncyCastleFast" />, ECDSA P-256 leaves, and
+    ///     <see cref="SaveFakeCertificates" /> enabled. The root CA stays RSA.
+    ///     <para>
+    ///         Library <see cref="Options.ProxyProfile.Balanced" /> still defaults to RSA-2048 leaves for
+    ///         widest compatibility. Call this from Inspector, CLI, and desktop MITM hosts where clients
+    ///         are known to accept ECDSA server certificates — RSA leaf generation is the dominant
+    ///         cold-start cost when a page hits many not-yet-seen hosts (often ~1 s per host).
+    ///     </para>
+    /// </summary>
+    public void ApplyFastColdStartLeafSettings()
+    {
+        CertificateEngine = CertificateEngine.BouncyCastleFast;
+        LeafCertificateKeyAlgorithm = CertificateKeyAlgorithm.EcdsaP256;
+        SaveFakeCertificates = true;
+    }
 
     /// <summary>
     ///     The fake certificate cache storage.
@@ -1211,6 +1229,10 @@ public sealed class CertificateManager : IDisposable
             // localMachine\Root
             InstallCertificate(StoreName.Root, StoreLocation.LocalMachine);
         }
+
+        // On macOS/Linux, also trust for SSL in Keychain / NSS so browsers accept MITM.
+        if (!RunTime.IsWindows && RootCertificate != null)
+            Helpers.UnixCertificateTrust.TrustUserSsl(RootCertificate, RootCertificateName);
     }
 
     /// <summary>
@@ -1224,14 +1246,21 @@ public sealed class CertificateManager : IDisposable
     /// <returns>True if success.</returns>
     public bool TrustRootCertificateAsAdmin(bool machineTrusted = false)
     {
-        if (!RunTime.IsWindows) return false;
-
         var certificate = RootCertificate;
         if (certificate == null) return false;
 
         // currentUser\Personal + currentUser\Root (machine elevation is only needed for LocalMachine).
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
         InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
+
+        if (!RunTime.IsWindows)
+        {
+            Helpers.UnixCertificateTrust.TrustUserSsl(certificate, RootCertificateName);
+            // Explicit true when only user-store trust was requested (no machine step).
+            return machineTrusted
+                ? Helpers.UnixCertificateTrust.TrustMachineSsl(certificate, RootCertificateName)
+                : true; // NOSONAR S1125
+        }
 
         // certutil.exe only accepts the PFX password via a plain "-p password" command-line argument -
         // it has no file/stdin-based alternative (confirmed: no documented option to read it from a
@@ -1361,6 +1390,9 @@ public sealed class CertificateManager : IDisposable
             // localMachine\Root
             UninstallCertificate(StoreName.Root, StoreLocation.LocalMachine, RootCertificate);
         }
+
+        if (!RunTime.IsWindows && RootCertificate != null)
+            Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
     }
 
     /// <summary>
@@ -1369,11 +1401,19 @@ public sealed class CertificateManager : IDisposable
     /// <returns>Should also remove from machine store?</returns>
     public bool RemoveTrustedRootCertificateAsAdmin(bool machineTrusted = false)
     {
-        if (!RunTime.IsWindows) return false;
-
         // currentUser\Personal + currentUser\Root
         UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
         UninstallCertificate(StoreName.Root, StoreLocation.CurrentUser, RootCertificate);
+
+        if (!RunTime.IsWindows)
+        {
+            if (RootCertificate == null) return false;
+            Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
+            // Explicit true when only user-store untrust was requested (no machine step).
+            return machineTrusted
+                ? Helpers.UnixCertificateTrust.UntrustMachineSsl(RootCertificate, RootCertificateName)
+                : true; // NOSONAR S1125
+        }
 
         var infos = new List<ProcessStartInfo>();
         if (!machineTrusted)

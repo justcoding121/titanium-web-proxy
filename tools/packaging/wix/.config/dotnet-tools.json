@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "wix": {
+      "version": "5.0.2",
+      "commands": [
+        "wix"
+      ]
+    }
+  }
+}

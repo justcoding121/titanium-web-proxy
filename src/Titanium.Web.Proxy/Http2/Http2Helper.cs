@@ -4243,42 +4243,13 @@ namespace Titanium.Web.Proxy.Http2
             return true;
         }
 
-        /// <summary>
-        ///     Appends append-only MITM header literals without indexing on a HEADER_TABLE_SIZE=0 block
-        ///     (no Decoder round-trip). Uses one allocation for the whole batch.
-        /// </summary>
-        private static byte[] AppendAddedLiteralsToStaticHpackBlock(
-            byte[] block, MitmCompressedRelayHelper.AddedHeaderBuffer added) =>
-            AppendAddedLiteralsToStaticHpackBlock(block, BuildStaticLiteralAppendSuffix(added, null, null));
-
-        private static byte[] AppendAddedLiteralsToStaticHpackBlock(byte[] block, byte[]? appendSuffix)
-        {
-            if (appendSuffix == null || appendSuffix.Length == 0)
-                return block;
-
-            var result = new byte[block.Length + appendSuffix.Length];
-            Buffer.BlockCopy(block, 0, result, 0, block.Length);
-            Buffer.BlockCopy(appendSuffix, 0, result, block.Length, appendSuffix.Length);
-            return result;
-        }
-
-        private static byte[] AppendOneLiteralToStaticHpackBlock(byte[] block, string name, string value) =>
-            AppendAddedLiteralsToStaticHpackBlock(block, SingleAddedHeader(name, value));
-
-        private static MitmCompressedRelayHelper.AddedHeaderBuffer SingleAddedHeader(string name, string value)
-        {
-            var added = default(MitmCompressedRelayHelper.AddedHeaderBuffer);
-            added.Add(name, value);
-            return added;
-        }
-
         private static int GetStaticLiteralAppendSize(int nameLength, int valueLength) =>
             1 + GetHpackStringLiteralEncodedSize(nameLength) + GetHpackStringLiteralEncodedSize(valueLength);
 
         private static int GetHpackStringLiteralEncodedSize(int byteLength) =>
-            byteLength < 127 ? 1 + byteLength : WriteHpackPrefixedIntSize(0x00, 7, (ulong)byteLength) + byteLength;
+            byteLength < 127 ? 1 + byteLength : WriteHpackPrefixedIntSize(7, (ulong)byteLength) + byteLength;
 
-        private static int WriteHpackPrefixedIntSize(byte patternByte, int prefixBits, ulong value)
+        private static int WriteHpackPrefixedIntSize(int prefixBits, ulong value)
         {
             var mask = (uint)((1 << prefixBits) - 1);
             if (value < mask)
@@ -4309,13 +4280,6 @@ namespace Titanium.Web.Proxy.Http2
             for (var i = 0; i < value.Length; i++)
                 dest[written + i] = (byte)value[i];
             return written + value.Length;
-        }
-
-        private static int WriteHpackStringLiteral(Span<byte> dest, ReadOnlySpan<byte> bytes)
-        {
-            var written = WriteHpackPrefixedInt(dest, 0x00, 7, (ulong)bytes.Length);
-            bytes.CopyTo(dest.Slice(written));
-            return written + bytes.Length;
         }
 
         private static int WriteHpackPrefixedInt(Span<byte> dest, byte patternByte, int prefixBits, ulong value)

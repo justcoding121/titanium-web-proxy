@@ -102,6 +102,11 @@ Classes
       <h4><a class="xref" href="Titanium.Web.Proxy.Http.KnownHeaders.html">KnownHeaders</a></h4>
       <section><p>Well known http headers.</p>
 </section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Http.ProxyResults.html">ProxyResults</a></h4>
+      <section><p>Factory methods that build synthetic <a class="xref" href="Titanium.Web.Proxy.Http.Response.html">Response</a> or <a class="xref" href="Titanium.Web.Proxy.Http.StreamingProxyResult.html">StreamingProxyResult</a>
+objects for use with <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_Respond_Titanium_Web_Proxy_Http_Response_System_Boolean_">Respond(Response, bool)</a> and
+<a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_RespondStreaming_Titanium_Web_Proxy_Http_StreamingProxyResult_System_Boolean_">RespondStreaming(StreamingProxyResult, bool)</a>.</p>
+</section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Http.Request.html">Request</a></h4>
       <section><p>Http(s) request object</p>
 </section>
@@ -120,6 +125,11 @@ dictionary's values in turn - the same effective order as the previous
 <code>Concat(...SelectMany(...))</code> implementation - without allocating any LINQ iterator
 objects. See the remarks on <a class="xref" href="Titanium.Web.Proxy.Http.HeaderCollection.html#Titanium_Web_Proxy_Http_HeaderCollection_GetEnumerator">GetEnumerator()</a> for why this is worth a hand-written
 enumerator instead of the equivalent LINQ expression.</p>
+</section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Http.StreamingProxyResult.html">StreamingProxyResult</a></h4>
+      <section><p>Pairs a synthetic response (status and headers) with a delegate that writes the body on the fly.
+Pass to <a class="xref" href="Titanium.Web.Proxy.EventArguments.SessionEventArgs.html#Titanium_Web_Proxy_EventArguments_SessionEventArgs_RespondStreaming_Titanium_Web_Proxy_Http_StreamingProxyResult_System_Boolean_">RespondStreaming(StreamingProxyResult, bool)</a> to
+stream without buffering the whole body in memory.</p>
 </section>
     <h3 id="enums">
 Enums

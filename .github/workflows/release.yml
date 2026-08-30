@@ -1,0 +1,397 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'stable or beta'
+        required: true
+        default: 'stable'
+
+permissions:
+  contents: read
+
+jobs:
+  resolve-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      release_tag: ${{ steps.v.outputs.tag }}
+      version: ${{ steps.v.outputs.version }}
+      channel: ${{ steps.v.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: v
+        name: Resolve release tag / channel
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+            CHANNEL=stable
+            if [[ "$VERSION" == *beta* || "$VERSION" == *-* ]]; then CHANNEL=beta; fi
+          else
+            CHANNEL="${{ github.event.inputs.channel || 'stable' }}"
+            PREFIX=$(grep -oP '(?<=<VersionPrefix>)[^<]+' src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj | head -n1)
+            if [[ -z "$PREFIX" ]]; then echo "VersionPrefix not found"; exit 1; fi
+            if [[ "$CHANNEL" == "beta" ]]; then
+              VERSION="${PREFIX}-beta"
+            else
+              VERSION="$PREFIX"
+            fi
+            TAG="v${VERSION}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag=$TAG version=$VERSION channel=$CHANNEL"
+
+  test:
+    needs: resolve-version
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+      - name: Test
+        run: |
+          dotnet test src/Titanium.Web.Proxy.sln -c Release --nologo --filter "TestCategory!=Slow&TestCategory!=E2E-UI-Window"
+          # Product release also requires Headless/Visual/Plus dashboard (same gates as ui-portable).
+          dotnet build tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj -c Release
+          pwsh tests/Titanium.E2E.Tests/bin/Release/net10.0/playwright.ps1 install chromium
+          dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj -c Release --no-build --filter "TestCategory=E2E-UI-Headless|TestCategory=E2E-UI-Visual|TestCategory=E2E-UI-Plus-Dashboard"
+
+
+  build-cli:
+    needs: [resolve-version, test]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            os: ubuntu-latest
+          - rid: linux-arm64
+            os: ubuntu-latest
+          - rid: linux-musl-x64
+            os: ubuntu-latest
+          - rid: linux-musl-arm64
+            os: ubuntu-latest
+          - rid: win-x64
+            os: ubuntu-latest
+          - rid: osx-x64
+            os: macos-latest
+          - rid: osx-arm64
+            os: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+      - uses: actions/cache@v4
+        with:
+          path: tools/packaging/.cache/http3-natives
+          key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-${{ matrix.rid }}
+          restore-keys: |
+            http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-
+      - name: Publish Cli
+        shell: pwsh
+        run: |
+          $rid = "${{ matrix.rid }}"
+          $out = "artifacts/cli/$rid"
+          dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r $rid --self-contained true -o $out
+          if (Test-Path "$out/titanium.exe") {
+            Copy-Item "$out/titanium.exe" "$out/twp.exe"
+          } elseif (Test-Path "$out/titanium") {
+            Copy-Item "$out/titanium" "$out/twp"
+          }
+          ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
+          if ($IsWindows) {
+            Compress-Archive -Path "$out/*" -DestinationPath "Titanium.Cli-$rid.zip"
+          } else {
+            Push-Location $out
+            try { zip -r "../../../Titanium.Cli-$rid.zip" . } finally { Pop-Location }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.rid }}
+          path: Titanium.Cli-${{ matrix.rid }}.zip
+
+  build-plus:
+    needs: [resolve-version, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+      - name: Build Plus
+        env:
+          RELEASE_TAG: ${{ needs.resolve-version.outputs.release_tag }}
+        run: |
+          dotnet build src/Titanium.Plus/Titanium.Plus.csproj -c Release -o artifacts/plus
+          cp artifacts/plus/Titanium.Plus.dll "Titanium.Plus-${RELEASE_TAG}.dll"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plus
+          path: Titanium.Plus-*.dll
+
+  build-inspector:
+    needs: [resolve-version, test]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+            msi: true
+          - rid: linux-x64
+            os: ubuntu-latest
+            msi: false
+          - rid: linux-arm64
+            os: ubuntu-latest
+            msi: false
+          - rid: linux-musl-x64
+            os: ubuntu-latest
+            msi: false
+          - rid: linux-musl-arm64
+            os: ubuntu-latest
+            msi: false
+          - rid: osx-x64
+            os: macos-latest
+            msi: false
+          - rid: osx-arm64
+            os: macos-latest
+            msi: false
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+      - uses: actions/cache@v4
+        with:
+          path: tools/packaging/.cache/http3-natives
+          key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-${{ matrix.rid }}
+          restore-keys: |
+            http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-
+      - name: Publish Inspector
+        shell: pwsh
+        run: |
+          $rid = "${{ matrix.rid }}"
+          $out = "artifacts/inspector/$rid"
+          dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r $rid --self-contained true -o $out
+          ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
+          Copy-Item -Force tools/packaging/THIRD-PARTY-INSPECTOR.txt (Join-Path $out "THIRD-PARTY-INSPECTOR.txt")
+          if ($IsWindows) {
+            Compress-Archive -Path "$out/*" -DestinationPath "TitaniumInspector-$rid.zip"
+          } else {
+            Push-Location $out
+            try { zip -r "../../../TitaniumInspector-$rid.zip" . } finally { Pop-Location }
+          }
+      - name: Build MSI (WiX)
+        if: matrix.msi
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          $ver = $env:RELEASE_VERSION
+          if ($ver -notmatch '^\d+\.\d+\.\d+') { $ver = "7.0.0" }
+          $ver = ($ver -split "-")[0]
+          ./tools/packaging/build-inspector-msi.ps1 `
+            -PayloadDir artifacts/inspector/win-x64 `
+            -OutputMsi TitaniumInspector-win-x64.msi `
+            -Version $ver
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inspector-${{ matrix.rid }}
+          if-no-files-found: error
+          path: |
+            TitaniumInspector-${{ matrix.rid }}.zip
+      - uses: actions/upload-artifact@v4
+        if: matrix.msi
+        with:
+          name: inspector-${{ matrix.rid }}-msi
+          path: TitaniumInspector-${{ matrix.rid }}.msi
+
+  smoke-http3:
+    needs: build-cli
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            container: ""
+          - rid: linux-musl-x64
+            container: alpine:3.24
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-${{ matrix.rid }}
+          path: dist
+      - name: Smoke QuicListener (host ubuntu / glibc)
+        if: matrix.container == ''
+        run: |
+          set -euo pipefail
+          unzip -q dist/Titanium.Cli-${{ matrix.rid }}.zip -d cli
+          chmod +x cli/titanium
+          # Soft probe: http3-deps status exits 0 and prints IsSupported
+          ./cli/titanium http3-deps status | tee smoke-out.txt
+          grep -qi 'IsSupported' smoke-out.txt
+          # Bundled natives must be present for glibc zip
+          test -e cli/libmsquic.so -o -e cli/libmsquic.so.2 -o -e cli/libmsquic.so.2.6.0
+      - name: Smoke QuicListener (Alpine musl container)
+        if: matrix.container != ''
+        uses: addnab/docker-run-action@4f65fabd2431ebc8d299f8e5a018d79a769ae185 # v3
+        with:
+          image: ${{ matrix.container }}
+          options: -v ${{ github.workspace }}/dist:/dist
+          run: |
+            set -euo pipefail
+            apk add --no-cache unzip libstdc++ libgcc icu-libs
+            unzip -q /dist/Titanium.Cli-${{ matrix.rid }}.zip -d /cli
+            chmod +x /cli/titanium
+            /cli/titanium http3-deps status | tee /cli/smoke-out.txt
+            grep -qi 'IsSupported' /cli/smoke-out.txt
+            test -e /cli/libmsquic.so -o -e /cli/libmsquic.so.2 -o -e /cli/libmsquic.so.2.5.7
+
+  publish-release:
+    needs: [resolve-version, build-cli, build-plus, build-inspector, smoke-http3]
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Build release-manifest and create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.resolve-version.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
+          RELEASE_CHANNEL: ${{ needs.resolve-version.outputs.channel }}
+        run: |
+          set -euo pipefail
+          TAG="$RELEASE_TAG"
+          VERSION="$RELEASE_VERSION"
+          CHANNEL="$RELEASE_CHANNEL"
+          export RELEASE_TAG VERSION
+          mkdir -p dist
+          find artifacts -type f \( -name '*.zip' -o -name '*.dll' -o -name '*.msi' \) -exec cp {} dist/ \;
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, datetime
+          tag = os.environ["RELEASE_TAG"]
+          version = os.environ["VERSION"]
+          channel = "beta" if ("-" in version or "beta" in version.lower()) else "stable"
+          dist = pathlib.Path("dist")
+          def sha(p):
+            h = hashlib.sha256()
+            h.update(p.read_bytes())
+            return h.hexdigest()
+          assets = {}
+          for p in dist.iterdir():
+            assets[p.name] = {"path": str(p), "sha256": sha(p)}
+          manifest = {
+            "version": version,
+            "channel": channel,
+            "releasedUtc": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "abstractionsVersion": version.split("-")[0],
+            "products": {
+              "cli": {"assets": {}},
+              "plus": {"requiredAbstractions": "7.0.0", "asset": None},
+              "inspector": {"assets": {}},
+            },
+            "nuget": {
+              "Titanium.Web.Proxy": version.split("-")[0],
+              "Titanium.Web.Proxy.Abstractions": version.split("-")[0],
+              "Titanium.Web.Proxy.Configuration": version.split("-")[0],
+            },
+          }
+          for name, meta in assets.items():
+            url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{tag}/{name}"
+            entry = {"url": url, "sha256": meta["sha256"]}
+            if name.startswith("Titanium.Cli-"):
+              rid = name.removeprefix("Titanium.Cli-").removesuffix(".zip")
+              manifest["products"]["cli"]["assets"][rid] = entry
+            elif name.startswith("TitaniumInspector-") and name.endswith(".msi"):
+              manifest["products"]["inspector"]["assets"]["win-x64-msi"] = entry
+            elif name.startswith("TitaniumInspector-"):
+              rid = name.removeprefix("TitaniumInspector-").removesuffix(".zip")
+              manifest["products"]["inspector"]["assets"][rid] = entry
+            elif name.startswith("Titanium.Plus"):
+              manifest["products"]["plus"]["asset"] = entry
+          pathlib.Path("dist/release-manifest.json").write_text(json.dumps(manifest, indent=2))
+          print(json.dumps(manifest, indent=2))
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG" --force
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release delete "$TAG" --yes --cleanup-tag || true
+            git tag -f -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+            git push origin "refs/tags/$TAG" --force
+          fi
+          PRE=""
+          if [[ "$CHANNEL" == "beta" ]]; then PRE="--prerelease"; fi
+          gh release create "$TAG" dist/* \
+            --title "$TAG" \
+            --generate-notes \
+            --target "$GITHUB_SHA" \
+            $PRE
+          # When GitHub finds no PR merges, --generate-notes is only a compare link.
+          # Fall back to commit-subject bullets from the previous different-SHA release tag.
+          BODY="$(gh release view "$TAG" --json body -q .body 2>/dev/null || true)"
+          if [[ "$BODY" != *"What's Changed"* ]]; then
+            CUR_SHA="$(git rev-parse "${TAG}^{commit}" 2>/dev/null || echo "$GITHUB_SHA")"
+            RANGE_PREV=""
+            while read -r cand; do
+              [[ -z "$cand" || "$cand" == "$TAG" ]] && continue
+              cs="$(git rev-parse "${cand}^{commit}" 2>/dev/null || true)"
+              [[ -n "$cs" && "$cs" != "$CUR_SHA" ]] || continue
+              if git merge-base --is-ancestor "$cs" "$CUR_SHA" 2>/dev/null; then
+                RANGE_PREV="$cand"
+                break
+              fi
+            done < <(gh release list --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName')
+            NOTES_FILE="$(mktemp)"
+            {
+              echo "## What's Changed"
+              if [[ -n "$RANGE_PREV" ]]; then
+                git log --no-merges --pretty=format:'* %s' "${RANGE_PREV}..${TAG}"
+                echo ""
+                echo ""
+                echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${RANGE_PREV}...${TAG}"
+              else
+                echo "* See repository history for this tag."
+              fi
+            } > "$NOTES_FILE"
+            if grep -q '^\* ' "$NOTES_FILE"; then
+              gh release edit "$TAG" --notes-file "$NOTES_FILE"
+            fi
+            rm -f "$NOTES_FILE"
+          fi

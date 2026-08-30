@@ -14,7 +14,7 @@ Directory.CreateDirectory(logDirectory);
 #if DEBUG
 const LogEventLevel minimumLevel = LogEventLevel.Verbose;
 #else
-const LogEventLevel minimumLevel = LogEventLevel.Information;
+const LogEventLevel minimumLevel = LogEventLevel.Warning;
 #endif
 
 const string timestampedTemplate =
