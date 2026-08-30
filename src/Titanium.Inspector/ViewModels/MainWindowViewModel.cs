@@ -189,6 +189,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         _selectedSessions.Clear();
         _selectedSessions.AddRange(selected);
+        NotifyFilterSelectionProperties();
     }
 
     /// <summary>
@@ -635,28 +636,29 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private async Task CopyUrlAsync()
     {
-        var url = ResolveCopyUrl();
-        if (string.IsNullOrEmpty(url))
+        var urls = ResolveCopyUrls();
+        if (urls.Count == 0)
         {
-            StatusText = "Select a session to copy URL";
+            StatusText = "Select a session with a URL to copy";
             return;
         }
 
+        var text = string.Join(Environment.NewLine, urls);
         var window = TryGetMainWindow();
         if (window?.Clipboard is { } clipboard)
         {
-            await clipboard.SetTextAsync(url);
+            await clipboard.SetTextAsync(text);
         }
 
-        StatusText = "Copied URL";
+        StatusText = urls.Count == 1 ? "Copied URL" : $"Copied {urls.Count} URLs";
     }
 
     private Task FilterByHostAsync()
     {
-        var host = ResolveFilterHost();
+        var host = ResolveUnanimousFilterHost();
         if (string.IsNullOrEmpty(host))
         {
-            StatusText = "Select a session with a host to filter";
+            StatusText = "Filter by host needs one shared host in the selection";
             return Task.CompletedTask;
         }
 
@@ -667,10 +669,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private Task FilterByProcessAsync()
     {
-        var process = ResolveFilterProcess();
+        var process = ResolveUnanimousFilterProcess();
         if (string.IsNullOrEmpty(process))
         {
-            StatusText = "Select a session with a process to filter";
+            StatusText = "Filter by process needs one shared process in the selection";
             return Task.CompletedTask;
         }
 
@@ -679,14 +681,93 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
-    private string? ResolveFilterHost()
+    /// <summary>True when selection shares one non-empty host (single or multi-select).</summary>
+    public bool CanFilterByHost => ResolveUnanimousFilterHost() is not null;
+
+    /// <summary>True when selection shares one non-empty process (single or multi-select).</summary>
+    public bool CanFilterByProcess => ResolveUnanimousFilterProcess() is not null;
+
+    /// <summary>True when at least one session is selected.</summary>
+    public bool HasSelectedSessions => ResolveFilterSelection().Count > 0;
+
+    /// <summary>True when exactly one session is selected (Replay / Composer).</summary>
+    public bool HasSingleSelectedSession => ResolveFilterSelection().Count == 1;
+
+    /// <summary>True when at least one selected session has a URL to copy.</summary>
+    public bool CanCopyUrl => ResolveCopyUrls().Count > 0;
+
+    private string? ResolveUnanimousFilterHost()
     {
-        var session = SelectedSession ?? _selectedSessions.FirstOrDefault();
-        if (session is null)
+        var selection = ResolveFilterSelection();
+        if (selection.Count == 0)
         {
             return null;
         }
 
+        string? host = null;
+        foreach (var session in selection)
+        {
+            var value = ResolveSessionHost(session);
+            if (string.IsNullOrEmpty(value))
+            {
+                return null;
+            }
+
+            if (host is null)
+            {
+                host = value;
+            }
+            else if (!host.Equals(value, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+        }
+
+        return host;
+    }
+
+    private string? ResolveUnanimousFilterProcess()
+    {
+        var selection = ResolveFilterSelection();
+        if (selection.Count == 0)
+        {
+            return null;
+        }
+
+        string? process = null;
+        foreach (var session in selection)
+        {
+            var value = ResolveSessionProcess(session);
+            if (string.IsNullOrEmpty(value))
+            {
+                return null;
+            }
+
+            if (process is null)
+            {
+                process = value;
+            }
+            else if (!process.Equals(value, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+        }
+
+        return process;
+    }
+
+    private IReadOnlyList<SessionSnapshot> ResolveFilterSelection()
+    {
+        if (_selectedSessions.Count > 0)
+        {
+            return _selectedSessions;
+        }
+
+        return SelectedSession is null ? Array.Empty<SessionSnapshot>() : [SelectedSession];
+    }
+
+    private static string? ResolveSessionHost(SessionSnapshot session)
+    {
         if (!string.IsNullOrWhiteSpace(session.Host))
         {
             return session.Host.Trim();
@@ -697,14 +778,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             : null;
     }
 
-    private string? ResolveFilterProcess()
+    private static string? ResolveSessionProcess(SessionSnapshot session)
     {
-        var session = SelectedSession ?? _selectedSessions.FirstOrDefault();
-        if (session is null)
-        {
-            return null;
-        }
-
         if (!string.IsNullOrWhiteSpace(session.ProcessName))
         {
             return session.ProcessName.Trim();
@@ -713,22 +788,33 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return session.ProcessId > 0 ? session.ProcessId.ToString() : null;
     }
 
-    private string? ResolveCopyUrl()
+    private void NotifyFilterSelectionProperties()
     {
-        if (!string.IsNullOrEmpty(SelectedSession?.Url))
-        {
-            return SelectedSession!.Url;
-        }
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanFilterByHost)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanFilterByProcess)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSelectedSessions)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSingleSelectedSession)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCopyUrl)));
+    }
 
-        foreach (var snap in _selectedSessions)
+    private IReadOnlyList<string> ResolveCopyUrls()
+    {
+        var urls = new List<string>();
+        foreach (var snap in ResolveFilterSelection())
         {
             if (!string.IsNullOrEmpty(snap.Url))
             {
-                return snap.Url;
+                urls.Add(snap.Url);
             }
         }
 
-        return null;
+        return urls;
+    }
+
+    private string? ResolveCopyUrl()
+    {
+        var urls = ResolveCopyUrls();
+        return urls.Count > 0 ? urls[0] : null;
     }
 
     private Task AddAutoResponderRuleAsync()
@@ -1186,6 +1272,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSelectedSession)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowInspectEmpty)));
+            NotifyFilterSelectionProperties();
 
             if (value is not null)
             {

@@ -235,6 +235,29 @@ public class ExportAndSystemProxyCoverageTests
             await ExecuteAsync(vm.FilterByProcessCommand);
             Assert.AreEqual("host:example.com process:chrome", vm.SearchQuery);
             StringAssert.Contains(vm.StatusText, "process:chrome");
+            Assert.IsTrue(vm.CanFilterByHost);
+            Assert.IsTrue(vm.CanFilterByProcess);
+            Assert.IsTrue(vm.HasSingleSelectedSession);
+            Assert.IsTrue(vm.HasSelectedSessions);
+            Assert.IsTrue(vm.CanCopyUrl);
+
+            var otherHost = new SessionSnapshot
+            {
+                Id = 43,
+                Method = "GET",
+                Url = "https://other.test/",
+                Host = "other.test",
+                ProcessName = "chrome",
+                ProcessId = 99,
+            };
+            vm.SeedSession(otherHost);
+            vm.SetSelectedSessions([snap, otherHost]);
+            Assert.IsFalse(vm.CanFilterByHost);
+            Assert.IsTrue(vm.CanFilterByProcess);
+            Assert.IsFalse(vm.HasSingleSelectedSession);
+            Assert.IsTrue(vm.HasSelectedSessions);
+            Assert.IsTrue(vm.CanCopyUrl);
+            vm.SetSelectedSessions([snap]);
             vm.SearchQuery = "";
 
             await ExecuteAsync(vm.ClearSessionsCommand);

@@ -146,17 +146,32 @@
                 AutoGenerateColumns="False">
         <DataGrid.ContextMenu>
           <ContextMenu AutomationProperties.AutomationId="SessionsContextMenu">
-            <MenuItem Header="Replay" Command="{Binding ReplayCommand}" AutomationProperties.AutomationId="CtxReplay" />
-            <MenuItem Header="Load into Composer" Command="{Binding LoadIntoComposerCommand}" AutomationProperties.AutomationId="CtxLoadComposer" />
-            <Separator />
-            <MenuItem Header="Export selected HAR…" Command="{Binding ExportSelectedHarCommand}" AutomationProperties.AutomationId="CtxExportSelectedHar" />
-            <MenuItem Header="Export selected archive…" Command="{Binding ExportSelectedArchiveCommand}" AutomationProperties.AutomationId="CtxExportSelectedArchive" />
-            <Separator />
-            <MenuItem Header="Copy URL" Command="{Binding CopyUrlCommand}" AutomationProperties.AutomationId="CtxCopyUrl" />
-            <MenuItem Header="Filter by host" Command="{Binding FilterByHostCommand}" AutomationProperties.AutomationId="CtxFilterByHost" />
-            <MenuItem Header="Filter by process" Command="{Binding FilterByProcessCommand}" AutomationProperties.AutomationId="CtxFilterByProcess" />
-            <Separator />
+            <MenuItem Header="Replay" Command="{Binding ReplayCommand}"
+                      IsVisible="{Binding HasSingleSelectedSession}"
+                      AutomationProperties.AutomationId="CtxReplay" />
+            <MenuItem Header="Load into Composer" Command="{Binding LoadIntoComposerCommand}"
+                      IsVisible="{Binding HasSingleSelectedSession}"
+                      AutomationProperties.AutomationId="CtxLoadComposer" />
+            <Separator IsVisible="{Binding HasSingleSelectedSession}" />
+            <MenuItem Header="Export selected HAR…" Command="{Binding ExportSelectedHarCommand}"
+                      IsVisible="{Binding HasSelectedSessions}"
+                      AutomationProperties.AutomationId="CtxExportSelectedHar" />
+            <MenuItem Header="Export selected archive…" Command="{Binding ExportSelectedArchiveCommand}"
+                      IsVisible="{Binding HasSelectedSessions}"
+                      AutomationProperties.AutomationId="CtxExportSelectedArchive" />
+            <Separator IsVisible="{Binding HasSelectedSessions}" />
+            <MenuItem Header="Copy URL" Command="{Binding CopyUrlCommand}"
+                      IsVisible="{Binding CanCopyUrl}"
+                      AutomationProperties.AutomationId="CtxCopyUrl" />
+            <MenuItem Header="Filter by host" Command="{Binding FilterByHostCommand}"
+                      IsVisible="{Binding CanFilterByHost}"
+                      AutomationProperties.AutomationId="CtxFilterByHost" />
+            <MenuItem Header="Filter by process" Command="{Binding FilterByProcessCommand}"
+                      IsVisible="{Binding CanFilterByProcess}"
+                      AutomationProperties.AutomationId="CtxFilterByProcess" />
+            <Separator IsVisible="{Binding HasSelectedSessions}" />
             <MenuItem Header="Remove selected" Command="{Binding RemoveSelectedSessionsCommand}"
+                      IsVisible="{Binding HasSelectedSessions}"
                       AutomationProperties.AutomationId="CtxRemoveSelected" />
           </ContextMenu>
         </DataGrid.ContextMenu>
