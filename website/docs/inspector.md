@@ -21,6 +21,8 @@ winget install justcoding121.TitaniumInspector
 
 Default bind is typically `127.0.0.1:8866`. HTTPS stays opaque CONNECT tunnels until **Decrypt HTTPS** is enabled.
 
+Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs, **Debug file logging**) show a check when on. Turning on debug file logging also writes the log path to the status bar.
+
 ## Right pane: Inspect vs Tools
 
 The right pane has two outer tabs:
@@ -90,7 +92,7 @@ Notes:
 ## Other features
 
 - Session grid: method, status, host, URL, protocol, duration, TTFB, size, process
-- HAR import/export, archive, replay
+- HAR / archive: Export all writes every captured session; Export selected writes the grid multi-selection. Import appends sessions from the file. Replay selected session.
 - System proxy and root CA install / untrust / export / device setup
 - Search (`method:GET status:200 host:example is:ws`)
 - Optional Plus panels when `Titanium.Plus.dll` is present

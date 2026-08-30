@@ -13,8 +13,10 @@ public class AutomationIdCoverageHeadlessTests
         "MainMenu",
         "MenuFile",
         "MenuExportHar",
+        "MenuExportSelectedHar",
         "MenuImportHar",
         "MenuExportArchive",
+        "MenuExportSelectedArchive",
         "MenuImportArchive",
         "MenuCapture",
         "MenuStartCapture",
@@ -141,8 +143,14 @@ public class AutomationIdCoverageHeadlessTests
 
             fx.Robot.SetCheck("CapturingCheck", false);
             Assert.IsFalse(fx.ViewModel.Capturing);
-            fx.Robot.Click("MenuToggleCapturing");
+            fx.Robot.SetCheck("MenuToggleCapturing", true);
             Assert.IsTrue(fx.ViewModel.Capturing);
+
+            var debugWasOn = fx.ViewModel.DebugFileLogging;
+            fx.Robot.SetCheck("MenuDebugLog", !debugWasOn);
+            Assert.AreEqual(!debugWasOn, fx.ViewModel.DebugFileLogging);
+            fx.Robot.SetCheck("MenuDebugLog", debugWasOn);
+            Assert.AreEqual(debugWasOn, fx.ViewModel.DebugFileLogging);
         });
 
         await fx.DispatchAsync(async () =>
@@ -225,7 +233,7 @@ public class AutomationIdCoverageHeadlessTests
         fx.PathPicker.SavePath = zip;
         await fx.DispatchAsync(() =>
         {
-            fx.ViewModel.Sessions.Add(new SessionSnapshot
+            fx.ViewModel.SeedSession(new SessionSnapshot
             {
                 Id = 5,
                 Method = "GET",
@@ -240,10 +248,15 @@ public class AutomationIdCoverageHeadlessTests
         {
             Assert.IsTrue(fx.PathPicker.SaveCalls >= 1);
             Assert.IsTrue(File.Exists(zip));
+            StringAssert.Contains(fx.ViewModel.StatusText, "Exported 1 sessions");
         });
         fx.PathPicker.OpenPath = zip;
         await fx.DispatchAsync(() => fx.Robot.Click("MenuImportArchive"));
-        await fx.DispatchAsync(() => Assert.IsTrue(fx.PathPicker.OpenCalls >= 1));
+        await fx.DispatchAsync(() =>
+        {
+            Assert.IsTrue(fx.PathPicker.OpenCalls >= 1);
+            StringAssert.Contains(fx.ViewModel.StatusText, "Appended");
+        });
         try { File.Delete(zip); } catch { /* ignore */ }
     }
 }

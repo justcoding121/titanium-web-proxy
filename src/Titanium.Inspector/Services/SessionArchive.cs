@@ -214,7 +214,7 @@ public static class SessionArchive
         }
 
         reqHeaders = FormatHarHeaders(req);
-        if (req.TryGetProperty("postData", out var post))
+        if (req.TryGetProperty("postData", out var post) && post.ValueKind == JsonValueKind.Object)
         {
             if (post.TryGetProperty("text", out var pt))
             {

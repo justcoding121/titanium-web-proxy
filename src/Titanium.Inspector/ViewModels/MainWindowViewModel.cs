@@ -24,6 +24,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly IInspectorDialogs _dialogs;
     private readonly IInspectorPathPicker _pathPicker;
     private readonly ObservableCollection<SessionSnapshot> _all = new();
+    private readonly List<SessionSnapshot> _selectedSessions = new();
     private string _statusText = "Ready";
     private string _searchQuery = "";
     private SessionSnapshot? _selected;
@@ -35,6 +36,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private bool _systemProxy;
     private bool _autoStartCapture = true;
     private bool _autoSystemProxyOnStart = true;
+    private bool _debugFileLogging;
     /// <summary>Prefs as loaded from disk — used for auto-start so MenuItem binding cannot clobber before Opened.</summary>
     private bool _launchAutoStartCapture = true;
     private bool _launchAutoSystemProxyOnStart = true;
@@ -87,8 +89,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         CheckForUpdatesCommand = new RelayCommand(async () => await CheckUpdatesAsync());
         ExportHarCommand = new RelayCommand(async () => await ExportHarAsync());
+        ExportSelectedHarCommand = new RelayCommand(async () => await ExportSelectedHarAsync());
         ImportHarCommand = new RelayCommand(async () => await ImportHarAsync());
         ExportArchiveCommand = new RelayCommand(async () => await ExportArchiveAsync());
+        ExportSelectedArchiveCommand = new RelayCommand(async () => await ExportSelectedArchiveAsync());
         ImportArchiveCommand = new RelayCommand(async () => await ImportArchiveAsync());
         StartCaptureCommand = new RelayCommand(async () => await StartCaptureAsync());
         StopCaptureCommand = new RelayCommand(StopCaptureAsync);
@@ -155,6 +159,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     /// <summary>Exposed for E2E / headless tests.</summary>
     public IInspectorPathPicker PathPicker => _pathPicker;
+
+    /// <summary>Exposed for E2E / headless tests — seeds the in-memory capture list.</summary>
+    public void SeedSession(SessionSnapshot snapshot)
+    {
+        _registry.Add(snapshot);
+        OnSessionAdded(snapshot);
+    }
+
+    /// <summary>Called from the session grid when Extended multi-select changes.</summary>
+    public void SetSelectedSessions(IReadOnlyList<SessionSnapshot> selected)
+    {
+        _selectedSessions.Clear();
+        _selectedSessions.AddRange(selected);
+    }
 
     /// <summary>
     /// After the main window is shown: optionally start capture and system proxy.
@@ -361,6 +379,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         _all.Clear();
         Sessions.Clear();
+        _selectedSessions.Clear();
         SelectedSession = null;
         StatusText = "Sessions cleared";
         return Task.CompletedTask;
@@ -544,8 +563,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public AutoResponderViewModel AutoResponder { get; }
     public ICommand CheckForUpdatesCommand { get; }
     public ICommand ExportHarCommand { get; }
+    public ICommand ExportSelectedHarCommand { get; }
     public ICommand ImportHarCommand { get; }
     public ICommand ExportArchiveCommand { get; }
+    public ICommand ExportSelectedArchiveCommand { get; }
     public ICommand ImportArchiveCommand { get; }
     public ICommand StartCaptureCommand { get; }
     public ICommand StopCaptureCommand { get; }
@@ -781,6 +802,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>When true, file logging is on at Debug level.</summary>
+    public bool DebugFileLogging
+    {
+        get => _debugFileLogging;
+        private set => SetField(ref _debugFileLogging, value);
+    }
+
     /// <summary>When true, MITM decrypts HTTPS; when false, tunnels stay CONNECT.</summary>
     public bool DecryptHttps
     {
@@ -973,8 +1001,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.ScriptOnResponse = _scriptOnResponse;
         _interception.IgnoreServerCertificateErrors = s.IgnoreServerCertificateErrors;
         _interception.DecryptHttps = _decryptHttps;
+        _debugFileLogging = IsDebugFileLoggingEnabled(s);
         _interception.ConfigureLogging(s);
     }
+
+    private static bool IsDebugFileLoggingEnabled(InspectorSettings s) =>
+        s.LoggingEnableFile &&
+        string.Equals(s.LoggingMinimumLevel, "Debug", StringComparison.OrdinalIgnoreCase);
 
     private void PersistAutoResponder()
     {
@@ -1095,8 +1128,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private Task ToggleDebugLoggingAsync()
     {
         var s = _settings.Current;
-        var enable = !s.LoggingEnableFile ||
-                     !string.Equals(s.LoggingMinimumLevel, "Debug", StringComparison.OrdinalIgnoreCase);
+        var enable = !IsDebugFileLoggingEnabled(s);
         s.LoggingEnabled = true;
         s.LoggingEnableFile = enable;
         s.LoggingMinimumLevel = enable ? "Debug" : "Error";
@@ -1109,6 +1141,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         _interception.ConfigureLogging(s);
         _settings.Save();
+        DebugFileLogging = enable;
         StatusText = enable
             ? $"Debug file logging on: {s.LoggingFilePath}"
             : "Debug file logging off (Error level, file sink disabled)";
@@ -1359,7 +1392,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private async Task ExportHarAsync()
     {
-        var path = await _pathPicker.PickSavePathAsync("Export HAR", "titanium-inspector.har", "HAR", "*.har");
+        if (_all.Count == 0)
+        {
+            StatusText = "No sessions to export";
+            return;
+        }
+
+        var path = await _pathPicker.PickSavePathAsync("Export all HAR", "titanium-inspector.har", "HAR", "*.har");
         if (path is null)
         {
             StatusText = "Export HAR cancelled";
@@ -1367,7 +1406,27 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         await SessionArchive.ExportHarAsync(_all, path);
-        StatusText = "Exported HAR: " + path;
+        StatusText = $"Exported {_all.Count} sessions to {path}";
+    }
+
+    private async Task ExportSelectedHarAsync()
+    {
+        var sessions = ResolveExportSelection();
+        if (sessions.Count == 0)
+        {
+            StatusText = "Select a session to export";
+            return;
+        }
+
+        var path = await _pathPicker.PickSavePathAsync("Export selected HAR", "titanium-inspector.har", "HAR", "*.har");
+        if (path is null)
+        {
+            StatusText = "Export HAR cancelled";
+            return;
+        }
+
+        await SessionArchive.ExportHarAsync(sessions, path);
+        StatusText = $"Exported {sessions.Count} sessions to {path}";
     }
 
     private async Task ImportHarAsync()
@@ -1396,12 +1455,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         ApplyFilter();
-        StatusText = $"Imported {imported.Count} sessions from {Path.GetFileName(path)}";
+        StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
     }
 
     private async Task ExportArchiveAsync()
     {
-        var path = await _pathPicker.PickSavePathAsync("Export archive", "titanium-inspector.zip", "ZIP", "*.zip");
+        if (_all.Count == 0)
+        {
+            StatusText = "No sessions to export";
+            return;
+        }
+
+        var path = await _pathPicker.PickSavePathAsync("Export all archive", "titanium-inspector.zip", "ZIP", "*.zip");
         if (path is null)
         {
             StatusText = "Export archive cancelled";
@@ -1409,7 +1474,27 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         await SessionArchive.ExportNativeArchiveAsync(_all, path);
-        StatusText = "Exported archive: " + path;
+        StatusText = $"Exported {_all.Count} sessions to {path}";
+    }
+
+    private async Task ExportSelectedArchiveAsync()
+    {
+        var sessions = ResolveExportSelection();
+        if (sessions.Count == 0)
+        {
+            StatusText = "Select a session to export";
+            return;
+        }
+
+        var path = await _pathPicker.PickSavePathAsync("Export selected archive", "titanium-inspector.zip", "ZIP", "*.zip");
+        if (path is null)
+        {
+            StatusText = "Export archive cancelled";
+            return;
+        }
+
+        await SessionArchive.ExportNativeArchiveAsync(sessions, path);
+        StatusText = $"Exported {sessions.Count} sessions to {path}";
     }
 
     private async Task ImportArchiveAsync()
@@ -1429,7 +1514,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         ApplyFilter();
-        StatusText = $"Imported {imported.Count} sessions from {Path.GetFileName(path)}";
+        StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
+    }
+
+    private IReadOnlyList<SessionSnapshot> ResolveExportSelection()
+    {
+        if (_selectedSessions.Count > 0)
+        {
+            return _selectedSessions.ToList();
+        }
+
+        return SelectedSession is null ? Array.Empty<SessionSnapshot>() : [SelectedSession];
     }
 
     private static string DescribePanel(object panel)

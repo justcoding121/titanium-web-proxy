@@ -37,6 +37,7 @@ public partial class MainWindow : Window
         Opened += OnOpened;
         DataContextChanged += OnDataContextChanged;
         SessionsGrid.Loaded += OnSessionsGridLoaded;
+        SessionsGrid.SelectionChanged += OnSessionsGridSelectionChanged;
         HookSessionsCollection(DataContext as MainWindowViewModel);
     }
 
@@ -44,6 +45,25 @@ public partial class MainWindow : Window
     {
         AttachSessionsScroll();
         ApplySessionGridLayoutIfNeeded();
+    }
+
+    private void OnSessionsGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        var selected = new List<SessionSnapshot>();
+        foreach (var item in SessionsGrid.SelectedItems)
+        {
+            if (item is SessionSnapshot snap)
+            {
+                selected.Add(snap);
+            }
+        }
+
+        vm.SetSelectedSessions(selected);
     }
 
     private async void OnOpened(object? sender, EventArgs e)

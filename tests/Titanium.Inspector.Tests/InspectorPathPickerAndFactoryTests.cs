@@ -129,6 +129,20 @@ public class InspectorPathPickerAndFactoryTests
                 new InterceptionService(new RecordingSystemProxyController()),
                 pathPicker: picker);
 
+            await ExecuteAsync(vm.ExportHarCommand);
+            StringAssert.Contains(vm.StatusText, "No sessions to export");
+
+            await ExecuteAsync(vm.ExportSelectedHarCommand);
+            StringAssert.Contains(vm.StatusText, "Select a session to export");
+
+            vm.SeedSession(new SessionSnapshot
+            {
+                Id = 1,
+                Method = "GET",
+                Url = "http://example/",
+                StatusCode = 200,
+            });
+
             picker.SavePath = null;
             await ExecuteAsync(vm.ExportHarCommand);
             StringAssert.Contains(vm.StatusText, "cancelled");
@@ -147,21 +161,21 @@ public class InspectorPathPickerAndFactoryTests
 
             picker.SavePath = harPath;
             await ExecuteAsync(vm.ExportHarCommand);
-            StringAssert.Contains(vm.StatusText, "Exported HAR");
+            StringAssert.Contains(vm.StatusText, "Exported 1 sessions");
             Assert.IsTrue(File.Exists(harPath));
 
             picker.OpenPath = harPath;
             await ExecuteAsync(vm.ImportHarCommand);
-            StringAssert.Contains(vm.StatusText, "Imported");
+            StringAssert.Contains(vm.StatusText, "Appended");
 
             picker.SavePath = zipPath;
             await ExecuteAsync(vm.ExportArchiveCommand);
-            StringAssert.Contains(vm.StatusText, "Exported archive");
+            StringAssert.Contains(vm.StatusText, "Exported");
             Assert.IsTrue(File.Exists(zipPath));
 
             picker.OpenPath = zipPath;
             await ExecuteAsync(vm.ImportArchiveCommand);
-            StringAssert.Contains(vm.StatusText, "Imported");
+            StringAssert.Contains(vm.StatusText, "Appended");
         }
         finally
         {
@@ -178,6 +192,52 @@ public class InspectorPathPickerAndFactoryTests
             if (File.Exists(zipPath))
             {
                 File.Delete(zipPath);
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task ExportSelected_WritesOnlySelectedSubset()
+    {
+        var settingsPath = Path.Combine(Path.GetTempPath(), "twp-sel-export-" + Guid.NewGuid().ToString("N") + ".json");
+        var harPath = Path.Combine(Path.GetTempPath(), $"twp-sel-export-{Guid.NewGuid():N}.har");
+        try
+        {
+            var settings = new SettingsService(settingsPath);
+            var registry = new SessionRegistry();
+            var picker = new ScriptedInspectorPathPicker { SavePath = harPath };
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                new InterceptionService(new RecordingSystemProxyController()),
+                pathPicker: picker);
+
+            var keep = new SessionSnapshot { Id = 10, Method = "GET", Url = "http://keep/", StatusCode = 200 };
+            var drop = new SessionSnapshot { Id = 11, Method = "POST", Url = "http://drop/", StatusCode = 201 };
+            vm.SeedSession(keep);
+            vm.SeedSession(drop);
+            vm.SetSelectedSessions([keep]);
+
+            await ExecuteAsync(vm.ExportSelectedHarCommand);
+            StringAssert.Contains(vm.StatusText, "Exported 1 sessions");
+            Assert.IsTrue(File.Exists(harPath));
+
+            var imported = await SessionArchive.ImportHarAsync(harPath);
+            Assert.AreEqual(1, imported.Count);
+            Assert.AreEqual("http://keep/", imported[0].Url);
+        }
+        finally
+        {
+            if (File.Exists(settingsPath))
+            {
+                File.Delete(settingsPath);
+            }
+
+            if (File.Exists(harPath))
+            {
+                File.Delete(harPath);
             }
         }
     }

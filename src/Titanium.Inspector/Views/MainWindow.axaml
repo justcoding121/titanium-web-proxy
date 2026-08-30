@@ -10,18 +10,23 @@
   <DockPanel>
     <Menu DockPanel.Dock="Top" x:Name="MainMenu" AutomationProperties.AutomationId="MainMenu">
       <MenuItem Header="_File" AutomationProperties.AutomationId="MenuFile">
-        <MenuItem Header="Export HAR…" Command="{Binding ExportHarCommand}" AutomationProperties.AutomationId="MenuExportHar" />
+        <MenuItem Header="Export all HAR…" Command="{Binding ExportHarCommand}" AutomationProperties.AutomationId="MenuExportHar" />
+        <MenuItem Header="Export selected HAR…" Command="{Binding ExportSelectedHarCommand}" AutomationProperties.AutomationId="MenuExportSelectedHar" />
         <MenuItem Header="Import HAR…" Command="{Binding ImportHarCommand}" AutomationProperties.AutomationId="MenuImportHar" />
-        <MenuItem Header="Export archive…" Command="{Binding ExportArchiveCommand}" AutomationProperties.AutomationId="MenuExportArchive" />
-        <MenuItem Header="Import archive from Desktop…" Command="{Binding ImportArchiveCommand}" AutomationProperties.AutomationId="MenuImportArchive" />
+        <MenuItem Header="Export all archive…" Command="{Binding ExportArchiveCommand}" AutomationProperties.AutomationId="MenuExportArchive" />
+        <MenuItem Header="Export selected archive…" Command="{Binding ExportSelectedArchiveCommand}" AutomationProperties.AutomationId="MenuExportSelectedArchive" />
+        <MenuItem Header="Import archive…" Command="{Binding ImportArchiveCommand}" AutomationProperties.AutomationId="MenuImportArchive" />
       </MenuItem>
       <MenuItem Header="_Capture" AutomationProperties.AutomationId="MenuCapture">
         <MenuItem Header="Start interception" Command="{Binding StartCaptureCommand}" AutomationProperties.AutomationId="MenuStartCapture" />
         <MenuItem Header="Stop interception" Command="{Binding StopCaptureCommand}" AutomationProperties.AutomationId="MenuStopCapture" />
-        <MenuItem Header="Capturing on/off" Command="{Binding ToggleCapturingCommand}" AutomationProperties.AutomationId="MenuToggleCapturing" />
+        <!-- Mode=OneWay + Command: Avalonia MenuItem CheckBox TwoWay can write false during init and persist it. -->
+        <MenuItem Header="Capturing" ToggleType="CheckBox"
+                  IsChecked="{Binding Capturing, Mode=OneWay}"
+                  Command="{Binding ToggleCapturingCommand}"
+                  AutomationProperties.AutomationId="MenuToggleCapturing" />
         <MenuItem Header="Clear sessions" Command="{Binding ClearSessionsCommand}" AutomationProperties.AutomationId="MenuClearSessions" />
         <Separator />
-        <!-- Mode=OneWay + Command: Avalonia MenuItem CheckBox TwoWay can write false during init and persist it. -->
         <MenuItem Header="Auto-start capture" ToggleType="CheckBox"
                   IsChecked="{Binding AutoStartCapture, Mode=OneWay}"
                   Command="{Binding ToggleAutoStartCaptureCommand}"
@@ -46,10 +51,13 @@
         <MenuItem Header="Remove root CA (current user)" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />
         <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" AutomationProperties.AutomationId="MenuExportCa" />
         <MenuItem Header="Device CA setup…" Command="{Binding DeviceCaSetupCommand}" AutomationProperties.AutomationId="MenuDeviceCa" />
-        <MenuItem Header="Enable loopback for sandboxed apps…" Command="{Binding OpenLoopbackExemptCommand}"
+        <MenuItem Header="Loopback for sandboxed apps…" Command="{Binding OpenLoopbackExemptCommand}"
                   IsVisible="{Binding ShowLoopbackExemptMenu}"
                   AutomationProperties.AutomationId="MenuLoopbackExempt" />
-        <MenuItem Header="Enable debug file logging" Command="{Binding ToggleDebugLoggingCommand}" AutomationProperties.AutomationId="MenuDebugLog" />
+        <MenuItem Header="Debug file logging" ToggleType="CheckBox"
+                  IsChecked="{Binding DebugFileLogging, Mode=OneWay}"
+                  Command="{Binding ToggleDebugLoggingCommand}"
+                  AutomationProperties.AutomationId="MenuDebugLog" />
       </MenuItem>
       <MenuItem Header="_Session" AutomationProperties.AutomationId="MenuSession">
         <MenuItem Header="Replay selected" Command="{Binding ReplayCommand}" AutomationProperties.AutomationId="MenuReplay" />

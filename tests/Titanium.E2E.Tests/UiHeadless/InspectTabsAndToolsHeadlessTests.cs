@@ -77,7 +77,7 @@ public class InspectTabsAndToolsHeadlessTests
         fx.PathPicker.SavePath = har;
         await fx.DispatchAsync(() =>
         {
-            fx.ViewModel.Sessions.Add(new SessionSnapshot
+            fx.ViewModel.SeedSession(new SessionSnapshot
             {
                 Id = 1,
                 Method = "GET",
@@ -93,6 +93,7 @@ public class InspectTabsAndToolsHeadlessTests
         {
             Assert.IsTrue(fx.PathPicker.SaveCalls >= 1);
             Assert.IsTrue(File.Exists(har), "HAR should be written via scripted picker path");
+            StringAssert.Contains(fx.ViewModel.StatusText, "Exported 1 sessions");
         });
 
         try { File.Delete(har); } catch { /* ignore */ }
