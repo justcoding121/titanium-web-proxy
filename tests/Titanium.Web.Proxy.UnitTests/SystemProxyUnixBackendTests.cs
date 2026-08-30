@@ -1,6 +1,6 @@
-using System.Diagnostics.CodeAnalysis;
 using System;
 using System.Collections.Generic;
+using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
@@ -46,6 +46,8 @@ public class UnixProxyBypassMapperTests
 }
 
 [TestClass]
+[SupportedOSPlatform("macos")]
+[SupportedOSPlatform("osx")]
 public class MacOsSystemProxyBackendTests
 {
     [TestMethod]
@@ -92,6 +94,7 @@ public class MacOsSystemProxyBackendTests
 }
 
 [TestClass]
+[SupportedOSPlatform("linux")]
 public class LinuxSystemProxyBackendTests
 {
     [TestMethod]
