@@ -100,6 +100,53 @@ public class ExportAndSystemProxyCoverageTests
     }
 
     [TestMethod]
+    public async Task ExportHarCommands_ReportFailureWhenPathCannotBeWritten()
+    {
+        var settingsPath = Path.Combine(Path.GetTempPath(), "twp-export-fail-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new SettingsService(settingsPath);
+            var registry = new SessionRegistry();
+            var picker = new ScriptedInspectorPathPicker();
+            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                pathPicker: picker);
+
+            var snap = new SessionSnapshot
+            {
+                Id = 7,
+                Method = "GET",
+                Url = "https://example.com/",
+                Host = "example.com",
+            };
+            vm.SeedSession(snap);
+            vm.SelectedSession = snap;
+            vm.SetSelectedSessions([snap]);
+
+            var missingDir = Path.Combine(Path.GetTempPath(), "twp-missing-" + Guid.NewGuid().ToString("N"), "out.har");
+            picker.SavePath = missingDir;
+            await ExecuteAsync(vm.ExportHarCommand);
+            StringAssert.Contains(vm.StatusText, "Export HAR failed");
+
+            picker.SavePath = missingDir;
+            await ExecuteAsync(vm.ExportSelectedHarCommand);
+            StringAssert.Contains(vm.StatusText, "Export HAR failed");
+        }
+        finally
+        {
+            if (File.Exists(settingsPath))
+            {
+                File.Delete(settingsPath);
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task StartStopCapture_AndSystemProxyWithoutCapture_AreCovered()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-start-cov-" + Guid.NewGuid().ToString("N") + ".json");
