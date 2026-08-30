@@ -29,6 +29,8 @@ concurrency:
 
 jobs:
   build:
+    # NuGet-only GitHub Releases must not redeploy Pages; only v* product tags.
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     permissions:
       contents: read

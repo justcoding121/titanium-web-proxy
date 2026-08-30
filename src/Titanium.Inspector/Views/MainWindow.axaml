@@ -18,7 +18,7 @@
       <MenuItem Header="_Capture" AutomationProperties.AutomationId="MenuCapture">
         <MenuItem Header="Start interception" Command="{Binding StartCaptureCommand}" AutomationProperties.AutomationId="MenuStartCapture" />
         <MenuItem Header="Stop interception" Command="{Binding StopCaptureCommand}" AutomationProperties.AutomationId="MenuStopCapture" />
-        <MenuItem Header="Capturing on/off" Command="{Binding ToggleCapturingCommand}" />
+        <MenuItem Header="Capturing on/off" Command="{Binding ToggleCapturingCommand}" AutomationProperties.AutomationId="MenuToggleCapturing" />
         <MenuItem Header="Clear sessions" Command="{Binding ClearSessionsCommand}" AutomationProperties.AutomationId="MenuClearSessions" />
         <Separator />
         <MenuItem Header="Auto-start capture" ToggleType="CheckBox" IsChecked="{Binding AutoStartCapture}"
@@ -28,24 +28,20 @@
         <MenuItem Header="Decrypt HTTPS" ToggleType="CheckBox" IsChecked="{Binding DecryptHttps}"
                   AutomationProperties.AutomationId="MenuDecryptHttps" />
         <Separator />
-        <MenuItem Header="Bind address">
-          <TextBox Width="160" Text="{Binding BindAddress}" Watermark="127.0.0.1 or 0.0.0.0" />
-        </MenuItem>
-        <MenuItem Header="Bind port">
-          <TextBox Width="80" Text="{Binding BindPort}" />
-        </MenuItem>
+        <MenuItem Header="Bind address" AutomationProperties.AutomationId="MenuBindAddress"><TextBox Width="160" Text="{Binding BindAddress}" Watermark="127.0.0.1 or 0.0.0.0" AutomationProperties.AutomationId="MenuBindAddressBox" /></MenuItem>
+        <MenuItem Header="Bind port" AutomationProperties.AutomationId="MenuBindPort"><TextBox Width="80" Text="{Binding BindPort}" AutomationProperties.AutomationId="MenuBindPortBox" /></MenuItem>
         <Separator />
         <MenuItem Header="Toggle system proxy" Command="{Binding ToggleSystemProxyCommand}" AutomationProperties.AutomationId="MenuToggleSystemProxy" />
         <MenuItem Header="Install root CA (current user)" Command="{Binding InstallCaCommand}" AutomationProperties.AutomationId="MenuInstallCa" />
         <MenuItem Header="Remove root CA (current user)" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />
-        <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" />
+        <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" AutomationProperties.AutomationId="MenuExportCa" />
         <MenuItem Header="Device CA setup…" Command="{Binding DeviceCaSetupCommand}" AutomationProperties.AutomationId="MenuDeviceCa" />
         <MenuItem Header="Enable loopback for sandboxed apps…" Command="{Binding OpenLoopbackExemptCommand}"
                   IsVisible="{Binding ShowLoopbackExemptMenu}"
                   AutomationProperties.AutomationId="MenuLoopbackExempt" />
         <MenuItem Header="Enable debug file logging" Command="{Binding ToggleDebugLoggingCommand}" AutomationProperties.AutomationId="MenuDebugLog" />
       </MenuItem>
-      <MenuItem Header="_Session">
+      <MenuItem Header="_Session" AutomationProperties.AutomationId="MenuSession">
         <MenuItem Header="Replay selected" Command="{Binding ReplayCommand}" AutomationProperties.AutomationId="MenuReplay" />
       </MenuItem>
       <MenuItem Header="_Tools" AutomationProperties.AutomationId="MenuTools">
@@ -54,9 +50,7 @@
         <MenuItem Header="AutoResponder…" Command="{Binding OpenToolsAutoResponderCommand}" AutomationProperties.AutomationId="MenuToolsAutoResponder" />
         <MenuItem Header="Scripts…" Command="{Binding OpenToolsScriptsCommand}" AutomationProperties.AutomationId="MenuToolsScripts" />
       </MenuItem>
-      <MenuItem Header="_Help">
-        <MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}" />
-      </MenuItem>
+      <MenuItem Header="_Help" AutomationProperties.AutomationId="MenuHelp"><MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}" AutomationProperties.AutomationId="MenuCheckForUpdates" /></MenuItem>
     </Menu>
     <Grid RowDefinitions="Auto,*,Auto">
       <Grid.ColumnDefinitions>
@@ -67,8 +61,7 @@
       <StackPanel Grid.Row="0" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="8" Spacing="12">
         <TextBox Width="360" Watermark="Search: method:GET status:200 host:example is:ws"
                  Text="{Binding SearchQuery}" AutomationProperties.AutomationId="SearchBox" />
-        <TextBox Width="120" Watermark="Bind address" Text="{Binding BindAddress}" />
-        <TextBox Width="70" Watermark="Port" Text="{Binding BindPort}" />
+        <TextBox Width="120" Watermark="Bind address" Text="{Binding BindAddress}" AutomationProperties.AutomationId="ToolbarBindAddress" /><TextBox Width="70" Watermark="Port" Text="{Binding BindPort}" AutomationProperties.AutomationId="ToolbarBindPort" />
         <CheckBox Content="Capturing" IsChecked="{Binding Capturing}" AutomationProperties.AutomationId="CapturingCheck" />
         <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}" AutomationProperties.AutomationId="DecryptHttpsCheck" />
         <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}" IsEnabled="False" AutomationProperties.AutomationId="SystemProxyCheck" />
@@ -225,7 +218,7 @@
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <TextBox Watermark="Status" Text="{Binding AutoResponderStatus}" Width="80"
                              AutomationProperties.AutomationId="AutoResponderStatus" />
-                    <TextBox Watermark="Content-Type" Text="{Binding AutoResponderContentType}" Width="160" />
+                    <TextBox Watermark="Content-Type" Text="{Binding AutoResponderContentType}" Width="160" AutomationProperties.AutomationId="AutoResponderContentType" />
                   </StackPanel>
                   <TextBox Watermark="Response body" Text="{Binding AutoResponderBody}" AcceptsReturn="True" Height="80"
                            AutomationProperties.AutomationId="AutoResponderBody" />

@@ -1,4 +1,4 @@
-# Manual saturation RPS lab on GitHub-hosted VMs (not a job container).
+﻿# Manual saturation RPS lab on GitHub-hosted VMs (not a job container).
 # Maintainers run this, then paste median numbers into wiki/Performance.md.
 # Not a per-PR gate; not comparable to dedicated-server blog posts.
 #
@@ -11,6 +11,10 @@
 name: RPS saturation
 
 on:
+  pull_request:
+    branches: [beta, stable]
+  push:
+    branches: [beta, stable]
   workflow_dispatch:
     inputs:
       mode:
@@ -117,15 +121,22 @@ on:
 
 jobs:
   rps:
+    # PR → beta/stable: compare-spot; push → beta/stable: compare-editions; dispatch: inputs.mode
+    env:
+      RPS_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || (github.event_name == 'pull_request' && 'compare-spot' || 'compare-editions') }}
+      RPS_CONCURRENCY: ${{ github.event_name == 'workflow_dispatch' && inputs.concurrency || '8,16,32,64' }}
+      RPS_WARMUP_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.warmup_sec || 2 }}
+      RPS_DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || 8 }}
+      RPS_REPEATS: ${{ github.event_name == 'workflow_dispatch' && inputs.repeats || 1 }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
+    # Intentionally no jobs.*.container â€” saturation RPS on a container network measures the wrong thing.
     # compare-product with MITM Lite+Full can exceed 3.5h per OS on hosted runners.
     # compare-editions (expanded Plus/CLI stress arms) needs ~60m; other modes keep the long ceiling.
-    timeout-minutes: ${{ inputs.mode == 'compare-editions' && 90 || 420 }}
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || 420)) }}
     steps:
       - uses: actions/checkout@v6
 
@@ -262,14 +273,14 @@ jobs:
       # Pass workflow_dispatch inputs via env (not ${{ }} in the script) to avoid
       # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
-        timeout-minutes: ${{ inputs.mode == 'compare-editions' && 60 || 400 }}
+        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || 400)) }}
         shell: pwsh
         env:
-          RPS_MODE: ${{ inputs.mode }}
-          RPS_CONCURRENCY: ${{ inputs.concurrency }}
-          RPS_WARMUP_SEC: ${{ inputs.warmup_sec }}
-          RPS_DURATION_SEC: ${{ inputs.duration_sec }}
-          RPS_REPEATS: ${{ inputs.repeats }}
+          RPS_MODE: ${{ env.RPS_MODE }}
+          RPS_CONCURRENCY: ${{ env.RPS_CONCURRENCY }}
+          RPS_WARMUP_SEC: ${{ env.RPS_WARMUP_SEC }}
+          RPS_DURATION_SEC: ${{ env.RPS_DURATION_SEC }}
+          RPS_REPEATS: ${{ env.RPS_REPEATS }}
         run: |
           pwsh tools/RpsLoadProbe/run-rps.ps1 `
             -Mode $env:RPS_MODE `
@@ -281,7 +292,7 @@ jobs:
             -BombardierCheck
 
       - name: Validate edition gates
-        if: inputs.mode == 'compare-editions'
+        if: env.RPS_MODE == 'compare-editions'
         shell: pwsh
         run: |
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
@@ -290,7 +301,7 @@ jobs:
           pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName
 
       - name: Validate compare-product gates
-        if: inputs.mode == 'compare-product'
+        if: env.RPS_MODE == 'compare-product'
         shell: pwsh
         run: |
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
@@ -299,7 +310,7 @@ jobs:
           pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName
 
       - name: Validate cross-version gates
-        if: inputs.mode == 'compare-cross-version'
+        if: env.RPS_MODE == 'compare-cross-version'
         shell: pwsh
         run: |
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |

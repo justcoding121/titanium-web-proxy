@@ -22,6 +22,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly SettingsService _settings;
     private readonly InterceptionService _interception;
     private readonly IInspectorDialogs _dialogs;
+    private readonly IInspectorPathPicker _pathPicker;
     private readonly ObservableCollection<SessionSnapshot> _all = new();
     private string _statusText = "Ready";
     private string _searchQuery = "";
@@ -63,7 +64,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         UpdateService updates,
         SettingsService settings,
         InterceptionService? interception = null,
-        IInspectorDialogs? dialogs = null)
+        IInspectorDialogs? dialogs = null,
+        IInspectorPathPicker? pathPicker = null)
     {
         _buffer = buffer;
         _registry = registry;
@@ -71,6 +73,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _settings = settings;
         _interception = interception ?? new InterceptionService();
         _dialogs = dialogs ?? new AvaloniaInspectorDialogs();
+        _pathPicker = pathPicker ?? new AvaloniaInspectorPathPicker();
         Sessions = new ObservableCollection<SessionSnapshot>();
         Breakpoints = new BreakpointViewModel();
         AutoResponder = new AutoResponderViewModel();
@@ -131,6 +134,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     /// <summary>Exposed for E2E / headless tests.</summary>
     public IInspectorDialogs Dialogs => _dialogs;
+
+    /// <summary>Exposed for E2E / headless tests.</summary>
+    public IInspectorPathPicker PathPicker => _pathPicker;
 
     /// <summary>
     /// After the main window is shown: optionally start capture and system proxy.
@@ -1258,25 +1264,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private async Task ExportHarAsync()
     {
-        var path = await PickSavePathAsync("Export HAR", "titanium-inspector.har", "HAR", "*.har")
-                   ?? Path.Combine(
-                       Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-                       $"titanium-inspector-{DateTime.Now:yyyyMMddHHmmss}.har");
+        var path = await _pathPicker.PickSavePathAsync("Export HAR", "titanium-inspector.har", "HAR", "*.har");
+        if (path is null)
+        {
+            StatusText = "Export HAR cancelled";
+            return;
+        }
+
         await SessionArchive.ExportHarAsync(_all, path);
         StatusText = "Exported HAR: " + path;
     }
 
     private async Task ImportHarAsync()
     {
-        var path = await PickOpenPathAsync("Import HAR", "HAR", "*.har", "*.zip");
+        var path = await _pathPicker.PickOpenPathAsync("Import HAR", "HAR", "*.har", "*.zip");
         if (path is null)
         {
-            path = FindLatestDesktop("*.har") ?? FindLatestDesktop("titanium-inspector-*.zip");
-        }
-
-        if (path is null)
-        {
-            StatusText = "No .har or archive on Desktop to import";
+            StatusText = "No .har or archive to import";
             return;
         }
 
@@ -1302,21 +1306,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private async Task ExportArchiveAsync()
     {
-        var path = await PickSavePathAsync("Export archive", "titanium-inspector.zip", "ZIP", "*.zip")
-                   ?? Path.Combine(
-                       Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-                       $"titanium-inspector-{DateTime.Now:yyyyMMddHHmmss}.zip");
+        var path = await _pathPicker.PickSavePathAsync("Export archive", "titanium-inspector.zip", "ZIP", "*.zip");
+        if (path is null)
+        {
+            StatusText = "Export archive cancelled";
+            return;
+        }
+
         await SessionArchive.ExportNativeArchiveAsync(_all, path);
         StatusText = "Exported archive: " + path;
     }
 
     private async Task ImportArchiveAsync()
     {
-        var path = await PickOpenPathAsync("Import archive", "ZIP", "*.zip")
-                   ?? FindLatestDesktop("titanium-inspector-*.zip");
+        var path = await _pathPicker.PickOpenPathAsync("Import archive", "ZIP", "*.zip");
         if (path is null)
         {
-            StatusText = "No titanium-inspector-*.zip on Desktop to import";
+            StatusText = "No titanium-inspector archive to import";
             return;
         }
 
@@ -1329,64 +1335,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         ApplyFilter();
         StatusText = $"Imported {imported.Count} sessions from {Path.GetFileName(path)}";
-    }
-
-    private static string? FindLatestDesktop(string pattern)
-    {
-        var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-        return Directory.EnumerateFiles(desktop, pattern)
-            .OrderByDescending(f => f)
-            .FirstOrDefault();
-    }
-
-    private static Window? TryGetMainWindow()
-    {
-        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-        {
-            return desktop.MainWindow;
-        }
-
-        return null;
-    }
-
-    private static async Task<string?> PickSavePathAsync(string title, string suggested, string name, string pattern)
-    {
-        var top = TryGetMainWindow();
-        if (top?.StorageProvider is not { CanSave: true } sp)
-        {
-            return null;
-        }
-
-        var file = await sp.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = title,
-            SuggestedFileName = suggested,
-            FileTypeChoices =
-            [
-                new FilePickerFileType(name) { Patterns = [pattern] },
-            ],
-        });
-        return file?.TryGetLocalPath();
-    }
-
-    private static async Task<string?> PickOpenPathAsync(string title, string name, params string[] patterns)
-    {
-        var top = TryGetMainWindow();
-        if (top?.StorageProvider is not { CanOpen: true } sp)
-        {
-            return null;
-        }
-
-        var files = await sp.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = title,
-            AllowMultiple = false,
-            FileTypeFilter =
-            [
-                new FilePickerFileType(name) { Patterns = patterns.ToList() },
-            ],
-        });
-        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
 
     private static string DescribePanel(object panel)
@@ -1410,6 +1358,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         field = value;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         return true;
+    }
+
+    private static Window? TryGetMainWindow()
+    {
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            return desktop.MainWindow;
+        }
+
+        return null;
     }
 }
 

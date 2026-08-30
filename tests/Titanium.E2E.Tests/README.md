@@ -7,7 +7,10 @@ Process-level and service-level end-to-end coverage for CLI, CLI+Plus, and Inspe
 | Category | CI | Description |
 |----------|----|-------------|
 | `E2E` | Yes (Windows build job) | Spawn `titanium`, reverse/edge + Plus control plane; MITM happy-path smoke only |
-| `E2E-UI` | Yes (`ui-portable` on Windows/Linux/macOS + dedicated `inspector-ui-macos`) | ViewModel commands, feature sanity (capture/proxy/CA/tools/composer), elevate-CA UX |
+| `E2E-UI` |
+| `E2E-UI-Headless` | Yes (`ui-portable` + Windows `build`) | Avalonia Headless click/type by AutomationId |
+| `E2E-UI-Visual` | Yes (`ui-portable` + Windows `build`) | Sparse Skia `CaptureRenderedFrame` smoke |
+| `E2E-UI-Plus-Dashboard` | Yes (`ui-portable` + Windows `build`) | Playwright Chromium vs Plus HTML dashboard | Yes (`ui-portable` on Windows/Linux/macOS + dedicated `inspector-ui-macos`) | ViewModel commands, feature sanity (capture/proxy/CA/tools/composer), elevate-CA UX |
 | `E2E-UI-Mac` / `E2E-UI-Linux` | Yes (macOS / Linux runners only) | System-proxy backend factory selection for that OS |
 | `E2E-UI-Window` | No (opt-in) | Windows FlaUI / real HWND smoke against `TitaniumInspector.exe` |
 | `E2E-Slow` | No | Windows WinINET system proxy + Chrome `--disable-quic` |
@@ -42,6 +45,6 @@ From a Windows (or any) host with Docker:
 ./tools/InspectorUiDocker/run-e2e-ui.sh
 ```
 
-This runs `TestCategory=E2E-UI` inside a Linux SDK container (Avalonia Headless). It does **not** run `E2E-UI-Window` / FlaUI.
+Docker helper runs ViewModel `E2E-UI`. Prefer CI `E2E-UI-Headless` / `E2E-UI-Visual` for real Avalonia Headless + Skia frames. It does **not** run `E2E-UI-Window` / FlaUI.
 
 Build `Titanium.Cli` and `Titanium.Plus` (Release or Debug) before process tests so `CliProcessHarness` can locate `titanium.dll`.

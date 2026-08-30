@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:svc="using:Titanium.Inspector.Services"
-        x:Class="Titanium.Inspector.Views.LoopbackExemptWindow"
+        x:Class="Titanium.Inspector.Views.LoopbackExemptWindow" AutomationProperties.AutomationId="LoopbackExemptWindow"
         Title="Loopback for sandboxed apps"
         Width="560" Height="480"
         WindowStartupLocation="CenterOwner">
@@ -9,12 +9,12 @@
     <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,8"
                Text="Allow selected AppContainer / Store apps to reach the local proxy (Windows loopback exemption)." />
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
-      <Button x:Name="ExemptButton" Content="Exempt selected" MinWidth="120" />
-      <Button x:Name="ClearButton" Content="Clear exemptions" MinWidth="120" />
-      <Button x:Name="CloseButton" Content="Close" MinWidth="80" IsCancel="True" />
+      <Button x:Name="ExemptButton" AutomationProperties.AutomationId="LoopbackExempt" Content="Exempt selected" MinWidth="120" />
+      <Button x:Name="ClearButton" AutomationProperties.AutomationId="LoopbackClear" Content="Clear exemptions" MinWidth="120" />
+      <Button x:Name="CloseButton" AutomationProperties.AutomationId="LoopbackClose" Content="Close" MinWidth="80" IsCancel="True" />
     </StackPanel>
-    <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Margin="0,8,0,0" TextWrapping="Wrap" Opacity="0.8" />
-    <ListBox x:Name="PackageList" SelectionMode="Multiple">
+    <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="LoopbackStatus" DockPanel.Dock="Bottom" Margin="0,8,0,0" TextWrapping="Wrap" Opacity="0.8" />
+    <ListBox x:Name="PackageList" AutomationProperties.AutomationId="LoopbackPackages" SelectionMode="Multiple">
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="svc:AppContainerInfo">
           <StackPanel Orientation="Horizontal" Spacing="8">

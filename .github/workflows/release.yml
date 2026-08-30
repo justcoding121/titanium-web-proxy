@@ -23,7 +23,13 @@ jobs:
           dotnet-version: '10.0.x'
           cache: true
       - name: Test
-        run: dotnet test src/Titanium.Web.Proxy.sln -c Release --nologo
+        run: |
+          dotnet test src/Titanium.Web.Proxy.sln -c Release --nologo --filter "TestCategory!=Slow&TestCategory!=E2E-UI-Window"
+          # Product release also requires Headless/Visual/Plus dashboard (same gates as ui-portable).
+          dotnet build tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj -c Release
+          pwsh tests/Titanium.E2E.Tests/bin/Release/net10.0/playwright.ps1 install chromium
+          dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj -c Release --no-build --filter "TestCategory=E2E-UI-Headless|TestCategory=E2E-UI-Visual|TestCategory=E2E-UI-Plus-Dashboard"
+
 
   build-cli:
     needs: test

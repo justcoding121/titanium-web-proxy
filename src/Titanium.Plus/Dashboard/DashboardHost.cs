@@ -175,12 +175,15 @@ public sealed class DashboardHost : IDisposable
         var rows = new StringBuilder();
         foreach (var (id, state) in snap.DestinationStates.OrderBy(kv => kv.Key))
         {
-            rows.Append("<tr><td>").Append(WebUtility.HtmlEncode(id)).Append("</td><td>")
+            var enc = WebUtility.HtmlEncode(id);
+            var esc = Uri.EscapeDataString(id);
+            rows.Append("<tr data-testid=\"dest-row-").Append(enc).Append("\"><td>").Append(enc)
+                .Append("</td><td data-testid=\"dest-state-").Append(enc).Append("\">")
                 .Append(state).Append("</td><td>")
-                .Append("<button onclick=\"post('/drain/").Append(Uri.EscapeDataString(id))
-                .Append("')\">Drain</button> ")
-                .Append("<button onclick=\"post('/healthy/").Append(Uri.EscapeDataString(id))
-                .Append("')\">Healthy</button>")
+                .Append("<button data-testid=\"btn-drain-").Append(enc)
+                .Append("\" onclick=\"post('/drain/").Append(esc).Append("')\">Drain</button> ")
+                .Append("<button data-testid=\"btn-healthy-").Append(enc)
+                .Append("\" onclick=\"post('/healthy/").Append(esc).Append("')\">Healthy</button>")
                 .Append("</td></tr>");
         }
 
@@ -195,13 +198,13 @@ public sealed class DashboardHost : IDisposable
             .Append("<style>body{font-family:system-ui,sans-serif;margin:1.5rem}")
             .Append("table{border-collapse:collapse;width:100%;max-width:720px}")
             .Append("th,td{border:1px solid #ccc;padding:.4rem .6rem;text-align:left}")
-            .Append("code{background:#f4f4f4;padding:.1rem .3rem}</style></head><body>")
+            .Append("code{background:#f4f4f4;padding:.1rem .3rem}</style></head><body data-testid=\"plus-dashboard\">")
             .Append("<h1>Titanium Plus</h1><p>Authenticated with <code>")
             .Append(ControlPlaneServer.SharedSecretHeader)
             .Append("</code>. Control plane: <code>")
             .Append(WebUtility.HtmlEncode(_controlPlane.Prefix))
-            .Append("</code></p><p><a href=\"/metrics\">Prometheus metrics</a> · ")
-            .Append("<a href=\"/api/snapshot\">JSON snapshot</a></p><table>")
+            .Append("</code></p><p><a data-testid=\"link-metrics\" href=\"/metrics\">Prometheus metrics</a> · ")
+            .Append("<a data-testid=\"link-snapshot\" href=\"/api/snapshot\">JSON snapshot</a></p><table>")
             .Append("<thead><tr><th>Destination</th><th>State</th><th>Actions</th></tr></thead><tbody>")
             .Append(rows)
             .Append("</tbody></table><script>")
