@@ -26,10 +26,18 @@ on:
       - '.github/workflows/deploy-website.yml'
       - '.github/dns/**'
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      # SonarCloud / PR decoration when token is present
+      pull-requests: write
+      checks: write
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:

@@ -119,9 +119,14 @@ on:
         required: true
         default: '3'
 
+permissions:
+  contents: read
+
 jobs:
   rps:
     # PR → beta/stable: compare-spot; push → beta/stable: compare-editions; dispatch: inputs.mode
+    permissions:
+      contents: read
     env:
       RPS_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || (github.event_name == 'pull_request' && 'compare-spot' || 'compare-editions') }}
       RPS_CONCURRENCY: ${{ github.event_name == 'workflow_dispatch' && inputs.concurrency || '8,16,32,64' }}

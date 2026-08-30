@@ -11,9 +11,14 @@ on:
         required: true
         default: 'stable'
 
+permissions:
+  contents: read
+
 jobs:
   resolve-version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       release_tag: ${{ steps.v.outputs.tag }}
       version: ${{ steps.v.outputs.version }}
