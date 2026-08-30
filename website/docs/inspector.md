@@ -15,11 +15,11 @@ winget install justcoding121.TitaniumInspector
 
 ## Quick use
 
-1. Start interception from the **Capture** menu.
-2. Install the root CA when prompted.
-3. Toggle system proxy.
+1. Launch Inspector — by default it starts listening and enables system proxy (Capturing on).
+2. Check **Decrypt HTTPS** when you want MITM (installs the root CA if needed; may prompt for admin).
+3. Use the toolbar **System proxy** / **Capturing** checkboxes to pause either without quitting.
 
-Default bind is typically `127.0.0.1:8866`.
+Default bind is typically `127.0.0.1:8866`. HTTPS stays opaque CONNECT tunnels until **Decrypt HTTPS** is enabled.
 
 ## Right pane: Inspect vs Tools
 

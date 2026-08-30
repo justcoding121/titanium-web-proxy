@@ -31,7 +31,8 @@
         <MenuItem Header="Bind address" AutomationProperties.AutomationId="MenuBindAddress"><TextBox Width="160" Text="{Binding BindAddress}" Watermark="127.0.0.1 or 0.0.0.0" AutomationProperties.AutomationId="MenuBindAddressBox" /></MenuItem>
         <MenuItem Header="Bind port" AutomationProperties.AutomationId="MenuBindPort"><TextBox Width="80" Text="{Binding BindPort}" AutomationProperties.AutomationId="MenuBindPortBox" /></MenuItem>
         <Separator />
-        <MenuItem Header="Toggle system proxy" Command="{Binding ToggleSystemProxyCommand}" AutomationProperties.AutomationId="MenuToggleSystemProxy" />
+        <MenuItem Header="System proxy" ToggleType="CheckBox" IsChecked="{Binding SystemProxy}"
+                  AutomationProperties.AutomationId="MenuToggleSystemProxy" />
         <MenuItem Header="Install root CA (current user)" Command="{Binding InstallCaCommand}" AutomationProperties.AutomationId="MenuInstallCa" />
         <MenuItem Header="Remove root CA (current user)" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />
         <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" AutomationProperties.AutomationId="MenuExportCa" />
@@ -64,7 +65,7 @@
         <TextBox Width="120" Watermark="Bind address" Text="{Binding BindAddress}" AutomationProperties.AutomationId="ToolbarBindAddress" /><TextBox Width="70" Watermark="Port" Text="{Binding BindPort}" AutomationProperties.AutomationId="ToolbarBindPort" />
         <CheckBox Content="Capturing" IsChecked="{Binding Capturing}" AutomationProperties.AutomationId="CapturingCheck" />
         <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}" AutomationProperties.AutomationId="DecryptHttpsCheck" />
-        <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}" IsEnabled="False" AutomationProperties.AutomationId="SystemProxyCheck" />
+        <CheckBox Content="System proxy" IsChecked="{Binding SystemProxy}" AutomationProperties.AutomationId="SystemProxyCheck" />
       </StackPanel>
       <DataGrid Grid.Row="1" Grid.Column="0" Margin="8,8,4,8"
                 x:Name="SessionsGrid"

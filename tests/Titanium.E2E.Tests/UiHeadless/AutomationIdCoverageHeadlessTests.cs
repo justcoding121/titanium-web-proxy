@@ -144,6 +144,22 @@ public class AutomationIdCoverageHeadlessTests
             fx.Robot.Click("MenuToggleCapturing");
             Assert.IsTrue(fx.ViewModel.Capturing);
         });
+
+        await fx.DispatchAsync(async () =>
+        {
+            fx.ViewModel.StartCaptureCommand.Execute(null);
+            var deadline = DateTime.UtcNow.AddSeconds(15);
+            while (!fx.Interception.IsRunning && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(50);
+            }
+
+            Assert.IsTrue(fx.Interception.IsRunning, fx.ViewModel.StatusText);
+            fx.Robot.SetCheck("SystemProxyCheck", true);
+            Assert.IsTrue(fx.ViewModel.SystemProxy);
+            fx.Robot.SetCheck("MenuToggleSystemProxy", false);
+            Assert.IsFalse(fx.ViewModel.SystemProxy);
+        });
     }
 
     [TestMethod]

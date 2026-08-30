@@ -159,9 +159,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        if (_interception.SetSystemProxy(true))
+        SystemProxy = true;
+        if (SystemProxy)
         {
-            SystemProxy = true;
             StatusText =
                 $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shows as CONNECT until Decrypt HTTPS is enabled." +
                 " Chrome/Edge: --disable-quic or HTTP/3 may bypass the proxy.";
@@ -169,7 +169,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         else
         {
             StatusText =
-                $"Listening on {FormatBindDisplay()}:{BindPort}, but system proxy failed to enable — use Capture → Toggle system proxy.";
+                $"Listening on {FormatBindDisplay()}:{BindPort}, but system proxy failed to enable — use the System proxy checkbox.";
         }
     }
 
@@ -186,7 +186,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         _interception.EnsureShutdown();
-        SystemProxy = false;
+        SetSystemProxyCore(false);
     }
 
     /// <summary>
@@ -204,7 +204,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             // ignore
         }
 
-        SystemProxy = false;
+        // UI flag only — do not call SetSystemProxy on the UI thread (WinINET deadlock risk).
+        SetSystemProxyCore(false);
         _interception.BeginBackgroundShutdown();
     }
 
@@ -295,7 +296,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private Task StopCaptureAsync()
     {
         _interception.Stop();
-        SystemProxy = false;
+        SetSystemProxyCore(false);
         PersistSettings();
         StatusText = "Stopped (system proxy restored if it was on)";
         return Task.CompletedTask;
@@ -318,25 +319,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private Task ToggleSystemProxyAsync()
     {
-        if (!_interception.IsRunning)
-        {
-            StatusText = "Start interception before toggling system proxy";
-            return Task.CompletedTask;
-        }
-
-        var enable = !SystemProxy;
-        if (!_interception.SetSystemProxy(enable))
-        {
-            StatusText = enable
-                ? "Failed to enable system proxy (permissions, cancelled admin prompt, or unsupported desktop environment)"
-                : "Failed to restore system proxy settings";
-            return Task.CompletedTask;
-        }
-
-        SystemProxy = enable;
-        StatusText = enable
-            ? "System proxy enabled (identity bypass). For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy."
-            : "System proxy restored";
+        SystemProxy = !SystemProxy;
         return Task.CompletedTask;
     }
 
@@ -668,7 +651,58 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public bool SystemProxy
     {
         get => _systemProxy;
-        set => SetField(ref _systemProxy, value);
+        set // NOSONAR S4275 -- fail paths leave _systemProxy unchanged and re-raise PropertyChanged to snap the checkbox back
+        {
+            if (_systemProxy == value)
+            {
+                return;
+            }
+
+            if (value)
+            {
+                if (!_interception.IsRunning)
+                {
+                    StatusText = "Start interception before enabling system proxy";
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
+                    return;
+                }
+
+                if (!_interception.SetSystemProxy(true))
+                {
+                    StatusText =
+                        "Failed to enable system proxy (permissions, cancelled admin prompt, or unsupported desktop environment)";
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
+                    return;
+                }
+
+                SetSystemProxyCore(true);
+                StatusText =
+                    "System proxy enabled (identity bypass). For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy.";
+                return;
+            }
+
+            if (_interception.IsRunning && _interception.SystemProxyEnabled &&
+                !_interception.SetSystemProxy(false))
+            {
+                StatusText = "Failed to restore system proxy settings";
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
+                return;
+            }
+
+            SetSystemProxyCore(false);
+            StatusText = "System proxy restored";
+        }
+    }
+
+    private void SetSystemProxyCore(bool enabled)
+    {
+        if (_systemProxy == enabled)
+        {
+            return;
+        }
+
+        _systemProxy = enabled;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
     }
 
     public bool AutoStartCapture
@@ -1153,8 +1187,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         StatusText = _decryptHttps
-            ? $"Listening on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS on. Enable system proxy from Capture menu. Chrome: --disable-quic or H3 may bypass."
-            : $"Listening on {FormatBindDisplay()}:{BindPort} — HTTPS as CONNECT until Decrypt HTTPS is enabled. Enable system proxy from Capture menu.";
+            ? $"Listening on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS on. Enable System proxy if needed. Chrome: --disable-quic or H3 may bypass."
+            : $"Listening on {FormatBindDisplay()}:{BindPort} — HTTPS as CONNECT until Decrypt HTTPS is enabled. Enable System proxy if needed.";
     }
 
     private static IPAddress ParseBindAddress(string bindAddress)
