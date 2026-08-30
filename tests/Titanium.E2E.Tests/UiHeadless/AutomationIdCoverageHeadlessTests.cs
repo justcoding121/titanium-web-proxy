@@ -264,7 +264,7 @@ public class AutomationIdCoverageHeadlessTests
             fx.Robot.Click("MenuExportArchive");
         });
 
-        var exportDeadline = DateTime.UtcNow.AddSeconds(5);
+        var exportDeadline = DateTime.UtcNow.AddSeconds(15);
         while (DateTime.UtcNow < exportDeadline &&
                !fx.ViewModel.StatusText.Contains("Exported 1 sessions", StringComparison.Ordinal))
         {

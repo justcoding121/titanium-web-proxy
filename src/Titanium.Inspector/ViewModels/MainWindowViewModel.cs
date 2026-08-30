@@ -1996,7 +1996,10 @@ internal sealed class RelayCommand(Func<Task> execute) : ICommand
     {
         try
         {
-            await execute().ConfigureAwait(false);
+            // Preserve Avalonia UI sync context so StatusText / collection updates after
+            // awaits are applied on the UI thread (ConfigureAwait(false) caused macOS
+            // headless flakes where export wrote the file but StatusText stayed "Ready").
+            await execute();
         }
         catch
         {

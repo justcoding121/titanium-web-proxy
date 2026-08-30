@@ -89,8 +89,8 @@ public class InspectTabsAndToolsHeadlessTests
             fx.Robot.Click("MenuExportHar");
         });
 
-        // ExportHarCommand is async; file may exist before StatusText is updated.
-        var deadline = DateTime.UtcNow.AddSeconds(5);
+        // ExportHarCommand is async; wait for StatusText (file may exist briefly before it).
+        var deadline = DateTime.UtcNow.AddSeconds(15);
         while (DateTime.UtcNow < deadline &&
                !fx.ViewModel.StatusText.Contains("Exported 1 sessions", StringComparison.Ordinal))
         {
