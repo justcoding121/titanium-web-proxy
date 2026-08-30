@@ -78,6 +78,28 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
             Dispatcher.UIThread.RunJobs();
         }, CancellationToken.None);
 
+    /// <summary>
+    /// Wait until <paramref name="condition"/> is true, pumping the Avalonia dispatcher each poll so
+    /// async RelayCommand continuations (StatusText after file I/O) can run in headless.
+    /// </summary>
+    public async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout, int pollMs = 50)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await DispatchAsync(() => { });
+            if (condition())
+            {
+                return;
+            }
+
+            await Task.Delay(pollMs);
+        }
+
+        // Final pump so callers assert against the latest UI state.
+        await DispatchAsync(() => { });
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_session is not null)

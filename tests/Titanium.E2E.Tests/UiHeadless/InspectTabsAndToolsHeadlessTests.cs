@@ -89,13 +89,10 @@ public class InspectTabsAndToolsHeadlessTests
             fx.Robot.Click("MenuExportHar");
         });
 
-        // ExportHarCommand is async; wait for StatusText (file may exist briefly before it).
-        var deadline = DateTime.UtcNow.AddSeconds(15);
-        while (DateTime.UtcNow < deadline &&
-               !fx.ViewModel.StatusText.Contains("Exported 1 sessions", StringComparison.Ordinal))
-        {
-            await Task.Delay(50);
-        }
+        // ExportHarCommand is async; pump dispatcher while waiting so StatusText continuations run.
+        await fx.WaitUntilAsync(
+            () => fx.ViewModel.StatusText.Contains("Exported 1 sessions", StringComparison.Ordinal),
+            TimeSpan.FromSeconds(15));
 
         await fx.DispatchAsync(() =>
         {

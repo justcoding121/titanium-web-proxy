@@ -264,12 +264,9 @@ public class AutomationIdCoverageHeadlessTests
             fx.Robot.Click("MenuExportArchive");
         });
 
-        var exportDeadline = DateTime.UtcNow.AddSeconds(15);
-        while (DateTime.UtcNow < exportDeadline &&
-               !fx.ViewModel.StatusText.Contains("Exported 1 sessions", StringComparison.Ordinal))
-        {
-            await Task.Delay(50);
-        }
+        await fx.WaitUntilAsync(
+            () => fx.ViewModel.StatusText.Contains("Exported 1 sessions", StringComparison.Ordinal),
+            TimeSpan.FromSeconds(15));
 
         await fx.DispatchAsync(() =>
         {
@@ -296,13 +293,10 @@ public class AutomationIdCoverageHeadlessTests
 
         await fx.DispatchAsync(() => fx.Robot.Click("MenuImportArchive"));
 
-        var importDeadline = DateTime.UtcNow.AddSeconds(15);
-        while (DateTime.UtcNow < importDeadline &&
-               !fx.ViewModel.StatusText.Contains("Appended", StringComparison.Ordinal) &&
-               !fx.ViewModel.StatusText.Contains("Import archive failed", StringComparison.Ordinal))
-        {
-            await Task.Delay(50);
-        }
+        await fx.WaitUntilAsync(
+            () => fx.ViewModel.StatusText.Contains("Appended", StringComparison.Ordinal)
+                  || fx.ViewModel.StatusText.Contains("Import archive failed", StringComparison.Ordinal),
+            TimeSpan.FromSeconds(15));
 
         await fx.DispatchAsync(() =>
         {

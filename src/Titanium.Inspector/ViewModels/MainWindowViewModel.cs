@@ -1830,8 +1830,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        await SessionArchive.ExportHarAsync(_all, path);
-        StatusText = $"Exported {_all.Count} sessions to {path}";
+        try
+        {
+            await SessionArchive.ExportHarAsync(_all, path);
+            await MarshalToUiAsync(() => StatusText = $"Exported {_all.Count} sessions to {path}");
+        }
+        catch (Exception ex)
+        {
+            await MarshalToUiAsync(() => StatusText = "Export HAR failed: " + Truncate(ex.Message, 160));
+        }
     }
 
     private async Task ExportSelectedHarAsync()
@@ -1850,8 +1857,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        await SessionArchive.ExportHarAsync(sessions, path);
-        StatusText = $"Exported {sessions.Count} sessions to {path}";
+        try
+        {
+            await SessionArchive.ExportHarAsync(sessions, path);
+            await MarshalToUiAsync(() => StatusText = $"Exported {sessions.Count} sessions to {path}");
+        }
+        catch (Exception ex)
+        {
+            await MarshalToUiAsync(() => StatusText = "Export HAR failed: " + Truncate(ex.Message, 160));
+        }
     }
 
     private async Task ImportHarAsync()
