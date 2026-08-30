@@ -171,9 +171,33 @@
           <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="140" />
           <DataGridTextColumn Header="URL" Binding="{Binding Url}" Width="280" />
           <DataGridTextColumn Header="Client→Server" Binding="{Binding Protocol}" Width="110" />
-          <DataGridTextColumn Header="Duration" Binding="{Binding DurationMs, StringFormat={}{0:0}}" Width="80" />
-          <DataGridTextColumn Header="TTFB" Binding="{Binding TtfbMs, StringFormat={}{0:0}}" Width="70" />
-          <DataGridTextColumn Header="Size" Binding="{Binding BodySize}" Width="70" />
+          <DataGridTextColumn Header="Duration" Binding="{Binding DurationMs, StringFormat={}{0:0}}" Width="95"
+                              SortMemberPath="DurationMs">
+            <DataGridTextColumn.HeaderTemplate>
+              <DataTemplate>
+                <TextBlock Text="Duration (ms)"
+                           ToolTip.Tip="Total request time from session start to complete." />
+              </DataTemplate>
+            </DataGridTextColumn.HeaderTemplate>
+          </DataGridTextColumn>
+          <DataGridTextColumn Header="TTFB" Binding="{Binding TtfbMs, StringFormat={}{0:0}}" Width="85"
+                              SortMemberPath="TtfbMs">
+            <DataGridTextColumn.HeaderTemplate>
+              <DataTemplate>
+                <TextBlock Text="TTFB (ms)"
+                           ToolTip.Tip="Time to first byte — wait from request sent until response headers arrive." />
+              </DataTemplate>
+            </DataGridTextColumn.HeaderTemplate>
+          </DataGridTextColumn>
+          <DataGridTextColumn Header="Size" Binding="{Binding BodySizeDisplay}" Width="80"
+                              SortMemberPath="BodySize">
+            <DataGridTextColumn.HeaderTemplate>
+              <DataTemplate>
+                <TextBlock Text="Size"
+                           ToolTip.Tip="Response body size (B below 1 KB, otherwise KB / MB)." />
+              </DataTemplate>
+            </DataGridTextColumn.HeaderTemplate>
+          </DataGridTextColumn>
           <DataGridTextColumn Header="Process" Binding="{Binding ProcessDisplay}" Width="120" />
         </DataGrid.Columns>
       </DataGrid>

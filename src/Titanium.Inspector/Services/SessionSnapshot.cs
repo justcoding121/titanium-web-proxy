@@ -102,6 +102,9 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         set => SetField(ref _bodySize, value);
     }
 
+    /// <summary>Grid display for <see cref="BodySize"/> (B / KB / MB).</summary>
+    public string BodySizeDisplay => SessionDisplayFormat.FormatByteSize(BodySize);
+
     public int ProcessId
     {
         get => _processId;
@@ -165,6 +168,11 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         if (name is nameof(ProcessId) or nameof(ProcessName))
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProcessDisplay)));
+        }
+
+        if (name is nameof(BodySize))
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BodySizeDisplay)));
         }
     }
 }

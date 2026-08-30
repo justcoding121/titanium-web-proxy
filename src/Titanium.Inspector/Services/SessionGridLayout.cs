@@ -25,7 +25,17 @@ public static class SessionGridLayout
 {
     public const string DefaultSortColumnKey = "Id";
 
-    public static string? GetColumnKey(object? header) => header as string;
+    /// <summary>
+    /// Stable layout key: prefer <see cref="Avalonia.Controls.TextBlock.Tag"/> when the header is a
+    /// <c>TextBlock</c> (so display text can include units/tooltips without breaking persistence).
+    /// </summary>
+    public static string? GetColumnKey(object? header) => header switch
+    {
+        string s => s,
+        Avalonia.Controls.TextBlock { Tag: string tag } => tag,
+        Avalonia.Controls.TextBlock { Text: string text } => text,
+        _ => null,
+    };
 
     /// <summary>
     /// Factory default is Id ascending. Persisted sort wins when both key and direction are set.
