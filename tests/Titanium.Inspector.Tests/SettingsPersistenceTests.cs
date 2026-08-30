@@ -280,6 +280,49 @@ public class SettingsPersistenceTests
     }
 
     [TestMethod]
+    public async Task TryAutoStart_IgnoresUiClobber_OfAutoSystemProxyPreference()
+    {
+        var path = TempSettingsPath();
+        try
+        {
+            // Disk says: auto-start + auto system proxy (factory / first-launch intent).
+            var settings = new SettingsService(path);
+            Assert.IsTrue(settings.Current.AutoStartCapture);
+            Assert.IsTrue(settings.Current.AutoSystemProxyOnStart);
+
+            var recorder = new RecordingSystemProxyController();
+            using var interception = new InterceptionService(recorder);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception);
+
+            vm.BindPort = GetFreePort();
+
+            // Simulate Avalonia MenuItem TwoWay writing false before Opened and persisting it.
+            vm.AutoSystemProxyOnStart = false;
+            Assert.IsFalse(new SettingsService(path).Current.AutoSystemProxyOnStart);
+
+            await vm.TryAutoStartAsync();
+
+            Assert.IsTrue(vm.AutoSystemProxyOnStart, "Launch snapshot should restore clobbered preference");
+            Assert.IsTrue(interception.IsRunning, vm.StatusText);
+            Assert.IsTrue(vm.SystemProxy, vm.StatusText);
+            Assert.AreEqual(1, recorder.SetCount);
+            Assert.IsTrue(new SettingsService(path).Current.AutoSystemProxyOnStart);
+
+            vm.EnsureShutdown();
+        }
+        finally
+        {
+            TryDelete(path);
+        }
+    }
+
+    [TestMethod]
     public void SettingsService_MissingFile_UsesFactoryDefaults()
     {
         var path = TempSettingsPath();

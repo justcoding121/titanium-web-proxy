@@ -21,17 +21,26 @@
         <MenuItem Header="Capturing on/off" Command="{Binding ToggleCapturingCommand}" AutomationProperties.AutomationId="MenuToggleCapturing" />
         <MenuItem Header="Clear sessions" Command="{Binding ClearSessionsCommand}" AutomationProperties.AutomationId="MenuClearSessions" />
         <Separator />
-        <MenuItem Header="Auto-start capture" ToggleType="CheckBox" IsChecked="{Binding AutoStartCapture}"
+        <!-- Mode=OneWay + Command: Avalonia MenuItem CheckBox TwoWay can write false during init and persist it. -->
+        <MenuItem Header="Auto-start capture" ToggleType="CheckBox"
+                  IsChecked="{Binding AutoStartCapture, Mode=OneWay}"
+                  Command="{Binding ToggleAutoStartCaptureCommand}"
                   AutomationProperties.AutomationId="AutoStartCaptureCheck" />
-        <MenuItem Header="Auto system proxy on start" ToggleType="CheckBox" IsChecked="{Binding AutoSystemProxyOnStart}"
+        <MenuItem Header="Auto system proxy on start" ToggleType="CheckBox"
+                  IsChecked="{Binding AutoSystemProxyOnStart, Mode=OneWay}"
+                  Command="{Binding ToggleAutoSystemProxyOnStartCommand}"
                   AutomationProperties.AutomationId="AutoSystemProxyCheck" />
-        <MenuItem Header="Decrypt HTTPS" ToggleType="CheckBox" IsChecked="{Binding DecryptHttps}"
+        <MenuItem Header="Decrypt HTTPS" ToggleType="CheckBox"
+                  IsChecked="{Binding DecryptHttps, Mode=OneWay}"
+                  Command="{Binding ToggleDecryptHttpsCommand}"
                   AutomationProperties.AutomationId="MenuDecryptHttps" />
         <Separator />
         <MenuItem Header="Bind address" AutomationProperties.AutomationId="MenuBindAddress"><TextBox Width="160" Text="{Binding BindAddress}" Watermark="127.0.0.1 or 0.0.0.0" AutomationProperties.AutomationId="MenuBindAddressBox" /></MenuItem>
         <MenuItem Header="Bind port" AutomationProperties.AutomationId="MenuBindPort"><TextBox Width="80" Text="{Binding BindPort}" AutomationProperties.AutomationId="MenuBindPortBox" /></MenuItem>
         <Separator />
-        <MenuItem Header="System proxy" ToggleType="CheckBox" IsChecked="{Binding SystemProxy}"
+        <MenuItem Header="System proxy" ToggleType="CheckBox"
+                  IsChecked="{Binding SystemProxy, Mode=OneWay}"
+                  Command="{Binding ToggleSystemProxyCommand}"
                   AutomationProperties.AutomationId="MenuToggleSystemProxy" />
         <MenuItem Header="Install root CA (current user)" Command="{Binding InstallCaCommand}" AutomationProperties.AutomationId="MenuInstallCa" />
         <MenuItem Header="Remove root CA (current user)" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />

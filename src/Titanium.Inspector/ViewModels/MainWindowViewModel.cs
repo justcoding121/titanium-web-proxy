@@ -35,6 +35,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private bool _systemProxy;
     private bool _autoStartCapture = true;
     private bool _autoSystemProxyOnStart = true;
+    /// <summary>Prefs as loaded from disk — used for auto-start so MenuItem binding cannot clobber before Opened.</summary>
+    private bool _launchAutoStartCapture = true;
+    private bool _launchAutoSystemProxyOnStart = true;
     private bool _decryptHttps;
     private bool _decryptHttpsBusy;
     private string _autoResponderMatch = "*";
@@ -90,6 +93,21 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         StartCaptureCommand = new RelayCommand(async () => await StartCaptureAsync());
         StopCaptureCommand = new RelayCommand(StopCaptureAsync);
         ToggleCapturingCommand = new RelayCommand(ToggleCapturingAsync);
+        ToggleAutoStartCaptureCommand = new RelayCommand(() =>
+        {
+            AutoStartCapture = !AutoStartCapture;
+            return Task.CompletedTask;
+        });
+        ToggleAutoSystemProxyOnStartCommand = new RelayCommand(() =>
+        {
+            AutoSystemProxyOnStart = !AutoSystemProxyOnStart;
+            return Task.CompletedTask;
+        });
+        ToggleDecryptHttpsCommand = new RelayCommand(() =>
+        {
+            DecryptHttps = !DecryptHttps;
+            return Task.CompletedTask;
+        });
         ClearSessionsCommand = new RelayCommand(ClearSessionsAsync);
         ToggleSystemProxyCommand = new RelayCommand(ToggleSystemProxyAsync);
         InstallCaCommand = new RelayCommand(InstallCaAsync);
@@ -144,7 +162,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// </summary>
     public async Task TryAutoStartAsync()
     {
-        if (!AutoStartCapture)
+        // MenuItem CheckBox TwoWay bindings can write false during init and PersistSettings.
+        // Prefer the disk snapshot from LoadFromSettings for this first-start decision.
+        RestoreLaunchPreferencesIfClobbered();
+
+        if (!_launchAutoStartCapture)
         {
             return;
         }
@@ -154,7 +176,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             await StartCaptureAsync();
         }
 
-        if (!AutoSystemProxyOnStart || !_interception.IsRunning || SystemProxy)
+        if (!_launchAutoSystemProxyOnStart || !_interception.IsRunning || SystemProxy)
         {
             return;
         }
@@ -170,6 +192,33 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             StatusText =
                 $"Listening on {FormatBindDisplay()}:{BindPort}, but system proxy failed to enable — use the System proxy checkbox.";
+        }
+    }
+
+    /// <summary>
+    /// If Avalonia menu bindings flipped prefs before Opened, put launch-time values back
+    /// (and rewrite settings) so auto-start and the menu checkboxes stay honest.
+    /// </summary>
+    private void RestoreLaunchPreferencesIfClobbered()
+    {
+        var changed = false;
+        if (_autoStartCapture != _launchAutoStartCapture)
+        {
+            _autoStartCapture = _launchAutoStartCapture;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoStartCapture)));
+            changed = true;
+        }
+
+        if (_autoSystemProxyOnStart != _launchAutoSystemProxyOnStart)
+        {
+            _autoSystemProxyOnStart = _launchAutoSystemProxyOnStart;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoSystemProxyOnStart)));
+            changed = true;
+        }
+
+        if (changed)
+        {
+            PersistSettings();
         }
     }
 
@@ -501,6 +550,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand StartCaptureCommand { get; }
     public ICommand StopCaptureCommand { get; }
     public ICommand ToggleCapturingCommand { get; }
+    public ICommand ToggleAutoStartCaptureCommand { get; }
+    public ICommand ToggleAutoSystemProxyOnStartCommand { get; }
+    public ICommand ToggleDecryptHttpsCommand { get; }
     public ICommand ClearSessionsCommand { get; }
     public ICommand ToggleSystemProxyCommand { get; }
     public ICommand InstallCaCommand { get; }
@@ -898,8 +950,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var s = _settings.Current;
         BindAddress = s.BindAddress;
         BindPort = s.BindPort is > 0 and < 65536 ? s.BindPort : 8866;
-        _autoStartCapture = s.AutoStartCapture;
-        _autoSystemProxyOnStart = s.AutoSystemProxyOnStart;
+        _launchAutoStartCapture = _autoStartCapture = s.AutoStartCapture;
+        _launchAutoSystemProxyOnStart = _autoSystemProxyOnStart = s.AutoSystemProxyOnStart;
         _decryptHttps = s.DecryptHttps;
         AutoResponder.Enabled = s.AutoResponderEnabled;
         AutoResponder.LoadFromDtos(s.AutoResponderRules);

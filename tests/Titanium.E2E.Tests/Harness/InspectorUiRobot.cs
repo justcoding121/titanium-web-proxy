@@ -62,6 +62,14 @@ public sealed class InspectorUiRobot(Control root)
 
         if (TryFind<MenuItem>(automationId, out var menu) && menu is not null)
         {
+            // Preference menus use Mode=OneWay + Command — assigning IsChecked alone won't update the VM.
+            if (menu.Command is { } cmd && menu.IsChecked != value)
+            {
+                Assert.IsTrue(cmd.CanExecute(menu.CommandParameter), $"Menu command not executable: {automationId}");
+                cmd.Execute(menu.CommandParameter);
+                return;
+            }
+
             menu.IsChecked = value;
             return;
         }
