@@ -275,21 +275,10 @@ public class AutomationIdCoverageHeadlessTests
             StringAssert.Contains(fx.ViewModel.StatusText, "Exported 1 sessions");
         });
 
-        // macOS runners can briefly keep the zip handle; wait until a shared read succeeds.
-        fx.PathPicker.OpenPath = zip;
-        var readableDeadline = DateTime.UtcNow.AddSeconds(10);
-        while (DateTime.UtcNow < readableDeadline)
-        {
-            try
-            {
-                await using var probe = new FileStream(zip, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                break;
-            }
-            catch (IOException)
-            {
-                await Task.Delay(50);
-            }
-        }
+        // Import from a copy so any lingering exclusive handle on the export path cannot block macOS.
+        var importZip = Path.Combine(Path.GetTempPath(), "twp-arch-in-" + Guid.NewGuid().ToString("N") + ".zip");
+        File.Copy(zip, importZip, overwrite: true);
+        fx.PathPicker.OpenPath = importZip;
 
         await fx.DispatchAsync(() => fx.Robot.Click("MenuImportArchive"));
 
@@ -300,9 +289,13 @@ public class AutomationIdCoverageHeadlessTests
 
         await fx.DispatchAsync(() =>
         {
-            Assert.IsTrue(fx.PathPicker.OpenCalls >= 1);
-            StringAssert.Contains(fx.ViewModel.StatusText, "Appended");
+            Assert.IsTrue(fx.PathPicker.OpenCalls >= 1, "Import path picker was not invoked");
+            StringAssert.Contains(
+                fx.ViewModel.StatusText,
+                "Appended",
+                "StatusText after import: " + fx.ViewModel.StatusText);
         });
         try { File.Delete(zip); } catch { /* ignore */ }
+        try { File.Delete(importZip); } catch { /* ignore */ }
     }
 }

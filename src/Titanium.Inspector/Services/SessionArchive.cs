@@ -52,57 +52,66 @@ public static class SessionArchive
 
     public static async Task ExportNativeArchiveAsync(IEnumerable<SessionSnapshot> sessions, string zipPath, CancellationToken ct = default)
     {
-        await using var fs = new FileStream(
-            zipPath,
-            FileMode.Create,
-            FileAccess.ReadWrite,
-            FileShare.None,
-            bufferSize: 4096,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
-        using (var zip = new ZipArchive(fs, ZipArchiveMode.Create, leaveOpen: true))
+        // Off the UI sync context: zip I/O must not resume on Avalonia's dispatcher (macOS headless
+        // can otherwise stall the import that follows an export in the same test).
+        await Task.Run(async () =>
         {
-            var index = 0;
-            foreach (var session in sessions)
+            await using var fs = new FileStream(
+                zipPath,
+                FileMode.Create,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                bufferSize: 4096,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+            using (var zip = new ZipArchive(fs, ZipArchiveMode.Create, leaveOpen: true))
             {
-                ct.ThrowIfCancellationRequested();
-                var entry = zip.CreateEntry($"session-{index:D5}.json");
-                await using var stream = await entry.OpenAsync(ct);
-                await JsonSerializer.SerializeAsync(stream, session, cancellationToken: ct);
-                index++;
+                var index = 0;
+                foreach (var session in sessions)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var entry = zip.CreateEntry($"session-{index:D5}.json");
+                    await using var stream = entry.Open();
+                    await JsonSerializer.SerializeAsync(stream, session, cancellationToken: ct).ConfigureAwait(false);
+                    index++;
+                }
             }
-        }
 
-        await fs.FlushAsync(ct);
+            await fs.FlushAsync(ct).ConfigureAwait(false);
+        }, ct).ConfigureAwait(false);
     }
 
     public static async Task<List<SessionSnapshot>> ImportNativeArchiveAsync(string zipPath, CancellationToken ct = default)
     {
-        var list = new List<SessionSnapshot>();
-        await using var fs = new FileStream(
-            zipPath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            bufferSize: 4096,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
-        using var zip = new ZipArchive(fs, ZipArchiveMode.Read, leaveOpen: true);
-        foreach (var entry in zip.Entries.OrderBy(e => e.FullName))
+        return await Task.Run(async () =>
         {
-            ct.ThrowIfCancellationRequested();
-            if (!entry.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            var list = new List<SessionSnapshot>();
+            await using var fs = new FileStream(
+                zipPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete,
+                bufferSize: 4096,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+            using var zip = new ZipArchive(fs, ZipArchiveMode.Read, leaveOpen: true);
+            foreach (var entry in zip.Entries.OrderBy(e => e.FullName))
             {
-                continue;
+                ct.ThrowIfCancellationRequested();
+                if (!entry.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                await using var stream = entry.Open();
+                var snap = await JsonSerializer.DeserializeAsync<SessionSnapshot>(stream, cancellationToken: ct)
+                    .ConfigureAwait(false);
+                if (snap is not null)
+                {
+                    list.Add(snap);
+                }
             }
 
-            await using var stream = await entry.OpenAsync(ct);
-            var snap = await JsonSerializer.DeserializeAsync<SessionSnapshot>(stream, cancellationToken: ct);
-            if (snap is not null)
-            {
-                list.Add(snap);
-            }
-        }
-
-        return list;
+            return list;
+        }, ct).ConfigureAwait(false);
     }
 
     private static object ToHarEntry(SessionSnapshot s)
