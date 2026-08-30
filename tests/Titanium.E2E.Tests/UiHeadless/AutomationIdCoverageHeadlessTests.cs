@@ -50,6 +50,7 @@ public class AutomationIdCoverageHeadlessTests
         "ToolbarBindAddress",
         "ToolbarBindPort",
         "ToggleInterceptButton",
+        "ListeningIndicator",
         "EndpointStatusText",
         "CapturingCheck",
         "DecryptHttpsCheck",

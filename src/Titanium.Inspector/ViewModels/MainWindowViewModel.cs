@@ -742,6 +742,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>Bind address/port are start-time config; editable only while the proxy is stopped.</summary>
     public bool BindFieldsEnabled => !_interception.IsRunning;
 
+    /// <summary>True while the proxy endpoint is listening (drives toolbar accent / live indicator).</summary>
+    public bool IsIntercepting => _interception.IsRunning;
+
     /// <summary>Toolbar button label: Start or Stop interception.</summary>
     public string InterceptToggleText
     {
@@ -1520,6 +1523,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             : "Not listening";
         InterceptToggleText = _interception.IsRunning ? "Stop interception" : "Start interception";
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindFieldsEnabled)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsIntercepting)));
     }
 
     private static IPAddress ParseBindAddress(string bindAddress)

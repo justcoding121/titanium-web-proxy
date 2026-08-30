@@ -115,9 +115,17 @@
                    IsEnabled="{Binding BindFieldsEnabled}"
                    VerticalAlignment="Center" Margin="0,0,12,6"
                    AutomationProperties.AutomationId="ToolbarBindPort" />
+          <!-- Accent while idle (Start); quieter default while listening (Stop). Live pip shows running state. -->
           <Button Content="{Binding InterceptToggleText}" Command="{Binding ToggleInterceptCommand}"
+                  Classes.accent="{Binding BindFieldsEnabled}"
                   VerticalAlignment="Center" Margin="0,0,12,6"
                   AutomationProperties.AutomationId="ToggleInterceptButton" />
+          <Ellipse Width="8" Height="8" Margin="0,0,6,6"
+                   VerticalAlignment="Center"
+                   Fill="{DynamicResource SessionStatusSuccessBrush}"
+                   IsVisible="{Binding IsIntercepting}"
+                   ToolTip.Tip="Proxy is listening"
+                   AutomationProperties.AutomationId="ListeningIndicator" />
           <TextBlock Text="{Binding EndpointStatusText}" VerticalAlignment="Center" Opacity="0.85"
                      TextWrapping="Wrap" MaxWidth="420" Margin="0,0,12,6"
                      AutomationProperties.AutomationId="EndpointStatusText" />
