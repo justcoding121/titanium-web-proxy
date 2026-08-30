@@ -219,6 +219,8 @@ public class ExportAndSystemProxyCoverageTests
                 Method = "GET",
                 Url = "https://example.com/x",
                 Host = "example.com",
+                ProcessName = "chrome",
+                ProcessId = 99,
             };
             vm.SeedSession(snap);
             vm.SelectedSession = snap;
@@ -227,8 +229,28 @@ public class ExportAndSystemProxyCoverageTests
             await ExecuteAsync(vm.CopyUrlCommand);
             StringAssert.Contains(vm.StatusText, "Copied");
 
+            await ExecuteAsync(vm.FilterByHostCommand);
+            Assert.AreEqual("host:example.com", vm.SearchQuery);
+            StringAssert.Contains(vm.StatusText, "host:example.com");
+            await ExecuteAsync(vm.FilterByProcessCommand);
+            Assert.AreEqual("host:example.com process:chrome", vm.SearchQuery);
+            StringAssert.Contains(vm.StatusText, "process:chrome");
+            vm.SearchQuery = "";
+
             await ExecuteAsync(vm.ClearSessionsCommand);
             StringAssert.Contains(vm.StatusText, "cleared");
+
+            var keep = new SessionSnapshot { Id = 1, Method = "GET", Url = "https://a/", Host = "a" };
+            var drop = new SessionSnapshot { Id = 2, Method = "POST", Url = "https://b/", Host = "b" };
+            vm.SeedSession(keep);
+            vm.SeedSession(drop);
+            vm.SetSelectedSessions([drop]);
+            vm.SelectedSession = drop;
+            await ExecuteAsync(vm.RemoveSelectedSessionsCommand);
+            Assert.AreEqual(1, vm.Sessions.Count);
+            Assert.AreEqual(1, vm.Sessions[0].Id);
+            Assert.IsNull(vm.SelectedSession);
+            StringAssert.Contains(vm.StatusText, "Removed");
 
             vm.BeginBackgroundShutdown();
             vm.EnsureShutdown();

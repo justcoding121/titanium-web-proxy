@@ -120,6 +120,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return Task.CompletedTask;
         });
         ClearSessionsCommand = new RelayCommand(ClearSessionsAsync);
+        RemoveSelectedSessionsCommand = new RelayCommand(RemoveSelectedSessionsAsync);
         ToggleSystemProxyCommand = new RelayCommand(ToggleSystemProxyAsync);
         InstallCaCommand = new RelayCommand(InstallCaAsync);
         UntrustCaCommand = new RelayCommand(UntrustCaAsync);
@@ -130,6 +131,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         LoadFromSelectedCommand = new RelayCommand(LoadFromSelectedAsync);
         LoadIntoComposerCommand = new RelayCommand(LoadIntoComposerAsync);
         CopyUrlCommand = new RelayCommand(CopyUrlAsync);
+        FilterByHostCommand = new RelayCommand(FilterByHostAsync);
+        FilterByProcessCommand = new RelayCommand(FilterByProcessAsync);
         SendComposerCommand = new RelayCommand(async () => await SendComposerAsync());
         AddAutoResponderRuleCommand = new RelayCommand(AddAutoResponderRuleAsync);
         DeleteAutoResponderRuleCommand = new RelayCommand(DeleteAutoResponderRuleAsync);
@@ -451,6 +454,43 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return Task.CompletedTask;
     }
 
+    private Task RemoveSelectedSessionsAsync()
+    {
+        var selected = ResolveExportSelection();
+        if (selected.Count == 0)
+        {
+            StatusText = "Select one or more sessions to remove";
+            return Task.CompletedTask;
+        }
+
+        var ids = selected.Select(s => s.Id).ToHashSet();
+        for (var i = _all.Count - 1; i >= 0; i--)
+        {
+            if (ids.Contains(_all[i].Id))
+            {
+                _all.RemoveAt(i);
+            }
+        }
+
+        for (var i = Sessions.Count - 1; i >= 0; i--)
+        {
+            if (ids.Contains(Sessions[i].Id))
+            {
+                Sessions.RemoveAt(i);
+            }
+        }
+
+        _selectedSessions.Clear();
+        if (SelectedSession is not null && ids.Contains(SelectedSession.Id))
+        {
+            SelectedSession = null;
+        }
+
+        RefreshSessionCountText();
+        StatusText = selected.Count == 1 ? "Removed 1 session" : $"Removed {selected.Count} sessions";
+        return Task.CompletedTask;
+    }
+
     private Task ToggleSystemProxyAsync()
     {
         SystemProxy = !SystemProxy;
@@ -611,6 +651,68 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         StatusText = "Copied URL";
     }
 
+    private Task FilterByHostAsync()
+    {
+        var host = ResolveFilterHost();
+        if (string.IsNullOrEmpty(host))
+        {
+            StatusText = "Select a session with a host to filter";
+            return Task.CompletedTask;
+        }
+
+        SearchQuery = SessionSearch.SetKeyedToken(SearchQuery, "host", host);
+        StatusText = $"Filtered by host:{host}";
+        return Task.CompletedTask;
+    }
+
+    private Task FilterByProcessAsync()
+    {
+        var process = ResolveFilterProcess();
+        if (string.IsNullOrEmpty(process))
+        {
+            StatusText = "Select a session with a process to filter";
+            return Task.CompletedTask;
+        }
+
+        SearchQuery = SessionSearch.SetKeyedToken(SearchQuery, "process", process);
+        StatusText = $"Filtered by process:{process}";
+        return Task.CompletedTask;
+    }
+
+    private string? ResolveFilterHost()
+    {
+        var session = SelectedSession ?? _selectedSessions.FirstOrDefault();
+        if (session is null)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(session.Host))
+        {
+            return session.Host.Trim();
+        }
+
+        return Uri.TryCreate(session.Url, UriKind.Absolute, out var uri) && !string.IsNullOrEmpty(uri.Host)
+            ? uri.Host
+            : null;
+    }
+
+    private string? ResolveFilterProcess()
+    {
+        var session = SelectedSession ?? _selectedSessions.FirstOrDefault();
+        if (session is null)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(session.ProcessName))
+        {
+            return session.ProcessName.Trim();
+        }
+
+        return session.ProcessId > 0 ? session.ProcessId.ToString() : null;
+    }
+
     private string? ResolveCopyUrl()
     {
         if (!string.IsNullOrEmpty(SelectedSession?.Url))
@@ -702,6 +804,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ToggleAutoSystemProxyOnStartCommand { get; }
     public ICommand ToggleDecryptHttpsCommand { get; }
     public ICommand ClearSessionsCommand { get; }
+    public ICommand RemoveSelectedSessionsCommand { get; }
     public ICommand ToggleSystemProxyCommand { get; }
     public ICommand InstallCaCommand { get; }
     public ICommand UntrustCaCommand { get; }
@@ -712,6 +815,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand LoadFromSelectedCommand { get; }
     public ICommand LoadIntoComposerCommand { get; }
     public ICommand CopyUrlCommand { get; }
+    public ICommand FilterByHostCommand { get; }
+    public ICommand FilterByProcessCommand { get; }
     public ICommand SendComposerCommand { get; }
     public ICommand AddAutoResponderRuleCommand { get; }
     public ICommand DeleteAutoResponderRuleCommand { get; }

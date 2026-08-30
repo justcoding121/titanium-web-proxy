@@ -120,6 +120,22 @@ public class SessionSearchAndArchiveTests
     }
 
     [TestMethod]
+    public void SetKeyedToken_ReplacesExistingKey()
+    {
+        var set = SessionSearch.SetKeyedToken("method:GET host:old", "host", "example.com");
+        Assert.AreEqual("method:GET host:example.com", set);
+        Assert.IsTrue(SessionSearch.ContainsToken(set, "host", "example.com"));
+        Assert.IsFalse(SessionSearch.ContainsToken(set, "host", "old"));
+
+        var process = SessionSearch.SetKeyedToken(set, "process", "chrome");
+        Assert.AreEqual("method:GET host:example.com process:chrome", process);
+
+        var replacedProcess = SessionSearch.SetKeyedToken(process, "process", "msedge");
+        Assert.AreEqual("method:GET host:example.com process:msedge", replacedProcess);
+        Assert.AreEqual("method:GET host:example.com", SessionSearch.RemoveKeyedTokens(replacedProcess, "process"));
+    }
+
+    [TestMethod]
     public async Task NativeArchive_RoundTrip()
     {
         var path = Path.Combine(Path.GetTempPath(), $"twp-insp-{Guid.NewGuid():N}.zip");

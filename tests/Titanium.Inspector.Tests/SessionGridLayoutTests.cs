@@ -11,11 +11,13 @@ public class SessionGridLayoutTests
     public void GetColumnKey_UsesStringOrTextBlockTag()
     {
         Assert.AreEqual("Id", SessionGridLayout.GetColumnKey("Id"));
+        Assert.AreEqual("Duration", SessionGridLayout.GetColumnKey("Duration (ms)"));
+        Assert.AreEqual("TTFB", SessionGridLayout.GetColumnKey("TTFB (ms)"));
         Assert.AreEqual(
             "Duration",
             SessionGridLayout.GetColumnKey(new Avalonia.Controls.TextBlock { Text = "Duration (ms)", Tag = "Duration" }));
         Assert.AreEqual(
-            "TTFB (ms)",
+            "TTFB",
             SessionGridLayout.GetColumnKey(new Avalonia.Controls.TextBlock { Text = "TTFB (ms)" }));
         Assert.IsNull(SessionGridLayout.GetColumnKey(42));
     }
