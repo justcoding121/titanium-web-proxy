@@ -83,7 +83,16 @@
           <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="60"
                               CustomSortComparer="{x:Static svc:SessionIdComparer.Instance}" />
           <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="70" />
-          <DataGridTextColumn Header="Status" Binding="{Binding StatusCode}" Width="60" />
+          <DataGridTemplateColumn Header="Status" Width="60" SortMemberPath="StatusCode">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="svc:SessionSnapshot">
+                <TextBlock Text="{Binding StatusCode}"
+                           Foreground="{Binding StatusCode, Converter={StaticResource StatusCodeBrushConverter}}"
+                           FontWeight="{Binding StatusCode, Converter={StaticResource StatusCodeFontWeightConverter}}"
+                           VerticalAlignment="Center" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
           <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="140" />
           <DataGridTextColumn Header="URL" Binding="{Binding Url}" Width="280" />
           <DataGridTextColumn Header="Client→Server" Binding="{Binding Protocol}" Width="110" />
