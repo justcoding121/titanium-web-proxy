@@ -353,6 +353,61 @@ public class SettingsPersistenceTests
     }
 
     [TestMethod]
+    public void ToggleCommands_AndSessionGridLayout_CoverNewLaunchSeams()
+    {
+        var path = TempSettingsPath();
+        try
+        {
+            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            var settings = new SettingsService(path);
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception);
+
+            Assert.IsTrue(vm.AutoStartCapture);
+            Assert.IsTrue(vm.ToggleAutoStartCaptureCommand.CanExecute(null));
+            vm.ToggleAutoStartCaptureCommand.Execute(null);
+            Assert.IsFalse(vm.AutoStartCapture);
+
+            Assert.IsTrue(vm.AutoSystemProxyOnStart);
+            vm.ToggleAutoSystemProxyOnStartCommand.Execute(null);
+            Assert.IsFalse(vm.AutoSystemProxyOnStart);
+
+            Assert.IsFalse(vm.DecryptHttps);
+            // DecryptHttps toggle when interception is stopped should stay off / set status.
+            vm.ToggleDecryptHttpsCommand.Execute(null);
+
+            var layout = new SessionGridLayoutDto
+            {
+                SortColumnKey = "Id",
+                SortDirection = ListSortDirection.Ascending,
+                Columns =
+                [
+                    new SessionGridColumnStateDto { Key = "Id", Width = 80, DisplayIndex = 0 },
+                ],
+            };
+            Assert.IsNull(vm.GetSessionGridLayout());
+            vm.PersistSessionGridLayout(layout);
+            Assert.AreEqual("Id", vm.GetSessionGridLayout()?.SortColumnKey);
+            Assert.AreEqual("Id", new SettingsService(path).Current.SessionGridLayout?.SortColumnKey);
+
+            // System proxy without capture running hits the early-return path.
+            Assert.IsFalse(interception.IsRunning);
+            vm.SystemProxy = true;
+            Assert.IsFalse(vm.SystemProxy);
+            StringAssert.Contains(vm.StatusText, "Start interception");
+        }
+        finally
+        {
+            TryDelete(path);
+        }
+    }
+
+    [TestMethod]
     public void SettingsService_MissingFile_UsesFactoryDefaults()
     {
         var path = TempSettingsPath();
