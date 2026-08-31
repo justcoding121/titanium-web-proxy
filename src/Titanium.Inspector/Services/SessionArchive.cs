@@ -60,7 +60,9 @@ public static class SessionArchive
             zipPath,
             FileMode.Create,
             FileAccess.ReadWrite,
-            FileShare.None,
+            // Allow readers (tests / Finder) to open the zip as soon as bytes land; FileShare.None
+            // left an exclusive lock long enough for File.Copy to fail on macOS CI.
+            FileShare.Read,
             bufferSize: 4096,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
         using (var zip = new ZipArchive(fs, ZipArchiveMode.Create, leaveOpen: true))
