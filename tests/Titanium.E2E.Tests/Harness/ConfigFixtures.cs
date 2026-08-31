@@ -156,8 +156,9 @@ public static class ConfigFixtures
         int? dashboardPort = null)
     {
         var path = Path.Combine(dir, $"plus-{listenPort}.yaml");
+        // Indent relative to raw-string de-indent (controlPlane children → 4 spaces), not source column.
         var dashLine = dashboardPort is > 0
-            ? $"\n                dashboardPort: {dashboardPort.Value}"
+            ? $"\n    dashboardPort: {dashboardPort.Value}"
             : "";
         File.WriteAllText(path, $"""
             schemaVersion: "7.0"
