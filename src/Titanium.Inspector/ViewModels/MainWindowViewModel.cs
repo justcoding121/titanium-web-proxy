@@ -2109,10 +2109,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         try
         {
             var sessions = _all.ToList();
-            await _store.EnsureBodiesLoadedAsync(sessions).ConfigureAwait(false);
-            await SessionArchive.ExportHarAsync(sessions, path).ConfigureAwait(false);
-            // Set StatusText on the continuation thread (same as ExportArchiveAsync). MarshalToUiAsync
-            // after ConfigureAwait(false) flaked on macOS headless — file written, StatusText stayed Ready.
+            // Stay on the UI sync context (RelayCommand). ConfigureAwait(false) + StatusText update
+            // raced with headless WaitUntil pumps on macOS (file written, StatusText stayed Ready).
+            StatusText = "Exporting HAR…";
+            await _store.EnsureBodiesLoadedAsync(sessions);
+            await SessionArchive.ExportHarAsync(sessions, path);
             StatusText = $"Exported {sessions.Count} sessions to {path}";
         }
         catch (Exception ex)
@@ -2139,8 +2140,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            await _store.EnsureBodiesLoadedAsync(sessions).ConfigureAwait(false);
-            await SessionArchive.ExportHarAsync(sessions, path).ConfigureAwait(false);
+            StatusText = "Exporting HAR…";
+            await _store.EnsureBodiesLoadedAsync(sessions);
+            await SessionArchive.ExportHarAsync(sessions, path);
             StatusText = $"Exported {sessions.Count} sessions to {path}";
         }
         catch (Exception ex)
