@@ -111,12 +111,12 @@ jobs:
           path: website/.vitepress/dist
 
   deploy:
-    # github-pages environment protection allows develop only; beta/stable pushes
-    # still build (and can upload artifacts) but must not attempt Pages deploy.
+    # Push deploys only from develop (Pages env protection). Manual workflow_dispatch
+    # may publish from a fix branch to clear a bad artifact urgently.
     if: >
       github.event_name != 'pull_request' && (
         github.ref == 'refs/heads/develop' ||
-        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop') ||
+        github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v'))
       )
     needs: build
