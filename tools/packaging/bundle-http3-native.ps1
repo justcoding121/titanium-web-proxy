@@ -237,13 +237,15 @@ function Ensure-SonameLinks([string] $dir) {
 function Set-LinuxRpath([string] $dir) {
     $patchelf = Ensure-Patchelf
     Get-ChildItem -Path $dir -File -Filter "*.so*" | ForEach-Object {
+        $soFile = $_
         # Skip pure symlinks
-        if ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) { return }
+        if ($soFile.Attributes -band [IO.FileAttributes]::ReparsePoint) { return }
         try {
-            Invoke-Native $patchelf @("--set-rpath", "`$ORIGIN", $_.FullName)
+            Invoke-Native $patchelf @("--set-rpath", "`$ORIGIN", $soFile.FullName)
         }
         catch {
-            Write-Info "patchelf skipped $($_.Name): $_"
+            # Catch uses $_ as the error; keep $soFile for the name.
+            Write-Info "patchelf skipped $($soFile.Name): $_"
         }
     }
 }
@@ -367,10 +369,10 @@ function Bundle-Homebrew {
                 $local = Join-Path $PublishDir $depLeaf
                 if (-not (Test-Path $local)) {
                     # map libssl.3.dylib style
-                    $alt = $dylibs | Where-Object { $_.Name -like ($depLeaf -replace '\..*$','') + "*" } | Select-Object -First 1
+                    $alt = $dylibs | Where-Object { $_.Name -like (($depLeaf -replace '\..*$','') + "*") } | Select-Object -First 1
                     if ($alt) { $depLeaf = $alt.Name; $local = $alt.FullName }
                 }
-                if (Test-Path $local -or ($dylibs.Name -contains $depLeaf)) {
+                if ((Test-Path $local) -or ($dylibs.Name -contains $depLeaf)) {
                     if ($dep -ne "@loader_path/$depLeaf") {
                         try {
                             Invoke-Native "install_name_tool" @("-change", $dep, "@loader_path/$depLeaf", $lib.FullName)
