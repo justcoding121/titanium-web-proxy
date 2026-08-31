@@ -47,15 +47,6 @@ type GhRelease = {
   assets: Array<{ name: string; browser_download_url: string }>
 }
 
-function emptyLinks(): DownloadLinks {
-  return {
-    cli: {},
-    inspector: {},
-    releasesUrl: RELEASES,
-    latestTag: null,
-  }
-}
-
 function githubHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
@@ -94,15 +85,29 @@ function mapReleases(releases: GhRelease[]): DownloadLinks {
 
 export default defineLoader({
   async load(): Promise<DownloadLinks> {
+    const url =
+      'https://api.github.com/repos/justcoding121/titanium-web-proxy/releases?per_page=40'
     try {
-      const res = await fetch(
-        'https://api.github.com/repos/justcoding121/titanium-web-proxy/releases?per_page=40',
-        { headers: githubHeaders() },
-      )
-      if (!res.ok) return emptyLinks()
-      return mapReleases((await res.json()) as GhRelease[])
-    } catch {
-      return emptyLinks()
+      const res = await fetch(url, { headers: githubHeaders() })
+      if (!res.ok) {
+        throw new Error(`GitHub releases API ${res.status} ${res.statusText}`)
+      }
+      const links = mapReleases((await res.json()) as GhRelease[])
+      const cliCount = Object.keys(links.cli).length
+      if (cliCount === 0) {
+        console.warn(
+          '[download.data] GitHub releases returned no CLI zip assets — download buttons will be empty',
+        )
+      } else {
+        console.log(
+          `[download.data] resolved ${cliCount} CLI RIDs from tag ${links.cli['win-x64']?.tag ?? links.latestTag}`,
+        )
+      }
+      return links
+    } catch (e) {
+      console.error('[download.data] failed to load GitHub releases:', e)
+      // Fail the Pages build rather than silently shipping empty download buttons.
+      throw e
     }
   },
 })

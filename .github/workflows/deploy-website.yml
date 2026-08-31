@@ -76,6 +76,29 @@ jobs:
             echo "Warning: docs/api missing; API pages will not be published"
           fi
 
+      # GitHub Pages + VitePress cleanUrls: /download sometimes keeps a stale
+      # object while /download.html updates. Publish both shapes so the nav link works.
+      - name: Mirror cleanUrls HTML as index.html
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist=website/.vitepress/dist
+          for f in "$dist"/*.html; do
+            base="$(basename "$f" .html)"
+            [[ "$base" == "index" || "$base" == "404" ]] && continue
+            mkdir -p "$dist/$base"
+            cp -f "$f" "$dist/$base/index.html"
+          done
+          # Nested docs pages
+          if [ -d "$dist/docs" ]; then
+            find "$dist/docs" -name '*.html' ! -name 'index.html' ! -name '404.html' | while read -r f; do
+              base="$(basename "$f" .html)"
+              dir="$(dirname "$f")"
+              mkdir -p "$dir/$base"
+              cp -f "$f" "$dir/$base/index.html"
+            done
+          fi
+
       - name: Upload Pages artifact
         if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
