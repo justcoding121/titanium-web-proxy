@@ -7,7 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <SignAssembly>True</SignAssembly>
     <AssemblyOriginatorKeyFile>StrongNameKey.snk</AssemblyOriginatorKeyFile>
-    <VersionPrefix>7.0.2</VersionPrefix>
+    <VersionPrefix>7.0.3</VersionPrefix>
     <Authors>Jehonathan Thomas</Authors>
     <Description>YAML/JSON configuration binding for Titanium Web Proxy CLI and reverse-proxy documents.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

@@ -84,7 +84,7 @@ public class CliCommandE2ETests
         using var harness = new CliProcessHarness();
         var (code, stdout, _) = await harness.RunOnceAsync(["version"]);
         Assert.AreEqual(0, code);
-        StringAssert.Contains(stdout, "7.0.2");
+        StringAssert.Contains(stdout, "7.0.3");
     }
 
     [TestMethod]
@@ -344,7 +344,7 @@ public class CliCommandE2ETests
             ["version", "--check"],
             timeout: TimeSpan.FromSeconds(30));
         Assert.AreEqual(0, code);
-        StringAssert.Contains(stdout + stderr, "7.0.2");
+        StringAssert.Contains(stdout + stderr, "7.0.3");
     }
 
     [TestMethod]

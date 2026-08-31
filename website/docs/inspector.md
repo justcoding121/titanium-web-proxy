@@ -20,8 +20,8 @@ winget install justcoding121.TitaniumInspector
 
 Windows examples for the **7.0 beta** product tag:
 
-- [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.2-beta/TitaniumInspector-win-x64.msi)
-- [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.2-beta/TitaniumInspector-win-x64.zip)
+- [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.3-beta/TitaniumInspector-win-x64.msi)
+- [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.3-beta/TitaniumInspector-win-x64.zip)
 
 ### Linux
 
