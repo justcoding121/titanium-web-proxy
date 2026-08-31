@@ -195,6 +195,9 @@ jobs:
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
+        # Intel macOS bottles are sparse; do not force-upgrade openssl (no bottle → job fail).
+        $env:HOMEBREW_NO_AUTO_UPDATE = '1'
+        $env:HOMEBREW_NO_INSTALL_UPGRADE = '1'
         brew install openssl@3 libmsquic
         $prefix = (& brew --prefix).Trim()
         $msquicLib = Join-Path $prefix 'opt/libmsquic/lib'
@@ -236,7 +239,8 @@ jobs:
             Select-Object -First 1
           if ($found) {
             $extra = $found.Directory.FullName
-            $dyld2 = "$extra:$dyld"
+            # ${extra} — bare $extra: is parsed as a PowerShell drive-qualified variable.
+            $dyld2 = "${extra}:${dyld}"
             Add-Content -Path $env:GITHUB_ENV -Value "DYLD_LIBRARY_PATH=$dyld2"
             Add-Content -Path $env:GITHUB_ENV -Value "DYLD_FALLBACK_LIBRARY_PATH=$dyld2"
             $env:DYLD_LIBRARY_PATH = $dyld2

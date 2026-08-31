@@ -248,13 +248,24 @@ jobs:
           & (Join-Path $nginxDir 'nginx.exe') -v
 
       # Homebrew nginx bottles include --with-http_v3_module (OpenSSL 3). Fail hard if missing.
+      # macos-15-intel: Homebrew no longer mass-bottles Intel; avoid brew update/upgrade of openssl
+      # (already-installed bottle works; upgrading hits "no bottle available").
       - name: Install nginx (HTTP/3-capable, macOS)
         if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALL_UPGRADE: '1'
         run: |
           set -euo pipefail
-          brew update
-          brew install openssl@3 pcre2
-          brew install nginx
+          # Use preinstalled openssl@3 / pcre2 when present; do not upgrade (Intel bottles missing).
+          brew list --versions openssl@3 || brew install openssl@3
+          brew list --versions pcre2 || brew install pcre2
+          if ! brew list --versions nginx >/dev/null 2>&1; then
+            if ! brew install nginx; then
+              echo "brew install nginx failed (likely missing Intel bottle); building from source…" >&2
+              brew install --build-from-source nginx
+            fi
+          fi
           # Prefer brew nginx; if a bottle somehow lacks http_v3, rebuild from source with the flag.
           if ! nginx -V 2>&1 | grep -q http_v3_module; then
             echo "brew nginx lacks http_v3_module; rebuilding from source with --with-http_v3_module" >&2
@@ -303,8 +314,12 @@ jobs:
       - name: Install MsQuic (HTTP/3, macOS Intel)
         if: runner.os == 'macOS'
         shell: pwsh
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALL_UPGRADE: '1'
         run: |
           $ErrorActionPreference = 'Stop'
+          # Do not upgrade openssl@3 on Intel — new formula often has no bottle.
           brew install openssl@3 libmsquic
           $prefix = (& brew --prefix).Trim()
           $msquicLib = Join-Path $prefix 'opt/libmsquic/lib'
@@ -347,7 +362,8 @@ jobs:
               Select-Object -First 1
             if ($found) {
               $extra = $found.Directory.FullName
-              $dyld2 = "$extra:$dyld"
+              # ${extra} — bare $extra: is parsed as a PowerShell drive-qualified variable.
+              $dyld2 = "${extra}:${dyld}"
               Add-Content -Path $env:GITHUB_ENV -Value "DYLD_LIBRARY_PATH=$dyld2"
               Add-Content -Path $env:GITHUB_ENV -Value "DYLD_FALLBACK_LIBRARY_PATH=$dyld2"
               $env:DYLD_LIBRARY_PATH = $dyld2
