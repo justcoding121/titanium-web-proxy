@@ -231,7 +231,7 @@ public class SameCommonNameStoreCandidateTests
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
         var pending = pendingField.GetValue(mgr)!;
         var itemType = pending.GetType().GetGenericArguments()[0];
-        var disposable = new X509Certificate2(leaf.RawData);
+        var disposable = X509CertificateLoader.LoadCertificate(leaf.RawData);
         var item = Activator.CreateInstance(itemType, disposable, DateTime.UtcNow.AddMinutes(-5))!;
         pending.GetType().GetMethod("Enqueue")!.Invoke(pending, [item]);
         typeof(CertificateManager).GetMethod("DisposePendingEvictions",
