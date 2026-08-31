@@ -16,7 +16,10 @@ public class ExportAndSystemProxyCoverageTests
             var settings = new SettingsService(path);
             var registry = new SessionRegistry();
             var picker = new ScriptedInspectorPathPicker();
-            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),
                 registry,
@@ -108,7 +111,10 @@ public class ExportAndSystemProxyCoverageTests
             var settings = new SettingsService(settingsPath);
             var registry = new SessionRegistry();
             var picker = new ScriptedInspectorPathPicker();
-            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),
                 registry,
@@ -158,7 +164,10 @@ public class ExportAndSystemProxyCoverageTests
             settings.Save();
 
             var registry = new SessionRegistry();
-            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),
                 registry,
@@ -170,7 +179,7 @@ public class ExportAndSystemProxyCoverageTests
 
             vm.SystemProxy = true;
             Assert.IsFalse(vm.SystemProxy);
-            StringAssert.Contains(vm.StatusText, "Start interception");
+            StringAssert.Contains(vm.StatusText, "Start the proxy");
 
             await ExecuteAsync(vm.StartCaptureCommand);
             Assert.IsTrue(interception.IsRunning, vm.StatusText);
@@ -205,7 +214,10 @@ public class ExportAndSystemProxyCoverageTests
                 ElevateRootCaResult = false,
                 DeviceCaSetupResult = false,
             };
-            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),
                 registry,
@@ -215,13 +227,13 @@ public class ExportAndSystemProxyCoverageTests
                 dialogs);
 
             await ExecuteAsync(vm.InstallCaCommand);
-            StringAssert.Contains(vm.StatusText, "Start interception");
+            StringAssert.Contains(vm.StatusText, "Start the proxy");
 
             await ExecuteAsync(vm.UntrustCaCommand);
-            StringAssert.Contains(vm.StatusText, "Start interception");
+            StringAssert.Contains(vm.StatusText, "Start the proxy");
 
             await ExecuteAsync(vm.ExportCaCommand);
-            StringAssert.Contains(vm.StatusText, "start interception");
+            StringAssert.Contains(vm.StatusText, "Start the proxy");
 
             await ExecuteAsync(vm.LoadIntoComposerCommand);
             StringAssert.Contains(vm.StatusText, "Select a session");
@@ -346,7 +358,10 @@ public class ExportAndSystemProxyCoverageTests
             settings.Save();
 
             var registry = new SessionRegistry();
-            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),
                 registry,

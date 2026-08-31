@@ -23,17 +23,40 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
 
     private static bool orphanedLegacyRootNoticeLogged;
 
+    /// <summary>
+    ///     When an absolute root PFX path has been used, leaf <c>crts/</c> lives beside that file
+    ///     instead of under the shared <see cref="AppDirectoryName"/> directory.
+    /// </summary>
+    private string? absoluteLeafBaseDirectory;
+
     private string? rootCertificatePath;
+
+    /// <summary>
+    ///     Shared default leaf-cache directory (<c>%LocalAppData%/Titanium.Web.Proxy/crts</c> on Windows).
+    ///     Used by Inspector to prune legacy leaves after migrating to an absolute root path.
+    /// </summary>
+    public static string GetSharedLeafCertificateDirectory()
+    {
+        string basePath;
+        if (RunTime.IsWindows)
+            basePath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        else
+            basePath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+
+        return Path.Combine(basePath, AppDirectoryName, DefaultCertificateDirectoryName);
+    }
 
     public X509Certificate2? LoadRootCertificate(string pathOrName, string password, X509KeyStorageFlags storageFlags)
     {
         var path = GetRootCertificatePath(pathOrName);
+        RememberAbsoluteLeafBase(pathOrName, path);
         return LoadCertificate(path, password, storageFlags);
     }
 
     public void SaveRootCertificate(string pathOrName, string password, X509Certificate2 certificate)
     {
         var path = GetRootCertificatePath(pathOrName);
+        RememberAbsoluteLeafBase(pathOrName, path);
         var exported = certificate.Export(X509ContentType.Pkcs12, password);
         WriteFileAtomic(path, exported);
     }
@@ -167,13 +190,22 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
     {
         if (Path.IsPathRooted(pathOrName)) return pathOrName;
 
-        return Path.Combine(GetRootCertificateDirectory(),
+        return Path.Combine(GetSharedRootCertificateDirectory(),
             string.IsNullOrEmpty(pathOrName) ? DefaultRootCertificateFileName : pathOrName);
+    }
+
+    private void RememberAbsoluteLeafBase(string pathOrName, string resolvedRootPath)
+    {
+        if (!Path.IsPathRooted(pathOrName)) return;
+
+        var dir = Path.GetDirectoryName(resolvedRootPath);
+        if (!string.IsNullOrEmpty(dir))
+            absoluteLeafBaseDirectory = dir;
     }
 
     private string GetCertificatePath(bool create)
     {
-        var path = GetRootCertificateDirectory();
+        var path = absoluteLeafBaseDirectory ?? GetSharedRootCertificateDirectory();
 
         var certPath = Path.Combine(path, DefaultCertificateDirectoryName);
         if (create && !Directory.Exists(certPath)) Directory.CreateDirectory(certPath);
@@ -189,7 +221,7 @@ public sealed class DefaultCertificateDiskCache : ICertificateCache
     ///     location" for a file holding the root CA's private key. 5.0.0 is unreleased, so a clean move
     ///     is preferred over a dual-path migration that would have to keep checking the old spot forever.
     /// </summary>
-    private string GetRootCertificateDirectory()
+    private string GetSharedRootCertificateDirectory()
     {
         if (rootCertificatePath == null)
         {

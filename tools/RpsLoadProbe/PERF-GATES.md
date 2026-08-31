@@ -2,7 +2,7 @@
 
 Run on the release SHA via [`.github/workflows/rps-saturation.yml`](../../.github/workflows/rps-saturation.yml) (manual `workflow_dispatch`).
 
-Product version stays **`7.0.0.0`** until the first beta cut; gates block beta/stable tags, not feature commits.
+Product version is **`7.0.0.0`**; gates block beta/stable tags, not feature commits.
 
 ## Branch policy + CI gates (beta / stable)
 
@@ -97,7 +97,7 @@ Do not retune the harness to pass a gate — fix Core / CLI / Plus instead. Neve
   - Discovery-file **0.80**, metrics-scrape **0.80** vs CLI
   - lb-leasttime stays **0.85×**
 
-**Pre-beta note:** Gate 1/2 matrix, editions, cross-version, and product are green on `develop` as of 2026-08-29. Remaining before tag: feature freeze on the release SHA, then cut `v7.0.0-beta` (heavier wiki tables optional).
+**Pre-beta note:** Gate 1/2 matrix, editions, cross-version, and product are green on `develop` as of 2026-08-29. Remaining before tag: feature freeze on the release SHA, then cut `v7.0.1-beta` (heavier wiki tables optional).
 
 ### Fix-and-rerun policy
 

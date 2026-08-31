@@ -587,7 +587,15 @@ public class SonarNewCodeCoverageTests
         {
             enabled.SetValue(null, original);
             Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT", null);
-            if (File.Exists(outPath)) File.Delete(outPath);
+            SpinWait.SpinUntil(() =>
+            {
+                try
+                {
+                    if (File.Exists(outPath)) File.Delete(outPath);
+                    return !File.Exists(outPath);
+                }
+                catch (IOException) { return false; }
+            }, TimeSpan.FromSeconds(3));
         }
     }
 
@@ -1074,15 +1082,15 @@ public class SonarNewCodeCoverageTests
             finally
             {
                 Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT", null);
-                try
+                SpinWait.SpinUntil(() =>
                 {
-                    if (File.Exists(outPath))
-                        File.Delete(outPath);
-                }
-                catch
-                {
-                    // best-effort
-                }
+                    try
+                    {
+                        if (File.Exists(outPath)) File.Delete(outPath);
+                        return !File.Exists(outPath);
+                    }
+                    catch (IOException) { return false; }
+                }, TimeSpan.FromSeconds(3));
             }
         }
         finally

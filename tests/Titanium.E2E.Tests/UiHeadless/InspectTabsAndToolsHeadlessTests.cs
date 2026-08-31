@@ -89,16 +89,20 @@ public class InspectTabsAndToolsHeadlessTests
             fx.Robot.Click("MenuExportHar");
         });
 
-        // ExportHarCommand is async; pump dispatcher while waiting so StatusText continuations run.
+        // Pump dispatcher so async RelayCommand continuations (no ConfigureAwait(false)) run.
         await fx.WaitUntilAsync(
-            () => fx.ViewModel.StatusText.Contains("Exported 1 sessions", StringComparison.Ordinal),
-            TimeSpan.FromSeconds(15));
+            () => fx.ViewModel.StatusText.Contains("Exported 1 sessions", StringComparison.Ordinal)
+                  || fx.ViewModel.StatusText.Contains("Export HAR failed", StringComparison.Ordinal),
+            TimeSpan.FromSeconds(20));
 
         await fx.DispatchAsync(() =>
         {
-            Assert.IsTrue(fx.PathPicker.SaveCalls >= 1);
+            Assert.IsTrue(fx.PathPicker.SaveCalls >= 1, "Save picker calls=" + fx.PathPicker.SaveCalls);
             Assert.IsTrue(File.Exists(har), "HAR should be written via scripted picker path");
-            StringAssert.Contains(fx.ViewModel.StatusText, "Exported 1 sessions");
+            StringAssert.Contains(
+                fx.ViewModel.StatusText,
+                "Exported 1 sessions",
+                "StatusText after HAR export: " + fx.ViewModel.StatusText);
         });
 
         try { File.Delete(har); } catch { /* ignore */ }

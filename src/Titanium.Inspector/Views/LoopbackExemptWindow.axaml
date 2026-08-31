@@ -2,20 +2,20 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:svc="using:Titanium.Inspector.Services"
         x:Class="Titanium.Inspector.Views.LoopbackExemptWindow" AutomationProperties.AutomationId="LoopbackExemptWindow"
-        Title="Loopback for sandboxed apps"
+        Title="Allow Store apps to use this proxy"
         Width="640" Height="520"
         WindowStartupLocation="CenterOwner">
   <DockPanel Margin="12">
     <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,8"
-               Text="Check AppContainer / Store apps that should reach the local proxy, then apply. Clearing removes all loopback exemptions." />
+               Text="Windows Store / UWP apps are blocked from localhost by default. Check apps that should use Inspector, then Apply. Clear all removes every allow entry." />
     <TextBox x:Name="FilterBox"
              DockPanel.Dock="Top"
              Margin="0,0,0,8"
              Watermark="Filter by app name…"
              AutomationProperties.AutomationId="LoopbackFilter" />
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
-      <Button x:Name="ExemptButton" AutomationProperties.AutomationId="LoopbackExempt" Content="Apply exemptions" MinWidth="120" />
-      <Button x:Name="ClearButton" AutomationProperties.AutomationId="LoopbackClear" Content="Clear exemptions" MinWidth="120" />
+      <Button x:Name="ExemptButton" AutomationProperties.AutomationId="LoopbackExempt" Content="Apply" MinWidth="120" />
+      <Button x:Name="ClearButton" AutomationProperties.AutomationId="LoopbackClear" Content="Clear all" MinWidth="120" />
       <Button x:Name="CloseButton" AutomationProperties.AutomationId="LoopbackClose" Content="Close" MinWidth="88" IsCancel="True" />
     </StackPanel>
     <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="LoopbackStatus" DockPanel.Dock="Bottom" Margin="0,8,0,0" TextWrapping="Wrap" Opacity="0.8" />
@@ -29,7 +29,7 @@
               GridLinesVisibility="Horizontal"
               AutoGenerateColumns="False">
       <DataGrid.Columns>
-        <DataGridTemplateColumn Header="Exempt" Width="70" SortMemberPath="IsExempt" CanUserSort="True">
+        <DataGridTemplateColumn Header="Allow" Width="70" SortMemberPath="IsExempt" CanUserSort="True">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="svc:AppContainerInfo">
               <CheckBox IsChecked="{Binding IsExempt, Mode=TwoWay}"

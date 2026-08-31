@@ -10,8 +10,8 @@ Prefer the [Download](/download) page (resolves the newest release that has Insp
 
 Windows examples for the **7.0 beta** product tag:
 
-- [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.0-beta/TitaniumInspector-win-x64.msi)
-- [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.0-beta/TitaniumInspector-win-x64.zip)
+- [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.1-beta/TitaniumInspector-win-x64.msi)
+- [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.1-beta/TitaniumInspector-win-x64.zip)
 
 ```shell
 # Stable community package only — not the 7.0 beta
@@ -24,15 +24,17 @@ winget install justcoding121.TitaniumInspector
 2. Check **Decrypt HTTPS** when you want MITM (installs the root CA if needed; may prompt for admin).
 3. Use the toolbar **System proxy** / **Capturing** checkboxes to pause either without quitting.
 
-Default bind is typically `127.0.0.1:8866`. Bind address/port are **start-time** settings on the toolbar: editable when interception is stopped; disabled while listening. Use **Start interception** / **Stop interception** (toolbar button or Capture menu) to switch. After Stop → Start, system proxy is turned back on if it was on before Stop, or if **Auto system proxy on start** is checked.
+Default bind is typically `127.0.0.1:8866`. Bind address/port are **start-time** settings on the toolbar: editable when the proxy is stopped; disabled while running. Use **Start proxy** / **Stop proxy** (toolbar button or Capture menu) to switch. After Stop → Start, system proxy is turned back on if it was on before Stop, or if **Auto system proxy on start** is checked.
 
-HTTPS stays opaque CONNECT tunnels until **Decrypt HTTPS** is enabled.
+HTTPS stays encrypted (opaque tunnels) until **Decrypt HTTPS** is enabled.
 
-Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs, **Debug file logging**) show a check when on. Turning on debug file logging also writes the log path to the status bar.
+Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy**, auto-start prefs) show a check when on. Preferences such as **Session retention…**, **HTTPS sites to decrypt…**, **Ignore insecure server certificates** (off by default), and **Logging…** live under **Options**. **Reset Inspector settings…** restores preferences to factory defaults; it does not remove the root CA or clear sessions.
 
 The status strip keeps command feedback on the left and a live **Sessions: N** count on the right, so capture traffic does not wipe tips or export paths.
 
-**Install root CA (current user)** trusts the MITM CA on this PC. **Device CA setup…** opens a dialog with steps for phones/other devices and can **Export CA** from there (or use **Export root CA…** on the Capture menu).
+**Install root CA (current user)** trusts the MITM CA on this PC. On Windows, the OS may show a Trusted Root **Yes/No** security dialog the first time that certificate is added (this is not UAC). Re-installing when the CA is already trusted does not prompt again; orphan same-name roots are cleaned up only when a new thumbprint is installed, or via **Remove** / **Clear and reinstall**. **Remove root CA** clears every same-name Titanium root in the current-user Trusted Root store (including orphans from earlier installs). **Clear and reinstall root CA…** mints a new private key, clears this install’s leaf certificate cache (next to `%AppData%\TitaniumInspector\rootCert.pfx`), removes same-name trusted roots, and prompts to reinstall trust. **Device CA setup…** opens a dialog with steps for phones/other devices and can **Export CA** from there (or use **Export root CA…** on the Capture menu).
+
+Leaf certificates for Inspector are stored under `%AppData%\TitaniumInspector\crts\` (beside the root PFX), not under the shared `%LocalAppData%\Titanium.Web.Proxy\crts` folder used by the library default. On first start after upgrade (and on every clear/reinstall), Inspector best-effort deletes that legacy shared `crts` folder; it never deletes a shared `rootCert.pfx`.
 
 ## Right pane: Inspect vs Tools
 
@@ -102,10 +104,10 @@ Notes:
 - If user-level CA install fails, Inspector offers an elevated retry (OS admin prompt).
 ## Other features
 
-- Session grid: method, status, host, URL, protocol, duration, TTFB, size, process. Right-click menu: Replay, Load into Composer, Export selected HAR/archive, Copy URL.
+- Session grid: method, status, host, URL, Protocol, duration, Wait (TTFB), size, process. Right-click menu: Replay, Load into Composer, Export selected HAR/archive, Copy URL.
 - HAR / archive: Export all writes every captured session; Export selected writes the grid multi-selection. Import appends sessions from the file. Replay selected session.
-- System proxy and root CA install / untrust / export; Device CA setup dialog for external devices
-- Search (`method:GET status:2xx host:example process:chrome is:ws hide:tunnel`); quick filters: Hide tunnels, Hide images, Errors only
+- System proxy and root CA install / untrust / export; Device CA setup dialog for external devices; **Allow Store apps…** on Windows
+- Search (`method:GET status:2xx host:example process:chrome is:ws hide:tunnel`); quick filters: Hide CONNECT, Hide images, Errors only
 - Optional Plus panels when `Titanium.Plus.dll` is present
 
 ## See also

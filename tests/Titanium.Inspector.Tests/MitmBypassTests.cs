@@ -32,4 +32,13 @@ public class MitmBypassTests
         Assert.IsTrue(MitmBypass.ShouldDisableSslDecrypt("content.dropbox.com"));
         Assert.IsTrue(MitmBypass.ShouldDisableSslDecrypt("meet.webex.com"));
     }
+
+    [TestMethod]
+    public void HostnameMatches_WildcardAndExact()
+    {
+        Assert.IsTrue(MitmBypass.HostnameMatches("a.example.com", "*.example.com"));
+        Assert.IsTrue(MitmBypass.HostnameMatches("example.com", "*.example.com"));
+        Assert.IsTrue(MitmBypass.HostnameMatches("login.live.com", "login.live.com"));
+        Assert.IsFalse(MitmBypass.HostnameMatches("other.com", "*.example.com"));
+    }
 }

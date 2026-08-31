@@ -41,6 +41,7 @@ public sealed class InspectorSettings
 #endif
     public string? LoggingFilePath { get; set; }
 
+    /// <summary>Accept upstream TLS that fails normal validation (lab / self-signed hosts). Off by default.</summary>
     public bool IgnoreServerCertificateErrors { get; set; }
 
     /// <summary>Start listener when the main window opens.</summary>
@@ -54,6 +55,32 @@ public sealed class InspectorSettings
 
     /// <summary>Session grid column widths, order, and sort across launches.</summary>
     public SessionGridLayoutDto? SessionGridLayout { get; set; }
+
+    /// <summary>Hard cap on sessions retained in the Inspector grid.</summary>
+    public int MaxSessionsInMemory { get; set; } = 10_000;
+
+    /// <summary>Soft budget for in-RAM body bytes+text across retained sessions.</summary>
+    public long MaxCaptureBytesInMemory { get; set; } = 512L * 1024 * 1024;
+
+    /// <summary>Newest N sessions keep bodies in RAM; older ones spill to disk.</summary>
+    public int HotBodySessions { get; set; } = 2_000;
+
+    /// <summary>When true, cold session bodies are written under LocalAppData session-cache.</summary>
+    public bool SpillBodiesToDisk { get; set; } = true;
+
+    /// <summary>Max size of the on-disk session body cache.</summary>
+    public long DiskCacheMaxBytes { get; set; } = 2L * 1024 * 1024 * 1024;
+
+    /// <summary>Delete spill files older than this many days on startup.</summary>
+    public int DiskCacheMaxAgeDays { get; set; } = 7;
+
+    /// <summary>Extra host patterns that skip HTTPS decryption (one pattern per entry; supports *.example.com).</summary>
+    public List<string> DecryptSkipHosts { get; set; } = new();
+
+    /// <summary>
+    /// When non-empty, only these host patterns are decrypted (built-in bypass hosts still never decrypt).
+    /// </summary>
+    public List<string> DecryptOnlyHosts { get; set; } = new();
 }
 
 public sealed class SettingsService
@@ -84,6 +111,16 @@ public sealed class SettingsService
     public void Save()
     {
         File.WriteAllText(_path, JsonSerializer.Serialize(Current, JsonOptions));
+    }
+
+    /// <summary>
+    /// Replace preferences with factory defaults and write settings.json.
+    /// Does not touch the root CA, OS trust stores, or captured sessions / disk body cache.
+    /// </summary>
+    public void ResetToFactoryDefaults()
+    {
+        Current = new InspectorSettings();
+        Save();
     }
 
     private InspectorSettings LoadFromDisk()

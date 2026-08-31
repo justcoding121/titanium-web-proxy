@@ -84,4 +84,31 @@ public class Http2OriginCapabilityCacheIntegrationTests
             "session connection for the second; the second tunnel should have reused the first tunnel's " +
             "cached capability result instead of probing the origin again.");
     }
+
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public async Task Http2_ProbeAlpnRejectedByH1OnlyOrigin_DoesNotCacheFalse()
+    {
+        using var rawServer = new Http11OnlyOriginServer(CreateOriginCertificate());
+
+        using var testSuite = new TestSuite();
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableTcpServerConnectionPrefetch = false;
+
+        using var client = TestHelper.GetHttpClient(proxy.ProxyEndPoints[0].Port);
+        using var response = await client.GetAsync($"https://localhost:{rawServer.Port}/");
+        Assert.AreEqual(System.Net.HttpStatusCode.OK, response.StatusCode,
+            "Auto mode should fall back to HTTP/1.1 after the h2-only ALPN probe is rejected.");
+
+        // NegotiateHttp2Async must not Set(false) on probe exceptions (including ALPN mismatch),
+        // or every later tunnel would be pinned to h1 for the full TTL.
+        var capabilityKey = Network.Tcp.TcpConnectionFactory.GetConnectionCacheKey(
+            "localhost", rawServer.Port, isHttps: true, applicationProtocols: null,
+            upStreamEndPoint: null, externalProxy: null);
+
+        Assert.IsFalse(proxy.Http2OriginCapabilityCache.TryGet(capabilityKey, out var supported),
+            "ALPN-rejected h2 probe must leave the capability cache empty (no false entry).");
+        Assert.IsFalse(supported);
+    }
 }

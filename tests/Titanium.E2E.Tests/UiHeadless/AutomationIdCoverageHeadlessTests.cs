@@ -30,17 +30,21 @@ public class AutomationIdCoverageHeadlessTests
         "MenuToggleSystemProxy",
         "MenuInstallCa",
         "MenuRemoveCa",
+        "MenuRotateCa",
         "MenuExportCa",
         "MenuDeviceCa",
         "MenuLoopbackExempt",
-        "MenuDebugLog",
-        "MenuSession",
-        "MenuReplay",
         "MenuTools",
         "MenuToolsComposer",
         "MenuToolsBreakpoints",
         "MenuToolsAutoResponder",
         "MenuToolsScripts",
+        "MenuOptions",
+        "MenuSessionRetention",
+        "MenuHttpsDecryptHosts",
+        "MenuIgnoreServerCertErrors",
+        "MenuLogging",
+        "MenuResetSettings",
         "MenuHelp",
         "MenuCheckForUpdates",
         "SearchBox",
@@ -166,10 +170,16 @@ public class AutomationIdCoverageHeadlessTests
             Assert.IsTrue(fx.ViewModel.Capturing);
 
             var debugWasOn = fx.ViewModel.DebugFileLogging;
-            fx.Robot.SetCheck("MenuDebugLog", !debugWasOn);
+            fx.ViewModel.ToggleDebugLoggingCommand.Execute(null);
             Assert.AreEqual(!debugWasOn, fx.ViewModel.DebugFileLogging);
-            fx.Robot.SetCheck("MenuDebugLog", debugWasOn);
+            fx.ViewModel.ToggleDebugLoggingCommand.Execute(null);
             Assert.AreEqual(debugWasOn, fx.ViewModel.DebugFileLogging);
+
+            var ignoreWasOn = fx.ViewModel.IgnoreServerCertificateErrors;
+            fx.Robot.SetCheck("MenuIgnoreServerCertErrors", !ignoreWasOn);
+            Assert.AreEqual(!ignoreWasOn, fx.ViewModel.IgnoreServerCertificateErrors);
+            fx.Robot.SetCheck("MenuIgnoreServerCertErrors", ignoreWasOn);
+            Assert.AreEqual(ignoreWasOn, fx.ViewModel.IgnoreServerCertificateErrors);
         });
 
         await fx.DispatchAsync(async () =>

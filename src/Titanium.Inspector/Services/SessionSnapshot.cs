@@ -28,6 +28,12 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     public string Method { get; set; } = "GET";
     public string Url { get; set; } = "";
     public DateTimeOffset StartedUtc { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// When true, request/response body bytes and text were spilled to the session disk cache
+    /// and must be reloaded via <see cref="SessionStore.EnsureBodiesLoadedAsync"/>.
+    /// </summary>
+    public bool BodiesOnDisk { get; set; }
     public bool IsWebSocket { get; set; }
     public bool IsGrpc { get; set; }
     public bool IsTunnel { get; set; }

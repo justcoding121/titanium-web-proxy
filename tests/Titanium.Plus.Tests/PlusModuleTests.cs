@@ -28,7 +28,7 @@ public class PlusModuleTests
     public void RequiredAbstractionsVersion_Is70()
     {
         TitaniumPlusModule module = new TitaniumPlusModule();
-        Assert.AreEqual(new Version(7, 0, 0), module.RequiredAbstractionsVersion);
+        Assert.AreEqual(new Version(7, 0, 1), module.RequiredAbstractionsVersion);
     }
 
     [TestMethod]

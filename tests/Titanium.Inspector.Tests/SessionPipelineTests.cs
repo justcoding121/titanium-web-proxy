@@ -8,13 +8,17 @@ namespace Titanium.Inspector.Tests;
 public class SessionPipelineTests
 {
     [TestMethod]
-    public async Task SessionStreamBuffer_PublishesToRegistry()
+    public async Task SessionStreamBuffer_PublishesSessionAdded()
     {
-        var registry = new SessionRegistry();
+        var registry = new SessionRegistry(new SessionStoreOptions { SpillBodiesToDisk = false });
         var buffer = new SessionStreamBuffer(registry);
         var snap = buffer.CreatePlaceholder("GET", "https://example.com/");
         var tcs = new TaskCompletionSource();
-        buffer.SessionAdded += _ => tcs.TrySetResult();
+        buffer.SessionAdded += s =>
+        {
+            registry.Add(s);
+            tcs.TrySetResult();
+        };
         buffer.Publish(snap);
         await tcs.Task.WaitAsync(TimeSpan.FromSeconds(2));
         Assert.AreEqual(1, registry.VisibleSessions.Count);

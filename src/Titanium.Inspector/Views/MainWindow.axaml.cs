@@ -400,7 +400,8 @@ public partial class MainWindow : Window
             var tip = SessionGridLayout.GetColumnKey(header.Content) switch
             {
                 "Duration" => "Total request time from session start to complete (milliseconds).",
-                "TTFB" => "Time to first byte — wait from request sent until response headers arrive (milliseconds).",
+                "TTFB" => "Time until first response byte (TTFB), in milliseconds.",
+                "Protocol" => "HTTP/1.1, HTTP/2, … between client and proxy.",
                 "Size" => "Response body size (B below 1 KB, otherwise KB / MB).",
                 _ => null,
             };

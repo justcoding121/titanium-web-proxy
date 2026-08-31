@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Network.Tcp;
 internal static class Ipv6UnreachableSoftSkip
 {
     internal const int DefaultStrikeThreshold = 1;
-    internal static readonly TimeSpan DefaultTtl = TimeSpan.FromSeconds(30);
+    internal static readonly TimeSpan DefaultTtl = TimeSpan.FromMinutes(5);
 
     private static int consecutiveIpv6Unreachable;
     private static long skipUntilUnixMs; // 0 = not skipping

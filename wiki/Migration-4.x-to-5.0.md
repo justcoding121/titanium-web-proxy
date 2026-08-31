@@ -104,6 +104,21 @@ read the CA private key, or on some deployments replace the leaf-certificate cac
 - If your deployment pins or backs up the certificate path (Docker volumes, provisioning scripts,
   documentation), update those paths to the new location.
 
+**Inspector (7.0+):** when `CertificateManager.PfxFilePath` is an absolute path (Inspector’s
+`%AppData%\TitaniumInspector\rootCert.pfx`), generated leaf PKCS#12 files are stored under a sibling
+`crts\` directory — not under the shared `%LocalAppData%\Titanium.Web.Proxy\crts` folder. **Clear and
+reinstall root CA…** remints the root, clears that local leaf cache, and removes same-CN Trusted Root
+entries. On first Inspector start after upgrade (marker file) and on every clear/reinstall, Inspector
+best-effort deletes only the legacy shared `crts` directory; it never deletes a shared `rootCert.pfx`.
+Orphan same-CN roots are pruned when a **new** root thumbprint is installed, or via Remove / Clear and
+reinstall — not on every re-trust of an already-present CA (avoids repeated Windows Trusted Root Yes/No
+prompts).
+
+**HTTP/2 ALPN probes:** an origin that rejects h2-only ALPN (`SEC_E_NO_APPLICATION_PROTOCOL`) no
+longer triggers a TLS-version downgrade retry loop. Failed probes are not written into
+`Http2OriginCapabilityCache` as `Supported=false`, so a later successful h2 origin is not pinned to
+HTTP/1.1 for the cache TTL.
+
 ---
 
 ## Ambiguous HTTP/1 framing is now rejected
@@ -419,7 +434,7 @@ per address (RFC 8305's Connection Attempt Delay) rather than tried one at a tim
 to complete a TCP (or SOCKS) connect wins; every other in-flight attempt is cancelled and its socket
 disposed. Failed attempts are result-shaped (one Debug breadcrumb each) rather than faulting the race
 task. When `EnableIpv6UnreachableSoftSkip` is `true` (the default), a single IPv6
-`NetworkUnreachable`-class failure temporarily omits IPv6 from the race for 30 seconds — operators who
+`NetworkUnreachable`-class failure temporarily omits IPv6 from the race for 5 minutes — operators who
 need strict IPv6 preference on healthy dual-stack can set the knob to `false`. This is a pure latency /
 exception-overhead improvement with no behavior change for successful connects.
 ## Connection IDs are monotonic `long` counters, not `Guid`

@@ -92,6 +92,9 @@ Example apps live under [`examples/`](https://github.com/justcoding121/titanium-
 
 <img src="images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
 
+Inspector stores its MITM root beside `%AppData%\TitaniumInspector\rootCert.pfx` and leaf certs in a sibling `crts\` folder (not the shared `%LocalAppData%\Titanium.Web.Proxy\crts` default). Use **Clear and reinstall root CA…** to mint a new root, clear local leaves, and remove same-name Trusted Root entries; on first start after upgrade (and on every clear/reinstall) Inspector best-effort deletes the legacy shared `crts` folder only — never a shared `rootCert.pfx`. Windows may show a Trusted Root Yes/No security dialog the first time a new root is installed (not UAC).
+
+Outbound HTTP/2 probes that fail ALPN (`SEC_E_NO_APPLICATION_PROTOCOL` / “No common application protocol”) are treated as “origin has no h2” without a TLS-version downgrade thrash, and a failed probe is **not** cached as a permanent “no HTTP/2” result.
 **Basic console example** — compact per-request traffic tape:
 
 <img src="images/basic-screenshot.jpg" alt="Basic console proxy screenshot" width="900" />
@@ -419,7 +422,7 @@ QUIC endpoint is visible without extra config.
 | Knob | Balanced default | Speed opt-in | Notes |
 |---|---|---|---|
 | `EnableConnectionPool` | `true` | — | Live pool switch; prefer this over unused `ProxyResourceLimits.ConnectionPoolingEnabled`. |
-| `EnableIpv6UnreachableSoftSkip` | `true` | disable for strict IPv6 preference | After one IPv6 `NetworkUnreachable`-class Happy Eyeballs failure, skip IPv6 addresses for 30s (filter after address-family interleave). |
+| `EnableIpv6UnreachableSoftSkip` | `true` | disable for strict IPv6 preference | After one IPv6 `NetworkUnreachable`-class Happy Eyeballs failure, skip IPv6 addresses for 5 minutes (filter after address-family interleave). |
 | `MaxCachedConnections` | `128` | raise for high fan-out **per origin** | Live knob on `ProxyServer`. Cap is **per upstream host**, not process-wide. No upper clamp — set `512`/`1024` on large hosts. Keep in sync with `ResourceLimits.MaxCachedConnectionsPerHost` when you replace the snapshot. |
 | `ProxyEndPoint.MaxCachedConnections` | `null` (use server) | deeper pool for one reverse EP | Optional per-endpoint override applied when that EP owns the session. |
 | `ResourceLimits.MaxConcurrentStreamsPerConnection` | `256` | raise for heavy H2 fan-in | Replace via `ProxyResourceLimits.Create(...)` — validated positive only, no max ceiling. |

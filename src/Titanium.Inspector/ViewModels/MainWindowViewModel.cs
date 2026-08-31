@@ -20,12 +20,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private readonly SessionStreamBuffer _buffer;
     private readonly SessionRegistry _registry;
+    private readonly SessionStore _store;
     private readonly UpdateService _updates;
     private readonly SettingsService _settings;
     private readonly InterceptionService _interception;
     private readonly IInspectorDialogs _dialogs;
     private readonly IInspectorPathPicker _pathPicker;
-    private readonly ObservableCollection<SessionSnapshot> _all = new();
+    private readonly ObservableCollection<SessionSnapshot> _all;
     private readonly List<SessionSnapshot> _selectedSessions = new();
     private string _statusText = "Ready";
     private string _sessionCountText = "Sessions: 0";
@@ -52,8 +53,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _plusPanelsSummary = "";
     private string _bindAddress = "127.0.0.1";
     private int _bindPort = 8866;
-    private string _endpointStatusText = "Not listening";
-    private string _interceptToggleText = "Start interception";
+    private string _endpointStatusText = "Proxy stopped";
+    private string _interceptToggleText = "Start proxy";
     /// <summary>Sticky intent: re-enable system proxy on the next Start after a Stop that had it on.</summary>
     private bool _reenableSystemProxyOnStart;
     private bool _stopBusy;
@@ -82,6 +83,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         _buffer = buffer;
         _registry = registry;
+        _store = registry.Store;
+        _all = _store.Sessions;
         _updates = updates;
         _settings = settings;
         _interception = interception ?? new InterceptionService();
@@ -121,14 +124,24 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             DecryptHttps = !DecryptHttps;
             return Task.CompletedTask;
         });
+        ToggleIgnoreServerCertificateErrorsCommand = new RelayCommand(() =>
+        {
+            IgnoreServerCertificateErrors = !IgnoreServerCertificateErrors;
+            return Task.CompletedTask;
+        });
         ClearSessionsCommand = new RelayCommand(ClearSessionsAsync);
         RemoveSelectedSessionsCommand = new RelayCommand(RemoveSelectedSessionsAsync);
         ToggleSystemProxyCommand = new RelayCommand(ToggleSystemProxyAsync);
         InstallCaCommand = new RelayCommand(InstallCaAsync);
         UntrustCaCommand = new RelayCommand(UntrustCaAsync);
+        RotateCaCommand = new RelayCommand(RotateCaAsync);
         ExportCaCommand = new RelayCommand(ExportCaAsync);
         DeviceCaSetupCommand = new RelayCommand(DeviceCaSetupAsync);
         OpenLoopbackExemptCommand = new RelayCommand(OpenLoopbackExemptAsync);
+        OpenSessionRetentionCommand = new RelayCommand(OpenSessionRetentionAsync);
+        OpenLoggingSettingsCommand = new RelayCommand(OpenLoggingSettingsAsync);
+        OpenHttpsDecryptHostsCommand = new RelayCommand(OpenHttpsDecryptHostsAsync);
+        ResetSettingsCommand = new RelayCommand(ResetSettingsAsync);
         ReplayCommand = new RelayCommand(async () => await ReplaySelectedAsync());
         LoadFromSelectedCommand = new RelayCommand(LoadFromSelectedAsync);
         LoadIntoComposerCommand = new RelayCommand(LoadIntoComposerAsync);
@@ -167,6 +180,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.ConfigureLogging(_settings.Current);
         _interception.IgnoreServerCertificateErrors = _settings.Current.IgnoreServerCertificateErrors;
         _interception.DecryptHttps = _decryptHttps;
+        ApplyDecryptHostListsFromSettings();
         ShowLoopbackExemptMenu = AppContainerLoopback.IsSupported;
     }
 
@@ -182,8 +196,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>Exposed for E2E / headless tests — seeds the in-memory capture list.</summary>
     public void SeedSession(SessionSnapshot snapshot)
     {
-        _registry.Add(snapshot);
-        OnSessionAdded(snapshot);
+        _store.Add(snapshot);
+        OnSessionAddedToFilter(snapshot);
     }
 
     /// <summary>Called from the session grid when Extended multi-select changes.</summary>
@@ -223,13 +237,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         if (SystemProxy)
         {
             StatusText =
-                $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shows as CONNECT until Decrypt HTTPS is enabled." +
+                $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shown as encrypted tunnels until Decrypt HTTPS is enabled." +
                 " Chrome/Edge: --disable-quic or HTTP/3 may bypass the proxy.";
         }
         else
         {
             StatusText =
-                $"Listening on {FormatBindDisplay()}:{BindPort}, but system proxy failed to enable — use the System proxy checkbox.";
+                $"Proxy running on {FormatBindDisplay()}:{BindPort}, but system proxy failed to enable — use the System proxy checkbox.";
         }
     }
 
@@ -275,6 +289,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.EnsureShutdown();
         SetSystemProxyCore(false);
         RefreshEndpointAndBindUi();
+        _registry.Dispose();
     }
 
     /// <summary>
@@ -334,15 +349,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private void WireSessionPipelineHandlers()
     {
-        _buffer.SessionAdded += snapshot => MarshalToUi(() => OnSessionAdded(snapshot));
-        _interception.SessionCaptured += (_, snap) =>
+        _buffer.SessionAdded += snapshot => MarshalToUi(() =>
         {
-            _registry.Add(snap);
-            _buffer.Publish(snap);
-        };
+            _store.Add(snapshot);
+            OnSessionAddedToFilter(snapshot);
+        });
+        _store.SessionsRemoved += removed => MarshalToUi(() => OnSessionsRemoved(removed));
+        _interception.SessionCaptured += (_, snap) => _buffer.Publish(snap);
         _interception.SessionUpdated += (_, snap) =>
             MarshalToUi(() =>
             {
+                _store.NotifyUpdated(snap);
                 if (ReferenceEquals(SelectedSession, snap))
                 {
                     RefreshSelectedInspectors();
@@ -448,7 +465,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private Task ClearSessionsAsync()
     {
-        _all.Clear();
+        _store.Clear();
         Sessions.Clear();
         _selectedSessions.Clear();
         SelectedSession = null;
@@ -467,13 +484,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         var ids = selected.Select(s => s.Id).ToHashSet();
-        for (var i = _all.Count - 1; i >= 0; i--)
-        {
-            if (ids.Contains(_all[i].Id))
-            {
-                _all.RemoveAt(i);
-            }
-        }
+        _store.Remove(ids);
 
         for (var i = Sessions.Count - 1; i >= 0; i--)
         {
@@ -504,7 +515,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (!_interception.IsRunning)
         {
-            StatusText = "Start interception first";
+            StatusText = "Start the proxy first";
             return;
         }
 
@@ -531,7 +542,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (!_interception.IsRunning)
         {
-            StatusText = "Start interception first";
+            StatusText = "Start the proxy first";
             return;
         }
 
@@ -553,10 +564,63 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             : "Root CA removed from current user store; Decrypt HTTPS is off until you install the CA again";
     }
 
+    private async Task RotateCaAsync()
+    {
+        if (!_interception.IsRunning)
+        {
+            StatusText = "Start the proxy first";
+            return;
+        }
+
+        var owner = TryGetMainWindow();
+        if (!await _dialogs.ConfirmRotateRootCaAsync(owner))
+        {
+            StatusText = "Clear and reinstall root CA cancelled";
+            return;
+        }
+
+        if (DecryptHttps)
+            SetDecryptHttpsCore(false);
+
+        var oldThumb = _interception.RootCertificate?.Thumbprint;
+        var ok = _interception.RotateRootCertificate(machineStore: false);
+        if (!ok)
+        {
+            StatusText = "Clear and reinstall root CA failed — see logs";
+            return;
+        }
+
+        var newThumb = _interception.RootCertificate?.Thumbprint;
+        var changed = !string.IsNullOrEmpty(newThumb) &&
+                      !string.Equals(oldThumb, newThumb, StringComparison.OrdinalIgnoreCase);
+
+        if (await _dialogs.ConfirmInstallRootCaAsync(owner))
+        {
+            var trusted = _interception.InstallRootCertificate(machineStore: false);
+            if (!trusted && await _dialogs.ConfirmElevateRootCaAsync(owner))
+                trusted = _interception.InstallRootCertificateAsAdmin(machineStore: false);
+
+            StatusText = FormatRotateCaInstallStatus(trusted, changed);
+            return;
+        }
+
+        StatusText = FormatRotateCaDeferredTrustStatus(changed);
+    }
+
+    private static string FormatRotateCaInstallStatus(bool trusted, bool changed)
+    {
+        if (!trusted)
+            return "Root CA cleared but trust failed — use Install root CA or Export CA";
+        return changed ? "Root CA cleared and reinstalled — enable Decrypt HTTPS when ready" : "Root CA recreate completed and trusted";
+    }
+
+    private static string FormatRotateCaDeferredTrustStatus(bool changed) =>
+        changed ? "Root CA cleared — Install root CA (or enable Decrypt HTTPS) to trust the new certificate" : "Root CA recreate completed — Install root CA to trust";
+
     private Task ExportCaAsync()
     {
         var path = _interception.ExportRootCertificate();
-        StatusText = path is null ? "No root certificate yet — start interception first" : "Exported CA: " + path;
+        StatusText = path is null ? "No root certificate yet — Start the proxy first" : "Exported CA: " + path;
         return Task.CompletedTask;
     }
 
@@ -564,7 +628,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         if (!AppContainerLoopback.IsSupported)
         {
-            StatusText = "Loopback exemptions require Windows 8 or later";
+            StatusText = "Allowing Store apps requires Windows 8 or later";
             return;
         }
 
@@ -573,7 +637,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             if (AppContainerLoopback.TryProbeApis(out var msg))
             {
-                StatusText = "Loopback APIs OK (no UI owner): " + msg;
+                StatusText = "Store app allow-list OK (no UI owner): " + msg;
             }
             else
             {
@@ -584,7 +648,94 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         await LoopbackExemptWindow.ShowAsync(owner);
-        StatusText = "Loopback exemption dialog closed";
+        StatusText = "Allow Store apps dialog closed";
+    }
+
+    private async Task OpenSessionRetentionAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = "Session retention requires the main window";
+            return;
+        }
+
+        var saved = await SessionRetentionWindow.ShowAsync(owner, _settings);
+        StatusText = saved
+            ? "Session retention saved — restart Inspector to apply"
+            : "Session retention cancelled";
+    }
+
+    private async Task OpenLoggingSettingsAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            // Headless / unit tests: apply defaults path without UI.
+            StatusText = "Logging settings require the main window";
+            return;
+        }
+
+        var saved = await LoggingSettingsWindow.ShowAsync(
+            owner,
+            _settings,
+            s =>
+            {
+                _interception.ConfigureLogging(s);
+                DebugFileLogging = IsDebugFileLoggingEnabled(s);
+            });
+        if (saved)
+        {
+            var path = _settings.Current.LoggingFilePath ?? LoggingSettingsWindow.DefaultLogPath();
+            StatusText = _settings.Current.LoggingEnableFile
+                ? $"Logging saved: {path}"
+                : "Logging saved (file logging off)";
+        }
+        else
+        {
+            StatusText = "Logging settings cancelled";
+        }
+    }
+
+    private async Task OpenHttpsDecryptHostsAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            StatusText = "HTTPS sites to decrypt requires the main window";
+            return;
+        }
+
+        var saved = await HttpsDecryptHostsWindow.ShowAsync(
+            owner,
+            _settings,
+            ApplyDecryptHostListsFromSettings);
+        StatusText = saved
+            ? "HTTPS sites to decrypt saved (applies to new connections)"
+            : "HTTPS sites to decrypt cancelled";
+    }
+
+    private async Task ResetSettingsAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (!await _dialogs.ConfirmResetSettingsAsync(owner))
+        {
+            StatusText = "Reset settings cancelled";
+            return;
+        }
+
+        _settings.ResetToFactoryDefaults();
+        LoadFromSettings();
+        NotifySettingsUiChanged();
+        StatusText =
+            "Settings restored to defaults — restart Inspector so retention limits fully apply. Root CA and sessions were not changed.";
+    }
+
+    private void ApplyDecryptHostListsFromSettings()
+    {
+        var s = _settings.Current;
+        _interception.DecryptSkipHosts = s.DecryptSkipHosts?.ToList() ?? [];
+        _interception.DecryptOnlyHosts = s.DecryptOnlyHosts?.ToList() ?? [];
     }
 
     private async Task DeviceCaSetupAsync()
@@ -604,36 +755,45 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private Task LoadFromSelectedAsync()
+    private async Task LoadFromSelectedAsync()
     {
-        if (SelectedSession is null)
+        var selected = SelectedSession;
+        if (selected is null)
         {
             StatusText = "Select a session to load into Composer";
-            return Task.CompletedTask;
+            return;
         }
 
-        ComposerMethod = SelectedSession.Method;
-        ComposerUrl = SelectedSession.Url;
-        ComposerHeaders = SelectedSession.RequestHeadersText ?? "";
-        ComposerBody = SelectedSession.RequestBodyText ?? "";
-        StatusText = "Composer loaded from selected session";
-        return Task.CompletedTask;
+        await _store.EnsureBodiesLoadedAsync(selected).ConfigureAwait(false);
+        await MarshalToUiAsync(() =>
+        {
+            ComposerMethod = selected.Method;
+            ComposerUrl = selected.Url;
+            ComposerHeaders = selected.RequestHeadersText ?? "";
+            ComposerBody = selected.RequestBodyText ?? "";
+            StatusText = "Composer loaded from selected session";
+        }).ConfigureAwait(false);
     }
 
-    private Task LoadIntoComposerAsync()
+    private async Task LoadIntoComposerAsync()
     {
-        if (SelectedSession is null)
+        var selected = SelectedSession;
+        if (selected is null)
         {
             StatusText = "Select a session to load into Composer";
-            return Task.CompletedTask;
+            return;
         }
 
-        ComposerMethod = SelectedSession.Method;
-        ComposerUrl = SelectedSession.Url;
-        ComposerHeaders = SelectedSession.RequestHeadersText ?? "";
-        ComposerBody = SelectedSession.RequestBodyText ?? "";
-        StatusText = "Composer loaded from selected session";
-        return OpenToolsTabAsync(0);
+        await _store.EnsureBodiesLoadedAsync(selected).ConfigureAwait(false);
+        await MarshalToUiAsync(() =>
+        {
+            ComposerMethod = selected.Method;
+            ComposerUrl = selected.Url;
+            ComposerHeaders = selected.RequestHeadersText ?? "";
+            ComposerBody = selected.RequestBodyText ?? "";
+            StatusText = "Composer loaded from selected session";
+        }).ConfigureAwait(false);
+        await OpenToolsTabAsync(0).ConfigureAwait(false);
     }
 
     private async Task CopyUrlAsync()
@@ -877,14 +1037,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ToggleAutoStartCaptureCommand { get; }
     public ICommand ToggleAutoSystemProxyOnStartCommand { get; }
     public ICommand ToggleDecryptHttpsCommand { get; }
+    public ICommand ToggleIgnoreServerCertificateErrorsCommand { get; }
     public ICommand ClearSessionsCommand { get; }
     public ICommand RemoveSelectedSessionsCommand { get; }
     public ICommand ToggleSystemProxyCommand { get; }
     public ICommand InstallCaCommand { get; }
     public ICommand UntrustCaCommand { get; }
+    public ICommand RotateCaCommand { get; }
     public ICommand ExportCaCommand { get; }
     public ICommand DeviceCaSetupCommand { get; }
     public ICommand OpenLoopbackExemptCommand { get; }
+    public ICommand OpenSessionRetentionCommand { get; }
+    public ICommand OpenLoggingSettingsCommand { get; }
+    public ICommand OpenHttpsDecryptHostsCommand { get; }
+    public ICommand ResetSettingsCommand { get; }
     public ICommand ReplayCommand { get; }
     public ICommand LoadFromSelectedCommand { get; }
     public ICommand LoadIntoComposerCommand { get; }
@@ -921,10 +1087,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>Bind address/port are start-time config; editable only while the proxy is stopped.</summary>
     public bool BindFieldsEnabled => !_interception.IsRunning;
 
-    /// <summary>True while the proxy endpoint is listening (drives toolbar accent / live indicator).</summary>
+    /// <summary>True while the proxy endpoint is Proxy running on (drives toolbar accent / live indicator).</summary>
     public bool IsIntercepting => _interception.IsRunning;
 
-    /// <summary>Toolbar button label: Start or Stop interception.</summary>
+    /// <summary>Toolbar button label: Start or Stop proxy.</summary>
     public string InterceptToggleText
     {
         get => _interceptToggleText;
@@ -1064,7 +1230,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             {
                 if (!_interception.IsRunning)
                 {
-                    StatusText = "Start interception before enabling system proxy";
+                    StatusText = "Start the proxy before enabling system proxy";
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SystemProxy)));
                     return;
                 }
@@ -1079,7 +1245,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
                 SetSystemProxyCore(true);
                 StatusText =
-                    "System proxy enabled (identity bypass). For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy.";
+                    "System proxy enabled. For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy.";
                 return;
             }
 
@@ -1156,8 +1322,28 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             else
             {
                 SetDecryptHttpsCore(false);
-                StatusText = "Decrypt HTTPS off — HTTPS shown as CONNECT tunnels";
+                StatusText = "Decrypt HTTPS off — HTTPS shown as encrypted tunnels (not decrypted)";
             }
+        }
+    }
+
+    /// <summary>When true, accept upstream TLS certs that would otherwise fail validation.</summary>
+    public bool IgnoreServerCertificateErrors
+    {
+        get => _interception.IgnoreServerCertificateErrors;
+        set
+        {
+            if (_interception.IgnoreServerCertificateErrors == value)
+            {
+                return;
+            }
+
+            _interception.IgnoreServerCertificateErrors = value;
+            PersistSettings();
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IgnoreServerCertificateErrors)));
+            StatusText = value
+                ? "Ignoring insecure server certificates"
+                : "Validating server certificates";
         }
     }
 
@@ -1258,6 +1444,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 return;
             }
 
+            _store.PinnedSessionId = value?.Id;
+
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSelectedSession)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowInspectEmpty)));
             NotifyFilterSelectionProperties();
@@ -1269,7 +1457,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             }
 
             UpdateWsFramesVisibility();
-            RefreshSelectedInspectors();
+            if (value is { BodiesOnDisk: true })
+            {
+                _ = LoadSelectedBodiesAsync(value);
+            }
+            else
+            {
+                RefreshSelectedInspectors();
+            }
         }
     }
 
@@ -1373,20 +1568,37 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _launchAutoStartCapture = _autoStartCapture = s.AutoStartCapture;
         _launchAutoSystemProxyOnStart = _autoSystemProxyOnStart = s.AutoSystemProxyOnStart;
         _decryptHttps = s.DecryptHttps;
-        AutoResponder.Enabled = s.AutoResponderEnabled;
-        AutoResponder.LoadFromDtos(s.AutoResponderRules);
-        Breakpoints.Enabled = s.BreakpointEnabled;
-        Breakpoints.UrlFilter = string.IsNullOrEmpty(s.BreakpointUrlFilter) ? "*" : s.BreakpointUrlFilter;
         _breakpointOnResponse = s.BreakpointOnResponse;
         _scriptOnRequest = s.ScriptOnRequest;
         _scriptOnResponse = s.ScriptOnResponse;
+        // Apply interception flags before AutoResponder/Breakpoints mutations — those can PersistSettings.
         _interception.BreakpointOnResponse = _breakpointOnResponse;
         _interception.ScriptOnRequest = _scriptOnRequest;
         _interception.ScriptOnResponse = _scriptOnResponse;
         _interception.IgnoreServerCertificateErrors = s.IgnoreServerCertificateErrors;
         _interception.DecryptHttps = _decryptHttps;
+        ApplyDecryptHostListsFromSettings();
         _debugFileLogging = IsDebugFileLoggingEnabled(s);
         _interception.ConfigureLogging(s);
+
+        AutoResponder.Enabled = s.AutoResponderEnabled;
+        AutoResponder.LoadFromDtos(s.AutoResponderRules);
+        Breakpoints.Enabled = s.BreakpointEnabled;
+        Breakpoints.UrlFilter = string.IsNullOrEmpty(s.BreakpointUrlFilter) ? "*" : s.BreakpointUrlFilter;
+    }
+
+    private void NotifySettingsUiChanged()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindAddress)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindPort)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoStartCapture)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AutoSystemProxyOnStart)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IgnoreServerCertificateErrors)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BreakpointOnResponse)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ScriptOnRequest)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ScriptOnResponse)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DebugFileLogging)));
     }
 
     private static bool IsDebugFileLoggingEnabled(InspectorSettings s) =>
@@ -1409,6 +1621,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         s.AutoStartCapture = AutoStartCapture;
         s.AutoSystemProxyOnStart = AutoSystemProxyOnStart;
         s.DecryptHttps = DecryptHttps;
+        s.IgnoreServerCertificateErrors = _interception.IgnoreServerCertificateErrors;
         s.AutoResponderEnabled = AutoResponder.Enabled;
         s.AutoResponderRules = AutoResponder.ToDtos();
         s.BreakpointEnabled = Breakpoints.Enabled;
@@ -1416,7 +1629,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         s.BreakpointOnResponse = BreakpointOnResponse;
         s.ScriptOnRequest = ScriptOnRequest;
         s.ScriptOnResponse = ScriptOnResponse;
-        s.IgnoreServerCertificateErrors = _interception.IgnoreServerCertificateErrors;
         s.LoggingEnabled = _settings.Current.LoggingEnabled;
         s.LoggingMinimumLevel = _settings.Current.LoggingMinimumLevel;
         s.LoggingEnableFile = _settings.Current.LoggingEnableFile;
@@ -1457,7 +1669,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             if (!_interception.IsRunning)
             {
-                StatusText = "Start interception before enabling Decrypt HTTPS";
+                StatusText = "Start the proxy before enabling Decrypt HTTPS";
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
                 return;
             }
@@ -1483,7 +1695,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             }
 
             SetDecryptHttpsCore(true);
-            StatusText = "Decrypt HTTPS on — MITM decrypting TLS";
+            StatusText = "Decrypting HTTPS";
         }
         finally
         {
@@ -1511,6 +1723,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private Task ToggleDebugLoggingAsync()
     {
+        // Kept for tests that invoke ToggleDebugLoggingCommand; opens Logging… when UI is available,
+        // otherwise toggles the previous Debug-file latch in settings.
+        if (TryGetMainWindow() is not null)
+        {
+            return OpenLoggingSettingsAsync();
+        }
+
         var s = _settings.Current;
         var enable = !IsDebugFileLoggingEnabled(s);
         s.LoggingEnabled = true;
@@ -1518,9 +1737,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         s.LoggingMinimumLevel = enable ? "Debug" : "Error";
         if (string.IsNullOrWhiteSpace(s.LoggingFilePath))
         {
-            s.LoggingFilePath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "TitaniumInspector", "logs", "titanium-inspector.log");
+            s.LoggingFilePath = LoggingSettingsWindow.DefaultLogPath();
         }
 
         _interception.ConfigureLogging(s);
@@ -1528,7 +1745,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         DebugFileLogging = enable;
         StatusText = enable
             ? $"Debug file logging on: {s.LoggingFilePath}"
-            : "Debug file logging off (Error level, file sink disabled)";
+            : "Debug file logging off (Error level, file logging off)";
         return Task.CompletedTask;
     }
 
@@ -1601,11 +1818,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private void OnSessionAdded(SessionSnapshot snapshot)
+    private void OnSessionAddedToFilter(SessionSnapshot snapshot)
     {
-        _all.Add(snapshot);
-        // Append in place — never Clear/rebuild here or DataGrid multi-select (Ctrl+A) is wiped
-        // every time a new session arrives.
+        // Store already holds the row — append to the filtered grid in place.
         if (SessionSearch.Matches(snapshot, SearchQuery))
         {
             Sessions.Add(snapshot);
@@ -1614,10 +1829,72 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         RefreshSessionCountText();
     }
 
-    private void RefreshSessionCountText() =>
+    private void OnSessionsRemoved(IReadOnlyList<SessionSnapshot> removed)
+    {
+        if (removed.Count == 0)
+        {
+            return;
+        }
+
+        var ids = removed.Select(s => s.Id).ToHashSet();
+        for (var i = Sessions.Count - 1; i >= 0; i--)
+        {
+            if (ids.Contains(Sessions[i].Id))
+            {
+                Sessions.RemoveAt(i);
+            }
+        }
+
+        _selectedSessions.RemoveAll(s => ids.Contains(s.Id));
+        if (SelectedSession is not null && ids.Contains(SelectedSession.Id))
+        {
+            SelectedSession = null;
+        }
+
+        RefreshSessionCountText();
+        if (removed.Count == 1)
+        {
+            StatusText = "Removed 1 oldest session to stay under limits";
+        }
+        else
+        {
+            StatusText = $"Removed {removed.Count} oldest sessions to stay under limits";
+        }
+    }
+
+    private async Task LoadSelectedBodiesAsync(SessionSnapshot snap)
+    {
+        try
+        {
+            await _store.EnsureBodiesLoadedAsync(snap).ConfigureAwait(false);
+            await MarshalToUiAsync(() =>
+            {
+                if (ReferenceEquals(_selected, snap))
+                {
+                    RefreshSelectedInspectors();
+                }
+            }).ConfigureAwait(false);
+        }
+        catch
+        {
+            await MarshalToUiAsync(() =>
+            {
+                if (ReferenceEquals(_selected, snap))
+                {
+                    RefreshSelectedInspectors();
+                }
+            }).ConfigureAwait(false);
+        }
+    }
+
+    private void RefreshSessionCountText()
+    {
+        var spilled = _store.SpilledCount;
+        var spilledSuffix = spilled > 0 ? $" ({spilled} bodies on disk)" : "";
         SessionCountText = string.IsNullOrWhiteSpace(SearchQuery)
-            ? $"Sessions: {_all.Count}"
-            : $"Sessions: {Sessions.Count} / {_all.Count}";
+            ? $"Sessions: {_all.Count}{spilledSuffix}"
+            : $"Sessions: {Sessions.Count} / {_all.Count}{spilledSuffix}";
+    }
 
     private void NotifyQuickFilterProperties()
     {
@@ -1679,31 +1956,31 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             SetDecryptHttpsCore(false);
             StatusText = SystemProxy
-                ? $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
-                : $"Listening on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.";
+                ? $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
+                : $"Proxy running on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.";
             return;
         }
 
         if (SystemProxy)
         {
             StatusText = _decryptHttps
-                ? $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on. Decrypt HTTPS on. Chrome: --disable-quic or H3 may bypass."
-                : $"Listening on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shows as CONNECT until Decrypt HTTPS is enabled." +
+                ? $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on. Decrypt HTTPS on. Chrome: --disable-quic or H3 may bypass."
+                : $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on. HTTPS shown as encrypted tunnels until Decrypt HTTPS is enabled." +
                   " Chrome/Edge: --disable-quic or HTTP/3 may bypass the proxy.";
             return;
         }
 
         StatusText = _decryptHttps
-            ? $"Listening on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS on. Enable System proxy if needed. Chrome: --disable-quic or H3 may bypass."
-            : $"Listening on {FormatBindDisplay()}:{BindPort} — HTTPS as CONNECT until Decrypt HTTPS is enabled. Enable System proxy if needed.";
+            ? $"Proxy running on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS on. Enable System proxy if needed. Chrome: --disable-quic or H3 may bypass."
+            : $"Proxy running on {FormatBindDisplay()}:{BindPort} — HTTPS shown as encrypted tunnels until Decrypt HTTPS is enabled. Enable System proxy if needed.";
     }
 
     private void RefreshEndpointAndBindUi()
     {
         EndpointStatusText = _interception.IsRunning
-            ? $"Listening {FormatBindDisplay()}:{BindPort}"
-            : "Not listening";
-        InterceptToggleText = _interception.IsRunning ? "Stop interception" : "Start interception";
+            ? $"Proxy running on {FormatBindDisplay()}:{BindPort}"
+            : "Proxy stopped";
+        InterceptToggleText = _interception.IsRunning ? "Stop proxy" : "Start proxy";
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindFieldsEnabled)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsIntercepting)));
     }
@@ -1732,12 +2009,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         StatusText = "Replaying…";
+        await _store.EnsureBodiesLoadedAsync(SelectedSession).ConfigureAwait(false);
         var result = await ReplayService.ReplayAsync(
             SelectedSession,
-            ignoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors);
-        StatusText = result.Ok
-            ? $"Replay → HTTP {result.StatusCode}: {Truncate(result.Message, 120)}"
-            : "Replay failed: " + result.Message;
+            ignoreServerCertificateErrors: _interception.IgnoreServerCertificateErrors).ConfigureAwait(false);
+        await MarshalToUiAsync(() =>
+        {
+            StatusText = result.Ok
+                ? $"Replay → HTTP {result.StatusCode}: {Truncate(result.Message, 120)}"
+                : "Replay failed: " + result.Message;
+        }).ConfigureAwait(false);
     }
 
     private async Task SendComposerAsync()
@@ -1789,8 +2070,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             Protocol = "Composer",
         };
 
-        _registry.Add(snap);
-        _all.Add(snap);
+        _store.Add(snap);
         ApplyFilter();
         RefreshSessionCountText();
         SelectedSession = snap;
@@ -1832,12 +2112,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            await SessionArchive.ExportHarAsync(_all, path);
-            await MarshalToUiAsync(() => StatusText = $"Exported {_all.Count} sessions to {path}");
+            var sessions = _all.ToList();
+            // Stay on the UI sync context (RelayCommand). ConfigureAwait(false) + StatusText update
+            // raced with headless WaitUntil pumps on macOS (file written, StatusText stayed Ready).
+            StatusText = "Exporting HAR…";
+            await _store.EnsureBodiesLoadedAsync(sessions);
+            await SessionArchive.ExportHarAsync(sessions, path);
+            StatusText = $"Exported {sessions.Count} sessions to {path}";
         }
         catch (Exception ex)
         {
-            await MarshalToUiAsync(() => StatusText = "Export HAR failed: " + Truncate(ex.Message, 160));
+            StatusText = "Export HAR failed: " + Truncate(ex.Message, 160);
         }
     }
 
@@ -1859,12 +2144,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
+            StatusText = "Exporting HAR…";
+            await _store.EnsureBodiesLoadedAsync(sessions);
             await SessionArchive.ExportHarAsync(sessions, path);
-            await MarshalToUiAsync(() => StatusText = $"Exported {sessions.Count} sessions to {path}");
+            StatusText = $"Exported {sessions.Count} sessions to {path}";
         }
         catch (Exception ex)
         {
-            await MarshalToUiAsync(() => StatusText = "Export HAR failed: " + Truncate(ex.Message, 160));
+            StatusText = "Export HAR failed: " + Truncate(ex.Message, 160);
         }
     }
 
@@ -1889,8 +2176,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         foreach (var snap in imported)
         {
-            _registry.Add(snap);
-            _all.Add(snap);
+            _store.Add(snap);
         }
 
         ApplyFilter();
@@ -1915,9 +2201,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            // SessionArchive runs zip IO on the thread pool; resume here on the UI sync context.
-            await SessionArchive.ExportNativeArchiveAsync(_all, path);
-            StatusText = $"Exported {_all.Count} sessions to {path}";
+            var sessions = _all.ToList();
+            await _store.EnsureBodiesLoadedAsync(sessions).ConfigureAwait(false);
+            await SessionArchive.ExportNativeArchiveAsync(sessions, path).ConfigureAwait(false);
+            StatusText = $"Exported {sessions.Count} sessions to {path}";
         }
         catch (Exception ex)
         {
@@ -1943,7 +2230,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            await SessionArchive.ExportNativeArchiveAsync(sessions, path);
+            await _store.EnsureBodiesLoadedAsync(sessions).ConfigureAwait(false);
+            await SessionArchive.ExportNativeArchiveAsync(sessions, path).ConfigureAwait(false);
             StatusText = $"Exported {sessions.Count} sessions to {path}";
         }
         catch (Exception ex)
@@ -1970,8 +2258,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             {
                 foreach (var snap in imported)
                 {
-                    _registry.Add(snap);
-                    _all.Add(snap);
+                    _store.Add(snap);
                 }
 
                 ApplyFilter();

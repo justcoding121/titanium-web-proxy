@@ -570,11 +570,11 @@ public partial class ProxyServer
                     return;
                 }
             }
-            else if (!isHttps && EnableHttp2)
+            else if (!isHttps)
             {
-                // Transparent reverse cleartext: detect prior-knowledge h2c before HTTP/1 parsing.
-                // Skip the peek entirely when HTTP/2 is disabled — StartReverseHttp1 / plain H1 reverse
-                // paid GetMethod on every new client connection for nothing.
+                // Always detect prior-knowledge h2c before HTTP/1 parsing. When EnableHttp2 is false,
+                // HandleInboundHttp2CleartextAsync rejects the preface (closes the client) instead of
+                // hanging in H1 request parsing on "PRI * HTTP/2.0…".
                 var method = await HttpHelper.GetMethod(clientStream, BufferPool, cancellationToken);
                 if (method == KnownMethod.Pri)
                 {

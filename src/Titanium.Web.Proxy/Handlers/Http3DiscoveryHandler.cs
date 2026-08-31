@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http3;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy;
@@ -17,6 +18,21 @@ public partial class ProxyServer
     /// </summary>
     private void TryUpdateHttp3CapabilityFromResponse(SessionEventArgs args)
     {
+        try
+        {
+            TryUpdateHttp3CapabilityFromResponseCore(args);
+        }
+        catch (Exception ex) when (ex is UriFormatException or FormatException)
+        {
+            // Alt-Svc bookkeeping must never fail AfterResponse (e.g. path-only H2 stream
+            // with no :authority / Host). Logged as benign — not ProxyHttpException.
+            ProxyDiagnostics.ReportBenign(logger,
+                "HTTP/3 Alt-Svc capability update skipped due to unparseable request origin.", ex);
+        }
+    }
+
+    private void TryUpdateHttp3CapabilityFromResponseCore(SessionEventArgs args)
+    {
         if (!EnableHttp3) return;
 
         var response = args.HttpClient.Response;
@@ -26,17 +42,26 @@ public partial class ProxyServer
         if (string.IsNullOrEmpty(altSvc) || altSvc == "clear")
         {
             if (altSvc == "clear")
-            {
-                var (clearHost, clearPort) = args.HttpClient.Request.GetOriginHostPort(443);
-                var clearKey = $"{clearHost}:{clearPort}";
-                Http3OriginCapabilityCache.Evict(clearKey);
-                // Prevent a late background SVCB completion from undoing the clear.
-                _svcbDiscoveryCoordinator?.Invalidate(clearKey);
-            }
-
+                ClearHttp3Capability(args);
             return;
         }
 
+        CacheHttp3CapabilityFromAltSvc(args, altSvc);
+    }
+
+    private void ClearHttp3Capability(SessionEventArgs args)
+    {
+        var (clearHost, clearPort) = args.HttpClient.Request.GetOriginHostPort(443);
+        if (string.IsNullOrEmpty(clearHost)) return;
+
+        var clearKey = $"{clearHost}:{clearPort}";
+        Http3OriginCapabilityCache.Evict(clearKey);
+        // Prevent a late background SVCB completion from undoing the clear.
+        _svcbDiscoveryCoordinator?.Invalidate(clearKey);
+    }
+
+    private void CacheHttp3CapabilityFromAltSvc(SessionEventArgs args, string altSvc)
+    {
         var entries = AltSvcParser.Parse(altSvc);
         if (entries.Count == 0) return;
 

@@ -49,6 +49,12 @@ public sealed class InterceptionService : IDisposable
     /// </summary>
     public bool DecryptHttps { get; set; }
 
+    /// <summary>Extra host patterns that skip HTTPS decryption (in addition to built-in bypasses).</summary>
+    public List<string> DecryptSkipHosts { get; set; } = [];
+
+    /// <summary>When non-empty, only these hosts are decrypted (built-in bypasses still never decrypt).</summary>
+    public List<string> DecryptOnlyHosts { get; set; } = [];
+
     /// <summary>True when the OS can host QUIC (MsQuic / <c>QuicListener.IsSupported</c>).</summary>
     public static bool IsHttp3Supported => System.Net.Quic.QuicListener.IsSupported;
 
@@ -108,6 +114,10 @@ public sealed class InterceptionService : IDisposable
         ApplyLoggingOptions(_loggingSettings);
         _proxy.EnableHttpInterception = true;
         _proxy.EnableRequestTimingCapture = true;
+        // Inspector eagerly buffers bodies for the session grid; 4 MiB trips too often on
+        // normal browsing (images, JS bundles) and RST'd the H2 stream. 32 MiB still bounds
+        // memory while covering typical inspected payloads.
+        _proxy.MaxBufferedBodyBytes = 32 * 1024 * 1024;
         ApplyHttpProtocols();
         _proxy.BeforeRequest += OnBeforeRequest;
         _proxy.BeforeResponse += OnBeforeResponse;
@@ -135,6 +145,8 @@ public sealed class InterceptionService : IDisposable
         _proxy.Start();
 
         IsRootTrusted = UseInMemoryTrustState ? _inMemoryTrusted : IsRootPresentInStore(machineStore: false);
+
+        TryPruneLegacySharedCrtsOnce();
 
         if (AutoTrustRootOnStart)
         {
@@ -368,6 +380,14 @@ public sealed class InterceptionService : IDisposable
             return true;
         }
 
+        // Already trusted: skip TrustRootCertificate so Windows does not show another
+        // Trusted Root security dialog (or orphan-removal prompt) on repeated Install CA.
+        if (IsRootPresentInStore(machineStore))
+        {
+            IsRootTrusted = true;
+            return true;
+        }
+
         _proxy.CertificateManager.TrustRootCertificate(machineStore);
         IsRootTrusted = IsRootPresentInStore(machineStore);
         return IsRootTrusted;
@@ -413,6 +433,112 @@ public sealed class InterceptionService : IDisposable
 
         _proxy.CertificateManager.RemoveTrustedRootCertificate(machineStore);
         IsRootTrusted = IsRootPresentInStore(machineStore);
+    }
+
+    /// <summary>
+    ///     Mint a new root CA: untrust same-CN store entries, delete Inspector PFX + local leaf cache,
+    ///     recreate root. Always best-effort prunes the legacy shared <c>Titanium.Web.Proxy/crts</c> folder.
+    ///     Does not install trust — caller should prompt Install CA.
+    /// </summary>
+    public bool RotateRootCertificate(bool machineStore)
+    {
+        if (_proxy is null)
+            return false;
+
+        EnsureRootPfxPath();
+        var mgr = _proxy.CertificateManager;
+
+        if (!UseInMemoryTrustState)
+            mgr.RemoveTrustedRootCertificate(machineStore);
+        else
+        {
+            _inMemoryTrusted = false;
+            IsRootTrusted = false;
+        }
+
+        mgr.ClearRootCertificate();
+
+        try
+        {
+            if (File.Exists(_rootPfxPath))
+                File.Delete(_rootPfxPath);
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        try
+        {
+            var localCrts = Path.Combine(Path.GetDirectoryName(_rootPfxPath!)!, "crts");
+            if (Directory.Exists(localCrts))
+                Directory.Delete(localCrts, recursive: true);
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        mgr.PfxFilePath = _rootPfxPath!;
+        var ok = mgr.CreateRootCertificate(persistToFile: true);
+        IsRootTrusted = !UseInMemoryTrustState && IsRootPresentInStore(machineStore);
+
+        PruneLegacySharedCrts(force: true);
+        return ok && mgr.RootCertificate != null;
+    }
+
+    /// <summary>Test seam: override marker + shared-crts paths under a temp directory.</summary>
+    public string? LegacyCrtsTestRoot { get; set; }
+
+    private string LegacySharedCrtsMarkerPath()
+    {
+        EnsureRootPfxPath();
+        var dir = LegacyCrtsTestRoot ?? Path.GetDirectoryName(_rootPfxPath!)!;
+        return Path.Combine(dir, "legacy-shared-crts-cleared");
+    }
+
+    private string ResolveLegacySharedCrtsDirectory()
+    {
+        if (LegacyCrtsTestRoot != null)
+            return Path.Combine(LegacyCrtsTestRoot, "shared-crts");
+        return Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.GetSharedLeafCertificateDirectory();
+    }
+
+    private void TryPruneLegacySharedCrtsOnce()
+    {
+        var marker = LegacySharedCrtsMarkerPath();
+        if (File.Exists(marker))
+            return;
+        PruneLegacySharedCrts(force: false);
+    }
+
+    /// <summary>
+    ///     Best-effort delete of shared <c>Titanium.Web.Proxy/crts</c> (never the shared root PFX).
+    ///     When <paramref name="force"/> is false, writes the one-time Start marker.
+    /// </summary>
+    public void PruneLegacySharedCrts(bool force)
+    {
+        _ = force; // Callers pass Start vs rotate; marker write is identical.
+        try
+        {
+            var sharedCrts = ResolveLegacySharedCrtsDirectory();
+            if (Directory.Exists(sharedCrts))
+                Directory.Delete(sharedCrts, recursive: true);
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        // Start (force=false) and rotate (force=true) both ensure the one-time marker exists.
+        try
+        {
+            File.WriteAllText(LegacySharedCrtsMarkerPath(), DateTime.UtcNow.ToString("O"));
+        }
+        catch
+        {
+            // best-effort
+        }
     }
 
     public bool RefreshTrustState(bool machineStore = false)
@@ -482,7 +608,10 @@ public sealed class InterceptionService : IDisposable
     {
         var host = e.HttpClient.Request.RequestUri?.Host
                    ?? TryHost(e.HttpClient.Request);
-        e.DecryptSsl = DecryptHttps && !MitmBypass.ShouldDisableSslDecrypt(host);
+        e.DecryptSsl = DecryptHttps && !MitmBypass.ShouldDisableSslDecrypt(
+            host,
+            DecryptSkipHosts,
+            DecryptOnlyHosts);
 
         if (!Capturing)
         {
@@ -571,7 +700,7 @@ public sealed class InterceptionService : IDisposable
     {
         try
         {
-            if (e.HttpClient.Request.HasBody)
+            if (e.HttpClient.Request.HasBody && ShouldBufferBody(e.HttpClient.Request, e))
             {
                 e.HttpClient.Request.KeepBody = true;
                 await e.GetRequestBody();
@@ -629,7 +758,7 @@ public sealed class InterceptionService : IDisposable
     {
         try
         {
-            if (e.HttpClient.Response.HasBody)
+            if (e.HttpClient.Response.HasBody && ShouldBufferBody(e.HttpClient.Response, e))
             {
                 e.HttpClient.Response.KeepBody = true;
                 await e.GetResponseBody();
@@ -839,6 +968,24 @@ public sealed class InterceptionService : IDisposable
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    ///     Whole-body buffering for the session grid must not run when Content-Length already
+    ///     exceeds <see cref="ProxyServer.MaxBufferedBodyBytes" /> — that path RSTs HTTP/2 streams
+    ///     with ENHANCE_YOUR_CALM and breaks the browser download. Unknown length still buffers
+    ///     up to the limit (UI truncation via <see cref="MaxBodyBytes" /> applies afterward).
+    /// </summary>
+    private bool ShouldBufferBody(RequestResponseBase message, SessionEventArgs session)
+    {
+        var limit = session.MaxBufferedBodyBytes ?? _proxy?.MaxBufferedBodyBytes ?? (4 * 1024 * 1024);
+        if (limit <= 0)
+        {
+            return true;
+        }
+
+        var contentLength = message.ContentLength;
+        return contentLength < 0 || contentLength <= limit;
     }
 
     private static byte[]? TruncateBytes(byte[]? body)

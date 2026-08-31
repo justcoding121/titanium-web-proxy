@@ -60,7 +60,6 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-          cache: true
       - name: Test
         run: |
           dotnet test src/Titanium.Web.Proxy.sln -c Release --nologo --filter "TestCategory!=Slow&TestCategory!=E2E-UI-Window"
@@ -98,7 +97,6 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-          cache: true
       - uses: actions/cache@v4
         with:
           path: tools/packaging/.cache/http3-natives
@@ -138,7 +136,6 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-          cache: true
       - name: Build Plus
         env:
           RELEASE_TAG: ${{ needs.resolve-version.outputs.release_tag }}
@@ -185,7 +182,6 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-          cache: true
       - uses: actions/cache@v4
         with:
           path: tools/packaging/.cache/http3-natives

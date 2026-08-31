@@ -9,19 +9,23 @@ public static class SessionArchive
 {
     private static readonly JsonSerializerOptions HarJson = new() { WriteIndented = true };
 
-    public static async Task ExportHarAsync(IEnumerable<SessionSnapshot> sessions, string path, CancellationToken ct = default)
+    public static Task ExportHarAsync(IEnumerable<SessionSnapshot> sessions, string path, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var entries = sessions.Select(ToHarEntry).ToList();
         var har = new
         {
             log = new
             {
                 version = "1.2",
-                creator = new { name = "Titanium Inspector", version = "7.0.0" },
+                creator = new { name = "Titanium Inspector", version = "7.0.1" },
                 entries,
             },
         };
-        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(har, HarJson), ct);
+        // Sync write keeps headless RelayCommand StatusText updates on the same UI turn
+        // (async File.WriteAllTextAsync continuations were invisible to macOS WaitUntil pumps).
+        File.WriteAllText(path, JsonSerializer.Serialize(har, HarJson));
+        return Task.CompletedTask;
     }
 
     public static async Task<List<SessionSnapshot>> ImportHarAsync(string path, CancellationToken ct = default)

@@ -4,13 +4,13 @@
 import { data as links } from './download.data.ts'
 </script>
 
-Get CLI and Inspector builds from GitHub Releases. Product binaries on this page resolve the newest release that has zip/MSI assets (**including prereleases** such as `v7.0.0-beta`).
+Get CLI and Inspector builds from GitHub Releases. Product binaries on this page resolve the newest release that has zip/MSI assets (**including prereleases** such as `v7.0.1-beta`).
 
 **winget** installs the last published **stable** community package only — use the buttons below or GitHub for beta.
 
 HTTP/3 natives ship inside each RID zip (except Windows, which uses OS MsQuic on Win11 / Server 2022+). Alpine/K8s: use **`linux-musl-*`**, not `linux-x64`. Details: [HTTP/3](/docs/http3).
 
-## CLI (`titanium` / `twp`)
+## CLI (`titanium` / `twp`) {#cli}
 
 Self-contained zip. Extract and run. Each zip includes both `titanium` and `twp` binaries.
 
@@ -72,7 +72,7 @@ titanium update
 titanium http3-deps status
 ```
 
-## Titanium Inspector
+## Titanium Inspector {#inspector}
 
 Desktop MITM debugger. Windows: MSI + zip. Linux / macOS: zip only (same RID set as CLI).
 
@@ -168,7 +168,7 @@ dotnet add package Titanium.Web.Proxy --prerelease
 See [Releases](/releases) or [all assets on GitHub](https://github.com/justcoding121/titanium-web-proxy/releases).
 
 ::: tip Product zips vs NuGet tags
-Some tags publish **NuGet only**. CLI / Inspector / Plus zip assets are attached when a full product release is cut (`v*` tag via the release workflow). After `v7.0.0-beta`, the buttons above should resolve that prerelease’s assets. Prefer this page or GitHub Releases for beta binaries; **winget** remains stable-only.
+Some tags publish **NuGet only**. CLI / Inspector / Plus zip assets are attached when a full product release is cut (`v*` tag via the release workflow). After `v7.0.1-beta`, the buttons above should resolve that prerelease’s assets. Prefer this page or GitHub Releases for beta binaries; **winget** remains stable-only.
 :::
 
 ## See also

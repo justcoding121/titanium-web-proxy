@@ -94,6 +94,7 @@ public class SettingsPersistenceTests
     {
         var settings = new InspectorSettings();
         Assert.IsTrue(settings.LoggingEnabled);
+        Assert.IsFalse(settings.IgnoreServerCertificateErrors);
 #if DEBUG
         Assert.IsTrue(settings.LoggingEnableFile);
         Assert.AreEqual("Debug", settings.LoggingMinimumLevel);
@@ -399,7 +400,7 @@ public class SettingsPersistenceTests
             Assert.IsFalse(interception.IsRunning);
             vm.SystemProxy = true;
             Assert.IsFalse(vm.SystemProxy);
-            StringAssert.Contains(vm.StatusText, "Start interception");
+            StringAssert.Contains(vm.StatusText, "Start the proxy");
         }
         finally
         {

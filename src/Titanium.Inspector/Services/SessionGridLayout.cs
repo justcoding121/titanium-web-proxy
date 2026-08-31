@@ -43,6 +43,8 @@ public static class SessionGridLayout
         {
             "Duration (ms)" => "Duration",
             "TTFB (ms)" => "TTFB",
+            "Wait (ms)" => "TTFB",
+            "Client→Server" => "Protocol",
             _ => raw,
         };
     }
@@ -84,6 +86,11 @@ public static class SessionGridLayout
             }
 
             map[column.Key] = column;
+            // Prefer plain "Protocol" key; keep legacy Client→Server layouts working.
+            if (string.Equals(column.Key, "Client→Server", StringComparison.Ordinal))
+            {
+                map["Protocol"] = column;
+            }
         }
 
         return map;

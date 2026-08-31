@@ -6,12 +6,10 @@ namespace Titanium.Inspector.Services;
 public sealed class SessionStreamBuffer
 {
     private readonly Channel<SessionSnapshot> _channel;
-    private readonly SessionRegistry _registry;
     private long _nextId;
 
-    public SessionStreamBuffer(SessionRegistry registry, int capacity = 10_000)
+    public SessionStreamBuffer(int capacity = 10_000)
     {
-        _registry = registry;
         _channel = Channel.CreateBounded<SessionSnapshot>(new BoundedChannelOptions(capacity)
         {
             FullMode = BoundedChannelFullMode.DropOldest,
@@ -19,6 +17,13 @@ public sealed class SessionStreamBuffer
             SingleWriter = false,
         });
         _ = Task.Run(ReadLoopAsync);
+    }
+
+    /// <summary>Compatibility ctor — registry retention is owned by the ViewModel / <see cref="SessionStore"/>.</summary>
+    public SessionStreamBuffer(SessionRegistry registry, int capacity = 10_000)
+        : this(capacity)
+    {
+        _ = registry;
     }
 
     public event Action<SessionSnapshot>? SessionAdded;
@@ -40,7 +45,6 @@ public sealed class SessionStreamBuffer
     {
         await foreach (var snapshot in _channel.Reader.ReadAllAsync())
         {
-            _registry.Add(snapshot);
             SessionAdded?.Invoke(snapshot);
         }
     }

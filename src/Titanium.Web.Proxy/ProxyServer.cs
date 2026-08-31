@@ -386,7 +386,9 @@ public partial class ProxyServer : IDisposable
     ///     </list>
     ///     Requires MsQuic native library and a supported operating-system version
     ///     (<see cref="System.Net.Quic.QuicListener.IsSupported" />). Setting to <see langword="true" /> with
-    ///     no inbound HTTP/3 endpoint configured emits a warning and skips QUIC initialization.
+    ///     no inbound HTTP/3 endpoint is fine when an explicit/SOCKS/transparent TCP endpoint is
+    ///     present (origin-side QUIC only). A warning is emitted only when EnableHttp3 is set with
+    ///     no client-facing endpoints at all.
     ///     Default: <see langword="false" /> (opt-in).
     ///     <para>
     ///         <b>Experimental:</b> HTTP/3 support has not yet completed the full interop/soak/fuzz gate
@@ -1681,10 +1683,19 @@ public partial class ProxyServer : IDisposable
                 quicListenerCts = new CancellationTokenSource();
             else if (EnableHttp3)
             {
-                Logger.LogWarning(
-                    "EnableHttp3 is true but no inbound HTTP/3 endpoint is registered. " +
-                    "Add a TransparentQuicProxyEndPoint, or a TransparentProxyEndPoint with EnableHttp3, " +
-                    "before calling Start().");
+                // Explicit/SOCKS endpoints speak TCP to the client; EnableHttp3 still correctly
+                // arms origin-side QUIC (Alt-Svc / H2↔H3 bridge). That is the Inspector/CLI happy
+                // path — do not warn. Warn only when nothing can use either inbound or origin H3
+                // (no client-facing TCP endpoints), which usually means a misconfigured Start().
+                var hasTcpClientFacingEndpoint = ProxyEndPoints.Any(e =>
+                    e is ExplicitProxyEndPoint or SocksProxyEndPoint or TransparentProxyEndPoint);
+                if (!hasTcpClientFacingEndpoint)
+                {
+                    Logger.LogWarning(
+                        "EnableHttp3 is true but no inbound HTTP/3 endpoint is registered. " +
+                        "Add a TransparentQuicProxyEndPoint, or a TransparentProxyEndPoint with EnableHttp3, " +
+                        "before calling Start().");
+                }
             }
 
             // UDP-only transparent QUIC first (no TCP on that port).
