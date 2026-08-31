@@ -1,16 +1,13 @@
 name: Deploy website
 
 on:
+  # Always on product-channel and develop pushes so download.data.ts rebuilds when
+  # beta/stable merges land (those merges often do not touch website/**).
   push:
     branches:
       - develop
-    paths:
-      - 'website/**'
-      - 'wiki/images/**'
-      - 'docs/api/**'
-      - 'docs/styles/**'
-      - 'docs/fonts/**'
-      - '.github/workflows/deploy-website.yml'
+      - beta
+      - stable
   pull_request:
     branches:
       - develop
@@ -21,6 +18,8 @@ on:
       - 'docs/styles/**'
       - 'docs/fonts/**'
       - '.github/workflows/deploy-website.yml'
+  # Human-published releases. Actions GITHUB_TOKEN `gh release create` does not
+  # cascade this event — release.yml also dispatches this workflow after assets.
   release:
     types: [published]
   workflow_dispatch:
@@ -84,7 +83,14 @@ jobs:
           path: website/.vitepress/dist
 
   deploy:
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/develop' || github.event_name == 'release' || github.event_name == 'workflow_dispatch')
+    if: >
+      github.event_name != 'pull_request' && (
+        github.ref == 'refs/heads/develop' ||
+        github.ref == 'refs/heads/beta' ||
+        github.ref == 'refs/heads/stable' ||
+        github.event_name == 'release' ||
+        github.event_name == 'workflow_dispatch'
+      )
     needs: build
     runs-on: ubuntu-latest
     permissions:
