@@ -86,7 +86,8 @@ jobs:
         run: |
           set -euo pipefail
           dist=website/.vitepress/dist
-          printf 'titaniumproxy.com\n' > "$dist/CNAME"
+          # Do NOT write a Pages CNAME: titaniumproxy.com DNS points at CloudFront,
+          # not GitHub. A Pages custom domain causes http↔https redirect loops.
           for f in "$dist"/*.html; do
             base="$(basename "$f" .html)"
             [[ "$base" == "index" || "$base" == "404" ]] && continue
