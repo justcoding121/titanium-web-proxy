@@ -2399,23 +2399,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         StatusText = "Importing archive…";
         try
         {
-            // Off the UI sync context for zip IO so headless WaitUntil pumps cannot deadlock the import.
-            var imported = await SessionArchive.ImportNativeArchiveAsync(path).ConfigureAwait(false);
-            var count = imported.Count;
-            var fileName = Path.GetFileName(path);
-            await MarshalToUiAsync(() =>
+            // Stay on the UI sync context (RelayCommand). ConfigureAwait(false) + off-thread
+            // StatusText throws Avalonia "Call from invalid thread" on Windows CI, and
+            // nested MarshalToUiAsync StatusText updates flaked on macOS headless.
+            var imported = await SessionArchive.ImportNativeArchiveAsync(path);
+            foreach (var snap in imported)
             {
-                foreach (var snap in imported)
-                {
-                    _store.Add(snap);
-                }
+                _store.Add(snap);
+            }
 
-                ApplyFilter();
-                RefreshSessionCountText();
-            });
-            // Match ExportArchive: set StatusText after ConfigureAwait(false) without nesting it
-            // inside MarshalToUiAsync (StatusText remeasure was leaving "Importing…" stuck on macOS CI).
-            StatusText = $"Appended {count} sessions from {fileName}";
+            ApplyFilter();
+            RefreshSessionCountText();
+            StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
         }
         catch (Exception ex)
         {
