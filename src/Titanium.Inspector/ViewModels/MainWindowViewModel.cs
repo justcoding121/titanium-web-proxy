@@ -2111,11 +2111,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             var sessions = _all.ToList();
             await _store.EnsureBodiesLoadedAsync(sessions).ConfigureAwait(false);
             await SessionArchive.ExportHarAsync(sessions, path).ConfigureAwait(false);
-            await MarshalToUiAsync(() => StatusText = $"Exported {sessions.Count} sessions to {path}");
+            // Set StatusText on the continuation thread (same as ExportArchiveAsync). MarshalToUiAsync
+            // after ConfigureAwait(false) flaked on macOS headless — file written, StatusText stayed Ready.
+            StatusText = $"Exported {sessions.Count} sessions to {path}";
         }
         catch (Exception ex)
         {
-            await MarshalToUiAsync(() => StatusText = "Export HAR failed: " + Truncate(ex.Message, 160));
+            StatusText = "Export HAR failed: " + Truncate(ex.Message, 160);
         }
     }
 
@@ -2139,11 +2141,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             await _store.EnsureBodiesLoadedAsync(sessions).ConfigureAwait(false);
             await SessionArchive.ExportHarAsync(sessions, path).ConfigureAwait(false);
-            await MarshalToUiAsync(() => StatusText = $"Exported {sessions.Count} sessions to {path}");
+            StatusText = $"Exported {sessions.Count} sessions to {path}";
         }
         catch (Exception ex)
         {
-            await MarshalToUiAsync(() => StatusText = "Export HAR failed: " + Truncate(ex.Message, 160));
+            StatusText = "Export HAR failed: " + Truncate(ex.Message, 160);
         }
     }
 
