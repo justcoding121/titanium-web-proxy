@@ -98,7 +98,22 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         LoadFromSettings();
 
-        CheckForUpdatesCommand = new RelayCommand(async () => await CheckUpdatesAsync());
+        CheckForUpdatesCommand = new RelayCommand(async () => await CheckUpdatesAsync(promptIfAvailable: true));
+        SetUpdateChannelStableCommand = new RelayCommand(() =>
+        {
+            UpdateChannelIsBeta = false;
+            return Task.CompletedTask;
+        });
+        SetUpdateChannelBetaCommand = new RelayCommand(() =>
+        {
+            UpdateChannelIsBeta = true;
+            return Task.CompletedTask;
+        });
+        ToggleCheckForUpdatesOnStartupCommand = new RelayCommand(() =>
+        {
+            CheckForUpdatesOnStartup = !CheckForUpdatesOnStartup;
+            return Task.CompletedTask;
+        });
         ExportHarCommand = new RelayCommand(async () => await ExportHarAsync());
         ExportSelectedHarCommand = new RelayCommand(async () => await ExportSelectedHarAsync());
         ImportHarCommand = new RelayCommand(async () => await ImportHarAsync());
@@ -1024,6 +1039,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public BreakpointViewModel Breakpoints { get; }
     public AutoResponderViewModel AutoResponder { get; }
     public ICommand CheckForUpdatesCommand { get; }
+    public ICommand SetUpdateChannelStableCommand { get; }
+    public ICommand SetUpdateChannelBetaCommand { get; }
+    public ICommand ToggleCheckForUpdatesOnStartupCommand { get; }
     public ICommand ExportHarCommand { get; }
     public ICommand ExportSelectedHarCommand { get; }
     public ICommand ImportHarCommand { get; }
@@ -1294,6 +1312,52 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             {
                 PersistSettings();
             }
+        }
+    }
+
+    public bool UpdateChannelIsBeta
+    {
+        get => _settings.Current.UpdateChannel.Equals("Beta", StringComparison.OrdinalIgnoreCase);
+        set
+        {
+            var next = value ? "Beta" : "Stable";
+            if (string.Equals(_settings.Current.UpdateChannel, next, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _settings.Current.UpdateChannel = next;
+            PersistSettings();
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UpdateChannelIsBeta)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UpdateChannelIsStable)));
+        }
+    }
+
+    public bool UpdateChannelIsStable
+    {
+        get => !UpdateChannelIsBeta;
+        set
+        {
+            if (value)
+            {
+                UpdateChannelIsBeta = false;
+            }
+        }
+    }
+
+    public bool CheckForUpdatesOnStartup
+    {
+        get => _settings.Current.CheckForUpdatesOnStartup;
+        set
+        {
+            if (_settings.Current.CheckForUpdatesOnStartup == value)
+            {
+                return;
+            }
+
+            _settings.Current.CheckForUpdatesOnStartup = value;
+            PersistSettings();
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CheckForUpdatesOnStartup)));
         }
     }
 
@@ -1599,6 +1663,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ScriptOnRequest)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ScriptOnResponse)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DebugFileLogging)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UpdateChannelIsBeta)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UpdateChannelIsStable)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CheckForUpdatesOnStartup)));
     }
 
     private static bool IsDebugFileLoggingEnabled(InspectorSettings s) =>
@@ -1923,11 +1990,50 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private async Task CheckUpdatesAsync()
+    /// <summary>Startup or Help → Check for updates. When <paramref name="promptIfAvailable"/>, offer install dialog.</summary>
+    public async Task CheckUpdatesAsync(bool promptIfAvailable = true)
     {
-        StatusText = "Checking for updates…";
+        var channel = _updates.ChannelDisplayName;
+        StatusText = $"Checking for updates ({channel})…";
         var result = await _updates.CheckAsync();
+        if (!result.UpdateAvailable || string.IsNullOrEmpty(result.AssetUrl))
+        {
+            StatusText = result.Message;
+            return;
+        }
+
         StatusText = result.Message;
+        if (!promptIfAvailable)
+        {
+            return;
+        }
+
+        var owner = TryGetMainWindow();
+        var version = result.RemoteVersion ?? "";
+        if (!await _dialogs.ConfirmInstallUpdateAsync(owner, version, result.ChannelDisplay))
+        {
+            StatusText = $"Update available: {version} ({result.ChannelDisplay})";
+            return;
+        }
+
+        StatusText = "Downloading update…";
+        var (ok, message) = await _updates.DownloadAndStartApplyAsync(result);
+        StatusText = message;
+        if (!ok)
+        {
+            return;
+        }
+
+        StatusText = $"Installing {version} ({result.ChannelDisplay})… restarting.";
+        BeginBackgroundShutdown();
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            desktop.Shutdown();
+        }
+        else
+        {
+            TryGetMainWindow()?.Close();
+        }
     }
 
     private async Task StartCaptureAsync()

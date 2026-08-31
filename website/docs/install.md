@@ -27,6 +27,8 @@ titanium version --check --channel beta
 titanium http3-deps status
 ```
 
+`titanium update` checks the selected channel, downloads the RID zip, verifies SHA256, replaces the install directory after the process exits, and prints the new version. Use `--channel stable` (default) or `--channel beta` — it does not pick “whichever is newer” across channels.
+
 ## Plus
 
 ```shell

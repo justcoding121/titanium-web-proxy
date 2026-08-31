@@ -135,6 +135,18 @@ public partial class MainWindow : Window
         {
             // never crash UI on auto-start failure
         }
+
+        try
+        {
+            if (vm.CheckForUpdatesOnStartup)
+            {
+                await vm.CheckUpdatesAsync(promptIfAvailable: true);
+            }
+        }
+        catch
+        {
+            // never crash UI on update check failure
+        }
     }
 
     private void OnClosing(object? sender, WindowClosingEventArgs e)

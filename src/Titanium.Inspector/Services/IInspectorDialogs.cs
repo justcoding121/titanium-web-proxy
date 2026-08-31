@@ -27,6 +27,11 @@ public interface IInspectorDialogs
     /// Confirm resetting Inspector preferences to factory defaults (not the root CA or sessions).
     /// </summary>
     Task<bool> ConfirmResetSettingsAsync(Window? owner);
+
+    /// <summary>
+    /// Confirm installing an Inspector update for the selected channel. Returns true if Install and restart.
+    /// </summary>
+    Task<bool> ConfirmInstallUpdateAsync(Window? owner, string version, string channelDisplay);
 }
 
 /// <summary>Avalonia modal dialogs.</summary>
@@ -88,6 +93,16 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
             accept: "Reset settings",
             cancel: CancelLabel,
             height: 300);
+
+    public Task<bool> ConfirmInstallUpdateAsync(Window? owner, string version, string channelDisplay) =>
+        SimpleConfirmDialog.ShowAsync(
+            owner,
+            "Update available",
+            $"Update {version} ({channelDisplay}) is available. Install and restart now?\n\n" +
+            "Inspector will close, apply the update, and relaunch.",
+            accept: "Install and restart",
+            cancel: "Later",
+            height: 240);
 }
 
 /// <summary>Scripted answers for unit / E2E-UI tests (no real windows).</summary>
@@ -99,13 +114,17 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     public bool DeviceCaSetupResult { get; set; }
     public bool ResetSettingsResult { get; set; } = true;
     public bool RotateRootCaResult { get; set; } = true;
+    public bool InstallUpdateResult { get; set; } = true;
     public int InstallRootCaCalls { get; private set; }
     public int RemoveRootCaCalls { get; private set; }
     public int ElevateRootCaCalls { get; private set; }
     public int DeviceCaSetupCalls { get; private set; }
     public int ResetSettingsCalls { get; private set; }
     public int RotateRootCaCalls { get; private set; }
+    public int InstallUpdateCalls { get; private set; }
     public string? LastDeviceCaSetupMessage { get; private set; }
+    public string? LastInstallUpdateVersion { get; private set; }
+    public string? LastInstallUpdateChannel { get; private set; }
 
     public Task<bool> ConfirmInstallRootCaAsync(Window? owner)
     {
@@ -142,5 +161,13 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     {
         ResetSettingsCalls++;
         return Task.FromResult(ResetSettingsResult);
+    }
+
+    public Task<bool> ConfirmInstallUpdateAsync(Window? owner, string version, string channelDisplay)
+    {
+        InstallUpdateCalls++;
+        LastInstallUpdateVersion = version;
+        LastInstallUpdateChannel = channelDisplay;
+        return Task.FromResult(InstallUpdateResult);
     }
 }

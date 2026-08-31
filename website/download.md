@@ -127,9 +127,11 @@ winget install justcoding121.TitaniumInspector
 titanium run -c twp.yaml
 titanium version --check
 titanium update
+titanium update --channel beta
 titanium http3-deps status
 ```
 
+`titanium update` self-updates the CLI from the release feed for the selected channel (stable by default).
 ## Titanium.Plus
 
 Plus is **not** a separate download on this page. After the CLI is installed:

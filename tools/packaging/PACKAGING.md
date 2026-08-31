@@ -38,7 +38,8 @@ Uses WiX 5 (`dotnet tool` manifest under `tools/packaging/wix/`) plus **WixTools
 - `WixUI_InstallDir` wizard (welcome → license → **install folder** → progress → **Finished**)
 - `ARPPRODUCTICON` (Programs and Features icon from `app.ico`)
 - Start Menu + Desktop shortcuts
-- **Launch Titanium Inspector** checkbox on the exit dialog
+- **Launch Titanium Inspector** checkbox on the exit dialog (first install and upgrades)
+- `CloseApplication` for `TitaniumInspector.exe` so manual MSI upgrades can close a running instance
 
 Authenticode signing is stretch; unsigned MSI is fine for GitHub Releases / early winget.
 

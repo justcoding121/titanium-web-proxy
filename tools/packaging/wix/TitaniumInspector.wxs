@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
-     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Package Name="Titanium Inspector"
            Manufacturer="justcoding121"
            Version="$(var.ProductVersion)"
@@ -15,6 +16,13 @@
 
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Titanium Inspector" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+
+    <!-- Close running Inspector before overwriting locked files (manual MSI upgrade). -->
+    <util:CloseApplication Id="CloseInspector"
+                           Target="TitaniumInspector.exe"
+                           CloseMessage="yes"
+                           RebootPrompt="no"
+                           Timeout="10" />
 
     <!-- Resolve install path at runtime (Property Value cannot nest [INSTALLFOLDER] at build time). -->
     <SetProperty Id="WixShellExecTarget"
@@ -41,7 +49,7 @@
                Control="Finish"
                Event="DoAction"
                Value="LaunchApplication"
-               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT REMOVE" />
     </UI>
 
     <StandardDirectory Id="ProgramFiles64Folder">

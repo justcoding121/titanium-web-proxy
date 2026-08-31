@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Titanium.Cli;
 using Titanium.Cli.Config;
@@ -15,6 +16,7 @@ internal static class VersionCommand
         var check = args.Contains("--check", StringComparer.OrdinalIgnoreCase);
         var plus = args.Contains("--plus", StringComparer.OrdinalIgnoreCase);
         var channel = ParseChannel(args);
+        var channelDisplay = FormatChannel(channel);
 
         PrintLocalVersions(plus);
 
@@ -33,17 +35,17 @@ internal static class VersionCommand
 
         var local = typeof(Program).Assembly.GetName().Version ?? new Version(0, 0);
         var remote = Version.TryParse(StripPrerelease(manifest.Version), out var v) ? v : new Version(0, 0);
-        AsyncConsole.WriteLine($"Remote Cli ({channel}): {manifest.Version}");
+        AsyncConsole.WriteLine($"Remote Cli ({channelDisplay}): {manifest.Version}");
 
         var exit = 0;
         if (remote > local)
         {
-            AsyncConsole.WriteLine("A newer Cli build is available. Run: titanium update");
+            AsyncConsole.WriteLine($"A newer Cli build is available ({channelDisplay}). Run: titanium update --channel {channel}");
             exit = 2;
         }
         else
         {
-            AsyncConsole.WriteLine("Cli is up to date.");
+            AsyncConsole.WriteLine($"Cli is up to date ({channelDisplay}).");
         }
 
         if (plus)
@@ -54,12 +56,13 @@ internal static class VersionCommand
                 Version.TryParse(StripPrerelease(plusRemote), out var pr) &&
                 (plusLocal is null || pr > plusLocal))
             {
-                AsyncConsole.WriteLine($"A newer Plus build is available ({plusRemote}). Run: titanium update --plus");
+                AsyncConsole.WriteLine(
+                    $"A newer Plus build is available ({plusRemote}, {channelDisplay}). Run: titanium update --plus --channel {channel}");
                 exit = 2;
             }
             else if (plusLocal is not null)
             {
-                AsyncConsole.WriteLine($"Plus is up to date ({plusLocal}).");
+                AsyncConsole.WriteLine($"Plus is up to date ({plusLocal}, {channelDisplay}).");
             }
         }
 
@@ -121,12 +124,15 @@ internal static class VersionCommand
         {
             if (args[i] is "--channel" && i + 1 < args.Length)
             {
-                return args[i + 1];
+                return args[i + 1].Trim().ToLowerInvariant();
             }
         }
 
-        return Environment.GetEnvironmentVariable("TITANIUM_UPDATE_CHANNEL") ?? "stable";
+        return (Environment.GetEnvironmentVariable("TITANIUM_UPDATE_CHANNEL") ?? "stable").Trim().ToLowerInvariant();
     }
+
+    internal static string FormatChannel(string channel) =>
+        channel.Equals("beta", StringComparison.OrdinalIgnoreCase) ? "beta" : "stable";
 
     internal static string StripPrerelease(string? version)
     {
@@ -135,8 +141,9 @@ internal static class VersionCommand
             return "0.0.0";
         }
 
-        var dash = version.IndexOf('-');
-        return dash > 0 ? version[..dash] : version.TrimStart('v');
+        var trimmed = version.TrimStart('v');
+        var dash = trimmed.IndexOf('-');
+        return dash > 0 ? trimmed[..dash] : trimmed;
     }
 }
 
@@ -146,6 +153,12 @@ internal static class UpdateCommand
     {
         var plus = args.Contains("--plus", StringComparer.OrdinalIgnoreCase);
         var channel = VersionCommand.ParseChannel(args);
+        var channelDisplay = VersionCommand.FormatChannel(channel);
+
+        AsyncConsole.WriteLine(plus
+            ? $"Checking Plus updates ({channelDisplay})…"
+            : $"Checking for updates ({channelDisplay})…");
+
         var client = new UpdateFeedClient(channel);
         var manifest = await client.TryGetManifestAsync();
         if (manifest is null)
@@ -156,11 +169,20 @@ internal static class UpdateCommand
 
         if (plus)
         {
-            return await UpdatePlusAsync(manifest);
+            return await UpdatePlusAsync(manifest, channelDisplay);
         }
 
-        if (OperatingSystem.IsWindows() && await TryUpdateViaWingetAsync())
+        return await UpdateCliAsync(manifest, channelDisplay);
+    }
+
+    private static async Task<int> UpdateCliAsync(ReleaseManifest manifest, string channelDisplay)
+    {
+        var local = typeof(Program).Assembly.GetName().Version ?? new Version(0, 0);
+        var remoteText = manifest.Version?.TrimStart('v') ?? "0.0.0";
+        var remote = Version.TryParse(VersionCommand.StripPrerelease(remoteText), out var v) ? v : new Version(0, 0);
+        if (remote <= local)
         {
+            AsyncConsole.WriteLine($"Titanium CLI is up to date ({channelDisplay}).");
             return 0;
         }
 
@@ -168,17 +190,24 @@ internal static class UpdateCommand
         var asset = manifest.Products?.Cli?.Assets?.GetValueOrDefault(rid);
         if (asset?.Url is null)
         {
-            AsyncConsole.WriteLine($"Cli update ({channel}): re-download Titanium.Cli-{rid}.zip from GitHub Releases.");
-            AsyncConsole.WriteLine($"Remote version: {manifest.Version}");
-            return 0;
+            AsyncConsole.WriteError(
+                $"No CLI package for RID {rid} on channel {channelDisplay} (remote {remoteText}).");
+            return 1;
         }
 
-        var destZip = Path.Combine(Path.GetTempPath(), $"Titanium.Cli-{rid}-{manifest.Version}.zip");
-        AsyncConsole.WriteLine($"Downloading {asset.Url}");
-        using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) })
+        AsyncConsole.WriteLine($"Update {remoteText} ({channelDisplay}) is available. Installing…");
+        AsyncConsole.WriteLine("Downloading…");
+
+        var workDir = Path.Combine(Path.GetTempPath(), "TitaniumCli-update");
+        Directory.CreateDirectory(workDir);
+        var destZip = Path.Combine(workDir, $"Titanium.Cli-{rid}-{remoteText}.zip");
+
+        try
         {
+            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
             http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
             var bytes = await http.GetByteArrayAsync(asset.Url);
+            AsyncConsole.WriteLine("Verifying SHA256…");
             if (!string.IsNullOrEmpty(asset.Sha256))
             {
                 var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
@@ -191,118 +220,186 @@ internal static class UpdateCommand
 
             await File.WriteAllBytesAsync(destZip, bytes);
         }
+        catch (Exception ex)
+        {
+            AsyncConsole.WriteError($"Download failed: {ex.Message}");
+            return 1;
+        }
 
-        AsyncConsole.WriteLine($"Downloaded to {destZip}. Extract over the install directory and restart.");
-        AsyncConsole.WriteLine("If this process is locked, stop titanium and unzip manually.");
+        var installDir = AppContext.BaseDirectory.TrimEnd(
+            Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var exeName = OperatingSystem.IsWindows() ? "titanium.exe" : "titanium";
+        var relaunch = Path.Combine(installDir, exeName);
+        if (!File.Exists(relaunch))
+        {
+            // Published layout may use AssemblyName titanium without extension on Unix already handled;
+            // twp sibling is optional.
+            relaunch = Path.Combine(installDir, OperatingSystem.IsWindows() ? "twp.exe" : "twp");
+        }
+
+        AsyncConsole.WriteLine("Restarting updater…");
+        CliUpdateApplyHelper.StartDetached(
+            Environment.ProcessId,
+            destZip,
+            installDir,
+            relaunch,
+            remoteText,
+            channelDisplay);
+
+        AsyncConsole.WriteLine(
+            $"Installing {remoteText} ({channelDisplay}) in the background. When finished, run: titanium version");
+        // Exit so the helper can replace locked binaries.
         return 0;
     }
 
-    private static async Task<bool> TryUpdateViaWingetAsync()
-    {
-        try
-        {
-            var winget = ResolveWingetPath();
-            if (winget is null)
-            {
-                throw new FileNotFoundException("winget.exe not found");
-            }
-
-            var psi = new ProcessStartInfo(winget, "upgrade --id justcoding121.TitaniumCli -e --accept-package-agreements --accept-source-agreements")
-            {
-                UseShellExecute = false,
-            };
-            using var proc = Process.Start(psi);
-            if (proc is not null)
-            {
-                await proc.WaitForExitAsync();
-                if (proc.ExitCode == 0)
-                {
-                    AsyncConsole.WriteLine("Updated via winget.");
-                    return true;
-                }
-            }
-        }
-        catch
-        {
-            // fall through to download
-        }
-
-        return false;
-    }
-
-    private static async Task<int> UpdatePlusAsync(ReleaseManifest manifest)
+    private static async Task<int> UpdatePlusAsync(ReleaseManifest manifest, string channelDisplay)
     {
         var asset = manifest.Products?.Plus?.Asset;
         if (asset?.Url is null)
         {
-            AsyncConsole.WriteLine("Plus update: download Titanium.Plus.dll from GitHub Releases and place beside this executable, then restart.");
-            return 0;
+            AsyncConsole.WriteError($"No Plus package on channel {channelDisplay}.");
+            return 1;
         }
 
+        var remoteLabel = manifest.Products?.Plus?.Version ?? manifest.Version ?? "unknown";
         var dest = Path.Combine(AppContext.BaseDirectory, "Titanium.Plus.dll");
         var backup = dest + ".bak";
-        AsyncConsole.WriteLine($"Downloading {asset.Url}");
-        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
-        var bytes = await http.GetByteArrayAsync(asset.Url);
-        if (!string.IsNullOrEmpty(asset.Sha256))
+        AsyncConsole.WriteLine("Downloading…");
+        try
         {
-            var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-            if (!hash.Equals(asset.Sha256, StringComparison.OrdinalIgnoreCase))
+            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
+            var bytes = await http.GetByteArrayAsync(asset.Url);
+            AsyncConsole.WriteLine("Verifying SHA256…");
+            if (!string.IsNullOrEmpty(asset.Sha256))
             {
-                AsyncConsole.WriteError("SHA256 mismatch — aborting Plus update.");
-                return 1;
+                var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+                if (!hash.Equals(asset.Sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    AsyncConsole.WriteError("SHA256 mismatch — aborting Plus update.");
+                    return 1;
+                }
             }
-        }
 
-        if (File.Exists(dest))
+            if (File.Exists(dest))
+            {
+                File.Copy(dest, backup, overwrite: true);
+            }
+
+            var staging = dest + ".new";
+            await File.WriteAllBytesAsync(staging, bytes);
+            File.Move(staging, dest, overwrite: true);
+            AsyncConsole.WriteLine($"Updated Titanium.Plus.dll to {remoteLabel} ({channelDisplay}).");
+            return 0;
+        }
+        catch (Exception ex)
         {
-            File.Copy(dest, backup, overwrite: true);
+            AsyncConsole.WriteError($"Plus update failed: {ex.Message}");
+            return 1;
         }
-
-        await File.WriteAllBytesAsync(dest + ".new", bytes);
-        AsyncConsole.WriteLine($"Wrote {dest}.new — stop `titanium run` then rename to Titanium.Plus.dll (backup at .bak).");
-        return 0;
     }
 
     private static string ResolveRid() => Http3DepsCommand.SuggestRid();
+}
 
-    private static string? ResolveWingetPath()
+/// <summary>Detached helper that replaces the CLI install after this process exits.</summary>
+internal static class CliUpdateApplyHelper
+{
+    public static void StartDetached(
+        int pid,
+        string zipPath,
+        string installDir,
+        string relaunchPath,
+        string version,
+        string channel)
     {
-        var localApps = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Microsoft",
-            "WindowsApps",
-            "winget.exe");
-        if (File.Exists(localApps))
+        var workDir = Path.GetDirectoryName(zipPath) ?? Path.GetTempPath();
+        if (OperatingSystem.IsWindows())
         {
-            return localApps;
+            var ps1 = Path.Combine(workDir, "apply-cli-update.ps1");
+            File.WriteAllText(ps1, BuildWindowsScript(pid, zipPath, installDir, relaunchPath, version, channel), Encoding.UTF8);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{ps1}\"",
+                UseShellExecute = true,
+                CreateNoWindow = true,
+                WorkingDirectory = workDir,
+            });
+            return;
         }
 
-        return TryFindWingetUnderProgramFiles();
+        var sh = Path.Combine(workDir, "apply-cli-update.sh");
+        File.WriteAllText(sh, BuildUnixScript(pid, zipPath, installDir, relaunchPath, version, channel), new UTF8Encoding(false));
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "/bin/bash",
+            Arguments = $"\"{sh}\"",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = workDir,
+        });
     }
 
-    private static string? TryFindWingetUnderProgramFiles()
+    internal static string BuildWindowsScript(
+        int pid,
+        string zipPath,
+        string installDir,
+        string relaunchPath,
+        string version,
+        string channel)
     {
-        var programFiles = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            "WindowsApps");
-        if (!Directory.Exists(programFiles))
-        {
-            return null;
-        }
-
-        try
-        {
-            return Directory.EnumerateFiles(programFiles, "winget.exe", SearchOption.AllDirectories)
-                .FirstOrDefault();
-        }
-        catch
-        {
-            // WindowsApps may deny enumeration.
-            return null;
-        }
+        var sb = new StringBuilder();
+        sb.AppendLine("$ErrorActionPreference = 'Stop'");
+        sb.AppendLine($"$pidToWait = {pid}");
+        sb.AppendLine($"$package = '{EscapePs(zipPath)}'");
+        sb.AppendLine($"$installDir = '{EscapePs(installDir)}'");
+        sb.AppendLine($"$relaunch = '{EscapePs(relaunchPath)}'");
+        sb.AppendLine("while (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 400 }");
+        sb.AppendLine("Start-Sleep -Seconds 1");
+        sb.AppendLine("$tmp = Join-Path $env:TEMP ('ti-cli-unz-' + [guid]::NewGuid().ToString('n'))");
+        sb.AppendLine("New-Item -ItemType Directory -Force -Path $tmp | Out-Null");
+        sb.AppendLine("Expand-Archive -LiteralPath $package -DestinationPath $tmp -Force");
+        sb.AppendLine("Copy-Item -Path (Join-Path $tmp '*') -Destination $installDir -Recurse -Force");
+        sb.AppendLine("Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue");
+        sb.AppendLine($"Write-Host 'Updated to {EscapePs(version)} ({EscapePs(channel)}).'");
+        sb.AppendLine("if (Test-Path -LiteralPath $relaunch) {");
+        sb.AppendLine("  & $relaunch version");
+        sb.AppendLine("}");
+        return sb.ToString();
     }
+
+    internal static string BuildUnixScript(
+        int pid,
+        string zipPath,
+        string installDir,
+        string relaunchPath,
+        string version,
+        string channel)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("#!/usr/bin/env bash");
+        sb.AppendLine("set -euo pipefail");
+        sb.AppendLine($"pid={pid}");
+        sb.AppendLine($"package={BashQuote(zipPath)}");
+        sb.AppendLine($"install_dir={BashQuote(installDir)}");
+        sb.AppendLine($"relaunch={BashQuote(relaunchPath)}");
+        sb.AppendLine("while kill -0 \"$pid\" 2>/dev/null; do sleep 0.4; done");
+        sb.AppendLine("sleep 1");
+        sb.AppendLine("tmp=$(mktemp -d)");
+        sb.AppendLine("unzip -qo \"$package\" -d \"$tmp\"");
+        sb.AppendLine("cp -a \"$tmp\"/. \"$install_dir\"/");
+        sb.AppendLine("rm -rf \"$tmp\"");
+        sb.AppendLine("chmod +x \"$install_dir/titanium\" \"$install_dir/twp\" 2>/dev/null || true");
+        sb.AppendLine($"echo 'Updated to {version} ({channel}).'");
+        sb.AppendLine("if [[ -x \"$relaunch\" ]]; then \"$relaunch\" version || true; fi");
+        return sb.ToString();
+    }
+
+    private static string EscapePs(string value) => value.Replace("'", "''", StringComparison.Ordinal);
+
+    private static string BashQuote(string value) =>
+        "'" + value.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
 }
 
 internal sealed class UpdateFeedClient
@@ -335,7 +432,6 @@ internal sealed class UpdateFeedClient
                 return JsonSerializer.Deserialize<ReleaseManifest>(json, ManifestJson);
             }
 
-            // Prefer release-manifest.json asset on latest (or first prerelease for beta).
             var api = _channel.Equals("beta", StringComparison.OrdinalIgnoreCase)
                 ? "https://api.github.com/repos/justcoding121/titanium-web-proxy/releases"
                 : "https://api.github.com/repos/justcoding121/titanium-web-proxy/releases/latest";
@@ -429,9 +525,15 @@ internal sealed class ProductsBlock
 {
     public CliBlock? Cli { get; set; }
     public PlusProductBlock? Plus { get; set; }
+    public InspectorBlock? Inspector { get; set; }
 }
 
 internal sealed class CliBlock
+{
+    public Dictionary<string, AssetBlock>? Assets { get; set; }
+}
+
+internal sealed class InspectorBlock
 {
     public Dictionary<string, AssetBlock>? Assets { get; set; }
 }

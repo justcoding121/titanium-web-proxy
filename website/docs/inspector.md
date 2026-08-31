@@ -45,6 +45,12 @@ chmod +x install-app.sh uninstall-app.sh TitaniumInspector
 ./uninstall-app.sh
 ```
 
+## Updates
+
+**Options → Update channel** — Stable (default) or Beta. **Help → Check for updates…** checks only that channel and labels it in the dialog (e.g. *Update 7.0.3 (Stable)*). Choosing **Install and restart** downloads the package (MSI for a Program Files install, otherwise the RID zip), closes Inspector, applies the update, and relaunches.
+
+**Options → Check for updates on startup** uses the same channel and confirm dialog (never silent-install).
+
 ## Quick use
 
 1. Launch Inspector — by default it starts listening and enables system proxy (Capturing on).
