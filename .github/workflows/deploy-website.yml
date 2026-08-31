@@ -76,21 +76,22 @@ jobs:
             echo "Warning: docs/api missing; API pages will not be published"
           fi
 
-      # GitHub Pages + VitePress cleanUrls: publishing BOTH `download.html` and
-      # `download/index.html` leaves `/download` stuck on a stale object while
-      # `/download.html` updates. Mirror then remove the sibling `*.html` so only
-      # `dir/index.html` remains (nav `/download` and `/download/` both resolve).
+      # GitHub Pages cleanUrls: keep BOTH `page.html` and `page/index.html`.
+      # Deleting the sibling `.html` forces `/page` (no slash) through a Pages 301
+      # that rewrites the host to `*.github.io` when the custom-domain CNAME is not
+      # fully active on the edge (CloudFront → GitHub). That is what made
+      # titaniumproxy.com/download bounce to github.io.
       - name: Mirror cleanUrls HTML as index.html
         shell: bash
         run: |
           set -euo pipefail
           dist=website/.vitepress/dist
+          printf 'titaniumproxy.com\n' > "$dist/CNAME"
           for f in "$dist"/*.html; do
             base="$(basename "$f" .html)"
             [[ "$base" == "index" || "$base" == "404" ]] && continue
             mkdir -p "$dist/$base"
             cp -f "$f" "$dist/$base/index.html"
-            rm -f "$f"
           done
           # Nested docs pages
           if [ -d "$dist/docs" ]; then
@@ -99,7 +100,6 @@ jobs:
               dir="$(dirname "$f")"
               mkdir -p "$dir/$base"
               cp -f "$f" "$dir/$base/index.html"
-              rm -f "$f"
             done
           fi
 
