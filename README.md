@@ -41,7 +41,7 @@ A lightweight, high-performance HTTP(S) proxy — reverse / edge CLI, desktop In
 | **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge proxy for any stack: `run`, `test`, `version`, `update` | [Download (Windows, Linux & Mac)](https://titaniumproxy.com/download#cli) |
 | **Titanium Inspector** | Desktop MITM debugger (session grid, inspectors, AutoResponder, breakpoints, HAR) | [Download (Windows, Linux & Mac)](https://titaniumproxy.com/download#inspector) |
 | **Titanium.Plus** | Optional advanced features: control plane, ops, observability, and dashboard | After installing CLI, run `titanium update --plus` |
-| **Titanium.Web.Proxy** | Core library. Embed a MITM and/or reverse proxy in a .NET app | [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy/7.0.1-beta) (`dotnet add package Titanium.Web.Proxy --prerelease`) |
+| **Titanium.Web.Proxy** | Core library. Embed a MITM and/or reverse proxy in a .NET app | [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy/7.0.2-beta) (`dotnet add package Titanium.Web.Proxy --prerelease`) |
 
 CLI and Plus target reverse-proxy / edge workloads (routing, load balancing, health, discovery) on Windows, Linux, and macOS. Inspector is the MITM debugging product. The Core library is the embed path for .NET. Requires .NET 10 or later.
 
@@ -67,7 +67,7 @@ On Windows, **winget is stable-only**:
 winget install justcoding121.TitaniumCli
 ```
 
-For **beta**, download self-contained zips from [Download](https://titaniumproxy.com/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when a product release includes `Titanium.Cli-*.zip` assets (e.g. `v7.0.1-beta`). Extract and run:
+For **beta**, download self-contained zips from [Download](https://titaniumproxy.com/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when a product release includes `Titanium.Cli-*.zip` assets (e.g. `v7.0.2-beta`). Extract and run:
 
 ```shell
 titanium run -c twp.yaml
@@ -82,7 +82,7 @@ Optional Plus: run `titanium update --plus` (add `--channel beta` for prerelease
 
 ### Titanium Inspector
 
-Prefer [Download](https://titaniumproxy.com/download). On Windows, winget id `justcoding121.TitaniumInspector` is **stable-only**; MSI / portable zip for beta come from the product `v*` release (e.g. `v7.0.1-beta`). Start interception from the Capture menu, install the root CA, then toggle system proxy.
+Prefer [Download](https://titaniumproxy.com/download). On Windows, winget id `justcoding121.TitaniumInspector` is **stable-only**; MSI / portable zip for beta come from the product `v*` release (e.g. `v7.0.2-beta`). Start interception from the Capture menu, install the root CA, then toggle system proxy.
 
 ## Quick start
 

@@ -4,7 +4,7 @@
 import { data as links } from './download.data.ts'
 </script>
 
-Get CLI and Inspector builds from GitHub Releases. Product binaries on this page resolve the newest release that has zip/MSI assets (**including prereleases** such as `v7.0.1-beta`).
+Get CLI and Inspector builds from GitHub Releases. Product binaries on this page resolve the newest release that has zip/MSI assets (**including prereleases** such as `v7.0.2-beta`).
 
 **winget** installs the last published **stable** community package only — use the buttons below or GitHub for beta.
 
@@ -168,7 +168,7 @@ dotnet add package Titanium.Web.Proxy --prerelease
 See [Releases](/releases) or [all assets on GitHub](https://github.com/justcoding121/titanium-web-proxy/releases).
 
 ::: tip Product zips vs NuGet tags
-Some tags publish **NuGet only**. CLI / Inspector / Plus zip assets are attached when a full product release is cut (`v*` tag via the release workflow). After `v7.0.1-beta`, the buttons above should resolve that prerelease’s assets. Prefer this page or GitHub Releases for beta binaries; **winget** remains stable-only.
+Some tags publish **NuGet only**. CLI / Inspector / Plus zip assets are attached when a full product release is cut (`v*` tag via the release workflow). After `v7.0.2-beta`, the buttons above should resolve that prerelease’s assets. Prefer this page or GitHub Releases for beta binaries; **winget** remains stable-only.
 :::
 
 ## See also
