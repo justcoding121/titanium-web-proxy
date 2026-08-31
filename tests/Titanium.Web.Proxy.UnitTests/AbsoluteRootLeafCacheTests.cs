@@ -255,6 +255,34 @@ public class SameCommonNameStoreCandidateTests
     }
 
     [TestMethod]
+    public void InstallCertificate_CurrentUserMy_AlreadyPresent_ReturnsFalse_ThenRemoveHits()
+    {
+        if (!RunTime.IsWindows)
+            Assert.Inconclusive("X509Store CurrentUser\\My install/remove coverage is Windows-focused.");
+
+        const string cn = "Titanium Cov Install Remove CA";
+        using var mgr = new CertificateManager(cn, "TitaniumCov", false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+
+        var install = typeof(CertificateManager).GetMethod("InstallCertificate",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var remove = typeof(CertificateManager).GetMethod("RemoveMatchingCertificates",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        try
+        {
+            Assert.IsTrue((bool)install.Invoke(mgr, [StoreName.My, StoreLocation.CurrentUser])!);
+            Assert.IsFalse((bool)install.Invoke(mgr, [StoreName.My, StoreLocation.CurrentUser])!);
+        }
+        finally
+        {
+            remove.Invoke(mgr, [StoreName.My, StoreLocation.CurrentUser, cn, null]);
+        }
+    }
+
+    [TestMethod]
     public void IsSameCommonNameStoreCandidate_EmptySubject_ReturnsFalse()
     {
         // Cover the early false return when SimpleName does not match.

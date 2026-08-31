@@ -242,4 +242,75 @@ public class RotateRootCaTests
             try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { }
         }
     }
+
+    [TestMethod]
+    public async Task RotateCa_UserInstallFails_ElevatesAndTrusts()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-rot-elev-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            using var interception = new InterceptionService
+            {
+                UseInMemoryTrustState = true,
+                FailNextUserTrustInstall = true
+            };
+            OverrideRootPfx(interception, Path.Combine(dir, "rootCert.pfx"));
+            await interception.StartAsync(IPAddress.Loopback, 0);
+            var dialogs = new ScriptedInspectorDialogs
+            {
+                RotateRootCaResult = true,
+                InstallRootCaResult = true,
+                ElevateRootCaResult = true
+            };
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                dialogs);
+
+            await ExecuteAsync(vm.RotateCaCommand);
+            Assert.AreEqual(1, dialogs.ElevateRootCaCalls);
+            StringAssert.Contains(vm.StatusText, "reinstalled");
+            interception.EnsureShutdown();
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { }
+        }
+    }
+
+    [TestMethod]
+    public async Task OpenLoopbackExempt_WithoutOwner_SetsProbeStatus_OnWindows()
+    {
+        if (!OperatingSystem.IsWindows())
+            Assert.Inconclusive("Windows-only");
+
+        var dir = Path.Combine(Path.GetTempPath(), "ti-loop-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            using var interception = new InterceptionService { UseInMemoryTrustState = true };
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                new ScriptedInspectorDialogs());
+
+            await ExecuteAsync(vm.OpenLoopbackExemptCommand);
+            StringAssert.Contains(vm.StatusText, "Store app allow-list OK");
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { }
+        }
+    }
 }

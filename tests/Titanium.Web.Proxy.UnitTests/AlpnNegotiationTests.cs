@@ -54,4 +54,16 @@ public class AlpnNegotiationTests
     {
         Assert.IsFalse(AlpnNegotiation.IsAlpnNegotiationFailure(null));
     }
+
+    [TestMethod]
+    public void IsAlpnNegotiationFailure_HResultOnly_True()
+    {
+        var ex = new Exception("ALPN mismatch without Win32Exception")
+        {
+            HResult = AlpnNegotiation.SecENoApplicationProtocol
+        };
+        Assert.IsTrue(AlpnNegotiation.IsAlpnNegotiationFailure(ex));
+        Assert.IsFalse(AlpnNegotiation.ShouldAttemptTlsVersionDowngrade(
+            new AuthenticationException("auth", ex)));
+    }
 }
