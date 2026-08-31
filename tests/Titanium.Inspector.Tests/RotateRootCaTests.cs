@@ -172,4 +172,74 @@ public class RotateRootCaTests
         command.Execute(null);
         await Task.Delay(150);
     }
+    [TestMethod]
+    public async Task RotateCa_WhenProxyStopped_SetsStartFirstStatus()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-rot-stop-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            using var interception = new InterceptionService { UseInMemoryTrustState = true };
+            OverrideRootPfx(interception, Path.Combine(dir, "rootCert.pfx"));
+            var dialogs = new ScriptedInspectorDialogs { RotateRootCaResult = true };
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                dialogs);
+
+            await ExecuteAsync(vm.RotateCaCommand);
+            StringAssert.Contains(vm.StatusText, "Start the proxy first");
+            Assert.AreEqual(0, dialogs.RotateRootCaCalls);
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { }
+        }
+    }
+
+    [TestMethod]
+    public async Task RotateCa_AcceptInstall_UpdatesStatusViaInstallHelper()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-rot-inst-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            using var interception = new InterceptionService { UseInMemoryTrustState = true };
+            OverrideRootPfx(interception, Path.Combine(dir, "rootCert.pfx"));
+            await interception.StartAsync(IPAddress.Loopback, 0);
+            // Force decrypt on so RotateCa clears it.
+            var settings = new SettingsService(Path.Combine(dir, "settings.json"));
+            settings.Current.DecryptHttps = true;
+            var dialogs = new ScriptedInspectorDialogs
+            {
+                RotateRootCaResult = true,
+                InstallRootCaResult = true,
+                ElevateRootCaResult = false
+            };
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception,
+                dialogs);
+            vm.DecryptHttps = true;
+
+            await ExecuteAsync(vm.RotateCaCommand);
+            Assert.IsFalse(vm.DecryptHttps);
+            Assert.IsTrue(dialogs.InstallRootCaCalls >= 1);
+            StringAssert.Contains(vm.StatusText, "reinstalled");
+            interception.EnsureShutdown();
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { }
+        }
+    }
 }

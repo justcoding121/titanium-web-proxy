@@ -239,4 +239,26 @@ public class SameCommonNameStoreCandidateTests
             .Invoke(mgr, null);
         Assert.AreEqual(0, (int)pending.GetType().GetProperty("Count")!.GetValue(pending)!);
     }
+    [TestMethod]
+    public void RemoveMatchingCertificates_CurrentUserMy_OpensAndCompletes()
+    {
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        var remove = typeof(CertificateManager).GetMethod("RemoveMatchingCertificates",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        // Empty keep-thumbprint path walks CurrentUser\My; should not throw.
+        remove.Invoke(mgr, [StoreName.My, StoreLocation.CurrentUser, "NoSuchCommonName-Titanium-Test", null]);
+        remove.Invoke(mgr, [StoreName.My, StoreLocation.CurrentUser, "NoSuchCommonName-Titanium-Test", "DEADBEEF"]);
+    }
+
+    [TestMethod]
+    public void IsSameCommonNameStoreCandidate_EmptySubject_ReturnsFalse()
+    {
+        // Cover the early false return when SimpleName does not match.
+        using var leaf = CreateSelfSigned("CN=SomethingElse");
+        Assert.IsFalse(CertificateManager.IsSameCommonNameStoreCandidate(leaf, "Titanium Root Certificate Authority", null));
+    }
 }
