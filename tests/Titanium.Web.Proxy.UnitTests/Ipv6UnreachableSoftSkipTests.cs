@@ -39,11 +39,12 @@ public class Ipv6UnreachableSoftSkipTests
     {
         var v6 = IPAddress.Parse("2001:db8::1");
         var unreachable = new SocketException((int)SocketError.NetworkUnreachable);
+        // Arm with a short but CI-safe window (1ms was racing Assert.IsTrue on slow runners).
         Ipv6UnreachableSoftSkip.RecordAttemptFailure(v6, unreachable, enabled: true,
-            ttl: TimeSpan.FromMilliseconds(1));
-        Assert.IsTrue(Ipv6UnreachableSoftSkip.IsSkipping());
-        Thread.Sleep(30);
-        Assert.IsFalse(Ipv6UnreachableSoftSkip.IsSkipping(ttl: TimeSpan.FromMilliseconds(1)));
+            ttl: TimeSpan.FromMilliseconds(200));
+        Assert.IsTrue(Ipv6UnreachableSoftSkip.IsSkipping(), "skip should arm before TTL elapses");
+        Thread.Sleep(400);
+        Assert.IsFalse(Ipv6UnreachableSoftSkip.IsSkipping(), "skip should clear after short TTL");
     }
 
     [TestMethod]
