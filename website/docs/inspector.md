@@ -10,8 +10,8 @@ Prefer the [Download](/download) page (resolves the newest release that has Insp
 
 Windows examples for the **7.0 beta** product tag:
 
-- [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.1-beta/TitaniumInspector-win-x64.msi)
-- [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.1-beta/TitaniumInspector-win-x64.zip)
+- [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.2-beta/TitaniumInspector-win-x64.msi)
+- [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.2-beta/TitaniumInspector-win-x64.zip)
 
 ```shell
 # Stable community package only — not the 7.0 beta
