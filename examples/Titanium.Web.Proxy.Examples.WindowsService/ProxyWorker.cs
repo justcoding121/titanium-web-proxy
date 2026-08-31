@@ -82,9 +82,10 @@ internal sealed class ProxyWorker : BackgroundService
         explicitEndPointV4.BeforeTunnelConnectRequest += OnBeforeTunnelConnectRequest;
         proxyServer.AddEndPoint(explicitEndPointV4);
 
+        ExplicitProxyEndPoint? explicitEndPointV6 = null;
         if (settings.EnableIpV6)
         {
-            var explicitEndPointV6 =
+            explicitEndPointV6 =
                 new ExplicitProxyEndPoint(IPAddress.IPv6Any, settings.ListeningPort, settings.DecryptSsl);
             explicitEndPointV6.BeforeTunnelConnectRequest += OnBeforeTunnelConnectRequest;
             proxyServer.AddEndPoint(explicitEndPointV6);
@@ -130,7 +131,33 @@ internal sealed class ProxyWorker : BackgroundService
         if (settings.LogRequests)
             proxyServer.BeforeResponse += OnBeforeResponse;
 
-        proxyServer.Start();
+        try
+        {
+            proxyServer.Start();
+        }
+        catch (Exception ex) when (IsAddressAlreadyInUse(ex))
+        {
+            logger.LogWarning(ex,
+                "ListeningPort {ListeningPort} unavailable; falling back to ephemeral port 0",
+                settings.ListeningPort);
+            proxyServer.RemoveEndPoint(explicitEndPointV4);
+            if (explicitEndPointV6 != null)
+                proxyServer.RemoveEndPoint(explicitEndPointV6);
+
+            explicitEndPointV4 = new ExplicitProxyEndPoint(IPAddress.Any, 0, settings.DecryptSsl);
+            explicitEndPointV4.BeforeTunnelConnectRequest += OnBeforeTunnelConnectRequest;
+            proxyServer.AddEndPoint(explicitEndPointV4);
+
+            if (settings.EnableIpV6)
+            {
+                explicitEndPointV6 =
+                    new ExplicitProxyEndPoint(IPAddress.IPv6Any, 0, settings.DecryptSsl);
+                explicitEndPointV6.BeforeTunnelConnectRequest += OnBeforeTunnelConnectRequest;
+                proxyServer.AddEndPoint(explicitEndPointV6);
+            }
+
+            proxyServer.Start();
+        }
 
         if (settings.SetAsSystemProxy)
         {
@@ -140,7 +167,7 @@ internal sealed class ProxyWorker : BackgroundService
                     KnownMitmExclusions.CreateSystemProxySettings());
                 logger.LogInformation(
                     "Registered as Windows system proxy on port {ListeningPort} with identity host bypass (cleared on stop)",
-                    settings.ListeningPort);
+                    explicitEndPointV4.Port);
             }
             catch (NotSupportedException ex)
             {
@@ -148,9 +175,22 @@ internal sealed class ProxyWorker : BackgroundService
             }
         }
 
-        logger.LogInformation("Service listening on port {ListeningPort}", settings.ListeningPort);
+        logger.LogInformation("Service listening on port {ListeningPort}", explicitEndPointV4.Port);
 
         return base.StartAsync(cancellationToken);
+    }
+
+    private static bool IsAddressAlreadyInUse(Exception ex)
+    {
+        for (var cur = ex; cur != null; cur = cur.InnerException)
+        {
+            if (cur is System.Net.Sockets.SocketException se &&
+                (se.SocketErrorCode == System.Net.Sockets.SocketError.AddressAlreadyInUse
+                 || se.NativeErrorCode is 10048 or 98))
+                return true;
+        }
+
+        return false;
     }
 
     private static Task OnBeforeTunnelConnectRequest(object sender, TunnelConnectSessionEventArgs e)

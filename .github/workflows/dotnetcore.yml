@@ -152,7 +152,7 @@ jobs:
         pull: '--rebase --autostash'
 
   # Cross-OS Inspector + Plus dashboard UI gates (Headless / Visual / Playwright).
-  # Inspector unit suite stays on Windows `build` only - do not re-run it here.
+  # Inspector unit suite stays on Windows `build` only except Inspector-Stress (below).
   ui-portable:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
@@ -169,6 +169,52 @@ jobs:
       with:
         dotnet-version: |
           10.0.x
+    - name: Assert in-box MsQuic (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        if (-not [System.Net.Quic.QuicListener]::IsSupported) {
+          throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
+        }
+        Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"
+    - name: Install libmsquic (Linux HTTP/3)
+      if: runner.os == 'Linux'
+      run: |
+        set -euo pipefail
+        . /etc/os-release
+        curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+          "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb" \
+          -o packages-microsoft-prod.deb
+        sudo dpkg -i packages-microsoft-prod.deb
+        rm -f packages-microsoft-prod.deb
+        sudo apt-get update
+        sudo apt-get install -y libmsquic
+        pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { throw "QuicListener.IsSupported is false after libmsquic install" }; Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"'
+    - name: Install MsQuic (macOS HTTP/3)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Prefer Homebrew msquic when available; otherwise fail clearly (Inspector stress requires H3).
+        if brew list msquic &>/dev/null || brew install msquic; then
+          echo "msquic formula present"
+        else
+          echo "Attempting libmsquic via brew tap / fallback paths"
+          brew install --formula msquic || true
+        fi
+        # Help .NET find native libs from Homebrew on Intel/Apple Silicon prefixes.
+        for prefix in /usr/local /opt/homebrew; do
+          if [ -d "$prefix/lib" ]; then
+            echo "DYLD_LIBRARY_PATH=${prefix}/lib:${DYLD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+            echo "DOTNET_SYSTEM_NET_HTTP_SOCKETSHTTPHANDLER_HTTP3SUPPORT=1" >> "$GITHUB_ENV"
+          fi
+        done
+        pwsh -NoProfile -Command '
+          if (-not [System.Net.Quic.QuicListener]::IsSupported) {
+            throw "QuicListener.IsSupported is false on macOS after MsQuic install — Inspector stress requires HTTP/3"
+          }
+          Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"
+        '
     - name: Linux UI fonts + Playwright OS deps
       if: runner.os == 'Linux'
       run: |
@@ -194,6 +240,9 @@ jobs:
     - name: Inspector Headless + Visual + Plus Playwright
       run: |
         dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Headless|TestCategory=E2E-UI-Visual|TestCategory=E2E-UI-Plus-Dashboard"
+    - name: Inspector retention stress (spill + H3)
+      run: |
+        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-restore --filter "TestCategory=Inspector-Stress"
     - name: OS proxy-backend filters
       run: |
         dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "FullyQualifiedName~UnixProxyBypassMapperTests|FullyQualifiedName~MacOsSystemProxyBackendTests|FullyQualifiedName~LinuxSystemProxyBackendTests|FullyQualifiedName~ElevationPromptCancelTests|FullyQualifiedName~SystemProxyBackendFactoryPlatformTests"

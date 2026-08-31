@@ -182,7 +182,20 @@ namespace Titanium.Web.Proxy.Examples.Basic
             }
 #pragma warning restore TWP001
 
-            proxyServer.Start();
+            try
+            {
+                proxyServer.Start();
+            }
+            catch (Exception ex) when (IsAddressAlreadyInUse(ex))
+            {
+                Logger.LogWarning(ex, "Port 8000 in use; falling back to ephemeral port 0");
+                proxyServer.RemoveEndPoint(explicitEndPoint);
+                explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 0);
+                explicitEndPoint.BeforeTunnelConnectRequest += OnBeforeTunnelConnectRequest;
+                explicitEndPoint.BeforeTunnelConnectResponse += OnBeforeTunnelConnectResponse;
+                proxyServer.AddEndPoint(explicitEndPoint);
+                proxyServer.Start();
+            }
 
             foreach (var endPoint in proxyServer.ProxyEndPoints)
                 Logger.LogWarning("Listening on '{EndPointType}' endpoint at Ip {IpAddress} and port: {Port}",
@@ -219,6 +232,19 @@ namespace Titanium.Web.Proxy.Examples.Basic
                 "0" or "false" or "FALSE" => false,
                 _ => defaultValue
             };
+        }
+
+        private static bool IsAddressAlreadyInUse(Exception ex)
+        {
+            for (var cur = ex; cur != null; cur = cur.InnerException)
+            {
+                if (cur is SocketException se &&
+                    (se.SocketErrorCode == SocketError.AddressAlreadyInUse
+                     || se.NativeErrorCode is 10048 or 98))
+                    return true;
+            }
+
+            return false;
         }
 
         public void Stop()

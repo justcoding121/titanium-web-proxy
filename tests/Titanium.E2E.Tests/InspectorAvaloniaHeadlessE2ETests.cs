@@ -26,7 +26,7 @@ public class InspectorAvaloniaHeadlessE2ETests
             var updates = new UpdateService(settings);
             var interception = new InterceptionService(new RecordingSystemProxyController());
             var vm = new MainWindowViewModel(buffer, registry, updates, settings, interception);
-            vm.BindPort = CliProcessHarness.GetFreePort();
+            vm.BindPort = 0;
 
             vm.Sessions.Add(new SessionSnapshot
             {

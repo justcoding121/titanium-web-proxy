@@ -1322,8 +1322,11 @@ internal static class RampOrchestrator
         if (arm.BackgroundControlPlaneScrape && !string.IsNullOrWhiteSpace(stack.ControlPlaneUrl))
         {
             scrapeTask = RunControlPlaneScrapeLoopAsync(stack.ControlPlaneUrl!,
-                stack.ControlPlaneSecret ?? TitaniumCliHost.ControlPlaneSharedSecret, scrapeCts.Token);
-            ProbeLog.Info("  background control-plane scrape every 10s (/v1/snapshot)");
+                stack.ControlPlaneSecret ?? TitaniumCliHost.ControlPlaneSharedSecret, scrapeCts.Token,
+                stack.DashboardUrl);
+            ProbeLog.Info(string.IsNullOrWhiteSpace(stack.DashboardUrl)
+                ? "  background control-plane scrape every 10s (/v1/snapshot)"
+                : "  background control-plane scrape every 10s (/v1/snapshot + dashboard /metrics)");
         }
 
         if (arm.WarmCacheFirst)
@@ -1576,7 +1579,7 @@ internal static class RampOrchestrator
     }
 
     private static async Task RunControlPlaneScrapeLoopAsync(string controlPlaneUrl, string sharedSecret,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string? dashboardUrl = null)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
         http.DefaultRequestHeaders.TryAddWithoutValidation(
@@ -1584,14 +1587,19 @@ internal static class RampOrchestrator
 
         var baseUri = new Uri(controlPlaneUrl);
         var snapshotUrl = new Uri(baseUri, "/v1/snapshot").AbsoluteUri;
+        string? metricsUrl = null;
+        if (!string.IsNullOrWhiteSpace(dashboardUrl))
+            metricsUrl = new Uri(new Uri(dashboardUrl), "/metrics").AbsoluteUri;
 
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
                 _ = await http.GetAsync(snapshotUrl, cancellationToken);
-                // Snapshot alone measures control-plane contention; pairing /metrics roughly
-                // doubles scrape tax under c=64 and was failing the 0.95× Plus-base gate.
+                // When a dashboard URL is provided (PlusMetricsScrape), also scrape Prometheus
+                // /metrics on the dashboard port. Snapshot-only otherwise.
+                if (metricsUrl != null)
+                    _ = await http.GetAsync(metricsUrl, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

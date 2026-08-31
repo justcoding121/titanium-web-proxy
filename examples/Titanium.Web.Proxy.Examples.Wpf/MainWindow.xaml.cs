@@ -142,7 +142,24 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             {
                 Dispatcher.BeginInvoke(() => { Http3ServerConnectionCount = proxyServer.Http3ServerConnectionCount; });
             };
-            proxyServer.Start();
+
+            try
+            {
+                proxyServer.Start();
+            }
+            catch (Exception ex) when (IsAddressAlreadyInUse(ex))
+            {
+                System.Diagnostics.Debug.WriteLine("Port 8000 in use; falling back to ephemeral port 0");
+                proxyServer.RemoveEndPoint(explicitEndPoint);
+                explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 0);
+                explicitEndPoint.BeforeTunnelConnectRequest += ProxyServer_BeforeTunnelConnectRequest;
+                explicitEndPoint.BeforeTunnelConnectResponse += ProxyServer_BeforeTunnelConnectResponse;
+                proxyServer.AddEndPoint(explicitEndPoint);
+                proxyServer.Start();
+            }
+
+            System.Diagnostics.Debug.WriteLine(
+                $"Listening on ExplicitProxyEndPoint at {explicitEndPoint.IpAddress}:{explicitEndPoint.Port}");
 
             // Screenshot automation (TWP_CAPTURE_PATH) skips system-proxy registration so CI/desktop
             // capture runs do not alter the machine's proxy settings.
@@ -171,6 +188,19 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                     await CaptureScreenshotAndExitAsync(capturePath);
                 };
             }
+        }
+
+        private static bool IsAddressAlreadyInUse(Exception ex)
+        {
+            for (var cur = ex; cur != null; cur = cur.InnerException)
+            {
+                if (cur is System.Net.Sockets.SocketException se &&
+                    (se.SocketErrorCode == System.Net.Sockets.SocketError.AddressAlreadyInUse
+                     || se.NativeErrorCode is 10048 or 98))
+                    return true;
+            }
+
+            return false;
         }
 
         /// <summary>

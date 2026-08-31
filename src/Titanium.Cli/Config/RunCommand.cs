@@ -478,6 +478,11 @@ internal static class RunCommand
         {
             options["controlPlane.host"] = plus.ControlPlane.Host;
             options["controlPlane.port"] = plus.ControlPlane.Port.ToString();
+            if (plus.ControlPlane.DashboardPort is > 0 and < 65536)
+            {
+                options["controlPlane.dashboardPort"] = plus.ControlPlane.DashboardPort.Value.ToString();
+            }
+
             if (!string.IsNullOrEmpty(plus.ControlPlane.SharedSecret))
             {
                 options["controlPlane.sharedSecret"] = plus.ControlPlane.SharedSecret;

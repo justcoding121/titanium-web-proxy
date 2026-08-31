@@ -2,9 +2,11 @@
 
 Saturation RPS harness for Titanium.Web.Proxy. Measures the **breaking point** (last concurrency that still meets error/latency SLOs) and **peak RPS**.
 
-Published numbers and external control-arm comparisons live only on the wiki [Performance](../../wiki/Performance.md) page (GitHub Actions medians on matched 4 vCPU / 16 GiB Linux+Windows runners). Local cool A/B and laptop tables live on [Performance Local Lab](../../wiki/Performance-Local-Lab.md); the playbook is on [Performance Profiling](../../wiki/Performance-Profiling.md). This README lists how to run the local harness.
+Published numbers and external control-arm comparisons live only on the wiki [Performance](../../wiki/Performance.md) page (GitHub Actions medians on matched **4-core-class** runners: `ubuntu-latest` / `windows-latest` at 4 vCPU / 16 GiB, and `macos-15-intel` at 4-core / 14 GB). Local cool A/B and laptop tables live on [Performance Local Lab](../../wiki/Performance-Local-Lab.md); the playbook is on [Performance Profiling](../../wiki/Performance-Profiling.md). This README lists how to run the local harness.
 
-Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workflow_dispatch`, both `ubuntu-latest` and `windows-latest`).
+Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workflow_dispatch`, matrix `ubuntu-latest` + `windows-latest` + `macos-15-intel`). Do **not** use `macos-latest` (3-core M1 / 7 GiB) for publishable numbers.
+
+**macOS lab deps (workflow):** Homebrew nginx with `http_v3_module` (fail if missing), Homebrew `libmsquic` + `openssl@3` on `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` (assert `QuicListener.IsSupported`), bombardier darwin-amd64, and YARP via the same .NET probe arms as Linux/Windows.
 
 ## Tiered cadence
 
@@ -156,12 +158,14 @@ pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath tools/RpsLoadProbe/r
 | `twp-cli-plus-ratelimit-http1` | `state.mode=memory` + very high rate limit |
 | `twp-cli-plus-resilience-http1` | Active health vs ForwardHost+cluster destinations |
 | `twp-cli-plus-discovery-file-http1` | File discovery + mid-ramp rewrite |
-| `twp-cli-plus-metrics-scrape-http1` | Background `/metrics` + `/v1/snapshot` every 5s |
+| `twp-cli-plus-metrics-scrape-http1` | Background `/v1/snapshot` + dashboard `/metrics` every 10s |
 | `twp-cli-plus-cache-hit-http1` | Cache warm then measure (vs plus-cache cold) |
 | `twp-cli-static-http1` | `staticFiles.root` tiny file |
 | `twp-cli-logging-http1` | Logging enabled + Info file sink |
 | `twp-cli-lb-leasttime-http1` | LeastTime across two healthy origins |
 | `twp-cli-dialect-twp-http1` | `.twp` `listen`/`forward` site-file |
+
+Plus arms allocate an explicit `controlPlane.dashboardPort` (separate from the control-plane port). Prometheus `/metrics` lives on the **dashboard** listener, not `controlPort + 1`. The metrics-scrape arm polls control `/v1/snapshot` and dashboard `/metrics` every 10s via the CLI host’s `DashboardUrl`.
 
 Gates: see [PERF-GATES.md](PERF-GATES.md). Thresholds lock after a clean Win+Linux pass. Build/publish `Titanium.Cli` (and Plus DLL beside it for Plus arms) before ramping.
 

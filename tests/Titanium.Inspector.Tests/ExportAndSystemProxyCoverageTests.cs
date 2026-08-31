@@ -174,7 +174,7 @@ public class ExportAndSystemProxyCoverageTests
                 new UpdateService(settings),
                 settings,
                 interception);
-            vm.BindPort = GetFreePort();
+            vm.BindPort = 0;
             vm.BindAddress = "127.0.0.1";
 
             vm.SystemProxy = true;
@@ -256,7 +256,7 @@ public class ExportAndSystemProxyCoverageTests
             await ExecuteAsync(vm.OpenToolsAutoResponderCommand);
             await ExecuteAsync(vm.OpenToolsScriptsCommand);
 
-            vm.BindPort = GetFreePort();
+            vm.BindPort = 0;
             vm.BindAddress = "127.0.0.1";
             await ExecuteAsync(vm.StartCaptureCommand);
             Assert.IsTrue(interception.IsRunning, vm.StatusText);
@@ -368,7 +368,7 @@ public class ExportAndSystemProxyCoverageTests
                 new UpdateService(settings),
                 settings,
                 interception);
-            vm.BindPort = GetFreePort();
+            vm.BindPort = 0;
             vm.BindAddress = "127.0.0.1";
 
             // Clobber prefs after construction to hit RestoreLaunchPreferencesIfClobbered.
@@ -396,14 +396,5 @@ public class ExportAndSystemProxyCoverageTests
     {
         command.Execute(null);
         await Task.Delay(150);
-    }
-
-    private static int GetFreePort()
-    {
-        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
     }
 }

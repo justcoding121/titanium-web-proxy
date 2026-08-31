@@ -48,6 +48,43 @@ public sealed class CliProcessHarness : IDisposable
         return port;
     }
 
+    /// <summary>
+    /// Bind an <see cref="HttpListener"/> with retries against Windows TOCTOU / excluded-port races
+    /// after <see cref="GetFreePort"/>.
+    /// </summary>
+    public static (HttpListener Listener, int Port) BindHttpListenerOrRetry(
+        Func<int, string> prefixFactory,
+        int maxAttempts = 8)
+    {
+        Exception? last = null;
+        for (var i = 0; i < maxAttempts; i++)
+        {
+            var port = GetFreePort();
+            var listener = new HttpListener();
+            listener.Prefixes.Add(prefixFactory(port));
+            try
+            {
+                listener.Start();
+                return (listener, port);
+            }
+            catch (Exception ex) when (ex is HttpListenerException or SocketException)
+            {
+                last = ex;
+                try
+                {
+                    listener.Close();
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Failed to bind HttpListener after {maxAttempts} attempts.", last);
+    }
+
     public void EnsurePlusDllBesideCli(bool copy)
     {
         var dest = Path.Combine(CliDirectory, "Titanium.Plus.dll");

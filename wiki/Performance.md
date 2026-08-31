@@ -1,6 +1,6 @@
 # Performance
 
-Titanium targets **low-overhead MITM proxying**: connection pooling, HTTP/2 multiplexing, and buffer reuse. Numbers below are **Release** measurements with [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe) (and BenchmarkDotNet / Basic example where noted). Publishable tables cite **GitHub Actions** medians on matched **4 vCPU / 16 GiB** runners. Absolute RPS still varies by OS kernel, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux.
+Titanium targets **low-overhead MITM proxying**: connection pooling, HTTP/2 multiplexing, and buffer reuse. Numbers below are **Release** measurements with [RpsLoadProbe](https://github.com/justcoding121/titanium-web-proxy/tree/develop/tools/RpsLoadProbe) (and BenchmarkDotNet / Basic example where noted). Publishable tables cite **GitHub Actions** medians on matched **4-core-class** runners (`ubuntu-latest` / `windows-latest`: **4 vCPU / 16 GiB**; `macos-15-intel`: **4-core / 14 GB**). Do not publish from `macos-latest` (3-core / 7 GB). Absolute RPS still varies by OS kernel, TLS, and MsQuic packaging — compare **within a table**, not across Windows vs Linux vs macOS.
 
 Control arms: **nginx** (native C reverse-proxy ceiling; Linux is authoritative) and **YARP** (`Yarp.ReverseProxy`, managed .NET reverse proxy). Neither can MITM (no CONNECT / forged certs). FiddlerCore is not compared (commercial debugger license; not a throughput peer).
 
@@ -11,12 +11,16 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 - [Measurement environment](#measurement-environment)
     - [Windows (GitHub-hosted `windows-latest`)](#windows-github-hosted-windows-latest)
     - [Linux (GitHub-hosted `ubuntu-latest`)](#linux-github-hosted-ubuntu-latest)
+    - [macOS (GitHub-hosted `macos-15-intel`)](#macos-github-hosted-macos-15-intel)
     - [Tiered cadence](#tiered-cadence)
     - [Saturation control](#saturation-control)
 - [Windows — Titanium vs nginx vs YARP](#windows--titanium-vs-nginx-vs-yarp)
 - [Linux — Titanium vs nginx vs YARP](#linux--titanium-vs-nginx-vs-yarp)
     - [Tiny JSON reverse is nginx’s best case on Linux](#tiny-json-reverse-is-nginxs-best-case-on-linux)
     - [Why isn’t HTTP/3 > HTTP/2 > HTTP/1 in raw RPS?](#why-isnt-http3--http2--http1-in-raw-rps)
+- [macOS — Titanium vs nginx vs YARP](#macos--titanium-vs-nginx-vs-yarp)
+    - [Reverse](#reverse-2)
+    - [MITM (TWP only)](#mitm-twp-only-2)
 - [Editions (CLI / Plus / Intercept)](#editions-cli--plus--intercept)
 - [Cross-version (7.0 vs 6.0)](#cross-version-70-vs-60)
 - [Heavier reverse workloads](#heavier-reverse-workloads)
@@ -33,7 +37,7 @@ For pooling knobs and certificate first-visit tuning, see [Performance and pooli
 
 ## Measurement environment
 
-Both OS use the standard public-repo GitHub-hosted runner class (**4 vCPU / 16 GiB / 14 GB SSD**). Same harness knobs (`workflow_dispatch` [RPS saturation](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/rps-saturation.yml): warmup 2s / measure 8s; concurrency 8, 16, 32, 64; median of 3 repeats; `--stop-on-slo-fail` default on). Every `--ramp` arm is **three OS processes** (parent load generator + origin child + proxy child), except **origin-direct** arms (load gen + origin only). Prefer **TWP÷YARP** / **TWP÷nginx** ratios over absolute RPS.
+All three OS use the **4-core-class** public-repo GitHub-hosted runners: **Windows / Linux** at **4 vCPU / 16 GiB / 14 GB SSD**, **macOS** at **`macos-15-intel` 4-core / 14 GB** (not `macos-latest`). Same harness knobs (`workflow_dispatch` [RPS saturation](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/rps-saturation.yml): warmup 2s / measure 8s; concurrency 8, 16, 32, 64; median of 3 repeats; `--stop-on-slo-fail` default on). Every `--ramp` arm is **three OS processes** (parent load generator + origin child + proxy child), except **origin-direct** arms (load gen + origin only). Prefer **TWP÷YARP** / **TWP÷nginx** ratios over absolute RPS.
 
 Laptop High-perf / cool-paired Windows numbers live on [Performance Local Lab](Performance-Local-Lab). Do not mix those absolutes into the tables below.
 
@@ -73,6 +77,21 @@ See [PERF-GATES.md](https://github.com/justcoding121/titanium-web-proxy/blob/dev
 | nginx | nginx/**1.31.4** (nginx.org mainline, `--with-http_v3_module`) |
 | YARP | Yarp.ReverseProxy **2.3.0** |
 | Harness | RpsLoadProbe Release; median of 3 repeats where noted |
+
+### macOS (GitHub-hosted `macos-15-intel`)
+
+| | |
+|---|---|
+| OS | macOS 15 (GitHub-hosted `macos-15-intel`, Intel x86_64) |
+| CPU | **4** logical processors |
+| RAM | **14** GB |
+| Runtime | .NET 10.0.x |
+| nginx | Homebrew nginx with `--with-http_v3_module` (workflow fails if missing) |
+| MsQuic | Homebrew `libmsquic` + `openssl@3` on `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` (`QuicListener.IsSupported`) |
+| YARP | Yarp.ReverseProxy **2.3.0** |
+| Harness | RpsLoadProbe Release; median of 3 repeats where noted |
+
+Do **not** use `macos-latest` (Apple Silicon, 3-core / 7 GB) for publishable saturation numbers.
 
 ### Saturation control
 
@@ -318,6 +337,24 @@ Same Client×Origin wires with interception on (`compare-product` [33263425394](
 | HTTP/3 · QUIC | HTTP/2 · plain | **32261**<br><sub>(168 MiB / 52% CPU)</sub> | **31368**<br><sub>(166 MiB / 51.4% CPU)</sub> | **0.96×** | **0.93×** |
 | HTTP/3 · QUIC | HTTP/2 · TLS | **28611**<br><sub>(167 MiB / 50.2% CPU)</sub> | **28454**<br><sub>(169 MiB / 50.3% CPU)</sub> | **0.94×** | **0.93×** |
 | HTTP/3 · QUIC | HTTP/3 · QUIC | **21349**<br><sub>(170 MiB / 48.2% CPU)</sub> | **21559**<br><sub>(168 MiB / 48.3% CPU)</sub> | **0.88×** | **0.89×** |
+
+## macOS — Titanium vs nginx vs YARP
+
+Numbers are filled by `tools/RpsLoadProbe/apply-wiki-paste.ps1` after `compare-product` on `macos-15-intel` (placeholder headers match the Linux table shape).
+
+### Reverse
+
+*Not measured yet* — run `compare-product` on `macos-15-intel`, then `paste-compare-product-wiki.ps1` / `apply-wiki-paste.ps1`.
+
+| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |
+|---|---|---:|---:|---:|---:|---:|---:|
+
+### MITM (TWP only)
+
+*Not measured yet* — same paste path as Reverse (`---MAC_MITM---`).
+
+| Client | Origin | Lite sustain | Full sustain | Lite÷Reverse | Full÷Reverse |
+|---|---|---:|---:|---:|---:|
 
 ## Editions (CLI / Plus / Intercept)
 

@@ -118,6 +118,7 @@ internal static class ServeProxyHost
         string? nginxVersion = null;
         string? yarpVersion = null;
         string? cliControlPlaneUrl = null;
+        string? cliDashboardUrl = null;
         string? cliAuthorizationBearer = null;
         string? cliDiscoveryFile = null;
 
@@ -178,6 +179,7 @@ internal static class ServeProxyHost
                 listenUrl = cli.ListenUrl;
                 targetForClient = cli.ListenUrl;
                 cliControlPlaneUrl = cli.ControlPlaneUrl;
+                cliDashboardUrl = cli.DashboardUrl;
                 cliAuthorizationBearer = cli.AuthorizationBearer;
                 cliDiscoveryFile = cli.DiscoveryFilePath;
                 break;
@@ -799,6 +801,8 @@ internal static class ServeProxyHost
                 await ProbeLog.WriteProtocolLineAsync(
                     $"control_plane_secret={TitaniumCliHost.ControlPlaneSharedSecret}", cancellationToken);
             }
+            if (!string.IsNullOrWhiteSpace(cliDashboardUrl))
+                await ProbeLog.WriteProtocolLineAsync($"dashboard_url={cliDashboardUrl}", cancellationToken);
             if (!string.IsNullOrWhiteSpace(cliAuthorizationBearer))
                 await ProbeLog.WriteProtocolLineAsync($"authorization_bearer={cliAuthorizationBearer}",
                     cancellationToken);

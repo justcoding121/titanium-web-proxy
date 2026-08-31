@@ -56,7 +56,7 @@ public class HappyPathSanityE2ETests
         using var interception = new InterceptionService(new RecordingSystemProxyController());
         var vm = new MainWindowViewModel(buffer, registry, updates, settings, interception);
 
-        vm.BindPort = CliProcessHarness.GetFreePort();
+        vm.BindPort = 0;
         vm.BindAddress = "127.0.0.1";
         vm.StartCaptureCommand.Execute(null);
 

@@ -242,11 +242,11 @@ public class SessionPipelineTests
     public async Task Start_EnablesHttp2Http3AndFastEcdsaLeafCertificates()
     {
         using var interception = new InterceptionService(new RecordingSystemProxyController());
-        var port = GetFreeTcpPort();
-        await interception.StartAsync(System.Net.IPAddress.Loopback, port);
+        await interception.StartAsync(System.Net.IPAddress.Loopback, 0);
         try
         {
             Assert.IsTrue(interception.IsRunning);
+            Assert.IsTrue(interception.BoundPort > 0);
             Assert.IsTrue(interception.Http2Enabled);
             Assert.AreEqual(InterceptionService.IsHttp3Supported, interception.Http3Enabled);
 
@@ -267,12 +267,69 @@ public class SessionPipelineTests
         }
     }
 
-    private static int GetFreeTcpPort()
+    [TestMethod]
+    public async Task FirstCapturedHttpSession_HasIdOne_EvenWithBreakpointsAssigned()
     {
-        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
+        using var origin = new System.Net.HttpListener();
+        // Use Echo via TcpListener pattern from harness is elsewhere; keep local listener here.
+        var portListener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        portListener.Start();
+        var originPort = ((System.Net.IPEndPoint)portListener.LocalEndpoint).Port;
+        portListener.Stop();
+        origin.Prefixes.Add($"http://127.0.0.1:{originPort}/");
+        origin.Start();
+        _ = Task.Run(async () =>
+        {
+            while (origin.IsListening)
+            {
+                try
+                {
+                    var ctx = await origin.GetContextAsync();
+                    var bytes = System.Text.Encoding.UTF8.GetBytes("ok");
+                    ctx.Response.StatusCode = 200;
+                    ctx.Response.ContentLength64 = bytes.Length;
+                    await ctx.Response.OutputStream.WriteAsync(bytes);
+                    ctx.Response.Close();
+                }
+                catch
+                {
+                    return;
+                }
+            }
+        });
+
+        using var interception = new InterceptionService(new RecordingSystemProxyController());
+        // Same wiring as the desktop VM: Breakpoints instance present but disabled.
+        interception.Breakpoints = new BreakpointViewModel();
+        SessionSnapshot? captured = null;
+        interception.SessionCaptured += (_, s) => captured = s;
+
+        await interception.StartAsync(System.Net.IPAddress.Loopback, 0);
+        try
+        {
+            using var handler = new System.Net.Http.HttpClientHandler
+            {
+                Proxy = new System.Net.WebProxy($"http://127.0.0.1:{interception.BoundPort}"),
+                UseProxy = true,
+            };
+            using var http = new System.Net.Http.HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
+            var response = await http.GetAsync($"http://127.0.0.1:{originPort}/first-id");
+            Assert.AreEqual(System.Net.HttpStatusCode.OK, response.StatusCode);
+
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (captured is null && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(50);
+            }
+
+            Assert.IsNotNull(captured);
+            Assert.AreEqual(1L, captured!.Id);
+        }
+        finally
+        {
+            interception.Stop();
+            origin.Stop();
+            origin.Close();
+        }
     }
 }

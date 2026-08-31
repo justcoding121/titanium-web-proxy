@@ -73,8 +73,9 @@ public class CliPlusE2ETests
         using var origin = new EchoOrigin();
         var listen = CliProcessHarness.GetFreePort();
         var control = CliProcessHarness.GetFreePort();
+        var dashboard = CliProcessHarness.GetFreePort();
         const string secret = "e2e-plus-secret";
-        var cfg = ConfigFixtures.WritePlus(_tempDir, listen, origin.Port, control, secret);
+        var cfg = ConfigFixtures.WritePlus(_tempDir, listen, origin.Port, control, secret, dashboard);
         using var harness = new CliProcessHarness();
         harness.EnsurePlusDllBesideCli(copy: true);
         await harness.StartRunAsync(cfg, new Dictionary<string, string?>
@@ -110,7 +111,7 @@ public class CliPlusE2ETests
             var json = await auth.Content.ReadAsStringAsync();
             StringAssert.Contains(json, "clusters");
 
-            using var metricsReq = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{control + 1}/metrics");
+            using var metricsReq = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{dashboard}/metrics");
             metricsReq.Headers.TryAddWithoutValidation(ControlPlaneServer.SharedSecretHeader, secret);
             var metrics = await http.SendAsync(metricsReq);
             Assert.AreEqual(HttpStatusCode.OK, metrics.StatusCode);
@@ -232,6 +233,7 @@ public class CliPlusE2ETests
         using var origin = new EchoOrigin();
         var listen = CliProcessHarness.GetFreePort();
         var control = CliProcessHarness.GetFreePort();
+        var dashboard = CliProcessHarness.GetFreePort();
         const string secret = "e2e-waf";
         var cfg = ConfigFixtures.WritePlusOptions(_tempDir, listen, origin.Port, control, secret,
             new Dictionary<string, string>
@@ -241,7 +243,8 @@ public class CliPlusE2ETests
                 ["security.allowCidrs"] = "127.0.0.0/8,::1/128",
                 ["state.redis"] = "127.0.0.1:1",
             },
-            useRoutes: true);
+            useRoutes: true,
+            dashboardPort: dashboard);
         using var harness = new CliProcessHarness();
         harness.EnsurePlusDllBesideCli(copy: true);
         await harness.StartRunAsync(cfg, new Dictionary<string, string?>
@@ -279,7 +282,7 @@ public class CliPlusE2ETests
             {
                 try
                 {
-                    using var dashReq = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{control + 1}/");
+                    using var dashReq = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{dashboard}/");
                     dashReq.Headers.TryAddWithoutValidation(ControlPlaneServer.SharedSecretHeader, secret);
                     dash = await direct.SendAsync(dashReq);
                     break;

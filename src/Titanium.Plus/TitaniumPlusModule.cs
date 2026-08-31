@@ -30,6 +30,10 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
                      ?? "changeme";
         var host = options.GetValueOrDefault("controlPlane.host") ?? "127.0.0.1";
         var port = int.TryParse(options.GetValueOrDefault("controlPlane.port"), out var p) ? p : 9080;
+        int? dashboardPort = int.TryParse(options.GetValueOrDefault("controlPlane.dashboardPort"), out var dp) &&
+                             dp is > 0 and < 65536
+            ? dp
+            : null;
         var allowDev = string.Equals(
             Environment.GetEnvironmentVariable("TITANIUM_PLUS_ALLOW_DEV_SECRET"), "1",
             StringComparison.Ordinal);
@@ -48,8 +52,9 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
 
         var operations = new DrainOperations(context.ClusterManager);
         var metrics = new PrometheusMetricsExporter(context.ClusterManager, context.LatencyRecorder);
-        var dashboard = new DashboardHost(controlPlane, operations, metrics, context.ClusterManager);
+        var dashboard = new DashboardHost(controlPlane, operations, metrics, context.ClusterManager, dashboardPort);
         dashboard.Start();
+        PlusLog.Info(context, $"Plus dashboard listening on {dashboard.Prefix}");
 
         // Stretch modules — activate only when configured.
         _ = ServiceDiscovery.TryStart(context, options);

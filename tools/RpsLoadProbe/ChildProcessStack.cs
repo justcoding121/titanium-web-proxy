@@ -29,6 +29,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     public int? OriginQuicPort { get; }
     public string? ControlPlaneUrl { get; }
     public string? ControlPlaneSecret { get; }
+    public string? DashboardUrl { get; }
     public string? AuthorizationBearer { get; }
     public string? DiscoveryFilePath { get; }
     public int? OriginHttpPort { get; }
@@ -52,7 +53,8 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         string? nginxVersion, Version requestHttpVersion, HttpVersionPolicy versionPolicy,
         string? loadGenerator = null, int? quicPort = null, int? originQuicPort = null,
         string? yarpVersion = null, string? controlPlaneUrl = null, string? controlPlaneSecret = null,
-        string? authorizationBearer = null, string? discoveryFilePath = null, int? originHttpPort = null)
+        string? dashboardUrl = null, string? authorizationBearer = null, string? discoveryFilePath = null,
+        int? originHttpPort = null)
     {
         this.originProcess = originProcess;
         this.originStdout = originStdout;
@@ -70,6 +72,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         OriginQuicPort = originQuicPort;
         ControlPlaneUrl = controlPlaneUrl;
         ControlPlaneSecret = controlPlaneSecret;
+        DashboardUrl = dashboardUrl;
         AuthorizationBearer = authorizationBearer;
         DiscoveryFilePath = discoveryFilePath;
         OriginHttpPort = originHttpPort;
@@ -175,6 +178,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             httpVersion, policy, loadGenerator, quicPort, originQuicPort, yarpVersion,
             controlPlaneUrl: TryGet(proxyLines, "control_plane_url"),
             controlPlaneSecret: TryGet(proxyLines, "control_plane_secret"),
+            dashboardUrl: TryGet(proxyLines, "dashboard_url"),
             authorizationBearer: TryGet(proxyLines, "authorization_bearer"),
             discoveryFilePath: TryGet(proxyLines, "discovery_file"),
             originHttpPort: originHttpPort);
