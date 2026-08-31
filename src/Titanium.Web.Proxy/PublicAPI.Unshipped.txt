@@ -25,6 +25,8 @@ Titanium.Web.Proxy.Network.CertificateManager.ApplyFastColdStartLeafSettings() -
 static Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.GetSharedLeafCertificateDirectory() -> string!
 static Titanium.Web.Proxy.Network.CertificateManager.LeafRsaKeyPairBufferSize.get -> int
 static Titanium.Web.Proxy.Network.CertificateManager.LeafRsaKeyPairBufferSize.set -> void
+static Titanium.Web.Proxy.Network.CertificateManager.SuppressInteractiveRootStoreMutations.get -> bool
+static Titanium.Web.Proxy.Network.CertificateManager.SuppressInteractiveRootStoreMutations.set -> void
 Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCertificateDiskCacheEntries.get -> int?
 Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority.get -> int
 Titanium.Web.Proxy.Options.ProxyResourceLimits.WithCertificateCacheBounds(int? maxCertificateCacheEntries, int? maxCertificateDiskCacheEntries) -> Titanium.Web.Proxy.Options.ProxyResourceLimits!
