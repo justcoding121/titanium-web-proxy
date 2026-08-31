@@ -1,14 +1,17 @@
 import { defineConfig } from 'vitepress'
 
 const repo = 'https://github.com/justcoding121/titanium-web-proxy'
+// Project Pages live at /titanium-web-proxy/ on github.io. CloudFront on
+// titaniumproxy.com maps both /… and /titanium-web-proxy/… to that origin, so
+// this base keeps CSS/JS loading on github.io without breaking the custom domain.
+const base = '/titanium-web-proxy/'
 
 export default defineConfig({
   title: 'Titanium Web Proxy',
   description:
     'High-performance HTTP(S) proxy — reverse/edge CLI, Plus ops, and Inspector on Windows, Linux, and macOS. Optional .NET library via NuGet.',
   lang: 'en-US',
-  // Served at https://titaniumproxy.com via CloudFront (origin path maps GitHub Pages project URL).
-  base: '/',
+  base,
   cleanUrls: true,
   lastUpdated: true,
   ignoreDeadLinks: true,
@@ -21,7 +24,7 @@ export default defineConfig({
     },
   },
   head: [
-    ['link', { rel: 'icon', href: '/logo.svg', type: 'image/svg+xml' }],
+    ['link', { rel: 'icon', href: `${base}logo.svg`, type: 'image/svg+xml' }],
     ['meta', { name: 'theme-color', content: '#2B3A4A' }],
   ],
   themeConfig: {

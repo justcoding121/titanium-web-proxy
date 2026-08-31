@@ -320,7 +320,8 @@ internal static class CliUpdateApplyHelper
             File.WriteAllText(ps1, BuildWindowsScript(pid, zipPath, installDir, relaunchPath, version, channel), Encoding.UTF8);
             Process.Start(new ProcessStartInfo
             {
-                FileName = "powershell.exe",
+                // Absolute path: Sonar S4036 (PATH lookup for powershell.exe is a vulnerability).
+                FileName = ResolveWindowsPowerShellPath(),
                 Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{ps1}\"",
                 UseShellExecute = true,
                 CreateNoWindow = true,
@@ -340,6 +341,14 @@ internal static class CliUpdateApplyHelper
             WorkingDirectory = workDir,
         });
     }
+
+    /// <summary>Absolute Windows PowerShell path — avoids PATH-based Process.Start (Sonar S4036).</summary>
+    private static string ResolveWindowsPowerShellPath() =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.System),
+            "WindowsPowerShell",
+            "v1.0",
+            "powershell.exe");
 
     internal static string BuildWindowsScript(
         int pid,
