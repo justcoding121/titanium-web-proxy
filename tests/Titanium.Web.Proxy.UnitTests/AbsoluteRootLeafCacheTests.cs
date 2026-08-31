@@ -213,4 +213,30 @@ public class SameCommonNameStoreCandidateTests
         Assert.IsFalse(CertificateManager.IsSameCommonNameStoreCandidate(leaf, cn, leaf.Thumbprint));
         Assert.IsTrue(CertificateManager.IsSameCommonNameStoreCandidate(leaf, cn, "DEADBEEF"));
     }
+    [TestMethod]
+    public void InvalidateSslCertificateContext_Twice_AndDisposePendingEvictions()
+    {
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        using var leaf = mgr.CreateCertificate("invalidate-twice.example.com", false)!;
+        var invalidate = typeof(CertificateManager).GetMethod("InvalidateSslCertificateContext",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        invalidate.Invoke(mgr, [leaf]);
+        invalidate.Invoke(mgr, [leaf]);
+
+        var pendingField = typeof(CertificateManager).GetField("pendingDisposals",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var pending = pendingField.GetValue(mgr)!;
+        var itemType = pending.GetType().GetGenericArguments()[0];
+        var disposable = new X509Certificate2(leaf.RawData);
+        var item = Activator.CreateInstance(itemType, disposable, DateTime.UtcNow.AddMinutes(-5))!;
+        pending.GetType().GetMethod("Enqueue")!.Invoke(pending, [item]);
+        typeof(CertificateManager).GetMethod("DisposePendingEvictions",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(mgr, null);
+        Assert.AreEqual(0, (int)pending.GetType().GetProperty("Count")!.GetValue(pending)!);
+    }
 }

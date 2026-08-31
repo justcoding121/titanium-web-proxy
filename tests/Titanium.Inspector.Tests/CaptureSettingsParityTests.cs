@@ -319,12 +319,44 @@ public class CaptureSettingsParityTests
 
             cache.Delete(12345); // missing id — no throw
             cache.Dispose();
-            Assert.ThrowsException<ObjectDisposedException>(() =>
+            Assert.ThrowsExactly<ObjectDisposedException>(() =>
                 cache.Write(new SessionSnapshot { Id = 1, ResponseBodyBytes = [1] }));
         }
         finally
         {
             try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { }
         }
+    }
+[TestMethod]
+    public void DiskCache_ClearAll_OnEmptyDirectory_IsNoOp()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-disk-empty-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(dir);
+            using var cache = new SessionBodyDiskCache(dir, maxBytes: 1024, maxAge: TimeSpan.FromDays(1));
+            cache.ClearAll();
+            cache.DeleteMany(Array.Empty<long>());
+            cache.DeleteMany([42, 43]);
+            Assert.IsFalse(cache.TryLoad(new SessionSnapshot { Id = 42 }));
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+[TestMethod]
+    public void FormatRotateCaStatusHelpers_CoverChangedAndTrustedBranches()
+    {
+        var install = typeof(ViewModels.MainWindowViewModel).GetMethod("FormatRotateCaInstallStatus",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var deferred = typeof(ViewModels.MainWindowViewModel).GetMethod("FormatRotateCaDeferredTrustStatus",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+
+        Assert.IsTrue(((string)install.Invoke(null, [false, true])!).Contains("trust failed"));
+        Assert.IsTrue(((string)install.Invoke(null, [true, true])!).Contains("reinstalled"));
+        Assert.IsTrue(((string)install.Invoke(null, [true, false])!).Contains("recreate completed"));
+        Assert.IsTrue(((string)deferred.Invoke(null, [true])!).Contains("Install root CA"));
+        Assert.IsTrue(((string)deferred.Invoke(null, [false])!).Contains("recreate completed"));
     }
 }

@@ -93,7 +93,6 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
 /// <summary>Scripted answers for unit / E2E-UI tests (no real windows).</summary>
 public sealed class ScriptedInspectorDialogs : IInspectorDialogs
 {
-    private const string CancelLabel = "Cancel";
     public bool InstallRootCaResult { get; set; } = true;
     public bool RemoveRootCaResult { get; set; } = true;
     public bool ElevateRootCaResult { get; set; } = true;
