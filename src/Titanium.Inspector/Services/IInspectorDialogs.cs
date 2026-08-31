@@ -32,13 +32,14 @@ public interface IInspectorDialogs
 /// <summary>Avalonia modal dialogs.</summary>
 public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
 {
+    private const string CancelLabel = "Cancel";
     public Task<bool> ConfirmInstallRootCaAsync(Window? owner) =>
         SimpleConfirmDialog.ShowAsync(
             owner,
             "Install root CA",
             "Decrypt HTTPS requires trusting the Titanium Inspector root CA in your current-user certificate store (and Keychain/NSS on macOS/Linux). Install now?",
             accept: "Install",
-            cancel: "Cancel");
+            cancel: CancelLabel);
 
     public Task<bool> ConfirmRemoveRootCaAsync(Window? owner) =>
         SimpleConfirmDialog.ShowAsync(
@@ -46,7 +47,7 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
             "Remove root CA",
             "Remove the Titanium Inspector root CA from the current-user Trusted Root store? HTTPS decrypt will be turned off.",
             accept: "Remove",
-            cancel: "Cancel");
+            cancel: CancelLabel);
 
     public Task<bool> ConfirmElevateRootCaAsync(Window? owner) =>
         SimpleConfirmDialog.ShowAsync(
@@ -54,7 +55,7 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
             "Install with administrator privileges",
             "User-level trust failed or was insufficient. Continue to show the OS admin prompt (UAC / macOS authentication / polkit)? Cancel leaves certificate settings unchanged.",
             accept: "Continue",
-            cancel: "Cancel");
+            cancel: CancelLabel);
 
     public Task<bool> ShowDeviceCaSetupAsync(Window? owner, string message) =>
         SimpleConfirmDialog.ShowAsync(
@@ -75,7 +76,7 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
             "• You will be asked to trust the new root CA again (or enable Decrypt HTTPS)\n\n" +
             "Stop capture is recommended first.",
             accept: "Clear and reinstall",
-            cancel: "Cancel",
+            cancel: CancelLabel,
             height: 320);
 
     public Task<bool> ConfirmResetSettingsAsync(Window? owner) =>
@@ -85,13 +86,14 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
             "Restore bind address, menus, Tools (Composer/Breakpoints/AutoResponder/Scripts), retention, logging, HTTPS host lists, and layout to factory defaults?\n\n" +
             "This does not remove the root CA, change OS trust, clear captured sessions, or delete the on-disk body cache. Restart Inspector afterward so retention limits fully apply.",
             accept: "Reset settings",
-            cancel: "Cancel",
+            cancel: CancelLabel,
             height: 300);
 }
 
 /// <summary>Scripted answers for unit / E2E-UI tests (no real windows).</summary>
 public sealed class ScriptedInspectorDialogs : IInspectorDialogs
 {
+    private const string CancelLabel = "Cancel";
     public bool InstallRootCaResult { get; set; } = true;
     public bool RemoveRootCaResult { get; set; } = true;
     public bool ElevateRootCaResult { get; set; } = true;

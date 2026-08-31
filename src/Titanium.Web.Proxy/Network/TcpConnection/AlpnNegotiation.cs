@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Linq;
 using System.Security.Authentication;
 
 namespace Titanium.Web.Proxy.Network.Tcp;
@@ -21,30 +22,27 @@ internal static class AlpnNegotiation
     {
         for (Exception? e = error; e != null; e = e.InnerException)
         {
-            if (e is AggregateException aggregate)
-            {
-                foreach (var inner in aggregate.InnerExceptions)
-                {
-                    if (IsAlpnNegotiationFailure(inner))
-                        return true;
-                }
-
-                continue;
-            }
-
-            if (e is Win32Exception win32 && win32.NativeErrorCode == SecENoApplicationProtocol)
-                return true;
-
-            // Some runtimes surface the Win32 code only on HResult.
-            if (e.HResult == SecENoApplicationProtocol)
-                return true;
-
-            if (e.Message.Contains("No common application protocol", StringComparison.OrdinalIgnoreCase) ||
-                e.Message.Contains("Application protocol negotiation failed", StringComparison.OrdinalIgnoreCase))
+            if (MatchesAlpnFailure(e))
                 return true;
         }
 
         return false;
+    }
+
+    private static bool MatchesAlpnFailure(Exception e)
+    {
+        if (e is AggregateException aggregate)
+            return aggregate.InnerExceptions.Any(IsAlpnNegotiationFailure);
+
+        if (e is Win32Exception win32 && win32.NativeErrorCode == SecENoApplicationProtocol)
+            return true;
+
+        // Some runtimes surface the Win32 code only on HResult.
+        if (e.HResult == SecENoApplicationProtocol)
+            return true;
+
+        return e.Message.Contains("No common application protocol", StringComparison.OrdinalIgnoreCase)
+               || e.Message.Contains("Application protocol negotiation failed", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

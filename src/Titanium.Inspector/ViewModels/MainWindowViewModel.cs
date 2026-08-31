@@ -600,11 +600,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             if (!trusted && await _dialogs.ConfirmElevateRootCaAsync(owner))
                 trusted = _interception.InstallRootCertificateAsAdmin(machineStore: false);
 
-            StatusText = trusted
-                ? (changed
+            if (trusted)
+            {
+                StatusText = changed
                     ? "Root CA cleared and reinstalled — enable Decrypt HTTPS when ready"
-                    : "Root CA recreate completed and trusted")
-                : "Root CA cleared but trust failed — use Install root CA or Export CA";
+                    : "Root CA recreate completed and trusted";
+            }
+            else
+            {
+                StatusText = "Root CA cleared but trust failed — use Install root CA or Export CA";
+            }
             return;
         }
 

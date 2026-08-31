@@ -10,6 +10,7 @@ namespace Titanium.Inspector.Services;
 /// </summary>
 public sealed class SessionBodyDiskCache : IDisposable
 {
+    private const string BodyFileSearchPattern = "*.bin";
     private const int Version = 1;
     private static readonly byte[] Magic = "TSIB"u8.ToArray();
 
@@ -127,7 +128,7 @@ public sealed class SessionBodyDiskCache : IDisposable
             return;
         }
 
-        foreach (var file in Directory.EnumerateFiles(_directory, "*.bin"))
+        foreach (var file in Directory.EnumerateFiles(_directory, BodyFileSearchPattern))
         {
             try
             {
@@ -158,7 +159,7 @@ public sealed class SessionBodyDiskCache : IDisposable
         }
 
         var cutoff = DateTime.UtcNow - _maxAge;
-        foreach (var path in Directory.EnumerateFiles(_directory, "*.bin"))
+        foreach (var path in Directory.EnumerateFiles(_directory, BodyFileSearchPattern))
         {
             try
             {
@@ -190,7 +191,7 @@ public sealed class SessionBodyDiskCache : IDisposable
 
         long total = 0;
         var files = new List<FileInfo>();
-        foreach (var path in Directory.EnumerateFiles(_directory, "*.bin"))
+        foreach (var path in Directory.EnumerateFiles(_directory, BodyFileSearchPattern))
         {
             try
             {
@@ -228,7 +229,7 @@ public sealed class SessionBodyDiskCache : IDisposable
             return;
         }
 
-        var files = knownFiles ?? Directory.EnumerateFiles(_directory, "*.bin")
+        var files = knownFiles ?? Directory.EnumerateFiles(_directory, BodyFileSearchPattern)
             .Select(p =>
             {
                 try

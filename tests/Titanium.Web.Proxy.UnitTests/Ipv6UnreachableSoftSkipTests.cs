@@ -43,8 +43,7 @@ public class Ipv6UnreachableSoftSkipTests
         Ipv6UnreachableSoftSkip.RecordAttemptFailure(v6, unreachable, enabled: true,
             ttl: TimeSpan.FromMilliseconds(200));
         Assert.IsTrue(Ipv6UnreachableSoftSkip.IsSkipping(), "skip should arm before TTL elapses");
-        Thread.Sleep(400);
-        Assert.IsFalse(Ipv6UnreachableSoftSkip.IsSkipping(), "skip should clear after short TTL");
+        Assert.IsTrue(SpinWait.SpinUntil(() => !Ipv6UnreachableSoftSkip.IsSkipping(), TimeSpan.FromSeconds(2)), "skip should clear after short TTL");
     }
 
     [TestMethod]

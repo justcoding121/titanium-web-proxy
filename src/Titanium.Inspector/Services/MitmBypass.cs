@@ -1,3 +1,4 @@
+using System.Linq;
 using Titanium.Web.Proxy;
 
 namespace Titanium.Inspector.Services;
@@ -111,14 +112,6 @@ public static class MitmBypass
             return false;
         }
 
-        foreach (var pattern in patterns)
-        {
-            if (HostnameMatches(hostname, pattern))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return patterns.Any(pattern => HostnameMatches(hostname, pattern));
     }
 }

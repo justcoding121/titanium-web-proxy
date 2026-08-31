@@ -481,7 +481,7 @@ public sealed class InterceptionService : IDisposable
 
         mgr.PfxFilePath = _rootPfxPath!;
         var ok = mgr.CreateRootCertificate(persistToFile: true);
-        IsRootTrusted = UseInMemoryTrustState ? false : IsRootPresentInStore(machineStore);
+        IsRootTrusted = !UseInMemoryTrustState && IsRootPresentInStore(machineStore);
 
         PruneLegacySharedCrts(force: true);
         return ok && mgr.RootCertificate != null;
@@ -518,6 +518,7 @@ public sealed class InterceptionService : IDisposable
     /// </summary>
     public void PruneLegacySharedCrts(bool force)
     {
+        _ = force; // Callers pass Start vs rotate; marker write is identical.
         try
         {
             var sharedCrts = ResolveLegacySharedCrtsDirectory();
@@ -529,28 +530,14 @@ public sealed class InterceptionService : IDisposable
             // best-effort
         }
 
-        if (!force)
+        // Start (force=false) and rotate (force=true) both ensure the one-time marker exists.
+        try
         {
-            try
-            {
-                File.WriteAllText(LegacySharedCrtsMarkerPath(), DateTime.UtcNow.ToString("O"));
-            }
-            catch
-            {
-                // best-effort
-            }
+            File.WriteAllText(LegacySharedCrtsMarkerPath(), DateTime.UtcNow.ToString("O"));
         }
-        else
+        catch
         {
-            // Rotate always prunes; also ensure marker exists so Start won't re-hit aggressively.
-            try
-            {
-                File.WriteAllText(LegacySharedCrtsMarkerPath(), DateTime.UtcNow.ToString("O"));
-            }
-            catch
-            {
-                // best-effort
-            }
+            // best-effort
         }
     }
 

@@ -40,7 +40,7 @@ public sealed class SessionStore : IDisposable
                 SingleWriter = false,
             });
             _spillCts = new CancellationTokenSource();
-            _spillLoop = Task.Run(() => SpillLoopAsync(_spillCts.Token));
+            _spillLoop = Task.Run(() => SpillLoopAsync(_spillCts.Token), _spillCts.Token);
         }
 
         Sessions = new ObservableCollection<SessionSnapshot>();
@@ -269,7 +269,7 @@ public sealed class SessionStore : IDisposable
         var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
         while (Volatile.Read(ref _pendingSpills) > 0 && DateTime.UtcNow < deadline)
         {
-            await Task.Delay(25).ConfigureAwait(false);
+            await Task.Delay(25, CancellationToken.None).ConfigureAwait(false);
         }
     }
 
@@ -285,7 +285,7 @@ public sealed class SessionStore : IDisposable
         _spillChannel?.Writer.TryComplete();
         try
         {
-            _spillLoop?.Wait(TimeSpan.FromSeconds(2));
+            _spillLoop?.Wait(millisecondsTimeout: 2000, CancellationToken.None);
         }
         catch
         {
@@ -364,46 +364,40 @@ public sealed class SessionStore : IDisposable
     private void SpillColdBodiesLocked()
     {
         if (!_options.SpillBodiesToDisk || _disk is null || _spillChannel is null)
-        {
             return;
-        }
 
         var hot = _options.HotBodySessions;
         if (Sessions.Count <= hot && _inMemoryBodyBytes <= _options.MaxCaptureBytesInMemory)
-        {
             return;
-        }
 
+        SpillOutsideHotWindowLocked(hot);
+        SpillUntilUnderBudgetLocked();
+    }
+
+    private void SpillOutsideHotWindowLocked(int hot)
+    {
         var spillUntilIndex = Math.Max(0, Sessions.Count - hot);
         for (var i = 0; i < spillUntilIndex; i++)
         {
             var snap = Sessions[i];
             if (snap.BodiesOnDisk || EstimateInMemoryBodyBytes(snap) == 0)
-            {
                 continue;
-            }
-
             QueueSpillLocked(snap);
         }
+    }
 
+    private void SpillUntilUnderBudgetLocked()
+    {
         if (_inMemoryBodyBytes <= _options.MaxCaptureBytesInMemory)
-        {
             return;
-        }
 
         for (var i = 0; i < Sessions.Count && _inMemoryBodyBytes > _options.MaxCaptureBytesInMemory; i++)
         {
             var snap = Sessions[i];
             if (snap.BodiesOnDisk || EstimateInMemoryBodyBytes(snap) == 0)
-            {
                 continue;
-            }
-
             if (_pinnedSessionId is long pin && snap.Id == pin)
-            {
                 continue;
-            }
-
             QueueSpillLocked(snap);
         }
     }

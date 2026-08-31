@@ -169,4 +169,48 @@ public class SameCommonNameStoreCandidateTests
         req.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
         return req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
     }
+
+    [TestMethod]
+    public void EvictCertificate_InvalidatesSslContextEntry()
+    {
+        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        using var leaf = mgr.CreateCertificate("evict.example.com", false)!;
+
+        var cacheField = typeof(CertificateManager).GetField("cachedCertificates",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var cached = cacheField.GetValue(mgr)!;
+        var cachedType = cached.GetType();
+        if (!(bool)cachedType.GetMethod("ContainsKey")!.Invoke(cached, ["evict.example.com"])!)
+        {
+            var cachedCertType = cachedType.GetGenericArguments()[1];
+            var cachedCert = Activator.CreateInstance(cachedCertType, leaf)!;
+            Assert.IsTrue((bool)cachedType.GetMethod("TryAdd")!.Invoke(cached, ["evict.example.com", cachedCert])!);
+        }
+
+        var invalidate = typeof(CertificateManager).GetMethod("InvalidateSslCertificateContext",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        invalidate.Invoke(mgr, [leaf]);
+
+        var evict = typeof(CertificateManager).GetMethod("EvictCertificate",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        evict.Invoke(mgr, ["evict.example.com"]);
+
+        Assert.IsFalse((bool)cachedType.GetMethod("ContainsKey")!.Invoke(cached, ["evict.example.com"])!);
+        evict.Invoke(mgr, ["missing.example.com"]);
+    }
+
+    [TestMethod]
+    public void IsSameCommonNameStoreCandidate_KeepThumbprintBranches()
+    {
+        using var leaf = CreateSelfSigned("CN=cn-check.example.com");
+        var cn = leaf.GetNameInfo(X509NameType.SimpleName, false)!;
+        Assert.IsFalse(CertificateManager.IsSameCommonNameStoreCandidate(leaf, "Other CN", null));
+        Assert.IsTrue(CertificateManager.IsSameCommonNameStoreCandidate(leaf, cn, null));
+        Assert.IsFalse(CertificateManager.IsSameCommonNameStoreCandidate(leaf, cn, leaf.Thumbprint));
+        Assert.IsTrue(CertificateManager.IsSameCommonNameStoreCandidate(leaf, cn, "DEADBEEF"));
+    }
 }

@@ -42,19 +42,26 @@ public partial class ProxyServer
         if (string.IsNullOrEmpty(altSvc) || altSvc == "clear")
         {
             if (altSvc == "clear")
-            {
-                var (clearHost, clearPort) = args.HttpClient.Request.GetOriginHostPort(443);
-                if (string.IsNullOrEmpty(clearHost)) return;
-
-                var clearKey = $"{clearHost}:{clearPort}";
-                Http3OriginCapabilityCache.Evict(clearKey);
-                // Prevent a late background SVCB completion from undoing the clear.
-                _svcbDiscoveryCoordinator?.Invalidate(clearKey);
-            }
-
+                ClearHttp3Capability(args);
             return;
         }
 
+        CacheHttp3CapabilityFromAltSvc(args, altSvc);
+    }
+
+    private void ClearHttp3Capability(SessionEventArgs args)
+    {
+        var (clearHost, clearPort) = args.HttpClient.Request.GetOriginHostPort(443);
+        if (string.IsNullOrEmpty(clearHost)) return;
+
+        var clearKey = $"{clearHost}:{clearPort}";
+        Http3OriginCapabilityCache.Evict(clearKey);
+        // Prevent a late background SVCB completion from undoing the clear.
+        _svcbDiscoveryCoordinator?.Invalidate(clearKey);
+    }
+
+    private void CacheHttp3CapabilityFromAltSvc(SessionEventArgs args, string altSvc)
+    {
         var entries = AltSvcParser.Parse(altSvc);
         if (entries.Count == 0) return;
 

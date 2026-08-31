@@ -253,7 +253,7 @@ public sealed class CertificateManager : IDisposable
             return;
 
         // Drop any SslStreamCertificateContext keyed by this leaf before the deferred dispose.
-        // With SaveFakeCertificates, the next visit reloads the same PKCS#12 (same thumbprint);
+        // With SaveFakeCertificates, the next visit reloads the same PKCS#12 (same thumbprint)
         // leaving the context cached would hand SslStream a disposed SafeCertContext
         // ("m_safeCertContext is an invalid handle") and permanently break MITM for that host.
         InvalidateSslCertificateContext(removed.Certificate);
@@ -664,12 +664,10 @@ public sealed class CertificateManager : IDisposable
         {
             using var store = new X509Store(storeName, storeLocation);
             store.Open(OpenFlags.ReadWrite);
-            var toRemove = new List<X509Certificate2>();
-            foreach (var cert in store.Certificates)
-            {
-                if (IsSameCommonNameStoreCandidate(cert, expectedCn, keepThumbprint))
-                    toRemove.Add(cert);
-            }
+            var toRemove = store.Certificates
+                .Cast<X509Certificate2>()
+                .Where(cert => IsSameCommonNameStoreCandidate(cert, expectedCn, keepThumbprint))
+                .ToList();
 
             foreach (var cert in toRemove)
             {

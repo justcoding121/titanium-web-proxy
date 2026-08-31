@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.Views;
@@ -7,6 +8,9 @@ namespace Titanium.Inspector.Tests;
 [TestClass]
 public class CaptureSettingsParityTests
 {
+    private static readonly string[] ExpectedSkipHosts = ["*.corp.example.com", "auth.example.com"];
+    private static readonly string[] ExpectedOnlyHosts = ["api.example.com"];
+    private static readonly string[] ParsedHostList = ["api.example.com", "*.corp.dev"];
     [TestMethod]
     public void SessionRetention_MbConversion_RoundTrips()
     {
@@ -48,8 +52,8 @@ public class CaptureSettingsParityTests
             Assert.AreEqual(50, loaded.HotBodySessions);
             Assert.AreEqual(SessionRetentionWindow.MbToBytes(128), loaded.MaxCaptureBytesInMemory);
             Assert.IsTrue(loaded.IgnoreServerCertificateErrors);
-            CollectionAssert.AreEqual(new[] { "*.corp.example.com", "auth.example.com" }, loaded.DecryptSkipHosts);
-            CollectionAssert.AreEqual(new[] { "api.example.com" }, loaded.DecryptOnlyHosts);
+            CollectionAssert.AreEqual(ExpectedSkipHosts, loaded.DecryptSkipHosts);
+            CollectionAssert.AreEqual(ExpectedOnlyHosts, loaded.DecryptOnlyHosts);
             Assert.AreEqual("Warning", loaded.LoggingMinimumLevel);
             Assert.AreEqual(@"C:\tmp\inspector.log", loaded.LoggingFilePath);
         }
@@ -66,7 +70,7 @@ public class CaptureSettingsParityTests
     public void HostListFormat_ParseAndJoin()
     {
         var list = HostListFormat.Parse("api.example.com\n# comment\n*.corp.dev\n\napi.example.com");
-        CollectionAssert.AreEqual(new[] { "api.example.com", "*.corp.dev" }, list);
+        CollectionAssert.AreEqual(ParsedHostList, list);
         Assert.AreEqual("api.example.com" + Environment.NewLine + "*.corp.dev", HostListFormat.Join(list));
     }
 
@@ -265,6 +269,62 @@ public class CaptureSettingsParityTests
             {
                 File.Delete(path);
             }
+        }
+    }
+
+    [TestMethod]
+    public void DiskCache_RoundTrip_DeleteMany_ClearAll_EnforcesBudget()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-disk-cov-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(dir);
+            using var cache = new SessionBodyDiskCache(dir, maxBytes: 10485760, maxAge: TimeSpan.FromDays(1));
+
+            cache.Write(new SessionSnapshot
+            {
+                Id = 10,
+                RequestBodyBytes = [1, 2, 3, 4, 5, 6, 7, 8],
+                ResponseBodyBytes = [9, 10],
+                RequestBodyText = "req",
+                ResponseBodyText = "resp",
+            });
+            cache.Write(new SessionSnapshot
+            {
+                Id = 11,
+                ResponseBodyBytes = new byte[64],
+            });
+            cache.Write(new SessionSnapshot
+            {
+                Id = 12,
+                ResponseBodyBytes = new byte[64],
+            });
+
+            var loaded = new SessionSnapshot { Id = 10 };
+            Assert.IsTrue(cache.TryLoad(loaded));
+            CollectionAssert.AreEqual(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }, loaded.RequestBodyBytes);
+            Assert.AreEqual("req", loaded.RequestBodyText);
+            Assert.AreEqual("resp", loaded.ResponseBodyText);
+
+            cache.DeleteMany([10, 11]);
+            Assert.IsFalse(File.Exists(cache.PathFor(10)));
+            Assert.IsFalse(File.Exists(cache.PathFor(11)));
+
+            // Corrupt magic should fail load without throwing.
+            File.WriteAllBytes(cache.PathFor(99), "XXXX"u8.ToArray());
+            Assert.IsFalse(cache.TryLoad(new SessionSnapshot { Id = 99 }));
+
+            cache.ClearAll();
+            Assert.AreEqual(0, Directory.EnumerateFiles(dir, "*.bin").Count());
+
+            cache.Delete(12345); // missing id — no throw
+            cache.Dispose();
+            Assert.ThrowsException<ObjectDisposedException>(() =>
+                cache.Write(new SessionSnapshot { Id = 1, ResponseBodyBytes = [1] }));
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { }
         }
     }
 }
