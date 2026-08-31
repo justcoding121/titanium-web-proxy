@@ -38,7 +38,10 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
             var settings = new SettingsService(_settingsPath);
             settings.Current.AutoStartCapture = false;
             settings.Current.AutoSystemProxyOnStart = false;
+            settings.Current.CheckForUpdatesOnStartup = false;
             settings.Save();
+            // Disable update feed network in headless (empty string short-circuits UpdateService).
+            Environment.SetEnvironmentVariable("TITANIUM_UPDATE_FEED", "");
 
             var registry = new SessionRegistry();
             var buffer = new SessionStreamBuffer(registry);

@@ -138,9 +138,11 @@ public partial class MainWindow : Window
 
         try
         {
-            if (vm.CheckForUpdatesOnStartup)
+            if (vm.CheckForUpdatesOnStartup
+                && Environment.GetEnvironmentVariable("TITANIUM_UPDATE_FEED") != string.Empty)
             {
-                await vm.CheckUpdatesAsync(promptIfAvailable: true);
+                // Do not block window open on network; failures stay in StatusText.
+                _ = vm.CheckUpdatesAsync(promptIfAvailable: true);
             }
         }
         catch

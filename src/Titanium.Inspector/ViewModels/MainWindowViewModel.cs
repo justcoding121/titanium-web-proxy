@@ -399,15 +399,32 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private static Task MarshalToUiAsync(Action action)
+    private static async Task MarshalToUiAsync(Action action)
     {
         if (Application.Current is null || Dispatcher.UIThread.CheckAccess())
         {
             action();
-            return Task.CompletedTask;
+            return;
         }
 
-        return Dispatcher.UIThread.InvokeAsync(action).GetTask();
+        // macOS headless CI can briefly lose IFontManagerImpl during StatusText remeasure.
+        // Retry so RelayCommand does not swallow a one-shot failure and leave StatusText stuck
+        // (e.g. "Importing archive…").
+        const int maxAttempts = 8;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                await Dispatcher.UIThread.InvokeAsync(action).GetTask().ConfigureAwait(false);
+                return;
+            }
+            catch (InvalidOperationException ex) when (
+                attempt < maxAttempts
+                && ex.Message.Contains("IFontManagerImpl", StringComparison.Ordinal))
+            {
+                await Task.Delay(25 * attempt).ConfigureAwait(false);
+            }
+        }
     }
 
     private void LoadPlusPanels()
