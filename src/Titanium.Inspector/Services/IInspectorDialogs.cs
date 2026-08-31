@@ -20,7 +20,7 @@ public interface IInspectorDialogs
     /// </summary>
     Task<bool> ShowDeviceCaSetupAsync(Window? owner, string message);
 
-    /// <summary>Ask to rotate (regenerate) the Titanium root CA. Returns true if confirmed.</summary>
+    /// <summary>Ask to clear and reinstall (regenerate) the Titanium root CA. Returns true if confirmed.</summary>
     Task<bool> ConfirmRotateRootCaAsync(Window? owner);
 
     /// <summary>
@@ -68,13 +68,13 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
     public Task<bool> ConfirmRotateRootCaAsync(Window? owner) =>
         SimpleConfirmDialog.ShowAsync(
             owner,
-            "Rotate root CA",
-            "Generate a new Titanium Inspector root CA private key?\n\n" +
+            "Clear and reinstall root CA",
+            "Clear the current Titanium Inspector root CA and create a new one?\n\n" +
             "• All same-name Titanium roots are removed from the current-user Trusted Root store\n" +
-            "• Disk leaf certificates for this install are cleared\n" +
-            "• You must Install root CA again (or enable Decrypt HTTPS) to re-trust\n\n" +
-            "Stop capture is recommended before rotating.",
-            accept: "Rotate",
+            "• Cached site certificates for this install are cleared\n" +
+            "• You will be asked to trust the new root CA again (or enable Decrypt HTTPS)\n\n" +
+            "Stop capture is recommended first.",
+            accept: "Clear and reinstall",
             cancel: "Cancel",
             height: 320);
 

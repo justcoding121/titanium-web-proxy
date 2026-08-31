@@ -575,7 +575,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var owner = TryGetMainWindow();
         if (!await _dialogs.ConfirmRotateRootCaAsync(owner))
         {
-            StatusText = "Rotate root CA cancelled";
+            StatusText = "Clear and reinstall root CA cancelled";
             return;
         }
 
@@ -586,7 +586,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var ok = _interception.RotateRootCertificate(machineStore: false);
         if (!ok)
         {
-            StatusText = "Rotate root CA failed — see logs";
+            StatusText = "Clear and reinstall root CA failed — see logs";
             return;
         }
 
@@ -602,14 +602,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
             StatusText = trusted
                 ? (changed
-                    ? "Root CA rotated and trusted — enable Decrypt HTTPS when ready"
+                    ? "Root CA cleared and reinstalled — enable Decrypt HTTPS when ready"
                     : "Root CA recreate completed and trusted")
-                : "Root CA rotated but trust failed — use Install root CA or Export CA";
+                : "Root CA cleared but trust failed — use Install root CA or Export CA";
             return;
         }
 
         StatusText = changed
-            ? "Root CA rotated — Install root CA (or enable Decrypt HTTPS) to trust the new certificate"
+            ? "Root CA cleared — Install root CA (or enable Decrypt HTTPS) to trust the new certificate"
             : "Root CA recreate completed — Install root CA to trust";
     }
 

@@ -47,7 +47,7 @@
                   AutomationProperties.AutomationId="MenuToggleSystemProxy" />
         <MenuItem Header="Install root CA (current user)" Command="{Binding InstallCaCommand}" AutomationProperties.AutomationId="MenuInstallCa" />
         <MenuItem Header="Remove root CA (current user)" Command="{Binding UntrustCaCommand}" AutomationProperties.AutomationId="MenuRemoveCa" />
-        <MenuItem Header="Rotate root CA…" Command="{Binding RotateCaCommand}" AutomationProperties.AutomationId="MenuRotateCa" />
+        <MenuItem Header="Clear and reinstall root CA…" Command="{Binding RotateCaCommand}" AutomationProperties.AutomationId="MenuRotateCa" />
         <MenuItem Header="Export root CA…" Command="{Binding ExportCaCommand}" AutomationProperties.AutomationId="MenuExportCa" />
         <MenuItem Header="Device CA setup…" Command="{Binding DeviceCaSetupCommand}" AutomationProperties.AutomationId="MenuDeviceCa" />
         <MenuItem Header="Allow Store apps…" Command="{Binding OpenLoopbackExemptCommand}"
