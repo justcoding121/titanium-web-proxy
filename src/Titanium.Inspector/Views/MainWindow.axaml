@@ -70,6 +70,21 @@
                   Command="{Binding ToggleIgnoreServerCertificateErrorsCommand}"
                   AutomationProperties.AutomationId="MenuIgnoreServerCertErrors" />
         <Separator />
+        <MenuItem Header="Update channel" AutomationProperties.AutomationId="MenuUpdateChannel">
+          <MenuItem Header="Stable" ToggleType="CheckBox"
+                    IsChecked="{Binding UpdateChannelIsStable, Mode=OneWay}"
+                    Command="{Binding SetUpdateChannelStableCommand}"
+                    AutomationProperties.AutomationId="MenuUpdateChannelStable" />
+          <MenuItem Header="Beta" ToggleType="CheckBox"
+                    IsChecked="{Binding UpdateChannelIsBeta, Mode=OneWay}"
+                    Command="{Binding SetUpdateChannelBetaCommand}"
+                    AutomationProperties.AutomationId="MenuUpdateChannelBeta" />
+        </MenuItem>
+        <MenuItem Header="Check for updates on startup" ToggleType="CheckBox"
+                  IsChecked="{Binding CheckForUpdatesOnStartup, Mode=OneWay}"
+                  Command="{Binding ToggleCheckForUpdatesOnStartupCommand}"
+                  AutomationProperties.AutomationId="MenuCheckUpdatesOnStartup" />
+        <Separator />
         <MenuItem Header="Logging…" Command="{Binding OpenLoggingSettingsCommand}"
                   AutomationProperties.AutomationId="MenuLogging" />
         <Separator />

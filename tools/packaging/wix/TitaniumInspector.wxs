@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Package Name="Titanium Inspector"
            Manufacturer="justcoding121"
            Version="$(var.ProductVersion)"
@@ -7,16 +9,56 @@
            Scope="perMachine">
     <MajorUpgrade DowngradeErrorMessage="A newer version of Titanium Inspector is already installed." />
     <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="AppIcon" SourceFile="app.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/justcoding121/titanium-web-proxy" />
+
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Titanium Inspector" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+
+    <!-- Close running Inspector before overwriting locked files (manual MSI upgrade). -->
+    <util:CloseApplication Id="CloseInspector"
+                           Target="TitaniumInspector.exe"
+                           CloseMessage="yes"
+                           RebootPrompt="no"
+                           Timeout="10" />
+
+    <!-- Resolve install path at runtime (Property Value cannot nest [INSTALLFOLDER] at build time). -->
+    <SetProperty Id="WixShellExecTarget"
+                 Value="[INSTALLFOLDER]TitaniumInspector.exe"
+                 Sequence="ui"
+                 After="CostFinalize" />
+
+    <CustomAction Id="LaunchApplication"
+                  BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+                  DllEntry="WixShellExec"
+                  Impersonate="yes" />
+
     <Feature Id="Main" Title="Titanium Inspector" Level="1">
       <ComponentGroupRef Id="AppFiles" />
       <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
     </Feature>
+
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+    <UI>
+      <Publish Dialog="ExitDialog"
+               Control="Finish"
+               Event="DoAction"
+               Value="LaunchApplication"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT REMOVE" />
+    </UI>
+
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="Titanium Inspector" />
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder">
       <Directory Id="AppMenuFolder" Name="Titanium Inspector" />
     </StandardDirectory>
+    <StandardDirectory Id="DesktopFolder" />
   </Package>
 
   <Fragment>
@@ -28,11 +70,26 @@
                 Directory="AppMenuFolder"
                 Name="Titanium Inspector"
                 Target="[INSTALLFOLDER]TitaniumInspector.exe"
-                WorkingDirectory="INSTALLFOLDER" />
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="AppIcon" />
       <RemoveFolder Id="RemoveAppMenuFolder" Directory="AppMenuFolder" On="uninstall" />
       <RegistryValue Root="HKCU"
                      Key="Software\justcoding121\TitaniumInspector"
                      Name="installed"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes" />
+    </Component>
+    <Component Id="DesktopShortcut" Directory="INSTALLFOLDER" Guid="C2E5F93B-6D4F-5CA0-9B3E-8F7A0B2C4D5E">
+      <Shortcut Id="DesktopAppShortcut"
+                Directory="DesktopFolder"
+                Name="Titanium Inspector"
+                Target="[INSTALLFOLDER]TitaniumInspector.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="AppIcon" />
+      <RegistryValue Root="HKCU"
+                     Key="Software\justcoding121\TitaniumInspector"
+                     Name="desktop"
                      Type="integer"
                      Value="1"
                      KeyPath="yes" />

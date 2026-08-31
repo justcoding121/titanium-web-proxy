@@ -30,6 +30,16 @@ public sealed class SessionBodyDiskCache : IDisposable
         PruneOnStartup();
     }
 
+    /// <summary>
+    /// Default spill directory under LocalApplicationData (Windows LocalAppData,
+    /// Linux ~/.local/share, macOS Application Support).
+    /// </summary>
+    public static string GetDefaultDirectory() =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TitaniumInspector",
+            "session-cache");
+
     public string DirectoryPath => _directory;
 
     public string PathFor(long sessionId) => Path.Combine(_directory, sessionId.ToString("D") + ".bin");

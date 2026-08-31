@@ -8,15 +8,48 @@ Desktop MITM debugger (Avalonia). Licensed under [PolyForm Noncommercial](https:
 
 Prefer the [Download](/download) page (resolves the newest release that has Inspector assets, including prereleases).
 
-Windows examples for the **7.0 beta** product tag:
+### Windows
 
-- [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.2-beta/TitaniumInspector-win-x64.msi)
-- [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.2-beta/TitaniumInspector-win-x64.zip)
+- **MSI** — guided wizard (license, install folder, progress, Finished with optional Launch). Uninstall from **Settings → Apps** (or Programs and Features); the entry uses the Inspector icon.
+- **Portable zip** — extract and run `TitaniumInspector.exe`.
 
 ```shell
 # Stable community package only — not the 7.0 beta
 winget install justcoding121.TitaniumInspector
 ```
+
+Windows examples for the **7.0 beta** product tag:
+
+- [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.3-beta/TitaniumInspector-win-x64.msi)
+- [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.3-beta/TitaniumInspector-win-x64.zip)
+
+### Linux
+
+Extract the RID zip, then either run `./TitaniumInspector` (portable) or:
+
+```shell
+chmod +x install.sh uninstall.sh TitaniumInspector
+./install.sh          # ~/.local/share/TitaniumInspector + desktop entry
+# later:
+./uninstall.sh
+```
+
+### macOS
+
+Extract the RID zip, then either run `./TitaniumInspector` (portable) or:
+
+```shell
+chmod +x install-app.sh uninstall-app.sh TitaniumInspector
+./install-app.sh      # ~/Applications/Titanium Inspector.app
+# later:
+./uninstall-app.sh
+```
+
+## Updates
+
+**Options → Update channel** — Stable (default) or Beta. **Help → Check for updates…** checks only that channel and labels it in the dialog (e.g. *Update 7.0.3 (Stable)*). Choosing **Install and restart** downloads the package (MSI for a Program Files install, otherwise the RID zip), closes Inspector, applies the update, and relaunches.
+
+**Options → Check for updates on startup** uses the same channel and confirm dialog (never silent-install).
 
 ## Quick use
 

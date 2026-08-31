@@ -3,7 +3,7 @@
         x:Class="Titanium.Inspector.Views.SessionRetentionWindow"
         AutomationProperties.AutomationId="SessionRetentionWindow"
         Title="Session retention"
-        Width="560" Height="560"
+        Width="560" Height="620"
         WindowStartupLocation="CenterOwner"
         CanResize="False">
   <DockPanel Margin="16">
@@ -49,10 +49,25 @@
           <CheckBox x:Name="SpillBodiesCheck" Content="Save older bodies to disk"
                     AutomationProperties.AutomationId="RetentionSpillBodies" />
           <TextBlock Opacity="0.75" TextWrapping="Wrap" Margin="24,0,0,0"
-                     Text="When on, bodies for sessions outside the recent window are saved under Local App Data so you can reopen them without keeping everything in RAM." />
+                     Text="When on, bodies for sessions outside the recent window are saved as cache files so you can reopen them without keeping everything in RAM." />
         </StackPanel>
 
         <StackPanel x:Name="DiskFieldsPanel" Spacing="12" Margin="0,4,0,0">
+          <StackPanel Spacing="4">
+            <TextBlock FontWeight="SemiBold" Text="Cache folder" />
+            <TextBox x:Name="CacheFolderPathBox"
+                     IsReadOnly="True"
+                     TextWrapping="Wrap"
+                     AcceptsReturn="True"
+                     Opacity="0.85"
+                     AutomationProperties.AutomationId="RetentionCacheFolderPath" />
+            <Button x:Name="OpenCacheFolderButton"
+                    Content="Open cache folder"
+                    HorizontalAlignment="Left"
+                    MinWidth="88"
+                    Margin="0,4,0,0"
+                    AutomationProperties.AutomationId="RetentionOpenCacheFolder" />
+          </StackPanel>
           <StackPanel Spacing="4">
             <TextBlock FontWeight="SemiBold" Text="Disk cache size limit (MB)" />
             <TextBlock Opacity="0.75" TextWrapping="Wrap"

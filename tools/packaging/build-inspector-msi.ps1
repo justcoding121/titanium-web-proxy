@@ -18,6 +18,11 @@ if (-not (Test-Path (Join-Path $PayloadDir "TitaniumInspector.exe"))) {
     throw "TitaniumInspector.exe missing under $PayloadDir"
 }
 
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$iconSrc = Join-Path $repoRoot "src\Titanium.Inspector\Assets\app.ico"
+if (-not (Test-Path $iconSrc)) { throw "Application icon missing: $iconSrc" }
+Copy-Item -Force $iconSrc (Join-Path $wixDir "app.ico")
+
 # Always absolute: `dotnet wix -o` is relative to the WiX cwd, while Test-Path after
 # Pop-Location is relative to the caller's cwd (repo root on CI).
 $msiLeaf = Split-Path -Leaf $OutputMsi
@@ -32,7 +37,13 @@ Push-Location $wixDir
 try {
     dotnet tool restore
 
+    # UI + Util extensions (InstallDir wizard, Launch on exit).
+    & dotnet wix extension add "WixToolset.UI.wixext/5.0.2"
+    & dotnet wix extension add "WixToolset.Util.wixext/5.0.2"
+
     & dotnet wix build $wxs `
+        -ext WixToolset.UI.wixext `
+        -ext WixToolset.Util.wixext `
         -b "PayloadDir=$PayloadDir" `
         -d "ProductVersion=$Version" `
         -o $OutputMsi

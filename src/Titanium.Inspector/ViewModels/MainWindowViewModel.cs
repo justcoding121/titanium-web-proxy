@@ -98,7 +98,22 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         LoadFromSettings();
 
-        CheckForUpdatesCommand = new RelayCommand(async () => await CheckUpdatesAsync());
+        CheckForUpdatesCommand = new RelayCommand(async () => await CheckUpdatesAsync(promptIfAvailable: true));
+        SetUpdateChannelStableCommand = new RelayCommand(() =>
+        {
+            UpdateChannelIsBeta = false;
+            return Task.CompletedTask;
+        });
+        SetUpdateChannelBetaCommand = new RelayCommand(() =>
+        {
+            UpdateChannelIsBeta = true;
+            return Task.CompletedTask;
+        });
+        ToggleCheckForUpdatesOnStartupCommand = new RelayCommand(() =>
+        {
+            CheckForUpdatesOnStartup = !CheckForUpdatesOnStartup;
+            return Task.CompletedTask;
+        });
         ExportHarCommand = new RelayCommand(async () => await ExportHarAsync());
         ExportSelectedHarCommand = new RelayCommand(async () => await ExportSelectedHarAsync());
         ImportHarCommand = new RelayCommand(async () => await ImportHarAsync());
@@ -384,15 +399,52 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private static Task MarshalToUiAsync(Action action)
+    private static async Task MarshalToUiAsync(Action action)
     {
         if (Application.Current is null || Dispatcher.UIThread.CheckAccess())
         {
             action();
-            return Task.CompletedTask;
+            return;
         }
 
-        return Dispatcher.UIThread.InvokeAsync(action).GetTask();
+        // Prefer Post over InvokeAsync so headless WaitUntil pumps (RunJobs) can drain the
+        // callback without a nested InvokeAsync wait. Retry IFontManagerImpl races on macOS CI.
+        const int maxAttempts = 8;
+        Exception? last = null;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    action();
+                    tcs.TrySetResult();
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            });
+
+            try
+            {
+                await tcs.Task.ConfigureAwait(false);
+                return;
+            }
+            catch (InvalidOperationException ex) when (
+                attempt < maxAttempts
+                && ex.Message.Contains("IFontManagerImpl", StringComparison.Ordinal))
+            {
+                last = ex;
+                await Task.Delay(25 * attempt).ConfigureAwait(false);
+            }
+        }
+
+        if (last is not null)
+        {
+            throw last;
+        }
     }
 
     private void LoadPlusPanels()
@@ -1024,6 +1076,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public BreakpointViewModel Breakpoints { get; }
     public AutoResponderViewModel AutoResponder { get; }
     public ICommand CheckForUpdatesCommand { get; }
+    public ICommand SetUpdateChannelStableCommand { get; }
+    public ICommand SetUpdateChannelBetaCommand { get; }
+    public ICommand ToggleCheckForUpdatesOnStartupCommand { get; }
     public ICommand ExportHarCommand { get; }
     public ICommand ExportSelectedHarCommand { get; }
     public ICommand ImportHarCommand { get; }
@@ -1294,6 +1349,52 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             {
                 PersistSettings();
             }
+        }
+    }
+
+    public bool UpdateChannelIsBeta
+    {
+        get => _settings.Current.UpdateChannel.Equals("Beta", StringComparison.OrdinalIgnoreCase);
+        set
+        {
+            var next = value ? "Beta" : "Stable";
+            if (string.Equals(_settings.Current.UpdateChannel, next, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _settings.Current.UpdateChannel = next;
+            PersistSettings();
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UpdateChannelIsBeta)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UpdateChannelIsStable)));
+        }
+    }
+
+    public bool UpdateChannelIsStable
+    {
+        get => !UpdateChannelIsBeta;
+        set
+        {
+            if (value)
+            {
+                UpdateChannelIsBeta = false;
+            }
+        }
+    }
+
+    public bool CheckForUpdatesOnStartup
+    {
+        get => _settings.Current.CheckForUpdatesOnStartup;
+        set
+        {
+            if (_settings.Current.CheckForUpdatesOnStartup == value)
+            {
+                return;
+            }
+
+            _settings.Current.CheckForUpdatesOnStartup = value;
+            PersistSettings();
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CheckForUpdatesOnStartup)));
         }
     }
 
@@ -1599,6 +1700,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ScriptOnRequest)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ScriptOnResponse)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DebugFileLogging)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UpdateChannelIsBeta)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UpdateChannelIsStable)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CheckForUpdatesOnStartup)));
     }
 
     private static bool IsDebugFileLoggingEnabled(InspectorSettings s) =>
@@ -1923,11 +2027,50 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private async Task CheckUpdatesAsync()
+    /// <summary>Startup or Help → Check for updates. When <paramref name="promptIfAvailable"/>, offer install dialog.</summary>
+    public async Task CheckUpdatesAsync(bool promptIfAvailable = true)
     {
-        StatusText = "Checking for updates…";
+        var channel = _updates.ChannelDisplayName;
+        StatusText = $"Checking for updates ({channel})…";
         var result = await _updates.CheckAsync();
+        if (!result.UpdateAvailable || string.IsNullOrEmpty(result.AssetUrl))
+        {
+            StatusText = result.Message;
+            return;
+        }
+
         StatusText = result.Message;
+        if (!promptIfAvailable)
+        {
+            return;
+        }
+
+        var owner = TryGetMainWindow();
+        var version = result.RemoteVersion ?? "";
+        if (!await _dialogs.ConfirmInstallUpdateAsync(owner, version, result.ChannelDisplay))
+        {
+            StatusText = $"Update available: {version} ({result.ChannelDisplay})";
+            return;
+        }
+
+        StatusText = "Downloading update…";
+        var (ok, message) = await _updates.DownloadAndStartApplyAsync(result);
+        StatusText = message;
+        if (!ok)
+        {
+            return;
+        }
+
+        StatusText = $"Installing {version} ({result.ChannelDisplay})… restarting.";
+        BeginBackgroundShutdown();
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            desktop.Shutdown();
+        }
+        else
+        {
+            TryGetMainWindow()?.Close();
+        }
     }
 
     private async Task StartCaptureAsync()
@@ -2254,6 +2397,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             // Off the UI sync context for zip IO so headless WaitUntil pumps cannot deadlock the import.
             var imported = await SessionArchive.ImportNativeArchiveAsync(path).ConfigureAwait(false);
+            var count = imported.Count;
+            var fileName = Path.GetFileName(path);
             await MarshalToUiAsync(() =>
             {
                 foreach (var snap in imported)
@@ -2263,12 +2408,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
                 ApplyFilter();
                 RefreshSessionCountText();
-                StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
             });
+            // Match ExportArchive: set StatusText after ConfigureAwait(false) without nesting it
+            // inside MarshalToUiAsync (StatusText remeasure was leaving "Importing…" stuck on macOS CI).
+            StatusText = $"Appended {count} sessions from {fileName}";
         }
         catch (Exception ex)
         {
-            await MarshalToUiAsync(() => StatusText = "Import archive failed: " + Truncate(ex.Message, 160));
+            StatusText = "Import archive failed: " + Truncate(ex.Message, 160);
         }
     }
 

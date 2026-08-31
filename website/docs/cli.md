@@ -19,10 +19,10 @@ titanium http3-deps status|install
 | `run` | Start the proxy from YAML/JSON (or other dialects) |
 | `test` | Validate config without serving traffic |
 | `version` | Print local version; `--check` compares to the update feed |
-| `update` | Download a newer CLI zip; `--plus` updates the Plus sidecar DLL |
+| `update` | Self-update the CLI from the release feed (download, verify SHA256, replace install); `--plus` updates the Plus DLL |
 | `http3-deps` | Report Quic availability; optionally install system MsQuic on edge hosts |
 
-Channels: `stable` (default) or `beta` via `--channel` or `TITANIUM_UPDATE_CHANNEL`.
+Channels: `stable` (default) or `beta` via `--channel` or `TITANIUM_UPDATE_CHANNEL`. Messages always label the channel. `titanium update` does **not** use winget (so beta and non-Windows stay consistent); use winget only for the initial install on Windows stable.
 
 **Alpine / Kubernetes:** download the `linux-musl-*` RID zip (not `linux-x64`). See [HTTP/3](/docs/http3).
 

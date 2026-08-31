@@ -33,7 +33,28 @@ pwsh ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir artifacts/i
   -Version 7.0.0
 ```
 
-Uses WiX 5 (`dotnet tool` manifest under `tools/packaging/wix/`). Authenticode signing is stretch; unsigned MSI is fine for GitHub Releases / early winget.
+Uses WiX 5 (`dotnet tool` manifest under `tools/packaging/wix/`) plus **WixToolset.UI.wixext** / **Util** for:
+
+- `WixUI_InstallDir` wizard (welcome → license → **install folder** → progress → **Finished**)
+- `ARPPRODUCTICON` (Programs and Features icon from `app.ico`)
+- Start Menu + Desktop shortcuts
+- **Launch Titanium Inspector** checkbox on the exit dialog (first install and upgrades)
+- `CloseApplication` for `TitaniumInspector.exe` so manual MSI upgrades can close a running instance
+
+Authenticode signing is stretch; unsigned MSI is fine for GitHub Releases / early winget.
+
+### Linux / macOS desktop helpers (Inspector zips)
+
+Release publish copies helpers into each Inspector zip:
+
+| RID | Helpers |
+| --- | --- |
+| `linux-*` | `install.sh`, `uninstall.sh`, `TitaniumInspector.desktop.in`, `app.ico` |
+| `osx-*` | `install-app.sh`, `uninstall-app.sh`, `app.ico` |
+
+**Linux:** extract the zip, then `./install.sh` (default prefix `~/.local`) to copy the app under `~/.local/share/TitaniumInspector`, add a desktop entry, and symlink `titanium-inspector` on `PATH`. Uninstall: `./uninstall.sh` or `~/.local/share/TitaniumInspector/uninstall.sh`. Portable use without install: run `./TitaniumInspector` from the extracted folder.
+
+**macOS:** extract the zip, then `./install-app.sh` to create `~/Applications/Titanium Inspector.app`. Uninstall: `./uninstall-app.sh`. Portable use: run `./TitaniumInspector` from the extracted folder.
 
 Winget package IDs:
 
