@@ -2345,8 +2345,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         try
         {
             var sessions = _all.ToList();
-            await _store.EnsureBodiesLoadedAsync(sessions).ConfigureAwait(false);
-            await SessionArchive.ExportNativeArchiveAsync(sessions, path).ConfigureAwait(false);
+            // Stay on the UI sync context (RelayCommand). ConfigureAwait(false) + StatusText update
+            // raced with headless WaitUntil pumps on macOS (file written, StatusText stayed Ready).
+            StatusText = "Exporting archive…";
+            await _store.EnsureBodiesLoadedAsync(sessions);
+            await SessionArchive.ExportNativeArchiveAsync(sessions, path);
             StatusText = $"Exported {sessions.Count} sessions to {path}";
         }
         catch (Exception ex)
@@ -2373,8 +2376,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            await _store.EnsureBodiesLoadedAsync(sessions).ConfigureAwait(false);
-            await SessionArchive.ExportNativeArchiveAsync(sessions, path).ConfigureAwait(false);
+            StatusText = "Exporting archive…";
+            await _store.EnsureBodiesLoadedAsync(sessions);
+            await SessionArchive.ExportNativeArchiveAsync(sessions, path);
             StatusText = $"Exported {sessions.Count} sessions to {path}";
         }
         catch (Exception ex)

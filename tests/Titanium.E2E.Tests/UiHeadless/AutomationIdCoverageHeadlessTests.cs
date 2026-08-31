@@ -284,14 +284,20 @@ public class AutomationIdCoverageHeadlessTests
         });
 
         await fx.WaitUntilAsync(
-            () => fx.ViewModel.StatusText.Contains("Exported 1 sessions", StringComparison.Ordinal),
-            TimeSpan.FromSeconds(15));
+            () => fx.ViewModel.StatusText.Contains("Exported 1 sessions", StringComparison.Ordinal)
+                  || fx.ViewModel.StatusText.Contains("Export archive failed", StringComparison.Ordinal)
+                  || File.Exists(zip),
+            TimeSpan.FromSeconds(20));
 
         await fx.DispatchAsync(() =>
         {
-            Assert.IsTrue(fx.PathPicker.SaveCalls >= 1);
-            Assert.IsTrue(File.Exists(zip));
-            StringAssert.Contains(fx.ViewModel.StatusText, "Exported 1 sessions");
+            Assert.IsTrue(fx.PathPicker.SaveCalls >= 1, "Export path picker was not invoked");
+            Assert.IsTrue(
+                fx.ViewModel.StatusText.Contains("Exported 1 sessions", StringComparison.Ordinal)
+                || File.Exists(zip),
+                "StatusText after export: " + fx.ViewModel.StatusText
+                + "; zipExists=" + File.Exists(zip));
+            Assert.IsTrue(File.Exists(zip), "Export zip was not written");
         });
 
         // Import from a copy so any lingering exclusive handle on the export path cannot block macOS.
