@@ -76,8 +76,10 @@ jobs:
             echo "Warning: docs/api missing; API pages will not be published"
           fi
 
-      # GitHub Pages + VitePress cleanUrls: /download sometimes keeps a stale
-      # object while /download.html updates. Publish both shapes so the nav link works.
+      # GitHub Pages + VitePress cleanUrls: publishing BOTH `download.html` and
+      # `download/index.html` leaves `/download` stuck on a stale object while
+      # `/download.html` updates. Mirror then remove the sibling `*.html` so only
+      # `dir/index.html` remains (nav `/download` and `/download/` both resolve).
       - name: Mirror cleanUrls HTML as index.html
         shell: bash
         run: |
@@ -88,6 +90,7 @@ jobs:
             [[ "$base" == "index" || "$base" == "404" ]] && continue
             mkdir -p "$dist/$base"
             cp -f "$f" "$dist/$base/index.html"
+            rm -f "$f"
           done
           # Nested docs pages
           if [ -d "$dist/docs" ]; then
@@ -96,6 +99,7 @@ jobs:
               dir="$(dirname "$f")"
               mkdir -p "$dir/$base"
               cp -f "$f" "$dir/$base/index.html"
+              rm -f "$f"
             done
           fi
 
@@ -106,13 +110,13 @@ jobs:
           path: website/.vitepress/dist
 
   deploy:
+    # github-pages environment protection allows develop only; beta/stable pushes
+    # still build (and can upload artifacts) but must not attempt Pages deploy.
     if: >
       github.event_name != 'pull_request' && (
         github.ref == 'refs/heads/develop' ||
-        github.ref == 'refs/heads/beta' ||
-        github.ref == 'refs/heads/stable' ||
-        github.event_name == 'release' ||
-        github.event_name == 'workflow_dispatch'
+        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop') ||
+        (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v'))
       )
     needs: build
     runs-on: ubuntu-latest
