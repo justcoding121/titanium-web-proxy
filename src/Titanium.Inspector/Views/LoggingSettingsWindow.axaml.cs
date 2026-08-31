@@ -27,6 +27,7 @@ public partial class LoggingSettingsWindow : Window
         SaveButton.Click += OnSave;
         CancelButton.Click += (_, _) => Close();
         BrowseButton.Click += OnBrowse;
+        OpenFolderButton.Click += OnOpenFolder;
     }
 
     public bool Saved => _saved;
@@ -70,6 +71,16 @@ public partial class LoggingSettingsWindow : Window
         if (file?.TryGetLocalPath() is { } path)
         {
             PathBox.Text = path;
+        }
+    }
+
+    private void OnOpenFolder(object? sender, RoutedEventArgs e)
+    {
+        StatusText.Text = string.Empty;
+        var path = string.IsNullOrWhiteSpace(PathBox.Text) ? DefaultLogPath() : PathBox.Text.Trim();
+        if (!DesktopShell.TryRevealFileOrOpenDirectory(path, out var error))
+        {
+            StatusText.Text = "Could not open log folder: " + (error ?? "unknown error");
         }
     }
 

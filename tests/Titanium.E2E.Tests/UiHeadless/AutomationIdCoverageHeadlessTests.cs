@@ -1,6 +1,11 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.E2E.Tests.Harness;
 using Titanium.Inspector.Services;
+using Titanium.Inspector.Views;
 
 namespace Titanium.E2E.Tests.UiHeadless;
 
@@ -307,5 +312,43 @@ public class AutomationIdCoverageHeadlessTests
         });
         try { File.Delete(zip); } catch { /* ignore */ }
         try { File.Delete(importZip); } catch { /* ignore */ }
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Headless")]
+    public async Task RetentionAndLoggingDialogs_ExposeFolderAutomationIds()
+    {
+        await using var fx = new InspectorHeadlessFixture();
+        await fx.StartAsync();
+        await fx.DispatchAsync(() =>
+        {
+            var settingsPath = Path.Combine(
+                Path.GetTempPath(),
+                "twp-settings-" + Guid.NewGuid().ToString("N") + ".json");
+            var settings = new SettingsService(settingsPath);
+
+            var retention = new SessionRetentionWindow(settings);
+            AssertHasAutomationId(retention, "RetentionCacheFolderPath");
+            AssertHasAutomationId(retention, "RetentionOpenCacheFolder");
+
+            var logging = new LoggingSettingsWindow(settings, applyLogging: null);
+            AssertHasAutomationId(logging, "LoggingOpenFolder");
+            AssertHasAutomationId(logging, "LoggingBrowse");
+            AssertHasAutomationId(logging, "LoggingPath");
+        });
+    }
+
+    private static void AssertHasAutomationId(Control root, string automationId)
+    {
+        bool IdMatch(Avalonia.StyledElement c) =>
+            string.Equals(
+                AutomationProperties.GetAutomationId(c),
+                automationId,
+                StringComparison.Ordinal);
+
+        var found = IdMatch(root)
+            || root.GetLogicalDescendants().OfType<Control>().Any(IdMatch)
+            || root.GetVisualDescendants().OfType<Control>().Any(IdMatch);
+        Assert.IsTrue(found, "Missing AutomationId on dialog: " + automationId);
     }
 }

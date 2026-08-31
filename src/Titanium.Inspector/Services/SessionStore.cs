@@ -26,10 +26,7 @@ public sealed class SessionStore : IDisposable
         _options = options ?? new SessionStoreOptions();
         if (_options.SpillBodiesToDisk)
         {
-            var dir = cacheDirectory ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "TitaniumInspector",
-                "session-cache");
+            var dir = cacheDirectory ?? SessionBodyDiskCache.GetDefaultDirectory();
             _disk = new SessionBodyDiskCache(
                 dir,
                 _options.DiskCacheMaxBytes,
@@ -47,6 +44,9 @@ public sealed class SessionStore : IDisposable
     }
 
     public ObservableCollection<SessionSnapshot> Sessions { get; }
+
+    /// <summary>Resolved body spill directory when disk spill is enabled; otherwise null.</summary>
+    public string? DiskCacheDirectoryPath => _disk?.DirectoryPath;
 
     public SessionStoreOptions Options => _options;
 

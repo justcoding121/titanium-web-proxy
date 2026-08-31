@@ -3362,12 +3362,15 @@ namespace Titanium.Web.Proxy.Http2
                     // STREAM_CLOSED is the peer saying the stream is already done (half-close races).
                     // PROTOCOL_ERROR on a received RST is the peer's assessment — our own framing
                     // defects are already ReportException'd at the detection site before we send RST.
+                    // INTERNAL_ERROR is commonly used by long-lived peer streams (e.g. LaunchDarkly /
+                    // SonarCloud ld-stream) when they tear down; not a proxy defect.
                     // Forward the RST either way; do not flood Error logs for peer-initiated codes.
                     if (errorCode != (int)Http2ErrorCode.NoError &&
                         errorCode != (int)Http2ErrorCode.Cancel &&
                         errorCode != (int)Http2ErrorCode.RefusedStream &&
                         errorCode != (int)Http2ErrorCode.StreamClosed &&
-                        errorCode != (int)Http2ErrorCode.ProtocolError)
+                        errorCode != (int)Http2ErrorCode.ProtocolError &&
+                        errorCode != (int)Http2ErrorCode.InternalError)
                     {
                         var direction = isClient ? "client→proxy" : "origin→proxy";
                         var requestUrl = args?.HttpClient.Request.Url ?? "(unknown)";

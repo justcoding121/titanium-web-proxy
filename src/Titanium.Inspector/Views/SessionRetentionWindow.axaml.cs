@@ -22,6 +22,7 @@ public partial class SessionRetentionWindow : Window
         SyncDiskFieldsEnabled();
         SaveButton.Click += OnSave;
         CancelButton.Click += (_, _) => Close();
+        OpenCacheFolderButton.Click += OnOpenCacheFolder;
     }
 
     public bool Saved => _saved;
@@ -42,6 +43,7 @@ public partial class SessionRetentionWindow : Window
         MaxSessionsBox.Text = s.MaxSessionsInMemory.ToString();
         HotBodySessionsBox.Text = s.HotBodySessions.ToString();
         MaxBodyRamMbBox.Text = BytesToMb(s.MaxCaptureBytesInMemory).ToString();
+        CacheFolderPathBox.Text = SessionBodyDiskCache.GetDefaultDirectory();
     }
 
     private void SyncDiskFieldsEnabled()
@@ -49,6 +51,16 @@ public partial class SessionRetentionWindow : Window
         var on = SpillBodiesCheck.IsChecked == true;
         DiskFieldsPanel.IsEnabled = on;
         DiskFieldsPanel.Opacity = on ? 1 : 0.5;
+    }
+
+    private void OnOpenCacheFolder(object? sender, RoutedEventArgs e)
+    {
+        StatusText.Text = string.Empty;
+        var path = SessionBodyDiskCache.GetDefaultDirectory();
+        if (!DesktopShell.TryOpenDirectory(path, out var error))
+        {
+            StatusText.Text = "Could not open cache folder: " + (error ?? "unknown error");
+        }
     }
 
     private void OnSave(object? sender, RoutedEventArgs e)
