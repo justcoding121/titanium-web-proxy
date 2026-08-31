@@ -18,7 +18,7 @@ public static class SessionArchive
             log = new
             {
                 version = "1.2",
-                creator = new { name = "Titanium Inspector", version = "7.0.2" },
+                creator = new { name = "Titanium Inspector", version = "7.0.3" },
                 entries,
             },
         };
