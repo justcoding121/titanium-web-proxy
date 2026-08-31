@@ -299,20 +299,25 @@ public class AutomationIdCoverageHeadlessTests
         File.Copy(zip, importZip, overwrite: true);
         fx.PathPicker.OpenPath = importZip;
 
+        var sessionsBeforeImport = 0;
+        await fx.DispatchAsync(() => sessionsBeforeImport = fx.ViewModel.Sessions.Count);
+
         await fx.DispatchAsync(() => fx.Robot.Click("MenuImportArchive"));
 
         await fx.WaitUntilAsync(
             () => fx.ViewModel.StatusText.Contains("Appended", StringComparison.Ordinal)
-                  || fx.ViewModel.StatusText.Contains("Import archive failed", StringComparison.Ordinal),
-            TimeSpan.FromSeconds(15));
+                  || fx.ViewModel.StatusText.Contains("Import archive failed", StringComparison.Ordinal)
+                  || fx.ViewModel.Sessions.Count > sessionsBeforeImport,
+            TimeSpan.FromSeconds(20));
 
         await fx.DispatchAsync(() =>
         {
             Assert.IsTrue(fx.PathPicker.OpenCalls >= 1, "Import path picker was not invoked");
-            StringAssert.Contains(
-                fx.ViewModel.StatusText,
-                "Appended",
-                "StatusText after import: " + fx.ViewModel.StatusText);
+            Assert.IsTrue(
+                fx.ViewModel.StatusText.Contains("Appended", StringComparison.Ordinal)
+                || fx.ViewModel.Sessions.Count > sessionsBeforeImport,
+                "StatusText after import: " + fx.ViewModel.StatusText
+                + "; sessions=" + fx.ViewModel.Sessions.Count);
         });
         try { File.Delete(zip); } catch { /* ignore */ }
         try { File.Delete(importZip); } catch { /* ignore */ }

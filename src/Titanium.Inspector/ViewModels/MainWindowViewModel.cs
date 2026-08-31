@@ -407,23 +407,43 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        // macOS headless CI can briefly lose IFontManagerImpl during StatusText remeasure.
-        // Retry so RelayCommand does not swallow a one-shot failure and leave StatusText stuck
-        // (e.g. "Importing archive…").
+        // Prefer Post over InvokeAsync so headless WaitUntil pumps (RunJobs) can drain the
+        // callback without a nested InvokeAsync wait. Retry IFontManagerImpl races on macOS CI.
         const int maxAttempts = 8;
+        Exception? last = null;
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
+            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    action();
+                    tcs.TrySetResult();
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            });
+
             try
             {
-                await Dispatcher.UIThread.InvokeAsync(action).GetTask().ConfigureAwait(false);
+                await tcs.Task.ConfigureAwait(false);
                 return;
             }
             catch (InvalidOperationException ex) when (
                 attempt < maxAttempts
                 && ex.Message.Contains("IFontManagerImpl", StringComparison.Ordinal))
             {
+                last = ex;
                 await Task.Delay(25 * attempt).ConfigureAwait(false);
             }
+        }
+
+        if (last is not null)
+        {
+            throw last;
         }
     }
 
@@ -2377,6 +2397,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         {
             // Off the UI sync context for zip IO so headless WaitUntil pumps cannot deadlock the import.
             var imported = await SessionArchive.ImportNativeArchiveAsync(path).ConfigureAwait(false);
+            var count = imported.Count;
+            var fileName = Path.GetFileName(path);
             await MarshalToUiAsync(() =>
             {
                 foreach (var snap in imported)
@@ -2386,12 +2408,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
                 ApplyFilter();
                 RefreshSessionCountText();
-                StatusText = $"Appended {imported.Count} sessions from {Path.GetFileName(path)}";
             });
+            // Match ExportArchive: set StatusText after ConfigureAwait(false) without nesting it
+            // inside MarshalToUiAsync (StatusText remeasure was leaving "Importing…" stuck on macOS CI).
+            StatusText = $"Appended {count} sessions from {fileName}";
         }
         catch (Exception ex)
         {
-            await MarshalToUiAsync(() => StatusText = "Import archive failed: " + Truncate(ex.Message, 160));
+            StatusText = "Import archive failed: " + Truncate(ex.Message, 160);
         }
     }
 
