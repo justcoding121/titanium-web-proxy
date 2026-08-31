@@ -231,4 +231,6 @@ website/.vitepress/cache/
 
 # HTTP/3 native download cache (CI / local packaging)
 tools/packaging/.cache/
+# WiX extension cache from `dotnet wix extension add`
+tools/packaging/wix/.wix/
 

@@ -69,7 +69,14 @@ HTTP/3 natives ship inside each RID zip (except Windows, which uses OS MsQuic on
   </div>
 
   <h3 :id="ch.id + '-inspector'">Titanium Inspector</h3>
-  <p>Desktop MITM debugger. Windows: MSI + zip. Linux / macOS: zip only (same RID set as CLI).</p>
+  <p>
+    Desktop MITM debugger.
+    <strong>Windows:</strong> MSI wizard (choose install folder, Finished + Launch) or portable zip.
+    Uninstall from Settings → Apps (branded icon).
+    <strong>Linux / macOS:</strong> zip — run portable, or use
+    <code>install.sh</code> / <code>install-app.sh</code> in the zip
+    (<code>uninstall.sh</code> / <code>uninstall-app.sh</code> to remove).
+  </p>
   <div class="download-grid">
     <div class="download-row">
       <strong>Windows MSI</strong>
