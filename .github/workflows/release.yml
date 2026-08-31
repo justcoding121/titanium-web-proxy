@@ -461,10 +461,7 @@ jobs:
           set -euo pipefail
           # GITHUB_TOKEN `gh release create` does not fire `release: published` for
           # other workflows. Rebuild Pages so download.data.ts sees new zip/MSI assets.
-          REF=develop
-          case "$RELEASE_CHANNEL" in
-            beta) REF=beta ;;
-            stable) REF=stable ;;
-          esac
-          echo "Dispatching deploy-website.yml --ref $REF (channel=$RELEASE_CHANNEL)"
-          gh workflow run deploy-website.yml --ref "$REF"
+          # github-pages environment only allows deploy from develop (beta/stable are
+          # blocked by environment protection rules).
+          echo "Dispatching deploy-website.yml --ref develop (channel=$RELEASE_CHANNEL)"
+          gh workflow run deploy-website.yml --ref develop
