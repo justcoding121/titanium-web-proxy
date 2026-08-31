@@ -192,29 +192,63 @@ jobs:
         pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { throw "QuicListener.IsSupported is false after libmsquic install" }; Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"'
     - name: Install MsQuic (macOS HTTP/3)
       if: runner.os == 'macOS'
-      shell: bash
+      shell: pwsh
       run: |
-        set -euo pipefail
-        # Prefer Homebrew msquic when available; otherwise fail clearly (Inspector stress requires H3).
-        if brew list msquic &>/dev/null || brew install msquic; then
-          echo "msquic formula present"
-        else
-          echo "Attempting libmsquic via brew tap / fallback paths"
-          brew install --formula msquic || true
-        fi
-        # Help .NET find native libs from Homebrew on Intel/Apple Silicon prefixes.
-        for prefix in /usr/local /opt/homebrew; do
-          if [ -d "$prefix/lib" ]; then
-            echo "DYLD_LIBRARY_PATH=${prefix}/lib:${DYLD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
-            echo "DOTNET_SYSTEM_NET_HTTP_SOCKETSHTTPHANDLER_HTTP3SUPPORT=1" >> "$GITHUB_ENV"
-          fi
-        done
-        pwsh -NoProfile -Command '
-          if (-not [System.Net.Quic.QuicListener]::IsSupported) {
-            throw "QuicListener.IsSupported is false on macOS after MsQuic install — Inspector stress requires HTTP/3"
+        $ErrorActionPreference = 'Stop'
+        brew install openssl@3 libmsquic
+        $prefix = (& brew --prefix).Trim()
+        $msquicLib = Join-Path $prefix 'opt/libmsquic/lib'
+        $sslLib = Join-Path $prefix 'opt/openssl@3/lib'
+        $libDirs = @($msquicLib, $sslLib, (Join-Path $prefix 'lib')) |
+          Where-Object { Test-Path $_ } |
+          Select-Object -Unique
+        $dyld = ($libDirs -join ':')
+        Add-Content -Path $env:GITHUB_ENV -Value "DYLD_LIBRARY_PATH=$dyld"
+        Add-Content -Path $env:GITHUB_ENV -Value "DYLD_FALLBACK_LIBRARY_PATH=$dyld"
+        $env:DYLD_LIBRARY_PATH = $dyld
+        $env:DYLD_FALLBACK_LIBRARY_PATH = $dyld
+        Write-Host "DYLD_LIBRARY_PATH=$dyld"
+
+        function Test-QuicSupported {
+          $out = & pwsh -NoProfile -Command {
+            if (-not [System.Net.Quic.QuicListener]::IsSupported) { '0' } else { '1' }
           }
-          Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"
-        '
+          return ($out.Trim() -eq '1')
+        }
+
+        if (-not (Test-QuicSupported)) {
+          Write-Host 'QuicListener.IsSupported still false after brew; trying Microsoft libmsquic drop…'
+          $arch = uname -m
+          $rid = if ($arch -eq 'arm64') { 'osx-arm64' } else { 'osx-x64' }
+          $dest = Join-Path $env:RUNNER_TEMP 'msquic-osx'
+          New-Item -ItemType Directory -Path $dest -Force | Out-Null
+          $tag = 'v2.4.7'
+          $url = "https://github.com/microsoft/msquic/releases/download/$tag/msquic_${rid}_$tag.zip"
+          $zip = Join-Path $env:RUNNER_TEMP 'msquic-osx.zip'
+          try {
+            & curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 $url -o $zip
+            if ($LASTEXITCODE -ne 0) { throw "curl exit $LASTEXITCODE" }
+            Expand-Archive -Path $zip -DestinationPath $dest -Force
+          } catch {
+            Write-Warning "Microsoft release download failed ($url): $_"
+          }
+          $found = Get-ChildItem -Path $dest -Recurse -Filter 'libmsquic*.dylib' -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if ($found) {
+            $extra = $found.Directory.FullName
+            $dyld2 = "$extra:$dyld"
+            Add-Content -Path $env:GITHUB_ENV -Value "DYLD_LIBRARY_PATH=$dyld2"
+            Add-Content -Path $env:GITHUB_ENV -Value "DYLD_FALLBACK_LIBRARY_PATH=$dyld2"
+            $env:DYLD_LIBRARY_PATH = $dyld2
+            $env:DYLD_FALLBACK_LIBRARY_PATH = $dyld2
+            Write-Host "Added Microsoft dylib dir: $extra"
+          }
+        }
+
+        if (-not (Test-QuicSupported)) {
+          throw 'QuicListener.IsSupported is false after macOS MsQuic install (brew + optional Microsoft drop)'
+        }
+        Write-Host 'QuicListener.IsSupported=True'
     - name: Linux UI fonts + Playwright OS deps
       if: runner.os == 'Linux'
       run: |
