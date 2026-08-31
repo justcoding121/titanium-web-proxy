@@ -22,6 +22,7 @@ Titanium.Web.Proxy.Network.CertificateKeyAlgorithm.Rsa2048 = 0 -> Titanium.Web.P
 Titanium.Web.Proxy.Network.CertificateManager.LeafCertificateKeyAlgorithm.get -> Titanium.Web.Proxy.Network.CertificateKeyAlgorithm
 Titanium.Web.Proxy.Network.CertificateManager.LeafCertificateKeyAlgorithm.set -> void
 Titanium.Web.Proxy.Network.CertificateManager.ApplyFastColdStartLeafSettings() -> void
+static Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.GetSharedLeafCertificateDirectory() -> string!
 static Titanium.Web.Proxy.Network.CertificateManager.LeafRsaKeyPairBufferSize.get -> int
 static Titanium.Web.Proxy.Network.CertificateManager.LeafRsaKeyPairBufferSize.set -> void
 Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxCertificateDiskCacheEntries.get -> int?

@@ -32,7 +32,9 @@ Capture menu latching options (**Capturing**, **Decrypt HTTPS**, **System proxy*
 
 The status strip keeps command feedback on the left and a live **Sessions: N** count on the right, so capture traffic does not wipe tips or export paths.
 
-**Install root CA (current user)** trusts the MITM CA on this PC. **Device CA setup…** opens a dialog with steps for phones/other devices and can **Export CA** from there (or use **Export root CA…** on the Capture menu).
+**Install root CA (current user)** trusts the MITM CA on this PC. **Remove root CA** clears every same-name Titanium root in the current-user Trusted Root store (including orphans from earlier installs). **Rotate root CA…** mints a new private key, clears this install’s leaf certificate cache (next to `%AppData%\TitaniumInspector\rootCert.pfx`), removes same-name trusted roots, and prompts to reinstall trust. **Device CA setup…** opens a dialog with steps for phones/other devices and can **Export CA** from there (or use **Export root CA…** on the Capture menu).
+
+Leaf certificates for Inspector are stored under `%AppData%\TitaniumInspector\crts\` (beside the root PFX), not under the shared `%LocalAppData%\Titanium.Web.Proxy\crts` folder used by the library default. On first start after upgrade (and on every Rotate), Inspector best-effort deletes that legacy shared `crts` folder; it never deletes a shared `rootCert.pfx`.
 
 ## Right pane: Inspect vs Tools
 

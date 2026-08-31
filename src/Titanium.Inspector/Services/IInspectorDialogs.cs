@@ -20,6 +20,9 @@ public interface IInspectorDialogs
     /// </summary>
     Task<bool> ShowDeviceCaSetupAsync(Window? owner, string message);
 
+    /// <summary>Ask to rotate (regenerate) the Titanium root CA. Returns true if confirmed.</summary>
+    Task<bool> ConfirmRotateRootCaAsync(Window? owner);
+
     /// <summary>
     /// Confirm resetting Inspector preferences to factory defaults (not the root CA or sessions).
     /// </summary>
@@ -62,6 +65,19 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
             cancel: "Close",
             height: 320);
 
+    public Task<bool> ConfirmRotateRootCaAsync(Window? owner) =>
+        SimpleConfirmDialog.ShowAsync(
+            owner,
+            "Rotate root CA",
+            "Generate a new Titanium Inspector root CA private key?\n\n" +
+            "• All same-name Titanium roots are removed from the current-user Trusted Root store\n" +
+            "• Disk leaf certificates for this install are cleared\n" +
+            "• You must Install root CA again (or enable Decrypt HTTPS) to re-trust\n\n" +
+            "Stop capture is recommended before rotating.",
+            accept: "Rotate",
+            cancel: "Cancel",
+            height: 320);
+
     public Task<bool> ConfirmResetSettingsAsync(Window? owner) =>
         SimpleConfirmDialog.ShowAsync(
             owner,
@@ -81,11 +97,13 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     public bool ElevateRootCaResult { get; set; } = true;
     public bool DeviceCaSetupResult { get; set; }
     public bool ResetSettingsResult { get; set; } = true;
+    public bool RotateRootCaResult { get; set; } = true;
     public int InstallRootCaCalls { get; private set; }
     public int RemoveRootCaCalls { get; private set; }
     public int ElevateRootCaCalls { get; private set; }
     public int DeviceCaSetupCalls { get; private set; }
     public int ResetSettingsCalls { get; private set; }
+    public int RotateRootCaCalls { get; private set; }
     public string? LastDeviceCaSetupMessage { get; private set; }
 
     public Task<bool> ConfirmInstallRootCaAsync(Window? owner)
@@ -104,6 +122,12 @@ public sealed class ScriptedInspectorDialogs : IInspectorDialogs
     {
         ElevateRootCaCalls++;
         return Task.FromResult(ElevateRootCaResult);
+    }
+
+    public Task<bool> ConfirmRotateRootCaAsync(Window? owner)
+    {
+        RotateRootCaCalls++;
+        return Task.FromResult(RotateRootCaResult);
     }
 
     public Task<bool> ShowDeviceCaSetupAsync(Window? owner, string message)

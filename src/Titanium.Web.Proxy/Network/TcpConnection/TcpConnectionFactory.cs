@@ -1126,7 +1126,8 @@ internal class TcpConnectionFactory : IDisposable
             goto retry; // NOSONAR S907 -- TLS compatibility fallback must restart the complete connection attempt.
         }
         catch (AuthenticationException ex) when (ex.HResult == unchecked((int)0x80131501) && retry &&
-                                                 enabledSslProtocols >= SslProtocols.Tls11) // NOSONAR S4423 - legacy fallback gate
+                                                 enabledSslProtocols >= SslProtocols.Tls11 && // NOSONAR S4423 - legacy fallback gate
+                                                 AlpnNegotiation.ShouldAttemptTlsVersionDowngrade(ex))
         {
             if (stream != null) await stream.DisposeAsync();
             tcpServerSocket?.Close();
@@ -1145,6 +1146,16 @@ internal class TcpConnectionFactory : IDisposable
             retry = false;
             ProxyMetrics.PoolDowngraded();
             goto retry; // NOSONAR S907 -- TLS compatibility fallback must restart the complete connection attempt.
+        }
+        catch (AuthenticationException ex) when (AlpnNegotiation.IsAlpnNegotiationFailure(ex))
+        {
+            // h2-only (or other ALPN) mismatch is not a TLS-version problem — fail fast so
+            // NegotiateHttp2Async can treat the probe as "no HTTP/2" without multi-second thrash.
+            if (stream != null) await stream.DisposeAsync();
+            tcpServerSocket?.Close();
+            ProxyDiagnostics.ReportBenign(proxyServer.Logger,
+                "TcpConnectionFactory ALPN negotiation rejected by origin; rethrowing without TLS downgrade", ex);
+            throw;
         }
 #pragma warning restore SYSLIB0039
         catch (Exception ex)

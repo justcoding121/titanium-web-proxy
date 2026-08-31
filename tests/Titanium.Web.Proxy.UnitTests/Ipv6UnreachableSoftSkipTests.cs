@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Network.Tcp;
 
@@ -11,6 +12,39 @@ public class Ipv6UnreachableSoftSkipTests
 {
     [TestInitialize]
     public void Reset() => Ipv6UnreachableSoftSkip.ResetForTests();
+
+    [TestMethod]
+    public void DefaultTtl_IsFiveMinutes()
+    {
+        Assert.AreEqual(TimeSpan.FromMinutes(5), Ipv6UnreachableSoftSkip.DefaultTtl);
+    }
+
+    [TestMethod]
+    public void IsIpv6Unreachable_ClassifiesUnreachableFamily()
+    {
+        Assert.IsTrue(Ipv6UnreachableSoftSkip.IsIpv6Unreachable(
+            new SocketException((int)SocketError.NetworkUnreachable)));
+        Assert.IsTrue(Ipv6UnreachableSoftSkip.IsIpv6Unreachable(
+            new SocketException((int)SocketError.HostUnreachable)));
+        Assert.IsTrue(Ipv6UnreachableSoftSkip.IsIpv6Unreachable(
+            new SocketException((int)SocketError.NetworkDown)));
+        Assert.IsTrue(Ipv6UnreachableSoftSkip.IsIpv6Unreachable(
+            new SocketException((int)SocketError.AddressNotAvailable)));
+        Assert.IsFalse(Ipv6UnreachableSoftSkip.IsIpv6Unreachable(
+            new SocketException((int)SocketError.ConnectionRefused)));
+    }
+
+    [TestMethod]
+    public void ExplicitShortTtl_ExpiresSkipWindow()
+    {
+        var v6 = IPAddress.Parse("2001:db8::1");
+        var unreachable = new SocketException((int)SocketError.NetworkUnreachable);
+        Ipv6UnreachableSoftSkip.RecordAttemptFailure(v6, unreachable, enabled: true,
+            ttl: TimeSpan.FromMilliseconds(1));
+        Assert.IsTrue(Ipv6UnreachableSoftSkip.IsSkipping());
+        Thread.Sleep(30);
+        Assert.IsFalse(Ipv6UnreachableSoftSkip.IsSkipping(ttl: TimeSpan.FromMilliseconds(1)));
+    }
 
     [TestMethod]
     public void FilterIfSkipping_WhenNotArmed_ReturnsOriginal()

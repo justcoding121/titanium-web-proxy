@@ -134,6 +134,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ToggleSystemProxyCommand = new RelayCommand(ToggleSystemProxyAsync);
         InstallCaCommand = new RelayCommand(InstallCaAsync);
         UntrustCaCommand = new RelayCommand(UntrustCaAsync);
+        RotateCaCommand = new RelayCommand(RotateCaAsync);
         ExportCaCommand = new RelayCommand(ExportCaAsync);
         DeviceCaSetupCommand = new RelayCommand(DeviceCaSetupAsync);
         OpenLoopbackExemptCommand = new RelayCommand(OpenLoopbackExemptAsync);
@@ -563,6 +564,55 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             : "Root CA removed from current user store; Decrypt HTTPS is off until you install the CA again";
     }
 
+    private async Task RotateCaAsync()
+    {
+        if (!_interception.IsRunning)
+        {
+            StatusText = "Start the proxy first";
+            return;
+        }
+
+        var owner = TryGetMainWindow();
+        if (!await _dialogs.ConfirmRotateRootCaAsync(owner))
+        {
+            StatusText = "Rotate root CA cancelled";
+            return;
+        }
+
+        if (DecryptHttps)
+            SetDecryptHttpsCore(false);
+
+        var oldThumb = _interception.RootCertificate?.Thumbprint;
+        var ok = _interception.RotateRootCertificate(machineStore: false);
+        if (!ok)
+        {
+            StatusText = "Rotate root CA failed — see logs";
+            return;
+        }
+
+        var newThumb = _interception.RootCertificate?.Thumbprint;
+        var changed = !string.IsNullOrEmpty(newThumb) &&
+                      !string.Equals(oldThumb, newThumb, StringComparison.OrdinalIgnoreCase);
+
+        if (await _dialogs.ConfirmInstallRootCaAsync(owner))
+        {
+            var trusted = _interception.InstallRootCertificate(machineStore: false);
+            if (!trusted && await _dialogs.ConfirmElevateRootCaAsync(owner))
+                trusted = _interception.InstallRootCertificateAsAdmin(machineStore: false);
+
+            StatusText = trusted
+                ? (changed
+                    ? "Root CA rotated and trusted — enable Decrypt HTTPS when ready"
+                    : "Root CA recreate completed and trusted")
+                : "Root CA rotated but trust failed — use Install root CA or Export CA";
+            return;
+        }
+
+        StatusText = changed
+            ? "Root CA rotated — Install root CA (or enable Decrypt HTTPS) to trust the new certificate"
+            : "Root CA recreate completed — Install root CA to trust";
+    }
+
     private Task ExportCaAsync()
     {
         var path = _interception.ExportRootCertificate();
@@ -989,6 +1039,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand ToggleSystemProxyCommand { get; }
     public ICommand InstallCaCommand { get; }
     public ICommand UntrustCaCommand { get; }
+    public ICommand RotateCaCommand { get; }
     public ICommand ExportCaCommand { get; }
     public ICommand DeviceCaSetupCommand { get; }
     public ICommand OpenLoopbackExemptCommand { get; }

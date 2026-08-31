@@ -419,7 +419,7 @@ per address (RFC 8305's Connection Attempt Delay) rather than tried one at a tim
 to complete a TCP (or SOCKS) connect wins; every other in-flight attempt is cancelled and its socket
 disposed. Failed attempts are result-shaped (one Debug breadcrumb each) rather than faulting the race
 task. When `EnableIpv6UnreachableSoftSkip` is `true` (the default), a single IPv6
-`NetworkUnreachable`-class failure temporarily omits IPv6 from the race for 30 seconds — operators who
+`NetworkUnreachable`-class failure temporarily omits IPv6 from the race for 5 minutes — operators who
 need strict IPv6 preference on healthy dual-stack can set the knob to `false`. This is a pure latency /
 exception-overhead improvement with no behavior change for successful connects.
 ## Connection IDs are monotonic `long` counters, not `Guid`

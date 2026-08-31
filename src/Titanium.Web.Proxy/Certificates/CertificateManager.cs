@@ -618,6 +618,84 @@ public sealed class CertificateManager : IDisposable
     }
 
     /// <summary>
+    ///     Returns <see langword="true" /> when <paramref name="candidate" /> has the expected common name
+    ///     and, when <paramref name="keepThumbprint" /> is set, a different thumbprint (an orphan).
+    ///     When <paramref name="keepThumbprint" /> is <see langword="null" />, any matching CN is selected
+    ///     (used when removing all same-name roots).
+    /// </summary>
+    internal static bool IsSameCommonNameStoreCandidate(
+        X509Certificate2 candidate, string expectedCommonName, string? keepThumbprint)
+    {
+        if (string.IsNullOrEmpty(expectedCommonName) || candidate.Subject.Length == 0)
+            return false;
+
+        // Subject is typically "CN=Titanium Root Certificate Authority" (plus optional other RDNs).
+        var cnPrefix = "CN=" + expectedCommonName;
+        if (!candidate.Subject.Contains(cnPrefix, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(candidate.GetNameInfo(X509NameType.SimpleName, false), expectedCommonName,
+                StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (keepThumbprint == null)
+            return true;
+
+        return !string.Equals(candidate.Thumbprint, keepThumbprint, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    ///     Removes Root/My store certificates that share <see cref="RootCertificateName" />.
+    ///     When <paramref name="keepCurrentThumbprint" /> is <see langword="true" />, the current
+    ///     <see cref="RootCertificate" /> thumbprint is preserved (orphan cleanup after install).
+    ///     When <see langword="false" />, every matching CN is removed (Remove CA).
+    /// </summary>
+    private void RemoveOrphanedSameCommonNameCertificates(StoreLocation storeLocation, bool keepCurrentThumbprint)
+    {
+        var expectedCn = RootCertificateName;
+        var keepThumb = keepCurrentThumbprint ? RootCertificate?.Thumbprint : null;
+        RemoveMatchingCertificates(StoreName.Root, storeLocation, expectedCn, keepThumb);
+        RemoveMatchingCertificates(StoreName.My, storeLocation, expectedCn, keepThumb);
+    }
+
+    private void RemoveMatchingCertificates(
+        StoreName storeName, StoreLocation storeLocation, string expectedCn, string? keepThumbprint)
+    {
+        try
+        {
+            using var store = new X509Store(storeName, storeLocation);
+            store.Open(OpenFlags.ReadWrite);
+            var toRemove = new List<X509Certificate2>();
+            foreach (var cert in store.Certificates)
+            {
+                if (IsSameCommonNameStoreCandidate(cert, expectedCn, keepThumbprint))
+                    toRemove.Add(cert);
+            }
+
+            foreach (var cert in toRemove)
+            {
+                try
+                {
+                    store.Remove(cert);
+                }
+                catch (Exception e)
+                {
+                    OnException(new Exception(
+                        $"Failed to remove same-CN certificate '{cert.Thumbprint}' from {storeName}\\{storeLocation}.",
+                        e));
+                }
+                finally
+                {
+                    cert.Dispose();
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            OnException(new Exception(
+                $"Failed to open {storeName}\\{storeLocation} for same-CN root cleanup.", e));
+        }
+    }
+
+    /// <summary>
     ///     Make current machine trust the Root Certificate used by this proxy
     /// </summary>
     /// <param name="storeName"></param>
@@ -1259,6 +1337,7 @@ public sealed class CertificateManager : IDisposable
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
         // currentUser\Root
         InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
+        RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: true);
 
         if (machineTrusted)
         {
@@ -1266,6 +1345,7 @@ public sealed class CertificateManager : IDisposable
             InstallCertificate(StoreName.My, StoreLocation.LocalMachine);
             // localMachine\Root
             InstallCertificate(StoreName.Root, StoreLocation.LocalMachine);
+            RemoveOrphanedSameCommonNameCertificates(StoreLocation.LocalMachine, keepCurrentThumbprint: true);
         }
 
         // On macOS/Linux, also trust for SSL in Keychain / NSS so browsers accept MITM.
@@ -1290,6 +1370,7 @@ public sealed class CertificateManager : IDisposable
         // currentUser\Personal + currentUser\Root (machine elevation is only needed for LocalMachine).
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
         InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
+        RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: true);
 
         if (!RunTime.IsWindows)
         {
@@ -1416,18 +1497,11 @@ public sealed class CertificateManager : IDisposable
     /// </param>
     public void RemoveTrustedRootCertificate(bool machineTrusted = false)
     {
-        // currentUser\personal
-        UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
-        // currentUser\Root
-        UninstallCertificate(StoreName.Root, StoreLocation.CurrentUser, RootCertificate);
+        // Drop every same-CN Titanium root (current + orphans) so Remove CA leaves a clean store.
+        RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: false);
 
         if (machineTrusted)
-        {
-            // localMachine\personal
-            UninstallCertificate(StoreName.My, StoreLocation.LocalMachine, RootCertificate);
-            // localMachine\Root
-            UninstallCertificate(StoreName.Root, StoreLocation.LocalMachine, RootCertificate);
-        }
+            RemoveOrphanedSameCommonNameCertificates(StoreLocation.LocalMachine, keepCurrentThumbprint: false);
 
         if (!RunTime.IsWindows && RootCertificate != null)
             Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
@@ -1439,9 +1513,8 @@ public sealed class CertificateManager : IDisposable
     /// <returns>Should also remove from machine store?</returns>
     public bool RemoveTrustedRootCertificateAsAdmin(bool machineTrusted = false)
     {
-        // currentUser\Personal + currentUser\Root
-        UninstallCertificate(StoreName.My, StoreLocation.CurrentUser, RootCertificate);
-        UninstallCertificate(StoreName.Root, StoreLocation.CurrentUser, RootCertificate);
+        // Current-user: remove all same-CN entries (current + orphans) without elevation.
+        RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: false);
 
         if (!RunTime.IsWindows)
         {

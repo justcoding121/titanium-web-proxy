@@ -146,6 +146,8 @@ public sealed class InterceptionService : IDisposable
 
         IsRootTrusted = UseInMemoryTrustState ? _inMemoryTrusted : IsRootPresentInStore(machineStore: false);
 
+        TryPruneLegacySharedCrtsOnce();
+
         if (AutoTrustRootOnStart)
         {
             InstallRootCertificate(machineStore: false);
@@ -423,6 +425,125 @@ public sealed class InterceptionService : IDisposable
 
         _proxy.CertificateManager.RemoveTrustedRootCertificate(machineStore);
         IsRootTrusted = IsRootPresentInStore(machineStore);
+    }
+
+    /// <summary>
+    ///     Mint a new root CA: untrust same-CN store entries, delete Inspector PFX + local leaf cache,
+    ///     recreate root. Always best-effort prunes the legacy shared <c>Titanium.Web.Proxy/crts</c> folder.
+    ///     Does not install trust — caller should prompt Install CA.
+    /// </summary>
+    public bool RotateRootCertificate(bool machineStore)
+    {
+        if (_proxy is null)
+            return false;
+
+        EnsureRootPfxPath();
+        var mgr = _proxy.CertificateManager;
+
+        if (!UseInMemoryTrustState)
+            mgr.RemoveTrustedRootCertificate(machineStore);
+        else
+        {
+            _inMemoryTrusted = false;
+            IsRootTrusted = false;
+        }
+
+        mgr.ClearRootCertificate();
+
+        try
+        {
+            if (File.Exists(_rootPfxPath))
+                File.Delete(_rootPfxPath);
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        try
+        {
+            var localCrts = Path.Combine(Path.GetDirectoryName(_rootPfxPath!)!, "crts");
+            if (Directory.Exists(localCrts))
+                Directory.Delete(localCrts, recursive: true);
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        mgr.PfxFilePath = _rootPfxPath!;
+        var ok = mgr.CreateRootCertificate(persistToFile: true);
+        IsRootTrusted = UseInMemoryTrustState ? false : IsRootPresentInStore(machineStore);
+
+        PruneLegacySharedCrts(force: true);
+        return ok && mgr.RootCertificate != null;
+    }
+
+    /// <summary>Test seam: override marker + shared-crts paths under a temp directory.</summary>
+    public string? LegacyCrtsTestRoot { get; set; }
+
+    private string LegacySharedCrtsMarkerPath()
+    {
+        EnsureRootPfxPath();
+        var dir = LegacyCrtsTestRoot ?? Path.GetDirectoryName(_rootPfxPath!)!;
+        return Path.Combine(dir, "legacy-shared-crts-cleared");
+    }
+
+    private string ResolveLegacySharedCrtsDirectory()
+    {
+        if (LegacyCrtsTestRoot != null)
+            return Path.Combine(LegacyCrtsTestRoot, "shared-crts");
+        return Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.GetSharedLeafCertificateDirectory();
+    }
+
+    private void TryPruneLegacySharedCrtsOnce()
+    {
+        var marker = LegacySharedCrtsMarkerPath();
+        if (File.Exists(marker))
+            return;
+        PruneLegacySharedCrts(force: false);
+    }
+
+    /// <summary>
+    ///     Best-effort delete of shared <c>Titanium.Web.Proxy/crts</c> (never the shared root PFX).
+    ///     When <paramref name="force"/> is false, writes the one-time Start marker.
+    /// </summary>
+    public void PruneLegacySharedCrts(bool force)
+    {
+        try
+        {
+            var sharedCrts = ResolveLegacySharedCrtsDirectory();
+            if (Directory.Exists(sharedCrts))
+                Directory.Delete(sharedCrts, recursive: true);
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        if (!force)
+        {
+            try
+            {
+                File.WriteAllText(LegacySharedCrtsMarkerPath(), DateTime.UtcNow.ToString("O"));
+            }
+            catch
+            {
+                // best-effort
+            }
+        }
+        else
+        {
+            // Rotate always prunes; also ensure marker exists so Start won't re-hit aggressively.
+            try
+            {
+                File.WriteAllText(LegacySharedCrtsMarkerPath(), DateTime.UtcNow.ToString("O"));
+            }
+            catch
+            {
+                // best-effort
+            }
+        }
     }
 
     public bool RefreshTrustState(bool machineStore = false)

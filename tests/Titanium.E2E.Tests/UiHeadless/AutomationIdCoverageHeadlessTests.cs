@@ -30,6 +30,7 @@ public class AutomationIdCoverageHeadlessTests
         "MenuToggleSystemProxy",
         "MenuInstallCa",
         "MenuRemoveCa",
+        "MenuRotateCa",
         "MenuExportCa",
         "MenuDeviceCa",
         "MenuLoopbackExempt",
