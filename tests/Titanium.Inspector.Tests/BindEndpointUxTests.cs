@@ -19,7 +19,7 @@ public class BindEndpointUxTests
             settings.Save();
 
             var recorder = new RecordingSystemProxyController();
-            using var interception = new InterceptionService(recorder);
+            using var interception = new InterceptionService(recorder) { UseInMemoryTrustState = true };
             var registry = new SessionRegistry();
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),
@@ -71,7 +71,7 @@ public class BindEndpointUxTests
             settings.Save();
 
             var recorder = new RecordingSystemProxyController();
-            using var interception = new InterceptionService(recorder);
+            using var interception = new InterceptionService(recorder) { UseInMemoryTrustState = true };
             var registry = new SessionRegistry();
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),
@@ -114,7 +114,7 @@ public class BindEndpointUxTests
             settings.Save();
 
             var recorder = new RecordingSystemProxyController();
-            using var interception = new InterceptionService(recorder);
+            using var interception = new InterceptionService(recorder) { UseInMemoryTrustState = true };
             var registry = new SessionRegistry();
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),
@@ -165,7 +165,7 @@ public class BindEndpointUxTests
             settings.Save();
 
             var recorder = new RecordingSystemProxyController();
-            using var interception = new InterceptionService(recorder);
+            using var interception = new InterceptionService(recorder) { UseInMemoryTrustState = true };
             var registry = new SessionRegistry();
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),

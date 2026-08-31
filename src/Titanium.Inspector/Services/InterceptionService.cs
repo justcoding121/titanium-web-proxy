@@ -380,6 +380,14 @@ public sealed class InterceptionService : IDisposable
             return true;
         }
 
+        // Already trusted: skip TrustRootCertificate so Windows does not show another
+        // Trusted Root security dialog (or orphan-removal prompt) on repeated Install CA.
+        if (IsRootPresentInStore(machineStore))
+        {
+            IsRootTrusted = true;
+            return true;
+        }
+
         _proxy.CertificateManager.TrustRootCertificate(machineStore);
         IsRootTrusted = IsRootPresentInStore(machineStore);
         return IsRootTrusted;

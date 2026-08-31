@@ -645,8 +645,9 @@ public sealed class CertificateManager : IDisposable
     /// <summary>
     ///     Removes Root/My store certificates that share <see cref="RootCertificateName" />.
     ///     When <paramref name="keepCurrentThumbprint" /> is <see langword="true" />, the current
-    ///     <see cref="RootCertificate" /> thumbprint is preserved (orphan cleanup after install).
-    ///     When <see langword="false" />, every matching CN is removed (Remove CA).
+    ///     <see cref="RootCertificate" /> thumbprint is preserved (orphan cleanup after a
+    ///     <em>new</em> Root install — not on re-trust of an already-present thumbprint).
+    ///     When <see langword="false" />, every matching CN is removed (Remove CA / Rotate).
     /// </summary>
     private void RemoveOrphanedSameCommonNameCertificates(StoreLocation storeLocation, bool keepCurrentThumbprint)
     {
@@ -696,16 +697,18 @@ public sealed class CertificateManager : IDisposable
     }
 
     /// <summary>
-    ///     Make current machine trust the Root Certificate used by this proxy
+    ///     Make current machine trust the Root Certificate used by this proxy.
     /// </summary>
-    /// <param name="storeName"></param>
-    /// <param name="storeLocation"></param>
-    private void InstallCertificate(StoreName storeName, StoreLocation storeLocation)
+    /// <returns>
+    ///     <see langword="true"/> when the certificate was newly added;
+    ///     <see langword="false"/> when it was already present or the install failed.
+    /// </returns>
+    private bool InstallCertificate(StoreName storeName, StoreLocation storeLocation)
     {
         var certificate = RootCertificate;
         if (certificate == null) throw new InvalidOperationException("Could not install certificate as it is null or empty.");
 
-        if (FindCertificates(storeName, storeLocation, certificate.Thumbprint).Count > 0) return;
+        if (FindCertificates(storeName, storeLocation, certificate.Thumbprint).Count > 0) return false;
 
         var x509Store = new X509Store(storeName, storeLocation);
 
@@ -713,6 +716,7 @@ public sealed class CertificateManager : IDisposable
         {
             x509Store.Open(OpenFlags.ReadWrite);
             x509Store.Add(certificate);
+            return true;
         }
         catch (Exception e)
         {
@@ -720,6 +724,7 @@ public sealed class CertificateManager : IDisposable
                 new Exception("Failed to make system trust root certificate "
                               + $" for {storeName}\\{storeLocation} store location. You may need admin rights.",
                     e));
+            return false;
         }
         finally
         {
@@ -1335,17 +1340,21 @@ public sealed class CertificateManager : IDisposable
     {
         // currentUser\personal
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
-        // currentUser\Root
-        InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
-        RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: true);
+        // currentUser\Root — Windows may show a Trusted Root yes/no security dialog on Add.
+        var rootAdded = InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
+        // Orphan Remove also prompts; only prune when we just installed this thumbprint so
+        // re-trust / Install CA when already present does not open Root ReadWrite for cleanup.
+        if (rootAdded)
+            RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: true);
 
         if (machineTrusted)
         {
             // localMachine\personal
             InstallCertificate(StoreName.My, StoreLocation.LocalMachine);
             // localMachine\Root
-            InstallCertificate(StoreName.Root, StoreLocation.LocalMachine);
-            RemoveOrphanedSameCommonNameCertificates(StoreLocation.LocalMachine, keepCurrentThumbprint: true);
+            var machineRootAdded = InstallCertificate(StoreName.Root, StoreLocation.LocalMachine);
+            if (machineRootAdded)
+                RemoveOrphanedSameCommonNameCertificates(StoreLocation.LocalMachine, keepCurrentThumbprint: true);
         }
 
         // On macOS/Linux, also trust for SSL in Keychain / NSS so browsers accept MITM.
@@ -1369,8 +1378,9 @@ public sealed class CertificateManager : IDisposable
 
         // currentUser\Personal + currentUser\Root (machine elevation is only needed for LocalMachine).
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
-        InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
-        RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: true);
+        var rootAdded = InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
+        if (rootAdded)
+            RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: true);
 
         if (!RunTime.IsWindows)
         {

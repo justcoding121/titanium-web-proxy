@@ -16,7 +16,10 @@ public class ExportAndSystemProxyCoverageTests
             var settings = new SettingsService(path);
             var registry = new SessionRegistry();
             var picker = new ScriptedInspectorPathPicker();
-            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),
                 registry,
@@ -108,7 +111,10 @@ public class ExportAndSystemProxyCoverageTests
             var settings = new SettingsService(settingsPath);
             var registry = new SessionRegistry();
             var picker = new ScriptedInspectorPathPicker();
-            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),
                 registry,
@@ -158,7 +164,10 @@ public class ExportAndSystemProxyCoverageTests
             settings.Save();
 
             var registry = new SessionRegistry();
-            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),
                 registry,
@@ -205,7 +214,10 @@ public class ExportAndSystemProxyCoverageTests
                 ElevateRootCaResult = false,
                 DeviceCaSetupResult = false,
             };
-            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),
                 registry,
@@ -346,7 +358,10 @@ public class ExportAndSystemProxyCoverageTests
             settings.Save();
 
             var registry = new SessionRegistry();
-            using var interception = new InterceptionService(new RecordingSystemProxyController());
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),
                 registry,
