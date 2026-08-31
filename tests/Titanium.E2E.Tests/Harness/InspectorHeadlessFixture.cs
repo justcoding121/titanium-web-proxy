@@ -81,24 +81,44 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
     /// <summary>
     /// Wait until <paramref name="condition"/> is true, pumping the Avalonia dispatcher each poll so
     /// async RelayCommand continuations (StatusText after file I/O) can run in headless.
+    /// Condition is evaluated on the UI thread. Transient Headless <c>IFontManagerImpl</c> locator
+    /// races (seen on macOS CI during StatusText remeasure) are retried until timeout.
     /// </summary>
     public async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout, int pollMs = 50)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            await DispatchAsync(() => { });
-            if (condition())
+            try
             {
-                return;
+                var met = false;
+                await DispatchAsync(() => { met = condition(); });
+                if (met)
+                {
+                    return;
+                }
+            }
+            catch (InvalidOperationException ex) when (IsTransientHeadlessFontRace(ex))
+            {
+                // Keep polling; shared Headless session can briefly drop font services mid-remeasure.
             }
 
             await Task.Delay(pollMs);
         }
 
         // Final pump so callers assert against the latest UI state.
-        await DispatchAsync(() => { });
+        try
+        {
+            await DispatchAsync(() => { });
+        }
+        catch (InvalidOperationException ex) when (IsTransientHeadlessFontRace(ex))
+        {
+            // ignore — caller asserts StatusText next
+        }
     }
+
+    private static bool IsTransientHeadlessFontRace(InvalidOperationException ex) =>
+        ex.Message.Contains("IFontManagerImpl", StringComparison.Ordinal);
 
     public async ValueTask DisposeAsync()
     {
@@ -111,8 +131,15 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
                     try { ViewModel.EnsureShutdown(); } catch { /* ignore */ }
                     try { Window.Close(); } catch { /* ignore */ }
                     // Drain pending layout/render before Headless resets the locator (avoids IFontManagerImpl races).
-                    Dispatcher.UIThread.RunJobs();
-                    Dispatcher.UIThread.RunJobs();
+                    try
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        Dispatcher.UIThread.RunJobs();
+                    }
+                    catch (InvalidOperationException ex) when (IsTransientHeadlessFontRace(ex))
+                    {
+                        // ignore teardown font race
+                    }
                 }, CancellationToken.None);
             }
             catch { /* ignore teardown */ }
