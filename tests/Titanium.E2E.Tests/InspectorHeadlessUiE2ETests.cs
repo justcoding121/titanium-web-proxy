@@ -46,8 +46,9 @@ public class InspectorHeadlessUiE2ETests
         Assert.IsTrue(interception.IsRunning, vm.StatusText);
         Assert.IsTrue(vm.Capturing);
         Assert.IsTrue(
-            vm.StatusText.Contains("Listening", StringComparison.OrdinalIgnoreCase) ||
-            vm.StatusText.Contains("CONNECT", StringComparison.OrdinalIgnoreCase),
+            vm.StatusText.Contains("Proxy running", StringComparison.OrdinalIgnoreCase) ||
+            vm.StatusText.Contains("Decrypt HTTPS", StringComparison.OrdinalIgnoreCase) ||
+            vm.StatusText.Contains("encrypted tunnels", StringComparison.OrdinalIgnoreCase),
             vm.StatusText);
 
         vm.InstallCaCommand.Execute(null);
