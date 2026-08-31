@@ -221,7 +221,7 @@ jobs:
 
         if (-not (Test-QuicSupported)) {
           Write-Host 'QuicListener.IsSupported still false after brew; trying Microsoft libmsquic drop…'
-          $arch = uname -m
+          $arch = (& uname -m).Trim()
           $rid = if ($arch -eq 'arm64') { 'osx-arm64' } else { 'osx-x64' }
           $dest = Join-Path $env:RUNNER_TEMP 'msquic-osx'
           New-Item -ItemType Directory -Path $dest -Force | Out-Null
