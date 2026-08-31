@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.E2E.Tests.Harness;
 using Titanium.Inspector.Services;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.E2E.Tests;
 
@@ -43,8 +44,17 @@ public class InspectorChromeSystemProxyE2ETests
         try
         {
             await interception.StartAsync(IPAddress.Loopback, proxyPort);
-            var trusted = interception.InstallRootCertificate(machineStore: false);
-            Assert.IsTrue(trusted, "CA must be in CurrentUser Root for Chrome");
+            var previousSuppress = CertificateManager.SuppressInteractiveRootStoreMutations;
+            CertificateManager.SuppressInteractiveRootStoreMutations = false;
+            try
+            {
+                var trusted = interception.InstallRootCertificate(machineStore: false);
+                Assert.IsTrue(trusted, "CA must be in CurrentUser Root for Chrome");
+            }
+            finally
+            {
+                CertificateManager.SuppressInteractiveRootStoreMutations = previousSuppress;
+            }
             Assert.IsTrue(interception.SetSystemProxy(true), "SetAsSystemProxy failed");
 
             chromeProc = Process.Start(new ProcessStartInfo

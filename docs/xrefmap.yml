@@ -6720,6 +6720,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.StorageFlag
   nameWithType: CertificateManager.StorageFlag
+- uid: Titanium.Web.Proxy.Network.CertificateManager.SuppressInteractiveRootStoreMutations
+  name: SuppressInteractiveRootStoreMutations
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_SuppressInteractiveRootStoreMutations
+  commentId: P:Titanium.Web.Proxy.Network.CertificateManager.SuppressInteractiveRootStoreMutations
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.SuppressInteractiveRootStoreMutations
+  nameWithType: CertificateManager.SuppressInteractiveRootStoreMutations
+- uid: Titanium.Web.Proxy.Network.CertificateManager.SuppressInteractiveRootStoreMutations*
+  name: SuppressInteractiveRootStoreMutations
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_SuppressInteractiveRootStoreMutations_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.SuppressInteractiveRootStoreMutations
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.SuppressInteractiveRootStoreMutations
+  nameWithType: CertificateManager.SuppressInteractiveRootStoreMutations
 - uid: Titanium.Web.Proxy.Network.CertificateManager.TrustRootCertificate(System.Boolean)
   name: TrustRootCertificate(bool)
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_TrustRootCertificate_System_Boolean_
@@ -6771,6 +6784,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.Clear
   nameWithType: DefaultCertificateDiskCache.Clear
+- uid: Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.GetSharedLeafCertificateDirectory
+  name: GetSharedLeafCertificateDirectory()
+  href: api/Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.html#Titanium_Web_Proxy_Network_DefaultCertificateDiskCache_GetSharedLeafCertificateDirectory
+  commentId: M:Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.GetSharedLeafCertificateDirectory
+  fullName: Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.GetSharedLeafCertificateDirectory()
+  nameWithType: DefaultCertificateDiskCache.GetSharedLeafCertificateDirectory()
+- uid: Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.GetSharedLeafCertificateDirectory*
+  name: GetSharedLeafCertificateDirectory
+  href: api/Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.html#Titanium_Web_Proxy_Network_DefaultCertificateDiskCache_GetSharedLeafCertificateDirectory_
+  commentId: Overload:Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.GetSharedLeafCertificateDirectory
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.GetSharedLeafCertificateDirectory
+  nameWithType: DefaultCertificateDiskCache.GetSharedLeafCertificateDirectory
 - uid: Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.LoadCertificate(System.String,System.Security.Cryptography.X509Certificates.X509KeyStorageFlags)
   name: LoadCertificate(string, X509KeyStorageFlags)
   href: api/Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.html#Titanium_Web_Proxy_Network_DefaultCertificateDiskCache_LoadCertificate_System_String_System_Security_Cryptography_X509Certificates_X509KeyStorageFlags_

@@ -34,7 +34,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
-      contents: read
+      # write: Publish Documentation (EndBug/add-and-commit) pushes DocFX output to develop.
+      # GITHUB_TOKEN with contents:read cannot push (403 github-actions[bot]).
+      contents: write
       # SonarCloud / PR decoration when token is present
       pull-requests: write
       checks: write

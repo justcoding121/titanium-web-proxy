@@ -18,7 +18,7 @@ public static class SessionArchive
             log = new
             {
                 version = "1.2",
-                creator = new { name = "Titanium Inspector", version = "7.0.1" },
+                creator = new { name = "Titanium Inspector", version = "7.0.2" },
                 entries,
             },
         };
@@ -70,7 +70,7 @@ public static class SessionArchive
             {
                 ct.ThrowIfCancellationRequested();
                 var entry = zip.CreateEntry($"session-{index:D5}.json");
-                await using var stream = entry.Open();
+                await using var stream = await entry.OpenAsync(ct);
                 await JsonSerializer.SerializeAsync(stream, session, cancellationToken: ct);
                 index++;
             }
@@ -98,7 +98,7 @@ public static class SessionArchive
                 continue;
             }
 
-            await using var stream = entry.Open();
+            await using var stream = await entry.OpenAsync(ct);
             var snap = await JsonSerializer.DeserializeAsync<SessionSnapshot>(stream, cancellationToken: ct);
             if (snap is not null)
             {

@@ -852,12 +852,48 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public void RemoveTrustedRootCertificate_NullRoot_LogsWithoutThrowing()
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            // Unique CN: must not match the product default "Titanium Root Certificate Authority"
+            // or Remove walks CurrentUser\Root and Windows shows a blocking DELETE dialog.
+            using var mgr = new CertificateManager(
+                "Titanium UnitTest NullRoot CA " + Guid.NewGuid().ToString("N"),
+                "TitaniumUnitTest",
+                false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastleFast
             };
             mgr.RemoveTrustedRootCertificate(machineTrusted: false);
             Assert.IsNull(mgr.RootCertificate);
+        }
+
+        [TestMethod]
+        public void SuppressInteractiveRootStoreMutations_SkipsRootAddAndRemove()
+        {
+            if (!RunTime.IsWindows)
+                Assert.Inconclusive("Root-store CryptUI suppression is Windows-focused.");
+
+            var previous = CertificateManager.SuppressInteractiveRootStoreMutations;
+            CertificateManager.SuppressInteractiveRootStoreMutations = true;
+            try
+            {
+                const string cn = "Titanium UnitTest Suppress Root UI CA";
+                using var mgr = new CertificateManager(cn, "TitaniumUnitTest", false, false, false,
+                    NullLogger.Instance)
+                {
+                    CertificateEngine = CertificateEngine.BouncyCastle
+                };
+                Assert.IsTrue(mgr.CreateRootCertificate(false));
+
+                // Would otherwise open Trusted Root Yes/No; must no-op under suppress.
+                mgr.TrustRootCertificate(machineTrusted: false);
+                Assert.IsFalse(mgr.IsRootCertificateUserTrusted());
+
+                // Would otherwise open Root DELETE Yes/No for any same-CN leftovers.
+                mgr.RemoveTrustedRootCertificate(machineTrusted: false);
+            }
+            finally
+            {
+                CertificateManager.SuppressInteractiveRootStoreMutations = previous;
+            }
         }
 
         /// <summary>

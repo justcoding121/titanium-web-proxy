@@ -18,14 +18,19 @@ if (-not (Test-Path (Join-Path $PayloadDir "TitaniumInspector.exe"))) {
     throw "TitaniumInspector.exe missing under $PayloadDir"
 }
 
+# Always absolute: `dotnet wix -o` is relative to the WiX cwd, while Test-Path after
+# Pop-Location is relative to the caller's cwd (repo root on CI).
+$msiLeaf = Split-Path -Leaf $OutputMsi
+$outDir = Split-Path -Parent $OutputMsi
+if ([string]::IsNullOrWhiteSpace($outDir)) {
+    $outDir = (Get-Location).Path
+}
+New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+$OutputMsi = Join-Path (Resolve-Path $outDir) $msiLeaf
+
 Push-Location $wixDir
 try {
     dotnet tool restore
-    $outDir = Split-Path -Parent $OutputMsi
-    if ($outDir) {
-        New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-        $OutputMsi = Join-Path (Resolve-Path $outDir) (Split-Path -Leaf $OutputMsi)
-    }
 
     & dotnet wix build $wxs `
         -b "PayloadDir=$PayloadDir" `

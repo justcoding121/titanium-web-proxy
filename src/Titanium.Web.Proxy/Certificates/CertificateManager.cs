@@ -88,6 +88,28 @@ public sealed class CertificateManager : IDisposable
     private static readonly ConcurrentDictionary<string, object> _saveCertificateLocks = new();
 
     /// <summary>
+    ///     When <see langword="true"/>, skip <see cref="StoreName.Root"/> Add/Remove that trigger Windows
+    ///     CryptUI "Root Certificate Store" Yes/No dialogs (which hang headless CI and unattended
+    ///     <c>dotnet test</c>). Personal (<see cref="StoreName.My"/>) mutations still run.
+    ///     Also treated as true when <c>CI</c>, <c>GITHUB_ACTIONS</c>, <c>TF_BUILD</c>, or
+    ///     <c>TITANIUM_SKIP_ROOT_STORE_UI=1</c> is set. Opt back in for intentional interactive Install CA
+    ///     (e.g. local E2E-Slow Chrome) by setting this to <see langword="false"/> in a process that
+    ///     does not set those env vars.
+    /// </summary>
+    public static bool SuppressInteractiveRootStoreMutations { get; set; }
+
+    /// <summary>
+    ///     True when Root-store Add/Remove should be skipped to avoid modal CryptUI prompts.
+    /// </summary>
+    internal static bool ShouldSuppressInteractiveRootStoreMutations =>
+        SuppressInteractiveRootStoreMutations
+        || IsTruthyEnv("CI")
+        || IsTruthyEnv("GITHUB_ACTIONS")
+        || IsTruthyEnv("TF_BUILD")
+        || string.Equals(Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI"), "1",
+            StringComparison.Ordinal);
+
+    /// <summary>
     ///     Cache dictionary
     /// </summary>
     private readonly ConcurrentDictionary<string, CachedCertificate> cachedCertificates = new();
@@ -660,6 +682,10 @@ public sealed class CertificateManager : IDisposable
     private void RemoveMatchingCertificates(
         StoreName storeName, StoreLocation storeLocation, string expectedCn, string? keepThumbprint)
     {
+        // Root Remove shows a blocking "Do you want to DELETE ... from the Root Store?" dialog on Windows.
+        if (storeName == StoreName.Root && ShouldSuppressInteractiveRootStoreMutations)
+            return;
+
         try
         {
             using var store = new X509Store(storeName, storeLocation);
@@ -707,6 +733,10 @@ public sealed class CertificateManager : IDisposable
         if (certificate == null) throw new InvalidOperationException("Could not install certificate as it is null or empty.");
 
         if (FindCertificates(storeName, storeLocation, certificate.Thumbprint).Count > 0) return false;
+
+        // Root Add shows a blocking Trusted Root Yes/No security dialog on Windows.
+        if (storeName == StoreName.Root && ShouldSuppressInteractiveRootStoreMutations)
+            return false;
 
         var x509Store = new X509Store(storeName, storeLocation);
 
@@ -1192,6 +1222,14 @@ public sealed class CertificateManager : IDisposable
         return value;
     }
 
+    private static bool IsTruthyEnv(string name)
+    {
+        var v = Environment.GetEnvironmentVariable(name);
+        return string.Equals(v, "true", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(v, "1", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(v, "yes", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsSelfSigned(X509Certificate2 cert) =>
         cert.SubjectName.RawData.SequenceEqual(cert.IssuerName.RawData);
 
@@ -1389,6 +1427,10 @@ public sealed class CertificateManager : IDisposable
                 : true; // NOSONAR S1125
         }
 
+        // Elevated certutil shows UAC; skip in CI / test processes that suppress Root UI.
+        if (ShouldSuppressInteractiveRootStoreMutations)
+            return false;
+
         // certutil.exe only accepts the PFX password via a plain "-p password" command-line argument -
         // it has no file/stdin-based alternative (confirmed: no documented option to read it from a
         // file). ProcessStartInfo.Arguments is visible to any other process/user that lists this
@@ -1533,6 +1575,10 @@ public sealed class CertificateManager : IDisposable
                 ? Helpers.UnixCertificateTrust.UntrustMachineSsl(RootCertificate, RootCertificateName)
                 : true; // NOSONAR S1125
         }
+
+        // Elevated certutil -delstore shows UAC; skip when Root UI is suppressed.
+        if (ShouldSuppressInteractiveRootStoreMutations)
+            return true;
 
         var infos = new List<ProcessStartInfo>();
         if (!machineTrusted)

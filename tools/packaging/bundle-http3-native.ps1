@@ -157,14 +157,32 @@ function Expand-Deb([string] $debPath, [string] $outDir) {
 
 function Expand-Apk([string] $apkPath, [string] $outDir) {
     New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-    # Alpine .apk = concatenated gzip members (signature tar + data tar).
+    # Alpine .apk = gzip-compressed ustar (optionally concatenated signature + data).
+    # Prefer GNU tar — it handles single- and multi-member apk packages without
+    # writing intermediate part*.tar files (a broken MemoryStream Position loop
+    # previously created tens of thousands of parts and filled the CI disk).
+    Push-Location $outDir
+    try {
+        Invoke-Native "tar" @("-xzf", $apkPath)
+        return
+    }
+    catch {
+        Write-Info "tar -xzf failed for $(Split-Path -Leaf $apkPath); falling back to gzip member walk: $_"
+    }
+    finally { Pop-Location }
+
     $bytes = [System.IO.File]::ReadAllBytes($apkPath)
     $pos = 0
     $part = 0
+    $maxParts = 16
     while ($pos -lt ($bytes.Length - 1) -and $bytes[$pos] -eq 0x1f -and $bytes[$pos + 1] -eq 0x8b) {
-        $remaining = New-Object byte[] ($bytes.Length - $pos)
-        [Array]::Copy($bytes, $pos, $remaining, 0, $remaining.Length)
-        $ms = New-Object System.IO.MemoryStream(,$remaining)
+        if ($part -ge $maxParts) {
+            throw "Expand-Apk refused runaway extract after $maxParts gzip members in $apkPath"
+        }
+        $remainingLen = $bytes.Length - $pos
+        $remaining = New-Object byte[] $remainingLen
+        [Array]::Copy($bytes, $pos, $remaining, 0, $remainingLen)
+        $ms = New-Object System.IO.MemoryStream($remaining, $false)
         $gz = New-Object System.IO.Compression.GzipStream($ms, [System.IO.Compression.CompressionMode]::Decompress)
         $outMs = New-Object System.IO.MemoryStream
         try {
@@ -176,6 +194,9 @@ function Expand-Apk([string] $apkPath, [string] $outDir) {
         $consumed = [int]$ms.Position
         $content = $outMs.ToArray()
         $ms.Dispose(); $outMs.Dispose()
+        if ($consumed -le 0) {
+            throw "Expand-Apk gzip member $part did not advance the stream (apk=$apkPath); refusing ENOSPC loop"
+        }
         $pos += $consumed
 
         $tarPath = Join-Path $outDir ("part{0}.tar" -f $part)
@@ -185,12 +206,11 @@ function Expand-Apk([string] $apkPath, [string] $outDir) {
             & tar -xf (Split-Path -Leaf $tarPath) 2>$null
         }
         finally { Pop-Location }
+        Remove-Item -Force $tarPath -ErrorAction SilentlyContinue
         $part++
     }
     if ($part -eq 0) {
-        Push-Location $outDir
-        try { Invoke-Native "tar" @("-xzf", $apkPath) }
-        finally { Pop-Location }
+        throw "Expand-Apk found no gzip members and tar -xzf failed for $apkPath"
     }
 }
 
@@ -237,13 +257,15 @@ function Ensure-SonameLinks([string] $dir) {
 function Set-LinuxRpath([string] $dir) {
     $patchelf = Ensure-Patchelf
     Get-ChildItem -Path $dir -File -Filter "*.so*" | ForEach-Object {
+        $soFile = $_
         # Skip pure symlinks
-        if ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) { return }
+        if ($soFile.Attributes -band [IO.FileAttributes]::ReparsePoint) { return }
         try {
-            Invoke-Native $patchelf @("--set-rpath", "`$ORIGIN", $_.FullName)
+            Invoke-Native $patchelf @("--set-rpath", "`$ORIGIN", $soFile.FullName)
         }
         catch {
-            Write-Info "patchelf skipped $($_.Name): $_"
+            # Catch uses $_ as the error; keep $soFile for the name.
+            Write-Info "patchelf skipped $($soFile.Name): $_"
         }
     }
 }
@@ -280,23 +302,32 @@ function Bundle-Deb {
 
 function Bundle-Apk {
     $cache = Ensure-CacheDir $Rid
-    $extractRoot = Join-Path $cache "extract"
+    # Extract under TEMP — never under the NuGet/http3 cache — so a bad expand
+    # cannot fill the workspace or poison the Actions cache key.
+    $extractRoot = Join-Path ([IO.Path]::GetTempPath()) ("twp-http3-apk-" + [guid]::NewGuid().ToString("n"))
     if (Test-Path $extractRoot) { Remove-Item -Recurse -Force $extractRoot }
     New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
 
-    foreach ($pkg in $ridEntry.packages) {
-        $leaf = Split-Path -Leaf $pkg.url
-        $dest = Join-Path $cache $leaf
-        Download-Verified $pkg.url $pkg.sha256 $dest
-        $pkgExtract = Join-Path $extractRoot ([IO.Path]::GetFileNameWithoutExtension($leaf))
-        Expand-Apk $dest $pkgExtract
-    }
+    try {
+        foreach ($pkg in $ridEntry.packages) {
+            $leaf = Split-Path -Leaf $pkg.url
+            $dest = Join-Path $cache $leaf
+            Download-Verified $pkg.url $pkg.sha256 $dest
+            $pkgExtract = Join-Path $extractRoot ([IO.Path]::GetFileNameWithoutExtension($leaf))
+            Expand-Apk $dest $pkgExtract
+        }
 
-    $copied = Copy-SharedLibs $extractRoot $PublishDir
-    Write-Info "copied: $($copied -join ', ')"
-    Ensure-SonameLinks $PublishDir
-    Set-LinuxRpath $PublishDir
-    Assert-RequiredFiles @("libmsquic.so*", "libssl.so.3", "libcrypto.so.3")
+        $copied = Copy-SharedLibs $extractRoot $PublishDir
+        Write-Info "copied: $($copied -join ', ')"
+        Ensure-SonameLinks $PublishDir
+        Set-LinuxRpath $PublishDir
+        Assert-RequiredFiles @("libmsquic.so*", "libssl.so.3", "libcrypto.so.3")
+    }
+    finally {
+        if (Test-Path $extractRoot) {
+            Remove-Item -Recurse -Force $extractRoot -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 function Resolve-BrewPrefix {
@@ -367,10 +398,10 @@ function Bundle-Homebrew {
                 $local = Join-Path $PublishDir $depLeaf
                 if (-not (Test-Path $local)) {
                     # map libssl.3.dylib style
-                    $alt = $dylibs | Where-Object { $_.Name -like ($depLeaf -replace '\..*$','') + "*" } | Select-Object -First 1
+                    $alt = $dylibs | Where-Object { $_.Name -like (($depLeaf -replace '\..*$','') + "*") } | Select-Object -First 1
                     if ($alt) { $depLeaf = $alt.Name; $local = $alt.FullName }
                 }
-                if (Test-Path $local -or ($dylibs.Name -contains $depLeaf)) {
+                if ((Test-Path $local) -or ($dylibs.Name -contains $depLeaf)) {
                     if ($dep -ne "@loader_path/$depLeaf") {
                         try {
                             Invoke-Native "install_name_tool" @("-change", $dep, "@loader_path/$depLeaf", $lib.FullName)
