@@ -620,6 +620,15 @@ internal class TcpConnectionFactory : IDisposable
 
         if (isHttps && sslProtocol == SslProtocols.None) sslProtocol = proxyServer.SupportedSslProtocols;
 
+        // QUIC inbound always reports SslProtocols.Tls13 (QuicClientConnection). Copying that
+        // mask onto outbound SslStream makes AuthenticateAsClientAsync offer TLS 1.3 only.
+        // macOS default SslStream (SecureTransport) cannot negotiate TLS 1.3 — every H3→HTTPS
+        // TCP origin handshake fails and the H3 stream aborts with H3_INTERNAL_ERROR — while
+        // H2→HTTPS (inbound TLS 1.2) and YARP (HttpClient SslProtocols.None → 1.2) succeed.
+        // Expand to SupportedSslProtocols (Tls12|Tls13): Mac negotiates 1.2; Win/Linux can 1.3.
+        if (isHttps && sslProtocol == SslProtocols.Tls13)
+            sslProtocol = proxyServer.SupportedSslProtocols;
+
         var useUpstreamProxy1 = false;
 
         // check if external proxy is set for HTTP/HTTPS
