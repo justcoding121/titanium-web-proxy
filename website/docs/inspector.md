@@ -20,8 +20,8 @@ winget install justcoding121.TitaniumInspector
 
 Windows examples for the **7.0 beta** product tag:
 
-- [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.3-beta/TitaniumInspector-win-x64.msi)
-- [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.3-beta/TitaniumInspector-win-x64.zip)
+- [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.4-beta/TitaniumInspector-win-x64.msi)
+- [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.4-beta/TitaniumInspector-win-x64.zip)
 
 ### Linux
 
@@ -47,7 +47,7 @@ chmod +x install-app.sh uninstall-app.sh TitaniumInspector
 
 ## Updates
 
-**Options → Update channel** — Stable (default) or Beta. **Help → Check for updates…** checks only that channel and labels it in the dialog (e.g. *Update 7.0.3 (Stable)*). Choosing **Install and restart** downloads the package (MSI for a Program Files install, otherwise the RID zip), closes Inspector, applies the update, and relaunches.
+**Options → Update channel** — Stable (default) or Beta. **Help → Check for updates…** checks only that channel and labels it in the dialog (e.g. *Update 7.0.4 (Stable)*). Choosing **Install and restart** downloads the package (MSI for a Program Files install, otherwise the RID zip), closes Inspector, applies the update, and relaunches.
 
 **Options → Check for updates on startup** uses the same channel and confirm dialog (never silent-install).
 
