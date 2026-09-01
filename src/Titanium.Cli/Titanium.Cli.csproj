@@ -7,7 +7,7 @@
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <SignAssembly>false</SignAssembly>
-    <VersionPrefix>7.0.3</VersionPrefix>
+    <VersionPrefix>7.0.4</VersionPrefix>
     <Authors>Jehonathan Thomas</Authors>
     <Description>Titanium Web Proxy CLI (titanium / twp).</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
