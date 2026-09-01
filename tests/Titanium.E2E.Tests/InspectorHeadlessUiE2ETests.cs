@@ -32,7 +32,7 @@ public class InspectorHeadlessUiE2ETests
         Assert.IsNotNull(vm.InstallCaCommand);
         Assert.IsNotNull(vm.ToggleSystemProxyCommand);
 
-        vm.BindPort = CliProcessHarness.GetFreePort();
+        vm.BindPort = 0;
         vm.BindAddress = "127.0.0.1";
 
         // Execute commands like the Avalonia bindings do (RelayCommand is async void).
@@ -115,7 +115,7 @@ public class InspectorHeadlessUiE2ETests
         settings.Save();
         var vm = new MainWindowViewModel(buffer, registry, updates, settings, interception);
 
-        vm.BindPort = CliProcessHarness.GetFreePort();
+        vm.BindPort = 0;
         vm.BindAddress = "127.0.0.1";
         vm.StartCaptureCommand.Execute(null);
 

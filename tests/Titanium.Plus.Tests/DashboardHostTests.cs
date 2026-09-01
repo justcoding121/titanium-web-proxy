@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Plus.ControlPlane;
@@ -31,15 +32,15 @@ public class DashboardHostTests
             },
         ]);
 
-        var port = GetFreePort();
         var secret = "dashboard-test-secret";
-        using var control = new ControlPlaneServer(manager, "127.0.0.1", port, secret);
-        control.Start();
+        using var control = StartControlPlaneOrRetry(manager, secret);
         var ops = new DrainOperations(manager);
         var metrics = new PrometheusMetricsExporter(manager, null);
+        // Dashboard binds its own ephemeral port (never controlPort+1); clients must use dash.Prefix.
         using var dash = new DashboardHost(control, ops, metrics, manager);
         dash.Start();
         Assert.IsNotNull(dash.Prefix);
+        Assert.AreNotEqual(control.Port, dash.BoundPort);
 
         using var http = new HttpClient();
 
@@ -80,9 +81,33 @@ public class DashboardHostTests
         Assert.AreEqual(HttpStatusCode.Unauthorized, (await http.SendAsync(drainUnauth)).StatusCode);
     }
 
+    private static ControlPlaneServer StartControlPlaneOrRetry(
+        IClusterManager manager, string secret, int maxAttempts = 8)
+    {
+        Exception? last = null;
+        for (var i = 0; i < maxAttempts; i++)
+        {
+            var port = GetFreePort();
+            var server = new ControlPlaneServer(manager, "127.0.0.1", port, secret);
+            try
+            {
+                server.Start();
+                return server;
+            }
+            catch (Exception ex) when (ex is HttpListenerException or SocketException)
+            {
+                last = ex;
+                server.Dispose();
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Failed to start ControlPlaneServer after {maxAttempts} attempts.", last);
+    }
+
     private static int GetFreePort()
     {
-        var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();

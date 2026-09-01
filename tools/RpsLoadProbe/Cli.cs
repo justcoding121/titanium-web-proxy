@@ -504,6 +504,9 @@ internal static class Cli
             case "compare-product":
                 mode = ProbeMode.CompareProduct;
                 return true;
+            case "compare-product-smoke":
+                mode = ProbeMode.CompareProductSmoke;
+                return true;
             case "compare-spot":
                 mode = ProbeMode.CompareSpot;
                 return true;
@@ -693,6 +696,7 @@ internal static class Cli
               compare-mitm            True MITM 5×5 lite + full-session mutate twins + CONNECT
               compare-matrix          Full 5×5 reverse matrix: all TWP + YARP (+ nginx terminate peers)
               compare-product         Same-job: compare-matrix reverse peers + compare-mitm TWP
+              compare-product-smoke   Gate-arm subset + validate-compare-product-gates (Mac quick check)
               compare-ceiling         TWP vs bare C# vs control arms on H1 / H1 TLS / H2→H1 reverse
               compare-bodies          Heavier reverse GET (64 KiB + 256 KiB) vs control arms
               compare-post            POST 64 KiB request+response reverse vs control arms

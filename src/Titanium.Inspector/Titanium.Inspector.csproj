@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <SignAssembly>false</SignAssembly>
-    <VersionPrefix>7.0.3</VersionPrefix>
+    <VersionPrefix>7.0.4</VersionPrefix>
     <Authors>Jehonathan Thomas</Authors>
     <Description>Titanium Inspector desktop traffic debugger (PolyForm Noncommercial).</Description>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>

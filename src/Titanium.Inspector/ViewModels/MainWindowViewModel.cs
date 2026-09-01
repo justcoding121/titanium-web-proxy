@@ -521,6 +521,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         Sessions.Clear();
         _selectedSessions.Clear();
         SelectedSession = null;
+        _interception.ResetSessionIdSequence();
         RefreshSessionCountText();
         StatusText = "Sessions cleared";
         return Task.CompletedTask;
@@ -2084,6 +2085,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _interception.DecryptHttps = _decryptHttps;
         _interception.ConfigureLogging(_settings.Current);
         await _interception.StartAsync(address, BindPort);
+        if (_interception.BoundPort > 0)
+        {
+            BindPort = _interception.BoundPort;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindPort)));
+        }
+
         Capturing = true;
         RefreshEndpointAndBindUi();
 

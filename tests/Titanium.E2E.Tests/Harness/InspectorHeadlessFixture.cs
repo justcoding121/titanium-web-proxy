@@ -49,7 +49,7 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
             Interception = new InterceptionService(Proxy) { UseInMemoryTrustState = true };
             (ViewModel, Window) = InspectorAppFactory.CreateMainWindow(
                 settings, buffer, registry, updates, Interception, Dialogs, PathPicker);
-            ViewModel.BindPort = CliProcessHarness.GetFreePort();
+            ViewModel.BindPort = 0;
             ViewModel.BindAddress = "127.0.0.1";
             ViewModel.AutoStartCapture = false;
             ViewModel.AutoSystemProxyOnStart = false;

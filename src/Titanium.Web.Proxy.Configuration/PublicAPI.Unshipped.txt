@@ -58,6 +58,8 @@ Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.Host.get -> string!
 Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.Host.set -> void
 Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.Port.get -> int
 Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.Port.set -> void
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardPort.get -> int?
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardPort.set -> void
 Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SharedSecret.get -> string
 Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SharedSecret.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SharedSecret.set -> void

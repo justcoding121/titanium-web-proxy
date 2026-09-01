@@ -36,7 +36,7 @@ Use a strong secret in production. Dev-only default secrets require an explicit 
 | Area | Capability |
 |------|------------|
 | Control plane | Loopback HTTP API with shared-secret header; snapshot get/put; cache purge |
-| Dashboard | HTML admin on control-plane port + 1 |
+| Dashboard | HTML admin on an ephemeral port (or explicit `controlPlane.dashboardPort`) |
 | Observability | Prometheus-style metrics for destination state / latency |
 | Operations | Drain / healthy / maintenance destination states |
 | Discovery | File watch, DNS poll; Consul / Kubernetes best-effort |

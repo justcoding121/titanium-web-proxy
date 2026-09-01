@@ -18,7 +18,7 @@ public static class SessionArchive
             log = new
             {
                 version = "1.2",
-                creator = new { name = "Titanium Inspector", version = "7.0.3" },
+                creator = new { name = "Titanium Inspector", version = "7.0.4" },
                 entries,
             },
         };
@@ -54,15 +54,21 @@ public static class SessionArchive
         return list;
     }
 
-    public static async Task ExportNativeArchiveAsync(IEnumerable<SessionSnapshot> sessions, string zipPath, CancellationToken ct = default)
+    public static Task ExportNativeArchiveAsync(IEnumerable<SessionSnapshot> sessions, string zipPath, CancellationToken ct = default)
     {
-        await using var fs = new FileStream(
+        ct.ThrowIfCancellationRequested();
+        // Sync zip write (same rationale as ExportHarAsync): async FileStream + ZipArchive
+        // continuations were invisible to macOS headless WaitUntil pumps, and Import could
+        // sit forever on "Importing archive…" when the async read path stalled.
+        using var fs = new FileStream(
             zipPath,
             FileMode.Create,
             FileAccess.ReadWrite,
-            FileShare.None,
+            // Allow readers (tests / Finder) to open the zip as soon as bytes land; FileShare.None
+            // left an exclusive lock long enough for File.Copy to fail on macOS CI.
+            FileShare.Read,
             bufferSize: 4096,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
+            FileOptions.SequentialScan);
         using (var zip = new ZipArchive(fs, ZipArchiveMode.Create, leaveOpen: true))
         {
             var index = 0;
@@ -70,25 +76,26 @@ public static class SessionArchive
             {
                 ct.ThrowIfCancellationRequested();
                 var entry = zip.CreateEntry($"session-{index:D5}.json");
-                await using var stream = await entry.OpenAsync(ct);
-                await JsonSerializer.SerializeAsync(stream, session, cancellationToken: ct);
+                using var stream = entry.Open();
+                JsonSerializer.Serialize(stream, session);
                 index++;
             }
         }
 
-        await fs.FlushAsync(ct);
+        fs.Flush();
+        return Task.CompletedTask;
     }
 
-    public static async Task<List<SessionSnapshot>> ImportNativeArchiveAsync(string zipPath, CancellationToken ct = default)
+    public static Task<List<SessionSnapshot>> ImportNativeArchiveAsync(string zipPath, CancellationToken ct = default)
     {
         var list = new List<SessionSnapshot>();
-        await using var fs = new FileStream(
+        using var fs = new FileStream(
             zipPath,
             FileMode.Open,
             FileAccess.Read,
             FileShare.ReadWrite | FileShare.Delete,
             bufferSize: 4096,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
+            FileOptions.SequentialScan);
         using var zip = new ZipArchive(fs, ZipArchiveMode.Read, leaveOpen: true);
         foreach (var entry in zip.Entries.OrderBy(e => e.FullName))
         {
@@ -98,15 +105,15 @@ public static class SessionArchive
                 continue;
             }
 
-            await using var stream = await entry.OpenAsync(ct);
-            var snap = await JsonSerializer.DeserializeAsync<SessionSnapshot>(stream, cancellationToken: ct);
+            using var stream = entry.Open();
+            var snap = JsonSerializer.Deserialize<SessionSnapshot>(stream);
             if (snap is not null)
             {
                 list.Add(snap);
             }
         }
 
-        return list;
+        return Task.FromResult(list);
     }
 
     private static object ToHarEntry(SessionSnapshot s)

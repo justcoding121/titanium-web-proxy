@@ -125,6 +125,12 @@ public sealed class ControlPlaneConfig
 
     public int Port { get; set; } = 9080;
 
+    /// <summary>
+    /// Optional dashboard listen port. When unset or 0, Plus allocates an ephemeral port
+    /// (not control-plane port + 1).
+    /// </summary>
+    public int? DashboardPort { get; set; }
+
     public string? SharedSecret { get; set; }
 }
 

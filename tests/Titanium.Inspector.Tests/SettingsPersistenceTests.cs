@@ -226,7 +226,7 @@ public class SettingsPersistenceTests
                     interception,
                     dialogs);
 
-                vm.BindPort = GetFreePort();
+                vm.BindPort = 0;
                 vm.StartCaptureCommand.Execute(null);
                 await WaitUntil(() => interception.IsRunning);
 
@@ -331,7 +331,7 @@ public class SettingsPersistenceTests
                 settings,
                 interception);
 
-            vm.BindPort = GetFreePort();
+            vm.BindPort = 0;
 
             // Simulate Avalonia MenuItem TwoWay writing false before Opened and persisting it.
             vm.AutoSystemProxyOnStart = false;
@@ -438,15 +438,6 @@ public class SettingsPersistenceTests
         {
             // ignore
         }
-    }
-
-    private static int GetFreePort()
-    {
-        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
     }
 
     private static async Task WaitUntil(Func<bool> condition, int timeoutMs = 15000)

@@ -22,7 +22,7 @@ public sealed class InterceptionService : IDisposable
     public const int MaxBodyBytes = 2 * 1024 * 1024;
     public const int MaxBodyTextChars = 256 * 1024;
 
-    private static long _nextId = 1;
+    private long _nextId;
     private readonly ConcurrentDictionary<object, SessionSnapshot> _live = new();
     private readonly ISystemProxyController _systemProxy;
     private ProxyServer? _proxy;
@@ -39,6 +39,9 @@ public sealed class InterceptionService : IDisposable
     }
 
     public bool IsRunning => _proxy?.ProxyRunning == true;
+
+    /// <summary>OS-assigned listen port after <see cref="StartAsync"/> (supports <c>port == 0</c>).</summary>
+    public int BoundPort { get; private set; }
 
     /// <summary>When false, the listener stays up but sessions are not published to the grid.</summary>
     public bool Capturing { get; set; } = true;
@@ -108,6 +111,8 @@ public sealed class InterceptionService : IDisposable
             return;
         }
 
+        Interlocked.Exchange(ref _nextId, 0);
+
         // Explicit trust flags: do not silently install into the user store on start.
         // Callers must InstallRootCertificate (or set AutoTrustRootOnStart) so UI can report success/failure.
         _proxy = new ProxyServer(userTrustRootCertificate: false, machineTrustRootCertificate: false);
@@ -143,6 +148,7 @@ public sealed class InterceptionService : IDisposable
         _endPoint.BeforeTunnelConnectResponse += OnBeforeTunnelConnectResponse;
         _proxy.AddEndPoint(_endPoint);
         _proxy.Start();
+        BoundPort = _endPoint.Port;
 
         IsRootTrusted = UseInMemoryTrustState ? _inMemoryTrusted : IsRootPresentInStore(machineStore: false);
 
@@ -321,6 +327,7 @@ public sealed class InterceptionService : IDisposable
         _proxy.Dispose();
         _proxy = null;
         _endPoint = null;
+        BoundPort = 0;
         _live.Clear();
         IsRootTrusted = false;
         _systemProxyEnabled = false;
@@ -663,7 +670,7 @@ public sealed class InterceptionService : IDisposable
         return Task.CompletedTask;
     }
 
-    private static SessionSnapshot CreateTunnelSnapshot(TunnelConnectSessionEventArgs e)
+    private SessionSnapshot CreateTunnelSnapshot(TunnelConnectSessionEventArgs e)
     {
         var req = e.HttpClient.Request;
         var processId = 0;
@@ -683,7 +690,7 @@ public sealed class InterceptionService : IDisposable
 
         return new SessionSnapshot
         {
-            Id = Interlocked.Increment(ref _nextId),
+            Id = NextSessionId(),
             Method = "CONNECT",
             Url = req.RequestUriString ?? req.Url ?? "",
             Host = TryHost(req),
@@ -723,8 +730,8 @@ public sealed class InterceptionService : IDisposable
                 e.GenericResponse(rule.Body, (HttpStatusCode)rule.StatusCode, headers);
             }
 
-            if (Breakpoints is not null &&
-                Breakpoints.TryEnter(CreatePreviewSnapshot(e), out var hit))
+            if (Breakpoints is { Enabled: true } &&
+                Breakpoints.TryEnter(CreatePreviewSnapshot(e, assignId: false), out var hit))
             {
                 var action = await hit.WaitAsync();
                 if (action == BreakpointAction.Abort)
@@ -744,7 +751,7 @@ public sealed class InterceptionService : IDisposable
                 return;
             }
 
-            var snap = CreatePreviewSnapshot(e);
+            var snap = CreatePreviewSnapshot(e, assignId: true);
             _live[e.HttpClient] = snap;
             SessionCaptured?.Invoke(this, snap);
         }
@@ -767,8 +774,8 @@ public sealed class InterceptionService : IDisposable
             SessionScriptHost.ApplyOnResponse(ScriptOnResponse, e);
 
             if (BreakpointOnResponse &&
-                Breakpoints is not null &&
-                Breakpoints.TryEnter(CreatePreviewSnapshot(e), out var hit))
+                Breakpoints is { Enabled: true } &&
+                Breakpoints.TryEnter(CreatePreviewSnapshot(e, assignId: false), out var hit))
             {
                 var action = await hit.WaitAsync();
                 if (action == BreakpointAction.Abort)
@@ -790,7 +797,7 @@ public sealed class InterceptionService : IDisposable
                     return;
                 }
 
-                snap = CreatePreviewSnapshot(e);
+                snap = CreatePreviewSnapshot(e, assignId: true);
                 _live[e.HttpClient] = snap;
                 SessionCaptured?.Invoke(this, snap);
             }
@@ -825,7 +832,7 @@ public sealed class InterceptionService : IDisposable
         return Task.CompletedTask;
     }
 
-    private static SessionSnapshot CreatePreviewSnapshot(SessionEventArgs e)
+    private SessionSnapshot CreatePreviewSnapshot(SessionEventArgs e, bool assignId)
     {
         var req = e.HttpClient.Request;
         var bodyBytes = req.IsBodyRead ? TruncateBytes(req.Body) : null;
@@ -847,7 +854,7 @@ public sealed class InterceptionService : IDisposable
 
         return new SessionSnapshot
         {
-            Id = Interlocked.Increment(ref _nextId),
+            Id = assignId ? NextSessionId() : 0,
             Method = req.Method ?? "GET",
             Url = req.Url ?? "",
             Host = TryHost(req),
@@ -865,6 +872,11 @@ public sealed class InterceptionService : IDisposable
             IsMultipart = req.ContentType?.Contains("multipart/", StringComparison.OrdinalIgnoreCase) == true,
         };
     }
+
+    private long NextSessionId() => Interlocked.Increment(ref _nextId);
+
+    /// <summary>Reset the session ID sequence (tests / clear-sessions).</summary>
+    public void ResetSessionIdSequence() => Interlocked.Exchange(ref _nextId, 0);
 
     private static void FillResponse(SessionSnapshot snap, SessionEventArgs e)
     {

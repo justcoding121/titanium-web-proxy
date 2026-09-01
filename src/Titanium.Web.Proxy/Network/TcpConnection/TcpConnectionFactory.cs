@@ -462,7 +462,11 @@ internal class TcpConnectionFactory : IDisposable
         SemaphoreSlim? createGate = null,
         string? precomputedCacheKey = null)
     {
-        var sslProtocol = sessionArgs.ClientConnection.SslProtocol;
+        // Outbound TLS version is product policy — never copy inbound ClientConnection.SslProtocol.
+        // QUIC inbound is always Tls13; mirroring it made H3→HTTPS-TCP offer TLS 1.3-only and
+        // fail on macOS SecureTransport (no TLS 1.3 client). Inbound/outbound are independent
+        // handshakes (H3→H1, H2→H1, etc.). CreateServerConnection resolves the mask below.
+        var sslProtocol = SslProtocols.None;
 
         IPEndPoint? resolvedV4 = upStreamEndPointIPv4;
         IPEndPoint? resolvedV6 = upStreamEndPointIPv6;
@@ -616,9 +620,12 @@ internal class TcpConnectionFactory : IDisposable
             throw new InvalidOperationException(
                 $"A client is making HTTP request via external proxy to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
 
-        if (proxyServer.SupportedServerSslProtocols != SslProtocols.None) sslProtocol = proxyServer.SupportedServerSslProtocols;
-
-        if (isHttps && sslProtocol == SslProtocols.None) sslProtocol = proxyServer.SupportedSslProtocols;
+        // Prefer an explicit outbound override; otherwise SupportedSslProtocols (default Tls12|Tls13).
+        // Do not mirror the inbound client handshake — see GetServerConnection.
+        if (proxyServer.SupportedServerSslProtocols != SslProtocols.None)
+            sslProtocol = proxyServer.SupportedServerSslProtocols;
+        else if (isHttps)
+            sslProtocol = proxyServer.SupportedSslProtocols;
 
         var useUpstreamProxy1 = false;
 

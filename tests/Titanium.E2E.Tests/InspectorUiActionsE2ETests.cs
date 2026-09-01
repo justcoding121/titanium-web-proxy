@@ -33,7 +33,7 @@ public class InspectorUiActionsE2ETests
         _interception = new InterceptionService(_recorder) { UseInMemoryTrustState = true };
         _vm = new MainWindowViewModel(buffer, registry, updates, settings, _interception, _dialogs);
         _origin = new EchoOrigin();
-        _vm.BindPort = CliProcessHarness.GetFreePort();
+        _vm.BindPort = 0;
         _vm.BindAddress = "127.0.0.1";
         _vm.StartCaptureCommand.Execute(null);
         var deadline = DateTime.UtcNow.AddSeconds(15);

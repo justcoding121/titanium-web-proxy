@@ -1,6 +1,4 @@
 using System.Net;
-using System.Net.Security;
-using System.Security.Cryptography.X509Certificates;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.E2E.Tests.Harness;
 using Titanium.Inspector.Services;
@@ -16,7 +14,6 @@ public class InspectorServiceE2ETests
     public async Task Mitm_HttpClient_ThroughExplicitProxy_CapturesHttp()
     {
         using var origin = new EchoOrigin();
-        var proxyPort = CliProcessHarness.GetFreePort();
         var recorder = new RecordingSystemProxyController();
         using var interception = new InterceptionService(recorder);
         SessionSnapshot? captured = null;
@@ -24,9 +21,11 @@ public class InspectorServiceE2ETests
         interception.SessionCaptured += (_, s) => captured = s;
         interception.SessionUpdated += (_, s) => updated = s;
 
-        await interception.StartAsync(IPAddress.Loopback, proxyPort);
+        await interception.StartAsync(IPAddress.Loopback, 0);
         Assert.IsTrue(interception.IsRunning);
+        Assert.IsTrue(interception.BoundPort > 0);
         Assert.AreEqual(System.Net.Quic.QuicListener.IsSupported, interception.Http3Enabled);
+        var proxyPort = interception.BoundPort;
 
         using var handler = new HttpClientHandler
         {
@@ -46,7 +45,8 @@ public class InspectorServiceE2ETests
         }
 
         Assert.IsNotNull(captured, "SessionCaptured should fire");
-        StringAssert.Contains(captured!.Url, "mitm-e2e");
+        Assert.AreEqual(1, captured!.Id, "First published session should be Id 1");
+        StringAssert.Contains(captured.Url, "mitm-e2e");
 
         deadline = DateTime.UtcNow.AddSeconds(5);
         while ((updated?.StatusCode is null) && DateTime.UtcNow < deadline)
@@ -65,7 +65,6 @@ public class InspectorServiceE2ETests
     public async Task Mitm_HttpClient_DecryptsHttps_LocalOrigin()
     {
         using var origin = new HttpsEchoOrigin();
-        var proxyPort = CliProcessHarness.GetFreePort();
         using var interception = new InterceptionService(new RecordingSystemProxyController());
         interception.IgnoreServerCertificateErrors = true;
 
@@ -74,9 +73,11 @@ public class InspectorServiceE2ETests
         interception.SessionCaptured += (_, s) => captured = s;
         interception.SessionUpdated += (_, s) => updated = s;
 
-        await interception.StartAsync(IPAddress.Loopback, proxyPort);
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        Assert.IsTrue(interception.BoundPort > 0);
         Assert.IsFalse(string.IsNullOrEmpty(interception.RootCertificate?.Thumbprint));
         interception.DecryptHttps = true;
+        var proxyPort = interception.BoundPort;
 
         using var handler = new HttpClientHandler
         {
@@ -106,10 +107,9 @@ public class InspectorServiceE2ETests
     [TestCategory("E2E")]
     public async Task EnsureShutdown_RestoresSystemProxy_ViaSeam()
     {
-        var proxyPort = CliProcessHarness.GetFreePort();
         var recorder = new RecordingSystemProxyController();
         using var interception = new InterceptionService(recorder);
-        await interception.StartAsync(IPAddress.Loopback, proxyPort);
+        await interception.StartAsync(IPAddress.Loopback, 0);
         Assert.IsTrue(interception.SetSystemProxy(true));
         Assert.AreEqual(1, recorder.SetCount);
         interception.EnsureShutdown();
@@ -122,7 +122,6 @@ public class InspectorServiceE2ETests
     [TestCategory("E2E")]
     public async Task AutoResponder_InjectsBeforeOrigin()
     {
-        var proxyPort = CliProcessHarness.GetFreePort();
         using var interception = new InterceptionService(new RecordingSystemProxyController());
         interception.AutoResponder = new AutoResponderViewModel { Enabled = true };
         interception.AutoResponder.Rules.Add(new AutoResponderRule
@@ -134,7 +133,8 @@ public class InspectorServiceE2ETests
             Enabled = true,
         });
 
-        await interception.StartAsync(IPAddress.Loopback, proxyPort);
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        var proxyPort = interception.BoundPort;
         using var handler = new HttpClientHandler
         {
             Proxy = new WebProxy($"http://127.0.0.1:{proxyPort}"),
@@ -164,10 +164,9 @@ public class InspectorServiceE2ETests
     [TestCategory("E2E")]
     public async Task SystemProxy_WhenRunning_UsesControllerSeam()
     {
-        var proxyPort = CliProcessHarness.GetFreePort();
         var recorder = new RecordingSystemProxyController();
         using var interception = new InterceptionService(recorder);
-        await interception.StartAsync(IPAddress.Loopback, proxyPort);
+        await interception.StartAsync(IPAddress.Loopback, 0);
         Assert.IsTrue(interception.SetSystemProxy(true));
         Assert.AreEqual(1, recorder.SetCount);
         Assert.IsTrue(recorder.LastEnabled);

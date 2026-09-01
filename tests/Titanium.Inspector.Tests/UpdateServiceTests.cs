@@ -61,11 +61,11 @@ public class UpdateServiceTests
             @"C:\temp\a.msi",
             @"C:\Program Files\Titanium Inspector",
             @"C:\Program Files\Titanium Inspector\TitaniumInspector.exe",
-            "7.0.3",
+            "7.0.4",
             "Stable");
         StringAssert.Contains(script, "msiexec");
         StringAssert.Contains(script, "42");
-        StringAssert.Contains(script, "7.0.3");
+        StringAssert.Contains(script, "7.0.4");
         StringAssert.Contains(script, "Stable");
     }
 
@@ -77,7 +77,7 @@ public class UpdateServiceTests
             "/tmp/a.zip",
             "/opt/ti",
             "/opt/ti/TitaniumInspector",
-            "7.0.3-beta",
+            "7.0.4-beta",
             "Beta");
         StringAssert.Contains(script, "unzip");
         StringAssert.Contains(script, "99");

@@ -6,7 +6,7 @@ namespace Titanium.E2E.Tests.Harness;
 /// <summary>Minimal HTTP origin for ForwardHost / route E2E.</summary>
 public sealed class EchoOrigin : IDisposable
 {
-    private readonly HttpListener _listener = new();
+    private readonly HttpListener _listener;
     private CancellationTokenSource? _cts;
 
     public int Port { get; }
@@ -14,9 +14,19 @@ public sealed class EchoOrigin : IDisposable
 
     public EchoOrigin(int? port = null)
     {
-        Port = port ?? CliProcessHarness.GetFreePort();
-        _listener.Prefixes.Add($"http://127.0.0.1:{Port}/");
-        _listener.Start();
+        if (port is > 0)
+        {
+            Port = port.Value;
+            _listener = new HttpListener();
+            _listener.Prefixes.Add($"http://127.0.0.1:{Port}/");
+            _listener.Start();
+        }
+        else
+        {
+            (_listener, Port) = CliProcessHarness.BindHttpListenerOrRetry(
+                p => $"http://127.0.0.1:{p}/");
+        }
+
         _cts = new CancellationTokenSource();
         _ = Task.Run(() => AcceptLoopAsync(_cts.Token));
     }
@@ -137,9 +147,19 @@ public static class ConfigFixtures
         return path;
     }
 
-    public static string WritePlus(string dir, int listenPort, int originPort, int controlPort, string secret)
+    public static string WritePlus(
+        string dir,
+        int listenPort,
+        int originPort,
+        int controlPort,
+        string secret,
+        int? dashboardPort = null)
     {
         var path = Path.Combine(dir, $"plus-{listenPort}.yaml");
+        // Indent relative to raw-string de-indent (controlPlane children → 4 spaces), not source column.
+        var dashLine = dashboardPort is > 0
+            ? $"\n    dashboardPort: {dashboardPort.Value}"
+            : "";
         File.WriteAllText(path, $"""
             schemaVersion: "7.0"
             listeners:
@@ -152,7 +172,7 @@ public static class ConfigFixtures
               enabled: true
               controlPlane:
                 host: "127.0.0.1"
-                port: {controlPort}
+                port: {controlPort}{dashLine}
                 sharedSecret: "{secret}"
               options:
                 cache.enable: "true"
@@ -293,11 +313,15 @@ public static class ConfigFixtures
         int controlPort,
         string secret,
         Dictionary<string, string> options,
-        bool useRoutes = false)
+        bool useRoutes = false,
+        int? dashboardPort = null)
     {
         var path = Path.Combine(dir, $"twp-plus-opts-{listenPort}.json");
         var optsJson = string.Join(",\n", options.Select(kv =>
             $"      \"{kv.Key}\": \"{kv.Value.Replace("\\", "\\\\")}\""));
+        var dashJson = dashboardPort is > 0
+            ? $",\n                  \"dashboardPort\": {dashboardPort.Value}"
+            : "";
         var listener = useRoutes
             ? $$"""{ "host": "127.0.0.1", "port": {{listenPort}}, "decryptSsl": false }"""
             : $$"""{ "host": "127.0.0.1", "port": {{listenPort}}, "decryptSsl": false, "forwardHost": "127.0.0.1", "forwardPort": {{originPort}} }""";
@@ -332,7 +356,7 @@ public static class ConfigFixtures
                 "controlPlane": {
                   "host": "127.0.0.1",
                   "port": {{controlPort}},
-                  "sharedSecret": "{{secret}}"
+                  "sharedSecret": "{{secret}}"{{dashJson}}
                 },
                 "options": {
             {{optsJson}}

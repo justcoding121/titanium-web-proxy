@@ -28,7 +28,7 @@ public class BindEndpointUxTests
                 settings,
                 interception);
 
-            vm.BindPort = GetFreePort();
+            vm.BindPort = 0;
 
             Assert.IsTrue(vm.BindFieldsEnabled);
             Assert.IsFalse(vm.IsIntercepting);
@@ -80,7 +80,7 @@ public class BindEndpointUxTests
                 settings,
                 interception);
 
-            vm.BindPort = GetFreePort();
+            vm.BindPort = 0;
 
             vm.ToggleInterceptCommand.Execute(null);
             await WaitUntil(() => interception.IsRunning && vm.InterceptToggleText == "Stop proxy");
@@ -123,7 +123,7 @@ public class BindEndpointUxTests
                 settings,
                 interception);
 
-            vm.BindPort = GetFreePort();
+            vm.BindPort = 0;
 
             vm.StartCaptureCommand.Execute(null);
             await WaitUntil(() => interception.IsRunning);
@@ -138,7 +138,7 @@ public class BindEndpointUxTests
             Assert.IsTrue(recorder.RestoreCount >= 1);
 
             var setAfterStop = recorder.SetCount;
-            vm.BindPort = GetFreePort();
+            vm.BindPort = 0;
             vm.StartCaptureCommand.Execute(null);
             await WaitUntil(() => interception.IsRunning && vm.SystemProxy);
 
@@ -174,7 +174,7 @@ public class BindEndpointUxTests
                 settings,
                 interception);
 
-            vm.BindPort = GetFreePort();
+            vm.BindPort = 0;
             Assert.IsTrue(vm.AutoSystemProxyOnStart);
 
             vm.StartCaptureCommand.Execute(null);
@@ -207,15 +207,6 @@ public class BindEndpointUxTests
         {
             // ignore
         }
-    }
-
-    private static int GetFreePort()
-    {
-        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
     }
 
     private static async Task WaitUntil(Func<bool> condition, int timeoutMs = 15000)

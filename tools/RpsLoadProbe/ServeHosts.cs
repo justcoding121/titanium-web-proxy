@@ -100,7 +100,8 @@ internal static class ServeProxyHost
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
             or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
             or ProbeMode.CompareHttp3Cleartext
-            or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareProduct or ProbeMode.CompareCeiling
+            or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareProduct
+            or ProbeMode.CompareProductSmoke or ProbeMode.CompareCeiling
             or ProbeMode.CompareBodies
             or ProbeMode.ComparePost or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost
             or ProbeMode.CompareArch or ProbeMode.CompareSaturation or ProbeMode.CompareEditions
@@ -118,6 +119,7 @@ internal static class ServeProxyHost
         string? nginxVersion = null;
         string? yarpVersion = null;
         string? cliControlPlaneUrl = null;
+        string? cliDashboardUrl = null;
         string? cliAuthorizationBearer = null;
         string? cliDiscoveryFile = null;
 
@@ -178,6 +180,7 @@ internal static class ServeProxyHost
                 listenUrl = cli.ListenUrl;
                 targetForClient = cli.ListenUrl;
                 cliControlPlaneUrl = cli.ControlPlaneUrl;
+                cliDashboardUrl = cli.DashboardUrl;
                 cliAuthorizationBearer = cli.AuthorizationBearer;
                 cliDiscoveryFile = cli.DiscoveryFilePath;
                 break;
@@ -799,6 +802,8 @@ internal static class ServeProxyHost
                 await ProbeLog.WriteProtocolLineAsync(
                     $"control_plane_secret={TitaniumCliHost.ControlPlaneSharedSecret}", cancellationToken);
             }
+            if (!string.IsNullOrWhiteSpace(cliDashboardUrl))
+                await ProbeLog.WriteProtocolLineAsync($"dashboard_url={cliDashboardUrl}", cancellationToken);
             if (!string.IsNullOrWhiteSpace(cliAuthorizationBearer))
                 await ProbeLog.WriteProtocolLineAsync($"authorization_bearer={cliAuthorizationBearer}",
                     cancellationToken);
@@ -890,6 +895,7 @@ internal static class ServeProxyHost
         ProbeMode.CompareMitm => "compare-mitm",
         ProbeMode.CompareMatrix => "compare-matrix",
         ProbeMode.CompareProduct => "compare-product",
+        ProbeMode.CompareProductSmoke => "compare-product-smoke",
         ProbeMode.CompareSpot => "compare-spot",
         ProbeMode.CompareCeiling => "compare-ceiling",
         ProbeMode.CompareBodies => "compare-bodies",
@@ -939,7 +945,8 @@ internal static class ServeHost
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
             or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
             or ProbeMode.CompareHttp3Cleartext
-            or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareProduct or ProbeMode.CompareCeiling
+            or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareProduct
+            or ProbeMode.CompareProductSmoke or ProbeMode.CompareCeiling
             or ProbeMode.CompareBodies
             or ProbeMode.ComparePost or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost
             or ProbeMode.CompareArch or ProbeMode.CompareSaturation or ProbeMode.ExplicitPoolSweep)

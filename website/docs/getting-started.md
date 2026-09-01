@@ -79,4 +79,4 @@ Point your client at `127.0.0.1:8000`. Only trust a generated root CA on a machi
 - [Install](/docs/install)
 - [Configuration (`twp.yaml`)](/docs/configuration)
 - [Editions & licenses](/docs/editions)
-- [API reference](/api/Titanium.Web.Proxy.ProxyServer.html)
+- [API reference](/api/Titanium.Web.Proxy.ProxyServer.html){target="_blank" rel="noreferrer"}

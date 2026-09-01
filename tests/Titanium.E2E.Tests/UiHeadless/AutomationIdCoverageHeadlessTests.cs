@@ -300,9 +300,30 @@ public class AutomationIdCoverageHeadlessTests
             Assert.IsTrue(File.Exists(zip), "Export zip was not written");
         });
 
-        // Import from a copy so any lingering exclusive handle on the export path cannot block macOS.
+        // Import from a copy so any lingering writer handle on the export path cannot block macOS.
         var importZip = Path.Combine(Path.GetTempPath(), "twp-arch-in-" + Guid.NewGuid().ToString("N") + ".zip");
-        File.Copy(zip, importZip, overwrite: true);
+        var copyDeadline = DateTime.UtcNow.AddSeconds(10);
+        Exception? lastCopy = null;
+        while (DateTime.UtcNow < copyDeadline)
+        {
+            try
+            {
+                File.Copy(zip, importZip, overwrite: true);
+                lastCopy = null;
+                break;
+            }
+            catch (IOException ex)
+            {
+                lastCopy = ex;
+                await Task.Delay(100);
+            }
+        }
+
+        if (lastCopy is not null)
+        {
+            throw new IOException($"Could not copy export zip for import: {zip}", lastCopy);
+        }
+
         fx.PathPicker.OpenPath = importZip;
 
         var sessionsBeforeImport = 0;

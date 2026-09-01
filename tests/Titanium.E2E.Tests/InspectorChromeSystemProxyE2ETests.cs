@@ -33,7 +33,6 @@ public class InspectorChromeSystemProxyE2ETests
         }
 
         using var origin = new EchoOrigin();
-        var proxyPort = CliProcessHarness.GetFreePort();
         using var interception = new InterceptionService(); // real WinINET
         SessionSnapshot? captured = null;
         interception.SessionCaptured += (_, s) => captured = s;
@@ -43,7 +42,7 @@ public class InspectorChromeSystemProxyE2ETests
         Process? chromeProc = null;
         try
         {
-            await interception.StartAsync(IPAddress.Loopback, proxyPort);
+            await interception.StartAsync(IPAddress.Loopback, 0);
             var previousSuppress = CertificateManager.SuppressInteractiveRootStoreMutations;
             CertificateManager.SuppressInteractiveRootStoreMutations = false;
             try

@@ -30,6 +30,7 @@ internal sealed class TitaniumCliHost : IDisposable
     public string ListenUrl { get; }
     public int? ProcessId => process.HasExited ? null : process.Id;
     public string? ControlPlaneUrl { get; }
+    public string? DashboardUrl { get; }
     public string? AuthorizationBearer { get; }
     public string? DiscoveryFilePath { get; }
     public int? SecondOriginHttpPort { get; }
@@ -40,6 +41,7 @@ internal sealed class TitaniumCliHost : IDisposable
         int port,
         string listenUrl,
         string? controlPlaneUrl,
+        string? dashboardUrl,
         string? authorizationBearer,
         string? discoveryFilePath,
         HttpListener? jwksListener,
@@ -53,6 +55,7 @@ internal sealed class TitaniumCliHost : IDisposable
         Port = port;
         ListenUrl = listenUrl;
         ControlPlaneUrl = controlPlaneUrl;
+        DashboardUrl = dashboardUrl;
         AuthorizationBearer = authorizationBearer;
         DiscoveryFilePath = discoveryFilePath;
         this.jwksListener = jwksListener;
@@ -112,6 +115,7 @@ internal sealed class TitaniumCliHost : IDisposable
 
         var port = GetFreeTcpPort();
         var controlPlanePort = NeedsControlPlane(kind) ? GetFreeTcpPort() : 0;
+        var dashboardPort = NeedsControlPlane(kind) ? GetFreeTcpPort() : 0;
         var workDir = Path.Combine(Path.GetTempPath(), "twp-rps-cli-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workDir);
 
@@ -126,7 +130,7 @@ internal sealed class TitaniumCliHost : IDisposable
         if (kind == CliArmKind.PlusJwt)
         {
             jwtRsa = RSA.Create(2048);
-            var jwksPort = GetFreeTcpPort();
+            (jwksListener, var jwksPort) = StartJwksListenerOrRetry();
             var authority = $"{JwtAuthorityHost}:{jwksPort}";
             var jwksUrl = $"{authority}/jwks.json";
             var kid = "rps-editions";
@@ -134,7 +138,6 @@ internal sealed class TitaniumCliHost : IDisposable
             // concurrent SignData/ExportParameters (SafeBCryptKeyHandle disposed / bad signatures).
             bearer = MintRs256Jwt(jwtRsa, authority, kid);
             var jwksJson = BuildJwksJson(jwtRsa, kid);
-            jwksListener = StartJwksListener(jwksPort);
             jwksCts = new CancellationTokenSource();
             _ = Task.Run(() => ServeJwksLoopAsync(jwksListener, jwksJson, jwksCts.Token), jwksCts.Token);
             await File.WriteAllTextAsync(
@@ -173,7 +176,8 @@ internal sealed class TitaniumCliHost : IDisposable
         {
             configPath = Path.Combine(workDir, "twp.json");
             await File.WriteAllTextAsync(configPath,
-                BuildJson(kind, port, originHttpPort, controlPlanePort, secondOriginPort, discoveryFile),
+                BuildJson(kind, port, originHttpPort, controlPlanePort, secondOriginPort, discoveryFile,
+                    dashboardPort),
                 Encoding.UTF8, cancellationToken);
         }
         else
@@ -205,13 +209,15 @@ internal sealed class TitaniumCliHost : IDisposable
             }
 
             await File.WriteAllTextAsync(configPath,
-                BuildYaml(kind, port, originHttpPort, controlPlanePort, jwtAuthority, jwksUrl, staticRoot, logFile),
+                BuildYaml(kind, port, originHttpPort, controlPlanePort, jwtAuthority, jwksUrl, staticRoot, logFile,
+                    dashboardPort),
                 Encoding.UTF8, cancellationToken);
         }
 
         var listenScheme = kind == CliArmKind.ForwardHostTls ? "https" : "http";
         var listenUrl = $"{listenScheme}://127.0.0.1:{port}/";
         var controlPlaneUrl = controlPlanePort > 0 ? $"http://127.0.0.1:{controlPlanePort}/" : null;
+        var dashboardUrl = dashboardPort > 0 ? $"http://127.0.0.1:{dashboardPort}/" : null;
 
         var psi = new ProcessStartInfo
         {
@@ -233,8 +239,8 @@ internal sealed class TitaniumCliHost : IDisposable
         var process = Process.Start(psi)
                       ?? throw new InvalidOperationException("Failed to start titanium CLI.");
 
-        var host = new TitaniumCliHost(process, workDir, port, listenUrl, controlPlaneUrl, bearer, discoveryFile,
-            jwksListener, jwksCts, jwtRsa, secondOrigin, secondOriginPort);
+        var host = new TitaniumCliHost(process, workDir, port, listenUrl, controlPlaneUrl, dashboardUrl, bearer,
+            discoveryFile, jwksListener, jwksCts, jwtRsa, secondOrigin, secondOriginPort);
         process.OutputDataReceived += (_, e) =>
         {
             if (e.Data is null) return;
@@ -319,7 +325,7 @@ internal sealed class TitaniumCliHost : IDisposable
         $"forward 127.0.0.1:{originPort}\nlisten 127.0.0.1:{listenPort}\n";
 
     internal static string BuildJson(CliArmKind kind, int listenPort, int originPort, int controlPlanePort = 0,
-        int? secondOriginPort = null, string? discoveryFile = null)
+        int? secondOriginPort = null, string? discoveryFile = null, int dashboardPort = 0)
     {
         var algorithm = kind == CliArmKind.LbLeastTime ? "LeastTime" : "RoundRobin";
         var destinations = kind == CliArmKind.LbLeastTime && secondOriginPort is int p2
@@ -362,13 +368,16 @@ internal sealed class TitaniumCliHost : IDisposable
                       "discovery.mode": "file",
                       "discovery.file": "{{(discoveryFile ?? "").Replace("\\", "/", StringComparison.Ordinal)}}"
                     """;
+            var dashJson = dashboardPort > 0
+                ? $",\n                  \"dashboardPort\": {dashboardPort}"
+                : "";
             plusBlock = $$"""
               ,
               "plus": {
                 "enabled": true,
                 "controlPlane": {
                   "host": "127.0.0.1",
-                  "port": {{controlPlanePort}},
+                  "port": {{controlPlanePort}}{{dashJson}},
                   "sharedSecret": "{{ControlPlaneSharedSecret}}"
                 },
                 "options": {
@@ -412,7 +421,8 @@ internal sealed class TitaniumCliHost : IDisposable
     }
 
     internal static string BuildYaml(CliArmKind kind, int listenPort, int originPort, int controlPlanePort,
-        string? jwtAuthority = null, string? jwksUrl = null, string? staticRoot = null, string? logFile = null)
+        string? jwtAuthority = null, string? jwksUrl = null, string? staticRoot = null, string? logFile = null,
+        int dashboardPort = 0)
     {
         var sb = new StringBuilder();
         sb.AppendLine("schemaVersion: \"7.0\"");
@@ -455,7 +465,7 @@ internal sealed class TitaniumCliHost : IDisposable
             case CliArmKind.PlusBase:
             case CliArmKind.PlusMetricsScrape:
                 AppendForwardHostListener(sb, listenPort, originPort, decryptSsl: false);
-                AppendPlus(sb, controlPlanePort, null);
+                AppendPlus(sb, controlPlanePort, null, dashboardPort);
                 break;
             case CliArmKind.PlusCache:
             case CliArmKind.PlusCacheHit:
@@ -463,7 +473,7 @@ internal sealed class TitaniumCliHost : IDisposable
                 AppendPlus(sb, controlPlanePort, new Dictionary<string, string>
                 {
                     ["cache.enable"] = "true"
-                });
+                }, dashboardPort);
                 break;
             case CliArmKind.PlusWaf:
                 AppendForwardHostListener(sb, listenPort, originPort, decryptSsl: false);
@@ -471,14 +481,14 @@ internal sealed class TitaniumCliHost : IDisposable
                 {
                     ["waf.enabled"] = "true",
                     ["waf.denyPaths"] = "^/admin"
-                });
+                }, dashboardPort);
                 break;
             case CliArmKind.PlusCidr:
                 AppendForwardHostListener(sb, listenPort, originPort, decryptSsl: false);
                 AppendPlus(sb, controlPlanePort, new Dictionary<string, string>
                 {
                     ["security.allowCidrs"] = "127.0.0.0/8"
-                });
+                }, dashboardPort);
                 break;
             case CliArmKind.PlusJwt:
                 AppendForwardHostListener(sb, listenPort, originPort, decryptSsl: false);
@@ -486,7 +496,7 @@ internal sealed class TitaniumCliHost : IDisposable
                 {
                     ["security.jwtAuthority"] = jwtAuthority ?? "http://127.0.0.1",
                     ["security.jwksUrl"] = jwksUrl ?? "http://127.0.0.1/jwks.json"
-                });
+                }, dashboardPort);
                 break;
             case CliArmKind.PlusRateLimit:
                 AppendForwardHostListener(sb, listenPort, originPort, decryptSsl: false);
@@ -494,7 +504,7 @@ internal sealed class TitaniumCliHost : IDisposable
                 {
                     ["state.mode"] = "memory",
                     ["state.rateLimitPerMinute"] = "10000000"
-                });
+                }, dashboardPort);
                 break;
             case CliArmKind.SingleRoute:
             case CliArmKind.InterceptTransform:
@@ -530,13 +540,16 @@ internal sealed class TitaniumCliHost : IDisposable
         sb.AppendLine("    enableHttp2: false");
     }
 
-    private static void AppendPlus(StringBuilder sb, int controlPlanePort, Dictionary<string, string>? options)
+    private static void AppendPlus(StringBuilder sb, int controlPlanePort, Dictionary<string, string>? options,
+        int dashboardPort = 0)
     {
         sb.AppendLine("plus:");
         sb.AppendLine("  enabled: true");
         sb.AppendLine("  controlPlane:");
         sb.AppendLine("    host: \"127.0.0.1\"");
         sb.AppendLine($"    port: {controlPlanePort}");
+        if (dashboardPort > 0)
+            sb.AppendLine($"    dashboardPort: {dashboardPort}");
         sb.AppendLine($"    sharedSecret: \"{ControlPlaneSharedSecret}\"");
         if (options is { Count: > 0 })
         {
@@ -546,12 +559,39 @@ internal sealed class TitaniumCliHost : IDisposable
         }
     }
 
-    private static HttpListener StartJwksListener(int port)
+    /// <summary>
+    /// Bind JWKS <see cref="HttpListener"/> with retries against Windows TOCTOU / excluded-port races
+    /// after <see cref="GetFreeTcpPort"/>.
+    /// </summary>
+    private static (HttpListener Listener, int Port) StartJwksListenerOrRetry(int maxAttempts = 8)
     {
-        var listener = new HttpListener();
-        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
-        listener.Start();
-        return listener;
+        Exception? last = null;
+        for (var i = 0; i < maxAttempts; i++)
+        {
+            var port = GetFreeTcpPort();
+            var listener = new HttpListener();
+            listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+            try
+            {
+                listener.Start();
+                return (listener, port);
+            }
+            catch (Exception ex) when (ex is HttpListenerException or SocketException)
+            {
+                last = ex;
+                try
+                {
+                    listener.Close();
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Failed to bind JWKS HttpListener after {maxAttempts} attempts.", last);
     }
 
     private static async Task ServeJwksLoopAsync(HttpListener listener, string jwksJson,

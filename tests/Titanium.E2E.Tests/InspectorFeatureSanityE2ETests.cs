@@ -33,7 +33,7 @@ public class InspectorFeatureSanityE2ETests
 
         try
         {
-            vm.BindPort = CliProcessHarness.GetFreePort();
+            vm.BindPort = 0;
             vm.BindAddress = "127.0.0.1";
 
             vm.StartCaptureCommand.Execute(null);
@@ -127,7 +127,7 @@ public class InspectorFeatureSanityE2ETests
 
         try
         {
-            vm.BindPort = CliProcessHarness.GetFreePort();
+            vm.BindPort = 0;
             vm.StartCaptureCommand.Execute(null);
             await WaitAsync(() => interception.IsRunning);
 
@@ -167,7 +167,7 @@ public class InspectorFeatureSanityE2ETests
 
         try
         {
-            vm.BindPort = CliProcessHarness.GetFreePort();
+            vm.BindPort = 0;
             vm.StartCaptureCommand.Execute(null);
             await WaitAsync(() => interception.IsRunning);
 

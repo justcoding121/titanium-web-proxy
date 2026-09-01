@@ -33,7 +33,7 @@ public class InspectorFiddlerFlowE2ETests
         _interception = new InterceptionService(_recorder) { UseInMemoryTrustState = true };
         _dialogs = new ScriptedInspectorDialogs();
         _vm = new MainWindowViewModel(buffer, registry, updates, _settings, _interception, _dialogs);
-        _vm.BindPort = CliProcessHarness.GetFreePort();
+        _vm.BindPort = 0;
         _vm.BindAddress = "127.0.0.1";
     }
 
@@ -97,7 +97,7 @@ public class InspectorFiddlerFlowE2ETests
         _interception = new InterceptionService(_recorder) { UseInMemoryTrustState = true };
         _dialogs = new ScriptedInspectorDialogs();
         _vm = new MainWindowViewModel(buffer, registry, new UpdateService(_settings), _settings, _interception, _dialogs);
-        _vm.BindPort = CliProcessHarness.GetFreePort();
+        _vm.BindPort = 0;
         _vm.BindAddress = "127.0.0.1";
 
         await _vm.TryAutoStartAsync();

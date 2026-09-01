@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -99,13 +100,11 @@ public class PlusModuleTests
             },
         ]);
 
-        var port = GetFreePort();
-        using var server = new ControlPlaneServer(manager, "127.0.0.1", port, "test-secret");
-        server.Start();
+        using var server = StartControlPlaneOrRetry(manager, "test-secret");
         await Task.Delay(100);
 
         using var http = new HttpClient();
-        var resp = await http.GetAsync($"http://127.0.0.1:{port}/v1/snapshot");
+        var resp = await http.GetAsync($"{server.Prefix}v1/snapshot");
         Assert.AreEqual(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 
@@ -113,16 +112,14 @@ public class PlusModuleTests
     public async Task ControlPlane_PutApply_UpdatesSnapshot()
     {
         var manager = new ClusterManager();
-        var port = GetFreePort();
-        using var server = new ControlPlaneServer(manager, "127.0.0.1", port, "test-secret");
-        server.Start();
+        using var server = StartControlPlaneOrRetry(manager, "test-secret");
         await Task.Delay(100);
 
         var body = """
             [{"id":"c2","destinations":[{"id":"d2","address":"10.0.0.2","port":8080}]}]
             """;
         using var http = new HttpClient();
-        using var req = new HttpRequestMessage(HttpMethod.Put, $"http://127.0.0.1:{port}/v1/snapshot")
+        using var req = new HttpRequestMessage(HttpMethod.Put, $"{server.Prefix}v1/snapshot")
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
         };
@@ -139,10 +136,8 @@ public class PlusModuleTests
         var manager = new ClusterManager();
         var routes = new List<RouteConfig>();
         var refreshed = 0;
-        var port = GetFreePort();
-        using var server = new ControlPlaneServer(
-            manager, "127.0.0.1", port, "test-secret", routes, () => Interlocked.Increment(ref refreshed));
-        server.Start();
+        using var server = StartControlPlaneOrRetry(
+            manager, "test-secret", routes, () => Interlocked.Increment(ref refreshed));
         await Task.Delay(100);
 
         var body = """
@@ -152,7 +147,7 @@ public class PlusModuleTests
             }
             """;
         using var http = new HttpClient();
-        using var req = new HttpRequestMessage(HttpMethod.Put, $"http://127.0.0.1:{port}/v1/snapshot")
+        using var req = new HttpRequestMessage(HttpMethod.Put, $"{server.Prefix}v1/snapshot")
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
         };
@@ -167,7 +162,7 @@ public class PlusModuleTests
         Assert.AreEqual("r1", routes[0].Id);
         Assert.IsTrue(refreshed >= 1);
 
-        using var get = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{port}/v1/snapshot");
+        using var get = new HttpRequestMessage(HttpMethod.Get, $"{server.Prefix}v1/snapshot");
         get.Headers.Add(ControlPlaneServer.SharedSecretHeader, "test-secret");
         var getResp = await http.SendAsync(get);
         var json = await getResp.Content.ReadAsStringAsync();
@@ -194,15 +189,12 @@ public class PlusModuleTests
             ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(5),
         }, TimeSpan.FromMinutes(5));
 
-        var port = GetFreePort();
-        using var server = new ControlPlaneServer(
-            new ClusterManager(), "127.0.0.1", port, "test-secret",
-            routes: null, refresh: null, responseCache: cache);
-        server.Start();
+        using var server = StartControlPlaneOrRetry(
+            new ClusterManager(), "test-secret", responseCache: cache);
         await Task.Delay(100);
 
         using var http = new HttpClient();
-        using var req = new HttpRequestMessage(HttpMethod.Post, $"http://127.0.0.1:{port}/v1/cache/purge?prefix=a");
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"{server.Prefix}v1/cache/purge?prefix=a");
         req.Headers.Add(ControlPlaneServer.SharedSecretHeader, "test-secret");
         var resp = await http.SendAsync(req);
         Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode);
@@ -753,9 +745,43 @@ public class PlusModuleTests
         Assert.IsTrue(panels.All(p => p is PlusInspectorPanel));
     }
 
+    /// <summary>
+    /// Start <see cref="ControlPlaneServer"/> with retries against Windows TOCTOU /
+    /// excluded-port races after <see cref="GetFreePort"/>.
+    /// </summary>
+    private static ControlPlaneServer StartControlPlaneOrRetry(
+        IClusterManager? clusters,
+        string sharedSecret,
+        IList<RouteConfig>? routes = null,
+        Action? refresh = null,
+        IHttpResponseCache? responseCache = null,
+        int maxAttempts = 8)
+    {
+        Exception? last = null;
+        for (var i = 0; i < maxAttempts; i++)
+        {
+            var port = GetFreePort();
+            var server = new ControlPlaneServer(
+                clusters, "127.0.0.1", port, sharedSecret, routes, refresh, responseCache);
+            try
+            {
+                server.Start();
+                return server;
+            }
+            catch (Exception ex) when (ex is HttpListenerException or SocketException)
+            {
+                last = ex;
+                server.Dispose();
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Failed to start ControlPlaneServer after {maxAttempts} attempts.", last);
+    }
+
     private static int GetFreePort()
     {
-        var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();

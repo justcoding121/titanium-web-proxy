@@ -21,8 +21,8 @@ public class UpdateCommandTests
     [TestMethod]
     public void StripPrerelease_RemovesSuffix()
     {
-        Assert.AreEqual("7.0.3", VersionCommand.StripPrerelease("v7.0.3-beta"));
-        Assert.AreEqual("7.0.3", VersionCommand.StripPrerelease("7.0.3"));
+        Assert.AreEqual("7.0.4", VersionCommand.StripPrerelease("v7.0.4-beta"));
+        Assert.AreEqual("7.0.4", VersionCommand.StripPrerelease("7.0.4"));
     }
 
     [TestMethod]
@@ -33,7 +33,7 @@ public class UpdateCommandTests
             @"C:\temp\cli.zip",
             @"C:\tools\titanium",
             @"C:\tools\titanium\titanium.exe",
-            "7.0.3",
+            "7.0.4",
             "stable");
         StringAssert.Contains(script, "Expand-Archive");
         StringAssert.Contains(script, "7");
@@ -49,7 +49,7 @@ public class UpdateCommandTests
             "/tmp/cli.zip",
             "/opt/titanium",
             "/opt/titanium/titanium",
-            "7.0.3-beta",
+            "7.0.4-beta",
             "beta");
         StringAssert.Contains(script, "unzip");
         StringAssert.Contains(script, "beta");

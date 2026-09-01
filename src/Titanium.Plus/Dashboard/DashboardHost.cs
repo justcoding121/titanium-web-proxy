@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Titanium.Plus.ControlPlane;
@@ -12,10 +13,13 @@ namespace Titanium.Plus.Dashboard;
 /// <summary>Authenticated HTML admin for destination states / drain / metrics.</summary>
 public sealed class DashboardHost : IDisposable
 {
+    private const int MaxBindAttempts = 8;
+
     private readonly ControlPlaneServer _controlPlane;
     private readonly DrainOperations _operations;
     private readonly PrometheusMetricsExporter _metrics;
     private readonly IClusterManager? _clusters;
+    private readonly int? _requestedPort;
     private HttpListener? _listener;
     private CancellationTokenSource? _cts;
 
@@ -23,39 +27,67 @@ public sealed class DashboardHost : IDisposable
         ControlPlaneServer controlPlane,
         DrainOperations operations,
         PrometheusMetricsExporter metrics,
-        IClusterManager? clusters)
+        IClusterManager? clusters,
+        int? dashboardPort = null)
     {
         _controlPlane = controlPlane;
         _operations = operations;
         _metrics = metrics;
         _clusters = clusters;
+        _requestedPort = dashboardPort is > 0 and < 65536 ? dashboardPort : null;
     }
 
     public string? Prefix { get; private set; }
 
+    public int? BoundPort { get; private set; }
+
     public void Start()
     {
         var uri = new Uri(_controlPlane.Prefix);
-        var dashPort = uri.Port + 1;
-        // Loopback-oriented dashboard over HttpListener; shared-secret auth, not public TLS.
+        Exception? last = null;
+        var attempts = _requestedPort.HasValue ? 1 : MaxBindAttempts;
+
+        for (var i = 0; i < attempts; i++)
+        {
+            var dashPort = _requestedPort ?? AllocateEphemeralPort();
+            // Loopback-oriented dashboard over HttpListener; shared-secret auth, not public TLS.
 #pragma warning disable S5332
-        Prefix = $"http://{uri.Host}:{dashPort}/";
+            var prefix = $"http://{uri.Host}:{dashPort}/";
 #pragma warning restore S5332
-        _cts = new CancellationTokenSource();
-        _listener = new HttpListener();
-        _listener.Prefixes.Add(Prefix);
-        try
-        {
-            _listener.Start();
-            _ = Task.Run(() => LoopAsync(_cts.Token), _cts.Token);
+            var cts = new CancellationTokenSource();
+            var listener = new HttpListener();
+            listener.Prefixes.Add(prefix);
+            try
+            {
+                listener.Start();
+                _cts = cts;
+                _listener = listener;
+                Prefix = prefix;
+                BoundPort = dashPort;
+                _ = Task.Run(() => LoopAsync(cts.Token), cts.Token);
+                return;
+            }
+            catch (Exception ex) when (ex is HttpListenerException or SocketException)
+            {
+                last = ex;
+                try
+                {
+                    listener.Close();
+                }
+                catch
+                {
+                    // ignore close failures while retrying
+                }
+
+                cts.Dispose();
+            }
         }
-        catch
-        {
-            _listener = null;
-            Prefix = null;
-            _cts.Dispose();
-            _cts = null;
-        }
+
+        throw new InvalidOperationException(
+            _requestedPort.HasValue
+                ? $"Dashboard failed to bind controlPlane.dashboardPort={_requestedPort.Value}."
+                : "Dashboard failed to bind an ephemeral port after retries.",
+            last);
     }
 
     public void Dispose()
@@ -73,6 +105,16 @@ public sealed class DashboardHost : IDisposable
         _listener?.Close();
         _cts?.Dispose();
         _cts = null;
+        BoundPort = null;
+    }
+
+    private static int AllocateEphemeralPort()
+    {
+        var probe = new TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        return port;
     }
 
     private async Task LoopAsync(CancellationToken cancellationToken)

@@ -10,7 +10,7 @@
 param(
     [ValidateSet(
         'compare', 'compare-http2', 'compare-tls', 'compare-terminate', 'compare-same', 'compare-bridges',
-        'compare-http3-cleartext', 'compare-mitm', 'compare-matrix', 'compare-product', 'compare-spot', 'compare-ceiling',
+        'compare-http3-cleartext', 'compare-mitm', 'compare-matrix', 'compare-product', 'compare-product-smoke', 'compare-spot', 'compare-ceiling',
         'compare-bodies', 'compare-post', 'compare-lossy', 'compare-tls-cost', 'compare-arch', 'compare-saturation',
         'compare-editions', 'compare-cross-version',
         'origin-direct', 'explicit-pool-sweep',

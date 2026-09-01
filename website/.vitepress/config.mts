@@ -7,7 +7,9 @@ export default defineConfig({
   description:
     'High-performance HTTP(S) proxy — reverse/edge CLI, Plus ops, and Inspector on Windows, Linux, and macOS. Optional .NET library via NuGet.',
   lang: 'en-US',
-  // Served at https://titaniumproxy.com via CloudFront (origin path maps GitHub Pages project URL).
+  // CloudFront serves titaniumproxy.com from the GitHub Pages project origin with
+  // path mapping, so asset URLs must be site-root absolute (`/assets/...`), not
+  // `/titanium-web-proxy/assets/...`. The github.io project URL is secondary.
   base: '/',
   cleanUrls: true,
   lastUpdated: true,
@@ -29,8 +31,10 @@ export default defineConfig({
     siteTitle: 'Titanium Web Proxy',
     nav: [
       { text: 'Docs', link: '/docs/getting-started' },
-      { text: 'Download', link: '/download' },
-      { text: 'Releases', link: '/releases' },
+      // Trailing slash: with only dir/index.html, GitHub Pages 301s `/download` →
+      // github.io when the Pages custom-domain CNAME is not active on the edge.
+      { text: 'Download', link: '/download/' },
+      { text: 'Releases', link: '/releases/' },
       { text: 'API', link: '/api/Titanium.Web.Proxy.ProxyServer.html', target: '_blank' },
       { text: 'GitHub', link: repo },
     ],
