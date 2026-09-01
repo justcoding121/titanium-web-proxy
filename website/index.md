@@ -101,4 +101,4 @@ proxyServer.Start();
 - [Getting started](/docs/getting-started)
 - [Configuration reference](/docs/configuration)
 - [Release notes](/releases)
-- [API reference](/api/Titanium.Web.Proxy.ProxyServer.html)
+- [API reference](/api/Titanium.Web.Proxy.ProxyServer.html){target="_blank" rel="noreferrer"}

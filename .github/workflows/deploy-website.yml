@@ -58,6 +58,10 @@ jobs:
           mkdir -p website/.vitepress/dist/api
           if [ -d docs/api ]; then
             cp -a docs/api/. website/.vitepress/dist/api/
+            # DocFX has toc.html but no index; /api/ 404s without this.
+            if [ -f website/.vitepress/dist/api/toc.html ] && [ ! -f website/.vitepress/dist/api/index.html ]; then
+              cp -f website/.vitepress/dist/api/toc.html website/.vitepress/dist/api/index.html
+            fi
             # DocFX HTML references ../styles and ../fonts from /api/*.html
             if [ -d docs/styles ]; then
               cp -a docs/styles website/.vitepress/dist/styles

@@ -45,8 +45,8 @@ Use `ForwardHost` on a transparent endpoint for a zero-cost terminate-lite path,
 
 ## API reference
 
-- [ProxyServer](/api/Titanium.Web.Proxy.ProxyServer.html)
-- Full API tree under [/api/](/api/)
+- [ProxyServer](/api/Titanium.Web.Proxy.ProxyServer.html){target="_blank" rel="noreferrer"}
+- Full API tree under [/api/](/api/){target="_blank" rel="noreferrer"}
 
 ## Examples in the repo
 

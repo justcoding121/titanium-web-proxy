@@ -28,46 +28,6 @@ HTTP/3 natives ship inside each RID zip (except Windows, which uses OS MsQuic on
     </template>
   </p>
 
-  <h3 :id="ch.id + '-cli'">CLI (<code>titanium</code> / <code>twp</code>)</h3>
-  <p>Self-contained zip. Extract and run. Each zip includes both <code>titanium</code> and <code>twp</code> binaries.</p>
-  <div class="download-grid">
-    <div class="download-row">
-      <strong>Windows x64</strong>
-      <a v-if="ch.data.cli['win-x64']" :href="ch.data.cli['win-x64'].url">{{ ch.data.cli['win-x64'].name }}</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>Linux x64 (glibc)</strong>
-      <a v-if="ch.data.cli['linux-x64']" :href="ch.data.cli['linux-x64'].url">{{ ch.data.cli['linux-x64'].name }}</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>Linux arm64 (glibc)</strong>
-      <a v-if="ch.data.cli['linux-arm64']" :href="ch.data.cli['linux-arm64'].url">{{ ch.data.cli['linux-arm64'].name }}</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>Alpine / musl x64</strong>
-      <a v-if="ch.data.cli['linux-musl-x64']" :href="ch.data.cli['linux-musl-x64'].url">{{ ch.data.cli['linux-musl-x64'].name }}</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>Alpine / musl arm64</strong>
-      <a v-if="ch.data.cli['linux-musl-arm64']" :href="ch.data.cli['linux-musl-arm64'].url">{{ ch.data.cli['linux-musl-arm64'].name }}</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>macOS x64</strong>
-      <a v-if="ch.data.cli['osx-x64']" :href="ch.data.cli['osx-x64'].url">{{ ch.data.cli['osx-x64'].name }}</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>macOS arm64</strong>
-      <a v-if="ch.data.cli['osx-arm64']" :href="ch.data.cli['osx-arm64'].url">{{ ch.data.cli['osx-arm64'].name }}</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-  </div>
-
   <h3 :id="ch.id + '-inspector'">Titanium Inspector</h3>
   <p>
     Desktop MITM debugger.
@@ -111,6 +71,46 @@ HTTP/3 natives ship inside each RID zip (except Windows, which uses OS MsQuic on
     <div class="download-row">
       <strong>macOS x64</strong>
       <a v-if="ch.data.inspector['osx-x64']" :href="ch.data.inspector['osx-x64'].url">{{ ch.data.inspector['osx-x64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+  </div>
+
+  <h3 :id="ch.id + '-cli'">CLI (<code>titanium</code> / <code>twp</code>)</h3>
+  <p>Self-contained zip. Extract and run. Each zip includes both <code>titanium</code> and <code>twp</code> binaries.</p>
+  <div class="download-grid">
+    <div class="download-row">
+      <strong>Windows x64</strong>
+      <a v-if="ch.data.cli['win-x64']" :href="ch.data.cli['win-x64'].url">{{ ch.data.cli['win-x64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux x64 (glibc)</strong>
+      <a v-if="ch.data.cli['linux-x64']" :href="ch.data.cli['linux-x64'].url">{{ ch.data.cli['linux-x64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux arm64 (glibc)</strong>
+      <a v-if="ch.data.cli['linux-arm64']" :href="ch.data.cli['linux-arm64'].url">{{ ch.data.cli['linux-arm64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Alpine / musl x64</strong>
+      <a v-if="ch.data.cli['linux-musl-x64']" :href="ch.data.cli['linux-musl-x64'].url">{{ ch.data.cli['linux-musl-x64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Alpine / musl arm64</strong>
+      <a v-if="ch.data.cli['linux-musl-arm64']" :href="ch.data.cli['linux-musl-arm64'].url">{{ ch.data.cli['linux-musl-arm64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>macOS x64</strong>
+      <a v-if="ch.data.cli['osx-x64']" :href="ch.data.cli['osx-x64'].url">{{ ch.data.cli['osx-x64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>macOS arm64</strong>
+      <a v-if="ch.data.cli['osx-arm64']" :href="ch.data.cli['osx-arm64'].url">{{ ch.data.cli['osx-arm64'].name }}</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
   </div>
