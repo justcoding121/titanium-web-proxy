@@ -6,6 +6,7 @@ Full download buttons live on the [Download](/download) page. This page is the s
 
 ```shell
 dotnet add package Titanium.Web.Proxy
+# Prerelease when newer than stable:
 dotnet add package Titanium.Web.Proxy --prerelease
 ```
 
@@ -17,7 +18,7 @@ On Windows, **winget is stable-only**:
 winget install justcoding121.TitaniumCli
 ```
 
-For **beta** (or any OS), take a self-contained zip from the [Download](/download) page or [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when `Titanium.Cli-*.zip` assets are published (e.g. `v7.0.4-beta`).
+Stable CLI zips are on the [Download](/download) page (`v7.0.4`). For **beta** (or any OS), use the beta section or [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when `Titanium.Cli-*.zip` assets are published (e.g. `v7.0.4-beta`).
 
 Pick the **matching RID** (e.g. Alpine/K8s → `linux-musl-x64` or `linux-musl-arm64`, not `linux-x64`). HTTP/3 natives ship inside those zips — see [HTTP/3](/docs/http3).
 
@@ -45,7 +46,7 @@ Prefer [Download](/download). **winget is stable-only**:
 winget install justcoding121.TitaniumInspector
 ```
 
-Or MSI / portable zip from [Download](/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when those assets are published (beta example: `v7.0.4-beta`). Linux and macOS Inspector builds are zip-only; Windows also ships an MSI. HTTP/3 natives are bundled the same way as the CLI ([HTTP/3](/docs/http3)).
+Or MSI / portable zip from [Download](/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) (stable: `v7.0.4`; beta example: `v7.0.4-beta`). Linux and macOS Inspector builds are zip-only; Windows also ships an MSI. HTTP/3 natives are bundled the same way as the CLI ([HTTP/3](/docs/http3)).
 
 ## See also
 

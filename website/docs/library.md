@@ -4,7 +4,7 @@ NuGet package **Titanium.Web.Proxy** (MIT). Target framework: **.NET 10**.
 
 ```shell
 dotnet add package Titanium.Web.Proxy
-# Latest prerelease (e.g. 7.0.4-beta):
+# Prerelease (e.g. 7.0.4-beta when newer than stable):
 dotnet add package Titanium.Web.Proxy --prerelease
 ```
 
