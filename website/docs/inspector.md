@@ -14,11 +14,16 @@ Prefer the [Download](/download) page (resolves the newest release that has Insp
 - **Portable zip** — extract and run `TitaniumInspector.exe`.
 
 ```shell
-# Stable community package only — not the 7.0 beta
+# Stable community package (v7.0.4)
 winget install justcoding121.TitaniumInspector
 ```
 
-Windows examples for the **7.0 beta** product tag:
+Windows **stable** (`v7.0.4`):
+
+- [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.4/TitaniumInspector-win-x64.msi)
+- [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.4/TitaniumInspector-win-x64.zip)
+
+Windows **beta** (`v7.0.4-beta`):
 
 - [MSI](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.4-beta/TitaniumInspector-win-x64.msi)
 - [Portable zip](https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.4-beta/TitaniumInspector-win-x64.zip)
