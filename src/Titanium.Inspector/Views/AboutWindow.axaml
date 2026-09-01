@@ -1,0 +1,34 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Titanium.Inspector.Views.AboutWindow"
+        AutomationProperties.AutomationId="AboutWindow"
+        Title="About Titanium Inspector"
+        Width="420" Height="280"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False">
+  <DockPanel Margin="16">
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+      <Button x:Name="OkButton" Content="OK" MinWidth="88" IsDefault="True" IsCancel="True"
+              AutomationProperties.AutomationId="AboutOk" />
+    </StackPanel>
+    <StackPanel Spacing="12">
+      <StackPanel Orientation="Horizontal" Spacing="12">
+        <Image Source="/Assets/app.ico" Width="48" Height="48" />
+        <StackPanel VerticalAlignment="Center" Spacing="4">
+          <TextBlock Text="Titanium Inspector" FontSize="18" FontWeight="SemiBold" />
+          <TextBlock x:Name="VersionText" Opacity="0.85" />
+        </StackPanel>
+      </StackPanel>
+      <TextBlock Text="Copyright © Jehonathan Thomas" Opacity="0.85" />
+      <TextBlock TextWrapping="Wrap" Opacity="0.85"
+                 Text="Licensed under the PolyForm Noncommercial License 1.0.0." />
+      <StackPanel Orientation="Horizontal" Spacing="16">
+        <TextBlock x:Name="LicenseLink" Text="License details" Cursor="Hand"
+                   TextDecorations="Underline" Foreground="#0066CC" />
+        <TextBlock x:Name="WebsiteLink" Text="titaniumproxy.com" Cursor="Hand"
+                   TextDecorations="Underline" Foreground="#0066CC" />
+      </StackPanel>
+    </StackPanel>
+  </DockPanel>
+</Window>

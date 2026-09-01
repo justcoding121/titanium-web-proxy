@@ -97,9 +97,9 @@ public sealed class AvaloniaInspectorDialogs : IInspectorDialogs
     public Task<bool> ConfirmInstallUpdateAsync(Window? owner, string version, string channelDisplay) =>
         SimpleConfirmDialog.ShowAsync(
             owner,
-            "Update available",
-            $"Update {version} ({channelDisplay}) is available. Install and restart now?\n\n" +
-            "Inspector will close, apply the update, and relaunch.",
+            "Install release",
+            $"Install {version} ({channelDisplay}) and restart now?\n\n" +
+            "Inspector will close, replace the current installation, and relaunch.",
             accept: "Install and restart",
             cancel: "Later",
             height: 240);

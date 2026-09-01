@@ -70,16 +70,6 @@
                   Command="{Binding ToggleIgnoreServerCertificateErrorsCommand}"
                   AutomationProperties.AutomationId="MenuIgnoreServerCertErrors" />
         <Separator />
-        <MenuItem Header="Update channel" AutomationProperties.AutomationId="MenuUpdateChannel">
-          <MenuItem Header="Stable" ToggleType="CheckBox"
-                    IsChecked="{Binding UpdateChannelIsStable, Mode=OneWay}"
-                    Command="{Binding SetUpdateChannelStableCommand}"
-                    AutomationProperties.AutomationId="MenuUpdateChannelStable" />
-          <MenuItem Header="Beta" ToggleType="CheckBox"
-                    IsChecked="{Binding UpdateChannelIsBeta, Mode=OneWay}"
-                    Command="{Binding SetUpdateChannelBetaCommand}"
-                    AutomationProperties.AutomationId="MenuUpdateChannelBeta" />
-        </MenuItem>
         <MenuItem Header="Check for updates on startup" ToggleType="CheckBox"
                   IsChecked="{Binding CheckForUpdatesOnStartup, Mode=OneWay}"
                   Command="{Binding ToggleCheckForUpdatesOnStartupCommand}"
@@ -91,7 +81,23 @@
         <MenuItem Header="Reset Inspector settings…" Command="{Binding ResetSettingsCommand}"
                   AutomationProperties.AutomationId="MenuResetSettings" />
       </MenuItem>
-      <MenuItem Header="_Help" AutomationProperties.AutomationId="MenuHelp"><MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}" AutomationProperties.AutomationId="MenuCheckForUpdates" /></MenuItem>
+      <MenuItem Header="_Help" AutomationProperties.AutomationId="MenuHelp">
+        <MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}"
+                  AutomationProperties.AutomationId="MenuCheckForUpdates" />
+        <MenuItem Header="Update channel" AutomationProperties.AutomationId="MenuUpdateChannel">
+          <MenuItem Header="Stable" ToggleType="CheckBox"
+                    IsChecked="{Binding UpdateChannelIsStable, Mode=OneWay}"
+                    Command="{Binding SetUpdateChannelStableCommand}"
+                    AutomationProperties.AutomationId="MenuUpdateChannelStable" />
+          <MenuItem Header="Beta" ToggleType="CheckBox"
+                    IsChecked="{Binding UpdateChannelIsBeta, Mode=OneWay}"
+                    Command="{Binding SetUpdateChannelBetaCommand}"
+                    AutomationProperties.AutomationId="MenuUpdateChannelBeta" />
+        </MenuItem>
+        <Separator />
+        <MenuItem Header="About Titanium Inspector…" Command="{Binding OpenAboutCommand}"
+                  AutomationProperties.AutomationId="MenuAbout" />
+      </MenuItem>
     </Menu>
     <Grid RowDefinitions="Auto,*,Auto">
       <Grid.ColumnDefinitions>

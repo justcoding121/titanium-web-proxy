@@ -22,6 +22,8 @@ public sealed class UpdateCheckResult
     public string? AssetUrl { get; init; }
     public string? AssetSha256 { get; init; }
     public UpdateApplyKind ApplyKind { get; init; } = UpdateApplyKind.Zip;
+    /// <summary>True when remote semver is lower than the running build (channel switch / downgrade).</summary>
+    public bool IsDowngrade { get; init; }
 }
 
 /// <summary>GitHub Releases + release-manifest updater for Stable/Beta channels.</summary>
@@ -77,13 +79,15 @@ public sealed class UpdateService
                 };
             }
 
-            var remoteText = manifest.Version?.TrimStart('v') ?? "0.0.0";
-            if (!Version.TryParse(remoteText.Split('-')[0], out var remote))
+            var remoteText = NormalizeReleaseTag(manifest.Version);
+            if (!Version.TryParse(StripPrerelease(remoteText), out var remote))
             {
                 remote = new Version(0, 0);
             }
 
-            if (remote <= local)
+            var installedTag = _settings.Current.InstalledReleaseTag;
+            var installedChannel = _settings.Current.InstalledReleaseChannel;
+            if (!ShouldOfferChannelInstall(local, remoteText, channelDisplay, installedTag, installedChannel))
             {
                 return new UpdateCheckResult
                 {
@@ -101,10 +105,18 @@ public sealed class UpdateService
                     UpdateAvailable = true,
                     RemoteVersion = remoteText,
                     ChannelDisplay = channelDisplay,
+                    IsDowngrade = remote < local,
                     Message =
-                        $"Update {remoteText} ({channelDisplay}) is available, but no package was found for this install.",
+                        $"Install {remoteText} ({channelDisplay}) is available, but no package was found for this install.",
                 };
             }
+
+            var isDowngrade = remote < local;
+            var message = remote > local
+                ? $"Update available: {remoteText} ({channelDisplay})"
+                : isDowngrade
+                    ? $"Install {channelDisplay} {remoteText} (replaces your current build)"
+                    : $"Install {remoteText} ({channelDisplay})";
 
             return new UpdateCheckResult
             {
@@ -114,7 +126,8 @@ public sealed class UpdateService
                 AssetUrl = asset.Url,
                 AssetSha256 = asset.Sha256,
                 ApplyKind = kind,
-                Message = $"Update available: {remoteText} ({channelDisplay})",
+                IsDowngrade = isDowngrade,
+                Message = message,
             };
         }
         catch (Exception ex)
@@ -126,6 +139,67 @@ public sealed class UpdateService
             };
         }
     }
+
+    /// <summary>
+    /// Whether the selected channel's latest release should be offered — upgrades, downgrades, and
+    /// same-semver channel/build switches (not only when remote semver is newer).
+    /// </summary>
+    public static bool ShouldOfferChannelInstall(
+        Version local,
+        string remoteText,
+        string channelDisplay,
+        string? installedReleaseTag,
+        string? installedReleaseChannel)
+    {
+        remoteText = NormalizeReleaseTag(remoteText);
+        var remoteSemver = Version.TryParse(StripPrerelease(remoteText), out var rv) ? rv : new Version(0, 0);
+
+        if (!string.IsNullOrEmpty(installedReleaseTag)
+            && installedReleaseTag.Equals(remoteText, StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrEmpty(installedReleaseChannel)
+            && installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (remoteSemver > local)
+        {
+            return true;
+        }
+
+        if (remoteSemver < local)
+        {
+            return true;
+        }
+
+        // Same semver — different release tag or channel build.
+        if (!string.IsNullOrEmpty(installedReleaseTag)
+            && !installedReleaseTag.Equals(remoteText, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrEmpty(installedReleaseChannel)
+            && !installedReleaseChannel.Equals(channelDisplay, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Unknown install origin: offer beta build at same semver, or when persisted channel differs.
+        if (channelDisplay.Equals("Beta", StringComparison.OrdinalIgnoreCase)
+            && remoteText.Contains('-', StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    public static string NormalizeReleaseTag(string? tag) =>
+        (tag ?? "0.0.0").TrimStart('v');
+
+    public static string StripPrerelease(string tag) =>
+        NormalizeReleaseTag(tag).Split('-')[0];
 
     /// <summary>Download package, verify SHA256, spawn apply helper, return true if helper started.</summary>
     public async Task<(bool Ok, string Message)> DownloadAndStartApplyAsync(
@@ -159,6 +233,10 @@ public sealed class UpdateService
             }
 
             await File.WriteAllBytesAsync(packagePath, bytes, cancellationToken);
+
+            _settings.Current.InstalledReleaseTag = check.RemoteVersion;
+            _settings.Current.InstalledReleaseChannel = check.ChannelDisplay;
+            _settings.Save();
 
             var installDir = AppContext.BaseDirectory.TrimEnd(
                 Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);

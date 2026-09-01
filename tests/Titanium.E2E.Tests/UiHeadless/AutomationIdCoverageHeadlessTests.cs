@@ -56,6 +56,7 @@ public class AutomationIdCoverageHeadlessTests
         "MenuResetSettings",
         "MenuHelp",
         "MenuCheckForUpdates",
+        "MenuAbout",
         "SearchBox",
         "HideTunnelsFilterCheck",
         "HideImagesFilterCheck",
@@ -371,6 +372,10 @@ public class AutomationIdCoverageHeadlessTests
             AssertHasAutomationId(logging, "LoggingOpenFolder");
             AssertHasAutomationId(logging, "LoggingBrowse");
             AssertHasAutomationId(logging, "LoggingPath");
+
+            var about = new AboutWindow();
+            AssertHasAutomationId(about, "AboutWindow");
+            AssertHasAutomationId(about, "AboutOk");
         });
     }
 

@@ -18,6 +18,12 @@ public sealed class InspectorSettings
     public DateTimeOffset? LastUpdateCheckUtc { get; set; }
     public string UpdateChannel { get; set; } = "Stable";
 
+    /// <summary>Release tag last applied via in-app update (e.g. 7.0.4-beta). Null when unknown / manual install.</summary>
+    public string? InstalledReleaseTag { get; set; }
+
+    /// <summary>Channel of <see cref="InstalledReleaseTag"/> (Stable or Beta). Null when unknown.</summary>
+    public string? InstalledReleaseChannel { get; set; }
+
     public string BindAddress { get; set; } = "127.0.0.1";
     public int BindPort { get; set; } = 8866;
 

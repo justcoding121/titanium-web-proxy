@@ -155,6 +155,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OpenLoopbackExemptCommand = new RelayCommand(OpenLoopbackExemptAsync);
         OpenSessionRetentionCommand = new RelayCommand(OpenSessionRetentionAsync);
         OpenLoggingSettingsCommand = new RelayCommand(OpenLoggingSettingsAsync);
+        OpenAboutCommand = new RelayCommand(OpenAboutAsync);
         OpenHttpsDecryptHostsCommand = new RelayCommand(OpenHttpsDecryptHostsAsync);
         ResetSettingsCommand = new RelayCommand(ResetSettingsAsync);
         ReplayCommand = new RelayCommand(async () => await ReplaySelectedAsync());
@@ -719,6 +720,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             : "Session retention cancelled";
     }
 
+    private async Task OpenAboutAsync()
+    {
+        var owner = TryGetMainWindow();
+        if (owner is null)
+        {
+            return;
+        }
+
+        await AboutWindow.ShowAsync(owner);
+    }
+
     private async Task OpenLoggingSettingsAsync()
     {
         var owner = TryGetMainWindow();
@@ -1105,6 +1117,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ICommand OpenLoopbackExemptCommand { get; }
     public ICommand OpenSessionRetentionCommand { get; }
     public ICommand OpenLoggingSettingsCommand { get; }
+    public ICommand OpenAboutCommand { get; }
     public ICommand OpenHttpsDecryptHostsCommand { get; }
     public ICommand ResetSettingsCommand { get; }
     public ICommand ReplayCommand { get; }

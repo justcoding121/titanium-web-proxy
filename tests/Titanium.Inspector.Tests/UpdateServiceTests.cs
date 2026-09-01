@@ -103,4 +103,48 @@ public class UpdateServiceTests
         Assert.AreEqual("7.1.0", dialogs.LastInstallUpdateVersion);
         Assert.AreEqual("Beta", dialogs.LastInstallUpdateChannel);
     }
+
+    [TestMethod]
+    public void ShouldOfferChannelInstall_UpgradeWhenRemoteNewer()
+    {
+        Assert.IsTrue(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 3), "7.0.4", "Stable", null, null));
+    }
+
+    [TestMethod]
+    public void ShouldOfferChannelInstall_DowngradeWhenSwitchingToStable()
+    {
+        Assert.IsTrue(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 4), "7.0.3", "Stable", "7.0.4-beta", "Beta"));
+    }
+
+    [TestMethod]
+    public void ShouldOfferChannelInstall_SameSemverBetaBuildWhenUnknownInstall()
+    {
+        Assert.IsTrue(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 4), "7.0.4-beta", "Beta", null, null));
+    }
+
+    [TestMethod]
+    public void ShouldOfferChannelInstall_UpToDateWhenTagAndChannelMatch()
+    {
+        Assert.IsFalse(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 4), "7.0.4-beta", "Beta", "7.0.4-beta", "Beta"));
+        Assert.IsFalse(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 4), "7.0.4", "Stable", "7.0.4", "Stable"));
+    }
+
+    [TestMethod]
+    public void ShouldOfferChannelInstall_UpToDateStableWhenUnknownInstallAndSameSemver()
+    {
+        Assert.IsFalse(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 4), "7.0.4", "Stable", null, null));
+    }
+
+    [TestMethod]
+    public void ShouldOfferChannelInstall_ChannelSwitchAtSameSemverWhenTagKnown()
+    {
+        Assert.IsTrue(UpdateService.ShouldOfferChannelInstall(
+            new Version(7, 0, 4), "7.0.4", "Stable", "7.0.4-beta", "Beta"));
+    }
 }
