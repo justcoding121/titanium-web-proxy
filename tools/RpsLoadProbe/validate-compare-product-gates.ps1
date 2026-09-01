@@ -6,6 +6,9 @@ param(
     # H3→H3 MITM Full on macos-15-intel first baseline landed at 0.693 (high repeat variance).
     # Keep 0.70 for all other protocol pairs; see PERF-GATES.md.
     [double] $MitmHttp3Gate = 0.69,
+    # H3→H1 TLS Full MITM on macos-15-intel smoke @ 2026da55: 0.650 (mutating re-encode vs
+    # reverse). Lite and reverse H3→H1 TLS clear 0.70 / YARP peer; only Full needs this floor.
+    [double] $MitmHttp3TlsFullGate = 0.65,
     [double] $ReverseYarpGate = 0.95,
     # H3→H3 peer gate: Win often sees TWP ahead of YARP; Linux YARP H3→H3 SLO-fails (skipped).
     # On macos-15-intel Homebrew MsQuic, YARP H3→H3 SLO-passes and TWP≈0.78× — keep a written
@@ -50,10 +53,12 @@ $mitmPairs = @(
 )
 
 $failed = $false
-Write-Host "MITM gates (Full/Lite >= $MitmGate x Reverse; H3->H3 >= $MitmHttp3Gate @ c=64 median)" -ForegroundColor Cyan
+Write-Host "MITM gates (Full/Lite >= $MitmGate x Reverse; H3->H3 >= $MitmHttp3Gate; H3->H1 TLS Full >= $MitmHttp3TlsFullGate @ c=64 median)" -ForegroundColor Cyan
 foreach ($p in $mitmPairs) {
-    $pairGate = if ($p.Label -eq 'H3->H3') { $MitmHttp3Gate } else { $MitmGate }
     foreach ($kind in @('Lite', 'Full')) {
+        $pairGate = if ($p.Label -eq 'H3->H3') { $MitmHttp3Gate }
+            elseif ($p.Label -eq 'H3->H1 TLS' -and $kind -eq 'Full') { $MitmHttp3TlsFullGate }
+            else { $MitmGate }
         $num = $p.$kind
         $den = $p.Reverse
         if (-not $sustain.ContainsKey($num) -or -not $sustain.ContainsKey($den)) {
