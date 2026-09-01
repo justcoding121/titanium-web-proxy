@@ -1049,7 +1049,7 @@ internal static class Http3OriginBridge
         {
             if (poolKey != null)
                 server.TcpConnectionFactory.TryRentPooled(server, poolKey,
-                    SslExtensions.Http11ProtocolAsList, out connection);
+                    applicationProtocols: null, out connection);
 
             if (connection == null)
             {
@@ -1071,9 +1071,13 @@ internal static class Http3OriginBridge
                 }
 
                 openSession = coldOpenSessionFactory();
+                // Do not advertise ALPN for HTTP/1.1 origins. macOS SslStream + http/1.1 ALPN
+                // against Kestrel Http1-only has been observed to fail the handshake (H3 client
+                // then sees H3_INTERNAL_ERROR) while the same topology works without ALPN and
+                // YARP AcceptAny succeeds. H2/H3 origin paths keep their ALPN lists.
                 connection = await server.TcpConnectionFactory.GetServerConnection(
                     server, host, port, HttpHeader.Version11, isHttps,
-                    SslExtensions.Http11ProtocolAsList, false, openSession,
+                    applicationProtocols: null, false, openSession,
                     fwd.UpStreamEndPoint ?? server.UpStreamEndPoint,
                     fwd.CustomUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy),
                     false, false, cancellationToken, connectHost, connectPort,

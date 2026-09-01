@@ -876,7 +876,11 @@ internal sealed class TwpProxyHost : IDisposable
         proxy.CertificateManager.LeafCertificateKeyAlgorithm = CertificateKeyAlgorithm.EcdsaP256;
         proxy.ServerCertificateValidationCallback += (_, args) =>
         {
-            args.IsValid = LoopbackCertificateAuthority.Validate(args.Certificate);
+            // Prefer chain trust against the shared probe root. On macOS Network.framework,
+            // CustomRootTrust Build can still fail for loopback leaves even when SNI matches;
+            // accept our minted leaf by subject as a probe-only fallback (YARP uses AcceptAny).
+            args.IsValid = LoopbackCertificateAuthority.Validate(args.Certificate)
+                           || LoopbackCertificateAuthority.IsProbeLeaf(args.Certificate);
             return Task.CompletedTask;
         };
     }

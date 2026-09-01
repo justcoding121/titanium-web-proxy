@@ -438,7 +438,7 @@ jobs:
       # Pass workflow_dispatch inputs via env (not ${{ }} in the script) to avoid
       # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
-        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || 400)) }}
+        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || (inputs.mode == 'compare-product-smoke' && 50 || 400))) }}
         shell: pwsh
         env:
           RPS_MODE: ${{ env.RPS_MODE }}
@@ -446,6 +446,7 @@ jobs:
           RPS_WARMUP_SEC: ${{ env.RPS_WARMUP_SEC }}
           RPS_DURATION_SEC: ${{ env.RPS_DURATION_SEC }}
           RPS_REPEATS: ${{ env.RPS_REPEATS }}
+          TWP_H3_ERROR_LOG: ${{ runner.temp }}/twp-h3-errors.log
         run: |
           pwsh tools/RpsLoadProbe/run-rps.ps1 `
             -Mode $env:RPS_MODE `
@@ -455,6 +456,14 @@ jobs:
             -Repeats ([int]$env:RPS_REPEATS) `
             -ResultsDir tools/RpsLoadProbe/results `
             -BombardierCheck
+
+      - name: Upload H3 error log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: twp-h3-errors-${{ matrix.os }}
+          path: ${{ runner.temp }}/twp-h3-errors.log
+          if-no-files-found: ignore
 
       - name: Validate edition gates
         if: env.RPS_MODE == 'compare-editions'

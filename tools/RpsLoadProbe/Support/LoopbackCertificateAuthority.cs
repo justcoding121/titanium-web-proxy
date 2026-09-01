@@ -71,6 +71,28 @@ internal static class LoopbackCertificateAuthority
         }
     }
 
+    /// <summary>
+    /// Probe-only identity check when <see cref="Validate"/> chain build fails on a platform
+    /// (seen on macOS Network.framework with CustomRootTrust + loopback leaf).
+    /// </summary>
+    public static bool IsProbeLeaf(X509Certificate? certificate)
+    {
+        if (certificate is null) return false;
+        var loaded = certificate as X509Certificate2
+                     ?? X509CertificateLoader.LoadCertificate(certificate.GetRawCertData());
+        try
+        {
+            var cn = loaded.GetNameInfo(X509NameType.SimpleName, false);
+            if (string.Equals(cn, "localhost", StringComparison.OrdinalIgnoreCase))
+                return true;
+            return loaded.Subject.Contains("localhost", StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (!ReferenceEquals(loaded, certificate)) loaded.Dispose();
+        }
+    }
+
     private static bool TryReadSharedPfx(string fileName, out byte[] bytes)
     {
         bytes = [];
