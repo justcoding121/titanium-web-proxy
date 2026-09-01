@@ -1,6 +1,8 @@
 # Titanium Web Proxy
 
-A lightweight, asynchronous HTTP(S) proxy server for .NET. This wiki documents the major features and the most common APIs. For the full type reference, see the [API documentation](https://justcoding121.github.io/titanium-web-proxy/docs/api/Titanium.Web.Proxy.ProxyServer.html).
+> Canonical product docs, downloads, and release notes: **[https://titaniumproxy.com](https://titaniumproxy.com)**
+
+A lightweight, high-performance HTTP(S) proxy — reverse / edge CLI, Inspector, and optional Plus on Windows, Linux, and macOS; embeddable .NET library via NuGet. This wiki documents major library APIs. For the full type reference, see the [API documentation](https://titaniumproxy.com/api/Titanium.Web.Proxy.ProxyServer.html).
 
 ## Contents
 
@@ -31,10 +33,14 @@ A lightweight, asynchronous HTTP(S) proxy server for .NET. This wiki documents t
 
 ## Getting started
 
+Canonical downloads: **[https://titaniumproxy.com/download](https://titaniumproxy.com/download)** · install guide: **[https://titaniumproxy.com/docs/install](https://titaniumproxy.com/docs/install)**.
+
 Install from [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy):
 
 ```shell
 dotnet add package Titanium.Web.Proxy
+# Beta / prerelease:
+dotnet add package Titanium.Web.Proxy --prerelease
 ```
 
 Start an explicit proxy that logs every requested URL:
@@ -82,6 +88,13 @@ Example apps live under [`examples/`](https://github.com/justcoding121/titanium-
 
 ## Screenshots
 
+**Titanium Inspector** — session grid with request/response details:
+
+<img src="images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
+
+Inspector stores its MITM root beside `%AppData%\TitaniumInspector\rootCert.pfx` and leaf certs in a sibling `crts\` folder (not the shared `%LocalAppData%\Titanium.Web.Proxy\crts` default). Use **Clear and reinstall root CA…** to mint a new root, clear local leaves, and remove same-name Trusted Root entries; on first start after upgrade (and on every clear/reinstall) Inspector best-effort deletes the legacy shared `crts` folder only — never a shared `rootCert.pfx`. Windows may show a Trusted Root Yes/No security dialog the first time a new root is installed (not UAC).
+
+Outbound HTTP/2 probes that fail ALPN (`SEC_E_NO_APPLICATION_PROTOCOL` / “No common application protocol”) are treated as “origin has no h2” without a TLS-version downgrade thrash, and a failed probe is **not** cached as a permanent “no HTTP/2” result.
 **Basic console example** — compact per-request traffic tape:
 
 <img src="images/basic-screenshot.jpg" alt="Basic console proxy screenshot" width="900" />
@@ -299,9 +312,10 @@ inbound h2c is not implemented. See
 
 ## HTTP/3
 
-HTTP/3 support is available as an opt-in feature.  See the **[HTTP/3](HTTP-3)** page for the full
-setup guide, and [Protocol Support — Protocol bridges](Protocol-Support#protocol-bridges) for every
-client→origin direction (including TCP HTTP/1.1 ↔ HTTP/2 translation).  Quick start:
+HTTP/3 support is available as an opt-in feature. See the **[HTTP/3](HTTP-3)** page for setup,
+**CLI/Inspector packaging** (which RID zip to download, Alpine/K8s musl zips, `http3-deps`), Alt-Svc,
+and gaps. See also [Protocol Support — Protocol bridges](Protocol-Support#protocol-bridges) for every
+client→origin direction (including TCP HTTP/1.1 ↔ HTTP/2 translation). Quick start:
 
 ```csharp
 proxy.EnableHttp3 = true;
@@ -408,7 +422,7 @@ QUIC endpoint is visible without extra config.
 | Knob | Balanced default | Speed opt-in | Notes |
 |---|---|---|---|
 | `EnableConnectionPool` | `true` | — | Live pool switch; prefer this over unused `ProxyResourceLimits.ConnectionPoolingEnabled`. |
-| `EnableIpv6UnreachableSoftSkip` | `true` | disable for strict IPv6 preference | After one IPv6 `NetworkUnreachable`-class Happy Eyeballs failure, skip IPv6 addresses for 30s (filter after address-family interleave). |
+| `EnableIpv6UnreachableSoftSkip` | `true` | disable for strict IPv6 preference | After one IPv6 `NetworkUnreachable`-class Happy Eyeballs failure, skip IPv6 addresses for 5 minutes (filter after address-family interleave). |
 | `MaxCachedConnections` | `128` | raise for high fan-out **per origin** | Live knob on `ProxyServer`. Cap is **per upstream host**, not process-wide. No upper clamp — set `512`/`1024` on large hosts. Keep in sync with `ResourceLimits.MaxCachedConnectionsPerHost` when you replace the snapshot. |
 | `ProxyEndPoint.MaxCachedConnections` | `null` (use server) | deeper pool for one reverse EP | Optional per-endpoint override applied when that EP owns the session. |
 | `ResourceLimits.MaxConcurrentStreamsPerConnection` | `256` | raise for heavy H2 fan-in | Replace via `ProxyResourceLimits.Create(...)` — validated positive only, no max ceiling. |

@@ -48,17 +48,16 @@ internal sealed class ProxySettings
     public int TcpTimeWaitSeconds { get; set; }
 
     /// <summary>
-    ///     Matches the library Balanced default (<see langword="false" />). Set <see langword="true" />
-    ///     to keep generated leaves on disk across restarts.
+    ///     Persist generated leaves across restarts (fast cold start for returning MITM sessions).
     /// </summary>
-    public bool SaveFakeCertificates { get; set; }
+    public bool SaveFakeCertificates { get; set; } = true;
 
     /// <summary>
-    ///     Matches the library Balanced default (<see cref="CertificateKeyAlgorithm.Rsa2048" />).
-    ///     Set <see cref="CertificateKeyAlgorithm.EcdsaP256" /> for much cheaper first-visit MITM when
-    ///     clients accept ECDSA server certificates (all current browsers). The root stays RSA either way.
+    ///     ECDSA P-256 leaves for modern TLS clients (default). Use
+    ///     <see cref="CertificateKeyAlgorithm.Rsa2048" /> only when you must intercept older stacks.
+    ///     The root stays RSA either way.
     /// </summary>
-    public CertificateKeyAlgorithm LeafCertificateKeyAlgorithm { get; set; } = CertificateKeyAlgorithm.Rsa2048;
+    public CertificateKeyAlgorithm LeafCertificateKeyAlgorithm { get; set; } = CertificateKeyAlgorithm.EcdsaP256;
 
     public bool EnableHttp2 { get; set; } = true;
 
@@ -121,11 +120,12 @@ internal sealed class ProxySettings
     ///     Master switch for proxy-library diagnostic logging (bridged into the host <c>ILoggerFactory</c>).
     ///     When false, the proxy uses a no-op logger regardless of host log levels.
     /// </summary>
-    public bool EnableProxyLogging { get; set; } = true;
+    public bool EnableProxyLogging { get; set; }
 
     /// <summary>
     ///     When true, each completed response is logged at Information (files only — Event Log is Warning+).
-    ///     Disable under high traffic if you only need errors and lifecycle messages.
+    ///     Disable under high traffic if you only need errors and lifecycle messages. Defaults off;
+    ///     enable via configuration when diagnosing.
     /// </summary>
-    public bool LogRequests { get; set; } = true;
+    public bool LogRequests { get; set; }
 }

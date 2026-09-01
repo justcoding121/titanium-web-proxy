@@ -1,0 +1,71 @@
+{
+  "CallerReference": "titaniumproxy-website-v1",
+  "Comment": "titaniumproxy.com → GitHub Pages origin (path rewrite via CloudFront Function titaniumproxy-path-rewrite)",
+  "Enabled": true,
+  "Aliases": {
+    "Quantity": 2,
+    "Items": ["titaniumproxy.com", "www.titaniumproxy.com"]
+  },
+  "DefaultRootObject": "index.html",
+  "Origins": {
+    "Quantity": 1,
+    "Items": [
+      {
+        "Id": "github-pages",
+        "DomainName": "justcoding121.github.io",
+        "OriginPath": "",
+        "CustomOriginConfig": {
+          "HTTPPort": 80,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "https-only",
+          "OriginSslProtocols": {
+            "Quantity": 1,
+            "Items": ["TLSv1.2"]
+          }
+        },
+        "CustomHeaders": {
+          "Quantity": 0
+        },
+        "ConnectionAttempts": 3,
+        "ConnectionTimeout": 10,
+        "OriginShield": {
+          "Enabled": false
+        }
+      }
+    ]
+  },
+  "DefaultCacheBehavior": {
+    "TargetOriginId": "github-pages",
+    "ViewerProtocolPolicy": "redirect-to-https",
+    "AllowedMethods": {
+      "Quantity": 3,
+      "Items": ["GET", "HEAD", "OPTIONS"],
+      "CachedMethods": {
+        "Quantity": 2,
+        "Items": ["GET", "HEAD"]
+      }
+    },
+    "Compress": true,
+    "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+    "FunctionAssociations": {
+      "Quantity": 1,
+      "Items": [
+        {
+          "EventType": "viewer-request",
+          "FunctionARN": "arn:aws:cloudfront::ACCOUNT_ID:function/titaniumproxy-path-rewrite"
+        }
+      ]
+    }
+  },
+  "CustomErrorResponses": {
+    "Quantity": 0
+  },
+  "ViewerCertificate": {
+    "ACMCertificateArn": "REPLACE_WITH_ACM_CERTIFICATE_ARN",
+    "SSLSupportMethod": "sni-only",
+    "MinimumProtocolVersion": "TLSv1.2_2021"
+  },
+  "HttpVersion": "http2and3",
+  "IsIPV6Enabled": true,
+  "PriceClass": "PriceClass_100"
+}

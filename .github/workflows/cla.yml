@@ -1,0 +1,34 @@
+name: CLA
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  cla:
+    runs-on: ubuntu-latest
+    steps:
+      - name: CLA Assistant
+        if: >
+          (github.event.issue.pull_request &&
+            contains(github.event.comment.body, 'I have read the CLA and I hereby sign the CLA')) ||
+          github.event_name == 'pull_request_target'
+        uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08 # v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.CLA_ASSISTANT_PAT || secrets.GITHUB_TOKEN }}
+        with:
+          path-to-document: https://github.com/justcoding121/titanium-web-proxy/blob/develop/CLA.md
+          path-to-signatures: signatures/version1/cla.json
+          branch: cla-signatures
+          allowlist: justcoding121,bot*
+          custom-notsigned-prcomment: >
+            Thanks for your contribution. Please read [CLA.md](https://github.com/justcoding121/titanium-web-proxy/blob/develop/CLA.md)
+            and reply with: I have read the CLA and I hereby sign the CLA.

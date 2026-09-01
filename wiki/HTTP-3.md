@@ -14,10 +14,30 @@ Titanium Web Proxy supports HTTP/3 as an **opt-in experimental** feature built o
 
 ## Prerequisites
 
-- .NET 10 or later.
-- MsQuic native library:
-  - **Windows**: shipped with the .NET runtime (Windows 11 / Server 2022 or later).
-  - **Linux**: install `libmsquic` from [packages.microsoft.com](https://packages.microsoft.com) (not bundled with the runtime). Example on Ubuntu:
+### CLI / Inspector products
+
+Release zips **bundle MsQuic natives** for:
+
+| RID | Typical host |
+| --- | --- |
+| `win-x64` | Windows 11 / Server 2022+ (OS MsQuic; no DLL in zip) |
+| `linux-x64` / `linux-arm64` | glibc (Ubuntu/Debian/RHEL-like) |
+| `linux-musl-x64` / `linux-musl-arm64` | Alpine / musl containers |
+| `osx-x64` / `osx-arm64` | macOS Intel / Apple Silicon |
+
+Linux/macOS natives sit next to the binary with `$ORIGIN` / `@loader_path` RPATH so `QuicListener.IsSupported` works without a system package. See [CLI/Inspector packaging](#cliinspector-packaging).
+
+```bash
+titanium http3-deps status
+titanium http3-deps install   # apt / dnf / zypper / apk / brew — edge hosts only
+```
+
+### NuGet library hosts
+
+Embedding `Titanium.Web.Proxy` does **not** ship MsQuic:
+
+- **Windows**: Windows 11 / Server 2022 or later (in-box MsQuic).
+- **Linux**: install `libmsquic` from [packages.microsoft.com](https://packages.microsoft.com) (or `apk add libmsquic` on Alpine). Example on Ubuntu:
 
 ```bash
 curl -fsSL --proto '=https' --tlsv1.2 \
@@ -27,12 +47,41 @@ sudo dpkg -i packages-microsoft-prod.deb && rm packages-microsoft-prod.deb
 sudo apt-get update && sudo apt-get install -y libmsquic
 ```
 
-  - **macOS**: not bundled by the .NET runtime. See [macOS](#macos) below for the bundling workaround.
-- At runtime: `System.Net.Quic.QuicListener.IsSupported == true` — check this before enabling HTTP/3.
-- An inbound HTTP/3 endpoint: either `TransparentQuicProxyEndPoint` (UDP-only transparent/NAT) or
-  `TransparentProxyEndPoint` with `EnableHttp3 = true` (reference .NET server stack-style TCP+UDP reverse listen).
+- **macOS**: bundle `libmsquic`, `libssl`, and `libcrypto` with `@loader_path`, or `brew install libmsquic`.
+
+At runtime: `System.Net.Quic.QuicListener.IsSupported == true` — check this before enabling HTTP/3.
+An inbound HTTP/3 endpoint: either `TransparentQuicProxyEndPoint` (UDP-only transparent/NAT) or
+`TransparentProxyEndPoint` with `EnableHttp3 = true` (TCP+UDP reverse listen).
 
 The [RPS saturation](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/rps-saturation.yml) workflow installs `libmsquic` on `ubuntu-latest` and asserts in-box MsQuic on `windows-latest` so HTTP/3 probe arms run on both OS.
+
+## CLI/Inspector packaging
+
+Publish wiring lives in `tools/packaging/` (`http3-native.lock.json`, `bundle-http3-native.ps1`, `THIRD-PARTY-HTTP3.txt`) and `.github/workflows/release.yml`.
+
+| RID family | What is in the zip | Host packages (not in zip) |
+| --- | --- | --- |
+| Windows | No `msquic.dll` — OS component | — |
+| glibc Linux | `libmsquic.so*`, `libssl.so.3`, `libcrypto.so.3` with `patchelf` RPATH `$ORIGIN` | `libnuma1` via `http3-deps` / apt |
+| musl Linux (Alpine) | Same idea from Alpine `.apk` (musl-linked OpenSSL — never mix with glibc `.so`) | `numactl`, `lttng-ust` via `http3-deps` / apk |
+| macOS | `libmsquic.dylib`, `libssl.3.dylib`, `libcrypto.3.dylib` with `@loader_path` via `install_name_tool` | — |
+
+LGPL/GPL natives (`libnuma`, `lttng-ust`, `liblttng-ust-ctl`, `libmsquic.lttng`) are **not** redistributed.
+
+## Alpine / Kubernetes
+
+Prefer Alpine (or other musl) images with the **`linux-musl-x64`** or **`linux-musl-arm64`** CLI zip. Do not extract a `linux-x64` glibc zip into an Alpine container — MsQuic will fail to `dlopen`.
+
+## `http3-deps` fallback
+
+When `QuicListener.IsSupported` is false (wrong RID, stripped natives, old glibc):
+
+```bash
+titanium http3-deps status
+titanium http3-deps install
+```
+
+Detects apt (Microsoft repo), dnf/zypper, `apk add libmsquic`, or `brew install libmsquic`. Opt-in; needs network and sudo/admin. Not automatic in MSI/winget.
 
 ## Quick start — reverse dual-listen (HttpClient / browsers)
 
@@ -351,11 +400,12 @@ pattern as `ExplicitProxyEndPoint` without touching the transparent implementati
 
 ## macOS
 
-MsQuic is **not bundled** with the .NET runtime on macOS. To use HTTP/3 on macOS, bundle `libmsquic`,
-`libssl`, and `libcrypto` alongside your application and configure `@loader_path` RPATH so the libraries
-can locate each other locally. When this is done correctly, `QuicListener.IsSupported` returns `true` and
-TWP's HTTP/3 support works without any code changes — no OS detection or special configuration in TWP is
-required.
+**CLI / Inspector:** Release `osx-x64` / `osx-arm64` zips already bundle `libmsquic`, `libssl`, and `libcrypto` with `@loader_path`. Prefer those zips over a manual Homebrew install.
+
+**NuGet library hosts:** MsQuic is **not** bundled with the .NET runtime on macOS. Bundle `libmsquic`,
+`libssl`, and `libcrypto` alongside your application and configure `@loader_path` so the libraries
+can locate each other locally. When this is done correctly, `QuicListener.IsSupported` returns `true`.
+Alternatively: `brew install libmsquic` or `titanium http3-deps install` on a machine that has the CLI.
 
 See the [MsQuic GitHub](https://github.com/microsoft/msquic) for library build and bundling instructions.
 

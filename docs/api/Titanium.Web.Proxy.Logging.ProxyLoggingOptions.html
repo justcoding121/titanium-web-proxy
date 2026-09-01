@@ -128,12 +128,13 @@ overhead (no timestamps are read, no strings are formatted, no providers run).</
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableConsole.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsole%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L36">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L39">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableConsole_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsole*"></a>
   <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableConsole" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsole">EnableConsole</h4>
-  <div class="markdown level1 summary"><p>Whether the built-in console sink is active. Defaults to <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a>. Ignored when
-<a class="xref" href="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.html#Titanium_Web_Proxy_Logging_ProxyLoggingOptions_LoggerFactory">LoggerFactory</a> is set.</p>
+  <div class="markdown level1 summary"><p>Whether the built-in async console sink is active. Defaults to <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a> so
+Error+ failures are visible without configuration. Ignored when <a class="xref" href="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.html#Titanium_Web_Proxy_Logging_ProxyLoggingOptions_LoggerFactory">LoggerFactory</a>
+is set. Writes never block session threads (bounded channel + background writer).</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="declaration">Declaration</h5>
@@ -160,7 +161,7 @@ overhead (no timestamps are read, no strings are formatted, no providers run).</
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableConsoleColors.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsoleColors%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L48">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L51">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableConsoleColors_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsoleColors*"></a>
   <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableConsoleColors" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableConsoleColors">EnableConsoleColors</h4>
@@ -198,7 +199,7 @@ redirected output/log files never contain raw escape codes.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableFile.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableFile%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L54">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L57">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableFile_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableFile*"></a>
   <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_EnableFile" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.EnableFile">EnableFile</h4>
@@ -230,14 +231,15 @@ Ignored when <a class="xref" href="Titanium.Web.Proxy.Logging.ProxyLoggingOption
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_Enabled.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.Enabled%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L21">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L22">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_Enabled_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.Enabled*"></a>
   <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_Enabled" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.Enabled">Enabled</h4>
-  <div class="markdown level1 summary"><p>Master switch for all proxy logging. When <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">false</a> (default is
-<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a>) the proxy uses a no-op logger; no log-related work of any kind is
-performed anywhere in the library, so this is the zero-overhead configuration for users who
-do not want logging at all.</p>
+  <div class="markdown level1 summary"><p>Master switch for all proxy logging. Defaults to <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a> so NuGet consumers
+surface real failures out of the box (paired with <a class="xref" href="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.html#Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MinimumLevel">MinimumLevel</a> of Error and
+the async console sink). Set to <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">false</a> for zero overhead: the proxy uses a
+no-op logger and performs no log-related work (preferred for probes and perf-sensitive hosts).
+Host apps should treat richer levels/file sinks as Debug-on / Release-opt-in.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="declaration">Declaration</h5>
@@ -264,7 +266,7 @@ do not want logging at all.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_FilePath.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.FilePath%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L60">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L63">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_FilePath_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.FilePath*"></a>
   <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_FilePath" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.FilePath">FilePath</h4>
@@ -296,7 +298,7 @@ against the current working directory. The containing directory is created on de
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_LoggerFactory.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.LoggerFactory%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L83">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L86">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_LoggerFactory_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.LoggerFactory*"></a>
   <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_LoggerFactory" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.LoggerFactory">LoggerFactory</h4>
@@ -329,7 +331,7 @@ created and this factory is used verbatim; the proxy never disposes a factory it
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MaxFileSizeBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxFileSizeBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L65">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L68">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MaxFileSizeBytes_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxFileSizeBytes*"></a>
   <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MaxFileSizeBytes" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxFileSizeBytes">MaxFileSizeBytes</h4>
@@ -360,7 +362,7 @@ created and this factory is used verbatim; the proxy never disposes a factory it
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MaxRolledFiles.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxRolledFiles%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L70">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L73">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MaxRolledFiles_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxRolledFiles*"></a>
   <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MaxRolledFiles" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MaxRolledFiles">MaxRolledFiles</h4>
@@ -391,15 +393,16 @@ created and this factory is used verbatim; the proxy never disposes a factory it
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MinimumLevel.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MinimumLevel%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L30">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L32">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MinimumLevel_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MinimumLevel*"></a>
   <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_MinimumLevel" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.MinimumLevel">MinimumLevel</h4>
   <div class="markdown level1 summary"><p>The minimum <a class="xref" href="https://learn.microsoft.com/dotnet/api/microsoft.extensions.logging.loglevel">LogLevel</a> that is actually written to any sink. Every caught
 exception in the proxy is still reported to the gateway regardless of this setting - this
 only controls how much of that stream is materialized/written. Defaults to
-<a class="xref" href="https://learn.microsoft.com/dotnet/api/microsoft.extensions.logging.loglevel#microsoft-extensions-logging-loglevel-error">Error</a> so out-of-the-box behavior stays quiet, while still surfacing
-every genuinely unexpected failure.</p>
+<a class="xref" href="https://learn.microsoft.com/dotnet/api/microsoft.extensions.logging.loglevel#microsoft-extensions-logging-loglevel-error">Error</a> so out-of-the-box NuGet behavior stays quiet while still
+surfacing genuinely unexpected failures. Raise the level (and/or enable file) only when
+diagnosing.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="declaration">Declaration</h5>
@@ -426,7 +429,7 @@ every genuinely unexpected failure.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Logging_ProxyLoggingOptions_QueueCapacity.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Logging.ProxyLoggingOptions.QueueCapacity%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L76">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Logging/ProxyLoggingOptions.cs/#L79">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_QueueCapacity_" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.QueueCapacity*"></a>
   <h4 id="Titanium_Web_Proxy_Logging_ProxyLoggingOptions_QueueCapacity" data-uid="Titanium.Web.Proxy.Logging.ProxyLoggingOptions.QueueCapacity">QueueCapacity</h4>

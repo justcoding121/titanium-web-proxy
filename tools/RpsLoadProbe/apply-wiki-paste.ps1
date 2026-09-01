@@ -43,6 +43,8 @@ $winRev = Get-Section 'WIN_REVERSE'
 $winMitm = Get-Section 'WIN_MITM'
 $linRev = Get-Section 'LIN_REVERSE'
 $linMitm = Get-Section 'LIN_MITM'
+$macRev = Get-Section 'MAC_REVERSE'
+$macMitm = Get-Section 'MAC_MITM'
 
 $wiki = [System.IO.File]::ReadAllText((Resolve-Path $WikiFile), [System.Text.Encoding]::UTF8)
 
@@ -54,19 +56,30 @@ $winRevHeader = "Median of **3 repeats** on ``windows-latest`` (4 vCPU / 16 GiB)
 
 $linRevHeader = "Median of **3 repeats** on ``ubuntu-latest`` (4 vCPU / 16 GiB). Bare reverse 5${mul}5 @ ``$HeadSha`` $em ``compare-product`` [$PrimaryRunId]($runUrl). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. **Linux nginx is the authoritative nginx baseline.** nginx terminate peers use ``keepalive 256`` + streaming buffers. The RPS workflow installs nginx.org mainline (``http_v3_module``) and ``libmsquic``. Prefer ratios over absolute RPS."
 
+$macRevHeader = "Median of **3 repeats** on ``macos-15-intel`` (4-core / 14 GB). Bare reverse 5${mul}5 @ ``$HeadSha`` $em ``compare-product`` [$PrimaryRunId]($runUrl). Warmup 2s / measure 8s; concurrency 8, 16, 32, 64. Prefer TWP${div}peer ratios over absolute RPS. **RPS cells** include median RSS / CPU at the peak-RPS step as ``<br><sub>(MiB / CPU%)</sub>``. The RPS workflow installs Homebrew nginx (``http_v3_module``), Homebrew ``libmsquic`` (+ ``DYLD_*``), and YARP. Do not publish from ``macos-latest`` (3-core / 7 GB)."
+
 $mitmNote = @(
     "Same Client${mul}Origin wires with interception on (``compare-product`` [$PrimaryRunId]($runUrl)). **Lite** = no-op handlers (unchanged-lite finish). **Full** = append-only header mutation (harness: one probe header each way; product: generic append-only relay via ``MitmCompressedRelayHelper``). nginx/YARP cannot MITM. **Lite${div}Reverse** / **Full${div}Reverse** vs bare reverse (same job). Completion gate: Lite and Full ${ge} **0.70${mul}** reverse sustain @ c=64 (median of 3 GHA runs)."
     ""
-    "**v1 append-only relay (2026-08-27):** Pre-fix H2${rarr}H2 Full${div}Reverse was **0.13${endash}0.16${mul}** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ ``$HeadSha``: H2 plain${rarr}H2 plain Full **0.77${endash}0.79${mul}**, H3${rarr}H1 Full **0.91${endash}0.93${mul}**, all MITM arms ${ge} **0.70${mul}** on median of [$PrimaryRunId]($runUrl), [33055267086](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055267086), [33055272140](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055272140)."
+    "**v1 append-only relay (2026-08-27):** Pre-fix H2${rarr}H2 Full${div}Reverse was **0.13${endash}0.16${mul}** ([32960766249](https://github.com/justcoding121/titanium-web-proxy/actions/runs/32960766249)). Post-fix @ ``df172718``: H2 plain${rarr}H2 plain Full **0.77${endash}0.79${mul}**, H3${rarr}H1 Full **0.91${endash}0.93${mul}**, all MITM arms ${ge} **0.70${mul}** on median of [33041445371](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33041445371), [33055267086](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055267086), [33055272140](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33055272140)."
+    ""
+    "**v2 drop-only + non-unique append (2026-08-27):** ``MitmStaticRebuildHelper`` rebuilds static HPACK/QPACK after 1${endash}4 unique header drops; trailing non-unique appends stay on compressed relay. @ ``$HeadSha``: all MITM arms ${ge} **0.70${mul}** on GHA median ([33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622), [33105885748](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33105885748) Linux; [33087085235](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087085235), [33087088466](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087088466), [33087091622](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33087091622) Windows). H2 plain${rarr}H2 plain Full **0.77${endash}0.79${mul}** (Win) / **0.78${mul}** (Lin)."
 ) -join "`n"
 
 $winHdr = "## Windows $em Titanium vs nginx vs YARP"
 $linHdr = "## Linux $em Titanium vs nginx vs YARP"
+$macHdr = "## macOS $em Titanium vs nginx vs YARP"
+# After Linux product tables: macOS, then Editions / Heavier / Cross-version depending on wiki shape.
+$afterLinuxLookahead = '(?=\r?\n## (?:macOS|Editions|Heavier|Cross-version))'
+$afterMacLookahead = '(?=\r?\n## (?:Editions|Heavier|Cross-version))'
 
+# Allow optional intro lines between section heading and ### Reverse (Windows has a Client/Origin blurb).
 $wiki = [regex]::Replace($wiki,
-    "(?s)($([regex]::Escape($winHdr))\r?\n\r?\n### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
+    "(?s)($([regex]::Escape($winHdr))\r?\n(?:.*?\r?\n)?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
     [System.Text.RegularExpressions.MatchEvaluator]{
-        param($m) $m.Groups[1].Value + $winRevHeader + "`n`n" + $winRev + "`n"
+        param($m)
+        $loadGen = "**Load generators:** Reverse inbound H3 arms use **``dotnet-httpclient``** (``http_version=3.0``, ``RequestVersionExact``). nginx/Windows is same-OS only (no QUIC)."
+        $m.Groups[1].Value + $winRevHeader + "`n`n" + $loadGen + "`n`n" + $winRev + "`n"
     },
     1)
 
@@ -78,21 +91,67 @@ $wiki = [regex]::Replace($wiki,
     1)
 
 $wiki = [regex]::Replace($wiki,
-    "(?s)($([regex]::Escape($linHdr))\r?\n\r?\n### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
+    "(?s)($([regex]::Escape($linHdr))\r?\n(?:.*?\r?\n)?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
     [System.Text.RegularExpressions.MatchEvaluator]{
         param($m) $m.Groups[1].Value + $linRevHeader + "`n`n" + $linRev + "`n"
     },
     1)
 
 $idx = $wiki.IndexOf($linHdr)
+if ($idx -lt 0) { throw "Missing wiki heading: $linHdr" }
+$head = $wiki.Substring(0, $idx)
 $tail = $wiki.Substring($idx)
+
 $tail = [regex]::Replace($tail,
-    '(?s)(### MITM \(TWP only\)\r?\n\r?\n).*?(?=\r?\n## Heavier)',
+    "(?s)(### MITM \(TWP only\)\r?\n\r?\n).*?$afterLinuxLookahead",
     [System.Text.RegularExpressions.MatchEvaluator]{
         param($m) $m.Groups[1].Value + $mitmNote + "`n`n" + $linMitm + "`n"
     },
     1)
-$wiki = $wiki.Substring(0, $idx) + $tail
+
+$macBlock = @(
+    $macHdr
+    ''
+    '### Reverse'
+    ''
+    $macRevHeader
+    ''
+    $macRev
+    ''
+    '### MITM (TWP only)'
+    ''
+    $mitmNote
+    ''
+    $macMitm
+    ''
+) -join "`n"
+
+if ($tail.Contains($macHdr)) {
+    $tail = [regex]::Replace($tail,
+        "(?s)($([regex]::Escape($macHdr))\r?\n(?:.*?\r?\n)?### Reverse\r?\n\r?\n).*?(?=\r?\n### MITM)",
+        [System.Text.RegularExpressions.MatchEvaluator]{
+            param($m) $m.Groups[1].Value + $macRevHeader + "`n`n" + $macRev + "`n"
+        },
+        1)
+    $macIdx = $tail.IndexOf($macHdr)
+    $macHead = $tail.Substring(0, $macIdx)
+    $macTail = $tail.Substring($macIdx)
+    $macTail = [regex]::Replace($macTail,
+        "(?s)(### MITM \(TWP only\)\r?\n\r?\n).*?$afterMacLookahead",
+        [System.Text.RegularExpressions.MatchEvaluator]{
+            param($m) $m.Groups[1].Value + $mitmNote + "`n`n" + $macMitm + "`n"
+        },
+        1)
+    $tail = $macHead + $macTail
+}
+else {
+    # Insert macOS after Linux product tables and before Editions / Heavier / Cross-version.
+    $insertAt = [regex]::Match($tail, '\r?\n## (?:Editions|Heavier|Cross-version)')
+    if (-not $insertAt.Success) { throw 'Could not find ## Editions / ## Heavier / ## Cross-version to insert macOS section' }
+    $tail = $tail.Substring(0, $insertAt.Index) + "`n`n" + $macBlock + $tail.Substring($insertAt.Index)
+}
+
+$wiki = $head + $tail
 
 $utf8 = New-Object System.Text.UTF8Encoding $false
 [System.IO.File]::WriteAllText((Resolve-Path $WikiFile), $wiki, $utf8)

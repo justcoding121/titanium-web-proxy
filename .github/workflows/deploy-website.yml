@@ -1,0 +1,137 @@
+name: Deploy website
+
+on:
+  # Always on product-channel and develop pushes so download.data.ts rebuilds when
+  # beta/stable merges land (those merges often do not touch website/**).
+  push:
+    branches:
+      - develop
+      - beta
+      - stable
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'website/**'
+      - 'wiki/images/**'
+      - 'docs/api/**'
+      - 'docs/styles/**'
+      - 'docs/fonts/**'
+      - '.github/workflows/deploy-website.yml'
+  # Human-published releases. Actions GITHUB_TOKEN `gh release create` does not
+  # cascade this event — release.yml also dispatches this workflow after assets.
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # NuGet-only GitHub Releases must not redeploy Pages; only v* product tags.
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install and build
+        working-directory: website
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm ci --ignore-scripts
+          npm run docs:build
+
+      - name: Copy DocFX API into site
+        shell: bash
+        run: |
+          mkdir -p website/.vitepress/dist/api
+          if [ -d docs/api ]; then
+            cp -a docs/api/. website/.vitepress/dist/api/
+            # DocFX has toc.html but no index; /api/ 404s without this.
+            if [ -f website/.vitepress/dist/api/toc.html ] && [ ! -f website/.vitepress/dist/api/index.html ]; then
+              cp -f website/.vitepress/dist/api/toc.html website/.vitepress/dist/api/index.html
+            fi
+            # DocFX HTML references ../styles and ../fonts from /api/*.html
+            if [ -d docs/styles ]; then
+              cp -a docs/styles website/.vitepress/dist/styles
+            fi
+            if [ -d docs/fonts ]; then
+              cp -a docs/fonts website/.vitepress/dist/fonts
+            fi
+            # Prefer DocFX logo only if VitePress did not already emit one
+            if [ -f docs/logo.svg ] && [ ! -f website/.vitepress/dist/logo.svg ]; then
+              cp docs/logo.svg website/.vitepress/dist/logo.svg
+            fi
+            if [ -f docs/favicon.ico ]; then
+              cp docs/favicon.ico website/.vitepress/dist/favicon.ico
+            fi
+          else
+            echo "Warning: docs/api missing; API pages will not be published"
+          fi
+
+      # GitHub Pages cleanUrls: keep BOTH `page.html` and `page/index.html`.
+      # Deleting the sibling `.html` forces `/page` (no slash) through a Pages 301
+      # that rewrites the host to `*.github.io` when the custom-domain CNAME is not
+      # fully active on the edge (CloudFront → GitHub). That is what made
+      # titaniumproxy.com/download bounce to github.io.
+      - name: Mirror cleanUrls HTML as index.html
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist=website/.vitepress/dist
+          # Do NOT write a Pages CNAME: titaniumproxy.com DNS points at CloudFront,
+          # not GitHub. A Pages custom domain causes http↔https redirect loops.
+          for f in "$dist"/*.html; do
+            base="$(basename "$f" .html)"
+            [[ "$base" == "index" || "$base" == "404" ]] && continue
+            mkdir -p "$dist/$base"
+            cp -f "$f" "$dist/$base/index.html"
+          done
+          # Nested docs pages
+          if [ -d "$dist/docs" ]; then
+            find "$dist/docs" -name '*.html' ! -name 'index.html' ! -name '404.html' | while read -r f; do
+              base="$(basename "$f" .html)"
+              dir="$(dirname "$f")"
+              mkdir -p "$dir/$base"
+              cp -f "$f" "$dir/$base/index.html"
+            done
+          fi
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/.vitepress/dist
+
+  deploy:
+    # Push deploys only from develop (Pages env protection). Manual workflow_dispatch
+    # may publish from a fix branch to clear a bad artifact urgently.
+    if: >
+      github.event_name != 'pull_request' && (
+        github.ref == 'refs/heads/develop' ||
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v'))
+      )
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

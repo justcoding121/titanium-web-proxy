@@ -13,10 +13,11 @@ namespace Titanium.Web.Proxy.Logging;
 public sealed class ProxyLoggingOptions
 {
     /// <summary>
-    ///     Master switch for all proxy logging. When <see langword="false" /> (default is
-    ///     <see langword="true" />) the proxy uses a no-op logger; no log-related work of any kind is
-    ///     performed anywhere in the library, so this is the zero-overhead configuration for users who
-    ///     do not want logging at all.
+    ///     Master switch for all proxy logging. Defaults to <see langword="true" /> so NuGet consumers
+    ///     surface real failures out of the box (paired with <see cref="MinimumLevel" /> of Error and
+    ///     the async console sink). Set to <see langword="false" /> for zero overhead: the proxy uses a
+    ///     no-op logger and performs no log-related work (preferred for probes and perf-sensitive hosts).
+    ///     Host apps should treat richer levels/file sinks as Debug-on / Release-opt-in.
     /// </summary>
     public bool Enabled { get; set; } = true;
 
@@ -24,14 +25,16 @@ public sealed class ProxyLoggingOptions
     ///     The minimum <see cref="LogLevel" /> that is actually written to any sink. Every caught
     ///     exception in the proxy is still reported to the gateway regardless of this setting - this
     ///     only controls how much of that stream is materialized/written. Defaults to
-    ///     <see cref="LogLevel.Error" /> so out-of-the-box behavior stays quiet, while still surfacing
-    ///     every genuinely unexpected failure.
+    ///     <see cref="LogLevel.Error" /> so out-of-the-box NuGet behavior stays quiet while still
+    ///     surfacing genuinely unexpected failures. Raise the level (and/or enable file) only when
+    ///     diagnosing.
     /// </summary>
     public LogLevel MinimumLevel { get; set; } = LogLevel.Error;
 
     /// <summary>
-    ///     Whether the built-in console sink is active. Defaults to <see langword="true" />. Ignored when
-    ///     <see cref="LoggerFactory" /> is set.
+    ///     Whether the built-in async console sink is active. Defaults to <see langword="true" /> so
+    ///     Error+ failures are visible without configuration. Ignored when <see cref="LoggerFactory" />
+    ///     is set. Writes never block session threads (bounded channel + background writer).
     /// </summary>
     public bool EnableConsole { get; set; } = true;
 

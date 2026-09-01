@@ -268,6 +268,9 @@ internal static class Http3RequestStream
                     return;
                 }
 
+                // Per-stream route → destination (no-op when ReverseProxy routes unset).
+                Routing.ReverseProxySessionDispatch.TryApply(server, sessionArgs);
+
                 // Inject Via only when we stay on the full session forward path (not MITM
                 // unchanged-lite / IsFastPath). Adding Via before the unchanged check would
                 // dirtied MutationCount and defeat the lite finish.
@@ -521,16 +524,6 @@ internal static class Http3RequestStream
             catch (Exception ex)
             {
                 logger.LogError(ex, "Unhandled error on HTTP/3 stream {StreamId}", stream.Id);
-                try
-                {
-                    var path = Environment.GetEnvironmentVariable("TWP_H3_ERROR_LOG");
-                    if (!string.IsNullOrEmpty(path))
-                        await System.IO.File.AppendAllTextAsync(path, ex.ToString() + Environment.NewLine + "---" + Environment.NewLine, CancellationToken.None);
-                }
-                catch
-                {
-                    // diagnostics only
-                }
                 try
                 {
                     stream.Abort(QuicAbortDirection.Write, (long)Http3ErrorCode.InternalError);

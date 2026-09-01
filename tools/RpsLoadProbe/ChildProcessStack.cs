@@ -27,6 +27,12 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     public string? LoadGenerator { get; }
     public int? QuicPort { get; }
     public int? OriginQuicPort { get; }
+    public string? ControlPlaneUrl { get; }
+    public string? ControlPlaneSecret { get; }
+    public string? DashboardUrl { get; }
+    public string? AuthorizationBearer { get; }
+    public string? DiscoveryFilePath { get; }
+    public int? OriginHttpPort { get; }
 
     /// <summary>
     ///     PID of the proxy child. Null for origin-direct arms. Use for <c>dotnet-dump</c> / <c>dotnet-trace</c>.
@@ -46,7 +52,9 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         StreamReader? proxyStdout, Uri targetUri, IReadOnlyList<Uri> targetUris, string? explicitProxyUrl,
         string? nginxVersion, Version requestHttpVersion, HttpVersionPolicy versionPolicy,
         string? loadGenerator = null, int? quicPort = null, int? originQuicPort = null,
-        string? yarpVersion = null)
+        string? yarpVersion = null, string? controlPlaneUrl = null, string? controlPlaneSecret = null,
+        string? dashboardUrl = null, string? authorizationBearer = null, string? discoveryFilePath = null,
+        int? originHttpPort = null)
     {
         this.originProcess = originProcess;
         this.originStdout = originStdout;
@@ -62,6 +70,12 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         LoadGenerator = loadGenerator;
         QuicPort = quicPort;
         OriginQuicPort = originQuicPort;
+        ControlPlaneUrl = controlPlaneUrl;
+        ControlPlaneSecret = controlPlaneSecret;
+        DashboardUrl = dashboardUrl;
+        AuthorizationBearer = authorizationBearer;
+        DiscoveryFilePath = discoveryFilePath;
+        OriginHttpPort = originHttpPort;
         ProxyProcessId = proxyProcess?.Id;
         IsCombinedServe = originProcess == null ||
                           (proxyProcess != null && ReferenceEquals(originProcess, proxyProcess));
@@ -76,7 +90,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         var exe = Environment.ProcessPath
                   ?? throw new InvalidOperationException("Cannot locate current process path for child spawn.");
         var certDir = LoopbackCertificateAuthority.SeedDirectory();
-        var childEnv = BuildChildEnv(workload, certDir, enableHttpInterception, mutateHttpInterception);
+        var childEnv = BuildChildEnv(workload, certDir, enableHttpInterception, mutateHttpInterception, mode);
 
         var origin = StartChild(exe, FormatOriginSpawnArgs(mode, workload), childEnv);
         Dictionary<string, string> originLines;
@@ -161,11 +175,20 @@ internal sealed class ChildProcessStack : IAsyncDisposable
         var stack = new ChildProcessStack(origin, origin.StandardOutput, proxy, proxy.StandardOutput,
             new Uri(target), targets,
             string.IsNullOrWhiteSpace(explicitProxy) ? null : explicitProxy, nginxVersion,
-            httpVersion, policy, loadGenerator, quicPort, originQuicPort, yarpVersion);
+            httpVersion, policy, loadGenerator, quicPort, originQuicPort, yarpVersion,
+            controlPlaneUrl: TryGet(proxyLines, "control_plane_url"),
+            controlPlaneSecret: TryGet(proxyLines, "control_plane_secret"),
+            dashboardUrl: TryGet(proxyLines, "dashboard_url"),
+            authorizationBearer: TryGet(proxyLines, "authorization_bearer"),
+            discoveryFilePath: TryGet(proxyLines, "discovery_file"),
+            originHttpPort: originHttpPort);
         if (stack.OriginProcessId is null)
             throw new InvalidOperationException("Ramp requires a split origin child; combined --serve is not used.");
         return stack;
     }
+
+    private static string? TryGet(Dictionary<string, string> map, string key) =>
+        map.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
 
     private static string FormatOriginSpawnArgs(ProbeMode mode, WorkloadOptions workload)
     {
@@ -222,7 +245,7 @@ internal sealed class ChildProcessStack : IAsyncDisposable
     }
 
     private static Dictionary<string, string> BuildChildEnv(WorkloadOptions workload, string certDir,
-        bool enableHttpInterception = false, bool mutateHttpInterception = false)
+        bool enableHttpInterception = false, bool mutateHttpInterception = false, ProbeMode? mode = null)
     {
         var env = new Dictionary<string, string>
         {
@@ -238,6 +261,8 @@ internal sealed class ChildProcessStack : IAsyncDisposable
             env["TWP_RPS_HTTP_INTERCEPTION_MUTATE"] = "1";
         if (workload.CaptureTlsTiming)
             env["TWP_RPS_CAPTURE_TLS"] = "1";
+        if (mode is ProbeMode.TwpCliPlusCacheHitHttp1)
+            env["TWP_RPS_ORIGIN_CACHE_CONTROL"] = "public, max-age=60";
         return env;
     }
 

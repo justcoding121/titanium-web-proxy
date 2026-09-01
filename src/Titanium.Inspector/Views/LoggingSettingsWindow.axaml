@@ -1,0 +1,44 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Titanium.Inspector.Views.LoggingSettingsWindow"
+        AutomationProperties.AutomationId="LoggingSettingsWindow"
+        Title="Logging"
+        Width="520" Height="400"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+  <DockPanel Margin="16">
+    <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,12" Opacity="0.85"
+               Text="Write diagnostic messages for troubleshooting. Changes apply immediately." />
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+      <Button x:Name="SaveButton" Content="Save" MinWidth="88" AutomationProperties.AutomationId="LoggingSave" />
+      <Button x:Name="CancelButton" Content="Cancel" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="LoggingCancel" />
+    </StackPanel>
+    <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Margin="0,8,0,0" TextWrapping="Wrap"
+               Foreground="#C0392B" AutomationProperties.AutomationId="LoggingStatus" />
+    <StackPanel Spacing="12">
+      <CheckBox x:Name="EnableLoggingCheck" Content="Enable logging"
+                AutomationProperties.AutomationId="LoggingEnabled" />
+      <CheckBox x:Name="WriteFileCheck" Content="Write log to a file"
+                AutomationProperties.AutomationId="LoggingWriteFile" />
+      <StackPanel Spacing="4">
+        <TextBlock FontWeight="SemiBold" Text="How much detail" />
+        <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                   Text="Error = problems only. Warning / Information = more context. Debug = very verbose." />
+        <ComboBox x:Name="LevelCombo" HorizontalAlignment="Left" MinWidth="160"
+                  AutomationProperties.AutomationId="LoggingLevel" />
+      </StackPanel>
+      <StackPanel Spacing="4">
+        <TextBlock FontWeight="SemiBold" Text="Log file path" />
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
+            <Button x:Name="OpenFolderButton" Content="Open folder" MinWidth="88"
+                    AutomationProperties.AutomationId="LoggingOpenFolder" />
+            <Button x:Name="BrowseButton" Content="Browse…" MinWidth="88"
+                    AutomationProperties.AutomationId="LoggingBrowse" />
+          </StackPanel>
+          <TextBox x:Name="PathBox" AutomationProperties.AutomationId="LoggingPath" />
+        </DockPanel>
+      </StackPanel>
+    </StackPanel>
+  </DockPanel>
+</Window>

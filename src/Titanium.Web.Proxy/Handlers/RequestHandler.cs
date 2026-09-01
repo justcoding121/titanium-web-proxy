@@ -323,6 +323,13 @@ public partial class ProxyServer
 
                         args.IsFastPath = fastPath;
 
+                        // Middleware requires BeforeRequest; never skip it when configured.
+                        if (fastPath && ReverseProxy?.Middleware is { Count: > 0 })
+                        {
+                            fastPath = false;
+                            args.IsFastPath = false;
+                        }
+
                         var requestHeaderRelayBaseline =
                             MitmCompressedRelayHelper.HeaderRelayBaseline.Capture(request.Headers);
                         var capturedRequestMethod = request.Method;
@@ -361,6 +368,9 @@ public partial class ProxyServer
                             ResolveRequestTimeout(args), ProxyTimeoutKind.Request);
                         var requestToken = requestDeadline.Token;
                         args.OperationCancellationToken = requestToken;
+
+                        // Per-request route → destination (no-op when ReverseProxy routes unset).
+                        Routing.ReverseProxySessionDispatch.TryApply(this, args);
 
                         try
                         {
@@ -508,11 +518,9 @@ public partial class ProxyServer
                             }
 
                             // Transparent reverse with a fixed ForwardHost keeps the origin socket sticky
-                            // (see release path below). Destination cannot change, so skip cache-key rebuild.
-                            var stickyForwardUpstream = args.ProxyEndPoint is TransparentBaseProxyEndPoint
-                            {
-                                ForwardHost: { Length: > 0 }
-                            };
+                            // (see release path below). Multi-destination route tables must not pin.
+                            var stickyForwardUpstream =
+                                Routing.ReverseProxySessionDispatch.AllowsStickyForwardUpstream(this, args.ProxyEndPoint);
 
                             if (connection != null)
                             {
@@ -1137,15 +1145,28 @@ public partial class ProxyServer
     /// </summary>
     /// <param name="args">The session event arguments.</param>
     /// <returns></returns>
-    private Task OnBeforeRequest(SessionEventArgs args)
+    private async Task OnBeforeRequest(SessionEventArgs args)
     {
-        if (args.IsFastPath) return Task.CompletedTask;
+        if (args.IsFastPath)
+            return;
 
         args.Timing?.MarkRequestHeadersReceived();
 
-        return BeforeRequest != null
-            ? BeforeRequest.InvokeAsync(this, args, logger)
-            : Task.CompletedTask;
+        var middleware = ReverseProxy?.Middleware;
+        if (middleware is { Count: > 0 })
+        {
+            var ctx = new Abstractions.Middleware.ProxyMiddlewareContext { Session = args };
+            Abstractions.Middleware.ProxyMiddlewareDelegate terminus = async (_, _) =>
+            {
+                if (BeforeRequest != null)
+                    await BeforeRequest.InvokeAsync(this, args, logger);
+            };
+            await Middleware.ProxyMiddlewarePipeline.Build(middleware, terminus)(ctx, args.CancellationToken);
+            return;
+        }
+
+        if (BeforeRequest != null)
+            await BeforeRequest.InvokeAsync(this, args, logger);
     }
 
     /// <summary>

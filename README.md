@@ -1,11 +1,12 @@
 # Titanium Web Proxy
 
-A lightweight, high performing HTTP(S) proxy server for .NET. It acts as a man in the middle (MITM) proxy and/or as a reverse proxy. Designed for high-performance. Works in Windows, Linux & Apple devices.
+A lightweight, high-performance HTTP(S) proxy — reverse / edge CLI, desktop Inspector, and optional Plus ops on Windows, Linux, and macOS. Embed the same engine in .NET via NuGet when you need a library.
+
+**[Website](https://titaniumproxy.com)** · [Download](https://titaniumproxy.com/download) · [Docs](https://titaniumproxy.com/docs/getting-started) · [Releases](https://titaniumproxy.com/releases)
 
 [![Build](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml/badge.svg?branch=develop)](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml)
 [![NuGet](https://img.shields.io/nuget/v/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)
 [![NuGet downloads](https://img.shields.io/nuget/dt/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)
-[![License](https://img.shields.io/github/license/justcoding121/Titanium-Web-Proxy.svg)](LICENSE)
 
 ## Code Quality
 
@@ -27,11 +28,22 @@ A lightweight, high performing HTTP(S) proxy server for .NET. It acts as a man i
 - Explicit, transparent, and SOCKS4/5 proxy endpoints
 - Request and response body streaming across HTTP/1.x (plain and TLS), HTTP/2, and HTTP/3 (see the [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support))
 - HTTP/2 support, on by default, opt-out via `ProxyServer.EnableHttp2` (see the [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support) for exact coverage)
-- HTTP/3 (QUIC) support, opt-in via `ProxyServer.EnableHttp3 = true` (requires MsQuic; 1xx interim responses, per-chunk body streaming hooks, upstream proxy chaining with TCP fallback, HTTPS/SVCB DNS discovery, and QPACK dynamic table; see the [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3) for setup and the [protocol bridge matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support#protocol-bridges) for every client→origin direction)
+- HTTP/3 (QUIC) support, opt-in via `ProxyServer.EnableHttp3 = true` (requires MsQuic; CLI/Inspector Release zips bundle natives per RID — see the [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3) for packaging and the [protocol bridge matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support#protocol-bridges) for every client→origin direction)
 - Upstream HTTP, HTTPS, and SOCKS proxies with automatic system proxy detection
 - Proxy authentication, mutual TLS, Kerberos, and NTLM support
 - Connection, certificate, and buffer pooling
-- Built-in, zero-overhead-when-disabled logging (every caught exception, optionally to console/file or your own `ILoggerFactory`) and opt-in structured request/connection timing — see [Logging and diagnostics](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#logging-and-diagnostics) in the wiki
+- Built-in, zero-overhead-when-disabled logging (every caught exception, optionally to console/file or your own `ILoggerFactory`) and opt-in structured request/connection timing. See [Logging and diagnostics](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#logging-and-diagnostics) in the wiki.
+
+## Editions
+
+| Product | What it is | How you get it |
+|---------|------------|----------------|
+| **Titanium.Cli** (`titanium` / `twp`) | Standalone reverse / edge proxy for any stack: `run`, `test`, `version`, `update` | [Download (Windows, Linux & Mac)](https://titaniumproxy.com/download#cli) |
+| **Titanium Inspector** | Desktop MITM debugger (session grid, inspectors, AutoResponder, breakpoints, HAR) | [Download (Windows, Linux & Mac)](https://titaniumproxy.com/download#inspector) |
+| **Titanium.Plus** | Optional advanced features: control plane, ops, observability, and dashboard | After installing CLI, run `titanium update --plus` |
+| **Titanium.Web.Proxy** | Core library. Embed a MITM and/or reverse proxy in a .NET app | [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy/7.0.4-beta) (`dotnet add package Titanium.Web.Proxy --prerelease`) |
+
+CLI and Plus target reverse-proxy / edge workloads (routing, load balancing, health, discovery) on Windows, Linux, and macOS. Inspector is the MITM debugging product. The Core library is the embed path for .NET. Requires .NET 10 or later.
 
 ## Installation
 
@@ -47,17 +59,30 @@ To use the latest prerelease:
 dotnet add package Titanium.Web.Proxy --prerelease
 ```
 
-## Supported frameworks
+### CLI (`titanium` / `twp`)
 
-- .NET 10
+On Windows, **winget is stable-only**:
 
-> Versions prior to 4.0 also supported .NET Framework 4.6.2 and .NET 8; starting with 4.0, the package
-> targets .NET 10 only so the codebase can take full advantage of modern APIs.
+```shell
+winget install justcoding121.TitaniumCli
+```
 
-> **Breaking change:** `ProxyServer.ExceptionFunc` and `SessionEventArgsBase.TimeLine` were removed in
-> favor of the unified `ProxyServer.Logging`/`EnableRequestTimingCapture` APIs described in
-> [Logging and diagnostics](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#logging-and-diagnostics)
-> and [Breaking changes: unified logging and timing](https://github.com/justcoding121/titanium-web-proxy/wiki/Home#breaking-changes-unified-logging-and-timing).
+For **beta**, download self-contained zips from [Download](https://titaniumproxy.com/download) / [GitHub Releases](https://github.com/justcoding121/titanium-web-proxy/releases) when a product release includes `Titanium.Cli-*.zip` assets (e.g. `v7.0.4-beta`). Extract and run:
+
+```shell
+titanium run -c twp.yaml
+titanium test -c twp.yaml
+titanium version --check
+titanium update
+```
+
+Each CLI zip also includes a `twp` alias binary.
+
+Optional Plus: run `titanium update --plus` (add `--channel beta` for prereleases), then enable Plus in config (`plus.enabled: true` with `plus.controlPlane.sharedSecret`). Check with `titanium version --check --plus`.
+
+### Titanium Inspector
+
+Prefer [Download](https://titaniumproxy.com/download). On Windows, winget id `justcoding121.TitaniumInspector` is **stable-only**; MSI / portable zip for beta come from the product `v*` release (e.g. `v7.0.4-beta`). Start interception from the Capture menu, install the root CA, then toggle system proxy.
 
 ## Quick start
 
@@ -102,31 +127,36 @@ Task OnRequest(object sender, SessionEventArgs e)
 
 Configure your client to use `127.0.0.1:8000` as its HTTP and HTTPS proxy. Trusting a generated root certificate changes the current user's certificate store; only do this on a machine you control.
 
+## Performance
+
+Typically at or above **YARP**; ahead of **nginx** on H2/H3→H1 reverse, near parity for the rest (nginx still edges tiny keep-alive). Details: [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
+
 ## Examples and documentation
 
-- [Wiki](https://github.com/justcoding121/titanium-web-proxy/wiki) — feature guides, including [performance measurements](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance), [streaming request/response bodies](https://github.com/justcoding121/titanium-web-proxy/wiki/Streaming-Bodies), the [HTTP/3 setup guide](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3), and a [protocol feature support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support) (what's supported for HTTP/1.x, HTTP/2, and HTTP/3, including [protocol bridges](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support#protocol-bridges))
+- **[Website](https://titaniumproxy.com)**: product docs, [download](https://titaniumproxy.com/download), and [release notes](https://titaniumproxy.com/releases)
+- [Wiki](https://github.com/justcoding121/titanium-web-proxy/wiki): additional feature guides (also mirrored on the website), including [performance measurements](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance), [streaming request/response bodies](https://github.com/justcoding121/titanium-web-proxy/wiki/Streaming-Bodies), the [HTTP/3 setup guide](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3), and a [protocol feature support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support) (what's supported for HTTP/1.x, HTTP/2, and HTTP/3, including [protocol bridges](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support#protocol-bridges))
 - [Basic console proxy](examples/Titanium.Web.Proxy.Examples.Basic)
 - [WPF proxy application](examples/Titanium.Web.Proxy.Examples.Wpf)
 - [Windows service](examples/Titanium.Web.Proxy.Examples.WindowsService)
-- [Benchmarks](benchmarks/Titanium.Web.Proxy.Benchmarks) — loopback throughput and allocation (BenchmarkDotNet)
-- [RPS saturation probe](tools/RpsLoadProbe) — concurrent breaking-point RPS (local cool lab + manual GitHub Linux/Windows VMs)
-- [API documentation](https://justcoding121.github.io/titanium-web-proxy/docs/api/Titanium.Web.Proxy.ProxyServer.html)
+- [Benchmarks](benchmarks/Titanium.Web.Proxy.Benchmarks): loopback throughput and allocation (BenchmarkDotNet)
+- [RPS saturation probe](tools/RpsLoadProbe): concurrent breaking-point RPS
+- [API documentation](https://titaniumproxy.com/api/Titanium.Web.Proxy.ProxyServer.html)
 
 ### Screenshots
 
-**Basic console example** — compact per-request traffic tape:
+**Titanium Inspector:** session grid with request/response details:
+
+<img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
+
+**Basic console example:** compact per-request traffic tape:
 
 <img src="wiki/images/basic-screenshot.jpg" alt="Basic console proxy screenshot" width="900" />
-
-**WPF example** — session list with request/response inspection:
-
-<img src="wiki/images/wpf-screenshot.jpg" alt="WPF proxy application screenshot" width="900" />
 
 ## Support and contributing
 
 - Report reproducible bugs and feature requests through [GitHub Issues](https://github.com/justcoding121/Titanium-Web-Proxy/issues).
 - Ask programming questions on [Stack Overflow](https://stackoverflow.com/questions/tagged/titanium-web-proxy) using the `titanium-web-proxy` tag.
-- Pull requests are welcome. Please include tests for behavior changes when practical.
+- Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Maintainers
 
@@ -140,4 +170,4 @@ Past contributors:
 
 ## License
 
-Titanium Web Proxy is available under the [MIT License](LICENSE).
+Titanium.Web.Proxy and Titanium.Cli are available under the [MIT License](LICENSE). Titanium Inspector and Titanium.Plus are licensed under [PolyForm Noncommercial 1.0.0](licenses/PolyForm-Noncommercial-1.0.0.txt).

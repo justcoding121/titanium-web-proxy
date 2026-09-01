@@ -38,10 +38,7 @@ public class Http1ProxyThroughputBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        originListener = new HttpListener();
-        var originPort = GetFreeTcpPort();
-        originListener.Prefixes.Add($"http://127.0.0.1:{originPort}/");
-        originListener.Start();
+        (originListener, var originPort) = BindHttpListenerOrRetry(port => $"http://127.0.0.1:{port}/");
         _ = Task.Run(RunOriginLoop);
 
         proxyServer = new ProxyServer(false, false, false);
@@ -104,6 +101,38 @@ public class Http1ProxyThroughputBenchmarks
             await ctx.Response.OutputStream.WriteAsync(bytes);
             ctx.Response.OutputStream.Close();
         }
+    }
+
+    private static (HttpListener Listener, int Port) BindHttpListenerOrRetry(
+        Func<int, string> prefixFactory, int maxAttempts = 8)
+    {
+        Exception? last = null;
+        for (var i = 0; i < maxAttempts; i++)
+        {
+            var port = GetFreeTcpPort();
+            var listener = new HttpListener();
+            listener.Prefixes.Add(prefixFactory(port));
+            try
+            {
+                listener.Start();
+                return (listener, port);
+            }
+            catch (Exception ex) when (ex is HttpListenerException or System.Net.Sockets.SocketException)
+            {
+                last = ex;
+                try
+                {
+                    listener.Close();
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Failed to bind HttpListener after {maxAttempts} attempts.", last);
     }
 
     private static int GetFreeTcpPort()

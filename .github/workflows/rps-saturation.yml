@@ -1,16 +1,22 @@
-# Manual saturation RPS lab on GitHub-hosted VMs (not a job container).
+﻿# Manual saturation RPS lab on GitHub-hosted VMs (not a job container).
 # Maintainers run this, then paste median numbers into wiki/Performance.md.
 # Not a per-PR gate; not comparable to dedicated-server blog posts.
 #
 # Prefer --repeats >= 3 for publishable numbers (runner noise). Linux nginx
 # is the authoritative nginx baseline; nginx/Windows is same-OS only.
 #
-# Both matrix legs use the standard public-repo runner class (4 vCPU / 16 GiB).
-# Do not mix larger or slim runners unless both OS get the same size.
+# Matrix uses the 4-core public-repo runner class: ubuntu-latest / windows-latest
+# (4 vCPU / 16 GiB) and macos-15-intel (4-core / 14 GiB). Do not use macos-latest
+# (3-core M1 / 7 GiB) for publishable numbers — wrong size and architecture.
+# Do not mix larger or slim runners unless every OS gets the same size class.
 
 name: RPS saturation
 
 on:
+  pull_request:
+    branches: [beta, stable]
+  push:
+    branches: [beta, stable]
   workflow_dispatch:
     inputs:
       mode:
@@ -26,6 +32,9 @@ on:
           - compare-mitm
           - compare-matrix
           - compare-product
+          - compare-product-smoke
+          - compare-editions
+          - compare-cross-version
           - compare-ceiling
           - compare-bodies
           - compare-post
@@ -33,6 +42,7 @@ on:
           - compare-tls-cost
           - compare-arch
           - compare-saturation
+          - compare-spot
           - origin-direct
           - compare
           - compare-tls
@@ -89,6 +99,12 @@ on:
           - nginx-reverse-http3-cleartext
           - yarp-reverse-http2
           - yarp-reverse-http2-to-https
+          - twp-cli-reverse-http1
+          - twp-cli-reverse-http1-tls
+          - twp-cli-reverse-http1-route
+          - twp-cli-plus-base-http1
+          - twp-cli-plus-cache-http1
+          - twp-cli-intercept-http1
       concurrency:
         description: 'Comma-separated concurrency steps'
         required: true
@@ -105,17 +121,42 @@ on:
         description: 'Full arm sequence repeats (median peaks)'
         required: true
         default: '3'
+      runner_os:
+        description: 'OS matrix filter (all = Win+Linux+Mac Intel)'
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - ubuntu-latest
+          - windows-latest
+          - macos-15-intel
+
+permissions:
+  contents: read
 
 jobs:
   rps:
+    # PR → beta/stable: compare-spot; push → beta/stable: compare-editions; dispatch: inputs.mode
+    permissions:
+      contents: read
+    env:
+      RPS_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || (github.event_name == 'pull_request' && 'compare-spot' || 'compare-editions') }}
+      RPS_CONCURRENCY: ${{ github.event_name == 'workflow_dispatch' && inputs.concurrency || '8,16,32,64' }}
+      RPS_WARMUP_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.warmup_sec || 2 }}
+      RPS_DURATION_SEC: ${{ github.event_name == 'workflow_dispatch' && inputs.duration_sec || 8 }}
+      RPS_REPEATS: ${{ github.event_name == 'workflow_dispatch' && inputs.repeats || 1 }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # workflow_dispatch runner_os filters to one OS; otherwise Win+Linux+Mac Intel.
+        os: ${{ fromJSON(inputs.runner_os == 'macos-15-intel' && '["macos-15-intel"]' || inputs.runner_os == 'ubuntu-latest' && '["ubuntu-latest"]' || inputs.runner_os == 'windows-latest' && '["windows-latest"]' || '["ubuntu-latest","windows-latest","macos-15-intel"]') }}
     runs-on: ${{ matrix.os }}
     # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
     # compare-product with MITM Lite+Full can exceed 3.5h per OS on hosted runners.
-    timeout-minutes: 420
+    # compare-editions (expanded Plus/CLI stress arms) needs ~60m; other modes keep the long ceiling.
+    # compare-product-smoke is a short gate-arm subset (Mac quick check).
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || (inputs.mode == 'compare-product-smoke' && 60 || 420))) }}
     steps:
       - uses: actions/checkout@v6
 
@@ -145,6 +186,31 @@ jobs:
           Write-Host "LogicalProcessors=$($cs.NumberOfLogicalProcessors)"
           Write-Host "RAM_GiB=$([math]::Round($cs.TotalPhysicalMemory / 1GB, 1))"
           Write-Host "CPU=$($cpu.Name)"
+
+      - name: Log runner shape (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          echo "os=$(uname -s) $(uname -r) $(uname -m)"
+          echo "sw_vers:"
+          sw_vers
+          ncpu=$(sysctl -n hw.ncpu)
+          # hw.memsize is bytes; assert >= 4 CPUs and >= 12 GiB (macos-15-intel is 4 / 14).
+          mem_bytes=$(sysctl -n hw.memsize)
+          mem_gib=$(awk -v b="$mem_bytes" 'BEGIN { printf "%.1f", b / (1024*1024*1024) }')
+          echo "ncpu=$ncpu"
+          echo "RAM_GiB=$mem_gib"
+          sysctl -n machdep.cpu.brand_string || true
+          if [ "$ncpu" -lt 4 ]; then
+            echo "Expected >=4 CPUs on macos-15-intel; got $ncpu (do not use macos-latest for publishable RPS)." >&2
+            exit 1
+          fi
+          # 12 GiB floor leaves headroom under the documented 14 GiB Intel runner.
+          min_bytes=$((12 * 1024 * 1024 * 1024))
+          if [ "$mem_bytes" -lt "$min_bytes" ]; then
+            echo "Expected >=12 GiB RAM on macos-15-intel; got ${mem_gib} GiB." >&2
+            exit 1
+          fi
 
       # Ubuntu 24.04 distro nginx is 1.24 without HTTP/3. Official nginx.org mainline
       # packages are built with --with-http_v3_module so the H3 terminate arm can run.
@@ -194,6 +260,44 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value $nginxDir
           & (Join-Path $nginxDir 'nginx.exe') -v
 
+      # Homebrew nginx bottles include --with-http_v3_module (OpenSSL 3). Fail hard if missing.
+      # macos-15-intel: Homebrew no longer mass-bottles Intel; avoid brew update/upgrade of openssl
+      # (already-installed bottle works; upgrading hits "no bottle available").
+      - name: Install nginx (HTTP/3-capable, macOS)
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALL_UPGRADE: '1'
+        run: |
+          set -euo pipefail
+          # Use preinstalled openssl@3 / pcre2 when present; do not upgrade (Intel bottles missing).
+          brew list --versions openssl@3 || brew install openssl@3
+          brew list --versions pcre2 || brew install pcre2
+          if ! brew list --versions nginx >/dev/null 2>&1; then
+            if ! brew install nginx; then
+              echo "brew install nginx failed (likely missing Intel bottle); building from source…" >&2
+              brew install --build-from-source nginx
+            fi
+          fi
+          # Prefer brew nginx; if a bottle somehow lacks http_v3, rebuild from source with the flag.
+          if ! nginx -V 2>&1 | grep -q http_v3_module; then
+            echo "brew nginx lacks http_v3_module; rebuilding from source with --with-http_v3_module" >&2
+            brew reinstall --build-from-source nginx
+          fi
+          brew services stop nginx 2>/dev/null || true
+          # Kill any leftover master so our temp-prefix nginx owns the ports we pick.
+          pkill -x nginx 2>/dev/null || true
+          NGINX_BIN="$(brew --prefix nginx)/bin"
+          echo "$NGINX_BIN" >> "$GITHUB_PATH"
+          export PATH="$NGINX_BIN:$PATH"
+          nginx -v
+          if ! nginx -V 2>&1 | grep -q http_v3_module; then
+            echo "nginx was installed but lacks --with-http_v3_module; failing job." >&2
+            nginx -V
+            exit 1
+          fi
+          nginx -V 2>&1 | tr ' ' '\n' | grep http_v3 || true
+
       # .NET System.Net.Quic on Linux requires native libmsquic (shipped in-box on Windows).
       - name: Install libmsquic (HTTP/3)
         if: runner.os == 'Linux'
@@ -217,6 +321,74 @@ jobs:
             throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
           }
           Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"
+
+      # macOS: System.Net.Quic needs Homebrew libmsquic (and OpenSSL) on DYLD_* path.
+      # Prefer brew; fall back to Microsoft osx-x64 release dylibs if brew is insufficient.
+      - name: Install MsQuic (HTTP/3, macOS Intel)
+        if: runner.os == 'macOS'
+        shell: pwsh
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALL_UPGRADE: '1'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Do not upgrade openssl@3 on Intel — new formula often has no bottle.
+          brew install openssl@3 libmsquic
+          $prefix = (& brew --prefix).Trim()
+          $msquicLib = Join-Path $prefix 'opt/libmsquic/lib'
+          $sslLib = Join-Path $prefix 'opt/openssl@3/lib'
+          $libDirs = @($msquicLib, $sslLib, (Join-Path $prefix 'lib')) |
+            Where-Object { Test-Path $_ } |
+            Select-Object -Unique
+          $dyld = ($libDirs -join ':')
+          # Persist for later steps (ramp / QuicListener).
+          Add-Content -Path $env:GITHUB_ENV -Value "DYLD_LIBRARY_PATH=$dyld"
+          Add-Content -Path $env:GITHUB_ENV -Value "DYLD_FALLBACK_LIBRARY_PATH=$dyld"
+          $env:DYLD_LIBRARY_PATH = $dyld
+          $env:DYLD_FALLBACK_LIBRARY_PATH = $dyld
+          Write-Host "DYLD_LIBRARY_PATH=$dyld"
+
+          function Test-QuicSupported {
+            # Child process so dyld sees DYLD_* (in-process env changes are too late for loaded runtime).
+            $out = & pwsh -NoProfile -Command {
+              if (-not [System.Net.Quic.QuicListener]::IsSupported) { '0' } else { '1' }
+            }
+            return ($out.Trim() -eq '1')
+          }
+
+          if (-not (Test-QuicSupported)) {
+            Write-Host 'QuicListener.IsSupported still false after brew; trying Microsoft osx-x64 libmsquic drop…'
+            $dest = Join-Path $env:RUNNER_TEMP 'msquic-osx'
+            New-Item -ItemType Directory -Path $dest -Force | Out-Null
+            # Pin a known MsQuic release asset layout; adjust tag if the download 404s.
+            $tag = 'v2.4.7'
+            $url = "https://github.com/microsoft/msquic/releases/download/$tag/msquic_osx-x64_$tag.zip"
+            $zip = Join-Path $env:RUNNER_TEMP 'msquic-osx.zip'
+            try {
+              & curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 $url -o $zip
+              if ($LASTEXITCODE -ne 0) { throw "curl exit $LASTEXITCODE" }
+              Expand-Archive -Path $zip -DestinationPath $dest -Force
+            } catch {
+              Write-Warning "Microsoft release download failed ($url): $_"
+            }
+            $found = Get-ChildItem -Path $dest -Recurse -Filter 'libmsquic*.dylib' -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+            if ($found) {
+              $extra = $found.Directory.FullName
+              # ${extra} — bare $extra: is parsed as a PowerShell drive-qualified variable.
+              $dyld2 = "${extra}:${dyld}"
+              Add-Content -Path $env:GITHUB_ENV -Value "DYLD_LIBRARY_PATH=$dyld2"
+              Add-Content -Path $env:GITHUB_ENV -Value "DYLD_FALLBACK_LIBRARY_PATH=$dyld2"
+              $env:DYLD_LIBRARY_PATH = $dyld2
+              $env:DYLD_FALLBACK_LIBRARY_PATH = $dyld2
+              Write-Host "Added Microsoft dylib dir: $extra"
+            }
+          }
+
+          if (-not (Test-QuicSupported)) {
+            throw 'QuicListener.IsSupported is false after macOS MsQuic install (brew + optional Microsoft drop)'
+          }
+          Write-Host 'QuicListener.IsSupported=True'
 
       - name: Install bombardier (optional external generator)
         if: runner.os == 'Linux'
@@ -243,8 +415,22 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value $dir
           & $exe --version
 
+      - name: Install bombardier (optional external generator)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          # macos-15-intel is x86_64 — use darwin amd64 binary.
+          dir="${RUNNER_TEMP}/bombardier"
+          mkdir -p "$dir"
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            "https://github.com/codesenberg/bombardier/releases/download/v1.2.6/bombardier-darwin-amd64" \
+            -o "$dir/bombardier"
+          chmod +x "$dir/bombardier"
+          echo "$dir" >> "$GITHUB_PATH"
+          "$dir/bombardier" --version || true
+
       - name: Raise open-file limit
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' || runner.os == 'macOS'
         run: |
           ulimit -n 65535 || true
           ulimit -n
@@ -252,13 +438,14 @@ jobs:
       # Pass workflow_dispatch inputs via env (not ${{ }} in the script) to avoid
       # githubactions:S7630 script-injection findings on user-controlled values.
       - name: Run saturation ramp
+        timeout-minutes: ${{ github.event_name == 'pull_request' && 40 || (github.event_name == 'push' && 60 || (inputs.mode == 'compare-editions' && 60 || (inputs.mode == 'compare-product-smoke' && 50 || 400))) }}
         shell: pwsh
         env:
-          RPS_MODE: ${{ inputs.mode }}
-          RPS_CONCURRENCY: ${{ inputs.concurrency }}
-          RPS_WARMUP_SEC: ${{ inputs.warmup_sec }}
-          RPS_DURATION_SEC: ${{ inputs.duration_sec }}
-          RPS_REPEATS: ${{ inputs.repeats }}
+          RPS_MODE: ${{ env.RPS_MODE }}
+          RPS_CONCURRENCY: ${{ env.RPS_CONCURRENCY }}
+          RPS_WARMUP_SEC: ${{ env.RPS_WARMUP_SEC }}
+          RPS_DURATION_SEC: ${{ env.RPS_DURATION_SEC }}
+          RPS_REPEATS: ${{ env.RPS_REPEATS }}
         run: |
           pwsh tools/RpsLoadProbe/run-rps.ps1 `
             -Mode $env:RPS_MODE `
@@ -269,7 +456,53 @@ jobs:
             -ResultsDir tools/RpsLoadProbe/results `
             -BombardierCheck
 
+      - name: Validate edition gates
+        if: env.RPS_MODE == 'compare-editions'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for edition gate validation' }
+          pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName
+
+      - name: Validate compare-product gates
+        if: env.RPS_MODE == 'compare-product' || env.RPS_MODE == 'compare-product-smoke'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for compare-product gate validation' }
+          # macos-15-intel first-baseline floors (PERF-GATES.md) — Win/Linux keep defaults.
+          $macFloors = @()
+          if ('${{ matrix.os }}' -eq 'macos-15-intel') {
+            $macFloors = @(
+              '-MitmHttp3TlsFullGate', '0.65',
+              '-MitmHttp1PlainFullGate', '0.55',
+              '-ReverseYarpHttp3ToHttp1Gate', '0.55',
+              '-ReverseYarpHttp3Gate', '0.74'
+            )
+          }
+          pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName @macFloors
+
+      - name: Validate cross-version gates
+        if: env.RPS_MODE == 'compare-cross-version'
+        shell: pwsh
+        run: |
+          $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No CSV found for cross-version gate validation' }
+          $baseline = if ($env:RUNNER_OS -eq 'Windows') {
+            'tools/RpsLoadProbe/results/baseline-6.0-win.csv'
+          } else {
+            'tools/RpsLoadProbe/results/baseline-6.0-linux.csv'
+          }
+          if (-not (Test-Path $baseline)) { throw "Missing baseline: $baseline" }
+          pwsh tools/RpsLoadProbe/validate-cross-version.ps1 `
+            -BaselineCsv $baseline `
+            -CurrentCsv $csv.FullName
+
       - name: Upload CSV artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: rps-csv-${{ matrix.os }}

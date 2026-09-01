@@ -24,6 +24,7 @@ using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Network.WinAuth;
+using Titanium.Web.Proxy.Abstractions;
 using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
@@ -90,6 +91,9 @@ public partial class ProxyServer : IDisposable
     private readonly ConcurrentDictionary<CancellationTokenSource, byte> activeSessionCancellations = new();
     private readonly ConcurrentBag<CancellationTokenSource> sessionCtsPool = new();
     private const int SessionCtsPoolCap = 256;
+
+    private const string SystemProxyNotSupportedMessage =
+        "Setting system proxy settings are not supported on this platform. Please manually configure your operating system to use this proxy's port and address.";
 
     /// <summary>
     ///     Backing field for exposed public property.
@@ -184,7 +188,7 @@ public partial class ProxyServer : IDisposable
         Http3WarmOrigins = new Http3.Http3WarmOriginRegistry();
         QuicConnectionPool = new Network.Quic.QuicConnectionPool(this);
         Http2OriginConnectionPool = new Http2.Http2OriginConnectionPool(this);
-        if (RunTime.IsWindows && !RunTime.IsUwpOnWindows) SystemProxySettingsManager = new SystemProxyManager();
+        SystemProxySettingsManager = SystemProxyBackendFactory.Create();
 
         CertificateManager = new CertificateManager(rootCertificateName, rootCertificateIssuerName,
             userTrustRootCertificate, machineTrustRootCertificate, trustRootCertificateAsAdmin, logger,
@@ -251,7 +255,7 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     Manage system proxy settings.
     /// </summary>
-    private SystemProxyManager? SystemProxySettingsManager { get; }
+    private ISystemProxyBackend? SystemProxySettingsManager { get; }
 
     /// <summary>
     ///     Number of times to retry upon network failures when connection pool is enabled.
@@ -382,7 +386,9 @@ public partial class ProxyServer : IDisposable
     ///     </list>
     ///     Requires MsQuic native library and a supported operating-system version
     ///     (<see cref="System.Net.Quic.QuicListener.IsSupported" />). Setting to <see langword="true" /> with
-    ///     no inbound HTTP/3 endpoint configured emits a warning and skips QUIC initialization.
+    ///     no inbound HTTP/3 endpoint is fine when an explicit/SOCKS/transparent TCP endpoint is
+    ///     present (origin-side QUIC only). A warning is emitted only when EnableHttp3 is set with
+    ///     no client-facing endpoints at all.
     ///     Default: <see langword="false" /> (opt-in).
     ///     <para>
     ///         <b>Experimental:</b> HTTP/3 support has not yet completed the full interop/soak/fuzz gate
@@ -392,6 +398,45 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
     public bool EnableHttp3 { get; set; } = false;
+
+    /// <summary>
+    ///     Turns on <see cref="EnableHttp3" /> when MsQuic is available
+    ///     (<see cref="System.Net.Quic.QuicListener.IsSupported" />). Hosts (CLI, Inspector, examples)
+    ///     should call this instead of setting <see cref="EnableHttp3" /> blindly. Returns
+    ///     <see langword="true" /> when HTTP/3 was enabled.
+    /// </summary>
+    public bool TryEnableHttp3IfSupported()
+    {
+#pragma warning disable TWP001
+        if (!System.Net.Quic.QuicListener.IsSupported)
+            return false;
+
+        EnableHttp3 = true;
+        return true;
+#pragma warning restore TWP001
+    }
+
+    /// <summary>
+    ///     Enables or disables <see cref="EnableHttp3" />. Enabling still requires MsQuic
+    ///     (<see cref="System.Net.Quic.QuicListener.IsSupported" />); disabling is always applied.
+    ///     Safe to call while the proxy is running — new origin connections pick up the change.
+    ///     Existing sessions keep the protocol they already negotiated.
+    /// </summary>
+    /// <returns>
+    ///     <see langword="true" /> when HTTP/3 is enabled after the call.
+    /// </returns>
+    public bool SetHttp3Enabled(bool enabled)
+    {
+#pragma warning disable TWP001
+        if (!enabled)
+        {
+            EnableHttp3 = false;
+            return false;
+        }
+
+        return TryEnableHttp3IfSupported();
+#pragma warning restore TWP001
+    }
 
     private bool? _enableHttpsSvcbDnsDiscovery;
 
@@ -867,8 +912,17 @@ public partial class ProxyServer : IDisposable
     public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls12 | SslProtocols.Tls13;
 
     /// <summary>
-    ///     List of supported Server Ssl versions.
-    ///     Using SslProtocol.None means to require the same SSL protocol as the proxy client.
+    ///     Ssl versions offered on <b>outbound</b> HTTPS connections to origins (and upstream proxies).
+    ///     <para>
+    ///         Default <see cref="SslProtocols.None"/> means “use <see cref="SupportedSslProtocols"/>”
+    ///         (typically TLS 1.2 and 1.3). Set an explicit mask to restrict or expand outbound-only
+    ///         independently of inbound client TLS.
+    ///     </para>
+    ///     <para>
+    ///         Older docs described <see cref="SslProtocols.None"/> as “same as the proxy client.”
+    ///         That coupling is incorrect across protocol translations (e.g. inbound QUIC is always
+    ///         TLS 1.3 while outbound TCP SslStream on macOS SecureTransport cannot offer TLS 1.3).
+    ///     </para>
     /// </summary>
     public SslProtocols SupportedServerSslProtocols { get; set; } = SslProtocols.None;
 
@@ -1229,6 +1283,12 @@ public partial class ProxyServer : IDisposable
     public event AsyncEventHandler<ConnectRequest>? BeforeUpStreamConnectRequest; // NOSONAR S3264 -- Public extension event invoked through internal delegate plumbing.
 
     /// <summary>
+    /// Optional reverse-proxy route/cluster configuration. When <see langword="null"/> (default),
+    /// Core keeps 6.x <c>ForwardHost</c> behavior with zero added cost on the hot path.
+    /// </summary>
+    public ReverseProxyOptions? ReverseProxy { get; set; }
+
+    /// <summary>
     /// Forces the full interception path (SessionEventArgs, BeforeRequest, etc.) even when
     /// no event handlers are subscribed. Set this when consuming SessionEventArgs for timing
     /// or metrics without subscribing to any event. Default: <see langword="false"/>.
@@ -1410,9 +1470,8 @@ public partial class ProxyServer : IDisposable
     public void SetAsSystemProxy(ExplicitProxyEndPoint endPoint, ProxyProtocolType protocolType,
         SystemProxySettings? settings)
     {
-        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
-            throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
-                            Please manually configure you operating system to use this proxy's port and address.");
+        if (SystemProxySettingsManager == null)
+            throw new NotSupportedException(SystemProxyNotSupportedMessage);
 
         ValidateEndPointAsSystemProxy(endPoint);
 
@@ -1442,7 +1501,7 @@ public partial class ProxyServer : IDisposable
         string? proxyOverride = null;
         if (settings != null)
         {
-            var currentProxyOverride = SystemProxyManager.GetProxyInfoFromRegistry()?.ProxyOverride;
+            var currentProxyOverride = SystemProxySettingsManager.GetCurrentProxyOverride();
             proxyOverride = settings.BuildProxyOverride(currentProxyOverride);
         }
 
@@ -1499,9 +1558,8 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public void RestoreOriginalProxySettings()
     {
-        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
-            throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
-                            Please manually configure your operating system to use this proxy's port and address.");
+        if (SystemProxySettingsManager == null)
+            throw new NotSupportedException(SystemProxyNotSupportedMessage);
 
         SystemProxySettingsManager.RestoreOriginalSettings();
 
@@ -1513,9 +1571,8 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public void DisableSystemProxy(ProxyProtocolType protocolType)
     {
-        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
-            throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
-                            Please manually configure your operating system to use this proxy's port and address.");
+        if (SystemProxySettingsManager == null)
+            throw new NotSupportedException(SystemProxyNotSupportedMessage);
 
         SystemProxySettingsManager.RemoveProxy(protocolType);
 
@@ -1531,9 +1588,8 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public void DisableAllSystemProxies()
     {
-        if (!RunTime.IsWindows || SystemProxySettingsManager == null)
-            throw new NotSupportedException(@"Setting system proxy settings are only supported in Windows.
-                            Please manually confugure you operating system to use this proxy's port and address.");
+        if (SystemProxySettingsManager == null)
+            throw new NotSupportedException(SystemProxyNotSupportedMessage);
 
         SystemProxySettingsManager.DisableAllProxy();
 
@@ -1590,21 +1646,12 @@ public partial class ProxyServer : IDisposable
         if (ProxyEndPoints.Any(x => x.DecryptSsl && x.GenericCertificate == null))
             CertificateManager.EnsureRootCertificate();
 
-        if (changeSystemProxySettings && SystemProxySettingsManager != null && RunTime.IsWindows &&
-            !RunTime.IsUwpOnWindows)
+        if (changeSystemProxySettings && SystemProxySettingsManager != null)
         {
-            var proxyInfo = SystemProxyManager.GetProxyInfoFromRegistry();
-            if (proxyInfo?.Proxies != null)
-            {
-                var protocolToRemove = ProxyProtocolType.None;
-                foreach (var proxy in proxyInfo.Proxies.Values.Where(proxy =>
-                             NetworkHelper.IsLocalIpAddress(proxy.HostName) &&
-                             ProxyEndPoints.Any(x => x.Port == proxy.Port)))
-                    protocolToRemove |= proxy.ProtocolType;
-
-                if (protocolToRemove != ProxyProtocolType.None)
-                    SystemProxySettingsManager.RemoveProxy(protocolToRemove, false);
-            }
+            var ownedPorts = ProxyEndPoints.Select(x => x.Port).ToHashSet();
+            var protocolToRemove = SystemProxySettingsManager.GetStaleLocalProxyProtocols(ownedPorts);
+            if (protocolToRemove != ProxyProtocolType.None)
+                SystemProxySettingsManager.RemoveProxy(protocolToRemove, false);
         }
 
         var assignedSystemUpStreamResolver = false;
@@ -1645,10 +1692,19 @@ public partial class ProxyServer : IDisposable
                 quicListenerCts = new CancellationTokenSource();
             else if (EnableHttp3)
             {
-                Logger.LogWarning(
-                    "EnableHttp3 is true but no inbound HTTP/3 endpoint is registered. " +
-                    "Add a TransparentQuicProxyEndPoint, or a TransparentProxyEndPoint with EnableHttp3, " +
-                    "before calling Start().");
+                // Explicit/SOCKS endpoints speak TCP to the client; EnableHttp3 still correctly
+                // arms origin-side QUIC (Alt-Svc / H2↔H3 bridge). That is the Inspector/CLI happy
+                // path — do not warn. Warn only when nothing can use either inbound or origin H3
+                // (no client-facing TCP endpoints), which usually means a misconfigured Start().
+                var hasTcpClientFacingEndpoint = ProxyEndPoints.Any(e =>
+                    e is ExplicitProxyEndPoint or SocksProxyEndPoint or TransparentProxyEndPoint);
+                if (!hasTcpClientFacingEndpoint)
+                {
+                    Logger.LogWarning(
+                        "EnableHttp3 is true but no inbound HTTP/3 endpoint is registered. " +
+                        "Add a TransparentQuicProxyEndPoint, or a TransparentProxyEndPoint with EnableHttp3, " +
+                        "before calling Start().");
+                }
             }
 
             // UDP-only transparent QUIC first (no TCP on that port).
@@ -1815,7 +1871,7 @@ public partial class ProxyServer : IDisposable
     {
         if (!ProxyRunning) throw new InvalidOperationException("Proxy is not running.");
 
-        if (RunTime.IsWindows && SystemProxySettingsManager != null)
+        if (SystemProxySettingsManager != null)
         {
             var systemProxyEndPoints = ProxyEndPoints.OfType<ExplicitProxyEndPoint>()
                 .Where(x => x.IsSystemHttpProxy || x.IsSystemHttpsProxy)
@@ -1858,8 +1914,8 @@ public partial class ProxyServer : IDisposable
         CertificateManager?.StopClearIdleCertificates();
 
         if (clearPools) TcpConnectionFactory.ClearPools();
-        if (clearPools) QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
-        if (clearPools) Http2OriginConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
+        if (clearPools) DrainPoolBlocking(QuicConnectionPool.DrainAsync());
+        if (clearPools) DrainPoolBlocking(Http2OriginConnectionPool.DrainAsync());
 
         // Start() may have wired GetCustomUpStreamProxyFunc to GetSystemUpStreamProxy and created
         // systemProxyResolver to back it. Undo both together: leaving the callback in place while
@@ -2311,6 +2367,22 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
+    ///     Bound wait for pool drain so UI-thread Stop/Dispose cannot hang indefinitely
+    ///     (GetResult on an unbounded drain deadlocks Avalonia/WPF close).
+    /// </summary>
+    private static void DrainPoolBlocking(ValueTask drain)
+    {
+        try
+        {
+            drain.AsTask().Wait(TimeSpan.FromSeconds(2));
+        }
+        catch
+        {
+            // ignore — sockets are released on process exit
+        }
+    }
+
+    /// <summary>
     ///     Quit listening on the given end point.
     /// </summary>
     private static void QuitListen(ProxyEndPoint endPoint)
@@ -2528,7 +2600,7 @@ public partial class ProxyServer : IDisposable
 
         try
         {
-            QuicConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
+            DrainPoolBlocking(QuicConnectionPool.DrainAsync());
         }
         catch
         {
@@ -2537,7 +2609,7 @@ public partial class ProxyServer : IDisposable
 
         try
         {
-            Http2OriginConnectionPool.DrainAsync().AsTask().GetAwaiter().GetResult();
+            DrainPoolBlocking(Http2OriginConnectionPool.DrainAsync());
         }
         catch
         {
@@ -2550,7 +2622,7 @@ public partial class ProxyServer : IDisposable
 
         // SystemProxyManager is [SupportedOSPlatform("windows")]; the platform analyzer cannot
         // prove that from a null-conditional access alone, so guard explicitly.
-        if (RunTime.IsWindows) SystemProxySettingsManager?.Dispose();
+        SystemProxySettingsManager?.Dispose();
     }
 
     private void DisposeOwnedLoggerFactory()

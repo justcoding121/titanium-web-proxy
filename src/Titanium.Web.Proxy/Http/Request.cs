@@ -119,6 +119,7 @@ public class Request : RequestResponseBase
     /// <summary>
     ///     Origin host/port from <see cref="Authority"/> or the Host header — no <see cref="Uri"/> alloc.
     ///     Falls back to <see cref="RequestUri"/> only for absolute-form targets with neither field set.
+    ///     Never throws: malformed / empty authority yields <c>("", defaultPort)</c>.
     /// </summary>
     internal (string Host, int Port) GetOriginHostPort(int defaultPort)
     {
@@ -131,8 +132,18 @@ public class Request : RequestResponseBase
             AuthorityParser.TryParse(header, defaultPort, out host, out port))
             return (host, port);
 
-        var uri = RequestUri;
-        return (uri.Host, uri.Port > 0 ? uri.Port : defaultPort);
+        try
+        {
+            var uri = RequestUri;
+            if (!string.IsNullOrEmpty(uri.Host))
+                return (uri.Host, uri.Port > 0 ? uri.Port : defaultPort);
+        }
+        catch (UriFormatException)
+        {
+            // Relative URL / empty authority — callers treat empty host as a no-op.
+        }
+
+        return (string.Empty, defaultPort);
     }
 
     /// <summary>

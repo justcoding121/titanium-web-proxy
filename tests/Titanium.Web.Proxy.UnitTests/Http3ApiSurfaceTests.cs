@@ -21,11 +21,23 @@ public class SessionEventArgsOverridePropertyTests
     }
 
     [TestMethod]
-    public void ProxyServer_EnableHttp3_CanBeSetToTrue()
+    public void ProxyServer_TryEnableHttp3IfSupported_MatchesOsQuic()
     {
         using var proxy = new ProxyServer();
-        proxy.EnableHttp3 = true;
-        Assert.IsTrue(proxy.EnableHttp3);
+        var enabled = proxy.TryEnableHttp3IfSupported();
+        Assert.AreEqual(System.Net.Quic.QuicListener.IsSupported, enabled);
+        Assert.AreEqual(enabled, proxy.EnableHttp3);
+    }
+
+    [TestMethod]
+    public void ProxyServer_SetHttp3Enabled_FalseClearsFlag()
+    {
+        using var proxy = new ProxyServer();
+        proxy.TryEnableHttp3IfSupported();
+        Assert.IsFalse(proxy.SetHttp3Enabled(false));
+        Assert.IsFalse(proxy.EnableHttp3);
+        Assert.AreEqual(System.Net.Quic.QuicListener.IsSupported, proxy.SetHttp3Enabled(true));
+        Assert.AreEqual(System.Net.Quic.QuicListener.IsSupported, proxy.EnableHttp3);
     }
 
     [TestMethod]

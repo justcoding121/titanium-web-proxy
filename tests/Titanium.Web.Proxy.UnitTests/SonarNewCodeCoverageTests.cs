@@ -578,13 +578,24 @@ public class SonarNewCodeCoverageTests
 
             var summary = Http2OriginConnectionPool.DiagPickStats.FormatSummary();
             Assert.IsTrue(summary.Contains("tryPick="));
-            Assert.IsTrue(File.Exists(outPath));
+            // Emit writes via fire-and-forget Task.Run — wait briefly for the file.
+            Assert.IsTrue(SpinWait.SpinUntil(
+                () => File.Exists(outPath) && new FileInfo(outPath).Length > 0,
+                TimeSpan.FromSeconds(3)));
         }
         finally
         {
             enabled.SetValue(null, original);
             Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT", null);
-            if (File.Exists(outPath)) File.Delete(outPath);
+            SpinWait.SpinUntil(() =>
+            {
+                try
+                {
+                    if (File.Exists(outPath)) File.Delete(outPath);
+                    return !File.Exists(outPath);
+                }
+                catch (IOException) { return false; }
+            }, TimeSpan.FromSeconds(3));
         }
     }
 
@@ -1064,20 +1075,22 @@ public class SonarNewCodeCoverageTests
 
                 Assert.IsTrue(Http2OriginConnectionPool.DiagPickStats.IsEnabled);
                 Assert.IsFalse(string.IsNullOrEmpty(Http2OriginConnectionPool.DiagPickStats.FormatSummary()));
-                Assert.IsTrue(File.Exists(outPath));
+                Assert.IsTrue(SpinWait.SpinUntil(
+                    () => File.Exists(outPath) && new FileInfo(outPath).Length > 0,
+                    TimeSpan.FromSeconds(3)));
             }
             finally
             {
                 Environment.SetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT", null);
-                try
+                SpinWait.SpinUntil(() =>
                 {
-                    if (File.Exists(outPath))
-                        File.Delete(outPath);
-                }
-                catch
-                {
-                    // best-effort
-                }
+                    try
+                    {
+                        if (File.Exists(outPath)) File.Delete(outPath);
+                        return !File.Exists(outPath);
+                    }
+                    catch (IOException) { return false; }
+                }, TimeSpan.FromSeconds(3));
             }
         }
         finally

@@ -503,20 +503,24 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
         {
             var line = $"[TWP_DIAG_POOL_PICK {tag}] {FormatSummary()}";
             var path = Environment.GetEnvironmentVariable("TWP_DIAG_POOL_PICK_OUT");
-            if (!string.IsNullOrEmpty(path))
+            // Fire-and-forget async I/O only — never block a pool pick / timer thread on disk or console.
+            _ = Task.Run(async () =>
             {
                 try
                 {
-                    File.AppendAllText(path, line + Environment.NewLine);
-                    return;
+                    if (!string.IsNullOrEmpty(path))
+                    {
+                        await File.AppendAllTextAsync(path, line + Environment.NewLine).ConfigureAwait(false);
+                        return;
+                    }
+
+                    await Console.Error.WriteLineAsync(line).ConfigureAwait(false);
                 }
                 catch
                 {
-                    // fall through
+                    // Diagnostic best-effort only.
                 }
-            }
-
-            Console.Error.WriteLine(line);
+            });
         }
 
         internal static void OnTryPick(int members, int softCap, int activeSum, bool hit)

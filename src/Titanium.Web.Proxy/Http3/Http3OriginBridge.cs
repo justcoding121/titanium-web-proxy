@@ -1016,6 +1016,10 @@ internal static class Http3OriginBridge
         if (string.IsNullOrEmpty(request.Host) && request.Authority.Length > 0)
             request.Host = request.Authority.GetString();
 
+        // Match H3→H2 / H3→H3: SNI / Host stay on client :authority (OriginAuthorityHost,
+        // typically "localhost"). ForwardHost is connect-only via connectHost/connectPort.
+        // Using ForwardHost (127.0.0.1) as SslStream.TargetHost fails name checks against a
+        // localhost leaf (integration TestCertificateAuthority; also macOS Network.framework).
         var isHttps = request.IsHttps;
         string? connectHost = null;
         int? connectPort = null;
@@ -1047,13 +1051,17 @@ internal static class Http3OriginBridge
 
             if (connection == null)
             {
-                // Resolve host/port only on pool miss — warm keep-alive hits skip GetOriginHostPort.
+                // Resolve SNI host/port only on pool miss — warm keep-alive hits skip GetOriginHostPort.
                 string host;
                 int port;
-                if (connectHost != null && connectPort is { } fwdPort)
+                var sni = fwd.OriginAuthorityHost;
+                if (!string.IsNullOrEmpty(sni))
                 {
-                    host = connectHost;
-                    port = fwdPort;
+                    var colon = sni.LastIndexOf(':');
+                    if (colon > 0 && int.TryParse(sni.AsSpan(colon + 1), out _))
+                        sni = sni[..colon];
+                    host = sni;
+                    port = connectPort ?? (isHttps ? 443 : 80);
                 }
                 else
                 {
@@ -1459,6 +1467,9 @@ internal static class Http3OriginBridge
     private static (string? ConnectHost, int? ConnectPort) ResolveTransparentForwardTarget(
         SessionEventArgs sessionArgs)
     {
+        if (sessionArgs.UpstreamConnectHost is { Length: > 0 } routedHost)
+            return (routedHost, sessionArgs.UpstreamConnectPort);
+
         if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint transparent
             && !string.IsNullOrEmpty(transparent.ForwardHost))
             return (transparent.ForwardHost, transparent.ForwardPort);

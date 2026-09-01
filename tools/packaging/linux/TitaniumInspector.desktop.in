@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Titanium Inspector
+Comment=Desktop MITM traffic debugger
+Exec=@EXEC@
+Icon=@ICON@
+Terminal=false
+Categories=Development;Network;
+StartupNotify=true

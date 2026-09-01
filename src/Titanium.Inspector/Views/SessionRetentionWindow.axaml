@@ -1,0 +1,89 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Titanium.Inspector.Views.SessionRetentionWindow"
+        AutomationProperties.AutomationId="SessionRetentionWindow"
+        Title="Session retention"
+        Width="560" Height="620"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+  <DockPanel Margin="16">
+    <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,14" Opacity="0.85"
+               Text="Keep Inspector from running out of memory during long captures. Oldest sessions are removed first when limits are hit. Restart Inspector to apply changes." />
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+      <Button x:Name="SaveButton" Content="Save" MinWidth="88" AutomationProperties.AutomationId="RetentionSave" />
+      <Button x:Name="CancelButton" Content="Cancel" MinWidth="88" IsCancel="True" AutomationProperties.AutomationId="RetentionCancel" />
+    </StackPanel>
+    <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Margin="0,8,0,0" TextWrapping="Wrap"
+               Foreground="#C0392B" AutomationProperties.AutomationId="RetentionStatus" />
+    <ScrollViewer>
+      <StackPanel Spacing="14">
+        <TextBlock FontWeight="SemiBold" Text="Session list (memory)" />
+
+        <StackPanel Spacing="4">
+          <TextBlock FontWeight="SemiBold" Text="Maximum sessions to keep" />
+          <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                     Text="How many requests stay in the session list. When over this, the oldest rows are deleted." />
+          <TextBox x:Name="MaxSessionsBox" Width="120" HorizontalAlignment="Left" Watermark="10000"
+                   AutomationProperties.AutomationId="RetentionMaxSessions" />
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+          <TextBlock FontWeight="SemiBold" Text="Memory for request/response bodies (MB)" />
+          <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                     Text="Soft cap on body data held in RAM across all sessions. When over this, older bodies are moved to disk (if enabled) or sessions are dropped." />
+          <TextBox x:Name="MaxBodyRamMbBox" Width="120" HorizontalAlignment="Left" Watermark="512"
+                   AutomationProperties.AutomationId="RetentionMaxBodyRamMb" />
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+          <TextBlock FontWeight="SemiBold" Text="Keep full bodies in memory for recent sessions" />
+          <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                     Text="Number of newest sessions that keep request/response bodies instantly available. Older ones may store bodies on disk instead." />
+          <TextBox x:Name="HotBodySessionsBox" Width="120" HorizontalAlignment="Left" Watermark="2000"
+                   AutomationProperties.AutomationId="RetentionHotBodies" />
+        </StackPanel>
+
+        <TextBlock FontWeight="SemiBold" Margin="0,8,0,0" Text="Disk cache" />
+
+        <StackPanel Spacing="4">
+          <CheckBox x:Name="SpillBodiesCheck" Content="Save older bodies to disk"
+                    AutomationProperties.AutomationId="RetentionSpillBodies" />
+          <TextBlock Opacity="0.75" TextWrapping="Wrap" Margin="24,0,0,0"
+                     Text="When on, bodies for sessions outside the recent window are saved as cache files so you can reopen them without keeping everything in RAM." />
+        </StackPanel>
+
+        <StackPanel x:Name="DiskFieldsPanel" Spacing="12" Margin="0,4,0,0">
+          <StackPanel Spacing="4">
+            <TextBlock FontWeight="SemiBold" Text="Cache folder" />
+            <TextBox x:Name="CacheFolderPathBox"
+                     IsReadOnly="True"
+                     TextWrapping="Wrap"
+                     AcceptsReturn="True"
+                     Opacity="0.85"
+                     AutomationProperties.AutomationId="RetentionCacheFolderPath" />
+            <Button x:Name="OpenCacheFolderButton"
+                    Content="Open cache folder"
+                    HorizontalAlignment="Left"
+                    MinWidth="88"
+                    Margin="0,4,0,0"
+                    AutomationProperties.AutomationId="RetentionOpenCacheFolder" />
+          </StackPanel>
+          <StackPanel Spacing="4">
+            <TextBlock FontWeight="SemiBold" Text="Disk cache size limit (MB)" />
+            <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                       Text="Maximum space for saved bodies. Oldest cached files are deleted when over this." />
+            <TextBox x:Name="DiskCacheMaxMbBox" Width="120" HorizontalAlignment="Left" Watermark="2048"
+                     AutomationProperties.AutomationId="RetentionDiskCacheMb" />
+          </StackPanel>
+          <StackPanel Spacing="4">
+            <TextBlock FontWeight="SemiBold" Text="Delete cached bodies older than (days)" />
+            <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                       Text="Cached body files older than this are removed automatically, including while Inspector is running." />
+            <TextBox x:Name="DiskCacheMaxAgeDaysBox" Width="120" HorizontalAlignment="Left" Watermark="7"
+                     AutomationProperties.AutomationId="RetentionDiskCacheAgeDays" />
+          </StackPanel>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

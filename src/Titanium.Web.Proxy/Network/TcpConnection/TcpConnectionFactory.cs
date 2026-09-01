@@ -324,14 +324,7 @@ internal class TcpConnectionFactory : IDisposable
 
         // Mirror the connectHost/connectPort logic from GetServerConnection so that the key
         // computed here is identical to the key stored on connections created by that method.
-        string? connectHost = null;
-        int? connectPort = null;
-        if (session.ProxyEndPoint is TransparentBaseProxyEndPoint transparentEndPoint
-            && !string.IsNullOrEmpty(transparentEndPoint.ForwardHost))
-        {
-            connectHost = transparentEndPoint.ForwardHost;
-            connectPort = transparentEndPoint.ForwardPort;
-        }
+        var (connectHost, connectPort) = ResolveConnectTarget(session);
 
         return GetConnectionCacheKey(originHost, originPort, isHttps, applicationProtocols, upStreamEndPoint,
             upStreamProxy, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
@@ -344,6 +337,21 @@ internal class TcpConnectionFactory : IDisposable
             session.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
             session.HttpClient.UpStreamEndPointIPv4 ?? server.UpStreamEndPointIPv4,
             session.HttpClient.UpStreamEndPointIPv6 ?? server.UpStreamEndPointIPv6);
+    }
+
+    /// <summary>
+    ///     Prefer per-session route dispatch override; else transparent ForwardHost.
+    /// </summary>
+    private static (string? Host, int? Port) ResolveConnectTarget(SessionEventArgsBase session)
+    {
+        if (session.UpstreamConnectHost is { Length: > 0 } routedHost)
+            return (routedHost, session.UpstreamConnectPort);
+
+        if (session.ProxyEndPoint is TransparentBaseProxyEndPoint transparentEndPoint
+            && !string.IsNullOrEmpty(transparentEndPoint.ForwardHost))
+            return (transparentEndPoint.ForwardHost, transparentEndPoint.ForwardPort);
+
+        return (null, null);
     }
 
 
@@ -414,16 +422,9 @@ internal class TcpConnectionFactory : IDisposable
         var upStreamProxy = customUpStreamProxy ??
                             (isHttps ? proxyServer.UpStreamHttpsProxy : proxyServer.UpStreamHttpProxy);
 
-        // For transparent endpoints with a fixed forward target, only the TCP connection
-        // destination is overridden; host/port stay the original for TLS SNI and Host header.
-        string? connectHost = null;
-        int? connectPort = null;
-        if (session.ProxyEndPoint is TransparentBaseProxyEndPoint transparentEndPoint
-            && !string.IsNullOrEmpty(transparentEndPoint.ForwardHost))
-        {
-            connectHost = transparentEndPoint.ForwardHost;
-            connectPort = transparentEndPoint.ForwardPort;
-        }
+        // Route dispatch may override connect target; else transparent ForwardHost.
+        // host/port stay the request authority for TLS SNI and Host header.
+        var (connectHost, connectPort) = ResolveConnectTarget(session);
 
         return await GetServerConnection(proxyServer, host, port, session.HttpClient.Request.HttpVersion, isHttps,
             applicationProtocols, isConnect, session, upStreamEndPoint, upStreamProxy, noCache, prefetch,
@@ -461,7 +462,11 @@ internal class TcpConnectionFactory : IDisposable
         SemaphoreSlim? createGate = null,
         string? precomputedCacheKey = null)
     {
-        var sslProtocol = sessionArgs.ClientConnection.SslProtocol;
+        // Outbound TLS version is product policy — never copy inbound ClientConnection.SslProtocol.
+        // QUIC inbound is always Tls13; mirroring it made H3→HTTPS-TCP offer TLS 1.3-only and
+        // fail on macOS SecureTransport (no TLS 1.3 client). Inbound/outbound are independent
+        // handshakes (H3→H1, H2→H1, etc.). CreateServerConnection resolves the mask below.
+        var sslProtocol = SslProtocols.None;
 
         IPEndPoint? resolvedV4 = upStreamEndPointIPv4;
         IPEndPoint? resolvedV6 = upStreamEndPointIPv6;
@@ -615,9 +620,12 @@ internal class TcpConnectionFactory : IDisposable
             throw new InvalidOperationException(
                 $"A client is making HTTP request via external proxy to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
 
-        if (proxyServer.SupportedServerSslProtocols != SslProtocols.None) sslProtocol = proxyServer.SupportedServerSslProtocols;
-
-        if (isHttps && sslProtocol == SslProtocols.None) sslProtocol = proxyServer.SupportedSslProtocols;
+        // Prefer an explicit outbound override; otherwise SupportedSslProtocols (default Tls12|Tls13).
+        // Do not mirror the inbound client handshake — see GetServerConnection.
+        if (proxyServer.SupportedServerSslProtocols != SslProtocols.None)
+            sslProtocol = proxyServer.SupportedServerSslProtocols;
+        else if (isHttps)
+            sslProtocol = proxyServer.SupportedSslProtocols;
 
         var useUpstreamProxy1 = false;
 
@@ -1125,7 +1133,8 @@ internal class TcpConnectionFactory : IDisposable
             goto retry; // NOSONAR S907 -- TLS compatibility fallback must restart the complete connection attempt.
         }
         catch (AuthenticationException ex) when (ex.HResult == unchecked((int)0x80131501) && retry &&
-                                                 enabledSslProtocols >= SslProtocols.Tls11) // NOSONAR S4423 - legacy fallback gate
+                                                 enabledSslProtocols >= SslProtocols.Tls11 && // NOSONAR S4423 - legacy fallback gate
+                                                 AlpnNegotiation.ShouldAttemptTlsVersionDowngrade(ex))
         {
             if (stream != null) await stream.DisposeAsync();
             tcpServerSocket?.Close();
@@ -1144,6 +1153,16 @@ internal class TcpConnectionFactory : IDisposable
             retry = false;
             ProxyMetrics.PoolDowngraded();
             goto retry; // NOSONAR S907 -- TLS compatibility fallback must restart the complete connection attempt.
+        }
+        catch (AuthenticationException ex) when (AlpnNegotiation.IsAlpnNegotiationFailure(ex))
+        {
+            // h2-only (or other ALPN) mismatch is not a TLS-version problem — fail fast so
+            // NegotiateHttp2Async can treat the probe as "no HTTP/2" without multi-second thrash.
+            if (stream != null) await stream.DisposeAsync();
+            tcpServerSocket?.Close();
+            ProxyDiagnostics.ReportBenign(proxyServer.Logger,
+                "TcpConnectionFactory ALPN negotiation rejected by origin; rethrowing without TLS downgrade", ex);
+            throw;
         }
 #pragma warning restore SYSLIB0039
         catch (Exception ex)

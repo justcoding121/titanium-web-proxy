@@ -117,6 +117,11 @@ internal static class EmbeddedLoadGenerator
                         };
                         if (!workload.KeepAlive)
                             request.Headers.ConnectionClose = true;
+                        if (workload.ExtraHeaders is { Count: > 0 } headers)
+                        {
+                            foreach (var (name, value) in headers)
+                                request.Headers.TryAddWithoutValidation(name, value);
+                        }
                         if (requestBody != null)
                         {
                             request.Content = workload.IsEarlyResponse

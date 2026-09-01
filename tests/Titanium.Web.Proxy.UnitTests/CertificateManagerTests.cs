@@ -166,6 +166,20 @@ namespace Titanium.Web.Proxy.UnitTests
             }
         }
 
+        [TestMethod]
+        public void ApplyFastColdStartLeafSettings_Sets_Ecdsa_FastEngine_And_DiskCache()
+        {
+            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance);
+            Assert.AreEqual(CertificateKeyAlgorithm.Rsa2048, mgr.LeafCertificateKeyAlgorithm);
+            Assert.IsFalse(mgr.SaveFakeCertificates);
+
+            mgr.ApplyFastColdStartLeafSettings();
+
+            Assert.AreEqual(CertificateEngine.BouncyCastleFast, mgr.CertificateEngine);
+            Assert.AreEqual(CertificateKeyAlgorithm.EcdsaP256, mgr.LeafCertificateKeyAlgorithm);
+            Assert.IsTrue(mgr.SaveFakeCertificates);
+        }
+
         /// <summary>
         /// Regression test for issue #765: setting RootCertificate to the same certificate instance
         /// (same thumbprint) must NOT clear the in-memory leaf cache, so cached leaves survive a
@@ -583,6 +597,113 @@ namespace Titanium.Web.Proxy.UnitTests
         }
 
         /// <summary>
+        ///     Regression: after a leaf is evicted (and disposed), reloading the same PKCS#12 yields a
+        ///     new X509Certificate2 with the same thumbprint. SslStreamCertificateContext must not be
+        ///     reused across instances — that yields CryptographicException "m_safeCertContext is an
+        ///     invalid handle" on AuthenticateAsServerAsync and breaks MITM for that host permanently.
+        /// </summary>
+        [TestMethod]
+        public async Task CreateSslCertificateContext_AfterEvictAndReload_DoesNotReuseDisposedLeafContext()
+        {
+            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance,
+                () => 1)
+            {
+                CertificateEngine = CertificateEngine.BouncyCastleFast
+            };
+            Assert.IsTrue(mgr.CreateRootCertificate(false));
+
+            var leaf1 = await mgr.CreateServerCertificate("reload-ctx.example");
+            Assert.IsNotNull(leaf1);
+            var pkcs12 = leaf1!.Export(X509ContentType.Pkcs12);
+            var thumbprint = leaf1.Thumbprint;
+            var ctx1 = mgr.CreateSslCertificateContext(leaf1);
+            Assert.AreSame(leaf1, ctx1.TargetCertificate);
+
+            // Bound=1: creating another host evicts reload-ctx.example and invalidates its context.
+            var other = await mgr.CreateServerCertificate("other-evict.example");
+            Assert.IsNotNull(other);
+
+            var contextsField = typeof(CertificateManager).GetField("sslCertificateContexts",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.IsNotNull(contextsField);
+            var contexts = contextsField!.GetValue(mgr)!;
+            var containsKey = contexts.GetType().GetMethod("ContainsKey")!;
+            Assert.IsFalse((bool)containsKey.Invoke(contexts, [thumbprint])!,
+                "eviction must drop the SslStreamCertificateContext for the evicted leaf thumbprint");
+
+            // Force deferred dispose of the evicted leaf (grace window already elapsed).
+            var pendingField = typeof(CertificateManager).GetField("pendingDisposals",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            var queue = pendingField!.GetValue(mgr)!;
+            var queueType = queue.GetType();
+            var tryDequeue = queueType.GetMethod("TryDequeue")!;
+            var enqueue = queueType.GetMethod("Enqueue")!;
+            var itemType = queueType.GetGenericArguments()[0];
+            var evictedAt = itemType.GetProperty("EvictedAtUtc")
+                ?? (MemberInfo?)itemType.GetField("EvictedAtUtc");
+            Assert.IsNotNull(evictedAt);
+            var requeued = new List<object>();
+            while (true)
+            {
+                var args = new object?[] { null };
+                if (!(bool)tryDequeue.Invoke(queue, args)!) break;
+                var item = args[0]!;
+                var past = DateTime.UtcNow.AddMinutes(-2);
+                if (evictedAt is PropertyInfo pi)
+                {
+                    var boxed = item;
+                    pi.SetValue(boxed, past);
+                    item = boxed;
+                }
+                else
+                    ((FieldInfo)evictedAt!).SetValue(item, past);
+                requeued.Add(item);
+            }
+
+            foreach (var item in requeued)
+                enqueue.Invoke(queue, [item]);
+
+            typeof(CertificateManager).GetMethod("DisposePendingEvictions",
+                BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(mgr, null);
+
+            // Same PKCS#12 bytes → same thumbprint, distinct SafeCertContext (Inspector disk reload path).
+            using var leaf2 = CertificateLoader.LoadPkcs12(pkcs12, null, X509KeyStorageFlags.Exportable);
+            Assert.AreEqual(thumbprint, leaf2.Thumbprint);
+            Assert.AreNotSame(leaf1, leaf2);
+
+            var ctx2 = mgr.CreateSslCertificateContext(leaf2);
+            Assert.AreNotSame(ctx1, ctx2,
+                "must not reuse SslStreamCertificateContext built for a disposed leaf instance");
+            Assert.AreSame(leaf2, ctx2.TargetCertificate);
+
+            using var ms = new MemoryStream();
+            await using var ssl = new System.Net.Security.SslStream(ms, leaveInnerStreamOpen: true);
+            var options = new System.Net.Security.SslServerAuthenticationOptions
+            {
+                ServerCertificateContext = ctx2,
+                ClientCertificateRequired = false
+            };
+            using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+            try
+            {
+                await ssl.AuthenticateAsServerAsync(options, cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected: no peer connected.
+            }
+            catch (System.Security.Cryptography.CryptographicException ex)
+            {
+                Assert.Fail(
+                    "SslStream must not see disposed cert handle after reload; got: " + ex.Message);
+            }
+            catch (IOException)
+            {
+                // Also acceptable: stream closed without a peer.
+            }
+        }
+
+        /// <summary>
         ///     Regression: CertificateManager.Dispose() must drain cachedCertificates so that the
         ///     native CAPI/OpenSSL handle of each leaf cert is released promptly.
         /// </summary>
@@ -731,12 +852,48 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public void RemoveTrustedRootCertificate_NullRoot_LogsWithoutThrowing()
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            // Unique CN: must not match the product default "Titanium Root Certificate Authority"
+            // or Remove walks CurrentUser\Root and Windows shows a blocking DELETE dialog.
+            using var mgr = new CertificateManager(
+                "Titanium UnitTest NullRoot CA " + Guid.NewGuid().ToString("N"),
+                "TitaniumUnitTest",
+                false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastleFast
             };
             mgr.RemoveTrustedRootCertificate(machineTrusted: false);
             Assert.IsNull(mgr.RootCertificate);
+        }
+
+        [TestMethod]
+        public void SuppressInteractiveRootStoreMutations_SkipsRootAddAndRemove()
+        {
+            if (!RunTime.IsWindows)
+                Assert.Inconclusive("Root-store CryptUI suppression is Windows-focused.");
+
+            var previous = CertificateManager.SuppressInteractiveRootStoreMutations;
+            CertificateManager.SuppressInteractiveRootStoreMutations = true;
+            try
+            {
+                const string cn = "Titanium UnitTest Suppress Root UI CA";
+                using var mgr = new CertificateManager(cn, "TitaniumUnitTest", false, false, false,
+                    NullLogger.Instance)
+                {
+                    CertificateEngine = CertificateEngine.BouncyCastle
+                };
+                Assert.IsTrue(mgr.CreateRootCertificate(false));
+
+                // Would otherwise open Trusted Root Yes/No; must no-op under suppress.
+                mgr.TrustRootCertificate(machineTrusted: false);
+                Assert.IsFalse(mgr.IsRootCertificateUserTrusted());
+
+                // Would otherwise open Root DELETE Yes/No for any same-CN leftovers.
+                mgr.RemoveTrustedRootCertificate(machineTrusted: false);
+            }
+            finally
+            {
+                CertificateManager.SuppressInteractiveRootStoreMutations = previous;
+            }
         }
 
         /// <summary>

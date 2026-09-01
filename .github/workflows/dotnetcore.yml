@@ -6,16 +6,40 @@ on:
         - develop
         - beta
         - stable
+    paths-ignore:
+      - 'website/**'
+      - 'wiki/**'
+      - 'docs/**'
+      - '*.md'
+      - '.github/workflows/deploy-website.yml'
+      - '.github/dns/**'
   pull_request:
     branches:
         - develop
         - beta
         - stable
-      
+    paths-ignore:
+      - 'website/**'
+      - 'wiki/**'
+      - 'docs/**'
+      - '*.md'
+      - '.github/workflows/deploy-website.yml'
+      - '.github/dns/**'
+
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 60
+    permissions:
+      # write: Publish Documentation (EndBug/add-and-commit) pushes DocFX output to develop.
+      # GITHUB_TOKEN with contents:read cannot push (403 github-actions[bot]).
+      contents: write
+      # SonarCloud / PR decoration when token is present
+      pull-requests: write
+      checks: write
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
@@ -62,8 +86,8 @@ jobs:
         /o:"justcoding121"
         /d:sonar.token="$env:SONAR_TOKEN"
         /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml"
-        /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**"
-        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/Http3/Http3OriginBridge.cs,**/Http3/Http3OriginClientSession.cs"
+        /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**,**/*.axaml,**/website/**,**/.github/**"
+        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/Http3/Http3OriginBridge.cs,**/Http3/Http3OriginClientSession.cs,**/Titanium.Plus/Dashboard/**,**/Titanium.Inspector/Views/**,**/Titanium.Inspector/Services/AppContainerLoopback.cs,**/Titanium.Inspector/App.axaml.cs,**/Titanium.Inspector/Program.cs,**/Titanium.Inspector/InspectorAppFactory.cs,**/Titanium.Inspector/Services/UpdateService.cs,**/Titanium.Cli/Program.cs,**/Titanium.Cli/AsyncConsole.cs,**/Titanium.Cli/Http3/Http3DepsCommand.cs,**/Titanium.Cli/Updates/VersionAndUpdateCommands.cs,**/Titanium.Cli/Certificates/CertificateBootstrap.cs,**/Titanium.Plus/Discovery/**,**/Titanium.Plus/Security/**,**/Titanium.Plus/State/**,**/Titanium.Plus/Resilience/**,**/Titanium.Plus/PlusLog.cs,**/Titanium.Web.Proxy/Helpers/LinuxSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/MacOsSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/IElevationPrompt.cs,**/Titanium.Web.Proxy/Helpers/IProcessRunner.cs"
 
     - name: Build for SonarCloud analysis
       if: env.SONAR_TOKEN != ''
@@ -73,6 +97,18 @@ jobs:
       shell: pwsh
       run: |
         dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/unit
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        # Additional MIT + NC unit suites (coverage merged below)
+        dotnet test tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/configuration
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/plus
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/inspector
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/cli
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E|TestCategory=E2E-UI" --collect:"Code Coverage" --results-directory coverage/e2e
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         # The integration suite spins up real listening sockets and TLS handshakes, which
@@ -110,14 +146,236 @@ jobs:
         message: Update documentation
         committer_name: GitHub Actions
         committer_email: actions@github.com
-        # Only commit DocFX output — never Sonar/coverage/tool install artifacts
+        # Only commit DocFX output -- never Sonar/coverage/tool install artifacts
         add: 'docs'
         # DocFX often races another develop push; rebase instead of failing the job.
         pull: '--rebase --autostash'
 
+  # Cross-OS Inspector + Plus dashboard UI gates (Headless / Visual / Playwright).
+  # Inspector unit suite stays on Windows `build` only except Inspector-Stress (below).
+  ui-portable:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+    - uses: actions/checkout@v6
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: |
+          10.0.x
+    - name: Assert in-box MsQuic (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        if (-not [System.Net.Quic.QuicListener]::IsSupported) {
+          throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
+        }
+        Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"
+    - name: Install libmsquic (Linux HTTP/3)
+      if: runner.os == 'Linux'
+      run: |
+        set -euo pipefail
+        . /etc/os-release
+        curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+          "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb" \
+          -o packages-microsoft-prod.deb
+        sudo dpkg -i packages-microsoft-prod.deb
+        rm -f packages-microsoft-prod.deb
+        sudo apt-get update
+        sudo apt-get install -y libmsquic
+        pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { throw "QuicListener.IsSupported is false after libmsquic install" }; Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"'
+    - name: Install MsQuic (macOS HTTP/3)
+      if: runner.os == 'macOS'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        # Intel macOS bottles are sparse; do not force-upgrade openssl (no bottle → job fail).
+        $env:HOMEBREW_NO_AUTO_UPDATE = '1'
+        $env:HOMEBREW_NO_INSTALL_UPGRADE = '1'
+        brew install openssl@3 libmsquic
+        $prefix = (& brew --prefix).Trim()
+        $msquicLib = Join-Path $prefix 'opt/libmsquic/lib'
+        $sslLib = Join-Path $prefix 'opt/openssl@3/lib'
+        $libDirs = @($msquicLib, $sslLib, (Join-Path $prefix 'lib')) |
+          Where-Object { Test-Path $_ } |
+          Select-Object -Unique
+        $dyld = ($libDirs -join ':')
+        Add-Content -Path $env:GITHUB_ENV -Value "DYLD_LIBRARY_PATH=$dyld"
+        Add-Content -Path $env:GITHUB_ENV -Value "DYLD_FALLBACK_LIBRARY_PATH=$dyld"
+        $env:DYLD_LIBRARY_PATH = $dyld
+        $env:DYLD_FALLBACK_LIBRARY_PATH = $dyld
+        Write-Host "DYLD_LIBRARY_PATH=$dyld"
+
+        function Test-QuicSupported {
+          $out = & pwsh -NoProfile -Command {
+            if (-not [System.Net.Quic.QuicListener]::IsSupported) { '0' } else { '1' }
+          }
+          return ($out.Trim() -eq '1')
+        }
+
+        if (-not (Test-QuicSupported)) {
+          Write-Host 'QuicListener.IsSupported still false after brew; trying Microsoft libmsquic drop…'
+          $arch = (& uname -m).Trim()
+          $rid = if ($arch -eq 'arm64') { 'osx-arm64' } else { 'osx-x64' }
+          $dest = Join-Path $env:RUNNER_TEMP 'msquic-osx'
+          New-Item -ItemType Directory -Path $dest -Force | Out-Null
+          $tag = 'v2.4.7'
+          $url = "https://github.com/microsoft/msquic/releases/download/$tag/msquic_${rid}_$tag.zip"
+          $zip = Join-Path $env:RUNNER_TEMP 'msquic-osx.zip'
+          try {
+            & curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 $url -o $zip
+            if ($LASTEXITCODE -ne 0) { throw "curl exit $LASTEXITCODE" }
+            Expand-Archive -Path $zip -DestinationPath $dest -Force
+          } catch {
+            Write-Warning "Microsoft release download failed ($url): $_"
+          }
+          $found = Get-ChildItem -Path $dest -Recurse -Filter 'libmsquic*.dylib' -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if ($found) {
+            $extra = $found.Directory.FullName
+            # ${extra} — bare $extra: is parsed as a PowerShell drive-qualified variable.
+            $dyld2 = "${extra}:${dyld}"
+            Add-Content -Path $env:GITHUB_ENV -Value "DYLD_LIBRARY_PATH=$dyld2"
+            Add-Content -Path $env:GITHUB_ENV -Value "DYLD_FALLBACK_LIBRARY_PATH=$dyld2"
+            $env:DYLD_LIBRARY_PATH = $dyld2
+            $env:DYLD_FALLBACK_LIBRARY_PATH = $dyld2
+            Write-Host "Added Microsoft dylib dir: $extra"
+          }
+        }
+
+        if (-not (Test-QuicSupported)) {
+          throw 'QuicListener.IsSupported is false after macOS MsQuic install (brew + optional Microsoft drop)'
+        }
+        Write-Host 'QuicListener.IsSupported=True'
+    - name: Linux UI fonts + Playwright OS deps
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y fonts-liberation libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libasound2t64 || sudo apt-get install -y fonts-liberation libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libasound2
+    - name: Restore
+      run: dotnet restore src/Titanium.Web.Proxy.sln
+    - name: Build
+      run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore
+    - name: Install Playwright Chromium
+      shell: pwsh
+      run: |
+        $pw = Join-Path (Resolve-Path "tests/Titanium.E2E.Tests/bin/Release/net10.0") "playwright.ps1"
+        if (-not (Test-Path $pw)) {
+          # Ensure test project is built so playwright.ps1 is in output
+          dotnet build tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj -c Release --no-restore
+          $pw = Join-Path (Resolve-Path "tests/Titanium.E2E.Tests/bin/Release/net10.0") "playwright.ps1"
+        }
+        & $pw install chromium
+    - name: E2E-UI ViewModel smoke
+      run: |
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI"
+    - name: Inspector Headless + Visual + Plus Playwright
+      run: |
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Headless|TestCategory=E2E-UI-Visual|TestCategory=E2E-UI-Plus-Dashboard"
+    - name: Inspector retention stress (spill + H3)
+      run: |
+        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-restore --filter "TestCategory=Inspector-Stress"
+    - name: OS proxy-backend filters
+      run: |
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "FullyQualifiedName~UnixProxyBypassMapperTests|FullyQualifiedName~MacOsSystemProxyBackendTests|FullyQualifiedName~LinuxSystemProxyBackendTests|FullyQualifiedName~ElevationPromptCancelTests|FullyQualifiedName~SystemProxyBackendFactoryPlatformTests"
+    - name: Inspector E2E-UI Linux platform
+      if: runner.os == 'Linux'
+      run: |
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Linux"
+    - name: Inspector E2E-UI macOS platform + publish smoke
+      if: runner.os == 'macOS'
+      run: |
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Mac|FullyQualifiedName~MacOsSystemProxyBackendTests|FullyQualifiedName~UnixProxyBypassMapperTests"
+        rid=$(dotnet --info | awk '/RID:/ {print $2; exit}')
+        if [ -z "$rid" ]; then rid=osx-arm64; fi
+        dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r "$rid" --self-contained true -o "./artifacts/inspector-$rid"
+        test -f "./artifacts/inspector-$rid/TitaniumInspector" || test -f "./artifacts/inspector-$rid/Titanium.Inspector"
+    - name: Upload UI failure artifacts
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ui-portable-${{ matrix.os }}
+        path: |
+          tests/Titanium.E2E.Tests/TestResults/**
+          **/test-results/**
+          **/playwright-report/**
+        if-no-files-found: ignore
+
+  # Tiered RPS gates for beta/stable publish (parallel — wall clock ~max of the two).
+  # Editions: CLI/Plus tax vs Core. Peer: Core reverse vs YARP (+ MITM÷Reverse) so a
+  # uniform Core slowdown cannot hide behind green edition ratios.
+  rps-publish-gate:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v6
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: |
+          10.0.x
+    - name: compare-editions (publish gate)
+      shell: pwsh
+      run: |
+        # Stable tags additionally require compare-product PASS via release.yml on that SHA.
+        pwsh tools/RpsLoadProbe/run-rps.ps1 `
+          -Mode compare-editions `
+          -Concurrency '8,16,32,64' `
+          -WarmupSec 2 `
+          -DurationSec 8 `
+          -Repeats 1 `
+          -ResultsDir tools/RpsLoadProbe/results `
+          -BombardierCheck
+        $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
+          Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if (-not $csv) { throw 'No CSV found for edition gate validation' }
+        pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName
+
+  # Parallel with rps-publish-gate: Core vs YARP on the release SHA (c=64 spot).
+  # Same validator as PR compare-spot / run-spot-matrix.ps1; does not extend wall clock
+  # past editions (~60m).
+  rps-peer-gate:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v6
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: |
+          10.0.x
+    - name: Install libmsquic (HTTP/3)
+      run: |
+        set -euo pipefail
+        . /etc/os-release
+        curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+          "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb" \
+          -o packages-microsoft-prod.deb
+        sudo dpkg -i packages-microsoft-prod.deb
+        rm -f packages-microsoft-prod.deb
+        sudo apt-get update
+        sudo apt-get install -y libmsquic
+        pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { throw "QuicListener.IsSupported is false after libmsquic install" }; Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"'
+    - name: compare-spot (Core÷YARP + MITM÷Reverse)
+      shell: pwsh
+      run: |
+        pwsh tools/RpsLoadProbe/run-spot-matrix.ps1
+
   publish:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
-    needs: build
+    needs: [build, ui-portable, rps-publish-gate, rps-peer-gate]
     runs-on: windows-latest
     environment: nuget-publish
     permissions:
@@ -136,11 +394,17 @@ jobs:
 
     - name: Pack Beta
       if: github.ref == 'refs/heads/beta'
-      run: dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release --version-suffix "beta"
+      run: |
+        dotnet pack src/Titanium.Web.Proxy.Abstractions/Titanium.Web.Proxy.Abstractions.csproj --configuration Release --version-suffix "beta"
+        dotnet pack src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj --configuration Release --version-suffix "beta"
+        dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release --version-suffix "beta"
 
     - name: Pack Stable
       if: github.ref == 'refs/heads/stable'
-      run: dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release
+      run: |
+        dotnet pack src/Titanium.Web.Proxy.Abstractions/Titanium.Web.Proxy.Abstractions.csproj --configuration Release
+        dotnet pack src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj --configuration Release
+        dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release
 
     - name: Log in to NuGet
       uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
@@ -149,34 +413,48 @@ jobs:
         user: ${{ secrets.NUGET_USER }}
 
     - name: Publish Package
-      run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
-
-    - name: Create GitHub Release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      shell: pwsh
+      # MIT packages only -- never push Titanium.Plus or Titanium.Inspector
       run: |
-        $nupkg = Get-ChildItem -Recurse -Filter *.nupkg |
-          Where-Object { $_.Name -notlike '*.symbols.nupkg' } |
-          Select-Object -First 1
-        if (-not $nupkg) { throw "No nupkg found to attach to the GitHub release." }
+        Get-ChildItem -Recurse -Filter *.nupkg |
+          Where-Object { $_.Name -notlike '*Plus*' -and $_.Name -notlike '*Inspector*' -and $_.Name -notlike '*.symbols.nupkg' } |
+          ForEach-Object {
+            dotnet nuget push $_.FullName `
+              --source https://api.nuget.org/v3/index.json `
+              --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" `
+              --skip-duplicate
+          }
 
-        # Titanium.Web.Proxy.3.2.3-beta.nupkg -> 3.2.3-beta
-        $version = $nupkg.BaseName -replace '^Titanium\.Web\.Proxy\.', ''
-        $isPrerelease = $version -match '-'
+  # Product zips stay on release.yml (v* tags). After beta/stable merge, create/move the
+  # version tag and dispatch release.yml (GITHUB_TOKEN tag pushes do not re-trigger workflows).
+  cut-product-tag:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
+    needs: [build, ui-portable, rps-publish-gate, rps-peer-gate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Create/move product tag and dispatch release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        PREFIX=$(grep -oP '(?<=<VersionPrefix>)[^<]+' src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj | head -n1)
+        if [[ -z "$PREFIX" ]]; then echo "VersionPrefix not found"; exit 1; fi
+        CHANNEL=stable
+        VERSION="$PREFIX"
+        if [[ "${{ github.ref }}" == "refs/heads/beta" ]]; then
+          CHANNEL=beta
+          VERSION="${PREFIX}-beta"
+        fi
+        TAG="v${VERSION}"
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git tag -f -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+        git push origin "refs/tags/$TAG" --force
+        echo "Dispatching product release for $TAG (channel=$CHANNEL) at $GITHUB_SHA"
+        gh workflow run release.yml --ref "$GITHUB_REF_NAME" -f channel="$CHANNEL"
 
-        gh release view $version 2>$null
-        if ($LASTEXITCODE -eq 0) {
-          Write-Output "Release $version already exists; uploading package."
-          gh release upload $version $nupkg.FullName --clobber
-        }
-        else {
-          $createArgs = @(
-            'release', 'create', $version, $nupkg.FullName,
-            '--title', $version,
-            '--generate-notes',
-            '--target', $env:GITHUB_SHA
-          )
-          if ($isPrerelease) { $createArgs += '--prerelease' }
-          gh @createArgs
-        }

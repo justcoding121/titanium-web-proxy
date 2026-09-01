@@ -202,6 +202,25 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     public IExternalProxy? CustomUpStreamProxyUsed { get; internal set; }
 
     /// <summary>
+    ///     When set by reverse-proxy route dispatch, overrides transparent <c>ForwardHost</c>
+    ///     for the TCP/QUIC connect target (SNI/Host header still follow the request authority).
+    /// </summary>
+    internal string? UpstreamConnectHost { get; set; }
+
+    /// <summary>
+    ///     Port paired with <see cref="UpstreamConnectHost"/>.
+    /// </summary>
+    internal int? UpstreamConnectPort { get; set; }
+
+    /// <summary>
+    ///     Selected cluster destination id for health / retry bookkeeping.
+    /// </summary>
+    internal string? UpstreamDestinationId { get; set; }
+
+    /// <summary>Active-request lease for <see cref="Clusters.DestinationHealthTracker"/>.</summary>
+    internal IDisposable? DestinationRequestLease { get; set; }
+
+    /// <summary>
     ///     Local endpoint via which we make the request.
     /// </summary>
     public ProxyEndPoint ProxyEndPoint { get; }

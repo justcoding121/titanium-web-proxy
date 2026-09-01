@@ -23,6 +23,8 @@ internal sealed class WorkloadOptions
     public int EarlyResponseAfterBytes { get; init; }
     public bool IsDuplexHttp { get; init; }
     public bool IsWebSocket { get; init; }
+    /// <summary>Optional extra request headers (e.g. Authorization Bearer for JWT edition arm).</summary>
+    public IReadOnlyDictionary<string, string>? ExtraHeaders { get; init; }
 
     public bool IsLossy => DelayMs > 0 || LossPercent > 0;
     public bool IsHeavyBody => ResponseBytes > TinyJsonBytes || RequestBytes > 0;
@@ -118,6 +120,9 @@ internal sealed class WorkloadOptions
 
     public WorkloadOptions WithCaptureTlsTiming(bool capture) => Copy(captureTlsTiming: capture);
 
+    public WorkloadOptions WithExtraHeaders(IReadOnlyDictionary<string, string>? headers) =>
+        Copy(extraHeaders: headers);
+
     public WorkloadOptions Copy(
         string? method = null,
         int? responseBytes = null,
@@ -130,7 +135,9 @@ internal sealed class WorkloadOptions
         int? clientReadSleepMs = null,
         int? earlyResponseAfterBytes = null,
         bool? isDuplexHttp = null,
-        bool? isWebSocket = null) => new()
+        bool? isWebSocket = null,
+        IReadOnlyDictionary<string, string>? extraHeaders = null,
+        bool replaceExtraHeaders = false) => new()
     {
         Method = method ?? Method,
         ResponseBytes = responseBytes ?? ResponseBytes,
@@ -143,7 +150,8 @@ internal sealed class WorkloadOptions
         ClientReadSleepMs = clientReadSleepMs ?? ClientReadSleepMs,
         EarlyResponseAfterBytes = earlyResponseAfterBytes ?? EarlyResponseAfterBytes,
         IsDuplexHttp = isDuplexHttp ?? IsDuplexHttp,
-        IsWebSocket = isWebSocket ?? IsWebSocket
+        IsWebSocket = isWebSocket ?? IsWebSocket,
+        ExtraHeaders = replaceExtraHeaders ? extraHeaders : (extraHeaders ?? ExtraHeaders)
     };
 
     public double ResolveP99SloMs(double http1, double http2, double http3, double httpsMitm,

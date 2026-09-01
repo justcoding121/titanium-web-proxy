@@ -1,4 +1,5 @@
-# PR2 local spot gate: compare-spot @ c=64, validate Full÷Reverse >= 0.70 and reverse TWP÷YARP >= 0.95.
+# Spot gate: compare-spot @ c=64, Full÷Reverse >= 0.70 and reverse TWP÷YARP >= 0.95.
+# Skip TWP÷YARP when YARP did not SLO-pass (same policy as validate-compare-product-gates.ps1).
 [CmdletBinding()]
 param(
     [int] $Concurrency = 64,
@@ -79,6 +80,17 @@ foreach ($pair in $mitmPairs) {
 }
 
 foreach ($pair in $reversePairs) {
+    if (-not $rpsAtC.ContainsKey($pair.Twp)) {
+        Write-Host ("FAIL {0}: missing TWP arm data" -f $pair.Label) -ForegroundColor Red
+        $failed = $true
+        continue
+    }
+    if (-not $rpsAtC.ContainsKey($pair.Yarp)) {
+        # Match validate-compare-product-gates.ps1: YARP H3→H3 often 0 RPS / SLO-fail on
+        # Linux GHA (peer harness), not a TWP regression — skip peer ratio when YARP absent.
+        Write-Host ("SKIP {0}: no YARP SLO-pass peer (TWP present)" -f $pair.Label) -ForegroundColor DarkYellow
+        continue
+    }
     $ratio = Get-Ratio $pair.Twp $pair.Yarp
     if ($null -eq $ratio) {
         Write-Host ("FAIL {0}: missing arm data" -f $pair.Label) -ForegroundColor Red

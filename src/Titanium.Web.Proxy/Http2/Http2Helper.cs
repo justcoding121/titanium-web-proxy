@@ -2719,9 +2719,13 @@ namespace Titanium.Web.Proxy.Http2
 
                             if (bodyBudgetBreached && bodyBudgetMode == PolicyMode.Enforce)
                             {
-                                ReportException(logger, new ProxyHttpException(
+                                // Intentional policy enforcement, not a proxy defect — Debug only.
+                                ProxyDiagnostics.ReportBenign(logger,
                                     $"HTTP/2 {(isClient ? "request" : "response")} body exceeded the configured " +
-                                    $"buffering limit of {maxBufferedBodyBytes:N0} bytes.", null, args));
+                                    $"buffering limit of {maxBufferedBodyBytes:N0} bytes.",
+                                    new ProxyHttpException(
+                                        $"HTTP/2 {(isClient ? "request" : "response")} body exceeded the configured " +
+                                        $"buffering limit of {maxBufferedBodyBytes:N0} bytes.", null, args));
 
                                 var sizeLimitException = new BodySizeLimitExceededException(
                                     $"HTTP/2 body byte count {data.Length + length:N0} exceeds the limit of {maxBufferedBodyBytes:N0}.");
@@ -3354,18 +3358,37 @@ namespace Titanium.Web.Proxy.Http2
 
                     // NO_ERROR (0) from the origin is a normal post-response cleanup; CANCEL is the usual
                     // client abort. REFUSED_STREAM is also expected under origin load-shedding / GOAWAY
-                    // races (observed live from github.com/Fastly both direct and via this proxy) - the
-                    // RST is still forwarded to the peer so browsers/HttpClient can retry, but it must
-                    // not flood server logs as a proxy defect.
+                    // races (observed live from github.com/Fastly both direct and via this proxy).
+                    // STREAM_CLOSED is the peer saying the stream is already done (half-close races).
+                    // PROTOCOL_ERROR on a received RST is the peer's assessment — our own framing
+                    // defects are already ReportException'd at the detection site before we send RST.
+                    // INTERNAL_ERROR is commonly used by long-lived peer streams (e.g. LaunchDarkly /
+                    // SonarCloud ld-stream) when they tear down; not a proxy defect.
+                    // Forward the RST either way; do not flood Error logs for peer-initiated codes.
                     if (errorCode != (int)Http2ErrorCode.NoError &&
                         errorCode != (int)Http2ErrorCode.Cancel &&
-                        errorCode != (int)Http2ErrorCode.RefusedStream)
+                        errorCode != (int)Http2ErrorCode.RefusedStream &&
+                        errorCode != (int)Http2ErrorCode.StreamClosed &&
+                        errorCode != (int)Http2ErrorCode.ProtocolError &&
+                        errorCode != (int)Http2ErrorCode.InternalError)
                     {
                         var direction = isClient ? "client→proxy" : "origin→proxy";
                         var requestUrl = args?.HttpClient.Request.Url ?? "(unknown)";
                         ReportException(logger, new ProxyHttpException(
                             $"HTTP/2 stream error. Error code: {errorCode}; direction: {direction}; " +
                             $"stream: {streamId}; request: {requestUrl}", null, args));
+                    }
+                    else if (logger.IsEnabled(LogLevel.Debug) &&
+                             errorCode != (int)Http2ErrorCode.NoError &&
+                             errorCode != (int)Http2ErrorCode.Cancel)
+                    {
+                        var direction = isClient ? "client→proxy" : "origin→proxy";
+                        var requestUrl = args?.HttpClient.Request.Url ?? "(unknown)";
+                        ProxyDiagnostics.ReportBenign(logger,
+                            $"HTTP/2 peer RST_STREAM. Error code: {errorCode}; direction: {direction}; " +
+                            $"stream: {streamId}; request: {requestUrl}",
+                            new ProxyHttpException(
+                                $"HTTP/2 peer stream reset code {errorCode}", null, args));
                     }
                 }
 
@@ -4243,42 +4266,13 @@ namespace Titanium.Web.Proxy.Http2
             return true;
         }
 
-        /// <summary>
-        ///     Appends append-only MITM header literals without indexing on a HEADER_TABLE_SIZE=0 block
-        ///     (no Decoder round-trip). Uses one allocation for the whole batch.
-        /// </summary>
-        private static byte[] AppendAddedLiteralsToStaticHpackBlock(
-            byte[] block, MitmCompressedRelayHelper.AddedHeaderBuffer added) =>
-            AppendAddedLiteralsToStaticHpackBlock(block, BuildStaticLiteralAppendSuffix(added, null, null));
-
-        private static byte[] AppendAddedLiteralsToStaticHpackBlock(byte[] block, byte[]? appendSuffix)
-        {
-            if (appendSuffix == null || appendSuffix.Length == 0)
-                return block;
-
-            var result = new byte[block.Length + appendSuffix.Length];
-            Buffer.BlockCopy(block, 0, result, 0, block.Length);
-            Buffer.BlockCopy(appendSuffix, 0, result, block.Length, appendSuffix.Length);
-            return result;
-        }
-
-        private static byte[] AppendOneLiteralToStaticHpackBlock(byte[] block, string name, string value) =>
-            AppendAddedLiteralsToStaticHpackBlock(block, SingleAddedHeader(name, value));
-
-        private static MitmCompressedRelayHelper.AddedHeaderBuffer SingleAddedHeader(string name, string value)
-        {
-            var added = default(MitmCompressedRelayHelper.AddedHeaderBuffer);
-            added.Add(name, value);
-            return added;
-        }
-
         private static int GetStaticLiteralAppendSize(int nameLength, int valueLength) =>
             1 + GetHpackStringLiteralEncodedSize(nameLength) + GetHpackStringLiteralEncodedSize(valueLength);
 
         private static int GetHpackStringLiteralEncodedSize(int byteLength) =>
-            byteLength < 127 ? 1 + byteLength : WriteHpackPrefixedIntSize(0x00, 7, (ulong)byteLength) + byteLength;
+            byteLength < 127 ? 1 + byteLength : WriteHpackPrefixedIntSize(7, (ulong)byteLength) + byteLength;
 
-        private static int WriteHpackPrefixedIntSize(byte patternByte, int prefixBits, ulong value)
+        private static int WriteHpackPrefixedIntSize(int prefixBits, ulong value)
         {
             var mask = (uint)((1 << prefixBits) - 1);
             if (value < mask)
@@ -4309,13 +4303,6 @@ namespace Titanium.Web.Proxy.Http2
             for (var i = 0; i < value.Length; i++)
                 dest[written + i] = (byte)value[i];
             return written + value.Length;
-        }
-
-        private static int WriteHpackStringLiteral(Span<byte> dest, ReadOnlySpan<byte> bytes)
-        {
-            var written = WriteHpackPrefixedInt(dest, 0x00, 7, (ulong)bytes.Length);
-            bytes.CopyTo(dest.Slice(written));
-            return written + bytes.Length;
         }
 
         private static int WriteHpackPrefixedInt(Span<byte> dest, byte patternByte, int prefixBits, ulong value)

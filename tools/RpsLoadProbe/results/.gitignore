@@ -1,2 +1,5 @@
 *
 !.gitignore
+!baseline-6.0-win.csv
+!baseline-6.0-linux.csv
+!README.md

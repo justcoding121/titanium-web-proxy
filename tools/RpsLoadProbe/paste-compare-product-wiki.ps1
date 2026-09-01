@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory)] [string[]] $RunIds,
     [string] $ResultsRoot = 'tools/RpsLoadProbe/results/gha-dl',
     [string] $HeadSha = 'df172718',
-    [string] $PrimaryRunId = '33041445371'
+    [string] $PrimaryRunId = '33041445371',
+    [string] $OutFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,6 +12,8 @@ if ($RunIds.Count -eq 1 -and $RunIds[0] -match ',') {
     $RunIds = $RunIds[0].Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ }
 }
 $Steps = 4
+$mul = [string][char]0x00D7          # ×
+$goldMedal = [char]::ConvertFromUtf32(0x1F947)  # 🥇
 
 function Median([double[]]$vals) {
     if ($vals.Count -eq 0) { return $null }
@@ -24,15 +27,24 @@ function Get-ArmMetrics([string]$CsvPath, [string]$Arm) {
     $sustains = @(); $peaks = @(); $rss = @(); $cpu = @()
     for ($i = 0; $i + $Steps -le $rows.Count; $i += $Steps) {
         $chunk = $rows[$i..($i + $Steps - 1)]
-        $c64 = $chunk | Where-Object { $_.concurrency -eq '64' -and $_.meets_slo -eq '1' } | Select-Object -Last 1
-        if ($c64) {
-            $sustains += [double]$c64.rps
-            $peaks += [double]$c64.rps
-            $rss += [double]$c64.proxy_rss_peak_bytes
-            $cpu += [double]$c64.proxy_cpu_avg_pct
+        $c64Ok = $chunk | Where-Object { $_.concurrency -eq '64' -and $_.meets_slo -eq '1' } | Select-Object -Last 1
+        if ($c64Ok) {
+            $sustains += [double]$c64Ok.rps
+            $peaks += [double]$c64Ok.rps
+            $rss += [double]$c64Ok.proxy_rss_peak_bytes
+            $cpu += [double]$c64Ok.proxy_cpu_avg_pct
+            continue
+        }
+        # SLO miss (e.g. Linux nginx H3): still publish peak @ c=64 with sustain 0.
+        $c64Any = $chunk | Where-Object { $_.concurrency -eq '64' } | Select-Object -Last 1
+        if ($c64Any) {
+            $sustains += 0
+            $peaks += [double]$c64Any.rps
+            $rss += [double]$c64Any.proxy_rss_peak_bytes
+            $cpu += [double]$c64Any.proxy_cpu_avg_pct
         }
     }
-    if ($sustains.Count -eq 0) { return $null }
+    if ($peaks.Count -eq 0) { return $null }
     return @{
         Sustain = Median $sustains
         Peak = Median $peaks
@@ -59,12 +71,12 @@ function Get-MedianMetrics([string]$OsFolder, [string]$Arm) {
     }
 }
 
-function Format-RpsCell($metrics, [switch]$Medal) {
+function Format-RpsCell($metrics, [switch]$Medal, [switch]$Peak) {
     if (-not $metrics) { return '*Not measured*' }
-    $r = [math]::Round($metrics.Sustain, 0)
+    $r = [math]::Round($(if ($Peak) { $metrics.Peak } else { $metrics.Sustain }), 0)
     $mb = [math]::Round($metrics.Rss / 1MB, 0)
     $cpu = [math]::Round($metrics.Cpu, 1)
-    $prefix = if ($Medal) { '🥇 ' } else { '' }
+    $prefix = if ($Medal) { "$goldMedal " } else { '' }
     return ("{0}**{1}**<br><sub>({2} MiB / {3}% CPU)</sub>" -f $prefix, $r, $mb, $cpu)
 }
 
@@ -93,51 +105,43 @@ $wires = @(
     @{ C='HTTP/2 · TLS'; O='HTTP/2 · plain'; Rev='twp-reverse-http2-to-h2c'; Yarp='yarp-reverse-http2-to-h2c'; Nginx=$null; Lite='twp-mitm-http2-to-h2c'; Full='twp-mitm-full-http2-to-h2c' },
     @{ C='HTTP/2 · TLS'; O='HTTP/2 · TLS'; Rev='twp-reverse-http2'; Yarp='yarp-reverse-http2-to-https'; Nginx=$null; Lite='twp-mitm-http2'; Full='twp-mitm-full-http2' },
     @{ C='HTTP/2 · TLS'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http2-to-http3'; Yarp='yarp-reverse-http2-to-http3'; Nginx=$null; Lite='twp-mitm-http2-to-http3'; Full='twp-mitm-full-http2-to-http3' },
-    @{ C='HTTP/3 · QUIC'; O='HTTP/1 · plain'; Rev='twp-reverse-http3-cleartext'; Yarp='yarp-reverse-http3-cleartext'; Nginx=$null; Lite='twp-mitm-http3-cleartext'; Full='twp-mitm-full-http3-cleartext' },
+    @{ C='HTTP/3 · QUIC'; O='HTTP/1 · plain'; Rev='twp-reverse-http3-cleartext'; Yarp='yarp-reverse-http3-cleartext'; Nginx='nginx-reverse-http3-cleartext'; Lite='twp-mitm-http3-cleartext'; Full='twp-mitm-full-http3-cleartext' },
     @{ C='HTTP/3 · QUIC'; O='HTTP/1 · TLS'; Rev='twp-reverse-http3-to-https-http1'; Yarp='yarp-reverse-http3-to-https-http1'; Nginx=$null; Lite='twp-mitm-http3-to-http1'; Full='twp-mitm-full-http3-to-http1' },
     @{ C='HTTP/3 · QUIC'; O='HTTP/2 · plain'; Rev='twp-reverse-http3-to-h2c'; Yarp='yarp-reverse-http3-to-h2c'; Nginx=$null; Lite='twp-mitm-http3-to-h2c'; Full='twp-mitm-full-http3-to-h2c' },
     @{ C='HTTP/3 · QUIC'; O='HTTP/2 · TLS'; Rev='twp-reverse-http3-to-http2'; Yarp='yarp-reverse-http3-to-http2'; Nginx=$null; Lite='twp-mitm-http3-to-http2'; Full='twp-mitm-full-http3-to-http2' },
     @{ C='HTTP/3 · QUIC'; O='HTTP/3 · QUIC'; Rev='twp-reverse-http3'; Yarp='yarp-reverse-http3-to-http3'; Nginx=$null; Lite='twp-mitm-http3'; Full='twp-mitm-full-http3' }
 )
 
-function Emit-ReverseTable([string]$OsFolder, [switch]$LinuxNginxH2Plain) {
+function Emit-ReverseTable([string]$OsFolder) {
     Write-Output '| Client | Origin | TWP sustain | TWP peak | nginx sustain | nginx peak | YARP sustain | YARP peak |'
     Write-Output '|---|---|---:|---:|---:|---:|---:|---:|'
     foreach ($w in $wires) {
         $twp = Get-MedianMetrics $OsFolder $w.Rev
         $yarp = Get-MedianMetrics $OsFolder $w.Yarp
-        $nginx = $null
-        if ($w.Nginx) {
-            if ($w.Nginx -eq 'nginx-reverse-http2' -and $LinuxNginxH2Plain) {
-                $nginx = $null
-            }
-            else {
-                $nginx = Get-MedianMetrics $OsFolder $w.Nginx
-            }
-        }
+        $nginx = if ($w.Nginx) { Get-MedianMetrics $OsFolder $w.Nginx } else { $null }
         $candidates = @(@{ M = $twp; K = 'twp' }, @{ M = $yarp; K = 'yarp' })
-        if ($nginx) { $candidates += @{ M = $nginx; K = 'nginx' } }
+        if ($nginx -and $nginx.Sustain -gt 0) { $candidates += @{ M = $nginx; K = 'nginx' } }
         $best = ($candidates | Where-Object { $_.M } | Sort-Object { $_.M.Sustain } -Descending | Select-Object -First 1).K
-        $nS = if ($w.Nginx -and -not ($w.Nginx -eq 'nginx-reverse-http2' -and $LinuxNginxH2Plain)) {
-            if ($nginx) { Format-RpsCell $nginx -Medal:($best -eq 'nginx') } else { Format-Impossible }
-        } else { Format-Impossible }
-        $nP = if ($w.Nginx -and -not ($w.Nginx -eq 'nginx-reverse-http2' -and $LinuxNginxH2Plain)) {
-            if ($nginx) { Format-RpsCell $nginx -Medal:($best -eq 'nginx') } else { Format-Impossible }
-        } else { Format-Impossible }
-        if ($w.O -match 'QUIC' -and -not $w.Nginx) {
-            if (-not $nginx) {
-                $nS = Format-Impossible 'Not possible (no QUIC)'
-                $nP = $nS
-            }
+        if ($nginx) {
+            $nS = Format-RpsCell $nginx -Medal:($best -eq 'nginx')
+            $nP = Format-RpsCell $nginx -Medal:($best -eq 'nginx') -Peak
         }
-        if ($w.C -match 'HTTP/3' -and $w.O -match 'HTTP/2' -and -not $nginx -and -not $w.Nginx) {
+        elseif ($w.Nginx -eq 'nginx-reverse-http3-cleartext' -or ($w.O -match 'QUIC' -and -not $w.Nginx)) {
+            $nS = Format-Impossible 'Not possible (no QUIC)'
+            $nP = $nS
+        }
+        elseif ($w.C -match 'HTTP/3' -and $w.O -match 'HTTP/2') {
             $nS = Format-Impossible 'Not possible (no H3 to H2)'
             $nP = $nS
         }
+        else {
+            $nS = Format-Impossible
+            $nP = $nS
+        }
         Write-Output ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} |" -f $w.C, $w.O,
-            (Format-RpsCell $twp -Medal:($best -eq 'twp')), (Format-RpsCell $twp -Medal:($best -eq 'twp')),
+            (Format-RpsCell $twp -Medal:($best -eq 'twp')), (Format-RpsCell $twp -Medal:($best -eq 'twp') -Peak),
             $nS, $nP,
-            (Format-RpsCell $yarp -Medal:($best -eq 'yarp')), (Format-RpsCell $yarp -Medal:($best -eq 'yarp')))
+            (Format-RpsCell $yarp -Medal:($best -eq 'yarp')), (Format-RpsCell $yarp -Medal:($best -eq 'yarp') -Peak))
     }
 }
 
@@ -151,17 +155,42 @@ function Emit-MitmTable([string]$OsFolder) {
         if (-not $rev) { continue }
         $lr = if ($lite) { [math]::Round($lite.Sustain / $rev.Sustain, 2) } else { 0 }
         $fr = if ($full) { [math]::Round($full.Sustain / $rev.Sustain, 2) } else { 0 }
-        Write-Output ("| {0} | {1} | {2} | {3} | **{4}×** | **{5}×** |" -f $w.C, $w.O,
-            (Format-RpsCell $lite), (Format-RpsCell $full), $lr, $fr)
+        Write-Output ("| {0} | {1} | {2} | {3} | **{4}{5}** | **{6}{5}** |" -f $w.C, $w.O,
+            (Format-RpsCell $lite), (Format-RpsCell $full), $lr, $mul, $fr)
     }
 }
 
-Write-Output "HEAD_SHA=$HeadSha PRIMARY_RUN=$PrimaryRunId"
-Write-Output '---WIN_REVERSE---'
-Emit-ReverseTable 'windows-latest'
-Write-Output '---WIN_MITM---'
-Emit-MitmTable 'windows-latest'
-Write-Output '---LIN_REVERSE---'
-Emit-ReverseTable 'ubuntu-latest' -LinuxNginxH2Plain
-Write-Output '---LIN_MITM---'
-Emit-MitmTable 'ubuntu-latest'
+$lines = [System.Collections.Generic.List[string]]::new()
+function Out([string]$s) { [void]$lines.Add($s) }
+
+Out "HEAD_SHA=$HeadSha PRIMARY_RUN=$PrimaryRunId"
+Out '---WIN_REVERSE---'
+# Emit helpers still Write-Output — capture via scriptblock redirection below.
+$script:EmitSink = $lines
+function Emit-SinkRedirect {
+    param([scriptblock]$Block)
+    foreach ($line in (& $Block)) { [void]$script:EmitSink.Add([string]$line) }
+}
+
+Emit-SinkRedirect { Emit-ReverseTable 'windows-latest' }
+Out '---WIN_MITM---'
+Emit-SinkRedirect { Emit-MitmTable 'windows-latest' }
+Out '---LIN_REVERSE---'
+Emit-SinkRedirect { Emit-ReverseTable 'ubuntu-latest' }
+Out '---LIN_MITM---'
+Emit-SinkRedirect { Emit-MitmTable 'ubuntu-latest' }
+Out '---MAC_REVERSE---'
+Emit-SinkRedirect { Emit-ReverseTable 'macos-15-intel' }
+Out '---MAC_MITM---'
+Emit-SinkRedirect { Emit-MitmTable 'macos-15-intel' }
+
+$text = ($lines -join "`n") + "`n"
+if ($OutFile) {
+    $utf8 = New-Object System.Text.UTF8Encoding $false
+    $full = if ([IO.Path]::IsPathRooted($OutFile)) { $OutFile } else { Join-Path (Get-Location) $OutFile }
+    [IO.File]::WriteAllText($full, $text, $utf8)
+    Write-Host "Wrote $full"
+}
+else {
+    Write-Output $text
+}

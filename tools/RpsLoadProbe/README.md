@@ -2,9 +2,25 @@
 
 Saturation RPS harness for Titanium.Web.Proxy. Measures the **breaking point** (last concurrency that still meets error/latency SLOs) and **peak RPS**.
 
-Published numbers and external control-arm comparisons live only on the wiki [Performance](../../wiki/Performance.md) page (GitHub Actions medians on matched 4 vCPU / 16 GiB Linux+Windows runners). Local cool A/B and laptop tables live on [Performance Local Lab](../../wiki/Performance-Local-Lab.md); the playbook is on [Performance Profiling](../../wiki/Performance-Profiling.md). This README lists how to run the local harness.
+Published numbers and external control-arm comparisons live only on the wiki [Performance](../../wiki/Performance.md) page (GitHub Actions medians on matched **4-core-class** runners: `ubuntu-latest` / `windows-latest` at 4 vCPU / 16 GiB, and `macos-15-intel` at 4-core / 14 GB). Local cool A/B and laptop tables live on [Performance Local Lab](../../wiki/Performance-Local-Lab.md); the playbook is on [Performance Profiling](../../wiki/Performance-Profiling.md). This README lists how to run the local harness.
 
-Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workflow_dispatch`, both `ubuntu-latest` and `windows-latest`).
+Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workflow_dispatch`, matrix `ubuntu-latest` + `windows-latest` + `macos-15-intel`). Do **not** use `macos-latest` (3-core M1 / 7 GiB) for publishable numbers.
+
+**macOS lab deps (workflow):** Homebrew nginx with `http_v3_module` (fail if missing), Homebrew `libmsquic` + `openssl@3` on `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` (assert `QuicListener.IsSupported`), bombardier darwin-amd64, and YARP via the same .NET probe arms as Linux/Windows.
+
+## Tiered cadence
+
+| Tier | Mode | When |
+|------|------|------|
+| Daily / per-PR | `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | minutes; Full÷Reverse + TWP÷YARP @ c=64 |
+| Milestone | `compare-terminate` / `compare-matrix` | ~1–2h investigation |
+| Editions | `compare-editions` | CLI / Plus / Intercept / stress arms vs baselines (~60 min) |
+| Beta/stable publish | `compare-editions` + `compare-spot` (parallel GHA jobs) | ~60 min wall; peer gate catches Core÷YARP regressions editions miss |
+| Cross-version | `compare-cross-version` | 7.0 vs committed 6.0 baselines (Gate 2) |
+| Release / wiki | `compare-product` | median of 3; full reverse + MITM (~3–4h with early-stop) |
+| Heavier tables | `compare-bodies` / `post` / `lossy` / `arch` / `bridges` / `tls-cost` | dispatch independently from the workflow |
+
+Harness defaults: warmup **2s** / measure **8s** / concurrency **8,16,32,64** / median of **3** for publishable GHA numbers. `--stop-on-slo-fail` (default **on**) stops an arm after the first SLO fail plus one peak confirmation step. See [PERF-GATES.md](PERF-GATES.md).
 
 ## Full 5×5 reverse matrix
 
@@ -120,6 +136,50 @@ Two TWP-only MITM shapes on the same Client×Origin wires (+ CONNECT). nginx/YAR
 `compare-mitm` and `compare-product` both run Lite then Full (Full roughly doubles MITM wall time; GHA `rps-saturation` job timeout is 420m so `compare-product` ×3 can finish). Wiki MITM table columns: Lite sustain, Full sustain, Lite÷Reverse, Full÷Reverse (RSS/CPU footnotes on sustain cells).
 
 **Reverse** (`compare-matrix` / reverse half of `compare-product`) is bare terminate (no handlers). nginx conf matches TWP/YARP streaming: `keepalive 256`, `proxy_buffering off`, `proxy_request_buffering off`.
+
+## Editions (`titanium run` daemon)
+
+Library arms (`twp-reverse-*`) embed Core with probe-tuned settings. Edition arms spawn the shipped CLI (`titanium run -c twp.yaml`) as an external process — same shape as nginx — for product-defaults comparison. Full matrix is ~60 min (expanded Plus/CLI stress arms).
+
+```powershell
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-editions
+pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath tools/RpsLoadProbe/results/rps-ramp-*.csv
+```
+
+| Arm | What it measures |
+|-----|------------------|
+| `twp-cli-reverse-http1` / `-tls` | CLI daemon, product defaults vs library |
+| `twp-cli-reverse-http1-route` | Single route table ≡ ForwardHost |
+| `twp-cli-plus-base-http1` | Plus ALC + control plane (no options) |
+| `twp-cli-plus-cache-http1` | Plus + `cache.enable` (cold) |
+| `twp-cli-intercept-http1` | Route `RequestHeaderSet` transform → session path |
+| `twp-cli-plus-waf-http1` | WAF denyPaths that do not match `/` |
+| `twp-cli-plus-cidr-http1` | `security.allowCidrs=127.0.0.0/8` |
+| `twp-cli-plus-jwt-http1` | RS256 JWT + JWKS mini-server; Bearer on every request |
+| `twp-cli-plus-ratelimit-http1` | `state.mode=memory` + very high rate limit |
+| `twp-cli-plus-resilience-http1` | Active health vs ForwardHost+cluster destinations |
+| `twp-cli-plus-discovery-file-http1` | File discovery + mid-ramp rewrite |
+| `twp-cli-plus-metrics-scrape-http1` | Background `/v1/snapshot` + dashboard `/metrics` every 10s |
+| `twp-cli-plus-cache-hit-http1` | Cache warm then measure (vs plus-cache cold) |
+| `twp-cli-static-http1` | `staticFiles.root` tiny file |
+| `twp-cli-logging-http1` | Logging enabled + Info file sink |
+| `twp-cli-lb-leasttime-http1` | LeastTime across two healthy origins |
+| `twp-cli-dialect-twp-http1` | `.twp` `listen`/`forward` site-file |
+
+Plus arms allocate an explicit `controlPlane.dashboardPort` (separate from the control-plane port). Prometheus `/metrics` lives on the **dashboard** listener, not `controlPort + 1`. The metrics-scrape arm polls control `/v1/snapshot` and dashboard `/metrics` every 10s via the CLI host’s `DashboardUrl`.
+
+Gates: see [PERF-GATES.md](PERF-GATES.md). Thresholds lock after a clean Win+Linux pass. Build/publish `Titanium.Cli` (and Plus DLL beside it for Plus arms) before ramping.
+
+## Cross-version (7.0 vs 6.0)
+
+```powershell
+pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode compare-cross-version
+pwsh tools/RpsLoadProbe/validate-cross-version.ps1 `
+  -BaselineCsv tools/RpsLoadProbe/results/baseline-6.0-win.csv `
+  -CurrentCsv  tools/RpsLoadProbe/results/rps-ramp-*.csv
+```
+
+`compare-cross-version` runs the reverse matrix with routes unset (same ForwardHost path as 6.x). Baselines are committed CSVs from the published 6.0 GHA medians — do not re-run 6.0.
 
 ## Bridge matrix (cross-version)
 

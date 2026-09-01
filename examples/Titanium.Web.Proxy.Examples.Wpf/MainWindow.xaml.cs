@@ -17,6 +17,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Examples.Shared;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Examples.Wpf
@@ -54,22 +55,28 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             // false,false: do not auto-trust on Start/SetAsSystemProxy — trust is opt-in via TWP_TRUST_ROOT.
             proxyServer = new ProxyServer(false, false, false);
 
-            // Session traffic is shown in the UI. Library diagnostics go to a rolling file (not the
-            // console — WinExe usually has none). Debug builds capture full protocol diagnostics.
+            // Session traffic is shown in the UI. Library diagnostics go to a rolling file only when
+            // diagnosing (Debug builds, or TWP_ENABLE_FILE_LOG=1). Console stays off for WinExe.
             proxyServer.Logging.EnableConsole = false;
-            proxyServer.Logging.EnableFile = true;
-            proxyServer.Logging.FilePath = Path.Combine(AppContext.BaseDirectory, "logs", "wpf-proxy.log");
 #if DEBUG
+            proxyServer.Logging.EnableFile = true;
             proxyServer.Logging.MinimumLevel = LogLevel.Trace;
 #else
-            proxyServer.Logging.MinimumLevel = LogLevel.Warning;
+            var enableFileLog = Environment.GetEnvironmentVariable("TWP_ENABLE_FILE_LOG") is "1" or "true" or "TRUE";
+            proxyServer.Logging.EnableFile = enableFileLog;
+            proxyServer.Logging.MinimumLevel = enableFileLog ? LogLevel.Warning : LogLevel.Error;
 #endif
-
+            if (proxyServer.Logging.EnableFile)
+            {
+                proxyServer.Logging.FilePath = Path.Combine(AppContext.BaseDirectory, "logs", "wpf-proxy.log");
+            }
             var certificateDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Titanium.Web.Proxy");
             Directory.CreateDirectory(certificateDirectory);
             proxyServer.CertificateManager.PfxFilePath = Path.Combine(certificateDirectory, "rootCert.pfx");
+            // Browser MITM: ECDSA P-256 leaves + persist (see CertificateManager.ApplyFastColdStartLeafSettings).
+            proxyServer.CertificateManager.ApplyFastColdStartLeafSettings();
 
             // Opt-in MITM root trust (same as Basic):
             //   TWP_TRUST_ROOT=1           → Current User Personal + Trusted Root
@@ -84,8 +91,6 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             }
 
             // Match ProxyProfile.Balanced / library defaults (same as the Basic example).
-            // Speed opt-ins for modern browsers: LeafCertificateKeyAlgorithm = EcdsaP256,
-            // SaveFakeCertificates = true — see wiki Home.md Performance.
             proxyServer.Profile = ProxyProfile.Balanced;
             proxyServer.ForwardToUpstreamGateway = true;
 
@@ -137,7 +142,24 @@ namespace Titanium.Web.Proxy.Examples.Wpf
             {
                 Dispatcher.BeginInvoke(() => { Http3ServerConnectionCount = proxyServer.Http3ServerConnectionCount; });
             };
-            proxyServer.Start();
+
+            try
+            {
+                proxyServer.Start();
+            }
+            catch (Exception ex) when (IsAddressAlreadyInUse(ex))
+            {
+                System.Diagnostics.Debug.WriteLine("Port 8000 in use; falling back to ephemeral port 0");
+                proxyServer.RemoveEndPoint(explicitEndPoint);
+                explicitEndPoint = new ExplicitProxyEndPoint(IPAddress.Any, 0);
+                explicitEndPoint.BeforeTunnelConnectRequest += ProxyServer_BeforeTunnelConnectRequest;
+                explicitEndPoint.BeforeTunnelConnectResponse += ProxyServer_BeforeTunnelConnectResponse;
+                proxyServer.AddEndPoint(explicitEndPoint);
+                proxyServer.Start();
+            }
+
+            System.Diagnostics.Debug.WriteLine(
+                $"Listening on ExplicitProxyEndPoint at {explicitEndPoint.IpAddress}:{explicitEndPoint.Port}");
 
             // Screenshot automation (TWP_CAPTURE_PATH) skips system-proxy registration so CI/desktop
             // capture runs do not alter the machine's proxy settings.
@@ -166,6 +188,19 @@ namespace Titanium.Web.Proxy.Examples.Wpf
                     await CaptureScreenshotAndExitAsync(capturePath);
                 };
             }
+        }
+
+        private static bool IsAddressAlreadyInUse(Exception ex)
+        {
+            for (var cur = ex; cur != null; cur = cur.InnerException)
+            {
+                if (cur is System.Net.Sockets.SocketException se &&
+                    (se.SocketErrorCode == System.Net.Sockets.SocketError.AddressAlreadyInUse
+                     || se.NativeErrorCode is 10048 or 98))
+                    return true;
+            }
+
+            return false;
         }
 
         /// <summary>

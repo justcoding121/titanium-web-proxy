@@ -64,6 +64,22 @@ public class LimitedStreamReadTests
         CollectionAssert.AreEqual(payload, destination);
     }
 
+    [TestMethod]
+    public async Task ReadAsync_Chunked_EmptyChunkHead_EndsGracefully()
+    {
+        // Blank line where a chunk size is expected (half-closed origin) must not throw
+        // ProxyHttpException "Invalid chunk length: ''" — that surfaces to browsers as PROTOCOL_ERROR.
+        var wire = "\r\n"u8.ToArray();
+        var proxy = new ProxyServer(false, false, false);
+        using var source = new HttpStream(proxy, new MemoryStream(wire), new DefaultBufferPool(),
+            CancellationToken.None, false);
+        var limited = new LimitedStream(source, new DefaultBufferPool(), isChunked: true, contentLength: -1);
+
+        var buffer = new byte[16];
+        var read = await limited.ReadAsync(buffer.AsMemory(), CancellationToken.None);
+        Assert.AreEqual(0, read);
+    }
+
     private sealed class FixedSizeBufferPool : IBufferPool
     {
         public FixedSizeBufferPool(int bufferSize) => BufferSize = bufferSize;

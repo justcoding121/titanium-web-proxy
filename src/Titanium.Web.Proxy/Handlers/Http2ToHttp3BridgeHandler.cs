@@ -104,6 +104,9 @@ public partial class ProxyServer
         if (!sessionArgs.IsFastPath)
             await OnBeforeRequest(sessionArgs);
 
+        // Per-stream destination when ReverseProxy routes are set.
+        Routing.ReverseProxySessionDispatch.TryApply(this, sessionArgs);
+
         // BeforeRequest already synthesized a response (Ok/GenericResponse/Redirect/etc.); Http2Helper
         // handles this via the CancelRequest path — nothing to bridge.
         if (sessionArgs.HttpClient.Request.CancelRequest)

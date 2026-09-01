@@ -119,6 +119,12 @@ internal enum ProbeMode
     /// Same-job product refresh: <see cref="CompareMatrix"/> reverse peers + <see cref="CompareMitm"/> TWP.
     /// </summary>
     CompareProduct,
+    /// <summary>
+    /// Fast smoke of arms required by <c>validate-compare-product-gates.ps1</c> (Lite+Full+Reverse
+    /// gate pairs + YARP H3 peers). Use on a single OS to verify CSV + gate step before a long
+    /// <see cref="CompareProduct"/> run finishes.
+    /// </summary>
+    CompareProductSmoke,
     /// <summary>PR2 local spot gate: MITM Full÷Reverse + reverse TWP÷YARP pairs @ c=64.</summary>
     CompareSpot,
     /// <summary>TWP vs bare C# reverse vs native reverse peer on the three Linux native-winning reverse rows.</summary>
@@ -137,6 +143,50 @@ internal enum ProbeMode
     /// Saturation control: origin-direct (+ optional bombardier) and H1 plain reverse peers in one session.
     /// </summary>
     CompareSaturation,
+    /// <summary>
+    /// Product editions: library H1 baselines + CLI daemon / CLI+Plus / CLI+Intercept arms.
+    /// </summary>
+    CompareEditions,
+    /// <summary>
+    /// Alias for <see cref="CompareMatrix"/> used by Gate 2 cross-version validation (routes unset).
+    /// </summary>
+    CompareCrossVersion,
+    /// <summary>Shipped CLI daemon: H1 plain forwardHost (product defaults).</summary>
+    TwpCliReverseHttp1,
+    /// <summary>Shipped CLI daemon: H1 TLS terminate → cleartext origin.</summary>
+    TwpCliReverseHttp1Tls,
+    /// <summary>Shipped CLI daemon: single route table ≡ ForwardHost.</summary>
+    TwpCliReverseHttp1Route,
+    /// <summary>CLI + Plus enabled (no options) — control-plane only.</summary>
+    TwpCliPlusBaseHttp1,
+    /// <summary>CLI + Plus + cache.enable.</summary>
+    TwpCliPlusCacheHttp1,
+    /// <summary>CLI + route RequestHeaderSet transform (forces session / intercept path).</summary>
+    TwpCliInterceptHttp1,
+    /// <summary>CLI + Plus WAF denyPaths that do not match probe traffic.</summary>
+    TwpCliPlusWafHttp1,
+    /// <summary>CLI + Plus CIDR allow 127.0.0.0/8.</summary>
+    TwpCliPlusCidrHttp1,
+    /// <summary>CLI + Plus JWT (RS256 JWKS) with Authorization Bearer on every request.</summary>
+    TwpCliPlusJwtHttp1,
+    /// <summary>CLI + Plus in-memory rate limit with a very high ceiling.</summary>
+    TwpCliPlusRateLimitHttp1,
+    /// <summary>CLI + Plus active health against ForwardHost+cluster destinations.</summary>
+    TwpCliPlusResilienceHttp1,
+    /// <summary>CLI + Plus file discovery with mid-ramp rewrite.</summary>
+    TwpCliPlusDiscoveryFileHttp1,
+    /// <summary>CLI + Plus-base with background control-plane /metrics + /v1/snapshot scrape.</summary>
+    TwpCliPlusMetricsScrapeHttp1,
+    /// <summary>CLI + Plus cache.enable with Cache-Control origin; warm then measure.</summary>
+    TwpCliPlusCacheHitHttp1,
+    /// <summary>CLI staticFiles.root tiny file.</summary>
+    TwpCliStaticHttp1,
+    /// <summary>CLI logging.enabled + Info file sink.</summary>
+    TwpCliLoggingHttp1,
+    /// <summary>CLI LeastTime LB across two healthy origins.</summary>
+    TwpCliLbLeastTimeHttp1,
+    /// <summary>CLI .twp site-file listen/forward dialect.</summary>
+    TwpCliDialectTwpHttp1,
     /// <summary>Load generator → origin child only (no proxy); calibration ceiling for reverse peers.</summary>
     OriginDirect,
     /// <summary>Managed reverse peer H2 TLS → HTTPS HTTP/2 origin.</summary>
@@ -160,6 +210,11 @@ internal sealed class RampOptions
     public int? MaxCachedConnections { get; init; }
     /// <summary>How many full arm sequences to run; peaks are median-aggregated (L1 runner noise).</summary>
     public int Repeats { get; init; } = 1;
+    /// <summary>
+    /// After the first SLO fail on an arm that previously passed, run one more concurrency step
+    /// (peak confirmation) then stop the arm. Default on — matches industry load-tool behavior.
+    /// </summary>
+    public bool StopOnSloFail { get; init; } = true;
     /// <summary>Default workload when an arm does not override (preserves tiny-GET matrix).</summary>
     public WorkloadOptions Workload { get; init; } = WorkloadOptions.TinyGet;
 }
@@ -494,7 +549,9 @@ internal static class RampOrchestrator
 
     private sealed record ArmSpec(string Name, ProbeMode Mode, int? MaxCachedConnections,
         WorkloadOptions? Workload = null, string? PreferredGenerator = null,
-        bool EnableHttpInterception = false, bool MutateHttpInterception = false);
+        bool EnableHttpInterception = false, bool MutateHttpInterception = false,
+        bool BackgroundControlPlaneScrape = false, bool RewriteDiscoveryMidRamp = false,
+        bool WarmCacheFirst = false);
 
     private static IReadOnlyList<ArmSpec> HeavierReverseArms(bool nginxAvailable, bool nginxHttp3Available,
         WorkloadOptions workload, string nameSuffix, bool includeHttp3 = true)
@@ -816,12 +873,53 @@ internal static class RampOrchestrator
                 ..BuildMitmFullArms()
             ],
             ProbeMode.CompareMatrix => BuildFullMatrixArms(nginxAvailable, nginxHttp3Available),
+            ProbeMode.CompareCrossVersion => BuildFullMatrixArms(nginxAvailable, nginxHttp3Available),
+            ProbeMode.CompareEditions => BuildEditionArms(),
+            ProbeMode.TwpCliReverseHttp1 => [new("twp-cli-reverse-http1", ProbeMode.TwpCliReverseHttp1, null)],
+            ProbeMode.TwpCliReverseHttp1Tls =>
+                [new("twp-cli-reverse-http1-tls", ProbeMode.TwpCliReverseHttp1Tls, null)],
+            ProbeMode.TwpCliReverseHttp1Route =>
+                [new("twp-cli-reverse-http1-route", ProbeMode.TwpCliReverseHttp1Route, null)],
+            ProbeMode.TwpCliPlusBaseHttp1 =>
+                [new("twp-cli-plus-base-http1", ProbeMode.TwpCliPlusBaseHttp1, null)],
+            ProbeMode.TwpCliPlusCacheHttp1 =>
+                [new("twp-cli-plus-cache-http1", ProbeMode.TwpCliPlusCacheHttp1, null)],
+            ProbeMode.TwpCliInterceptHttp1 =>
+                [new("twp-cli-intercept-http1", ProbeMode.TwpCliInterceptHttp1, null)],
+            ProbeMode.TwpCliPlusWafHttp1 =>
+                [new("twp-cli-plus-waf-http1", ProbeMode.TwpCliPlusWafHttp1, null)],
+            ProbeMode.TwpCliPlusCidrHttp1 =>
+                [new("twp-cli-plus-cidr-http1", ProbeMode.TwpCliPlusCidrHttp1, null)],
+            ProbeMode.TwpCliPlusJwtHttp1 =>
+                [new("twp-cli-plus-jwt-http1", ProbeMode.TwpCliPlusJwtHttp1, null)],
+            ProbeMode.TwpCliPlusRateLimitHttp1 =>
+                [new("twp-cli-plus-ratelimit-http1", ProbeMode.TwpCliPlusRateLimitHttp1, null)],
+            ProbeMode.TwpCliPlusResilienceHttp1 =>
+                [new("twp-cli-plus-resilience-http1", ProbeMode.TwpCliPlusResilienceHttp1, null)],
+            ProbeMode.TwpCliPlusDiscoveryFileHttp1 =>
+                [new("twp-cli-plus-discovery-file-http1", ProbeMode.TwpCliPlusDiscoveryFileHttp1, null,
+                    RewriteDiscoveryMidRamp: true)],
+            ProbeMode.TwpCliPlusMetricsScrapeHttp1 =>
+                [new("twp-cli-plus-metrics-scrape-http1", ProbeMode.TwpCliPlusMetricsScrapeHttp1, null,
+                    BackgroundControlPlaneScrape: true)],
+            ProbeMode.TwpCliPlusCacheHitHttp1 =>
+                [new("twp-cli-plus-cache-hit-http1", ProbeMode.TwpCliPlusCacheHitHttp1, null,
+                    WarmCacheFirst: true)],
+            ProbeMode.TwpCliStaticHttp1 =>
+                [new("twp-cli-static-http1", ProbeMode.TwpCliStaticHttp1, null)],
+            ProbeMode.TwpCliLoggingHttp1 =>
+                [new("twp-cli-logging-http1", ProbeMode.TwpCliLoggingHttp1, null)],
+            ProbeMode.TwpCliLbLeastTimeHttp1 =>
+                [new("twp-cli-lb-leasttime-http1", ProbeMode.TwpCliLbLeastTimeHttp1, null)],
+            ProbeMode.TwpCliDialectTwpHttp1 =>
+                [new("twp-cli-dialect-twp-http1", ProbeMode.TwpCliDialectTwpHttp1, null)],
             ProbeMode.CompareProduct =>
             [
                 ..BuildFullMatrixArms(nginxAvailable, nginxHttp3Available),
                 ..BuildMitmArms(),
                 ..BuildMitmFullArms()
             ],
+            ProbeMode.CompareProductSmoke => BuildProductSmokeArms(),
             ProbeMode.CompareSpot => BuildSpotArms(),
             ProbeMode.CompareCeiling => nginxAvailable
                 ?
@@ -1016,6 +1114,93 @@ internal static class RampOrchestrator
         ];
     }
 
+    /// <summary>
+    /// Minimal arm set for <c>validate-compare-product-gates.ps1</c> (every Lite/Full/Reverse
+    /// pair the script scores, plus YARP H3 reverse peers). Intended for Mac-only GHA smoke.
+    /// </summary>
+    private static IReadOnlyList<ArmSpec> BuildProductSmokeArms()
+    {
+        const bool intercept = true;
+        const bool mutate = true;
+        return
+        [
+            // H3→H1 plain
+            new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
+            new("twp-mitm-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null,
+                EnableHttpInterception: intercept),
+            new("twp-mitm-full-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            // H3→H1 TLS (previous Mac gate failure class)
+            new("twp-reverse-http3-to-https-http1", ProbeMode.MitmHttp3ToHttp1, null),
+            new("twp-mitm-http3-to-http1", ProbeMode.MitmHttp3ToHttp1, null,
+                EnableHttpInterception: intercept),
+            new("twp-mitm-full-http3-to-http1", ProbeMode.MitmHttp3ToHttp1, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("yarp-reverse-http3-to-https-http1", ProbeMode.YarpReverseHttp3ToHttpsHttp1, null),
+            // H3→H3
+            new("twp-reverse-http3", ProbeMode.ReverseHttp3, null),
+            new("twp-mitm-http3", ProbeMode.ReverseHttp3, null, EnableHttpInterception: intercept),
+            new("twp-mitm-full-http3", ProbeMode.ReverseHttp3, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("yarp-reverse-http3-to-http3", ProbeMode.YarpReverseHttp3ToHttp3, null),
+            // H1 plain
+            new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
+            new("twp-mitm-http1", ProbeMode.ReverseHttp1, null, EnableHttpInterception: intercept),
+            new("twp-mitm-full-http1", ProbeMode.ReverseHttp1, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            // H2 h2c→h2c
+            new("twp-reverse-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null),
+            new("twp-mitm-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null, EnableHttpInterception: intercept),
+            new("twp-mitm-full-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            // H2 TLS→h2c
+            new("twp-reverse-http2-to-h2c", ProbeMode.ReverseHttp2ToH2c, null),
+            new("twp-mitm-http2-to-h2c", ProbeMode.ReverseHttp2ToH2c, null, EnableHttpInterception: intercept),
+            new("twp-mitm-full-http2-to-h2c", ProbeMode.ReverseHttp2ToH2c, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            // H2 plain
+            new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
+            new("twp-mitm-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null,
+                EnableHttpInterception: intercept),
+            new("twp-mitm-full-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            // H2 TLS
+            new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
+            new("twp-mitm-http2", ProbeMode.ReverseHttp2, null, EnableHttpInterception: intercept),
+            new("twp-mitm-full-http2", ProbeMode.ReverseHttp2, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate)
+        ];
+    }
+
+    /// <summary>
+    /// Library H1 baselines plus shipped CLI / Plus / Intercept edition arms.
+    /// </summary>
+    private static IReadOnlyList<ArmSpec> BuildEditionArms() =>
+    [
+        new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
+        new("twp-reverse-http1-tls", ProbeMode.ReverseHttp1Tls, null),
+        new("twp-cli-reverse-http1", ProbeMode.TwpCliReverseHttp1, null),
+        new("twp-cli-reverse-http1-tls", ProbeMode.TwpCliReverseHttp1Tls, null),
+        new("twp-cli-reverse-http1-route", ProbeMode.TwpCliReverseHttp1Route, null),
+        new("twp-cli-plus-base-http1", ProbeMode.TwpCliPlusBaseHttp1, null),
+        new("twp-cli-plus-cache-http1", ProbeMode.TwpCliPlusCacheHttp1, null),
+        new("twp-cli-intercept-http1", ProbeMode.TwpCliInterceptHttp1, null),
+        new("twp-cli-plus-waf-http1", ProbeMode.TwpCliPlusWafHttp1, null),
+        new("twp-cli-plus-cidr-http1", ProbeMode.TwpCliPlusCidrHttp1, null),
+        new("twp-cli-plus-jwt-http1", ProbeMode.TwpCliPlusJwtHttp1, null),
+        new("twp-cli-plus-ratelimit-http1", ProbeMode.TwpCliPlusRateLimitHttp1, null),
+        new("twp-cli-plus-resilience-http1", ProbeMode.TwpCliPlusResilienceHttp1, null),
+        new("twp-cli-plus-discovery-file-http1", ProbeMode.TwpCliPlusDiscoveryFileHttp1, null,
+            RewriteDiscoveryMidRamp: true),
+        new("twp-cli-plus-metrics-scrape-http1", ProbeMode.TwpCliPlusMetricsScrapeHttp1, null,
+            BackgroundControlPlaneScrape: true),
+        new("twp-cli-plus-cache-hit-http1", ProbeMode.TwpCliPlusCacheHitHttp1, null, WarmCacheFirst: true),
+        new("twp-cli-static-http1", ProbeMode.TwpCliStaticHttp1, null),
+        new("twp-cli-logging-http1", ProbeMode.TwpCliLoggingHttp1, null),
+        new("twp-cli-lb-leasttime-http1", ProbeMode.TwpCliLbLeastTimeHttp1, null),
+        new("twp-cli-dialect-twp-http1", ProbeMode.TwpCliDialectTwpHttp1, null)
+    ];
+
     private static IReadOnlyList<ArmSpec> BuildFullMatrixArms(bool nginxAvailable, bool nginxHttp3Available)
     {
         // Full 5×5 Client×Origin reverse cartesian: TWP + YARP for each cell; nginx on terminate peers.
@@ -1189,6 +1374,40 @@ internal static class RampOrchestrator
             cancellationToken, workload, arm.EnableHttpInterception, arm.MutateHttpInterception);
         var nginxVersion = stack.NginxVersion ?? nginxVersionHint;
 
+        if (!string.IsNullOrWhiteSpace(stack.AuthorizationBearer))
+        {
+            workload = workload.WithExtraHeaders(new Dictionary<string, string>
+            {
+                ["Authorization"] = "Bearer " + stack.AuthorizationBearer
+            });
+        }
+
+        using var scrapeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Task? scrapeTask = null;
+        if (arm.BackgroundControlPlaneScrape && !string.IsNullOrWhiteSpace(stack.ControlPlaneUrl))
+        {
+            scrapeTask = RunControlPlaneScrapeLoopAsync(stack.ControlPlaneUrl!,
+                stack.ControlPlaneSecret ?? TitaniumCliHost.ControlPlaneSharedSecret, scrapeCts.Token,
+                stack.DashboardUrl);
+            ProbeLog.Info(string.IsNullOrWhiteSpace(stack.DashboardUrl)
+                ? "  background control-plane scrape every 10s (/v1/snapshot)"
+                : "  background control-plane scrape every 10s (/v1/snapshot + dashboard /metrics)");
+        }
+
+        if (arm.WarmCacheFirst)
+        {
+            ProbeLog.Info("  warming response cache before ramp...");
+            var warmOpts = new LoadRequestOptions
+            {
+                Target = stack.TargetUri,
+                HttpVersion = stack.RequestHttpVersion,
+                VersionPolicy = stack.VersionPolicy,
+                Workload = workload
+            };
+            await EmbeddedLoadGenerator.WarmupAsync(warmOpts, concurrency: 4, TimeSpan.FromSeconds(3),
+                cancellationToken);
+        }
+
         var p99Slo = workload.ResolveP99SloMs(options.Http1P99MsSlo, options.Http2P99MsSlo,
             options.Http3P99MsSlo, options.HttpsMitmP99MsSlo, arm.Mode);
 
@@ -1235,6 +1454,9 @@ internal static class RampOrchestrator
             LoadResult? peak = null;
             ProcessResourceSample? peakResources = null;
             var lastGoodConcurrency = 0;
+            // -1 = inactive; after first SLO fail with a prior pass, set to 1 (one more step) then 0 (stop).
+            var stopOnSloFailStepsRemaining = -1;
+            var discoveryRewritten = false;
 
             var useQuic = (stackUsesQuicGenerator || forceLossyQuicGenerator) && quicPort is > 0;
             var useBombardier = string.Equals(arm.PreferredGenerator, BombardierLoadGenerator.GeneratorName,
@@ -1276,6 +1498,18 @@ internal static class RampOrchestrator
 
             foreach (var concurrency in options.ConcurrencySteps)
             {
+                if (arm.RewriteDiscoveryMidRamp && !discoveryRewritten &&
+                    options.ConcurrencySteps.Length > 0 &&
+                    concurrency == options.ConcurrencySteps[options.ConcurrencySteps.Length / 2] &&
+                    !string.IsNullOrWhiteSpace(stack.DiscoveryFilePath) &&
+                    stack.OriginHttpPort is int originPort)
+                {
+                    TitaniumCliHost.RewriteDiscoveryFile(stack.DiscoveryFilePath!, originPort);
+                    discoveryRewritten = true;
+                    ProbeLog.Info($"  mid-ramp discovery rewrite → {stack.DiscoveryFilePath}");
+                    await Task.Delay(300, cancellationToken);
+                }
+
                 ProbeLog.Info($"  warmup c={concurrency} for {options.Warmup.TotalSeconds:F0}s...");
                 LoadResult result;
                 ProcessResourceSample? resources = null;
@@ -1371,7 +1605,21 @@ internal static class RampOrchestrator
                 else if (lastGood != null)
                 {
                     ProbeLog.Info($"    (breaking-point candidate at c={lastGoodConcurrency})");
+                    if (options.StopOnSloFail && stopOnSloFailStepsRemaining < 0)
+                    {
+                        stopOnSloFailStepsRemaining = 1;
+                        ProbeLog.Info("    (stop-on-slo-fail: one more step for peak confirmation)");
+                    }
                 }
+
+                if (stopOnSloFailStepsRemaining == 0)
+                {
+                    ProbeLog.Info("    (stop-on-slo-fail: peak confirmation done; ending arm)");
+                    break;
+                }
+
+                if (stopOnSloFailStepsRemaining > 0)
+                    stopOnSloFailStepsRemaining--;
             }
 
             ProbeLog.Info(string.Create(CultureInfo.InvariantCulture,
@@ -1381,10 +1629,60 @@ internal static class RampOrchestrator
         }
         finally
         {
+            scrapeCts.Cancel();
+            if (scrapeTask != null)
+            {
+                try { await scrapeTask; }
+                catch (OperationCanceledException) { /* expected */ }
+            }
+
             if (tcpLink != null)
                 await tcpLink.DisposeAsync();
             if (udpLink != null)
                 await udpLink.DisposeAsync();
+        }
+    }
+
+    private static async Task RunControlPlaneScrapeLoopAsync(string controlPlaneUrl, string sharedSecret,
+        CancellationToken cancellationToken, string? dashboardUrl = null)
+    {
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+        http.DefaultRequestHeaders.TryAddWithoutValidation(
+            "X-Titanium-Control-Secret", sharedSecret);
+
+        var baseUri = new Uri(controlPlaneUrl);
+        var snapshotUrl = new Uri(baseUri, "/v1/snapshot").AbsoluteUri;
+        string? metricsUrl = null;
+        if (!string.IsNullOrWhiteSpace(dashboardUrl))
+            metricsUrl = new Uri(new Uri(dashboardUrl), "/metrics").AbsoluteUri;
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                _ = await http.GetAsync(snapshotUrl, cancellationToken);
+                // When a dashboard URL is provided (PlusMetricsScrape), also scrape Prometheus
+                // /metrics on the dashboard port. Snapshot-only otherwise.
+                if (metricsUrl != null)
+                    _ = await http.GetAsync(metricsUrl, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch
+            {
+                // best-effort scrape; do not fail the arm
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
         }
     }
 

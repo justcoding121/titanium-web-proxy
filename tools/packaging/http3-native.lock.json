@@ -1,0 +1,101 @@
+{
+  "version": 2,
+  "notes": "Pinned HTTP/3 native packages for CLI/Inspector publish. MIT-clean zips ship MsQuic + OpenSSL only; libnuma / lttng-ust are host packages (http3-deps), not redistributed. Bump quarterly for CVE patching. Do not commit downloaded binaries under .cache/.",
+  "glibcBaseline": "ubuntu-22.04",
+  "alpineBranch": "v3.24",
+  "rids": {
+    "win-x64": {
+      "mode": "os-component",
+      "minimumOs": "Windows 11 / Windows Server 2022+",
+      "notes": "msquic.dll is provided by the OS (Schannel). Do not bundle Microsoft.Native.Quic.MsQuic.Schannel / OpenSSL builds."
+    },
+    "linux-x64": {
+      "mode": "deb",
+      "packages": [
+        {
+          "name": "libmsquic",
+          "url": "https://packages.microsoft.com/ubuntu/22.04/prod/pool/main/libm/libmsquic/libmsquic_2.6.0_amd64.deb",
+          "sha256": "2fdc1cadddaf68487da22a03baa9597c60de9cfd46336d2dc60260372928d354"
+        },
+        {
+          "name": "libssl3",
+          "url": "http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl3_3.0.2-0ubuntu1.29_amd64.deb",
+          "sha256": "c12bbf0074c44019bdf4b035b058c24eb904fc772c94707b1df801a4d130e146"
+        }
+      ],
+      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],
+      "hostPackages": ["libnuma1"]
+    },
+    "linux-arm64": {
+      "mode": "deb",
+      "packages": [
+        {
+          "name": "libmsquic",
+          "url": "https://packages.microsoft.com/ubuntu/22.04/prod/pool/main/libm/libmsquic/libmsquic_2.6.0_arm64.deb",
+          "sha256": "02cd729367e60e697ba1429bbdee8881aee721658fbaf51ec71f8a87c716fbba"
+        },
+        {
+          "name": "libssl3",
+          "url": "http://ports.ubuntu.com/ubuntu-ports/pool/main/o/openssl/libssl3_3.0.2-0ubuntu1.29_arm64.deb",
+          "sha256": "3b25897180b0a84a7c7ad19ba310d6bdb45d5ce89742b478e12f606bed38fafa"
+        }
+      ],
+      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],
+      "hostPackages": ["libnuma1"]
+    },
+    "linux-musl-x64": {
+      "mode": "apk",
+      "packages": [
+        {
+          "name": "libmsquic",
+          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/libmsquic-2.5.7-r0.apk",
+          "sha256": "cefc019005f6f0613b56796ca912d42fc70f0097b3ce56bbbd17c08c331f9552"
+        },
+        {
+          "name": "libssl3",
+          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libssl3-3.5.8-r0.apk",
+          "sha256": "aca521e5ae4a321322a9d47ed64a1775f5ab1ffd215d1e9fc0433c58f7bfd037"
+        },
+        {
+          "name": "libcrypto3",
+          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.8-r0.apk",
+          "sha256": "161223a16f042b8e469e9441291e071464fd91d4f4bbe6f496ee8d0abd4e0701"
+        }
+      ],
+      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],
+      "hostPackages": ["numactl", "lttng-ust"]
+    },
+    "linux-musl-arm64": {
+      "mode": "apk",
+      "packages": [
+        {
+          "name": "libmsquic",
+          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/community/aarch64/libmsquic-2.5.7-r0.apk",
+          "sha256": "c63eb99109b4bb467fcd9582efcc51e0efc209c4de287ec99353af6bd599f467"
+        },
+        {
+          "name": "libssl3",
+          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libssl3-3.5.8-r0.apk",
+          "sha256": "d6ec970cc10e01539e41626f720c4e0ac69016eaa2079a10ef776ffd3243db5b"
+        },
+        {
+          "name": "libcrypto3",
+          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libcrypto3-3.5.8-r0.apk",
+          "sha256": "35b892813c23664a3592e4fc8c12a03538a22c579057655361c7043305272a9a"
+        }
+      ],
+      "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],
+      "hostPackages": ["numactl", "lttng-ust"]
+    },
+    "osx-x64": {
+      "mode": "homebrew",
+      "formulas": ["libmsquic", "openssl@3"],
+      "requiredFiles": ["libmsquic.dylib", "libssl.3.dylib", "libcrypto.3.dylib"]
+    },
+    "osx-arm64": {
+      "mode": "homebrew",
+      "formulas": ["libmsquic", "openssl@3"],
+      "requiredFiles": ["libmsquic.dylib", "libssl.3.dylib", "libcrypto.3.dylib"]
+    }
+  }
+}
