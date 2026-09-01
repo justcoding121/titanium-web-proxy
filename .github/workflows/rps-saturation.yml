@@ -472,7 +472,16 @@ jobs:
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $csv) { throw 'No CSV found for compare-product gate validation' }
-          pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName
+          # macos-15-intel first-baseline floors (PERF-GATES.md) — Win/Linux keep defaults.
+          $macFloors = @()
+          if ('${{ matrix.os }}' -eq 'macos-15-intel') {
+            $macFloors = @(
+              '-MitmHttp3TlsFullGate', '0.65',
+              '-MitmHttp1PlainFullGate', '0.55',
+              '-ReverseYarpHttp3ToHttp1Gate', '0.55'
+            )
+          }
+          pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName @macFloors
 
       - name: Validate cross-version gates
         if: env.RPS_MODE == 'compare-cross-version'

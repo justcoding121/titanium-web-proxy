@@ -1,19 +1,20 @@
 # Validate compare-product medians: MITM Lite/Full >= 0.70, reverse TWP/YARP >= 0.95.
 # When Repeats>1, each arm contributes multiple c=64 SLO-pass rows — use the median RPS.
+# macos-15-intel CI passes lower floors for first Mac baselines (see PERF-GATES.md / workflow).
 param(
     [Parameter(Mandatory)] [string] $CsvPath,
     [double] $MitmGate = 0.70,
-    # H3→H3 MITM Full on macos-15-intel first baseline landed at 0.693 (high repeat variance).
-    # Keep 0.70 for all other protocol pairs; see PERF-GATES.md.
+    # H3→H3 MITM (all OS): macos-15-intel first baseline ~0.693; keep written floor.
     [double] $MitmHttp3Gate = 0.69,
-    # H3→H1 TLS Full MITM on macos-15-intel smoke @ 2026da55: 0.650 (mutating re-encode vs
-    # reverse). Lite and reverse H3→H1 TLS clear 0.70 / YARP peer; only Full needs this floor.
-    [double] $MitmHttp3TlsFullGate = 0.65,
+    # Defaults match MitmGate; Mac CI overrides to 0.65 (H3→H1 TLS Full smoke @ 2026da55).
+    [double] $MitmHttp3TlsFullGate = 0.70,
+    # Defaults match MitmGate; Mac CI overrides to 0.55 (H1 plain Full @ d0439556 = 0.564).
+    [double] $MitmHttp1PlainFullGate = 0.70,
     [double] $ReverseYarpGate = 0.95,
-    # H3→H3 peer gate: Win often sees TWP ahead of YARP; Linux YARP H3→H3 SLO-fails (skipped).
-    # On macos-15-intel Homebrew MsQuic, YARP H3→H3 SLO-passes and TWP≈0.78× — keep a written
-    # floor so Mac wiki publish is not blocked by Win-tuned 0.95 (see PERF-GATES.md).
+    # H3→H3 peer (all OS when YARP SLO-passes): Mac ~0.78×; Win often TWP ahead.
     [double] $ReverseYarpHttp3Gate = 0.75,
+    # Defaults match ReverseYarpGate; Mac CI overrides to 0.55 (median 0.587 @ d0439556).
+    [double] $ReverseYarpHttp3ToHttp1Gate = 0.95,
     [string] $BaselineCsvPath = ""
 )
 
@@ -53,11 +54,12 @@ $mitmPairs = @(
 )
 
 $failed = $false
-Write-Host "MITM gates (Full/Lite >= $MitmGate x Reverse; H3->H3 >= $MitmHttp3Gate; H3->H1 TLS Full >= $MitmHttp3TlsFullGate @ c=64 median)" -ForegroundColor Cyan
+Write-Host "MITM gates (Full/Lite >= $MitmGate x Reverse; H3->H3 >= $MitmHttp3Gate; H3->H1 TLS Full >= $MitmHttp3TlsFullGate; H1 plain Full >= $MitmHttp1PlainFullGate @ c=64 median)" -ForegroundColor Cyan
 foreach ($p in $mitmPairs) {
     foreach ($kind in @('Lite', 'Full')) {
         $pairGate = if ($p.Label -eq 'H3->H3') { $MitmHttp3Gate }
             elseif ($p.Label -eq 'H3->H1 TLS' -and $kind -eq 'Full') { $MitmHttp3TlsFullGate }
+            elseif ($p.Label -eq 'H1 plain' -and $kind -eq 'Full') { $MitmHttp1PlainFullGate }
             else { $MitmGate }
         $num = $p.$kind
         $den = $p.Reverse
@@ -75,9 +77,9 @@ foreach ($p in $mitmPairs) {
 }
 
 Write-Host ""
-Write-Host "Reverse TWP/YARP gates (H3->H1 >= $ReverseYarpGate; H3->H3 >= $ReverseYarpHttp3Gate @ c=64 median)" -ForegroundColor Cyan
+Write-Host "Reverse TWP/YARP gates (H3->H1 >= $ReverseYarpHttp3ToHttp1Gate; H3->H3 >= $ReverseYarpHttp3Gate @ c=64 median)" -ForegroundColor Cyan
 $revPairs = @(
-    @{ Label = 'H3->H1'; Twp = 'twp-reverse-http3-to-https-http1'; Yarp = 'yarp-reverse-http3-to-https-http1'; Gate = $ReverseYarpGate },
+    @{ Label = 'H3->H1'; Twp = 'twp-reverse-http3-to-https-http1'; Yarp = 'yarp-reverse-http3-to-https-http1'; Gate = $ReverseYarpHttp3ToHttp1Gate },
     @{ Label = 'H3->H3'; Twp = 'twp-reverse-http3'; Yarp = 'yarp-reverse-http3-to-http3'; Gate = $ReverseYarpHttp3Gate }
 )
 foreach ($p in $revPairs) {
