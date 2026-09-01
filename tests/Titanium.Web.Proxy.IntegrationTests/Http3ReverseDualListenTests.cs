@@ -120,8 +120,8 @@ public class Http3ReverseDualListenTests
 
     /// <summary>
     ///     RPS twin of <c>twp-reverse-http3-to-https-http1</c>: client H3, ForwardHost=127.0.0.1,
-    ///     origin HTTPS HTTP/1. Outbound SslStream must not stay Tls13-only after QUIC inbound
-    ///     (macOS SecureTransport cannot offer TLS 1.3).
+    ///     origin HTTPS HTTP/1. Outbound TLS uses <c>SupportedSslProtocols</c> (not inbound QUIC
+    ///     Tls13), so macOS SecureTransport can negotiate TLS 1.2.
     /// </summary>
     [TestMethod]
     public async Task HttpClient_Http3_To_HttpsHttp1_ForwardHostIp()

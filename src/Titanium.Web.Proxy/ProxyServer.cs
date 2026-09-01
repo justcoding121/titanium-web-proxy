@@ -912,8 +912,17 @@ public partial class ProxyServer : IDisposable
     public SslProtocols SupportedSslProtocols { get; set; } = SslProtocols.Tls12 | SslProtocols.Tls13;
 
     /// <summary>
-    ///     List of supported Server Ssl versions.
-    ///     Using SslProtocol.None means to require the same SSL protocol as the proxy client.
+    ///     Ssl versions offered on <b>outbound</b> HTTPS connections to origins (and upstream proxies).
+    ///     <para>
+    ///         Default <see cref="SslProtocols.None"/> means “use <see cref="SupportedSslProtocols"/>”
+    ///         (typically TLS 1.2 and 1.3). Set an explicit mask to restrict or expand outbound-only
+    ///         independently of inbound client TLS.
+    ///     </para>
+    ///     <para>
+    ///         Older docs described <see cref="SslProtocols.None"/> as “same as the proxy client.”
+    ///         That coupling is incorrect across protocol translations (e.g. inbound QUIC is always
+    ///         TLS 1.3 while outbound TCP SslStream on macOS SecureTransport cannot offer TLS 1.3).
+    ///     </para>
     /// </summary>
     public SslProtocols SupportedServerSslProtocols { get; set; } = SslProtocols.None;
 

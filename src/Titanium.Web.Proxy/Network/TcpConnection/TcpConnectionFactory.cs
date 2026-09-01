@@ -462,7 +462,11 @@ internal class TcpConnectionFactory : IDisposable
         SemaphoreSlim? createGate = null,
         string? precomputedCacheKey = null)
     {
-        var sslProtocol = sessionArgs.ClientConnection.SslProtocol;
+        // Outbound TLS version is product policy — never copy inbound ClientConnection.SslProtocol.
+        // QUIC inbound is always Tls13; mirroring it made H3→HTTPS-TCP offer TLS 1.3-only and
+        // fail on macOS SecureTransport (no TLS 1.3 client). Inbound/outbound are independent
+        // handshakes (H3→H1, H2→H1, etc.). CreateServerConnection resolves the mask below.
+        var sslProtocol = SslProtocols.None;
 
         IPEndPoint? resolvedV4 = upStreamEndPointIPv4;
         IPEndPoint? resolvedV6 = upStreamEndPointIPv6;
@@ -616,17 +620,11 @@ internal class TcpConnectionFactory : IDisposable
             throw new InvalidOperationException(
                 $"A client is making HTTP request via external proxy to one of the listening ports of this proxy {remoteHostName}:{remotePort}");
 
-        if (proxyServer.SupportedServerSslProtocols != SslProtocols.None) sslProtocol = proxyServer.SupportedServerSslProtocols;
-
-        if (isHttps && sslProtocol == SslProtocols.None) sslProtocol = proxyServer.SupportedSslProtocols;
-
-        // QUIC inbound always reports SslProtocols.Tls13 (QuicClientConnection). Copying that
-        // mask onto outbound SslStream makes AuthenticateAsClientAsync offer TLS 1.3 only.
-        // macOS default SslStream (SecureTransport) cannot negotiate TLS 1.3 — every H3→HTTPS
-        // TCP origin handshake fails and the H3 stream aborts with H3_INTERNAL_ERROR — while
-        // H2→HTTPS (inbound TLS 1.2) and YARP (HttpClient SslProtocols.None → 1.2) succeed.
-        // Expand to SupportedSslProtocols (Tls12|Tls13): Mac negotiates 1.2; Win/Linux can 1.3.
-        if (isHttps && sslProtocol == SslProtocols.Tls13)
+        // Prefer an explicit outbound override; otherwise SupportedSslProtocols (default Tls12|Tls13).
+        // Do not mirror the inbound client handshake — see GetServerConnection.
+        if (proxyServer.SupportedServerSslProtocols != SslProtocols.None)
+            sslProtocol = proxyServer.SupportedServerSslProtocols;
+        else if (isHttps)
             sslProtocol = proxyServer.SupportedSslProtocols;
 
         var useUpstreamProxy1 = false;
