@@ -478,7 +478,8 @@ jobs:
             $macFloors = @(
               '-MitmHttp3TlsFullGate', '0.65',
               '-MitmHttp1PlainFullGate', '0.55',
-              '-ReverseYarpHttp3ToHttp1Gate', '0.55'
+              '-ReverseYarpHttp3ToHttp1Gate', '0.55',
+              '-ReverseYarpHttp3Gate', '0.74'
             )
           }
           pwsh tools/RpsLoadProbe/validate-compare-product-gates.ps1 -CsvPath $csv.FullName @macFloors
