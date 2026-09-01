@@ -120,11 +120,11 @@ public class Http3ReverseDualListenTests
 
     /// <summary>
     ///     RPS twin of <c>twp-reverse-http3-to-https-http1</c>: client H3, ForwardHost=127.0.0.1,
-    ///     origin HTTPS HTTP/1 with a localhost leaf. SNI must stay <c>localhost</c> (not the IP)
-    ///     or macOS Network.framework rejects the origin TLS handshake.
+    ///     origin HTTPS HTTP/1. Outbound SslStream must not stay Tls13-only after QUIC inbound
+    ///     (macOS SecureTransport cannot offer TLS 1.3).
     /// </summary>
     [TestMethod]
-    public async Task HttpClient_Http3_To_HttpsHttp1_ForwardHostIp_UsesLocalhostSni()
+    public async Task HttpClient_Http3_To_HttpsHttp1_ForwardHostIp()
     {
         RequireQuic();
 

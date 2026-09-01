@@ -1016,10 +1016,6 @@ internal static class Http3OriginBridge
         if (string.IsNullOrEmpty(request.Host) && request.Authority.Length > 0)
             request.Host = request.Authority.GetString();
 
-        // Match H3→H2 / H3→H3 fast paths: SNI / Host stay on the client :authority
-        // (OriginAuthorityHost, typically "localhost"). ForwardHost is connect-only.
-        // Using ForwardHost (127.0.0.1) as SslStream.TargetHost breaks on macOS Network.framework
-        // against a localhost leaf — H3_INTERNAL_ERROR on every stream while YARP (any-cert) works.
         var isHttps = request.IsHttps;
         string? connectHost = null;
         int? connectPort = null;
@@ -1027,8 +1023,6 @@ internal static class Http3OriginBridge
         {
             if (ep.ForwardCleartext)
                 isHttps = false;
-            else if (!string.IsNullOrEmpty(ep.ForwardHost))
-                isHttps = true;
             if (!string.IsNullOrEmpty(ep.ForwardHost))
             {
                 connectHost = ep.ForwardHost;
@@ -1049,21 +1043,17 @@ internal static class Http3OriginBridge
         {
             if (poolKey != null)
                 server.TcpConnectionFactory.TryRentPooled(server, poolKey,
-                    applicationProtocols: null, out connection);
+                    SslExtensions.Http11ProtocolAsList, out connection);
 
             if (connection == null)
             {
-                // Resolve SNI host/port only on pool miss — warm keep-alive hits skip GetOriginHostPort.
+                // Resolve host/port only on pool miss — warm keep-alive hits skip GetOriginHostPort.
                 string host;
                 int port;
-                var sni = fwd.OriginAuthorityHost;
-                if (!string.IsNullOrEmpty(sni))
+                if (connectHost != null && connectPort is { } fwdPort)
                 {
-                    var colon = sni.LastIndexOf(':');
-                    if (colon > 0 && int.TryParse(sni.AsSpan(colon + 1), out _))
-                        sni = sni[..colon];
-                    host = sni;
-                    port = connectPort ?? (isHttps ? 443 : 80);
+                    host = connectHost;
+                    port = fwdPort;
                 }
                 else
                 {
@@ -1071,19 +1061,16 @@ internal static class Http3OriginBridge
                 }
 
                 openSession = coldOpenSessionFactory();
-                // Do not advertise ALPN for HTTP/1.1 origins. macOS SslStream + http/1.1 ALPN
-                // against Kestrel Http1-only has been observed to fail the handshake (H3 client
-                // then sees H3_INTERNAL_ERROR) while the same topology works without ALPN and
-                // YARP AcceptAny succeeds. H2/H3 origin paths keep their ALPN lists.
                 connection = await server.TcpConnectionFactory.GetServerConnection(
                     server, host, port, HttpHeader.Version11, isHttps,
-                    applicationProtocols: null, false, openSession,
+                    SslExtensions.Http11ProtocolAsList, false, openSession,
                     fwd.UpStreamEndPoint ?? server.UpStreamEndPoint,
                     fwd.CustomUpStreamProxy ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy),
                     false, false, cancellationToken, connectHost, connectPort,
                     precomputedCacheKey: poolKey)
                     ?? throw new InvalidOperationException(
                         $"Failed to establish an HTTP/1.1 origin connection to '{host}:{port}'.");
+
                 if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint store
                     && fwd.CustomUpStreamProxy == null
                     && (fwd.UpStreamEndPoint ?? server.UpStreamEndPoint) == null)
@@ -1764,9 +1751,8 @@ internal static class Http3OriginBridge
 
             try
             {
-                // No http/1.1 ALPN — same as ForwardOverTcpFastAsync / YARP Version11 Exact.
                 connection = await server.TcpConnectionFactory.GetServerConnection(
-                    server, host, port, HttpHeader.Version11, isHttps, applicationProtocols: null,
+                    server, host, port, HttpHeader.Version11, isHttps, SslExtensions.Http11ProtocolAsList,
                     false, sessionArgs, sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
                     sessionArgs.CustomUpStreamProxyUsed ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy),
                     false, false, cancellationToken, connectHost, connectPort,
