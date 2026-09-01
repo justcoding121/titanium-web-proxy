@@ -15,6 +15,7 @@ Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workfl
 | Daily / per-PR | `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | minutes; Full÷Reverse + TWP÷YARP @ c=64 |
 | Milestone | `compare-terminate` / `compare-matrix` | ~1–2h investigation |
 | Editions | `compare-editions` | CLI / Plus / Intercept / stress arms vs baselines (~60 min) |
+| Beta/stable publish | `compare-editions` + `compare-spot` (parallel GHA jobs) | ~60 min wall; peer gate catches Core÷YARP regressions editions miss |
 | Cross-version | `compare-cross-version` | 7.0 vs committed 6.0 baselines (Gate 2) |
 | Release / wiki | `compare-product` | median of 3; full reverse + MITM (~3–4h with early-stop) |
 | Heavier tables | `compare-bodies` / `post` / `lossy` / `arch` / `bridges` / `tls-cost` | dispatch independently from the workflow |

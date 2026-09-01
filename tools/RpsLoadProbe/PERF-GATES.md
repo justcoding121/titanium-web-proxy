@@ -18,8 +18,10 @@ Product version is **`7.0.0.0`**; gates block beta/stable tags, not feature comm
 
 | Event | RPS mode | Blocks |
 |-------|----------|--------|
-| Push to `beta` / `stable` (NuGet `publish`) | `compare-editions` via `.NET / rps-publish-gate` | NuGet publish |
+| Push to `beta` / `stable` (NuGet `publish`) | `compare-editions` via `.NET / rps-publish-gate` **and** `compare-spot` via `.NET / rps-peer-gate` (parallel; Core÷YARP + MITM÷Reverse @ c=64) | NuGet publish |
 | Tag `v*` product release | `compare-product` (manual / release workflow) | GitHub Release product assets |
+
+`rps-peer-gate` re-checks Core vs YARP on the merge SHA so a uniform Core slowdown cannot hide behind green edition ratios. It runs in parallel with editions, so publish wall clock stays ~max(editions ≈60m, spot ≈10–20m).
 
 Do **not** run full `compare-product` on every develop PR. Thresholds change only with written rationale here + commit — never loosen gates silently to go green.
 
@@ -30,6 +32,7 @@ Do **not** run full `compare-product` on every develop PR. Thresholds change onl
 | Daily / develop PR | feature commits (advisory) | `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | minutes |
 | Milestone / investigation | before merge to main | `compare-terminate` or `compare-matrix` | ~1–2h |
 | Editions | after CLI/Plus changes | `compare-editions` + [`validate-edition-gates.ps1`](validate-edition-gates.ps1) | ~60 min |
+| Beta / stable publish | push to `beta`/`stable` | `compare-editions` + parallel `compare-spot` ([`run-spot-matrix.ps1`](run-spot-matrix.ps1)) | ~60 min wall |
 | Cross-version (Gate 2) | before `v7.0.0` tag | `compare-cross-version` + [`validate-cross-version.ps1`](validate-cross-version.ps1) | ~1–2h |
 | Release / wiki refresh | release SHA | `compare-product` (median of 3) on `ubuntu-latest` + `windows-latest` + `macos-15-intel` | ~3–4h |
 | Heavier wiki tables | as needed | `compare-bodies` / `post` / `lossy` / `arch` / `bridges` / `tls-cost` (independent dispatch) | 30–60 min each |

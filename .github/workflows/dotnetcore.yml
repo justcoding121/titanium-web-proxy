@@ -307,7 +307,9 @@ jobs:
           **/playwright-report/**
         if-no-files-found: ignore
 
-  # Tiered RPS gate for beta/stable publish (editions). Spot runs on PRs via rps-saturation.yml.
+  # Tiered RPS gates for beta/stable publish (parallel — wall clock ~max of the two).
+  # Editions: CLI/Plus tax vs Core. Peer: Core reverse vs YARP (+ MITM÷Reverse) so a
+  # uniform Core slowdown cannot hide behind green edition ratios.
   rps-publish-gate:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
     runs-on: ubuntu-latest
@@ -338,9 +340,42 @@ jobs:
         if (-not $csv) { throw 'No CSV found for edition gate validation' }
         pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName
 
+  # Parallel with rps-publish-gate: Core vs YARP on the release SHA (c=64 spot).
+  # Same validator as PR compare-spot / run-spot-matrix.ps1; does not extend wall clock
+  # past editions (~60m).
+  rps-peer-gate:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v6
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: |
+          10.0.x
+    - name: Install libmsquic (HTTP/3)
+      run: |
+        set -euo pipefail
+        . /etc/os-release
+        curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+          "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb" \
+          -o packages-microsoft-prod.deb
+        sudo dpkg -i packages-microsoft-prod.deb
+        rm -f packages-microsoft-prod.deb
+        sudo apt-get update
+        sudo apt-get install -y libmsquic
+        pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { throw "QuicListener.IsSupported is false after libmsquic install" }; Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"'
+    - name: compare-spot (Core÷YARP + MITM÷Reverse)
+      shell: pwsh
+      run: |
+        pwsh tools/RpsLoadProbe/run-spot-matrix.ps1
+
   publish:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
-    needs: [build, ui-portable, rps-publish-gate]
+    needs: [build, ui-portable, rps-publish-gate, rps-peer-gate]
     runs-on: windows-latest
     environment: nuget-publish
     permissions:
@@ -393,7 +428,7 @@ jobs:
   # version tag and dispatch release.yml (GITHUB_TOKEN tag pushes do not re-trigger workflows).
   cut-product-tag:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
-    needs: [build, ui-portable, rps-publish-gate]
+    needs: [build, ui-portable, rps-publish-gate, rps-peer-gate]
     runs-on: ubuntu-latest
     permissions:
       contents: write
