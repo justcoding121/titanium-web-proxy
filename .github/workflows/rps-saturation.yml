@@ -32,6 +32,7 @@ on:
           - compare-mitm
           - compare-matrix
           - compare-product
+          - compare-product-smoke
           - compare-editions
           - compare-cross-version
           - compare-ceiling
@@ -120,6 +121,16 @@ on:
         description: 'Full arm sequence repeats (median peaks)'
         required: true
         default: '3'
+      runner_os:
+        description: 'OS matrix filter (all = Win+Linux+Mac Intel)'
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - ubuntu-latest
+          - windows-latest
+          - macos-15-intel
 
 permissions:
   contents: read
@@ -127,6 +138,11 @@ permissions:
 jobs:
   rps:
     # PR → beta/stable: compare-spot; push → beta/stable: compare-editions; dispatch: inputs.mode
+    # Skip matrix cells when workflow_dispatch runner_os filters to a single OS.
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      inputs.runner_os == 'all' ||
+      inputs.runner_os == matrix.os
     permissions:
       contents: read
     env:
@@ -140,10 +156,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-15-intel]
     runs-on: ${{ matrix.os }}
-    # Intentionally no jobs.*.container â€” saturation RPS on a container network measures the wrong thing.
+    # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
     # compare-product with MITM Lite+Full can exceed 3.5h per OS on hosted runners.
     # compare-editions (expanded Plus/CLI stress arms) needs ~60m; other modes keep the long ceiling.
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || 420)) }}
+    # compare-product-smoke is a short gate-arm subset (Mac quick check).
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || (github.event_name == 'push' && 90 || (inputs.mode == 'compare-editions' && 90 || (inputs.mode == 'compare-product-smoke' && 60 || 420))) }}
     steps:
       - uses: actions/checkout@v6
 
@@ -453,7 +470,7 @@ jobs:
           pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName
 
       - name: Validate compare-product gates
-        if: env.RPS_MODE == 'compare-product'
+        if: env.RPS_MODE == 'compare-product' || env.RPS_MODE == 'compare-product-smoke'
         shell: pwsh
         run: |
           $csv = Get-ChildItem tools/RpsLoadProbe/results -Filter 'rps-ramp-*.csv' |

@@ -100,7 +100,8 @@ internal static class ServeProxyHost
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
             or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
             or ProbeMode.CompareHttp3Cleartext
-            or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareProduct or ProbeMode.CompareCeiling
+            or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareProduct
+            or ProbeMode.CompareProductSmoke or ProbeMode.CompareCeiling
             or ProbeMode.CompareBodies
             or ProbeMode.ComparePost or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost
             or ProbeMode.CompareArch or ProbeMode.CompareSaturation or ProbeMode.CompareEditions
@@ -894,6 +895,7 @@ internal static class ServeProxyHost
         ProbeMode.CompareMitm => "compare-mitm",
         ProbeMode.CompareMatrix => "compare-matrix",
         ProbeMode.CompareProduct => "compare-product",
+        ProbeMode.CompareProductSmoke => "compare-product-smoke",
         ProbeMode.CompareSpot => "compare-spot",
         ProbeMode.CompareCeiling => "compare-ceiling",
         ProbeMode.CompareBodies => "compare-bodies",
@@ -943,7 +945,8 @@ internal static class ServeHost
         if (mode is ProbeMode.Compare or ProbeMode.CompareHttp2 or ProbeMode.CompareTls
             or ProbeMode.CompareTerminate or ProbeMode.CompareSame or ProbeMode.CompareBridges
             or ProbeMode.CompareHttp3Cleartext
-            or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareProduct or ProbeMode.CompareCeiling
+            or ProbeMode.CompareMitm or ProbeMode.CompareMatrix or ProbeMode.CompareProduct
+            or ProbeMode.CompareProductSmoke or ProbeMode.CompareCeiling
             or ProbeMode.CompareBodies
             or ProbeMode.ComparePost or ProbeMode.CompareLossy or ProbeMode.CompareTlsCost
             or ProbeMode.CompareArch or ProbeMode.CompareSaturation or ProbeMode.ExplicitPoolSweep)

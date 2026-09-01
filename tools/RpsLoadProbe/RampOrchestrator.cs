@@ -119,6 +119,12 @@ internal enum ProbeMode
     /// Same-job product refresh: <see cref="CompareMatrix"/> reverse peers + <see cref="CompareMitm"/> TWP.
     /// </summary>
     CompareProduct,
+    /// <summary>
+    /// Fast smoke of arms required by <c>validate-compare-product-gates.ps1</c> (Lite+Full+Reverse
+    /// gate pairs + YARP H3 peers). Use on a single OS to verify CSV + gate step before a long
+    /// <see cref="CompareProduct"/> run finishes.
+    /// </summary>
+    CompareProductSmoke,
     /// <summary>PR2 local spot gate: MITM Full÷Reverse + reverse TWP÷YARP pairs @ c=64.</summary>
     CompareSpot,
     /// <summary>TWP vs bare C# reverse vs native reverse peer on the three Linux native-winning reverse rows.</summary>
@@ -913,6 +919,7 @@ internal static class RampOrchestrator
                 ..BuildMitmArms(),
                 ..BuildMitmFullArms()
             ],
+            ProbeMode.CompareProductSmoke => BuildProductSmokeArms(),
             ProbeMode.CompareSpot => BuildSpotArms(),
             ProbeMode.CompareCeiling => nginxAvailable
                 ?
@@ -1104,6 +1111,64 @@ internal static class RampOrchestrator
                 EnableHttpInterception: intercept, MutateHttpInterception: mutate),
             new("yarp-reverse-http3-to-https-http1", ProbeMode.YarpReverseHttp3ToHttpsHttp1, null),
             new("yarp-reverse-http3-to-http3", ProbeMode.YarpReverseHttp3ToHttp3, null)
+        ];
+    }
+
+    /// <summary>
+    /// Minimal arm set for <c>validate-compare-product-gates.ps1</c> (every Lite/Full/Reverse
+    /// pair the script scores, plus YARP H3 reverse peers). Intended for Mac-only GHA smoke.
+    /// </summary>
+    private static IReadOnlyList<ArmSpec> BuildProductSmokeArms()
+    {
+        const bool intercept = true;
+        const bool mutate = true;
+        return
+        [
+            // H3→H1 plain
+            new("twp-reverse-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null),
+            new("twp-mitm-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null,
+                EnableHttpInterception: intercept),
+            new("twp-mitm-full-http3-cleartext", ProbeMode.ReverseHttp3Cleartext, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            // H3→H1 TLS (previous Mac gate failure class)
+            new("twp-reverse-http3-to-https-http1", ProbeMode.MitmHttp3ToHttp1, null),
+            new("twp-mitm-http3-to-http1", ProbeMode.MitmHttp3ToHttp1, null,
+                EnableHttpInterception: intercept),
+            new("twp-mitm-full-http3-to-http1", ProbeMode.MitmHttp3ToHttp1, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("yarp-reverse-http3-to-https-http1", ProbeMode.YarpReverseHttp3ToHttpsHttp1, null),
+            // H3→H3
+            new("twp-reverse-http3", ProbeMode.ReverseHttp3, null),
+            new("twp-mitm-http3", ProbeMode.ReverseHttp3, null, EnableHttpInterception: intercept),
+            new("twp-mitm-full-http3", ProbeMode.ReverseHttp3, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            new("yarp-reverse-http3-to-http3", ProbeMode.YarpReverseHttp3ToHttp3, null),
+            // H1 plain
+            new("twp-reverse-http1", ProbeMode.ReverseHttp1, null),
+            new("twp-mitm-http1", ProbeMode.ReverseHttp1, null, EnableHttpInterception: intercept),
+            new("twp-mitm-full-http1", ProbeMode.ReverseHttp1, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            // H2 h2c→h2c
+            new("twp-reverse-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null),
+            new("twp-mitm-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null, EnableHttpInterception: intercept),
+            new("twp-mitm-full-h2c-to-h2c", ProbeMode.ReverseH2cToH2c, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            // H2 TLS→h2c
+            new("twp-reverse-http2-to-h2c", ProbeMode.ReverseHttp2ToH2c, null),
+            new("twp-mitm-http2-to-h2c", ProbeMode.ReverseHttp2ToH2c, null, EnableHttpInterception: intercept),
+            new("twp-mitm-full-http2-to-h2c", ProbeMode.ReverseHttp2ToH2c, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            // H2 plain
+            new("twp-reverse-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null),
+            new("twp-mitm-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null,
+                EnableHttpInterception: intercept),
+            new("twp-mitm-full-http2-cleartext", ProbeMode.ReverseHttp2Cleartext, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate),
+            // H2 TLS
+            new("twp-reverse-http2", ProbeMode.ReverseHttp2, null),
+            new("twp-mitm-http2", ProbeMode.ReverseHttp2, null, EnableHttpInterception: intercept),
+            new("twp-mitm-full-http2", ProbeMode.ReverseHttp2, null,
+                EnableHttpInterception: intercept, MutateHttpInterception: mutate)
         ];
     }
 
