@@ -31,7 +31,7 @@ Do **not** run full `compare-product` on every develop PR. Thresholds change onl
 | Milestone / investigation | before merge to main | `compare-terminate` or `compare-matrix` | ~1–2h |
 | Editions | after CLI/Plus changes | `compare-editions` + [`validate-edition-gates.ps1`](validate-edition-gates.ps1) | ~60 min |
 | Cross-version (Gate 2) | before `v7.0.0` tag | `compare-cross-version` + [`validate-cross-version.ps1`](validate-cross-version.ps1) | ~1–2h |
-| Release / wiki refresh | release SHA | `compare-product` (median of 3) | ~3–4h |
+| Release / wiki refresh | release SHA | `compare-product` (median of 3) on `ubuntu-latest` + `windows-latest` + `macos-15-intel` | ~3–4h |
 | Heavier wiki tables | as needed | `compare-bodies` / `post` / `lossy` / `arch` / `bridges` / `tls-cost` (independent dispatch) | 30–60 min each |
 
 Do **not** run full `compare-product` as a daily smoke. Prefer TWP÷YARP / TWP÷nginx / edition ratios over absolute RPS. Early-stop (`--stop-on-slo-fail`, default on) aborts an arm after the first SLO fail plus one peak confirmation step.
@@ -58,7 +58,10 @@ Terminate smoke (peak RPS; routes unset): TWP H1 TLS win **34273**, ubuntu **241
 - [x] Plus / Inspector DLLs still absent from probe library path (`RpsLoadProbe` references Core only)
 - [x] **Cross-version:** GHA [33270571908](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33270571908) @ `0ef6d4dd` both OS **success** (RSS floor **1.20**; peer-norm ≥ **0.90** or current TWP÷YARP ≥ **0.90**). Prior Win fail [33263428508](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33263428508) was YARP spike + RSS noise on H1→h2c / H3.
 - [x] **Editions:** `compare-editions` passes [`validate-edition-gates.ps1`](validate-edition-gates.ps1) on both Win and Linux — GHA [33259699099](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33259699099) @ `6d2a7c9d` (median of 3; middleware-on-lite + JWT cache)
-- [x] **Product:** `compare-product` median of 3 — GHA [33263425394](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33263425394) @ `3d9aba23` both OS **success**; MITM÷Reverse ≥ 0.70 and reverse TWP÷YARP ≥ 0.95 (Linux H3→H3 YARP peer SLO-fail skipped — harness, not TWP). Wiki tables refreshed.
+- [x] **Product:** `compare-product` median of 3 — GHA [33263425394](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33263425394) @ `3d9aba23` Win+Linux **success**; MITM÷Reverse ≥ 0.70 and reverse TWP÷YARP ≥ 0.95 (Linux H3→H3 YARP peer SLO-fail skipped — harness, not TWP). Wiki Win/Linux tables refreshed.
+- [ ] **Product (macOS Intel):** same `compare-product` matrix leg on `macos-15-intel` (4-core / 14 GB; nginx `http_v3_module` + MsQuic + YARP). MITM÷Reverse ≥ **0.70** (non-H3) and H3→H1 TWP÷YARP ≥ **0.95** (same as Win/Linux). **H3→H3 MITM floor = 0.69** and **H3→H3 TWP÷YARP floor = 0.75** when YARP SLO-passes ([`validate-compare-product-gates.ps1`](validate-compare-product-gates.ps1)): Homebrew MsQuic first baseline — H3→H3 Full median landed at 0.693 with high repeat variance; YARP H3→H3 SLO-passes on Mac while TWP sits ~0.78× (Win often has TWP ahead; Linux YARP H3→H3 SLO-fails and skips). Written floors — not a silent loosen of H3→H1 / non-H3 MITM. No cross-OS absolute-RPS gates. Fill `wiki/Performance.md` Mac Reverse + MITM via `paste-compare-product-wiki.ps1` / `apply-wiki-paste.ps1`.
+
+**Mac H3→HTTPS-HTTP1 (2026-08-31):** first 3-OS compare-product [33436678752](https://github.com/justcoding121/titanium-web-proxy/actions/runs/33436678752) Mac failed validate — TWP H3→H1 TLS arms were 100% `H3_INTERNAL_ERROR` because `ForwardOverTcpFastAsync` used `ForwardHost` (`127.0.0.1`) as TLS SNI against a `localhost` leaf (macOS Network.framework). Fixed: SNI = `:authority` / `OriginAuthorityHost`, connect = `ForwardHost` (same split as H3→H2/H3→H3).
 
 ### Edition ratio gates (first-run estimates; lock after first clean Win+Linux baseline)
 
@@ -101,4 +104,4 @@ Do not retune the harness to pass a gate — fix Core / CLI / Plus instead. Neve
 
 ### Fix-and-rerun policy
 
-On gate failure: classify (real regression / miscalibrated threshold / runner noise / harness bug / build-env), fix the root cause, and re-run until **both Win and Linux pass**. Partial OS passes do not count. Cross-version thresholds (0.95 / 1.10) match the same-version gate and must not be relaxed for code convenience.
+On gate failure: classify (real regression / miscalibrated threshold / runner noise / harness bug / build-env), fix the root cause, and re-run until **Win and Linux pass** (required). For wiki-grade `compare-product`, also require **`macos-15-intel`** before publishing Mac tables. Partial OS passes do not count. When watching a parallel matrix: cancel remaining siblings after the first job failure, fix that failure, then re-dispatch. Cross-version thresholds (0.95 / 1.10) match the same-version gate and must not be relaxed for code convenience.

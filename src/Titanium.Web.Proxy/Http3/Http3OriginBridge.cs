@@ -1016,6 +1016,10 @@ internal static class Http3OriginBridge
         if (string.IsNullOrEmpty(request.Host) && request.Authority.Length > 0)
             request.Host = request.Authority.GetString();
 
+        // Match H3→H2 / H3→H3 fast paths: SNI / Host stay on the client :authority
+        // (OriginAuthorityHost, typically "localhost"). ForwardHost is connect-only.
+        // Using ForwardHost (127.0.0.1) as SslStream.TargetHost breaks on macOS Network.framework
+        // against a localhost leaf — H3_INTERNAL_ERROR on every stream while YARP (any-cert) works.
         var isHttps = request.IsHttps;
         string? connectHost = null;
         int? connectPort = null;
@@ -1023,6 +1027,8 @@ internal static class Http3OriginBridge
         {
             if (ep.ForwardCleartext)
                 isHttps = false;
+            else if (!string.IsNullOrEmpty(ep.ForwardHost))
+                isHttps = true;
             if (!string.IsNullOrEmpty(ep.ForwardHost))
             {
                 connectHost = ep.ForwardHost;
@@ -1047,13 +1053,17 @@ internal static class Http3OriginBridge
 
             if (connection == null)
             {
-                // Resolve host/port only on pool miss — warm keep-alive hits skip GetOriginHostPort.
+                // Resolve SNI host/port only on pool miss — warm keep-alive hits skip GetOriginHostPort.
                 string host;
                 int port;
-                if (connectHost != null && connectPort is { } fwdPort)
+                var sni = fwd.OriginAuthorityHost;
+                if (!string.IsNullOrEmpty(sni))
                 {
-                    host = connectHost;
-                    port = fwdPort;
+                    var colon = sni.LastIndexOf(':');
+                    if (colon > 0 && int.TryParse(sni.AsSpan(colon + 1), out _))
+                        sni = sni[..colon];
+                    host = sni;
+                    port = connectPort ?? (isHttps ? 443 : 80);
                 }
                 else
                 {
@@ -1070,7 +1080,6 @@ internal static class Http3OriginBridge
                     precomputedCacheKey: poolKey)
                     ?? throw new InvalidOperationException(
                         $"Failed to establish an HTTP/1.1 origin connection to '{host}:{port}'.");
-
                 if (fwd.ProxyEndPoint is TransparentBaseProxyEndPoint store
                     && fwd.CustomUpStreamProxy == null
                     && (fwd.UpStreamEndPoint ?? server.UpStreamEndPoint) == null)

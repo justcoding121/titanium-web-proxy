@@ -118,6 +118,50 @@ public class Http3ReverseDualListenTests
         Assert.AreEqual("h3-dual-ok", body);
     }
 
+    /// <summary>
+    ///     RPS twin of <c>twp-reverse-http3-to-https-http1</c>: client H3, ForwardHost=127.0.0.1,
+    ///     origin HTTPS HTTP/1 with a localhost leaf. SNI must stay <c>localhost</c> (not the IP)
+    ///     or macOS Network.framework rejects the origin TLS handshake.
+    /// </summary>
+    [TestMethod]
+    public async Task HttpClient_Http3_To_HttpsHttp1_ForwardHostIp_UsesLocalhostSni()
+    {
+        RequireQuic();
+
+        sharedServer.HandleRequest(context => context.Response.WriteAsync("h3-to-https-h1"));
+
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
+        {
+            EnableHttp3 = true,
+            ForwardHost = "127.0.0.1",
+            ForwardPort = sharedServer.HttpsListeningPort,
+            ForwardCleartext = false,
+            GenericCertificateName = "localhost",
+            MaxInboundBidirectionalStreams = 100
+        };
+        endPoint.BeforeQuicAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            args.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var proxy = CreateDualListenProxy(endPoint);
+        using var handler = CreateHttpClientHandler(HttpVersion.Version30);
+        using var client = new HttpClient(handler)
+        {
+            DefaultRequestVersion = HttpVersion.Version30,
+            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
+        };
+
+        using var response = await client.GetAsync($"https://localhost:{endPoint.Port}/");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+        Assert.AreEqual(HttpVersion.Version30, response.Version);
+        Assert.AreEqual("h3-to-https-h1", body);
+    }
+
     [TestMethod]
     public async Task HttpClient_Http2_SamePort_Injects_AltSvc()
     {
