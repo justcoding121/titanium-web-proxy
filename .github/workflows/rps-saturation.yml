@@ -138,11 +138,6 @@ permissions:
 jobs:
   rps:
     # PR → beta/stable: compare-spot; push → beta/stable: compare-editions; dispatch: inputs.mode
-    # Skip matrix cells when workflow_dispatch runner_os filters to a single OS.
-    if: >-
-      github.event_name != 'workflow_dispatch' ||
-      inputs.runner_os == 'all' ||
-      inputs.runner_os == matrix.os
     permissions:
       contents: read
     env:
@@ -154,7 +149,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-15-intel]
+        # workflow_dispatch runner_os filters to one OS; otherwise Win+Linux+Mac Intel.
+        os: ${{ fromJSON(inputs.runner_os == 'macos-15-intel' && '["macos-15-intel"]' || inputs.runner_os == 'ubuntu-latest' && '["ubuntu-latest"]' || inputs.runner_os == 'windows-latest' && '["windows-latest"]' || '["ubuntu-latest","windows-latest","macos-15-intel"]') }}
     runs-on: ${{ matrix.os }}
     # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
     # compare-product with MITM Lite+Full can exceed 3.5h per OS on hosted runners.
