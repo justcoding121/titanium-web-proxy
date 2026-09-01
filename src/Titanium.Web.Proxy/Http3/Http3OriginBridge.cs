@@ -1764,8 +1764,9 @@ internal static class Http3OriginBridge
 
             try
             {
+                // No http/1.1 ALPN — same as ForwardOverTcpFastAsync / YARP Version11 Exact.
                 connection = await server.TcpConnectionFactory.GetServerConnection(
-                    server, host, port, HttpHeader.Version11, isHttps, SslExtensions.Http11ProtocolAsList,
+                    server, host, port, HttpHeader.Version11, isHttps, applicationProtocols: null,
                     false, sessionArgs, sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
                     sessionArgs.CustomUpStreamProxyUsed ?? (isHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy),
                     false, false, cancellationToken, connectHost, connectPort,

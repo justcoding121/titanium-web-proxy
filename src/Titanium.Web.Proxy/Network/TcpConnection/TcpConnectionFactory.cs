@@ -1036,17 +1036,11 @@ internal class TcpConnectionFactory : IDisposable
                     // CONNECT tunnel: wrap TLS on the existing HttpServerStream (may hold buffered
                     // bytes from the CONNECT response). leaveInnerOpen:false — disposing the outer
                     // HttpServerStream tears down the chain.
-                    var sslStream = new SslStream(stream, leaveInnerStreamOpen: false,
-                        (sender, certificate, chain, sslPolicyErrors) =>
-                            proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
-                                sslPolicyErrors),
-                        (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
-                        {
-                            var clientCertificate = proxyServer.SelectClientCertificate(sender, sessionArgs,
-                                targetHost, localCertificates, remoteCertificate, acceptableIssuers);
-                            if (clientCertificate != null) usedClientCertificate = true;
-                            return clientCertificate!;
-                        });
+                    // Prefer SslClientAuthenticationOptions callbacks (YARP/SocketsHttpHandler style).
+                    // Constructor RemoteCertificateValidationCallback + AuthenticateAsClientAsync(options)
+                    // has been unreliable on macOS Network.framework — probe H3→HTTPS-H1 aborted every
+                    // stream with H3_INTERNAL_ERROR while YARP AcceptAny on SslOptions succeeded.
+                    var sslStream = new SslStream(stream, leaveInnerStreamOpen: false);
                     stream = new HttpServerStream(proxyServer, sslStream, proxyServer.BufferPool, cancellationToken);
 
                     var options = new SslClientAuthenticationOptions
@@ -1055,7 +1049,18 @@ internal class TcpConnectionFactory : IDisposable
                         TargetHost = remoteHostName,
                         ClientCertificates = null,
                         EnabledSslProtocols = enabledSslProtocols,
-                        CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
+                        CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation,
+                        RemoteCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) =>
+                            proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
+                                sslPolicyErrors),
+                        LocalCertificateSelectionCallback = (sender, targetHost, localCertificates,
+                            remoteCertificate, acceptableIssuers) =>
+                        {
+                            var clientCertificate = proxyServer.SelectClientCertificate(sender, sessionArgs,
+                                targetHost, localCertificates, remoteCertificate, acceptableIssuers);
+                            if (clientCertificate != null) usedClientCertificate = true;
+                            return clientCertificate!;
+                        }
                     };
 
                     ProxyLog.OriginHandshakeStarting(proxyServer.Logger, remoteHostName, remotePort,
@@ -1069,17 +1074,11 @@ internal class TcpConnectionFactory : IDisposable
             }
             else if (isHttps)
             {
-                var sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false,
-                    (sender, certificate, chain, sslPolicyErrors) =>
-                        proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
-                            sslPolicyErrors),
-                    (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
-                    {
-                        var clientCertificate = proxyServer.SelectClientCertificate(sender, sessionArgs, targetHost,
-                            localCertificates, remoteCertificate, acceptableIssuers);
-                        if (clientCertificate != null) usedClientCertificate = true;
-                        return clientCertificate!;
-                    });
+                // Prefer SslClientAuthenticationOptions callbacks (YARP/SocketsHttpHandler style).
+                // Constructor RemoteCertificateValidationCallback + AuthenticateAsClientAsync(options)
+                // has been unreliable on macOS Network.framework — probe H3→HTTPS-H1 aborted every
+                // stream with H3_INTERNAL_ERROR while YARP AcceptAny on SslOptions succeeded.
+                var sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false);
                 stream = new HttpServerStream(proxyServer, sslStream, proxyServer.BufferPool, cancellationToken);
 
                 var options = new SslClientAuthenticationOptions
@@ -1088,7 +1087,18 @@ internal class TcpConnectionFactory : IDisposable
                     TargetHost = remoteHostName,
                     ClientCertificates = null,
                     EnabledSslProtocols = enabledSslProtocols,
-                    CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
+                    CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation,
+                    RemoteCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) =>
+                        proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
+                            sslPolicyErrors),
+                    LocalCertificateSelectionCallback = (sender, targetHost, localCertificates, remoteCertificate,
+                        acceptableIssuers) =>
+                    {
+                        var clientCertificate = proxyServer.SelectClientCertificate(sender, sessionArgs, targetHost,
+                            localCertificates, remoteCertificate, acceptableIssuers);
+                        if (clientCertificate != null) usedClientCertificate = true;
+                        return clientCertificate!;
+                    }
                 };
 
                 ProxyLog.OriginHandshakeStarting(proxyServer.Logger, remoteHostName, remotePort, applicationProtocols);

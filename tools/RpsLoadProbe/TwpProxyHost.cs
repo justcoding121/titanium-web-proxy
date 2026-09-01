@@ -411,7 +411,9 @@ internal sealed class TwpProxyHost : IDisposable
         var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
         {
             EnableHttp3 = true,
-            ForwardHost = "127.0.0.1",
+            // Prefer "localhost" over 127.0.0.1 (matches working H3→H3 reverse and leaf CN).
+            // YARP uses https://127.0.0.1 with AcceptAny; name SNI + AcceptAny is equivalent.
+            ForwardHost = "localhost",
             ForwardPort = originHttpsPort,
             ForwardCleartext = false,
             GenericCertificateName = "localhost",
@@ -876,11 +878,11 @@ internal sealed class TwpProxyHost : IDisposable
         proxy.CertificateManager.LeafCertificateKeyAlgorithm = CertificateKeyAlgorithm.EcdsaP256;
         proxy.ServerCertificateValidationCallback += (_, args) =>
         {
-            // Prefer chain trust against the shared probe root. On macOS Network.framework,
-            // CustomRootTrust Build can still fail for loopback leaves even when SNI matches;
-            // accept our minted leaf by subject as a probe-only fallback (YARP uses AcceptAny).
-            args.IsValid = LoopbackCertificateAuthority.Validate(args.Certificate)
-                           || LoopbackCertificateAuthority.IsProbeLeaf(args.Certificate);
+            // Match YARP ForwarderHttpClientFactory DangerousAcceptAnyServerCertificate for the
+            // probe CA: SslOptions.RemoteCertificateValidationCallback = _ => true. CustomRootTrust
+            // + constructor SslStream callbacks were still failing Mac H3→HTTPS-H1 (100% 
+            // H3_INTERNAL_ERROR) while the same Kestrel leaf worked through YARP.
+            args.IsValid = true;
             return Task.CompletedTask;
         };
     }
