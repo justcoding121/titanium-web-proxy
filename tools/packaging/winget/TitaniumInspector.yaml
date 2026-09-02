@@ -1,9 +1,9 @@
 # justcoding121.TitaniumInspector
 # Submit a PR to https://github.com/microsoft/winget-pkgs after a *signed* GitHub Release with MSI.
-# Authenticode publisher: Jehonathan Thomas. Do not resubmit unsigned 7.0.4 — wait for next signed stable + new SHA256s.
+# Authenticode publisher: Jehonathan Thomas.
 
 PackageIdentifier: justcoding121.TitaniumInspector
-PackageVersion: 7.0.4
+PackageVersion: 7.0.5
 PackageLocale: en-US
 Publisher: justcoding121
 PublisherUrl: https://github.com/justcoding121/titanium-web-proxy
@@ -13,11 +13,11 @@ ShortDescription: Desktop HTTP(S) traffic debugger for Titanium Web Proxy.
 Installers:
   - Architecture: x64
     InstallerType: wix
-    InstallerUrl: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.4/TitaniumInspector-win-x64.msi
-    InstallerSha256: 94a19f24226f6d99bccc9abb2604feddf10b6d68bc13d696baac3e7ac2c9decb
+    InstallerUrl: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/TitaniumInspector-win-x64.msi
+    InstallerSha256: 15179C71A50B7724F55F421025086E0DA798B6A18EC9004FE64F22E04002124E
   - Architecture: x64
     InstallerType: portable
-    InstallerUrl: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.4/TitaniumInspector-win-x64.zip
-    InstallerSha256: 59c3fd049596233f9985e223e05fb9529d42ce4aff9abd69f759de53e02d3348
+    InstallerUrl: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/TitaniumInspector-win-x64.zip
+    InstallerSha256: 2A5F29234E2DFA4B29552CFB42E0D84E0CBC556C4787072196FD6EB0756AC15B
 ManifestType: singleton
 ManifestVersion: 1.6.0

@@ -1,14 +1,13 @@
 # Winget follow-up
 
-Status (2026-09-02): `winget search justcoding121.TitaniumCli` / Inspector — **not in catalog**. Prior `microsoft/winget-pkgs` PRs for unsigned `7.0.4` were closed by the MS bot and never landed on master.
+Status (2026-09-02): Signed stable [`v7.0.5`](https://github.com/justcoding121/titanium-web-proxy/releases/tag/v7.0.5) cut with Authenticode MSI + AppImages + `SHA256SUMS.asc`. Resubmit winget from **stable only**.
 
 ## Do not
 
-- Resubmit another unsigned `7.0.4` with the same installer SHA256s.
+- Resubmit unsigned `7.0.4` or any beta tag to `microsoft/winget-pkgs`.
 
-## After first signed stable (`7.0.5+` recommended if binaries change)
+## After signed stable (`7.0.5+`)
 
-1. Merge repo stub so `twp` → `twp.exe` ([`TitaniumCli.yaml`](winget/TitaniumCli.yaml)).
-2. Compute new SHA256 for `Titanium.Cli-win-x64.zip` and `TitaniumInspector-win-x64.msi` (+ zip if submitted).
-3. Open fresh PRs against `microsoft/winget-pkgs` using the stubs under [`winget/`](winget/).
-4. Note Authenticode publisher **Jehonathan Thomas** in PR description if SmartScreen/winget validation asks.
+1. Refresh SHA256s in [`winget/`](winget/) from the release `SHA256SUMS`.
+2. Open fresh PRs against `microsoft/winget-pkgs` (CLI zip portable + Inspector MSI).
+3. Note Authenticode publisher **Jehonathan Thomas** in the PR description.
