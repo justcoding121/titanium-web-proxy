@@ -11,8 +11,9 @@ First listing is a **human Flathub review**. Later stables should be version / U
 
 ## Formal Flathub submissions (v7.0.5)
 
-- Inspector: https://github.com/flathub/flathub/pull/10049
-- CLI: https://github.com/flathub/flathub/pull/10050
+- Inspector: https://github.com/flathub/flathub/pull/10054
+- CLI: https://github.com/flathub/flathub/pull/10055
+- Demo clips: https://github.com/justcoding121/titanium-web-proxy/releases/tag/flathub-submission-media
 
 ## Beta dry-run (before stable Flathub submit)
 

@@ -5,7 +5,7 @@ Status (2026-09-02): Signed stable [`v7.0.5`](https://github.com/justcoding121/t
 ## Submitted winget PRs
 
 - CLI: https://github.com/microsoft/winget-pkgs/pull/428410
-- Inspector (Authenticode MSI): https://github.com/microsoft/winget-pkgs/pull/428411
+- Inspector (Authenticode MSI): https://github.com/microsoft/winget-pkgs/pull/428421 (supersedes #428411; fixed LicenseUrl)
 
 ## Do not
 
