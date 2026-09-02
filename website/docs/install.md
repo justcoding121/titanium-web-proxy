@@ -6,12 +6,16 @@ Full download buttons live on the [Download](/download) page. This page is the s
 
 - **Windows:** Signed releases show Authenticode publisher **Jehonathan Thomas** (Azure Artifact Signing). SmartScreen reputation still builds over downloads/time.
 - **macOS:** Prefer the notarized **DMG** for Inspector when published. CLI zips are signed/notarized when Apple Developer secrets are configured in CI.
-- **Linux:** Prefer AppImage / `.deb` / `.rpm` (glibc) or Flathub when listed. Verify GitHub assets with `SHA256SUMS` (+ `SHA256SUMS.asc` when GPG signing is enabled):
+- **Linux:** Prefer AppImage / `.deb` / `.rpm` (glibc) or Flathub when listed. Verify GitHub assets with `SHA256SUMS` and the detached signature `SHA256SUMS.asc`:
 
 ```shell
+# Import the Titanium Releases public key (once)
+curl -fsSL https://titaniumproxy.com/titanium-releases.asc | gpg --import
+# Or from the repo: website/public/titanium-releases.asc
+# Fingerprint: A824 E886 0DAB 01FA DA94  4E2D 8E5A B43F 41C8 DE8F
+
 # From a release asset directory
 sha256sum -c SHA256SUMS
-# Optional, when SHA256SUMS.asc is attached:
 gpg --verify SHA256SUMS.asc SHA256SUMS
 ```
 
