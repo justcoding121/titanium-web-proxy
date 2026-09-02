@@ -9,6 +9,11 @@ First listing is a **human Flathub review**. Later stables should be version / U
 | Inspector | `io.github.justcoding121.TitaniumInspector` | [`io.github.justcoding121.TitaniumInspector.yml`](io.github.justcoding121.TitaniumInspector.yml) |
 | CLI | `io.github.justcoding121.TitaniumCli` | [`io.github.justcoding121.TitaniumCli.yml`](io.github.justcoding121.TitaniumCli.yml) |
 
+## Formal Flathub submissions (v7.0.5)
+
+- Inspector: https://github.com/flathub/flathub/pull/10049
+- CLI: https://github.com/flathub/flathub/pull/10050
+
 ## Beta dry-run (before stable Flathub submit)
 
 1. Point manifests at a polished **beta** linux-x64 zip + SHA256 (temporary).

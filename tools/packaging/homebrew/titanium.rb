@@ -10,18 +10,17 @@
 class Titanium < Formula
   desc "Titanium Web Proxy CLI (MITM / reverse proxy)"
   homepage "https://github.com/justcoding121/titanium-web-proxy"
-  # Temporarily points at polished beta; retarget to stable 7.0.5 after signed cut.
-  version "7.0.4-beta"
+  version "7.0.5"
   license "MIT"
 
   on_macos do
     on_arm do
       url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v#{version}/Titanium.Cli-osx-arm64.zip"
-      sha256 "82576f82ebdc971c1130a0fe514c6e1b81f56daf7042ee0613119f981163fb22"
+      sha256 "0eebb0a3cff372b004496cd44830edfb546670c42fd18d7abf79b56b15ce30e8"
     end
     on_intel do
       url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v#{version}/Titanium.Cli-osx-x64.zip"
-      sha256 "b2eddf7ff5008c478ee5d491afbb09467e4aa0b629d6aebef03b3ab854c4a42a"
+      sha256 "786f97316afedcd82b3c32e66970984f0f084b52a6a4b2a66b1320834f3d5d07"
     end
   end
 
@@ -33,7 +32,7 @@ class Titanium < Formula
   end
 
   test do
-    # Assembly versions are numeric (e.g. 7.0.4.0); formula may be 7.0.4-beta.
+    # Assembly versions are numeric (e.g. 7.0.5.0); formula may be 7.0.5-beta.
     assert_match version.to_s.split("-").first, shell_output("#{bin}/titanium version")
   end
 end

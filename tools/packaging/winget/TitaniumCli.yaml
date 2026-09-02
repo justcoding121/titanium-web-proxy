@@ -1,8 +1,8 @@
 # justcoding121.TitaniumCli
-# Stub for microsoft/winget-pkgs. Resubmit only after a *signed* stable cut with fresh SHA256.
-# Publisher on Authenticode is "Jehonathan Thomas"; winget Publisher field may stay justcoding121.
+# Submit a PR to microsoft/winget-pkgs after a *signed* stable GitHub Release.
+# Authenticode publisher: Jehonathan Thomas.
 PackageIdentifier: justcoding121.TitaniumCli
-PackageVersion: 7.0.4
+PackageVersion: 7.0.5
 PackageLocale: en-US
 Publisher: justcoding121
 PackageName: Titanium CLI
@@ -17,7 +17,7 @@ Installers:
         PortableCommandAlias: titanium
       - RelativeFilePath: twp.exe
         PortableCommandAlias: twp
-    InstallerUrl: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.4/Titanium.Cli-win-x64.zip
-    InstallerSha256: 67fe922f04d4fddd08a3d459459efda9601b2e814bcdaa8c2c40858fa2bf841a
+    InstallerUrl: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.5/Titanium.Cli-win-x64.zip
+    InstallerSha256: 8C6D09C7293C9A3D205C64FB00D946A10AFA3379F072FA83A87EEFC4FE9425E2
 ManifestType: singleton
 ManifestVersion: 1.6.0
