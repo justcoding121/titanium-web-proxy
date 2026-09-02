@@ -1,0 +1,25 @@
+# One-shot Flathub linter check for packaging manifests (dispatch only).
+name: flatpak-linter-smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Lint Inspector + CLI manifests
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/work" -w /work \
+            ghcr.io/flathub-infra/flatpak-builder-lint:unprivileged \
+            flatpak-builder-lint --exceptions --exceptions-repo stable \
+            manifest tools/packaging/flatpak/io.github.justcoding121.TitaniumInspector.yml
+          docker run --rm -v "$PWD:/work" -w /work \
+            ghcr.io/flathub-infra/flatpak-builder-lint:unprivileged \
+            flatpak-builder-lint --exceptions --exceptions-repo stable \
+            manifest tools/packaging/flatpak/io.github.justcoding121.TitaniumCli.yml
