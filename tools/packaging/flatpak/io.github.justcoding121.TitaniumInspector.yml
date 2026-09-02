@@ -29,6 +29,7 @@ modules:
       - chmod +x /app/bin/TitaniumInspector
       - install -Dm644 io.github.justcoding121.TitaniumInspector.desktop /app/share/applications/io.github.justcoding121.TitaniumInspector.desktop
       - install -Dm644 io.github.justcoding121.TitaniumInspector.metainfo.xml /app/share/metainfo/io.github.justcoding121.TitaniumInspector.metainfo.xml
+      - install -Dm644 io.github.justcoding121.TitaniumInspector.png /app/share/icons/hicolor/256x256/apps/io.github.justcoding121.TitaniumInspector.png
     sources:
       - type: archive
         # Beta dry-run target; retarget to stable tag + SHA before formal Flathub submit.
@@ -44,3 +45,5 @@ modules:
         path: io.github.justcoding121.TitaniumInspector.desktop
       - type: file
         path: io.github.justcoding121.TitaniumInspector.metainfo.xml
+      - type: file
+        path: io.github.justcoding121.TitaniumInspector.png
