@@ -14,11 +14,11 @@ command: TitaniumInspector
 finish-args:
   - --share=network
   - --share=ipc
-  - --socket=x11
   - --socket=wayland
   - --socket=fallback-x11
   - --device=dri
-  - --filesystem=home
+  - --filesystem=xdg-config/titanium:create
+  - --filesystem=xdg-data/titanium:create
   - --filesystem=xdg-download
 modules:
   - name: titanium-inspector
