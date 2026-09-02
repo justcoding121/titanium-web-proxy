@@ -234,3 +234,6 @@ tools/packaging/.cache/
 # WiX extension cache from `dotnet wix extension add`
 tools/packaging/wix/.wix/
 
+
+# Local Apple signing material (never commit)
+tools/packaging/osx/.local-signing/
