@@ -47,20 +47,27 @@ else
   exit 1
 fi
 
+# notarytool accepts only zip / pkg / dmg (or a zipped .app). Raw Mach-O binaries are codesigned only.
 if [[ -n "${NOTARY_KEY:-}" && -n "${NOTARY_KEY_ID:-}" && -n "${NOTARY_ISSUER:-}" ]]; then
   KEY_FILE="$(mktemp).p8"
   printf '%s\n' "${NOTARY_KEY}" > "${KEY_FILE}"
-  SUBMIT="${TARGET}"
-  if [[ -d "${TARGET}" ]]; then
+  SUBMIT=""
+  if [[ -d "${TARGET}" && "${TARGET}" == *.app ]]; then
     SUBMIT="$(mktemp -d)/notarize.zip"
     ditto -c -k --keepParent "${TARGET}" "${SUBMIT}"
+  elif [[ -f "${TARGET}" && ( "${TARGET}" == *.zip || "${TARGET}" == *.dmg || "${TARGET}" == *.pkg ) ]]; then
+    SUBMIT="${TARGET}"
+  else
+    echo "codesign-only (not a notarizable container): ${TARGET}"
   fi
-  xcrun notarytool submit "${SUBMIT}" --wait \
-    --key "${KEY_FILE}" --key-id "${NOTARY_KEY_ID}" --issuer "${NOTARY_ISSUER}"
+  if [[ -n "${SUBMIT}" ]]; then
+    xcrun notarytool submit "${SUBMIT}" --wait \
+      --key "${KEY_FILE}" --key-id "${NOTARY_KEY_ID}" --issuer "${NOTARY_ISSUER}"
+    if [[ "${TARGET}" == *.dmg || "${TARGET}" == *.app || -d "${TARGET}" ]]; then
+      xcrun stapler staple "${TARGET}" || true
+    fi
+  fi
   rm -f "${KEY_FILE}"
-  if [[ "${TARGET}" == *.dmg || "${TARGET}" == *.app || -d "${TARGET}" ]]; then
-    xcrun stapler staple "${TARGET}" || true
-  fi
 fi
 
 echo "Signed ${TARGET}"

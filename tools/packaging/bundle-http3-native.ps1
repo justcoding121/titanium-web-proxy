@@ -256,10 +256,15 @@ function Ensure-SonameLinks([string] $dir) {
 
 function Set-LinuxRpath([string] $dir) {
     $patchelf = Ensure-Patchelf
-    Get-ChildItem -Path $dir -File -Filter "*.so*" | ForEach-Object {
-        $soFile = $_
+    # Do NOT use Filter "*.so*" — PowerShell/Win32 wildcards match ".Sockets" inside
+    # System.Net.Sockets.dll and similar managed assemblies.
+    $soFiles = @(
+        Get-ChildItem -Path $dir -File -Filter "*.so"
+        Get-ChildItem -Path $dir -File | Where-Object { $_.Name -match '\.so\.\d' }
+    ) | Sort-Object -Property FullName -Unique
+    foreach ($soFile in $soFiles) {
         # Skip pure symlinks
-        if ($soFile.Attributes -band [IO.FileAttributes]::ReparsePoint) { return }
+        if ($soFile.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
         try {
             Invoke-Native $patchelf @("--set-rpath", "`$ORIGIN", $soFile.FullName)
         }
@@ -268,6 +273,9 @@ function Set-LinuxRpath([string] $dir) {
             Write-Info "patchelf skipped $($soFile.Name): $_"
         }
     }
+    # Caught native failures leave $LASTEXITCODE non-zero; clear so the GHA pwsh step
+    # does not fail the job after a soft-skip.
+    $global:LASTEXITCODE = 0
 }
 
 function Assert-RequiredFiles([string[]] $globs) {
@@ -443,3 +451,5 @@ switch ($ridEntry.mode) {
 }
 
 Write-Info "done"
+# Ensure GitHub Actions pwsh step succeeds even if a soft-skipped native tool left LASTEXITCODE set.
+$global:LASTEXITCODE = 0
