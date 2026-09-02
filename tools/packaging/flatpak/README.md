@@ -9,10 +9,22 @@ First listing is a **human Flathub review**. Later stables should be version / U
 | Inspector | `io.github.justcoding121.TitaniumInspector` | [`io.github.justcoding121.TitaniumInspector.yml`](io.github.justcoding121.TitaniumInspector.yml) |
 | CLI | `io.github.justcoding121.TitaniumCli` | [`io.github.justcoding121.TitaniumCli.yml`](io.github.justcoding121.TitaniumCli.yml) |
 
-## First submission checklist
+## Beta dry-run (before stable Flathub submit)
+
+1. Point manifests at a polished **beta** linux-x64 zip + SHA256 (temporary).
+2. Run [`.github/workflows/packaging-catalog-smoke.yml`](../../.github/workflows/packaging-catalog-smoke.yml) (`run_flatpak=true`) or locally:
+
+```shell
+flatpak-builder --user --force-clean /tmp/ti-build \
+  tools/packaging/flatpak/io.github.justcoding121.TitaniumInspector.yml
+```
+
+3. Do **not** request formal Flathub merge while URLs still point at a `-beta` tag.
+
+## First / formal submission checklist
 
 1. Cut a **signed/stable** GitHub Release that includes `TitaniumInspector-linux-x64.zip` and `Titanium.Cli-linux-x64.zip`.
-2. Fill `sha256:` in both manifests (`REPLACE_AFTER_RELEASE` → real digest). Prefer AppImage source later if Flathub reviewers prefer a single file; zip is fine for first listing.
+2. Retarget `url:` + `sha256:` in both manifests from beta → stable. Prefer AppImage source later if Flathub reviewers prefer a single file; zip is fine for first listing.
 3. Create Flathub account + two new app repos (or one PR per app) under [flathub/flathub](https://github.com/flathub/flathub) following [App Submission](https://docs.flathub.org/docs/for-app-authors/submission).
 4. Copy this directory’s manifests, `.desktop`, and `.metainfo.xml` into each Flathub app repo.
 5. Respond to reviewer sandbox / metainfo feedback (network + display sockets are already declared for Inspector).
