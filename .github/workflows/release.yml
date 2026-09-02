@@ -193,11 +193,65 @@ jobs:
             Push-Location $out
             try { zip -r "../../../Titanium.Cli-$rid.zip" . } finally { Pop-Location }
           }
+      - name: Sign and notarize CLI (macOS)
+        if: startsWith(matrix.rid, 'osx-')
+        env:
+          APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${APPLE_CERTIFICATE_P12:-}" ]]; then
+            echo "Apple secrets not set — skipping macOS CLI notarize"
+            exit 0
+          fi
+          chmod +x tools/packaging/osx/sign-and-notarize.sh
+          # Sign main binaries inside the publish dir, then re-zip
+          rid="${{ matrix.rid }}"
+          out="artifacts/cli/$rid"
+          chmod +x "$out/titanium" "$out/twp" 2>/dev/null || true
+          ./tools/packaging/osx/sign-and-notarize.sh "$out/titanium" tools/packaging/osx/TitaniumCli.entitlements
+          ./tools/packaging/osx/sign-and-notarize.sh "$out/twp" tools/packaging/osx/TitaniumCli.entitlements || true
+          rm -f "Titanium.Cli-$rid.zip"
+          (cd "$out" && zip -r "../../../Titanium.Cli-$rid.zip" .)
+          ./tools/packaging/osx/sign-and-notarize.sh "Titanium.Cli-$rid.zip" || true
+      - name: Linux packages (AppImage + deb/rpm)
+        if: matrix.rid == 'linux-x64' || matrix.rid == 'linux-arm64'
+        env:
+          RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          rid="${{ matrix.rid }}"
+          ver="${RELEASE_VERSION%%-*}"
+          arch=x86_64
+          [[ "$rid" == *arm64* ]] && arch=aarch64
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rsync imagemagick ruby ruby-dev build-essential rpm || true
+          sudo gem install --no-document fpm || true
+          chmod +x tools/packaging/linux/build-appimage.sh tools/packaging/linux/build-deb-rpm.sh
+          ./tools/packaging/linux/build-appimage.sh cli "artifacts/cli/$rid" \
+            "Titanium.Cli-$rid.AppImage" "$ver" "$arch" || echo "AppImage build soft-failed"
+          ./tools/packaging/linux/build-deb-rpm.sh cli "artifacts/cli/$rid" . "$ver" "$rid" || echo "deb/rpm soft-failed"
+      - name: Stage CLI artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          rid="${{ matrix.rid }}"
+          mkdir -p "staged-cli-$rid"
+          cp "Titanium.Cli-$rid.zip" "staged-cli-$rid/"
+          for ext in AppImage deb rpm; do
+            f="Titanium.Cli-$rid.$ext"
+            [[ -f "$f" ]] && cp "$f" "staged-cli-$rid/" || true
+          done
+          ls -la "staged-cli-$rid"
       - uses: actions/upload-artifact@v4
         with:
           name: cli-${{ matrix.rid }}
-          path: Titanium.Cli-${{ matrix.rid }}.zip
-
+          path: staged-cli-${{ matrix.rid }}/
+          if-no-files-found: error
   build-plus:
     needs: [resolve-version, test]
     runs-on: ubuntu-latest
@@ -333,17 +387,71 @@ jobs:
           certificate-profile-name: ${{ secrets.AZURE_SIGNING_PROFILE }}
           description: Titanium Inspector
           files: ${{ github.workspace }}\TitaniumInspector-win-x64.msi
+      - name: Build / sign / notarize Inspector DMG (macOS)
+        if: startsWith(matrix.rid, 'osx-')
+        env:
+          RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
+          APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
+        run: |
+          set -euo pipefail
+          rid="${{ matrix.rid }}"
+          ver="${RELEASE_VERSION%%-*}"
+          chmod +x tools/packaging/osx/build-app-bundle.sh \
+            tools/packaging/osx/build-dmg.sh \
+            tools/packaging/osx/sign-and-notarize.sh
+          ./tools/packaging/osx/build-app-bundle.sh \
+            "artifacts/inspector/$rid" "TitaniumInspector.app" "$ver"
+          if [[ -n "${APPLE_CERTIFICATE_P12:-}" ]]; then
+            ./tools/packaging/osx/sign-and-notarize.sh \
+              TitaniumInspector.app tools/packaging/osx/TitaniumInspector.entitlements
+          else
+            echo "Apple secrets not set — building unsigned DMG for CI artifact shape"
+          fi
+          ./tools/packaging/osx/build-dmg.sh \
+            TitaniumInspector.app "TitaniumInspector-$rid.dmg" "Titanium Inspector"
+          if [[ -n "${APPLE_CERTIFICATE_P12:-}" ]]; then
+            ./tools/packaging/osx/sign-and-notarize.sh "TitaniumInspector-$rid.dmg" || true
+          fi
+      - name: Linux packages (AppImage + deb/rpm)
+        if: matrix.rid == 'linux-x64' || matrix.rid == 'linux-arm64'
+        env:
+          RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          rid="${{ matrix.rid }}"
+          ver="${RELEASE_VERSION%%-*}"
+          arch=x86_64
+          [[ "$rid" == *arm64* ]] && arch=aarch64
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rsync imagemagick ruby ruby-dev build-essential rpm || true
+          sudo gem install --no-document fpm || true
+          chmod +x tools/packaging/linux/build-appimage.sh tools/packaging/linux/build-deb-rpm.sh
+          ./tools/packaging/linux/build-appimage.sh inspector "artifacts/inspector/$rid" \
+            "TitaniumInspector-$rid.AppImage" "$ver" "$arch" || echo "AppImage build soft-failed"
+          ./tools/packaging/linux/build-deb-rpm.sh inspector "artifacts/inspector/$rid" . "$ver" "$rid" \
+            || echo "deb/rpm soft-failed"
+      - name: Stage Inspector artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          rid="${{ matrix.rid }}"
+          mkdir -p "staged-inspector-$rid"
+          cp "TitaniumInspector-$rid.zip" "staged-inspector-$rid/"
+          for ext in msi AppImage deb rpm dmg; do
+            f="TitaniumInspector-$rid.$ext"
+            [[ -f "$f" ]] && cp "$f" "staged-inspector-$rid/" || true
+          done
+          ls -la "staged-inspector-$rid"
       - uses: actions/upload-artifact@v4
         with:
           name: inspector-${{ matrix.rid }}
           if-no-files-found: error
-          path: |
-            TitaniumInspector-${{ matrix.rid }}.zip
-      - uses: actions/upload-artifact@v4
-        if: matrix.msi
-        with:
-          name: inspector-${{ matrix.rid }}-msi
-          path: TitaniumInspector-${{ matrix.rid }}.msi
+          path: staged-inspector-${{ matrix.rid }}/
 
   smoke-http3:
     needs: build-cli
@@ -409,6 +517,8 @@ jobs:
           RELEASE_TAG: ${{ needs.resolve-version.outputs.release_tag }}
           RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
           RELEASE_CHANNEL: ${{ needs.resolve-version.outputs.channel }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
           TAG="$RELEASE_TAG"
@@ -416,7 +526,10 @@ jobs:
           CHANNEL="$RELEASE_CHANNEL"
           export RELEASE_TAG VERSION
           mkdir -p dist
-          find artifacts -type f \( -name '*.zip' -o -name '*.dll' -o -name '*.msi' \) -exec cp {} dist/ \;
+          find artifacts -type f \( \
+            -name '*.zip' -o -name '*.dll' -o -name '*.msi' \
+            -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.dmg' \
+          \) -exec cp {} dist/ \;
           python3 - <<'PY'
           import hashlib, json, os, pathlib, datetime
           tag = os.environ["RELEASE_TAG"]
@@ -429,7 +542,8 @@ jobs:
             return h.hexdigest()
           assets = {}
           for p in dist.iterdir():
-            assets[p.name] = {"path": str(p), "sha256": sha(p)}
+            if p.is_file():
+              assets[p.name] = {"path": str(p), "sha256": sha(p)}
           manifest = {
             "version": version,
             "channel": channel,
@@ -446,22 +560,37 @@ jobs:
               "Titanium.Web.Proxy.Configuration": version.split("-")[0],
             },
           }
+          def put(product, key, entry):
+            manifest["products"][product]["assets"][key] = entry
           for name, meta in assets.items():
             url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{tag}/{name}"
             entry = {"url": url, "sha256": meta["sha256"]}
             if name.startswith("Titanium.Cli-"):
-              rid = name.removeprefix("Titanium.Cli-").removesuffix(".zip")
-              manifest["products"]["cli"]["assets"][rid] = entry
-            elif name.startswith("TitaniumInspector-") and name.endswith(".msi"):
-              manifest["products"]["inspector"]["assets"]["win-x64-msi"] = entry
+              stem = name.removeprefix("Titanium.Cli-")
+              for ext in (".zip", ".AppImage", ".deb", ".rpm"):
+                if stem.endswith(ext):
+                  rid = stem[: -len(ext)]
+                  key = rid if ext == ".zip" else f"{rid}{ext}"
+                  put("cli", key, entry)
+                  break
             elif name.startswith("TitaniumInspector-"):
-              rid = name.removeprefix("TitaniumInspector-").removesuffix(".zip")
-              manifest["products"]["inspector"]["assets"][rid] = entry
+              stem = name.removeprefix("TitaniumInspector-")
+              if stem.endswith(".msi"):
+                put("inspector", "win-x64-msi", entry)
+              else:
+                for ext in (".zip", ".AppImage", ".deb", ".rpm", ".dmg"):
+                  if stem.endswith(ext):
+                    rid = stem[: -len(ext)]
+                    key = rid if ext == ".zip" else f"{rid}{ext}"
+                    put("inspector", key, entry)
+                    break
             elif name.startswith("Titanium.Plus"):
               manifest["products"]["plus"]["asset"] = entry
           pathlib.Path("dist/release-manifest.json").write_text(json.dumps(manifest, indent=2))
           print(json.dumps(manifest, indent=2))
           PY
+          chmod +x tools/packaging/sign-checksums.sh
+          ./tools/packaging/sign-checksums.sh dist
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -f -a "$TAG" -m "$TAG" "$GITHUB_SHA"

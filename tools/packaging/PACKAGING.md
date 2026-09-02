@@ -2,12 +2,14 @@
 
 ## RID matrix (7.0)
 
-| Product | RIDs | Notes |
-| --- | --- | --- |
-| CLI | `win-x64`, `linux-x64`, `linux-arm64`, `linux-musl-x64`, `linux-musl-arm64`, `osx-x64`, `osx-arm64` | Self-contained zips |
-| Inspector | Same RIDs | Zip for all; **MSI only** for `win-x64` |
+| Product | RIDs | Primary formats | Also attached |
+| --- | --- | --- | --- |
+| CLI | `win-x64`, `linux-x64`, `linux-arm64`, `linux-musl-*`, `osx-*` | win zip; linux glibc AppImage+deb+rpm; musl zip; osx zip (+ Homebrew) | All RIDs keep a **zip** for `titanium update` |
+| Inspector | Same RIDs | win **MSI**; osx **DMG**; linux glibc AppImage+deb+rpm; musl zip | Zip for all RIDs |
 
-HTTP/3 natives are bundled into every Linux/macOS zip via [`bundle-http3-native.ps1`](bundle-http3-native.ps1) + [`http3-native.lock.json`](http3-native.lock.json). Windows uses OS MsQuic (Win11 / Server 2022+).
+HTTP/3 natives are bundled into every Linux/macOS publish via [`bundle-http3-native.ps1`](bundle-http3-native.ps1) + [`http3-native.lock.json`](http3-native.lock.json). Windows uses OS MsQuic (Win11 / Server 2022+).
+
+Website [download](../../website/download.md) prefers MSI/DMG/AppImage/deb/rpm and hides redundant zips when those exist.
 
 ## Publish (local)
 
@@ -33,15 +35,50 @@ pwsh ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir artifacts/i
   -Version 7.0.0
 ```
 
-Uses WiX 5 (`dotnet tool` manifest under `tools/packaging/wix/`) plus **WixToolset.UI.wixext** / **Util** for:
+Uses WiX 5 (`dotnet tool` manifest under `tools/packaging/wix/`) plus **WixToolset.UI.wixext** / **Util**.
 
-- `WixUI_InstallDir` wizard (welcome → license → **install folder** → progress → **Finished**)
-- `ARPPRODUCTICON` (Programs and Features icon from `app.ico`)
-- Start Menu + Desktop shortcuts
-- **Launch Titanium Inspector** checkbox on the exit dialog (first install and upgrades)
-- `CloseApplication` for `TitaniumInspector.exe` so manual MSI upgrades can close a running instance
+### Windows Authenticode
 
-Windows Authenticode uses [Azure Artifact Signing](https://learn.microsoft.com/en-us/azure/artifact-signing/quickstart) in [`release.yml`](../../.github/workflows/release.yml) (`win-x64` CLI `titanium.exe`/`twp.exe`, `TitaniumInspector.exe`, and the MSI). Publisher is the validated individual identity (currently `CN=Jehonathan Thomas`). Leaf certificates are short-lived; timestamping is `http://timestamp.acs.microsoft.com`. Linux/macOS zips stay unsigned.
+Uses [Azure Artifact Signing](https://learn.microsoft.com/en-us/azure/artifact-signing/quickstart) in [`release.yml`](../../.github/workflows/release.yml) (`win-x64` CLI `titanium.exe`/`twp.exe`, `TitaniumInspector.exe`, and the MSI). Publisher is the validated individual identity (currently `CN=Jehonathan Thomas`). Leaf certificates are short-lived; timestamping is `http://timestamp.acs.microsoft.com`.
+
+### macOS codesign + notarize + DMG
+
+Scripts under [`osx/`](osx/):
+
+| Script | Role |
+| --- | --- |
+| `build-app-bundle.sh` | `.app` from Inspector publish folder |
+| `build-dmg.sh` | UDZO DMG with Applications symlink |
+| `sign-and-notarize.sh` | Developer ID codesign + `notarytool` + staple |
+| `TitaniumInspector.entitlements` / `TitaniumCli.entitlements` | Hardened runtime (JIT + network) |
+
+CI is **gated**: if `APPLE_CERTIFICATE_P12` (and related secrets) are unset, macOS jobs still build an **unsigned** DMG for artifact shape; notarize is skipped. Required GitHub secrets: `APPLE_DEVELOPER_ID`, `APPLE_CERTIFICATE_P12` (base64), `APPLE_CERTIFICATE_PASSWORD`, `NOTARY_KEY`, `NOTARY_KEY_ID`, `NOTARY_ISSUER`.
+
+### Linux AppImage / deb / rpm
+
+| Script | Role |
+| --- | --- |
+| [`linux/build-appimage.sh`](linux/build-appimage.sh) | AppImage for `cli` or `inspector` (glibc `linux-x64` / `linux-arm64`) |
+| [`linux/build-deb-rpm.sh`](linux/build-deb-rpm.sh) | `.deb` + `.rpm` via `fpm` (deb fallback without fpm) |
+
+Release asset names match the website loader: `Titanium.Cli-{rid}.{AppImage,deb,rpm}`, `TitaniumInspector-{rid}.{AppImage,deb,rpm,dmg}`.
+
+### GPG checksums
+
+[`sign-checksums.sh`](sign-checksums.sh) writes `SHA256SUMS` (always) and `SHA256SUMS.asc` / `release-manifest.json.asc` when `GPG_PRIVATE_KEY` (+ optional `GPG_PASSPHRASE`) is set in the release job.
+
+### Homebrew (Mac CLI)
+
+Formula source of truth: [`homebrew/titanium.rb`](homebrew/titanium.rb). After a release, run [`homebrew/bump-formula-shas.sh`](homebrew/bump-formula-shas.sh) and push to the `justcoding121/homebrew-titanium` tap (`Formula/titanium.rb`).
+
+```shell
+brew tap justcoding121/titanium
+brew install titanium
+```
+
+### Flathub
+
+Manifests + metainfo under [`flatpak/`](flatpak/). See [`flatpak/README.md`](flatpak/README.md) for first listing and `x-checker-data` updates.
 
 ### Linux / macOS desktop helpers (Inspector zips)
 
@@ -52,16 +89,14 @@ Release publish copies helpers into each Inspector zip:
 | `linux-*` | `install.sh`, `uninstall.sh`, `TitaniumInspector.desktop.in`, `app.ico` |
 | `osx-*` | `install-app.sh`, `uninstall-app.sh`, `app.ico` |
 
-**Linux:** extract the zip, then `./install.sh` (default prefix `~/.local`) to copy the app under `~/.local/share/TitaniumInspector`, add a desktop entry, and symlink `titanium-inspector` on `PATH`. Uninstall: `./uninstall.sh` or `~/.local/share/TitaniumInspector/uninstall.sh`. Portable use without install: run `./TitaniumInspector` from the extracted folder.
-
-**macOS:** extract the zip, then `./install-app.sh` to create `~/Applications/Titanium Inspector.app`. Uninstall: `./uninstall-app.sh`. Portable use: run `./TitaniumInspector` from the extracted folder.
+**Linux:** extract the zip, then `./install.sh` (default prefix `~/.local`). **macOS:** extract, then `./install-app.sh` → `~/Applications/Titanium Inspector.app` (prefer DMG when published).
 
 Winget package IDs:
 
 - `justcoding121.TitaniumInspector` (prefer MSI when attached to the Release)
 - `justcoding121.TitaniumCli` (portable zip)
 
-Manifest stubs live in `tools/packaging/winget/`.
+Manifest stubs live in `tools/packaging/winget/`. Resubmit to `microsoft/winget-pkgs` only after the **first signed stable** with fresh SHA256s (do not resubmit unsigned `7.0.4`).
 
 ## HTTP/3 native lock file
 
@@ -83,9 +118,8 @@ Do **not** mix glibc `.so` into musl zips (or the reverse). Do **not** redistrib
 
 See [`.github/workflows/release.yml`](../../.github/workflows/release.yml):
 
-- Matrix RID × runner (`ubuntu-latest` for win/linux/musl; `macos-latest` for osx).
-- `setup-dotnet` with `cache: true`.
-- Native download cache keyed on lock file hash.
+- Matrix RID × runner (`windows-latest` for `win-x64` CLI/Inspector; `ubuntu-latest` for linux/musl; `macos-latest` for osx).
+- Azure Artifact Signing on Windows; optional Apple notarize when secrets exist; optional GPG on checksums.
 - Smoke: `linux-x64` on host + `linux-musl-x64` inside `alpine:3.24` — `titanium http3-deps status` + assert natives present.
 
 Native bundling runs on **release** only (not every PR).
@@ -98,19 +132,3 @@ Bundling OpenSSL/MsQuic means **this repo owns CVE patching** for those versions
 2. Recompute SHA256 for each URL.
 3. Run a release (or local publish + smoke) for `linux-x64` and `linux-musl-x64`.
 4. Ship a new GitHub Release so operators pick up patched natives.
-
-Target cadence: **at least quarterly**, and immediately for critical OpenSSL/MsQuic CVEs.
-
-## Fallback for edge hosts
-
-```bash
-titanium http3-deps status
-titanium http3-deps install   # apt / dnf / zypper / apk / brew
-```
-
-Not run automatically by MSI/winget. NuGet library consumers stay docs-only (system MsQuic).
-
-## Operator docs
-
-- Website: `/docs/http3`, `/docs/install`, download page RID table
-- Wiki: `HTTP-3.md` packaging sections
