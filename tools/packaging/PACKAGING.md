@@ -41,7 +41,7 @@ Uses WiX 5 (`dotnet tool` manifest under `tools/packaging/wix/`) plus **WixTools
 - **Launch Titanium Inspector** checkbox on the exit dialog (first install and upgrades)
 - `CloseApplication` for `TitaniumInspector.exe` so manual MSI upgrades can close a running instance
 
-Authenticode signing is stretch; unsigned MSI is fine for GitHub Releases / early winget.
+Windows Authenticode uses [Azure Artifact Signing](https://learn.microsoft.com/en-us/azure/artifact-signing/quickstart) in [`release.yml`](../../.github/workflows/release.yml) (`win-x64` CLI `titanium.exe`/`twp.exe`, `TitaniumInspector.exe`, and the MSI). Publisher is the validated individual identity (currently `CN=Jehonathan Thomas`). Leaf certificates are short-lived; timestamping is `http://timestamp.acs.microsoft.com`. Linux/macOS zips stay unsigned.
 
 ### Linux / macOS desktop helpers (Inspector zips)
 

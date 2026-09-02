@@ -109,8 +109,11 @@ jobs:
   build-cli:
     needs: [resolve-version, test]
     runs-on: ${{ matrix.os }}
+    # win-x64 uses environment "signing" for Azure OIDC (federated cred).
+    environment: ${{ matrix.rid == 'win-x64' && 'signing' || '' }}
     permissions:
       contents: read
+      id-token: write
     strategy:
       fail-fast: false
       # Cap concurrency — many self-contained publishes on shared ubuntu runners run out of disk.
@@ -127,7 +130,7 @@ jobs:
           - rid: linux-musl-arm64
             os: ubuntu-latest
           - rid: win-x64
-            os: ubuntu-latest
+            os: windows-latest
           - rid: osx-x64
             os: macos-latest
           - rid: osx-arm64
@@ -161,6 +164,29 @@ jobs:
             Copy-Item "$out/titanium" "$out/twp"
           }
           ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
+      - name: Azure login (OIDC)
+        if: matrix.rid == 'win-x64'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Sign CLI Windows binaries
+        if: matrix.rid == 'win-x64'
+        uses: ./.github/actions/azure-artifact-sign
+        with:
+          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_SIGNING_PROFILE }}
+          description: Titanium Web Proxy CLI
+          files: |
+            ${{ github.workspace }}\artifacts\cli\win-x64\titanium.exe
+            ${{ github.workspace }}\artifacts\cli\win-x64\twp.exe
+      - name: Zip Cli
+        shell: pwsh
+        run: |
+          $rid = "${{ matrix.rid }}"
+          $out = "artifacts/cli/$rid"
           if ($IsWindows) {
             Compress-Archive -Path "$out/*" -DestinationPath "Titanium.Cli-$rid.zip"
           } else {
@@ -196,8 +222,10 @@ jobs:
   build-inspector:
     needs: [resolve-version, test]
     runs-on: ${{ matrix.os }}
+    environment: ${{ matrix.rid == 'win-x64' && 'signing' || '' }}
     permissions:
       contents: read
+      id-token: write
     strategy:
       fail-fast: false
       max-parallel: 2
@@ -256,6 +284,27 @@ jobs:
           if ($rid -like 'osx*') {
             Copy-Item -Force tools/packaging/osx/install-app.sh, tools/packaging/osx/uninstall-app.sh $out
           }
+      - name: Azure login (OIDC)
+        if: matrix.rid == 'win-x64'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Sign Inspector Windows binary
+        if: matrix.rid == 'win-x64'
+        uses: ./.github/actions/azure-artifact-sign
+        with:
+          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_SIGNING_PROFILE }}
+          description: Titanium Inspector
+          files: ${{ github.workspace }}\artifacts\inspector\win-x64\TitaniumInspector.exe
+      - name: Zip Inspector
+        shell: pwsh
+        run: |
+          $rid = "${{ matrix.rid }}"
+          $out = "artifacts/inspector/$rid"
           if ($IsWindows) {
             Compress-Archive -Path "$out/*" -DestinationPath "TitaniumInspector-$rid.zip"
           } else {
@@ -275,6 +324,15 @@ jobs:
             -PayloadDir artifacts/inspector/win-x64 `
             -OutputMsi TitaniumInspector-win-x64.msi `
             -Version $ver
+      - name: Sign Inspector MSI
+        if: matrix.msi
+        uses: ./.github/actions/azure-artifact-sign
+        with:
+          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_SIGNING_PROFILE }}
+          description: Titanium Inspector
+          files: ${{ github.workspace }}\TitaniumInspector-win-x64.msi
       - uses: actions/upload-artifact@v4
         with:
           name: inspector-${{ matrix.rid }}
