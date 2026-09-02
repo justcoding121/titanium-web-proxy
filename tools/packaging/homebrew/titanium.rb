@@ -33,6 +33,7 @@ class Titanium < Formula
   end
 
   test do
-    assert_match version.to_s, shell_output("#{bin}/titanium version")
+    # Assembly versions are numeric (e.g. 7.0.4.0); formula may be 7.0.4-beta.
+    assert_match version.to_s.split("-").first, shell_output("#{bin}/titanium version")
   end
 end

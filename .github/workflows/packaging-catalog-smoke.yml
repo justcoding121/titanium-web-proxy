@@ -58,7 +58,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Smoke brew install --formula
+      - name: Smoke brew install from tap
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
@@ -68,7 +68,15 @@ jobs:
           # Formula version must match tag without leading v (e.g. 7.0.4-beta).
           EXPECTED="${RELEASE_TAG#v}"
           grep -q "version \"$EXPECTED\"" "$FORMULA"
-          brew install --formula "$FORMULA"
+          # Homebrew rejects bare paths; install via the published custom tap (kept in sync).
+          export HOMEBREW_NO_REQUIRE_TAP_TRUST=1
+          brew tap justcoding121/titanium
+          brew update || true
+          # Prefer in-repo formula content for the version under test by copying into a local tap.
+          LOCAL_TAP="$(brew --repository)/Library/Taps/justcoding121/homebrew-titanium"
+          mkdir -p "${LOCAL_TAP}/Formula"
+          cp "$FORMULA" "${LOCAL_TAP}/Formula/titanium.rb"
+          brew install --formula justcoding121/titanium/titanium
           titanium version
-          brew test titanium || brew test --formula "$FORMULA"
-          brew uninstall --formula titanium || true
+          brew test justcoding121/titanium/titanium
+          brew uninstall --formula justcoding121/titanium/titanium || true
