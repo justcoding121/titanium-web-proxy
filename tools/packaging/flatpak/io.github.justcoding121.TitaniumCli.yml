@@ -8,7 +8,8 @@ sdk: org.freedesktop.Sdk
 command: titanium
 finish-args:
   - --share=network
-  - --filesystem=home
+  - --filesystem=xdg-config/titanium:create
+  - --filesystem=xdg-data/titanium:create
 modules:
   - name: titanium-cli
     buildsystem: simple
