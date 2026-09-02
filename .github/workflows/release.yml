@@ -229,11 +229,12 @@ jobs:
           arch=x86_64
           [[ "$rid" == *arm64* ]] && arch=aarch64
           sudo apt-get update -qq
-          sudo apt-get install -y -qq rsync imagemagick ruby ruby-dev build-essential rpm || true
+          sudo apt-get install -y -qq rsync imagemagick ruby ruby-dev build-essential rpm squashfs-tools file || true
           sudo gem install --no-document fpm || true
           chmod +x tools/packaging/linux/build-appimage.sh tools/packaging/linux/build-deb-rpm.sh
+          # AppImage is required for glibc RIDs (fail hard — no soft-fail).
           ./tools/packaging/linux/build-appimage.sh cli "artifacts/cli/$rid" \
-            "Titanium.Cli-$rid.AppImage" "$ver" "$arch" || echo "AppImage build soft-failed"
+            "Titanium.Cli-$rid.AppImage" "$ver" "$arch"
           ./tools/packaging/linux/build-deb-rpm.sh cli "artifacts/cli/$rid" . "$ver" "$rid" || echo "deb/rpm soft-failed"
       - name: Stage CLI artifacts
         shell: bash
@@ -428,11 +429,12 @@ jobs:
           arch=x86_64
           [[ "$rid" == *arm64* ]] && arch=aarch64
           sudo apt-get update -qq
-          sudo apt-get install -y -qq rsync imagemagick ruby ruby-dev build-essential rpm || true
+          sudo apt-get install -y -qq rsync imagemagick ruby ruby-dev build-essential rpm squashfs-tools file || true
           sudo gem install --no-document fpm || true
           chmod +x tools/packaging/linux/build-appimage.sh tools/packaging/linux/build-deb-rpm.sh
+          # AppImage is required for glibc RIDs (fail hard — no soft-fail).
           ./tools/packaging/linux/build-appimage.sh inspector "artifacts/inspector/$rid" \
-            "TitaniumInspector-$rid.AppImage" "$ver" "$arch" || echo "AppImage build soft-failed"
+            "TitaniumInspector-$rid.AppImage" "$ver" "$arch"
           ./tools/packaging/linux/build-deb-rpm.sh inspector "artifacts/inspector/$rid" . "$ver" "$rid" \
             || echo "deb/rpm soft-failed"
       - name: Stage Inspector artifacts
