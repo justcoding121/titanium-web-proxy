@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Titanium Inspector
+Comment=Desktop MITM traffic debugger
+Exec=TitaniumInspector
+Icon=io.github.justcoding121.TitaniumInspector
+Terminal=false
+Categories=Development;Network;
+StartupNotify=true

@@ -9,11 +9,11 @@ const channels = [
 ]
 </script>
 
-Get CLI and Inspector builds from GitHub Releases. This page lists the **latest stable** and **latest beta** product releases that include zip/MSI assets (NuGet-only tags are skipped).
+Get CLI and Inspector builds from GitHub Releases. This page lists the **latest stable** and **latest beta** product releases (NuGet-only tags are skipped). Prefer the primary format per OS (MSI / DMG / AppImage / deb / rpm); portable zips remain on GitHub for `titanium update` and Alpine/musl.
 
-**winget** installs the last published **stable** community package only — use the buttons below or GitHub for beta.
+**Windows:** Authenticode-signed assets show publisher **Jehonathan Thomas**. **winget** is stable-only. **macOS CLI:** `brew tap justcoding121/titanium && brew install titanium` when the tap is published. **Linux desktop:** Flathub apps are listed after first Flathub acceptance.
 
-HTTP/3 natives ship inside each RID zip (except Windows, which uses OS MsQuic on Win11 / Server 2022+). Alpine/K8s: use **`linux-musl-*`**, not `linux-x64`. Details: [HTTP/3](/docs/http3).
+HTTP/3 natives ship inside each RID zip / package (except Windows OS MsQuic). Alpine/K8s: use **`linux-musl-*`**, not `linux-x64`. Details: [HTTP/3](/docs/http3).
 
 <div v-for="ch in channels" :key="ch.id" class="download-channel">
   <h2 :id="ch.id">
@@ -23,7 +23,7 @@ HTTP/3 natives ship inside each RID zip (except Windows, which uses OS MsQuic on
   <p class="vp-muted">
     {{ ch.hint }}
     <template v-if="!ch.data.tag">
-      — no product zip/MSI release on this channel yet; see
+      — no product release on this channel yet; see
       <a :href="links.releasesUrl">GitHub Releases</a>.
     </template>
   </p>
@@ -31,11 +31,10 @@ HTTP/3 natives ship inside each RID zip (except Windows, which uses OS MsQuic on
   <h3 :id="ch.id + '-inspector'">Titanium Inspector</h3>
   <p>
     Desktop MITM debugger.
-    <strong>Windows:</strong> MSI wizard (choose install folder, Finished + Launch) or portable zip.
-    Uninstall from Settings → Apps (branded icon).
-    <strong>Linux / macOS:</strong> zip — run portable, or use
-    <code>install.sh</code> / <code>install-app.sh</code> in the zip
-    (<code>uninstall.sh</code> / <code>uninstall-app.sh</code> to remove).
+    <strong>Windows:</strong> MSI (signed).
+    <strong>macOS:</strong> DMG when published; otherwise zip + <code>install-app.sh</code>.
+    <strong>Linux glibc:</strong> AppImage / <code>.deb</code> / <code>.rpm</code> when published; otherwise zip.
+    <strong>Alpine musl:</strong> zip only.
   </p>
   <div class="download-grid">
     <div class="download-row">
@@ -44,18 +43,35 @@ HTTP/3 natives ship inside each RID zip (except Windows, which uses OS MsQuic on
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>Windows zip</strong>
-      <a v-if="ch.data.inspector.zip || ch.data.inspector['win-x64']" :href="(ch.data.inspector.zip || ch.data.inspector['win-x64']).url">{{ (ch.data.inspector.zip || ch.data.inspector['win-x64']).name }}</a>
+      <strong>Linux x64 AppImage</strong>
+      <a v-if="ch.data.inspector.appimage && ch.data.inspector.appimage['linux-x64']" :href="ch.data.inspector.appimage['linux-x64'].url">{{ ch.data.inspector.appimage['linux-x64'].name }}</a>
+      <a v-else-if="ch.data.inspector['linux-x64']" :href="ch.data.inspector['linux-x64'].url">{{ ch.data.inspector['linux-x64'].name }} (zip)</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>Linux x64</strong>
-      <a v-if="ch.data.inspector['linux-x64']" :href="ch.data.inspector['linux-x64'].url">{{ ch.data.inspector['linux-x64'].name }}</a>
+      <strong>Linux x64 .deb</strong>
+      <a v-if="ch.data.inspector.deb && ch.data.inspector.deb['linux-x64']" :href="ch.data.inspector.deb['linux-x64'].url">{{ ch.data.inspector.deb['linux-x64'].name }}</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>Linux arm64</strong>
-      <a v-if="ch.data.inspector['linux-arm64']" :href="ch.data.inspector['linux-arm64'].url">{{ ch.data.inspector['linux-arm64'].name }}</a>
+      <strong>Linux x64 .rpm</strong>
+      <a v-if="ch.data.inspector.rpm && ch.data.inspector.rpm['linux-x64']" :href="ch.data.inspector.rpm['linux-x64'].url">{{ ch.data.inspector.rpm['linux-x64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux arm64 AppImage</strong>
+      <a v-if="ch.data.inspector.appimage && ch.data.inspector.appimage['linux-arm64']" :href="ch.data.inspector.appimage['linux-arm64'].url">{{ ch.data.inspector.appimage['linux-arm64'].name }}</a>
+      <a v-else-if="ch.data.inspector['linux-arm64']" :href="ch.data.inspector['linux-arm64'].url">{{ ch.data.inspector['linux-arm64'].name }} (zip)</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux arm64 .deb</strong>
+      <a v-if="ch.data.inspector.deb && ch.data.inspector.deb['linux-arm64']" :href="ch.data.inspector.deb['linux-arm64'].url">{{ ch.data.inspector.deb['linux-arm64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux arm64 .rpm</strong>
+      <a v-if="ch.data.inspector.rpm && ch.data.inspector.rpm['linux-arm64']" :href="ch.data.inspector.rpm['linux-arm64'].url">{{ ch.data.inspector.rpm['linux-arm64'].name }}</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
@@ -64,19 +80,29 @@ HTTP/3 natives ship inside each RID zip (except Windows, which uses OS MsQuic on
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>macOS arm64</strong>
-      <a v-if="ch.data.inspector['osx-arm64']" :href="ch.data.inspector['osx-arm64'].url">{{ ch.data.inspector['osx-arm64'].name }}</a>
+      <strong>Alpine / musl arm64</strong>
+      <a v-if="ch.data.inspector['linux-musl-arm64']" :href="ch.data.inspector['linux-musl-arm64'].url">{{ ch.data.inspector['linux-musl-arm64'].name }}</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>macOS x64</strong>
-      <a v-if="ch.data.inspector['osx-x64']" :href="ch.data.inspector['osx-x64'].url">{{ ch.data.inspector['osx-x64'].name }}</a>
+      <strong>macOS arm64 DMG</strong>
+      <a v-if="ch.data.inspector.dmg && ch.data.inspector.dmg['osx-arm64']" :href="ch.data.inspector.dmg['osx-arm64'].url">{{ ch.data.inspector.dmg['osx-arm64'].name }}</a>
+      <a v-else-if="ch.data.inspector['osx-arm64']" :href="ch.data.inspector['osx-arm64'].url">{{ ch.data.inspector['osx-arm64'].name }} (zip)</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>macOS x64 DMG</strong>
+      <a v-if="ch.data.inspector.dmg && ch.data.inspector.dmg['osx-x64']" :href="ch.data.inspector.dmg['osx-x64'].url">{{ ch.data.inspector.dmg['osx-x64'].name }}</a>
+      <a v-else-if="ch.data.inspector['osx-x64']" :href="ch.data.inspector['osx-x64'].url">{{ ch.data.inspector['osx-x64'].name }} (zip)</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
   </div>
 
   <h3 :id="ch.id + '-cli'">CLI (<code>titanium</code> / <code>twp</code>)</h3>
-  <p>Self-contained zip. Extract and run. Each zip includes both <code>titanium</code> and <code>twp</code> binaries.</p>
+  <p>
+    Each package includes <code>titanium</code> and <code>twp</code>.
+    Prefer AppImage / deb / rpm on Linux glibc; zip on Windows / musl / macOS.
+  </p>
   <div class="download-grid">
     <div class="download-row">
       <strong>Windows x64</strong>
@@ -84,13 +110,35 @@ HTTP/3 natives ship inside each RID zip (except Windows, which uses OS MsQuic on
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>Linux x64 (glibc)</strong>
-      <a v-if="ch.data.cli['linux-x64']" :href="ch.data.cli['linux-x64'].url">{{ ch.data.cli['linux-x64'].name }}</a>
+      <strong>Linux x64 AppImage</strong>
+      <a v-if="ch.data.cli.appimage && ch.data.cli.appimage['linux-x64']" :href="ch.data.cli.appimage['linux-x64'].url">{{ ch.data.cli.appimage['linux-x64'].name }}</a>
+      <a v-else-if="ch.data.cli['linux-x64']" :href="ch.data.cli['linux-x64'].url">{{ ch.data.cli['linux-x64'].name }} (zip)</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>Linux arm64 (glibc)</strong>
-      <a v-if="ch.data.cli['linux-arm64']" :href="ch.data.cli['linux-arm64'].url">{{ ch.data.cli['linux-arm64'].name }}</a>
+      <strong>Linux x64 .deb</strong>
+      <a v-if="ch.data.cli.deb && ch.data.cli.deb['linux-x64']" :href="ch.data.cli.deb['linux-x64'].url">{{ ch.data.cli.deb['linux-x64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux x64 .rpm</strong>
+      <a v-if="ch.data.cli.rpm && ch.data.cli.rpm['linux-x64']" :href="ch.data.cli.rpm['linux-x64'].url">{{ ch.data.cli.rpm['linux-x64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux arm64 AppImage</strong>
+      <a v-if="ch.data.cli.appimage && ch.data.cli.appimage['linux-arm64']" :href="ch.data.cli.appimage['linux-arm64'].url">{{ ch.data.cli.appimage['linux-arm64'].name }}</a>
+      <a v-else-if="ch.data.cli['linux-arm64']" :href="ch.data.cli['linux-arm64'].url">{{ ch.data.cli['linux-arm64'].name }} (zip)</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux arm64 .deb</strong>
+      <a v-if="ch.data.cli.deb && ch.data.cli.deb['linux-arm64']" :href="ch.data.cli.deb['linux-arm64'].url">{{ ch.data.cli.deb['linux-arm64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux arm64 .rpm</strong>
+      <a v-if="ch.data.cli.rpm && ch.data.cli.rpm['linux-arm64']" :href="ch.data.cli.rpm['linux-arm64'].url">{{ ch.data.cli.rpm['linux-arm64'].name }}</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
@@ -122,6 +170,15 @@ HTTP/3 natives ship inside each RID zip (except Windows, which uses OS MsQuic on
 winget install justcoding121.TitaniumCli
 winget install justcoding121.TitaniumInspector
 ```
+
+## Homebrew (macOS CLI)
+
+```shell
+brew tap justcoding121/titanium
+brew install titanium
+```
+
+Requires the public tap repo (`homebrew-titanium`) with formula SHA256s matching the release zip.
 
 ```shell
 titanium run -c twp.yaml

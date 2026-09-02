@@ -1,5 +1,6 @@
 # justcoding121.TitaniumInspector
-# Submit a PR to https://github.com/microsoft/winget-pkgs after a GitHub Release with MSI.
+# Submit a PR to https://github.com/microsoft/winget-pkgs after a *signed* GitHub Release with MSI.
+# Authenticode publisher: Jehonathan Thomas. Do not resubmit unsigned 7.0.4 — wait for next signed stable + new SHA256s.
 
 PackageIdentifier: justcoding121.TitaniumInspector
 PackageVersion: 7.0.4
