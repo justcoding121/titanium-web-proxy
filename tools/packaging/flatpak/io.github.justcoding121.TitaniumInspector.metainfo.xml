@@ -12,7 +12,7 @@
   </description>
   <launchable type="desktop-id">io.github.justcoding121.TitaniumInspector.desktop</launchable>
   <releases>
-    <release version="7.0.4" date="2026-09-01"/>
+    <release version="7.0.4-beta" date="2026-09-02"/>
   </releases>
   <content_rating type="oars-1.1"/>
 </component>

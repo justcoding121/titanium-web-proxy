@@ -19,8 +19,9 @@ modules:
       - install -Dm644 io.github.justcoding121.TitaniumCli.metainfo.xml /app/share/metainfo/io.github.justcoding121.TitaniumCli.metainfo.xml
     sources:
       - type: archive
-        url: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.4/Titanium.Cli-linux-x64.zip
-        sha256: REPLACE_AFTER_RELEASE
+        # Beta dry-run target; retarget to stable tag + SHA before formal Flathub submit.
+        url: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.4-beta/Titanium.Cli-linux-x64.zip
+        sha256: 414feed19e12a234702483fe506a3ba4273d66e4e57f8aa68d939c8e9d93e20f
         dest: payload
         x-checker-data:
           type: json

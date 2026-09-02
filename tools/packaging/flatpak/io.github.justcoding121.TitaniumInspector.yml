@@ -31,8 +31,9 @@ modules:
       - install -Dm644 io.github.justcoding121.TitaniumInspector.metainfo.xml /app/share/metainfo/io.github.justcoding121.TitaniumInspector.metainfo.xml
     sources:
       - type: archive
-        url: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.4/TitaniumInspector-linux-x64.zip
-        sha256: REPLACE_AFTER_RELEASE
+        # Beta dry-run target; retarget to stable tag + SHA before formal Flathub submit.
+        url: https://github.com/justcoding121/titanium-web-proxy/releases/download/v7.0.4-beta/TitaniumInspector-linux-x64.zip
+        sha256: 1e2040534bc1a48769a7cf6a3e053818bc27742dd02140804e51e12d8ce15d15
         dest: payload
         x-checker-data:
           type: json
