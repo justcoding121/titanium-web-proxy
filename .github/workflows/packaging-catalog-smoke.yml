@@ -69,8 +69,13 @@ jobs:
           EXPECTED="${RELEASE_TAG#v}"
           grep -q "version \"$EXPECTED\"" "$FORMULA"
           # Homebrew rejects bare paths; install via the published custom tap (kept in sync).
+          export HOMEBREW_NO_REQUIRE_TAP_TRUST=1
           brew tap justcoding121/titanium
           brew update || true
+          # Prefer in-repo formula content for the version under test by copying into a local tap.
+          LOCAL_TAP="$(brew --repository)/Library/Taps/justcoding121/homebrew-titanium"
+          mkdir -p "${LOCAL_TAP}/Formula"
+          cp "$FORMULA" "${LOCAL_TAP}/Formula/titanium.rb"
           brew install --formula justcoding121/titanium/titanium
           titanium version
           brew test justcoding121/titanium/titanium
